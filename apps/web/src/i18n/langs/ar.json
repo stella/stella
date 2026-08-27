@@ -1499,6 +1499,10 @@
     "applyDirect": "مباشر",
     "applyTracked": "تعقّب التغييرات",
     "barLabel": "مراجعة الاقتراحات",
+    "change": {
+      "deleteParagraph": "حذف فقرة",
+      "replacement": "«{find}» → «{replace}»"
+    },
     "countHigh": "{count, plural, zero {# عالية} one {# عالية} two {# عاليتان} few {# عالية} many {# عالية} other {# عالية}}",
     "countLow": "{count, plural, zero {# منخفضة} one {# منخفضة} two {# منخفضتان} few {# منخفضة} many {# منخفضة} other {# منخفضة}}",
     "countMedium": "{count, plural, zero {# متوسطة} one {# متوسطة} two {# متوسطتان} few {# متوسطة} many {# متوسطة} other {# متوسطة}}",
@@ -1514,7 +1518,27 @@
     "severityMedium": "متوسطة",
     "severityUnspecified": "غير محدّدة",
     "skipped": "تعذّر التطبيق: {reason}",
-    "staleResolution": "تمت معالجة هذا الاقتراح بالفعل في مكان آخر."
+    "staleResolution": "تمت معالجة هذا الاقتراح بالفعل في مكان آخر.",
+    "summary": {
+      "commentOnParagraph": "{label, select, none {إضافة تعليق إلى فقرة} other {إضافة تعليق إلى الفقرة {label}}}",
+      "commentOnSelection": "إضافة تعليق إلى النص المحدد",
+      "deleteParagraph": "{label, select, none {حذف فقرة} other {حذف الفقرة {label}}}",
+      "deleteTableColumn": "حذف عمود جدول",
+      "deleteTableRow": "حذف صف جدول",
+      "formatSelection": "إعادة تنسيق النص المحدد",
+      "insertAfter": "{label, select, none {إدراج فقرة} other {إدراج فقرة بعد {label}}}",
+      "insertBefore": "{label, select, none {إدراج فقرة} other {إدراج فقرة قبل {label}}}",
+      "insertSignatureBlock": "إدراج جدول توقيع لـ {names}",
+      "insertTableColumn": "إدراج عمود جدول",
+      "insertTableRow": "إدراج صف جدول",
+      "mergeTableCells": "دمج خلايا الجدول",
+      "pageBreakAfter": "{label, select, none {إدراج فاصل صفحات} other {إدراج فاصل صفحات بعد {label}}}",
+      "pageBreakBefore": "{label, select, none {إدراج فاصل صفحات} other {إدراج فاصل صفحات قبل {label}}}",
+      "replaceInBlock": "استبدال «{find}» بـ «{replace}»",
+      "replaceParagraph": "{label, select, none {إعادة صياغة فقرة} other {إعادة صياغة الفقرة {label}}}",
+      "replaceSelection": "استبدال النص المحدد بـ «{replace}»",
+      "splitTableCell": "تقسيم خلية جدول"
+    }
   },
   "emailViewer": {
     "attachments": "المرفقات",
@@ -2320,12 +2344,6 @@
       "checks": "ما يتم فحصه:",
       "commentFailed": "تعذرت إضافة التعليق",
       "comparedWithReferences": "{count, plural, zero {لم تتم المقارنة مع أي مستند مرجعي} one {تمت المقارنة مع مستند مرجعي واحد} two {تمت المقارنة مع مستندين مرجعيين} few {تمت المقارنة مع # مستندات مرجعية} many {تمت المقارنة مع # مستندًا مرجعيًا} other {تمت المقارنة مع # مستند مرجعي}}",
-      "dealStrip": {
-        "flagged": "{count, number} مُعلَّمة",
-        "label": "موضع النتائج داخل المستند",
-        "more": "+{count, number} أخرى",
-        "preamble": "الديباجة"
-      },
       "decidedCount": "{count, number} مقرَّرة",
       "decision": "القرار",
       "decisionFailed": "تعذر تسجيل قرارك",
@@ -2446,6 +2464,10 @@
       "showInDocument": "إظهار في المستند",
       "sizeConfirmStart": "بدء المراجعة",
       "sizeConfirmTitle": "مراجعة كبيرة",
+      "skipReason": {
+        "dealSpecificValue": "قيمة خاصة بهذه الصفقة",
+        "structural": "اختلاف هيكلي"
+      },
       "standardColumn": "المعيار",
       "standardColumnFrom": "المعيار ({name})",
       "suggestionSkipped": "لم يعد يطابق المستند",

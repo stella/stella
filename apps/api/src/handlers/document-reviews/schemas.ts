@@ -7,6 +7,9 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import {
   REVIEW_PARTY_NAME_MAX_LENGTH,
   REVIEW_PARTY_ROLE_MAX_LENGTH,
+  REVIEW_SKIP_REASON_MAX_LENGTH,
+  REVIEW_SKIP_SUBJECT_MAX_LENGTH,
+  REVIEW_SKIPPED_MAX,
 } from "@/api/lib/document-review/contract";
 import {
   DOCUMENT_REVIEW_APPLICATION_STATUS,
@@ -77,6 +80,34 @@ export const reviewPerspectiveSchema = t.Union([
   }),
 ]);
 
+/**
+ * A subject the proposal pass read and deliberately did not compare.
+ *
+ * The reason is coded rather than English prose: the two the prompt itself
+ * hands the model are decided by the normalizer and rendered in the reader's
+ * own language, and only a reason the model wrote travels as text, in whatever
+ * language the document is. The run inserts this value into a column typed
+ * `ReviewSkippedTerm[]`, so a wire shape that drifts from the engine's fails
+ * typecheck at that insert rather than at a reader.
+ */
+export const reviewSkippedTermSchema = t.Object({
+  subject: t.String({
+    minLength: 1,
+    maxLength: REVIEW_SKIP_SUBJECT_MAX_LENGTH,
+  }),
+  reason: t.Union([
+    t.Object({ kind: t.Literal("deal-specific-value") }),
+    t.Object({ kind: t.Literal("structural") }),
+    t.Object({
+      kind: t.Literal("other"),
+      text: t.String({
+        minLength: 1,
+        maxLength: REVIEW_SKIP_REASON_MAX_LENGTH,
+      }),
+    }),
+  ]),
+});
+
 // The positions a request carries are exactly the positions a playbook holds:
 // one schema, so a list confirmed for one run and a list saved as a playbook
 // cannot diverge.
@@ -125,6 +156,13 @@ export const createDocumentReviewRunBodySchema = t.Object({
   /** The side the review is judged for. Sent even when no reference-derived
    *  position is in the list, where nothing reads it. */
   perspective: reviewPerspectiveSchema,
+  /**
+   * What the proposal pass read and left off the checklist, carried into the
+   * run so the results can still say how much of the document was not
+   * compared. Empty for a run with no proposal behind it — required, so that
+   * is a client stating it rather than a field nobody remembered to send.
+   */
+  skipped: t.Array(reviewSkippedTermSchema, { maxItems: REVIEW_SKIPPED_MAX }),
   /**
    * Restated size estimate from a prior 428 `usage_confirmation_required`
    * answer; the run starts only when it covers the current estimate.

@@ -1499,6 +1499,10 @@
     "applyDirect": "Bez režimu sledování změn",
     "applyTracked": "V režimu sledování změn",
     "barLabel": "Revize návrhů",
+    "change": {
+      "deleteParagraph": "Smazat odstavec",
+      "replacement": "„{find}“ → „{replace}“"
+    },
     "countHigh": "{count, plural, one {# vysoká} few {# vysoké} other {# vysokých}}",
     "countLow": "{count, plural, one {# nízká} few {# nízké} other {# nízkých}}",
     "countMedium": "{count, plural, one {# střední} few {# střední} other {# středních}}",
@@ -1514,7 +1518,27 @@
     "severityMedium": "Střední",
     "severityUnspecified": "Bez závažnosti",
     "skipped": "Nelze použít: {reason}",
-    "staleResolution": "Tento návrh byl již vyřešen jinde."
+    "staleResolution": "Tento návrh byl již vyřešen jinde.",
+    "summary": {
+      "commentOnParagraph": "{label, select, none {Okomentovat odstavec} other {Okomentovat odstavec {label}}}",
+      "commentOnSelection": "Okomentovat vybraný text",
+      "deleteParagraph": "{label, select, none {Smazat odstavec} other {Smazat odstavec {label}}}",
+      "deleteTableColumn": "Smazat sloupec tabulky",
+      "deleteTableRow": "Smazat řádek tabulky",
+      "formatSelection": "Změnit formátování vybraného textu",
+      "insertAfter": "{label, select, none {Vložit odstavec} other {Vložit odstavec za {label}}}",
+      "insertBefore": "{label, select, none {Vložit odstavec} other {Vložit odstavec před {label}}}",
+      "insertSignatureBlock": "Vložit podpisový blok pro {names}",
+      "insertTableColumn": "Vložit sloupec tabulky",
+      "insertTableRow": "Vložit řádek tabulky",
+      "mergeTableCells": "Sloučit buňky tabulky",
+      "pageBreakAfter": "{label, select, none {Vložit zalomení stránky} other {Vložit zalomení stránky za {label}}}",
+      "pageBreakBefore": "{label, select, none {Vložit zalomení stránky} other {Vložit zalomení stránky před {label}}}",
+      "replaceInBlock": "Nahradit „{find}“ textem „{replace}“",
+      "replaceParagraph": "{label, select, none {Přeformulovat odstavec} other {Přeformulovat odstavec {label}}}",
+      "replaceSelection": "Nahradit vybraný text textem „{replace}“",
+      "splitTableCell": "Rozdělit buňku tabulky"
+    }
   },
   "emailViewer": {
     "attachments": "Přílohy",
@@ -2320,12 +2344,6 @@
       "checks": "Posuzuje se:",
       "commentFailed": "Komentář se nepodařilo přidat",
       "comparedWithReferences": "{count, plural, one {Porovnáno s # referenčním dokumentem} few {Porovnáno s # referenčními dokumenty} other {Porovnáno s # referenčními dokumenty}}",
-      "dealStrip": {
-        "flagged": "označeno {count, number}",
-        "label": "Kde v dokumentu zjištění leží",
-        "more": "+{count, number} dalších",
-        "preamble": "Preambule"
-      },
       "decidedCount": "rozhodnuto {count, number}",
       "decision": "Rozhodnutí",
       "decisionFailed": "Rozhodnutí se nepodařilo uložit",
@@ -2446,6 +2464,10 @@
       "showInDocument": "Zobrazit v dokumentu",
       "sizeConfirmStart": "Spustit kontrolu",
       "sizeConfirmTitle": "Rozsáhlá kontrola",
+      "skipReason": {
+        "dealSpecificValue": "Hodnota specifická pro transakci",
+        "structural": "Strukturální rozdíl"
+      },
       "standardColumn": "Standard",
       "standardColumnFrom": "Standard ({name})",
       "suggestionSkipped": "Už neodpovídá dokumentu",

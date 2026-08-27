@@ -43,14 +43,51 @@ describe("parseReviewProposalEvent", () => {
         REVIEW_PROPOSAL_EVENT.SKIPPED,
         JSON.stringify({
           index: 0,
-          skipped: { subject: "Governing law", reason: "Not comparable" },
+          skipped: {
+            subject: "Governing law",
+            reason: { kind: "other", text: "Not comparable" },
+          },
         }),
       ),
     ).toEqual({
       type: REVIEW_PROPOSAL_EVENT.SKIPPED,
       index: 0,
-      skipped: { subject: "Governing law", reason: "Not comparable" },
+      skipped: {
+        subject: "Governing law",
+        reason: { kind: "other", text: "Not comparable" },
+      },
     });
+  });
+
+  it("reads a coded skip reason, and drops a code it has no words for", () => {
+    expect(
+      parseReviewProposalEvent(
+        REVIEW_PROPOSAL_EVENT.SKIPPED,
+        JSON.stringify({
+          index: 1,
+          skipped: {
+            subject: "Long-stop date",
+            reason: { kind: "deal-specific-value" },
+          },
+        }),
+      ),
+    ).toEqual({
+      type: REVIEW_PROPOSAL_EVENT.SKIPPED,
+      index: 1,
+      skipped: {
+        subject: "Long-stop date",
+        reason: { kind: "deal-specific-value" },
+      },
+    });
+    expect(
+      parseReviewProposalEvent(
+        REVIEW_PROPOSAL_EVENT.SKIPPED,
+        JSON.stringify({
+          index: 2,
+          skipped: { subject: "Notary", reason: { kind: "invented-later" } },
+        }),
+      ),
+    ).toBeNull();
   });
 
   it("reads parties, done and error frames", () => {
@@ -101,7 +138,11 @@ describe("parseReviewProposalEvent", () => {
     expect(
       parseReviewProposalEvent(
         REVIEW_PROPOSAL_EVENT.SKIPPED,
-        JSON.stringify({ index: 0, subject: "flat", reason: "not nested" }),
+        JSON.stringify({
+          index: 0,
+          subject: "flat",
+          reason: { kind: "structural" },
+        }),
       ),
     ).toBeNull();
   });

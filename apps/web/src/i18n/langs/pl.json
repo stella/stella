@@ -1499,6 +1499,10 @@
     "applyDirect": "Bezpośrednio",
     "applyTracked": "Śledzenie zmian",
     "barLabel": "Przegląd sugestii",
+    "change": {
+      "deleteParagraph": "Usuń akapit",
+      "replacement": "„{find}” → „{replace}”"
+    },
     "countHigh": "{count, plural, one {# wysoka} few {# wysokie} many {# wysokich} other {# wysokiej}}",
     "countLow": "{count, plural, one {# niska} few {# niskie} many {# niskich} other {# niskiej}}",
     "countMedium": "{count, plural, one {# średnia} few {# średnie} many {# średnich} other {# średniej}}",
@@ -1514,7 +1518,27 @@
     "severityMedium": "Średnia",
     "severityUnspecified": "Nieokreślona",
     "skipped": "Nie udało się zastosować: {reason}",
-    "staleResolution": "Ta sugestia została już rozstrzygnięta gdzie indziej."
+    "staleResolution": "Ta sugestia została już rozstrzygnięta gdzie indziej.",
+    "summary": {
+      "commentOnParagraph": "{label, select, none {Skomentuj akapit} other {Skomentuj akapit {label}}}",
+      "commentOnSelection": "Skomentuj zaznaczony tekst",
+      "deleteParagraph": "{label, select, none {Usuń akapit} other {Usuń akapit {label}}}",
+      "deleteTableColumn": "Usuń kolumnę tabeli",
+      "deleteTableRow": "Usuń wiersz tabeli",
+      "formatSelection": "Przeformatuj zaznaczony tekst",
+      "insertAfter": "{label, select, none {Wstaw akapit} other {Wstaw akapit za {label}}}",
+      "insertBefore": "{label, select, none {Wstaw akapit} other {Wstaw akapit przed {label}}}",
+      "insertSignatureBlock": "Wstaw tabelę podpisów dla {names}",
+      "insertTableColumn": "Wstaw kolumnę tabeli",
+      "insertTableRow": "Wstaw wiersz tabeli",
+      "mergeTableCells": "Scal komórki tabeli",
+      "pageBreakAfter": "{label, select, none {Wstaw podział strony} other {Wstaw podział strony za {label}}}",
+      "pageBreakBefore": "{label, select, none {Wstaw podział strony} other {Wstaw podział strony przed {label}}}",
+      "replaceInBlock": "Zastąp „{find}” tekstem „{replace}”",
+      "replaceParagraph": "{label, select, none {Przeformułuj akapit} other {Przeformułuj akapit {label}}}",
+      "replaceSelection": "Zastąp zaznaczony tekst tekstem „{replace}”",
+      "splitTableCell": "Podziel komórkę tabeli"
+    }
   },
   "emailViewer": {
     "attachments": "Załączniki",
@@ -2320,12 +2344,6 @@
       "checks": "Sprawdzane jest:",
       "commentFailed": "Nie udało się dodać komentarza",
       "comparedWithReferences": "{count, plural, one {Porównano z # dokumentem referencyjnym} few {Porównano z # dokumentami referencyjnymi} many {Porównano z # dokumentami referencyjnymi} other {Porównano z # dokumentami referencyjnymi}}",
-      "dealStrip": {
-        "flagged": "oznaczono {count, number}",
-        "label": "Gdzie w dokumencie znajdują się ustalenia",
-        "more": "+{count, number} więcej",
-        "preamble": "Preambuła"
-      },
       "decidedCount": "rozstrzygnięto {count, number}",
       "decision": "Decyzja",
       "decisionFailed": "Nie udało się zapisać decyzji",
@@ -2446,6 +2464,10 @@
       "showInDocument": "Pokaż w dokumencie",
       "sizeConfirmStart": "Rozpocznij weryfikację",
       "sizeConfirmTitle": "Obszerna weryfikacja",
+      "skipReason": {
+        "dealSpecificValue": "Wartość właściwa dla transakcji",
+        "structural": "Różnica strukturalna"
+      },
       "standardColumn": "Wzorzec",
       "standardColumnFrom": "Wzorzec ({name})",
       "suggestionSkipped": "Już nie pasuje do dokumentu",

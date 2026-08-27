@@ -75,7 +75,9 @@ export const ReviewTermRow = ({
       >
         <BidiText as="span">{label}</BidiText>
       </th>
-      <td className={cn(CELL_CLASS, "pe-3 text-end tabular-nums")}>
+      <td
+        className={cn(CELL_CLASS, "text-foreground pe-3 text-end tabular-nums")}
+      >
         <TermValue onShowInDocument={onShowInDocument} value={delta.target} />
       </td>
       <td

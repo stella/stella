@@ -98,6 +98,18 @@ const partySchema = v.object({
   name: v.nullable(v.string()),
 });
 
+/**
+ * Why a subject was not compared, as the endpoint states it: a code this app
+ * has words for, or the model's own text. Written out per member rather than
+ * accepting any `kind`, so a code the server adds without words here fails to
+ * parse — and that entry is dropped — instead of rendering as a blank line.
+ */
+const skipReasonSchema = v.variant("kind", [
+  v.object({ kind: v.literal("deal-specific-value") }),
+  v.object({ kind: v.literal("structural") }),
+  v.object({ kind: v.literal("other"), text: v.string() }),
+]);
+
 const PAYLOAD_SCHEMA = {
   [REVIEW_PROPOSAL_EVENT.PARTIES]: v.object({ parties: v.array(partySchema) }),
   [REVIEW_PROPOSAL_EVENT.POSITION]: v.object({
@@ -106,7 +118,7 @@ const PAYLOAD_SCHEMA = {
   }),
   [REVIEW_PROPOSAL_EVENT.SKIPPED]: v.object({
     index: v.number(),
-    skipped: v.object({ subject: v.string(), reason: v.string() }),
+    skipped: v.object({ subject: v.string(), reason: skipReasonSchema }),
   }),
   [REVIEW_PROPOSAL_EVENT.DONE]: v.object({
     positionCount: v.number(),

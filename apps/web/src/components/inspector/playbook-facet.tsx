@@ -34,7 +34,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import { DOCUMENT_REVIEW_LIMITS, REVIEW_FLAGS } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
-import type { DocxEditorRef, FolioAIBlock } from "@stll/folio-react";
+import type { DocxEditorRef } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -119,7 +119,6 @@ import type {
   ReviewProposal,
   StartReviewResult,
 } from "@/components/ai-suggestions/playbook-review-store";
-import { ReviewDealStrip } from "@/components/ai-suggestions/review-deal-strip";
 import type { DeltaCitation } from "@/components/ai-suggestions/review-delta";
 import { ReviewDeltaView } from "@/components/ai-suggestions/review-delta-view";
 import {
@@ -452,6 +451,7 @@ export const PlaybookFacet = ({
         references: basis.references,
         perspective: basis.perspective,
         positions: basis.positions,
+        skipped: basis.skipped,
         unexpectedErrorMessage: t("common.unexpectedError"),
       }),
     );
@@ -467,13 +467,13 @@ export const PlaybookFacet = ({
    * Either way the scroll is queued as a command, because an editor that is
    * not on screen yet cannot scroll.
    */
-  const scrollToBlock = (blockId: string) => {
+  const scrollToBlock = (blockId: string, text?: string) => {
     if (!documentInMainPane) {
       useInspectorTabsStore.getState().setFileFacet(fileFieldId, "preview");
     }
     useInspectorCommandStore
       .getState()
-      .requestBlockScroll({ tabId: fileFieldId, blockId });
+      .requestBlockScroll({ tabId: fileFieldId, blockId, text });
   };
 
   /**
@@ -727,6 +727,7 @@ export const PlaybookFacet = ({
           currentEntityVersionId={currentEntityVersionId}
           editorAvailable={editorAvailable}
           editorRef={targetEditorRef}
+          entityId={entityId}
           queueControls={queueControls}
           history={{
             mode: historyRunId === null ? "tracked" : "history",
@@ -841,6 +842,7 @@ export type ReviewRunHistoryView = {
 };
 
 type ReviewRunPanelProps = {
+  entityId: string;
   workspaceId: string;
   runId: string;
   /** The document's chat-proposed changes, listed under the run's findings. */
@@ -882,6 +884,7 @@ type ReviewRunPanelProps = {
  * review still describes itself after any of them has moved on.
  */
 const ReviewRunPanel = ({
+  entityId,
   workspaceId,
   runId,
   chatSection,
@@ -1009,7 +1012,7 @@ const ReviewRunPanel = ({
     return (
       <ReviewProgressState
         completed={run.completed}
-        sourceName={restored.basis.playbookName}
+        skipped={restored.basis.skipped}
         startedAt={run.startedAt}
         total={run.total}
       />
@@ -1031,6 +1034,7 @@ const ReviewRunPanel = ({
     <ResultsView
       basis={restored.basis}
       chatSection={chatSection}
+      entityId={entityId}
       queueControls={queueControls}
       decisionCounts={run.decisionCounts}
       decisionPending={decide.isPending}
@@ -1519,6 +1523,21 @@ const PerspectivePicker = ({
 };
 
 /**
+ * Words for the reasons the engine decides itself, which reach the client as
+ * codes rather than as English prose. Total over those codes, so one added on
+ * the server has to state its words here instead of rendering as a blank; a
+ * reason the model wrote is shown in the words it wrote, which follow the
+ * document rather than this interface.
+ */
+const SKIP_REASON_LABEL_KEYS = {
+  "deal-specific-value": "inspector.review.skipReason.dealSpecificValue",
+  structural: "inspector.review.skipReason.structural",
+} as const satisfies Record<
+  Exclude<ReviewSkippedTerm["reason"]["kind"], "other">,
+  TranslationKey
+>;
+
+/**
  * What the position proposal read but deliberately left off the checklist,
  * collapsed behind a count so it does not compete with the positions
  * themselves. A reviewer who wants to know why expands it; everyone else
@@ -1534,6 +1553,10 @@ const NotComparedDisclosure = ({
   if (skipped.length === 0) {
     return null;
   }
+  const reasonText = (reason: ReviewSkippedTerm["reason"]): string =>
+    reason.kind === "other"
+      ? reason.text
+      : t(SKIP_REASON_LABEL_KEYS[reason.kind]);
   return (
     <div className="mt-1.5">
       <button
@@ -1551,7 +1574,7 @@ const NotComparedDisclosure = ({
               className="text-muted-foreground text-xs leading-6"
               key={entry.subject}
             >
-              <BidiText as="span">{`${entry.subject} — ${entry.reason}`}</BidiText>
+              <BidiText as="span">{`${entry.subject} — ${reasonText(entry.reason)}`}</BidiText>
             </li>
           ))}
         </ul>
@@ -2099,9 +2122,11 @@ const formatElapsedMinutesSeconds = (ms: number): string => {
 // the work rather than a timer pretending to be one. The elapsed clock is a
 // second, independent read of the same "still working" fact.
 type ReviewProgressStateProps = {
-  sourceName: string;
   completed: number;
   total: number;
+  /** What the proposal behind this run left uncompared, so the count a
+   *  reviewer read while confirming survives the run starting. */
+  skipped: readonly ReviewSkippedTerm[];
   /** When the worker claimed the run, or `null` while it still sits queued. */
   startedAt: string | null;
 };
@@ -2128,29 +2153,38 @@ const useElapsedClock = (startedAt: string | null): number | null => {
 };
 
 const ReviewProgressState = ({
-  sourceName,
   completed,
   total,
+  skipped,
   startedAt,
 }: ReviewProgressStateProps) => {
   const t = useTranslations();
   const elapsedMs = useElapsedClock(startedAt);
 
+  // The counted positions and the clock, and nothing else. The pin's name for
+  // a list confirmed for this run alone is engine wording in one language, and
+  // it says nothing the count does not.
   const detail = [
-    sourceName,
     t("inspector.review.progressPositions", { completed, total }),
     elapsedMs === null ? null : formatElapsedMinutesSeconds(elapsedMs),
   ]
-    .filter((part): part is string => part !== null && part.length > 0)
+    .filter((part): part is string => part !== null)
     .join(SUMMARY_SEPARATOR);
 
   return (
-    <LoaderState
-      className="bg-background"
-      detail={detail.length > 0 ? detail : undefined}
-      hint={t("inspector.review.reviewingHint")}
-      label={t("inspector.review.reviewing")}
-    />
+    <div className="bg-background flex h-full flex-col">
+      <LoaderState
+        className="flex-1"
+        detail={detail}
+        hint={t("inspector.review.reviewingHint")}
+        label={t("inspector.review.reviewing")}
+      />
+      {skipped.length > 0 && (
+        <div className="flex shrink-0 justify-center px-6 pb-4">
+          <NotComparedDisclosure skipped={skipped} />
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -2207,11 +2241,6 @@ const ReviewResultsSkeleton = ({ cardCount }: { cardCount: number }) => {
             <Skeleton className="h-8 w-20 rounded-md" />
             <Skeleton className="h-8 w-20 rounded-md" />
           </div>
-        </div>
-        {/* The clause band sits where the deal strip paints it, so the list
-            below starts on the same line either way. */}
-        <div className="relative mb-2 h-9 w-full">
-          <Skeleton className="absolute start-0 end-0 top-[13px] h-2.5 rounded-full" />
         </div>
         <ul className="space-y-1.5">
           {Array.from({ length: cardCount }, (_unused, index) => (
@@ -2295,6 +2324,7 @@ const useRunBasisLabels = () => {
 };
 
 type ResultsViewProps = {
+  entityId: string;
   basis: RestoredReviewBasis;
   /** The document's chat-proposed changes, as their own group under the run. */
   chatSection: ReactNode;
@@ -2355,6 +2385,7 @@ type SetReviewFindingFlags = (
 ) => void;
 
 const ResultsView = ({
+  entityId,
   basis,
   chatSection,
   queueControls,
@@ -2441,9 +2472,9 @@ const ResultsView = ({
         />
         {results.length > 0 ? (
           <ReviewResultList
-            blocks={documentBlocks}
             decisionPending={decisionPending}
             editorAvailable={editorAvailable}
+            entityId={entityId}
             focusItemId={focusedFindingId}
             items={results}
             negotiationBySourceId={negotiationBySourceId}
@@ -2501,6 +2532,10 @@ const ResultsView = ({
               progress={runProgress}
               total={results.length}
             />
+            {/* What the run never measured, under the counts of what it did:
+              a checklist that silently omits half the document reads as if the
+              other half were compliant. */}
+            <NotComparedDisclosure skipped={basis.skipped} />
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <PaneSwapToggle swap={paneSwap} />
@@ -2919,10 +2954,8 @@ const NoReviewIssues = () => {
 };
 
 type ReviewResultListProps = {
+  entityId: string;
   items: readonly ReviewResultItem[];
-  /** The reviewed document's blocks, in document order: the clause map's
-   *  x-axis. Empty until the editor hands its snapshot over. */
-  blocks: readonly FolioAIBlock[];
   /** A finding another surface asked the list to open — a clause-map segment,
    *  a sidenote. `null` when nobody asked. */
   focusItemId: DocumentReviewFindingRow["id"] | null;
@@ -2951,8 +2984,8 @@ type ReviewResultListProps = {
 };
 
 const ReviewResultList = ({
+  entityId,
   items,
-  blocks,
   focusItemId,
   references,
   perspective,
@@ -3035,13 +3068,29 @@ const ReviewResultList = ({
       ?.scrollIntoView({ block: "nearest" });
   }, [focusItemId]);
 
-  const openFinding = (findingId: DocumentReviewFindingRow["id"]) => {
-    setExpandedId(findingId);
-    if (!visibleItems.some((item) => item.id === findingId)) {
-      setFilter("coverage");
-      setFlagFilter(null);
+  // The floating bar and the chat list read the same focused suggestion; a
+  // finding whose fix was staged as that suggestion opens and scrolls into
+  // view here too, so the two lists can never point at different changes.
+  const focusedSuggestionId = useReviewStore((state) =>
+    getReviewFocusedId(state, entityId),
+  );
+  const listRef = useRef<HTMLUListElement>(null);
+  useExternalSyncEffect(() => {
+    if (focusedSuggestionId === null) {
+      return;
     }
-  };
+    listRef.current
+      ?.querySelector(
+        `[data-suggestion-id="${CSS.escape(focusedSuggestionId)}"]`,
+      )
+      ?.scrollIntoView({ block: "nearest" });
+    const matched = orderedItems.find(
+      (item) => item.suggestionId === focusedSuggestionId,
+    );
+    if (matched !== undefined) {
+      setExpandedId(matched.id);
+    }
+  }, [focusedSuggestionId, orderedItems]);
 
   return (
     <section>
@@ -3069,30 +3118,7 @@ const ReviewResultList = ({
         onSelect={setFlagFilter}
         selected={flagFilter}
       />
-      {/* Where the listed findings actually fall in the document. The list is
-          ordered by severity; this is the only view of them in the order a
-          reader meets them. */}
-      <ReviewDealStrip
-        blocks={blocks}
-        findings={visibleItems.map((item) => ({
-          id: item.id,
-          title: item.title,
-          blockId: item.finding.citations.at(0)?.blockId ?? null,
-          severity: item.finding.severity,
-        }))}
-        onSelect={({ blockId, findingId }) => {
-          onScrollToBlock(blockId);
-          // The strip hands back the id it was given; resolving it against the
-          // listed items is what turns it back into a row this list can open.
-          const item = visibleItems.find(
-            (candidate) => candidate.id === findingId,
-          );
-          if (item !== undefined) {
-            openFinding(item.id);
-          }
-        }}
-      />
-      <ul className="space-y-1.5">
+      <ul className="space-y-1.5" ref={listRef}>
         {visibleItems.map((item) => (
           <ReviewResultCard
             editorAvailable={editorAvailable}
@@ -3249,7 +3275,7 @@ type ReviewResultCardProps = {
   onSetFlags: SetReviewFindingFlags;
   onToggle: () => void;
   onOpenReferenceCitation: (referenceFieldId: string, blockId: string) => void;
-  onScrollToBlock: (blockId: string) => void;
+  onScrollToBlock: (blockId: string, text?: string) => void;
 };
 
 /** The reference a finding's standard was quoted from, when every cited group
@@ -3305,6 +3331,13 @@ const ReviewResultCard = ({
       group.citations.map((citation) => [citation.blockId, group.fileFieldId]),
     ),
   );
+  // The cited passage's own text, so a scroll request can highlight it
+  // instead of only flashing the block.
+  const citationTextByBlockId = new Map(
+    finding.citations.map((citation) => [citation.blockId, citation.text]),
+  );
+  const scrollToCitedBlock = (blockId: string) =>
+    onScrollToBlock(blockId, citationTextByBlockId.get(blockId));
   const singleReferenceId = singleReferenceFieldId(finding);
   const singleReferenceName =
     singleReferenceId === null
@@ -3324,6 +3357,7 @@ const ReviewResultCard = ({
         // decided about.
         item.decision !== REVIEW_DECISION.OPEN && !expanded && "opacity-60",
       )}
+      data-suggestion-id={suggestion?.id}
     >
       <button
         aria-controls={detailId}
@@ -3372,7 +3406,7 @@ const ReviewResultCard = ({
             delta={finding.delta}
             impact={finding.impact ?? "unknown"}
             label={item.title}
-            onShowInDocument={editorAvailable ? onScrollToBlock : undefined}
+            onShowInDocument={editorAvailable ? scrollToCitedBlock : undefined}
             // Only a standard quoted from a reference has a document to
             // open; an authored one is language the playbook holds, and
             // offering to "show" it would lead nowhere.
@@ -3454,7 +3488,7 @@ const ReviewResultCard = ({
             onDecide={(decision) => onDecide(item.id, decision)}
             onSetFlags={(flags) => onSetFlags(item.id, item.decision, flags)}
             onRejectSuggestion={onRejectSuggestion}
-            onScrollToBlock={onScrollToBlock}
+            onScrollToBlock={scrollToCitedBlock}
             suggestion={suggestion}
             targetBlockId={targetBlockId}
           />

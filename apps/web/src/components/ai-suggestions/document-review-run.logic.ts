@@ -13,6 +13,7 @@ import type { ReviewFlag } from "@stll/api-contract";
 import type {
   ReferenceFile,
   ReviewPerspective,
+  ReviewSkippedTerm,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import type {
   DecidedReviewFinding,
@@ -206,6 +207,10 @@ export type RestoredReviewBasis = {
   positions: readonly PinnedPosition[];
   references: ReferenceFile[];
   perspective: ReviewPerspective;
+  /** What the proposal read and deliberately left off that list. Part of the
+   *  basis for the same reason the positions are: a checklist that silently
+   *  omits half the document reads as if the other half were compliant. */
+  skipped: readonly ReviewSkippedTerm[];
 };
 
 const pinnedReferenceFiles = (
@@ -222,15 +227,17 @@ const pinnedReferenceFiles = (
     fileName: reference.name,
   }));
 
-export const restoreReviewBasis = (
-  basis: DocumentReviewRunBasis,
-): RestoredReviewBasis => ({
+export const restoreReviewBasis = ({
+  basis,
+  skipped,
+}: Pick<DocumentReviewRunRow, "basis" | "skipped">): RestoredReviewBasis => ({
   playbookId: basis.playbook.definitionId,
   playbookName: basis.playbook.definitionSnapshot.name,
   provenance: basis.playbook.provenance,
   positions: basis.playbook.definitionSnapshot.positions.items,
   references: pinnedReferenceFiles(basis.references),
   perspective: basis.perspective,
+  skipped,
 });
 
 /**
@@ -268,7 +275,7 @@ export const restoreReviewRun = ({
   run,
   findings,
 }: DocumentReviewRunDetail): RestoredReviewRun => ({
-  basis: restoreReviewBasis(run.basis),
+  basis: restoreReviewBasis(run),
   findings: findings.map((row) => ({
     id: row.id,
     positionId: row.positionId,

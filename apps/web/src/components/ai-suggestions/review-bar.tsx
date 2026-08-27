@@ -35,6 +35,7 @@ import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef } from "@stll/folio-react";
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import {
@@ -52,13 +53,19 @@ import {
   getReviewBarAction,
   getReviewBarFocusTarget,
   getReviewBarPosition,
+  orderSuggestionsByDocumentPosition,
+  reviewBarHeading,
 } from "@/components/ai-suggestions/review-bar.logic";
+import { describeSuggestionChange } from "@/components/ai-suggestions/review-operation-labels";
+import type { SuggestionChange } from "@/components/ai-suggestions/review-operation-labels";
 import {
   getReviewFocusedId,
   useReviewStore,
 } from "@/components/ai-suggestions/review-store";
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
+import { useFolioDocumentBlocks } from "@/components/ai-suggestions/use-folio-document-blocks";
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -99,8 +106,19 @@ export const ReviewBar = ({
   const nextHotkey = useEffectiveHotkey("nextSuggestion");
   // `?? EMPTY_SUGGESTIONS` shares one module-level array for no-session
   // reads so useSyncExternalStore doesn't loop on a fresh `[]` each call.
-  const suggestions =
+  const storeSuggestions =
     useReviewStore((state) => state.sessions[entityId]) ?? EMPTY_SUGGESTIONS;
+  // Reading order, not hydration order: the stepper walks the document top to
+  // bottom the way the reviewer does. Read once the editor is readable; until
+  // then the session is passed through untouched.
+  const documentBlocks = useFolioDocumentBlocks(
+    docxEditorRef,
+    storeSuggestions.length > 0,
+  );
+  const suggestions = orderSuggestionsByDocumentPosition(
+    storeSuggestions,
+    documentBlocks,
+  );
   const focusedId = useReviewStore((state) =>
     getReviewFocusedId(state, entityId),
   );
@@ -195,6 +213,25 @@ export const ReviewBar = ({
     }
   });
 
+  // The reasoning behind a proposal lives on its card in the review panel.
+  // Bring that panel forward and park it on this suggestion rather than
+  // restating the argument on a bar that has room for one line.
+  const showWhy = useLatestCallback(() => {
+    const target = suggestions.at(activeIndex);
+    if (target === undefined) {
+      return;
+    }
+    setFocusedId(entityId, target.id);
+    const tabs = useInspectorTabsStore.getState();
+    const tab = tabs.tabs.find(
+      (candidate) =>
+        candidate.type === "pdf" && candidate.entityId === entityId,
+    );
+    if (tab) {
+      tabs.setFileFacet(tab.id, "playbook", { pulse: true });
+    }
+  });
+
   const revertActive = useLatestCallback(() => {
     const target = suggestions.at(activeIndex);
     if (target === undefined || getReviewBarAction(target) !== "revert") {
@@ -266,14 +303,10 @@ export const ReviewBar = ({
       role="toolbar"
     >
       {activeItem !== undefined && (
-        <button
-          className="text-foreground hover:bg-muted focus-visible:ring-ring min-w-0 flex-1 truncate rounded-md px-1.5 text-start text-xs font-medium transition-colors outline-none focus-visible:ring-2 @max-[42rem]/file-viewer:hidden"
-          onClick={() => navigateTo(activeItem)}
-          title={activeItem.summary}
-          type="button"
-        >
-          {activeItem.summary}
-        </button>
+        <SuggestionLabel
+          item={activeItem}
+          onActivate={() => navigateTo(activeItem)}
+        />
       )}
       <span className="text-muted-foreground min-w-14 px-1 text-center text-xs font-medium tabular-nums">
         {t("common.stepProgress", {
@@ -306,6 +339,14 @@ export const ReviewBar = ({
         variant="ghost"
       >
         <ChevronDownIcon className="size-4" />
+      </Button>
+      <Button
+        className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs"
+        onClick={showWhy}
+        size="sm"
+        variant="ghost"
+      >
+        {t("inspector.review.why")}
       </Button>
       <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
       {activeAction === "revert" && (
@@ -383,6 +424,79 @@ export const ReviewBar = ({
         </SelectPopup>
       </Select>
     </div>
+  );
+};
+
+type SuggestionLabelProps = {
+  item: ReviewSuggestion;
+  onActivate: () => void;
+};
+
+/**
+ * What the reviewer is about to decide, in two lines.
+ *
+ * The issue on top, because that is the reason the change exists: a review
+ * finding's title, or — for a change the chat proposed, which has no finding —
+ * what the operation does. The wording that would land underneath it, quietly,
+ * because the reviewer needs to recognise it, not read it here; the panel card
+ * and the document's own redline carry the full text.
+ */
+const SuggestionLabel = ({ item, onActivate }: SuggestionLabelProps) => {
+  const heading = reviewBarHeading(item);
+  const change =
+    item.pendingOperation === null
+      ? null
+      : describeSuggestionChange(item.pendingOperation);
+
+  return (
+    <button
+      className="hover:bg-muted focus-visible:ring-ring min-w-0 flex-1 rounded-md px-1.5 py-0.5 text-start transition-colors outline-none focus-visible:ring-2 @max-[42rem]/file-viewer:hidden"
+      onClick={onActivate}
+      title={heading}
+      type="button"
+    >
+      <BidiText
+        as="span"
+        className="text-foreground block truncate text-xs font-medium"
+      >
+        {heading}
+      </BidiText>
+      {change !== null && <SuggestionChangeLine change={change} />}
+    </button>
+  );
+};
+
+/** The wording an accept would land, in the reader's language. */
+const SuggestionChangeLine = ({
+  change,
+}: {
+  change: NonNullable<SuggestionChange>;
+}) => {
+  const t = useTranslations();
+  const text = (() => {
+    switch (change.type) {
+      case "replacement":
+        return t("docxReview.change.replacement", {
+          find: change.find,
+          replace: change.replace,
+        });
+      case "text":
+        return change.text;
+      case "message":
+        return t(change.key);
+      default:
+        change satisfies never;
+        return "";
+    }
+  })();
+
+  return (
+    <BidiText
+      as="span"
+      className="text-muted-foreground block truncate text-[11px] leading-4"
+    >
+      {text}
+    </BidiText>
   );
 };
 

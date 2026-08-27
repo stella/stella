@@ -53,9 +53,14 @@ export const REVIEW_CLAUSE_LABEL_CLASS =
   "text-muted-foreground text-xs tabular-nums";
 
 /** The passage measure: one scale, one leading, everywhere a passage renders.
- *  The pane's own width is the measure, so nothing caps it at a column. */
+ *  The pane's own width is the measure, so nothing caps it at a column.
+ *
+ *  The colour is stated, never inherited. A passage is the thing being read;
+ *  the labels around it are the metadata. Cards render inside panels that set
+ *  a muted colour for their own meta rows, and an inherited passage came out
+ *  grey enough to be hard to read. */
 const PASSAGE_PROSE_CLASS =
-  "flex w-full items-baseline gap-2 text-start text-sm leading-6 text-pretty";
+  "text-foreground flex w-full items-baseline gap-2 text-start text-sm leading-6 text-pretty";
 
 /**
  * How much of a passage a collapsed column shows.

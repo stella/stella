@@ -31,6 +31,7 @@ import {
 import type {
   ReviewParty,
   ReviewSkippedTerm,
+  ReviewSkipReason,
 } from "@/api/lib/document-review/contract";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import {
@@ -55,6 +56,26 @@ const GUIDANCE_MAX_LENGTH = 2000;
  *  it quotes belongs to one deal, so no second document can be measured
  *  against it. */
 export const DEAL_SPECIFIC_VALUE_SKIP_REASON = "deal-specific value";
+
+/** Why a subject was never a term to begin with: it is a difference in how the
+ *  two documents are built, not something either of them states. */
+export const STRUCTURAL_SKIP_REASON = "structural";
+
+/**
+ * The reason phrases the prompt itself hands the model, read back as codes.
+ *
+ * Both paths meet here: the skip this module decides on its own, and the same
+ * phrase echoed back by a model doing what the prompt asked. A reason the
+ * model wrote itself stays text — it follows the document's language, and no
+ * catalog of ours would render it any better.
+ */
+const CODED_SKIP_REASONS: Record<string, ReviewSkipReason> = {
+  [DEAL_SPECIFIC_VALUE_SKIP_REASON]: { kind: "deal-specific-value" },
+  [STRUCTURAL_SKIP_REASON]: { kind: "structural" },
+};
+
+export const codeSkipReason = (text: string): ReviewSkipReason =>
+  CODED_SKIP_REASONS[text.toLocaleLowerCase("und")] ?? { kind: "other", text };
 
 export const proposedPositionSchema = v.strictObject({
   /** What shape of term this is. Decides how the comparison is expressed and
@@ -285,12 +306,11 @@ export const createProposalNormalizer = ({
     skipped: 0,
   };
 
-  const skip = (subject: string, reason: string): ReviewProposalEvent[] => {
-    if (
-      counts.skipped >= REVIEW_SKIPPED_MAX ||
-      subject.length === 0 ||
-      reason.length === 0
-    ) {
+  const skip = (
+    subject: string,
+    reason: ReviewSkipReason,
+  ): ReviewProposalEvent[] => {
+    if (counts.skipped >= REVIEW_SKIPPED_MAX || subject.length === 0) {
       return [];
     }
     const key = subject.toLocaleLowerCase("und");
@@ -345,7 +365,7 @@ export const createProposalNormalizer = ({
         proposed.termKind === "parameter" &&
         !passages.some((passage) => statesComparableValue(passage.text))
       ) {
-        return skip(issue, DEAL_SPECIFIC_VALUE_SKIP_REASON);
+        return skip(issue, { kind: "deal-specific-value" });
       }
 
       const purpose = proposed.purpose.trim();
@@ -379,8 +399,14 @@ export const createProposalNormalizer = ({
       ];
     },
 
-    skipped: (proposed) =>
-      skip(proposed.subject.trim(), proposed.reason.trim()),
+    skipped: (proposed) => {
+      const reason = proposed.reason.trim();
+      // A subject with no reason is half a statement; the count it would add
+      // says nothing the reviewer can act on.
+      return reason.length === 0
+        ? []
+        : skip(proposed.subject.trim(), codeSkipReason(reason));
+    },
   };
 };
 

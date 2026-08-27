@@ -624,12 +624,13 @@ const queueReviewSuggestions = ({
         return [];
       }
       queuedIds.push(reportId);
+      const blockLabel = labelsById.get(folioOperationBlockId(folio));
       const base: ReviewSuggestion = {
         id,
         origin: REVIEW_SUGGESTION_ORIGIN.chat,
         blockId: folioOperationBlockId(folio),
         type: folio.type,
-        summary: summarizeOperation(folio),
+        summary: summarizeOperation(folio, blockLabel),
         preview,
         severity: inputOperationSeverity(input),
         area: inputOperationArea(input),
@@ -640,9 +641,8 @@ const queueReviewSuggestions = ({
         pendingOperation: folio,
         snapshot,
       };
-      const label = labelsById.get(folioOperationBlockId(folio));
-      if (label !== undefined) {
-        base.blockLabel = label;
+      if (blockLabel !== undefined) {
+        base.blockLabel = blockLabel;
       }
       const folioComment = folioOperationComment(folio);
       if (folioComment) {

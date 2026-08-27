@@ -1499,6 +1499,10 @@
     "applyDirect": "Otse",
     "applyTracked": "Jälitatud muudatustena",
     "barLabel": "Soovituste ülevaatus",
+    "change": {
+      "deleteParagraph": "Kustuta lõik",
+      "replacement": "„{find}“ → „{replace}“"
+    },
     "countHigh": "{count, plural, one {# kõrge} other {# kõrge}}",
     "countLow": "{count, plural, one {# madal} other {# madal}}",
     "countMedium": "{count, plural, one {# keskmine} other {# keskmine}}",
@@ -1514,7 +1518,27 @@
     "severityMedium": "Keskmine",
     "severityUnspecified": "Määramata",
     "skipped": "Ei saanud rakendada: {reason}",
-    "staleResolution": "See ettepanek on juba mujal lahendatud."
+    "staleResolution": "See ettepanek on juba mujal lahendatud.",
+    "summary": {
+      "commentOnParagraph": "{label, select, none {Lisa kommentaar lõigule} other {Lisa kommentaar lõigule {label}}}",
+      "commentOnSelection": "Lisa kommentaar valitud tekstile",
+      "deleteParagraph": "{label, select, none {Kustuta lõik} other {Kustuta lõik {label}}}",
+      "deleteTableColumn": "Kustuta tabeli veerg",
+      "deleteTableRow": "Kustuta tabeli rida",
+      "formatSelection": "Vorminda valitud tekst ümber",
+      "insertAfter": "{label, select, none {Lisa lõik} other {Lisa lõik pärast lõiku {label}}}",
+      "insertBefore": "{label, select, none {Lisa lõik} other {Lisa lõik enne lõiku {label}}}",
+      "insertSignatureBlock": "Lisa allkirjatabel {names} jaoks",
+      "insertTableColumn": "Lisa tabeli veerg",
+      "insertTableRow": "Lisa tabeli rida",
+      "mergeTableCells": "Ühenda tabeli lahtrid",
+      "pageBreakAfter": "{label, select, none {Lisa lehepiir} other {Lisa lehepiir pärast lõiku {label}}}",
+      "pageBreakBefore": "{label, select, none {Lisa lehepiir} other {Lisa lehepiir enne lõiku {label}}}",
+      "replaceInBlock": "Asenda „{find}“ sõnaga „{replace}“",
+      "replaceParagraph": "{label, select, none {Kirjuta lõik ümber} other {Kirjuta lõik {label} ümber}}",
+      "replaceSelection": "Asenda valitud tekst sõnaga „{replace}“",
+      "splitTableCell": "Tükelda tabeli lahter"
+    }
   },
   "emailViewer": {
     "attachments": "Manused",
@@ -2320,12 +2344,6 @@
       "checks": "Kontrollitakse:",
       "commentFailed": "Kommentaari lisamine ebaõnnestus",
       "comparedWithReferences": "{count, plural, one {Võrreldud # võrdlusdokumendiga} other {Võrreldud # võrdlusdokumendiga}}",
-      "dealStrip": {
-        "flagged": "{count, number} märgistatud",
-        "label": "Kus leiud dokumendis paiknevad",
-        "more": "+{count, number} veel",
-        "preamble": "Preambul"
-      },
       "decidedCount": "{count, number} otsustatud",
       "decision": "Otsus",
       "decisionFailed": "Otsust ei õnnestunud salvestada",
@@ -2446,6 +2464,10 @@
       "showInDocument": "Näita dokumendis",
       "sizeConfirmStart": "Alusta kontrolli",
       "sizeConfirmTitle": "Mahukas kontroll",
+      "skipReason": {
+        "dealSpecificValue": "Tehingupõhine väärtus",
+        "structural": "Struktuurne erinevus"
+      },
       "standardColumn": "Standardtekst",
       "standardColumnFrom": "Standardtekst ({name})",
       "suggestionSkipped": "Ei vasta enam dokumendile",

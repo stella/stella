@@ -64,6 +64,9 @@ export const readDocumentReviewRunDetail = async function* ({
           entityVersionId: documentReviewRuns.entityVersionId,
           contentSha256: documentReviewRuns.contentSha256,
           basis: documentReviewRuns.basis,
+          // What the proposal pass left uncompared, so the results can say how
+          // much of the document the checklist never covered.
+          skipped: documentReviewRuns.skipped,
           total: documentReviewRuns.total,
           completed: documentReviewRuns.completed,
           pipelineVersion: documentReviewRuns.pipelineVersion,

@@ -1,6 +1,10 @@
 import { sql } from "drizzle-orm";
 
-import type { ReviewParty } from "@/api/lib/document-review/contract";
+import { REVIEW_SKIPPED_MAX } from "@/api/lib/document-review/contract";
+import type {
+  ReviewParty,
+  ReviewSkippedTerm,
+} from "@/api/lib/document-review/contract";
 import {
   DOCUMENT_REVIEW_APPLICATION_STATUSES,
   DOCUMENT_REVIEW_APPLICATION_STATUS,
@@ -96,6 +100,12 @@ export const documentReviewRuns = p.pgTable(
       "playbook_definition_id",
     ),
     basis: jsonb().$type<DocumentReviewRunBasis>().notNull(),
+    // What the proposal pass read and deliberately did not turn into a
+    // position. Pinned on the run beside the positions rather than left in the
+    // browser: a checklist that silently omits half the document reads as if
+    // the other half were compliant, and that stays true when the review is
+    // reopened tomorrow. Empty for a run with no proposal behind it.
+    skipped: jsonb().$type<ReviewSkippedTerm[]>().notNull().default([]),
     status: p
       .text("status", { enum: DOCUMENT_REVIEW_RUN_STATUSES })
       .notNull()
@@ -171,6 +181,14 @@ export const documentReviewRuns = p.pgTable(
       "document_review_runs_basis_shape_check",
       sql`${table.basis}->'playbook'->>'provenance' IN (${PIN_PROVENANCE_SQL_VALUES})
         AND jsonb_typeof(${table.basis}->'playbook'->'definitionSnapshot'->'positions') = 'object'`,
+    ),
+    // A list, and no longer than the proposal pass will report. The column
+    // states it: the array arrives element by element from the wire, and
+    // Drizzle's `$type` is compile-time only.
+    p.check(
+      "document_review_runs_skipped_shape_check",
+      sql`jsonb_typeof(${table.skipped}) = 'array'
+        AND jsonb_array_length(${table.skipped}) <= ${sql.raw(String(REVIEW_SKIPPED_MAX))}`,
     ),
     p.check(
       "document_review_runs_progress_nonnegative_check",

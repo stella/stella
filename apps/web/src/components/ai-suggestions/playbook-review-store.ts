@@ -171,6 +171,10 @@ export type StartRunArgs = {
   >[];
   perspective: ReviewPerspective;
   positions: readonly Position[];
+  /** What the proposal read and left off the checklist. Pinned on the run
+   *  with the positions, so the results can still say how much of the document
+   *  was never compared; empty for a run with no proposal behind it. */
+  skipped: readonly ReviewSkippedTerm[];
   unexpectedErrorMessage: string;
   /** Restated size estimate after a confirmation answer. */
   confirmedUnits?: number;
@@ -276,6 +280,7 @@ const requestRun = async ({
   references,
   perspective,
   positions,
+  skipped,
   confirmedUnits,
 }: Omit<StartRunArgs, "unexpectedErrorMessage">) => {
   // Both channels are read here rather than handed on as one response: the
@@ -299,6 +304,7 @@ const requestRun = async ({
         positions: [...positions],
         references: referenceRefs(references),
         perspective,
+        skipped: [...skipped],
         ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
       },
       { fetch: { signal: AbortSignal.timeout(RUN_CREATE_TIMEOUT_MS) } },
@@ -351,6 +357,9 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
         references: [],
         perspective: setup.perspective,
         positions: seededPositions,
+        // No reference documents means no proposal, so nothing was read and
+        // left uncompared.
+        skipped: [],
         unexpectedErrorMessage,
       });
     }
@@ -559,6 +568,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
       references: setup.references,
       perspective: setup.perspective,
       positions: proposed.filter((position) => position.enabled),
+      skipped: session.proposal?.skipped ?? [],
       unexpectedErrorMessage,
     });
   },
@@ -599,6 +609,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     references,
     perspective,
     positions,
+    skipped,
     unexpectedErrorMessage,
     confirmedUnits,
   }) => {
@@ -633,6 +644,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
           references,
           perspective,
           positions,
+          skipped,
           ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
         }),
     );
@@ -669,6 +681,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
                     references,
                     perspective,
                     positions,
+                    skipped,
                     unexpectedErrorMessage,
                   },
                 },
@@ -801,6 +814,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
       references: session.setup.references,
       perspective: session.setup.perspective,
       positions: session.positions,
+      skipped: session.skipped,
       unexpectedErrorMessage,
     });
   },

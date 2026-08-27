@@ -1499,6 +1499,10 @@
     "applyDirect": "Direkt",
     "applyTracked": "Nachverfolgte Änderungen",
     "barLabel": "Vorschlagsprüfung",
+    "change": {
+      "deleteParagraph": "Absatz löschen",
+      "replacement": "„{find}“ → „{replace}“"
+    },
     "countHigh": "{count, plural, one {# hoch} other {# hoch}}",
     "countLow": "{count, plural, one {# niedrig} other {# niedrig}}",
     "countMedium": "{count, plural, one {# mittel} other {# mittel}}",
@@ -1514,7 +1518,27 @@
     "severityMedium": "Mittel",
     "severityUnspecified": "Nicht angegeben",
     "skipped": "Konnte nicht angewendet werden: {reason}",
-    "staleResolution": "Dieser Vorschlag wurde bereits an anderer Stelle bearbeitet."
+    "staleResolution": "Dieser Vorschlag wurde bereits an anderer Stelle bearbeitet.",
+    "summary": {
+      "commentOnParagraph": "{label, select, none {Einen Absatz kommentieren} other {Absatz {label} kommentieren}}",
+      "commentOnSelection": "Ausgewählten Text kommentieren",
+      "deleteParagraph": "{label, select, none {Einen Absatz löschen} other {Absatz {label} löschen}}",
+      "deleteTableColumn": "Eine Tabellenspalte löschen",
+      "deleteTableRow": "Eine Tabellenzeile löschen",
+      "formatSelection": "Ausgewählten Text neu formatieren",
+      "insertAfter": "{label, select, none {Einen Absatz einfügen} other {Absatz nach {label} einfügen}}",
+      "insertBefore": "{label, select, none {Einen Absatz einfügen} other {Absatz vor {label} einfügen}}",
+      "insertSignatureBlock": "Signaturtabelle für {names} einfügen",
+      "insertTableColumn": "Eine Tabellenspalte einfügen",
+      "insertTableRow": "Eine Tabellenzeile einfügen",
+      "mergeTableCells": "Tabellenzellen verbinden",
+      "pageBreakAfter": "{label, select, none {Einen Seitenumbruch einfügen} other {Seitenumbruch nach {label} einfügen}}",
+      "pageBreakBefore": "{label, select, none {Einen Seitenumbruch einfügen} other {Seitenumbruch vor {label} einfügen}}",
+      "replaceInBlock": "„{find}“ durch „{replace}“ ersetzen",
+      "replaceParagraph": "{label, select, none {Einen Absatz umformulieren} other {Absatz {label} umformulieren}}",
+      "replaceSelection": "Ausgewählten Text durch „{replace}“ ersetzen",
+      "splitTableCell": "Eine Tabellenzelle teilen"
+    }
   },
   "emailViewer": {
     "attachments": "Anhänge",
@@ -2320,12 +2344,6 @@
       "checks": "Geprüft wird:",
       "commentFailed": "Kommentar konnte nicht hinzugefügt werden",
       "comparedWithReferences": "{count, plural, one {Mit # Referenzdokument verglichen} other {Mit # Referenzdokumenten verglichen}}",
-      "dealStrip": {
-        "flagged": "{count, number} gekennzeichnet",
-        "label": "Wo die Ergebnisse im Dokument liegen",
-        "more": "+{count, number} weitere",
-        "preamble": "Präambel"
-      },
       "decidedCount": "{count, number} entschieden",
       "decision": "Entscheidung",
       "decisionFailed": "Entscheidung konnte nicht gespeichert werden",
@@ -2446,6 +2464,10 @@
       "showInDocument": "Im Dokument anzeigen",
       "sizeConfirmStart": "Prüfung starten",
       "sizeConfirmTitle": "Umfangreiche Prüfung",
+      "skipReason": {
+        "dealSpecificValue": "Transaktionsspezifischer Wert",
+        "structural": "Struktureller Unterschied"
+      },
       "standardColumn": "Der Standard",
       "standardColumnFrom": "Der Standard ({name})",
       "suggestionSkipped": "Stimmt nicht mehr mit dem Dokument überein",

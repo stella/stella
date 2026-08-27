@@ -28,8 +28,10 @@ import { Result } from "better-result";
 import {
   createPartialProposalReader,
   createProposalNormalizer,
+  DEAL_SPECIFIC_VALUE_SKIP_REASON,
   normalizeProposal,
   proposedPositionsSchema,
+  STRUCTURAL_SKIP_REASON,
 } from "@/api/handlers/document-reviews/reference-position-normalizer";
 import type {
   ReferenceSource,
@@ -89,11 +91,11 @@ A value that belongs to one deal is not comparable and is never a position: cale
 - the length between two dates rather than either date — "Locked-box period length (locked-box date to closing)", a parameter measured in months;
 - whether the mechanism exists at all — "Locked-box mechanism present", a presence term;
 - the rate or formula applied to the price rather than the price — "Ticking interest on the purchase price", a parameter.
-Where no comparable term sits behind it, put it in skipped with the reason "deal-specific value".
+Where no comparable term sits behind it, put it in skipped with the reason exactly "${DEAL_SPECIFIC_VALUE_SKIP_REASON}".
 
 passages are the reference blocks that state the term. Cite only exact block IDs supplied in the input, only from reference documents, never from F0. Fewest that carry the term, up to twelve; for an enumeration, every limb. A term you cannot quote is not a position.
 
-Put in skipped, and do not propose, anything else deal-specific or structural: signing and closing sequence, the difference between a preliminary and a final agreement, party names and addresses, schedule and annex lists, and execution mechanics. subject names it; reason says in a few words why it is not comparable.
+Put in skipped, and do not propose, anything else deal-specific or structural: signing and closing sequence, the difference between a preliminary and a final agreement, party names and addresses, schedule and annex lists, and execution mechanics. subject names it. reason is exactly "${STRUCTURAL_SKIP_REASON}" where the two documents are simply built differently, exactly "${DEAL_SPECIFIC_VALUE_SKIP_REASON}" where the subject is one deal's own value, and otherwise a few words on why it is not comparable.
 
 Do not judge the target, score it, or propose wording. Do not repeat a position the reviewer already has.
 

@@ -17,8 +17,20 @@ export type ReviewParty = { role: string; name: string | null };
 
 /** Something the reference document covers that the position pass read but
  *  deliberately did not turn into a position: `subject` names it, `reason`
- *  says in a few words why it is not comparable. */
-export type ReviewSkippedTerm = { subject: string; reason: string };
+ *  says why it is not comparable. */
+export type ReviewSkippedTerm = { subject: string; reason: ReviewSkipReason };
+
+/**
+ * Why a subject was not compared. The two the engine decides itself are codes
+ * this app renders in the reader's language; `other` carries the model's own
+ * words, which follow the document rather than the interface. Mirrors the
+ * API's `ReviewSkipReason` — the run read is typed against the API, so a drift
+ * fails to compile where a run's skips are restored.
+ */
+export type ReviewSkipReason =
+  | { kind: "deal-specific-value" }
+  | { kind: "structural" }
+  | { kind: "other"; text: string };
 
 /**
  * Whose interest a comparison is judged for: one of the target's parties, or

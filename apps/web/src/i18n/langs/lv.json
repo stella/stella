@@ -1499,6 +1499,10 @@
     "applyDirect": "Tieši",
     "applyTracked": "Izsekotās izmaiņas",
     "barLabel": "Ieteikumu pārskatīšana",
+    "change": {
+      "deleteParagraph": "Dzēst rindkopu",
+      "replacement": "„{find}” → „{replace}”"
+    },
     "countHigh": "{count, plural, zero {# augstu} one {# augsta} other {# augstas}}",
     "countLow": "{count, plural, zero {# zemu} one {# zema} other {# zemas}}",
     "countMedium": "{count, plural, zero {# vidēju} one {# vidēja} other {# vidējas}}",
@@ -1514,7 +1518,27 @@
     "severityMedium": "Vidēja",
     "severityUnspecified": "Nenorādīta",
     "skipped": "Neizdevās lietot: {reason}",
-    "staleResolution": "Šis ieteikums jau ir atrisināts citur."
+    "staleResolution": "Šis ieteikums jau ir atrisināts citur.",
+    "summary": {
+      "commentOnParagraph": "{label, select, none {Pievienot komentāru rindkopai} other {Pievienot komentāru rindkopai {label}}}",
+      "commentOnSelection": "Pievienot komentāru atlasītajam tekstam",
+      "deleteParagraph": "{label, select, none {Dzēst rindkopu} other {Dzēst rindkopu {label}}}",
+      "deleteTableColumn": "Dzēst tabulas kolonnu",
+      "deleteTableRow": "Dzēst tabulas rindu",
+      "formatSelection": "Pārformatēt atlasīto tekstu",
+      "insertAfter": "{label, select, none {Ievietot rindkopu} other {Ievietot rindkopu aiz {label}}}",
+      "insertBefore": "{label, select, none {Ievietot rindkopu} other {Ievietot rindkopu pirms {label}}}",
+      "insertSignatureBlock": "Ievietot parakstu tabulu personām: {names}",
+      "insertTableColumn": "Ievietot tabulas kolonnu",
+      "insertTableRow": "Ievietot tabulas rindu",
+      "mergeTableCells": "Apvienot tabulas šūnas",
+      "pageBreakAfter": "{label, select, none {Ievietot lapas pārtraukumu} other {Ievietot lapas pārtraukumu aiz {label}}}",
+      "pageBreakBefore": "{label, select, none {Ievietot lapas pārtraukumu} other {Ievietot lapas pārtraukumu pirms {label}}}",
+      "replaceInBlock": "Aizstāt „{find}” ar „{replace}”",
+      "replaceParagraph": "{label, select, none {Pārrakstīt rindkopu} other {Pārrakstīt rindkopu {label}}}",
+      "replaceSelection": "Aizstāt atlasīto tekstu ar „{replace}”",
+      "splitTableCell": "Sadalīt tabulas šūnu"
+    }
   },
   "emailViewer": {
     "attachments": "Pielikumi",
@@ -2320,12 +2344,6 @@
       "checks": "Tiek pārbaudīts:",
       "commentFailed": "Komentāru neizdevās pievienot",
       "comparedWithReferences": "{count, plural, zero {Nav salīdzināts ne ar vienu atsauces dokumentu} one {Salīdzināts ar # atsauces dokumentu} other {Salīdzināts ar # atsauces dokumentiem}}",
-      "dealStrip": {
-        "flagged": "{count, number} atzīmēti",
-        "label": "Kur dokumentā atrodas secinājumi",
-        "more": "+{count, number} vairāk",
-        "preamble": "Preambula"
-      },
       "decidedCount": "{count, number} izlemti",
       "decision": "Lēmums",
       "decisionFailed": "Lēmumu neizdevās saglabāt",
@@ -2446,6 +2464,10 @@
       "showInDocument": "Rādīt dokumentā",
       "sizeConfirmStart": "Sākt pārbaudi",
       "sizeConfirmTitle": "Apjomīga pārbaude",
+      "skipReason": {
+        "dealSpecificValue": "Konkrētam darījumam raksturīga vērtība",
+        "structural": "Strukturāla atšķirība"
+      },
       "standardColumn": "Standarts",
       "standardColumnFrom": "Standarts ({name})",
       "suggestionSkipped": "Vairs neatbilst dokumentam",

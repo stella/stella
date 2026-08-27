@@ -311,6 +311,9 @@ const createDocumentReviewRun = createSafeHandler(
           contentSha256: pinnedTarget.file.sha256Hex,
           playbookDefinitionId: playbook.definitionId,
           basis,
+          // Pinned by value with everything else the reviewer confirmed: what
+          // the proposal left uncompared is part of what this run covered.
+          skipped: body.skipped,
           status: "queued",
           total: plan.expectedFindingCount,
           requestedBy: user.id,

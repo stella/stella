@@ -43,7 +43,20 @@ export const REVIEW_PARTIES_MAX = 8;
 // between a preliminary and a final agreement, party and schedule particulars.
 // Reported rather than dropped: a checklist that silently omits half the
 // document reads as if the other half were compliant.
-export type ReviewSkippedTerm = { subject: string; reason: string };
+export type ReviewSkippedTerm = { subject: string; reason: ReviewSkipReason };
+
+/**
+ * Why a subject was read and not compared.
+ *
+ * Coded, not prose: the two reasons the prompt itself hands the model are
+ * decided here and rendered in the reader's language, so a Czech reviewer is
+ * not told "deal-specific value" in English. `other` carries the model's own
+ * words, which follow the document rather than the interface.
+ */
+export type ReviewSkipReason =
+  | { kind: "deal-specific-value" }
+  | { kind: "structural" }
+  | { kind: "other"; text: string };
 
 export const REVIEW_SKIP_SUBJECT_MAX_LENGTH = 256;
 export const REVIEW_SKIP_REASON_MAX_LENGTH = 300;

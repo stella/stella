@@ -1499,6 +1499,10 @@
     "applyDirect": "Direct",
     "applyTracked": "Suivi des modifications",
     "barLabel": "Révision des suggestions",
+    "change": {
+      "deleteParagraph": "Supprimer le paragraphe",
+      "replacement": "« {find} » → « {replace} »"
+    },
     "countHigh": "{count, plural, one {# élevée} other {# élevées}}",
     "countLow": "{count, plural, one {# faible} other {# faibles}}",
     "countMedium": "{count, plural, one {# moyenne} other {# moyennes}}",
@@ -1514,7 +1518,27 @@
     "severityMedium": "Moyenne",
     "severityUnspecified": "Non précisée",
     "skipped": "Impossible d’appliquer : {reason}",
-    "staleResolution": "Cette suggestion a déjà été traitée ailleurs."
+    "staleResolution": "Cette suggestion a déjà été traitée ailleurs.",
+    "summary": {
+      "commentOnParagraph": "{label, select, none {Commenter un paragraphe} other {Commenter le paragraphe {label}}}",
+      "commentOnSelection": "Commenter le texte sélectionné",
+      "deleteParagraph": "{label, select, none {Supprimer un paragraphe} other {Supprimer le paragraphe {label}}}",
+      "deleteTableColumn": "Supprimer une colonne de tableau",
+      "deleteTableRow": "Supprimer une ligne de tableau",
+      "formatSelection": "Reformater le texte sélectionné",
+      "insertAfter": "{label, select, none {Insérer un paragraphe} other {Insérer un paragraphe après {label}}}",
+      "insertBefore": "{label, select, none {Insérer un paragraphe} other {Insérer un paragraphe avant {label}}}",
+      "insertSignatureBlock": "Insérer un bloc de signature pour {names}",
+      "insertTableColumn": "Insérer une colonne de tableau",
+      "insertTableRow": "Insérer une ligne de tableau",
+      "mergeTableCells": "Fusionner les cellules de tableau",
+      "pageBreakAfter": "{label, select, none {Insérer un saut de page} other {Insérer un saut de page après {label}}}",
+      "pageBreakBefore": "{label, select, none {Insérer un saut de page} other {Insérer un saut de page avant {label}}}",
+      "replaceInBlock": "Remplacer « {find} » par « {replace} »",
+      "replaceParagraph": "{label, select, none {Reformuler un paragraphe} other {Reformuler le paragraphe {label}}}",
+      "replaceSelection": "Remplacer le texte sélectionné par « {replace} »",
+      "splitTableCell": "Fractionner une cellule de tableau"
+    }
   },
   "emailViewer": {
     "attachments": "Pièces jointes",
@@ -2320,12 +2344,6 @@
       "checks": "Point vérifié :",
       "commentFailed": "Impossible d’ajouter le commentaire",
       "comparedWithReferences": "{count, plural, one {Comparé à # document de référence} other {Comparé à # documents de référence}}",
-      "dealStrip": {
-        "flagged": "{count, number} signalé",
-        "label": "Où se situent les constats dans le document",
-        "more": "+{count, number} de plus",
-        "preamble": "Préambule"
-      },
       "decidedCount": "{count, number} décidé",
       "decision": "Décision",
       "decisionFailed": "Impossible d’enregistrer votre décision",
@@ -2446,6 +2464,10 @@
       "showInDocument": "Afficher dans le document",
       "sizeConfirmStart": "Lancer la révision",
       "sizeConfirmTitle": "Révision volumineuse",
+      "skipReason": {
+        "dealSpecificValue": "Valeur propre à l'opération",
+        "structural": "Différence structurelle"
+      },
       "standardColumn": "Le standard",
       "standardColumnFrom": "Le standard ({name})",
       "suggestionSkipped": "Ne correspond plus au document",

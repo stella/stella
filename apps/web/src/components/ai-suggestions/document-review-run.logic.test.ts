@@ -254,6 +254,9 @@ const cachedRun = (
         },
       ],
     },
+    skipped: [
+      { subject: "Long-stop date", reason: { kind: "deal-specific-value" } },
+    ],
     total: findings.length,
     completed: findings.length,
     pipelineVersion: 2,

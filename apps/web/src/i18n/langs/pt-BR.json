@@ -1499,6 +1499,10 @@
     "applyDirect": "Direto",
     "applyTracked": "Controle de alterações",
     "barLabel": "Revisão de sugestões",
+    "change": {
+      "deleteParagraph": "Excluir parágrafo",
+      "replacement": "“{find}” → “{replace}”"
+    },
     "countHigh": "{count, plural, one {# alto} other {# altos}}",
     "countLow": "{count, plural, one {# baixo} other {# baixos}}",
     "countMedium": "{count, plural, one {# médio} other {# médios}}",
@@ -1514,7 +1518,27 @@
     "severityMedium": "Médio",
     "severityUnspecified": "Não especificado",
     "skipped": "Não foi possível aplicar: {reason}",
-    "staleResolution": "Esta sugestão já foi resolvida em outro lugar."
+    "staleResolution": "Esta sugestão já foi resolvida em outro lugar.",
+    "summary": {
+      "commentOnParagraph": "{label, select, none {Comentar um parágrafo} other {Comentar o parágrafo {label}}}",
+      "commentOnSelection": "Comentar o texto selecionado",
+      "deleteParagraph": "{label, select, none {Excluir um parágrafo} other {Excluir o parágrafo {label}}}",
+      "deleteTableColumn": "Excluir uma coluna de tabela",
+      "deleteTableRow": "Excluir uma linha de tabela",
+      "formatSelection": "Reformatar o texto selecionado",
+      "insertAfter": "{label, select, none {Inserir um parágrafo} other {Inserir um parágrafo após {label}}}",
+      "insertBefore": "{label, select, none {Inserir um parágrafo} other {Inserir um parágrafo antes de {label}}}",
+      "insertSignatureBlock": "Inserir uma tabela de assinaturas para {names}",
+      "insertTableColumn": "Inserir uma coluna de tabela",
+      "insertTableRow": "Inserir uma linha de tabela",
+      "mergeTableCells": "Mesclar células de tabela",
+      "pageBreakAfter": "{label, select, none {Inserir uma quebra de página} other {Inserir uma quebra de página após {label}}}",
+      "pageBreakBefore": "{label, select, none {Inserir uma quebra de página} other {Inserir uma quebra de página antes de {label}}}",
+      "replaceInBlock": "Substituir “{find}” por “{replace}”",
+      "replaceParagraph": "{label, select, none {Reescrever um parágrafo} other {Reescrever o parágrafo {label}}}",
+      "replaceSelection": "Substituir o texto selecionado por “{replace}”",
+      "splitTableCell": "Dividir uma célula de tabela"
+    }
   },
   "emailViewer": {
     "attachments": "Anexos",
@@ -2320,12 +2344,6 @@
       "checks": "O que é verificado:",
       "commentFailed": "Não foi possível adicionar o comentário",
       "comparedWithReferences": "{count, plural, one {Comparado com # documento de referência} other {Comparado com # documentos de referência}}",
-      "dealStrip": {
-        "flagged": "{count, number} sinalizado",
-        "label": "Onde as constatações se encontram no documento",
-        "more": "+{count, number} mais",
-        "preamble": "Preâmbulo"
-      },
       "decidedCount": "{count, number} decidido",
       "decision": "Decisão",
       "decisionFailed": "Não foi possível registrar sua decisão",
@@ -2446,6 +2464,10 @@
       "showInDocument": "Mostrar no documento",
       "sizeConfirmStart": "Iniciar revisão",
       "sizeConfirmTitle": "Revisão extensa",
+      "skipReason": {
+        "dealSpecificValue": "Valor específico da operação",
+        "structural": "Diferença estrutural"
+      },
       "standardColumn": "O padrão",
       "standardColumnFrom": "O padrão ({name})",
       "suggestionSkipped": "Não corresponde mais ao documento",

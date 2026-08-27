@@ -20,6 +20,7 @@ import {
   proposedPositionSchema,
   proposedPositionsSchema,
   statesComparableValue,
+  STRUCTURAL_SKIP_REASON,
 } from "@/api/handlers/document-reviews/reference-position-normalizer";
 import type {
   ProposedPositions,
@@ -374,8 +375,8 @@ describe("deal-specific values", () => {
       "Locked-box period length",
     ]);
     expect(skipped).toEqual([
-      { subject: "Locked-box date", reason: DEAL_SPECIFIC_VALUE_SKIP_REASON },
-      { subject: "Long-stop date", reason: DEAL_SPECIFIC_VALUE_SKIP_REASON },
+      { subject: "Locked-box date", reason: { kind: "deal-specific-value" } },
+      { subject: "Long-stop date", reason: { kind: "deal-specific-value" } },
     ]);
   });
 
@@ -419,7 +420,29 @@ describe("skipped", () => {
         { subject: "   ", reason: "No subject." },
       ]),
     ).toEqual([
-      { subject: "Signing and closing sequence", reason: "Deal mechanics." },
+      {
+        subject: "Signing and closing sequence",
+        reason: { kind: "other", text: "Deal mechanics." },
+      },
+    ]);
+  });
+
+  test("codes the reasons the prompt itself hands the model", () => {
+    expect(
+      skips([
+        { subject: "Long-stop date", reason: DEAL_SPECIFIC_VALUE_SKIP_REASON },
+        { subject: "Annex list", reason: ` ${STRUCTURAL_SKIP_REASON} ` },
+        { subject: "Notary", reason: "Structural" },
+        { subject: "Escrow agent", reason: "Only in the precedent." },
+      ]),
+    ).toEqual([
+      { subject: "Long-stop date", reason: { kind: "deal-specific-value" } },
+      { subject: "Annex list", reason: { kind: "structural" } },
+      { subject: "Notary", reason: { kind: "structural" } },
+      {
+        subject: "Escrow agent",
+        reason: { kind: "other", text: "Only in the precedent." },
+      },
     ]);
   });
 

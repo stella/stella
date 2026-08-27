@@ -1499,6 +1499,10 @@
     "applyDirect": "Tiesiogiai",
     "applyTracked": "Sekami pakeitimai",
     "barLabel": "Pasiūlymų peržiūra",
+    "change": {
+      "deleteParagraph": "Ištrinti pastraipą",
+      "replacement": "„{find}“ → „{replace}“"
+    },
     "countHigh": "{count, plural, one {# aukšta} few {# aukštos} other {# aukštų}}",
     "countLow": "{count, plural, one {# žema} few {# žemos} other {# žemų}}",
     "countMedium": "{count, plural, one {# vidutinė} few {# vidutinės} other {# vidutinių}}",
@@ -1514,7 +1518,27 @@
     "severityMedium": "Vidutinė",
     "severityUnspecified": "Nenurodyta",
     "skipped": "Nepavyko pritaikyti: {reason}",
-    "staleResolution": "Šis pasiūlymas jau išspręstas kitur."
+    "staleResolution": "Šis pasiūlymas jau išspręstas kitur.",
+    "summary": {
+      "commentOnParagraph": "{label, select, none {Pridėti komentarą prie pastraipos} other {Pridėti komentarą prie pastraipos {label}}}",
+      "commentOnSelection": "Pridėti komentarą prie pažymėto teksto",
+      "deleteParagraph": "{label, select, none {Ištrinti pastraipą} other {Ištrinti pastraipą {label}}}",
+      "deleteTableColumn": "Ištrinti lentelės stulpelį",
+      "deleteTableRow": "Ištrinti lentelės eilutę",
+      "formatSelection": "Iš naujo formatuoti pažymėtą tekstą",
+      "insertAfter": "{label, select, none {Įterpti pastraipą} other {Įterpti pastraipą po {label}}}",
+      "insertBefore": "{label, select, none {Įterpti pastraipą} other {Įterpti pastraipą prieš {label}}}",
+      "insertSignatureBlock": "Įterpti parašų lentelę, skirtą {names}",
+      "insertTableColumn": "Įterpti lentelės stulpelį",
+      "insertTableRow": "Įterpti lentelės eilutę",
+      "mergeTableCells": "Sujungti lentelės langelius",
+      "pageBreakAfter": "{label, select, none {Įterpti puslapio lūžį} other {Įterpti puslapio lūžį po {label}}}",
+      "pageBreakBefore": "{label, select, none {Įterpti puslapio lūžį} other {Įterpti puslapio lūžį prieš {label}}}",
+      "replaceInBlock": "Pakeisti „{find}“ į „{replace}“",
+      "replaceParagraph": "{label, select, none {Perrašyti pastraipą} other {Perrašyti pastraipą {label}}}",
+      "replaceSelection": "Pakeisti pažymėtą tekstą į „{replace}“",
+      "splitTableCell": "Padalyti lentelės langelį"
+    }
   },
   "emailViewer": {
     "attachments": "Priedai",
@@ -2320,12 +2344,6 @@
       "checks": "Tikrinama:",
       "commentFailed": "Nepavyko pridėti komentaro",
       "comparedWithReferences": "{count, plural, one {Palyginta su # referenciniu dokumentu} few {Palyginta su # referenciniais dokumentais} other {Palyginta su # referencinių dokumentų}}",
-      "dealStrip": {
-        "flagged": "{count, number} pažymėta",
-        "label": "Kur dokumente yra išvados",
-        "more": "+{count, number} daugiau",
-        "preamble": "Preambulė"
-      },
       "decidedCount": "{count, number} nuspręsta",
       "decision": "Sprendimas",
       "decisionFailed": "Nepavyko įrašyti sprendimo",
@@ -2446,6 +2464,10 @@
       "showInDocument": "Rodyti dokumente",
       "sizeConfirmStart": "Pradėti patikrą",
       "sizeConfirmTitle": "Didelės apimties patikra",
+      "skipReason": {
+        "dealSpecificValue": "Konkretaus sandorio reikšmė",
+        "structural": "Struktūrinis skirtumas"
+      },
       "standardColumn": "Standartas",
       "standardColumnFrom": "Standartas ({name})",
       "suggestionSkipped": "Nebeatitinka dokumento",

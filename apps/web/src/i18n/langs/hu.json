@@ -1499,6 +1499,10 @@
     "applyDirect": "Közvetlen",
     "applyTracked": "Követett módosítások",
     "barLabel": "Javaslatok áttekintése",
+    "change": {
+      "deleteParagraph": "Bekezdés törlése",
+      "replacement": "„{find}” → „{replace}”"
+    },
     "countHigh": "{count, plural, one {# magas} other {# magas}}",
     "countLow": "{count, plural, one {# alacsony} other {# alacsony}}",
     "countMedium": "{count, plural, one {# közepes} other {# közepes}}",
@@ -1514,7 +1518,27 @@
     "severityMedium": "Közepes",
     "severityUnspecified": "Nincs megadva",
     "skipped": "Nem sikerült alkalmazni: {reason}",
-    "staleResolution": "Ezt a javaslatot már máshol elbírálták."
+    "staleResolution": "Ezt a javaslatot már máshol elbírálták.",
+    "summary": {
+      "commentOnParagraph": "{label, select, none {Megjegyzés hozzáadása egy bekezdéshez} other {Megjegyzés hozzáadása a(z) {label} bekezdéshez}}",
+      "commentOnSelection": "Megjegyzés hozzáadása a kijelölt szöveghez",
+      "deleteParagraph": "{label, select, none {Bekezdés törlése} other {A(z) {label} bekezdés törlése}}",
+      "deleteTableColumn": "Táblázatoszlop törlése",
+      "deleteTableRow": "Táblázatsor törlése",
+      "formatSelection": "A kijelölt szöveg újraformázása",
+      "insertAfter": "{label, select, none {Bekezdés beszúrása} other {Bekezdés beszúrása a(z) {label} után}}",
+      "insertBefore": "{label, select, none {Bekezdés beszúrása} other {Bekezdés beszúrása a(z) {label} elé}}",
+      "insertSignatureBlock": "Aláírási tábla beszúrása {names} részére",
+      "insertTableColumn": "Táblázatoszlop beszúrása",
+      "insertTableRow": "Táblázatsor beszúrása",
+      "mergeTableCells": "Táblázatcellák egyesítése",
+      "pageBreakAfter": "{label, select, none {Oldaltörés beszúrása} other {Oldaltörés beszúrása a(z) {label} után}}",
+      "pageBreakBefore": "{label, select, none {Oldaltörés beszúrása} other {Oldaltörés beszúrása a(z) {label} elé}}",
+      "replaceInBlock": "„{find}” cseréje erre: „{replace}”",
+      "replaceParagraph": "{label, select, none {Bekezdés átírása} other {A(z) {label} bekezdés átírása}}",
+      "replaceSelection": "A kijelölt szöveg cseréje erre: „{replace}”",
+      "splitTableCell": "Táblázatcella felosztása"
+    }
   },
   "emailViewer": {
     "attachments": "Mellékletek",
@@ -2320,12 +2344,6 @@
       "checks": "Vizsgált szempont:",
       "commentFailed": "A megjegyzést nem sikerült hozzáadni",
       "comparedWithReferences": "{count, plural, one {Összevetve # referenciadokumentummal} other {Összevetve # referenciadokumentummal}}",
-      "dealStrip": {
-        "flagged": "{count, number} megjelölve",
-        "label": "Hol helyezkednek el a megállapítások a dokumentumban",
-        "more": "+{count, number} további",
-        "preamble": "Preambulum"
-      },
       "decidedCount": "{count, number} eldöntve",
       "decision": "Döntés",
       "decisionFailed": "A döntést nem sikerült rögzíteni",
@@ -2446,6 +2464,10 @@
       "showInDocument": "Megjelenítés a dokumentumban",
       "sizeConfirmStart": "Ellenőrzés indítása",
       "sizeConfirmTitle": "Nagy terjedelmű ellenőrzés",
+      "skipReason": {
+        "dealSpecificValue": "Ügyletspecifikus érték",
+        "structural": "Szerkezeti eltérés"
+      },
       "standardColumn": "Etalon",
       "standardColumnFrom": "Etalon ({name})",
       "suggestionSkipped": "Már nem egyezik a dokumentummal",
