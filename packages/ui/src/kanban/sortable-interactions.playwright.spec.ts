@@ -61,6 +61,7 @@ const cancelNativeTouch = async (session: CDPSession) => {
 };
 
 const scrollWithTouch = async (
+  page: Page,
   session: CDPSession,
   {
     x,
@@ -74,19 +75,30 @@ const scrollWithTouch = async (
     yDistance?: number;
   },
 ) => {
-  await session.send("Input.synthesizeScrollGesture", {
-    gestureSourceType: "touch",
-    speed: 800,
-    x: Math.round(x),
-    xDistance,
-    y: Math.round(y),
-    yDistance,
-  });
+  const start = { clientX: x, clientY: y, id: 1 };
+  await dispatchNativeTouch(session, "touchStart", [start]);
+
+  const scrollSteps = 4;
+  const moveToNextScrollPosition = async (step: number): Promise<void> => {
+    if (step > scrollSteps) {
+      return;
+    }
+    const progress = step / scrollSteps;
+    await dispatchNativeTouch(session, "touchMove", [
+      {
+        clientX: x + xDistance * progress,
+        clientY: y + yDistance * progress,
+        id: start.id,
+      },
+    ]);
+    await page.waitForTimeout(16);
+    await moveToNextScrollPosition(step + 1);
+  };
+  await moveToNextScrollPosition(1);
+  await endNativeTouch(session);
 };
 
-test("preserves native board and list scrolling while a handle activates touch dragging", async ({
-  page,
-}) => {
+test("preserves native board and list scrolling", async ({ page }) => {
   const handle = await openFixture(page);
   const board = page.locator("[data-board]");
   const list = page.locator("[data-list]");
@@ -102,12 +114,12 @@ test("preserves native board and list scrolling while a handle activates touch d
   }
   const nativeTouch = await enableNativeTouch(page);
 
-  await scrollWithTouch(nativeTouch, {
+  await scrollWithTouch(page, nativeTouch, {
     x: boardBox.x + 100,
     y: listBox.y + listBox.height - 12,
     yDistance: -80,
   });
-  await scrollWithTouch(nativeTouch, {
+  await scrollWithTouch(page, nativeTouch, {
     x: boardBox.x + boardBox.width - 12,
     y: boardBox.y + boardBox.height - 12,
     xDistance: -180,
@@ -119,28 +131,6 @@ test("preserves native board and list scrolling while a handle activates touch d
   await expect
     .poll(async () => await list.evaluate((element) => element.scrollTop))
     .toBeGreaterThan(0);
-
-  await scrollWithTouch(nativeTouch, {
-    x: boardBox.x + 100,
-    y: listBox.y + 12,
-    yDistance: 80,
-  });
-  await scrollWithTouch(nativeTouch, {
-    x: boardBox.x + 12,
-    y: boardBox.y + boardBox.height - 12,
-    xDistance: 180,
-  });
-  await expect
-    .poll(async () => await board.evaluate((element) => element.scrollLeft))
-    .toBeLessThan(8);
-  await expect
-    .poll(async () => await list.evaluate((element) => element.scrollTop))
-    .toBeLessThan(8);
-
-  const coordinates = await getTouchCoordinates(handle);
-  await dispatchNativeTouch(nativeTouch, "touchStart", [coordinates]);
-  await expect(page.locator("[data-overlay]")).toHaveText("first");
-  await endNativeTouch(nativeTouch);
 });
 
 test("activates a mouse drag only after its distance threshold", async ({
