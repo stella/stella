@@ -3088,6 +3088,12 @@ fn custom_match_has_valid_edges(
   Ok(true)
 }
 
+/// A hyphen compound joins two word characters (`Dodd-Frank`, `Brno-Nový`). A
+/// dash whose far side is whitespace, punctuation, or the text boundary is a
+/// separator, not a compound: in `—John Smith` the em dash attributes a quote.
+/// Treating that as a compound discards `John` for lacking a name-bearing
+/// partner, which leaves `Smith` a single token that person detection then
+/// drops for lack of context, so the whole name survives in the clear.
 fn has_hyphen_compound_edge(
   full_text: &str,
   offsets: &ByteOffsets<'_>,
@@ -3096,16 +3102,19 @@ fn has_hyphen_compound_edge(
 ) -> Result<bool> {
   let start_byte = offsets.validate_offset(start)?;
   let end_byte = offsets.validate_offset(end)?;
-  let previous = full_text
-    .get(..start_byte)
-    .and_then(|prefix| prefix.chars().next_back());
-  if previous.is_some_and(is_dash) {
+
+  let mut leading = full_text.get(..start_byte).unwrap_or_default().chars().rev();
+  if leading.next().is_some_and(is_dash)
+    && leading.next().is_some_and(char::is_alphanumeric)
+  {
     return Ok(true);
   }
-  let next = full_text
-    .get(end_byte..)
-    .and_then(|suffix| suffix.chars().next());
-  Ok(next.is_some_and(is_dash))
+
+  let mut trailing = full_text.get(end_byte..).unwrap_or_default().chars();
+  Ok(
+    trailing.next().is_some_and(is_dash)
+      && trailing.next().is_some_and(char::is_alphanumeric),
+  )
 }
 
 fn has_supported_hyphenated_person_edge(
@@ -4135,6 +4144,43 @@ mod tests {
       .unwrap();
 
       assert!(entities.is_empty(), "dash {dash:?}");
+    }
+  }
+
+  #[test]
+  fn deny_list_keeps_name_after_separator_dash() {
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("John")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    };
+
+    // A dash whose far side is not a word character separates rather than
+    // compounds: a closed-up attribution, a bullet, or a wrapped line. The
+    // name after it keeps its person label.
+    for text in [
+      "—John Smith",
+      "\"Not our position.\" —John Smith",
+      "Best regards,\n-John Smith",
+    ] {
+      let start = u32::try_from(text.find("John").unwrap()).unwrap();
+      let matches = vec![SearchMatch::Literal {
+        pattern: 0,
+        start,
+        end: start.saturating_add(4),
+      }];
+      let entities = process_deny_list_matches(
+        &matches,
+        PatternSlice { start: 0, end: 1 },
+        text,
+        &data,
+      )
+      .unwrap();
+
+      assert!(!entities.is_empty(), "text {text:?}");
     }
   }
 
