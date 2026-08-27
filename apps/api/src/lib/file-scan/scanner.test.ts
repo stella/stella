@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { createArchiveContentScanner } from "@/api/lib/file-scan/archive";
 import { createZipBombGuard } from "@/api/lib/file-scan/scanner";
 
 const BYTE_MODULUS = 256;
@@ -232,5 +233,34 @@ describe("createZipBombGuard", () => {
       uncompressedSize: 16,
     });
     expect(await guard.scan(bytes)).toEqual([]);
+  });
+});
+
+describe("createArchiveContentScanner", () => {
+  const entry = (fileName: string): EntrySpec => ({
+    fileName,
+    compressedSize: 8,
+    uncompressedSize: 16,
+  });
+
+  test("leaves an archive the index guard reports uninflated", async () => {
+    let inflated = false;
+    const scanner = createArchiveContentScanner({
+      inner: {
+        scan: async () => {
+          inflated = true;
+          return await Promise.resolve([]);
+        },
+      },
+      budget: { maxEntries: 10, maxEntryBytes: 1024, maxTotalBytes: 1024 },
+      guard,
+    });
+
+    const matches = await scanner.scan(
+      archive(entry("a"), entry("b"), entry("c"), entry("d")),
+    );
+
+    expect(matches[0]?.rule).toBe("zip-bomb-entries");
+    expect(inflated).toBe(false);
   });
 });

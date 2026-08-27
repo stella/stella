@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
@@ -239,10 +239,16 @@ const readAncestorRelation = async ({
   `);
 
   const row = result.at(0);
-  if (row?.found === true) {
+  if (row === undefined) {
+    // Both columns are `EXISTS` aggregates, so the query answers one row for
+    // any input. No row means the walk did not run: reading that as "no
+    // ancestor" would let the move through without the check.
+    panic("Ancestor relation query returned no row");
+  }
+  if (row.found) {
     return "descendant";
   }
-  return row?.truncated === true ? "depth-exceeded" : "unrelated";
+  return row.truncated ? "depth-exceeded" : "unrelated";
 };
 
 const config = {

@@ -41547,6 +41547,7 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       properties: {
                         entityIds: {
+                          maxItems: 10000,
                           type: "array",
                           items: {
                             minLength: 36,
@@ -41820,6 +41821,7 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       properties: {
                         entityIds: {
+                          maxItems: 10000,
                           type: "array",
                           items: {
                             minLength: 36,
@@ -41830,6 +41832,7 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                         entityIdsOrder: {
+                          maxItems: 10000,
                           type: "array",
                           items: {
                             minLength: 36,

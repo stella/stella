@@ -579,6 +579,61 @@ describe("ooxml threats", () => {
     );
   });
 
+  test("DOCX with a single-quoted external relationship → warn", async () => {
+    const buffer = await makeThreatDocx({
+      relsXml:
+        "<?xml version='1.0'?>" +
+        "<Relationships>" +
+        "<Relationship Type='schema' " +
+        "Target='https://e.example/payload' " +
+        "TargetMode='External'/>" +
+        "</Relationships>",
+    });
+    const r = Result.unwrap(
+      await scanFile({
+        buffer,
+        declaredMimeType: DOCX_MIME,
+        fileName: "external-single-quoted.docx",
+      }),
+    );
+    expect(r.verdict).not.toBe("pass");
+    expect(
+      r.findings.some((f) => f.rule === "ooxml_external_relationship"),
+    ).toBe(true);
+  });
+
+  test("DOCX pairing a long hyperlink target with another external target → warn", async () => {
+    // The hyperlink element is padded so its TargetMode sits past the span a
+    // single relationship attribute list usually occupies: the two
+    // expressions must still count the same element, or the non-hyperlink
+    // relationship next to it goes unreported.
+    const buffer = await makeThreatDocx({
+      relsXml:
+        '<?xml version="1.0"?>' +
+        "<Relationships>" +
+        '<Relationship Id="rId4" ' +
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/' +
+        'relationships/hyperlink" ' +
+        `Target="https://example.com/${"x".repeat(450)}" ` +
+        'TargetMode="External"/>' +
+        '<Relationship Id="rId5" ' +
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/' +
+        'relationships/frame" ' +
+        'Target="https://e.example/f" TargetMode="External"/>' +
+        "</Relationships>",
+    });
+    const r = Result.unwrap(
+      await scanFile({
+        buffer,
+        declaredMimeType: DOCX_MIME,
+        fileName: "padded-hyperlink.docx",
+      }),
+    );
+    expect(
+      r.findings.some((f) => f.rule === "ooxml_external_relationship"),
+    ).toBe(true);
+  });
+
   test("DOCX whose external relationships are hyperlinks → pass", async () => {
     const buffer = await makeThreatDocx({
       relsXml:

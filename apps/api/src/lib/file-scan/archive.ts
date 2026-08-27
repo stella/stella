@@ -6,8 +6,9 @@
  * so rules that combine a part name with part content keep evaluating against
  * one byte range, exactly as they do for a stored archive.
  *
- * Inflation is best effort and bounded: an entry that would exceed the budget
- * is skipped and the shortfall is reported rather than failing the scan.
+ * Inflation is best effort and bounded: it runs only for an archive the index
+ * guard accepts, and an entry that would exceed the budget is skipped and the
+ * shortfall reported rather than failing the scan.
  */
 import JSZip from "jszip";
 
@@ -140,13 +141,32 @@ const ARCHIVE_UNREADABLE: Match = {
   },
 };
 
-export const createArchiveContentScanner = (
-  inner: Scanner,
-  budget: ArchiveInflateBudget,
-): Scanner => ({
+type ArchiveContentScannerOptions = {
+  /** Runs against the flattened entry names and inflated contents. */
+  inner: Scanner;
+  budget: ArchiveInflateBudget;
+  /** The archive-index guard. It reads entry count and declared sizes from
+   *  the index alone, so it settles whether the archive is worth inflating
+   *  before the index is materialized in memory. */
+  guard: Scanner;
+};
+
+export const createArchiveContentScanner = ({
+  inner,
+  budget,
+  guard,
+}: ArchiveContentScannerOptions): Scanner => ({
   async scan(bytes) {
     if (!hasZipMagic(bytes)) {
       return [];
+    }
+
+    // An archive the guard reports is already answered by that finding, and
+    // its index is exactly what inflation would build again: nothing is
+    // inflated for it.
+    const guardMatches = await guard.scan(bytes);
+    if (guardMatches.length > 0) {
+      return guardMatches;
     }
 
     const inflated = await inflateArchive(bytes, budget);

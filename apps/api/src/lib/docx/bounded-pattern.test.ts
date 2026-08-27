@@ -38,6 +38,31 @@ describe("compileBoundedPattern", () => {
     }
   });
 
+  it("refuses open-ended repeats standing side by side", () => {
+    // Each pair divides the same run of characters every way it can, and the
+    // work multiplies with every further pair.
+    for (const pattern of [
+      ["a*", "a*"].join(""),
+      String.raw`\d+\d+`,
+      "(a*)(a*)",
+      ["[a-z]{2,}", "[a-z]{2,}"].join(""),
+      "(?:ab)*(?:ab)+",
+    ]) {
+      expect(compileBoundedPattern(pattern).status).toBe("invalid");
+    }
+  });
+
+  it("keeps a bounded repeat or a separated pair usable", () => {
+    for (const pattern of [
+      String.raw`\d{4}-\d{2}-\d{2}`,
+      "[A-Z]+ [0-9]+",
+      String.raw`[^@]+@[^@]+\.[a-z]{2,4}`,
+      "a{1,3}b{1,3}",
+    ]) {
+      expect(compileBoundedPattern(pattern).status).toBe("valid");
+    }
+  });
+
   it("refuses a pattern the engine cannot parse", () => {
     expect(compileBoundedPattern("(unclosed").status).toBe("invalid");
     expect(compileBoundedPattern("[").status).toBe("invalid");

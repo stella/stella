@@ -17,10 +17,11 @@ const config = {
   access: "read",
   mcp: { type: "capability", reason: "workflow_orchestration" },
   body: t.Object({
-    // Bounded by what a run may actually be launched against: counting a
-    // larger set than `workspaces.workflow-start` accepts sizes nothing.
+    // Bounded by what a run may actually be launched against: the same cap
+    // `workspaces.workflow-start` puts on its own entity list, so every set
+    // that can start a run can also be sized first.
     entityIds: t.Optional(
-      t.Array(tSafeId("entity"), { maxItems: LIMITS.flowRunInputEntitiesMax }),
+      t.Array(tSafeId("entity"), { maxItems: LIMITS.entitiesCount }),
     ),
   }),
 } satisfies HandlerConfig;

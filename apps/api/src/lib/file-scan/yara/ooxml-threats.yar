@@ -21,11 +21,14 @@ rule ooxml_external_relationship
 
     strings:
         // One <Relationship> element resolving outside the package.
-        // [^>] keeps each match inside a single element.
-        $external = /<Relationship[^>]{0,512}TargetMode[\s]{0,8}=[\s]{0,8}"External"/ ascii nocase
+        // [^>] keeps each match inside a single element, and either XML
+        // quote form delimits the attribute value.
+        $external = /<Relationship[^>]{0,1035}TargetMode[\s]{0,8}=[\s]{0,8}("External"|'External')/ ascii nocase
         // The same element when it carries the hyperlink relationship
-        // type, which every document body link produces.
-        $hyperlink = /<Relationship[^>]{0,512}\/hyperlink"[^>]{0,512}TargetMode[\s]{0,8}=[\s]{0,8}"External"/ ascii nocase
+        // type, which every document body link produces. The two spans plus
+        // the type token total the single span above (512 + 11 + 512), so an
+        // element matching here always matches $external at the same offset.
+        $hyperlink = /<Relationship[^>]{0,512}\/hyperlink("|')[^>]{0,512}TargetMode[\s]{0,8}=[\s]{0,8}("External"|'External')/ ascii nocase
 
     condition:
         // Fires only when an external relationship is something other than

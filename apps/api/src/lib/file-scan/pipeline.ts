@@ -17,10 +17,14 @@ const zipBombGuard = createZipBombGuard({
 
 // Inflated bytes are held in memory for rule evaluation, so this budget is
 // far below the size at which the guard above rejects an archive outright.
-const archiveContentScanner = createArchiveContentScanner(yaraScanner, {
-  maxEntries: MAX_ZIP_ENTRIES,
-  maxEntryBytes: 32 * 1024 * 1024,
-  maxTotalBytes: 32 * 1024 * 1024,
+const archiveContentScanner = createArchiveContentScanner({
+  inner: yaraScanner,
+  budget: {
+    maxEntries: MAX_ZIP_ENTRIES,
+    maxEntryBytes: 32 * 1024 * 1024,
+    maxTotalBytes: 32 * 1024 * 1024,
+  },
+  guard: zipBombGuard,
 });
 
 export const scanner = composeScanners(

@@ -30,7 +30,7 @@ rule pdf_javascript_full
 
     strings:
         $header = "%PDF-" ascii
-        $js = "/JavaScript" ascii
+        $js = /\/JavaScript[\s\x00\/<>()\[\]{}%]/ ascii
         $xfa = /\/XFA[\s\x00\/<>()\[\]{}%]/ ascii
         $acroform = /\/AcroForm[\s\x00\/<>()\[\]{}%]/ ascii
 
@@ -47,7 +47,7 @@ rule pdf_xfa_form_javascript
     strings:
         $header = "%PDF-" ascii
         $js = /\/JS[\s\x00\/<>()\[\]{}%]/ ascii
-        $javascript = "/JavaScript" ascii
+        $javascript = /\/JavaScript[\s\x00\/<>()\[\]{}%]/ ascii
         $xfa = /\/XFA[\s\x00\/<>()\[\]{}%]/ ascii
         $acroform = /\/AcroForm[\s\x00\/<>()\[\]{}%]/ ascii
 

@@ -204,6 +204,16 @@ describe("benign fixtures match no rule", () => {
           'relationships/hyperlink" Target="https://e.example/" ' +
           'TargetMode="External"/></Relationships>',
       }),
+    "docx whose single-quoted external relationship is a hyperlink": async () =>
+      await docx({
+        [RELS]:
+          "<Relationships><Relationship Id='rId4' " +
+          "Type='http://schemas.openxmlformats.org/officeDocument/2006/" +
+          "relationships/hyperlink' Target='https://e.example/' " +
+          "TargetMode='External'/></Relationships>",
+      }),
+    "pdf naming an object whose name only starts with /JavaScript": async () =>
+      await pdf("<</AcroForm<</XFA 5 0 R>>>>\n<</JavaScriptBackup 5 0 R>>"),
     "clean svg": () => svg("<rect width='1' height='1'/>"),
     "plain text": () => ({
       buffer: encoder.encode("Smlouva o dílo\nArticle 1\n"),
