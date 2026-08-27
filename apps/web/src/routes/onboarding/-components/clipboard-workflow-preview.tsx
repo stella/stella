@@ -58,8 +58,8 @@ const ANIMATION_STYLE = `
   100% { opacity: 1; transform: scale(1); }
 }
 @keyframes cwp-draw {
-  from { stroke-dashoffset: 1; }
-  to { stroke-dashoffset: 0; }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes cwp-press {
   0% { opacity: 0; transform: translateY(-4px); }
@@ -70,14 +70,12 @@ const ANIMATION_STYLE = `
 .cwp-rise { animation: cwp-rise 320ms ease-out both; }
 .cwp-pop { animation: cwp-pop 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .cwp-draw {
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
   animation: cwp-draw 420ms ease-in-out both;
 }
 .cwp-press { animation: cwp-press 480ms ease-out both; }
 @media (prefers-reduced-motion: reduce) {
   .cwp-rise, .cwp-pop, .cwp-press { animation: none; }
-  .cwp-draw { animation: none; stroke-dashoffset: 0; }
+  .cwp-draw { animation: none; }
 }
 `;
 
