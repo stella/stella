@@ -182,7 +182,10 @@ export const matterFolderMoveDestinations = (
         continue;
       }
       invalidParentIds.add(folderId);
-      remaining.push(...(childrenByParentId.get(folderId) ?? []));
+      const childIds = childrenByParentId.get(folderId);
+      if (childIds !== undefined) {
+        remaining.push(...childIds);
+      }
     }
   }
 
