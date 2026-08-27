@@ -141,9 +141,9 @@ jobs:
           package_checks_required=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              .github/workflows/ci.yml)
+              .github/workflows/ci.yml|.github/actions/setup-playwright/action.yml)
                 # This workflow owns package-check scheduling and the
-                # code-quality job itself, so its changes must exercise both.
+                # browser test setup, so either change must exercise both.
                 package_checks_required=true
                 ;;
               .github/*|.provenance.yml|provenance/*)

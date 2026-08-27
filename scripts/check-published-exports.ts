@@ -20,6 +20,7 @@ import {
   isDistModuleEntry,
   toPublishedManifest,
 } from "./publish-manifest";
+import { isPublishedTestArtifact } from "./published-export-guards";
 
 const repoRoot = path.resolve(import.meta.dir, "..");
 
@@ -77,11 +78,7 @@ try {
       `tarball embeds ${embeddedDependencyFiles.length} dependency file(s) under dist/node_modules; declare the dependency in runtime or peer metadata (first: ${embeddedDependencyFiles.at(0)})`,
     );
   }
-  const testArtifacts = [...packed].filter((file) =>
-    /(?:^|\/)(?:fixtures\/|[^/]+\.(?:test|spec)\.[cm]?[jt]sx?$|[^/]+\.playwright\.[cm]?[jt]sx?$)/u.test(
-      file,
-    ),
-  );
+  const testArtifacts = [...packed].filter(isPublishedTestArtifact);
   if (testArtifacts.length > 0) {
     failures.push(
       `tarball includes ${testArtifacts.length} test or fixture artifact(s) (first: ${testArtifacts.at(0)})`,
