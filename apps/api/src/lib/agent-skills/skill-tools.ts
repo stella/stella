@@ -1,5 +1,5 @@
 import { toolDefinition } from "@tanstack/ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -25,6 +25,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { toTanStackValibotSchema as toTanStackToolSchema } from "@/api/lib/tanstack-ai-schema";
+
+import { hashAuthoredSkillContent } from "./authored-content-hash";
 
 type AvailableSkillMetadata = SkillMetadata & {
   source?: "built-in" | "installed" | undefined;
@@ -401,9 +403,33 @@ const updateCurrentSkillBody = async ({
   const result = await safeDb(
     async (tx) =>
       await tx.transaction(async (innerTx) => {
+        const currentRows = await innerTx
+          .select({
+            name: agentSkills.name,
+            description: agentSkills.description,
+            version: agentSkills.version,
+          })
+          .from(agentSkills)
+          .where(eq(agentSkills.id, activeSkillContext.id))
+          .limit(1)
+          .for("update");
+        const current = currentRows.at(0);
+        if (current === undefined) {
+          panic("active skill vanished during body update");
+        }
+        // The content hash covers the body, so a body-only write must refresh
+        // it: the revision trigger snapshots whatever hash the row carries.
         await innerTx
           .update(agentSkills)
-          .set({ body: content })
+          .set({
+            body: content,
+            contentHash: hashAuthoredSkillContent({
+              body: content,
+              description: current.description,
+              name: current.name,
+              version: current.version,
+            }),
+          })
           .where(eq(agentSkills.id, activeSkillContext.id));
 
         await recordAuditEvent(innerTx, {

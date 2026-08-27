@@ -7,6 +7,7 @@ import {
   RESERVED_AGENT_SKILL_COMMANDS,
   agentSkills,
 } from "@/api/db/schema";
+import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -16,8 +17,6 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { includes } from "@/api/lib/type-guards";
-
-import { hashAuthoredSkillContent } from "./authored-content-hash";
 
 const updateSkillParamsSchema = t.Object({
   skillId: tSafeId("agentSkill"),

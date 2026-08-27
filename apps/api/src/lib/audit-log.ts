@@ -230,6 +230,8 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   workspace: workspaceActivityCategory,
   audit_log: "other",
   agent_skill: "other",
+  agent_skill_comment: "other",
+  agent_skill_proposal: "other",
   ai_memory: "other",
   billing_code: "other",
   chat_file: "other",

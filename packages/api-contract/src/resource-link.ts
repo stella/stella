@@ -28,7 +28,10 @@ type ChatResourceLinkDisposition =
  */
 export const CHAT_RESOURCE_LINK_DISPOSITION = {
   [RESOURCE_TYPE.AGENT_SKILL]: { type: "unsupported" },
+  [RESOURCE_TYPE.AGENT_SKILL_COMMENT]: { type: "unsupported" },
+  [RESOURCE_TYPE.AGENT_SKILL_PROPOSAL]: { type: "unsupported" },
   [RESOURCE_TYPE.AGENT_SKILL_RESOURCE]: { type: "unsupported" },
+  [RESOURCE_TYPE.AGENT_SKILL_REVISION]: { type: "unsupported" },
   [RESOURCE_TYPE.AI_MEMORY]: { type: "unsupported" },
   [RESOURCE_TYPE.BILLING_CODE]: { type: "unsupported" },
   [RESOURCE_TYPE.CASE_LAW_DECISION]: {

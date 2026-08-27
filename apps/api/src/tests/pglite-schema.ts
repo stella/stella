@@ -18,6 +18,11 @@ const CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH = nodePath.join(
   "20260803120000_chat_thread_turn_workspace_cascade",
   "migration.sql",
 );
+const AGENT_SKILL_REVISIONS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260827080000_agent_skill_revisions",
+  "migration.sql",
+);
 
 type PgliteSchemaDb = {
   execute: (query: SQL) => Promise<unknown>;
@@ -107,6 +112,37 @@ export const installPgliteWorkspaceAccessObjects = async (
   for (const migrationPath of migrationPaths) {
     // oxlint-disable-next-line no-await-in-loop -- migration batches must stay ordered
     await installPgliteMigration({ db, migrationPath });
+  }
+};
+
+// Drizzle's schema (and therefore pushSchema) has no construct for trigger
+// functions, so 20260827080000_agent_skill_revisions's CREATE FUNCTION /
+// CREATE TRIGGER statements never reach the test database through the push
+// path that creates its tables, indexes, and RLS policies. Installing the
+// full migration file after pushSchema would re-run its CREATE TABLE
+// statements against tables pushSchema already created, so this pulls out
+// only the trigger-function statements — mirroring how
+// arabicNormalizeFunctionSql above extracts one function statement rather
+// than replaying its migration.
+const AGENT_SKILL_REVISION_TRIGGER_STATEMENT_PREFIXES = [
+  "CREATE FUNCTION",
+  "REVOKE ALL ON FUNCTION",
+  "CREATE TRIGGER",
+] as const;
+
+export const installPgliteAgentSkillRevisionTrigger = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    AGENT_SKILL_REVISIONS_MIGRATION_PATH,
+  ).filter((statement) =>
+    AGENT_SKILL_REVISION_TRIGGER_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    // oxlint-disable-next-line no-await-in-loop -- function/trigger DDL must execute in source order
+    await db.execute(sql.raw(statement));
   }
 };
 

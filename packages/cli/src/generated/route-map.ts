@@ -27403,6 +27403,308 @@ export const generatedRouteMap: RouteNode = {
         skills: {
           kind: "route",
           children: {
+            "comments-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "comments-create"],
+                capabilityId: "skills.comments.create",
+                description:
+                  "Comment on a character range of one revision of an agent skill, or of a proposal's body. Pass exactly one of revisionId and proposalId; a comment on a proposal is also anchored to the revision that proposal branched from. The quoted source text is captured from the range so the comment survives the text moving on.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--skill-id",
+                    prop: "skillId",
+                    required: true,
+                    part: "params",
+                    partPath: "skillId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--revision-id",
+                    prop: "revisionId",
+                    required: false,
+                    part: "body",
+                    partPath: "revisionId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--proposal-id",
+                    prop: "proposalId",
+                    required: false,
+                    part: "body",
+                    partPath: "proposalId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--body",
+                    prop: "body",
+                    required: true,
+                    part: "body",
+                    partPath: "body",
+                  },
+                ],
+                inputOnly: ["body.rangeStart", "body.rangeEnd"],
+                paginated: false,
+                destructive: false,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["rangeStart", "rangeEnd", "body"],
+                      properties: {
+                        revisionId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        proposalId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        rangeStart: {
+                          minimum: 0,
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 0,
+                              type: "integer",
+                            },
+                          ],
+                        },
+                        rangeEnd: {
+                          minimum: 0,
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 0,
+                              type: "integer",
+                            },
+                          ],
+                        },
+                        body: {
+                          minLength: 1,
+                          maxLength: 5000,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["skillId"],
+                      properties: {
+                        skillId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "comments-delete": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "comments-delete"],
+                capabilityId: "skills.comments.delete",
+                description:
+                  "Delete a comment on an agent skill. Only its author or someone who may edit the skill can.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--skill-id",
+                    prop: "skillId",
+                    required: true,
+                    part: "params",
+                    partPath: "skillId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--comment-id",
+                    prop: "commentId",
+                    required: true,
+                    part: "params",
+                    partPath: "commentId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["skillId", "commentId"],
+                      properties: {
+                        skillId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        commentId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "comments-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "comments-list"],
+                capabilityId: "skills.comments.list",
+                description:
+                  "List the comments anchored to an agent skill, oldest first, across its revisions and proposals. Each carries the character range and the quoted text it was written against, and whether it has been resolved.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--skill-id",
+                    prop: "skillId",
+                    required: true,
+                    part: "params",
+                    partPath: "skillId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["skillId"],
+                      properties: {
+                        skillId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "comments-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "comments-update"],
+                capabilityId: "skills.comments.update",
+                description:
+                  "Resolve or reopen a comment on an agent skill. Anyone who can see the skill can, not only the comment's author.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--skill-id",
+                    prop: "skillId",
+                    required: true,
+                    part: "params",
+                    partPath: "skillId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--comment-id",
+                    prop: "commentId",
+                    required: true,
+                    part: "params",
+                    partPath: "commentId",
+                  },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--resolved",
+                    prop: "resolved",
+                    required: true,
+                    part: "body",
+                    partPath: "resolved",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["resolved"],
+                      properties: {
+                        resolved: {
+                          type: "boolean",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["skillId", "commentId"],
+                      properties: {
+                        skillId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        commentId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             create: {
               kind: "capability-leaf",
               spec: {
@@ -27757,7 +28059,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "skills", "get"],
                 capabilityId: "skills.get",
                 description:
-                  "Read one agent skill in full: its instruction body, scope, origin, version, license, compatibility, source URL, slash command, and every resource file with its content. A team skill can only be read here by an admin or owner and a private one only by its author, which is stricter than skills.list, where both are visible without their bodies.",
+                  "Read one agent skill in full: its instruction body, scope, origin, version, license, compatibility, source URL, slash command, and every resource file with its content. A team skill is readable by every member of the organization; a private one only by its author.",
                 access: "read",
                 flags: [
                   {
@@ -28026,6 +28328,531 @@ export const generatedRouteMap: RouteNode = {
                   type: "object",
                   additionalProperties: false,
                   properties: {},
+                },
+              },
+            },
+            "proposals-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "proposals-create"],
+                capabilityId: "skills.proposals.create",
+                description:
+                  "Open a draft change proposal against an agent skill, branched from its newest revision. Omit body to start from that revision's text. The skill itself is untouched until someone with edit rights accepts the proposal; bundled skills are refused.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--skill-id",
+                    prop: "skillId",
+                    required: true,
+                    part: "params",
+                    partPath: "skillId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--body",
+                    prop: "body",
+                    required: false,
+                    part: "body",
+                    partPath: "body",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--summary",
+                    prop: "summary",
+                    required: false,
+                    part: "body",
+                    partPath: "summary",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        body: {
+                          minLength: 1,
+                          maxLength: 80000,
+                          type: "string",
+                        },
+                        summary: {
+                          maxLength: 2000,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["skillId"],
+                      properties: {
+                        skillId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "proposals-delete": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "proposals-delete"],
+                capabilityId: "skills.proposals.delete",
+                description:
+                  "Delete a change proposal for an agent skill, along with the comments anchored to it. The skill and its revisions are untouched. Only the author or someone who may edit the skill can.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--skill-id",
+                    prop: "skillId",
+                    required: true,
+                    part: "params",
+                    partPath: "skillId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--proposal-id",
+                    prop: "proposalId",
+                    required: true,
+                    part: "params",
+                    partPath: "proposalId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["skillId", "proposalId"],
+                      properties: {
+                        skillId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        proposalId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "proposals-from-comments-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "skills",
+                  "proposals-from-comments-create",
+                ],
+                capabilityId: "skills.proposals.from-comments.create",
+                description:
+                  "Turn reviewer comments on an agent skill into a draft change proposal: the model rewrites SKILL.md so each comment is addressed, and the result is stored as a draft branched from the skill's newest revision. Pass commentIds to apply specific comments, or omit it to apply every unresolved comment on that revision. The skill itself is untouched until someone with edit rights accepts the proposal, the comments stay unresolved, and bundled skills are refused. Consumes AI usage.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--skill-id",
+                    prop: "skillId",
+                    required: true,
+                    part: "params",
+                    partPath: "skillId",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    description:
+                      "Comments to apply. Omit to apply every unresolved comment written against the skill's newest revision.",
+                    flag: "--comment-ids",
+                    prop: "commentIds",
+                    required: false,
+                    part: "body",
+                    partPath: "commentIds",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      "Extra guidance for the revision, applied on top of the comments.",
+                    flag: "--instructions",
+                    prop: "instructions",
+                    required: false,
+                    part: "body",
+                    partPath: "instructions",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        commentIds: {
+                          minItems: 1,
+                          maxItems: 50,
+                          description:
+                            "Comments to apply. Omit to apply every unresolved comment written against the skill's newest revision.",
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                        instructions: {
+                          maxLength: 2000,
+                          description:
+                            "Extra guidance for the revision, applied on top of the comments.",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["skillId"],
+                      properties: {
+                        skillId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "proposals-get": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "proposals-get"],
+                capabilityId: "skills.proposals.get",
+                description:
+                  "Read one change proposal for an agent skill, with its proposed body and the body of the revision it branched from, so the two can be diffed.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--skill-id",
+                    prop: "skillId",
+                    required: true,
+                    part: "params",
+                    partPath: "skillId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--proposal-id",
+                    prop: "proposalId",
+                    required: true,
+                    part: "params",
+                    partPath: "proposalId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["skillId", "proposalId"],
+                      properties: {
+                        skillId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        proposalId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "proposals-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "proposals-list"],
+                capabilityId: "skills.proposals.list",
+                description:
+                  "List the change proposals raised against an agent skill, newest first and without their bodies. baseIsCurrent reports whether a proposal still branches from the skill's newest revision.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--skill-id",
+                    prop: "skillId",
+                    required: true,
+                    part: "params",
+                    partPath: "skillId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["skillId"],
+                      properties: {
+                        skillId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "proposals-review": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "proposals-review"],
+                capabilityId: "skills.proposals.review",
+                description:
+                  "Accept or reject a change proposal for an agent skill. Accepting writes the proposed body to the skill and records the revision it produced; rejecting leaves the skill untouched. Either way the decision is final. Requires the rights to edit the skill itself.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--skill-id",
+                    prop: "skillId",
+                    required: true,
+                    part: "params",
+                    partPath: "skillId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--proposal-id",
+                    prop: "proposalId",
+                    required: true,
+                    part: "params",
+                    partPath: "proposalId",
+                  },
+                  {
+                    kind: "enum",
+                    enum: ["accepted", "rejected"],
+                    repeatable: false,
+                    flag: "--decision",
+                    prop: "decision",
+                    required: true,
+                    part: "body",
+                    partPath: "decision",
+                  },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--allow-stale",
+                    prop: "allowStale",
+                    required: false,
+                    part: "body",
+                    partPath: "allowStale",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["decision"],
+                      properties: {
+                        decision: {
+                          default: "accepted",
+                          type: "string",
+                          enum: ["accepted", "rejected"],
+                        },
+                        allowStale: {
+                          type: "boolean",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["skillId", "proposalId"],
+                      properties: {
+                        skillId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        proposalId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "proposals-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "proposals-update"],
+                capabilityId: "skills.proposals.update",
+                description:
+                  "Edit a change proposal for an agent skill: its proposed body, its summary, or whether it is still a draft or now up for review. Only the author or someone who may edit the skill can, and only until the proposal is decided.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--skill-id",
+                    prop: "skillId",
+                    required: true,
+                    part: "params",
+                    partPath: "skillId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--proposal-id",
+                    prop: "proposalId",
+                    required: true,
+                    part: "params",
+                    partPath: "proposalId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--body",
+                    prop: "body",
+                    required: false,
+                    part: "body",
+                    partPath: "body",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--summary",
+                    prop: "summary",
+                    required: false,
+                    part: "body",
+                    partPath: "summary",
+                  },
+                ],
+                inputOnly: ["body.status"],
+                paginated: false,
+                destructive: false,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        body: {
+                          minLength: 1,
+                          maxLength: 80000,
+                          type: "string",
+                        },
+                        summary: {
+                          maxLength: 2000,
+                          type: "string",
+                        },
+                        status: {
+                          anyOf: [
+                            {
+                              const: "draft",
+                              type: "string",
+                            },
+                            {
+                              const: "proposed",
+                              type: "string",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["skillId", "proposalId"],
+                      properties: {
+                        skillId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        proposalId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -28409,6 +29236,108 @@ export const generatedRouteMap: RouteNode = {
                         },
                       },
                     },
+                    params: {
+                      type: "object",
+                      required: ["skillId"],
+                      properties: {
+                        skillId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "revisions-get": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "revisions-get"],
+                capabilityId: "skills.revisions.get",
+                description:
+                  "Read one recorded revision of an agent skill in full, including the instruction body as it stood at that point.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--skill-id",
+                    prop: "skillId",
+                    required: true,
+                    part: "params",
+                    partPath: "skillId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--revision-id",
+                    prop: "revisionId",
+                    required: true,
+                    part: "params",
+                    partPath: "revisionId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["skillId", "revisionId"],
+                      properties: {
+                        skillId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        revisionId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "revisions-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "skills", "revisions-list"],
+                capabilityId: "skills.revisions.list",
+                description:
+                  "List the recorded revisions of an agent skill, newest first, without their bodies. Every body change records one, including the edits that accepting a proposal makes.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--skill-id",
+                    prop: "skillId",
+                    required: true,
+                    part: "params",
+                    partPath: "skillId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
                     params: {
                       type: "object",
                       required: ["skillId"],

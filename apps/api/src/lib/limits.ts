@@ -175,6 +175,17 @@ export const LIMITS = {
   agentSkillGithubDirectoriesMax: SKILL_PACKAGE_LIMITS.githubDirectoriesMax,
   agentSkillResourcesPerSkill: SKILL_PACKAGE_LIMITS.resourcesPerSkillMax,
   agentSkillResourceMaxChars: SKILL_PACKAGE_LIMITS.resourceMaxChars,
+  /** Prose a proposal author writes to explain the change. */
+  agentSkillProposalSummaryMaxChars: 2000,
+  /** Quoted source a comment anchors to, kept so the comment can be
+   *  re-anchored once the text moves on. */
+  agentSkillCommentAnchorTextMaxChars: 2000,
+  agentSkillCommentBodyMaxChars: 5000,
+  /** Comments returned for one skill, oldest first. */
+  agentSkillCommentsPageSizeMax: 500,
+  /** Revisions and proposals returned for one skill, newest first. */
+  agentSkillRevisionsPageSizeMax: 100,
+  agentSkillProposalsPageSizeMax: 100,
   mcpGatewayConnectorsMax: 20,
   /** Max connector rows returned by the connector catalogue listing
    *  (`GET /mcp/connectors` and the custom-MCP slice of `/catalogue`). */

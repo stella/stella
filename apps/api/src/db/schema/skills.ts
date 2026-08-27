@@ -1,5 +1,7 @@
 import {
+  agentSkillChildPolicies,
   agentSkillPolicies,
+  agentSkillRevisionPolicies,
   agentSkillResourcePolicies,
   jsonb,
   organization,
@@ -116,6 +118,199 @@ export const agentSkillResources = p.pgTable(
       .index("agent_skill_resources_org_skill_idx")
       .on(table.organizationId, table.skillId),
     ...agentSkillResourcePolicies(),
+  ],
+);
+
+/**
+ * Immutable snapshots of a skill body. Rows are written by the
+ * `record_agent_skill_revision` trigger on every body change, never by
+ * application code, so no writer can forget one. Consecutive saves by the
+ * same author inside a short window coalesce into the latest revision unless
+ * a proposal or comment already anchors to it.
+ */
+export const agentSkillRevisions = p.pgTable(
+  "agent_skill_revisions",
+  {
+    id: pUuid<"agentSkillRevision">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    skillId: safeUuid<"agentSkill">("skill_id")
+      .notNull()
+      .references(() => agentSkills.id, { onDelete: "cascade" }),
+    revisionNumber: p.integer("revision_number").notNull(),
+    body: p.text().notNull(),
+    contentHash: p.varchar("content_hash", { length: 64 }).notNull(),
+    // Null for system writes (seeding, installs) and after account deletion.
+    createdBy: p
+      .text("created_by")
+      .references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .uniqueIndex("agent_skill_revisions_skill_number_uidx")
+      .on(table.skillId, table.revisionNumber),
+    p
+      .index("agent_skill_revisions_org_skill_idx")
+      .on(table.organizationId, table.skillId),
+    ...agentSkillRevisionPolicies(),
+  ],
+);
+
+export const AGENT_SKILL_PROPOSAL_STATUSES = [
+  "draft",
+  "proposed",
+  "accepted",
+  "rejected",
+] as const;
+export type AgentSkillProposalStatus =
+  (typeof AGENT_SKILL_PROPOSAL_STATUSES)[number];
+
+const AGENT_SKILL_PROPOSAL_STATUS_SQL_VALUES = sql.join(
+  AGENT_SKILL_PROPOSAL_STATUSES.map((status) => sql`${status}`),
+  sql`, `,
+);
+
+/** Terminal statuses: reached once, by a reviewer, and never left. */
+export const DECIDED_AGENT_SKILL_PROPOSAL_STATUSES = [
+  "accepted",
+  "rejected",
+] as const satisfies readonly AgentSkillProposalStatus[];
+
+const DECIDED_AGENT_SKILL_PROPOSAL_STATUS_SQL_VALUES = sql.join(
+  DECIDED_AGENT_SKILL_PROPOSAL_STATUSES.map((status) => sql`${status}`),
+  sql`, `,
+);
+
+/**
+ * A proposed body for a skill, branched from a base revision. Accepting a
+ * proposal writes its body to the skill (which records a revision) and links
+ * that revision back as `resultRevisionId`.
+ */
+export const agentSkillProposals = p.pgTable(
+  "agent_skill_proposals",
+  {
+    id: pUuid<"agentSkillProposal">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    skillId: safeUuid<"agentSkill">("skill_id")
+      .notNull()
+      .references(() => agentSkills.id, { onDelete: "cascade" }),
+    baseRevisionId:
+      safeUuid<"agentSkillRevision">("base_revision_id").notNull(),
+    body: p.text().notNull(),
+    summary: p.text().notNull().default(""),
+    status: p
+      .text("status", { enum: AGENT_SKILL_PROPOSAL_STATUSES })
+      .notNull()
+      .default("draft"),
+    authorId: p
+      .text("author_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    reviewerId: p
+      .text("reviewer_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    decidedAt: timestamptz("decided_at"),
+    resultRevisionId: safeUuid<"agentSkillRevision">("result_revision_id"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p.check(
+      "agent_skill_proposals_status_check",
+      sql`${table.status} IN (${AGENT_SKILL_PROPOSAL_STATUS_SQL_VALUES})`,
+    ),
+    p.check(
+      "agent_skill_proposals_decision_timing_check",
+      sql`(${table.status} IN (${DECIDED_AGENT_SKILL_PROPOSAL_STATUS_SQL_VALUES})) = (${table.decidedAt} IS NOT NULL)`,
+    ),
+    p.check(
+      "agent_skill_proposals_result_check",
+      sql`(${table.status} = 'accepted') = (${table.resultRevisionId} IS NOT NULL)`,
+    ),
+    p
+      .index("agent_skill_proposals_skill_status_idx")
+      .on(table.skillId, table.status),
+    p
+      .index("agent_skill_proposals_org_skill_idx")
+      .on(table.organizationId, table.skillId),
+    p.index("agent_skill_proposals_base_revision_idx").on(table.baseRevisionId),
+    // Named explicitly: Drizzle's generated names exceed Postgres' 63-byte
+    // identifier limit and would be truncated.
+    p
+      .foreignKey({
+        name: "agent_skill_proposals_base_revision_fk",
+        columns: [table.baseRevisionId],
+        foreignColumns: [agentSkillRevisions.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "agent_skill_proposals_result_revision_fk",
+        columns: [table.resultRevisionId],
+        foreignColumns: [agentSkillRevisions.id],
+      })
+      .onDelete("set null"),
+    ...agentSkillChildPolicies("agent_skill_proposals", "agent_skill_proposal"),
+  ],
+);
+
+/**
+ * A comment anchored to a character range of one revision (or of a
+ * proposal's body when `proposalId` is set). `anchorText` keeps the quoted
+ * source so the comment can be re-anchored or shown detached once the text
+ * moves on.
+ */
+export const agentSkillComments = p.pgTable(
+  "agent_skill_comments",
+  {
+    id: pUuid<"agentSkillComment">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    skillId: safeUuid<"agentSkill">("skill_id")
+      .notNull()
+      .references(() => agentSkills.id, { onDelete: "cascade" }),
+    revisionId: safeUuid<"agentSkillRevision">("revision_id")
+      .notNull()
+      .references(() => agentSkillRevisions.id, { onDelete: "cascade" }),
+    proposalId: safeUuid<"agentSkillProposal">("proposal_id").references(
+      () => agentSkillProposals.id,
+      { onDelete: "cascade" },
+    ),
+    rangeStart: p.integer("range_start").notNull(),
+    rangeEnd: p.integer("range_end").notNull(),
+    anchorText: p.text("anchor_text").notNull(),
+    body: p.text().notNull(),
+    authorId: p
+      .text("author_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    resolvedAt: timestamptz("resolved_at"),
+    resolvedBy: p
+      .text("resolved_by")
+      .references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.check(
+      "agent_skill_comments_range_check",
+      sql`${table.rangeStart} >= 0 AND ${table.rangeEnd} >= ${table.rangeStart}`,
+    ),
+    p
+      .index("agent_skill_comments_skill_created_idx")
+      .on(table.skillId, table.createdAt),
+    p
+      .index("agent_skill_comments_org_skill_idx")
+      .on(table.organizationId, table.skillId),
+    p.index("agent_skill_comments_revision_idx").on(table.revisionId),
+    p.index("agent_skill_comments_proposal_idx").on(table.proposalId),
+    ...agentSkillChildPolicies("agent_skill_comments", "agent_skill_comment"),
   ],
 );
 

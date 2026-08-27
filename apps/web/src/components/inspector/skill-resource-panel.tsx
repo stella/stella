@@ -11,6 +11,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { MarkdownPreview } from "@/components/markdown-preview";
 import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
 import {
+  splitFrontmatter,
   toEditorMarkdown,
   toStoredMarkdown,
 } from "@/components/skill-body-markdown";
@@ -24,6 +25,7 @@ import { toSafeId } from "@/lib/safe-id";
 import { InspectorTabHeader } from "./inspector-tab-header";
 import type { SkillResourceTab } from "./inspector-tabs-store";
 import { useInspectorTabsStore } from "./inspector-tabs-store";
+import { SkillBodyWorkspace } from "./skill-history/skill-body-workspace";
 
 type RenderMode = "markdown" | "text" | "pdf";
 
@@ -195,6 +197,58 @@ export const SkillResourcePanel = ({
     detached(runSaveLoop(editorMarkdown), "skill-resource-panel.run-save-loop");
   };
 
+  // The body was replaced wholesale by something other than the editor (an
+  // accepted proposal). The server already holds it; only the open tab needs
+  // to catch up, and the frontmatter stays the metadata the form owns.
+  const adoptBody = (editorMarkdown: string) => {
+    updateSkillResourceTabContent(
+      tab.id,
+      toStoredMarkdown(editorMarkdown, tab.content),
+    );
+  };
+
+  const restoreBody = (editorMarkdown: string) => {
+    persistMarkdown(editorMarkdown);
+    adoptBody(editorMarkdown);
+  };
+
+  const renderContentPane = () => {
+    const hybridSkillId = useHybridEditor ? tab.skillId : null;
+    if (hybridSkillId === null) {
+      return (
+        <SkillResourceBody
+          content={tab.content}
+          draft={draft}
+          editing={editing}
+          editLabel={t("common.edit")}
+          onDraftChange={setDraft}
+          pdfPlaceholder={t("knowledge.agentSkills.pdfPreviewSoon")}
+          renderMode={renderMode}
+        />
+      );
+    }
+    if (tab.target === "body") {
+      return (
+        <SkillBodyWorkspace
+          frontmatterLength={splitFrontmatter(tab.content).frontmatter.length}
+          key={tab.id}
+          liveMarkdown={toEditorMarkdown(tab.content)}
+          onAdoptBody={adoptBody}
+          onPersistBody={persistMarkdown}
+          onRestoreBody={restoreBody}
+          skillId={hybridSkillId}
+        />
+      );
+    }
+    return (
+      <MarkdownHybridEditor
+        key={tab.id}
+        markdown={toEditorMarkdown(tab.content)}
+        onMarkdownChange={persistMarkdown}
+      />
+    );
+  };
+
   return (
     <div className="bg-background flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <InspectorTabHeader
@@ -255,23 +309,7 @@ export const SkillResourcePanel = ({
         }
         onClose={onClose}
       />
-      {useHybridEditor && tab.skillId !== null ? (
-        <MarkdownHybridEditor
-          key={tab.id}
-          markdown={toEditorMarkdown(tab.content)}
-          onMarkdownChange={persistMarkdown}
-        />
-      ) : (
-        <SkillResourceBody
-          content={tab.content}
-          draft={draft}
-          editing={editing}
-          editLabel={t("common.edit")}
-          onDraftChange={setDraft}
-          pdfPlaceholder={t("knowledge.agentSkills.pdfPreviewSoon")}
-          renderMode={renderMode}
-        />
-      )}
+      {renderContentPane()}
     </div>
   );
 };

@@ -864,6 +864,67 @@ export const agentSkillResourcePolicies = () => [
   }),
 ];
 
+/**
+ * Rows that hang off a skill (revisions, proposals, comments) are visible to
+ * whoever can see the skill: every org member for team skills, the owner for
+ * private ones. `tableName` is needed because the correlated subquery must
+ * compare against the child row's own organization column.
+ */
+const agentSkillChildVisibleCheck = (tableName: string) => sql`(
+  ${organizationCheck} AND EXISTS (
+    SELECT 1
+    FROM agent_skills s
+    WHERE s.id = skill_id
+      AND s.organization_id = ${sql.raw(tableName)}.organization_id
+      AND (s.scope = 'team' OR s.user_id = (SELECT current_setting(
+        '${sql.raw(SETTING_USER_ID)}', true
+      )))
+  )
+)`;
+
+/**
+ * Revisions are written only by the `record_agent_skill_revision` trigger
+ * (SECURITY DEFINER), so the app role gets a select policy and nothing else:
+ * with no insert/update/delete policy, row security refuses those outright.
+ */
+export const agentSkillRevisionPolicies = () => [
+  p.pgPolicy("agent_skill_revision_select", {
+    for: "select",
+    to: stella,
+    using: agentSkillChildVisibleCheck("agent_skill_revisions"),
+  }),
+];
+
+export const agentSkillChildPolicies = (
+  tableName: string,
+  policyPrefix: string,
+) => {
+  const visible = agentSkillChildVisibleCheck(tableName);
+  return [
+    p.pgPolicy(`${policyPrefix}_select`, {
+      for: "select",
+      to: stella,
+      using: visible,
+    }),
+    p.pgPolicy(`${policyPrefix}_insert`, {
+      for: "insert",
+      to: stella,
+      withCheck: visible,
+    }),
+    p.pgPolicy(`${policyPrefix}_update`, {
+      for: "update",
+      to: stella,
+      using: visible,
+      withCheck: visible,
+    }),
+    p.pgPolicy(`${policyPrefix}_delete`, {
+      for: "delete",
+      to: stella,
+      using: visible,
+    }),
+  ];
+};
+
 export const chatThreadPolicies = () => [
   p.pgPolicy("chat_thread_select", {
     for: "select",

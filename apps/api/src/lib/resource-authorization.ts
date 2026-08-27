@@ -42,7 +42,19 @@ type ResourceAuthorizationDisposition =
  */
 export const RESOURCE_AUTHORIZATION_DISPOSITION = {
   [RESOURCE_TYPE.AGENT_SKILL]: { type: "domain_policy", owner: "agent_skills" },
+  [RESOURCE_TYPE.AGENT_SKILL_COMMENT]: {
+    type: "domain_policy",
+    owner: "agent_skills",
+  },
+  [RESOURCE_TYPE.AGENT_SKILL_PROPOSAL]: {
+    type: "domain_policy",
+    owner: "agent_skills",
+  },
   [RESOURCE_TYPE.AGENT_SKILL_RESOURCE]: {
+    type: "domain_policy",
+    owner: "agent_skills",
+  },
+  [RESOURCE_TYPE.AGENT_SKILL_REVISION]: {
     type: "domain_policy",
     owner: "agent_skills",
   },

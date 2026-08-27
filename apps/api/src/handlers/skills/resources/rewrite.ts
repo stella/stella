@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import { stripMarkdownFences } from "@/api/lib/agent-skills/markdown-fences";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -177,7 +178,7 @@ const rewriteSkillResource = createSafeRootHandler(
       return Result.err(generation.error);
     }
 
-    const rewritten = stripFences(generation.value).trim();
+    const rewritten = stripMarkdownFences(generation.value);
     if (!rewritten) {
       return Result.err(
         new HandlerError({
@@ -223,15 +224,5 @@ Current content:
 \`\`\`
 ${currentContent}
 \`\`\``;
-
-const stripFences = (raw: string): string => {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return "";
-  }
-  const fencePattern = /^```(?:[a-zA-Z0-9_-]*)\n(?<body>[\s\S]*?)\n```$/u;
-  const fenceMatch = fencePattern.exec(trimmed);
-  return fenceMatch?.groups?.["body"]?.trim() ?? trimmed;
-};
 
 export default rewriteSkillResource;

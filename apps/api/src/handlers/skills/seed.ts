@@ -2,12 +2,11 @@ import { Result } from "better-result";
 import { and, eq, isNotNull } from "drizzle-orm";
 
 import { agentSkills } from "@/api/db/schema";
+import { hashAuthoredSkillContent } from "@/api/lib/agent-skills/authored-content-hash";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-
-import { hashAuthoredSkillContent } from "./authored-content-hash";
 
 // Default slash-command skills installed for every new user. They
 // mirror the legacy `prompt_shortcuts` defaults — same commands, same
