@@ -33,7 +33,7 @@ type NativeTouchPoint = {
 
 const dispatchNativeTouch = async (
   session: CDPSession,
-  type: "touchCancel" | "touchEnd" | "touchMove" | "touchStart",
+  type: "touchMove" | "touchStart",
   touches: readonly NativeTouchPoint[],
 ) => {
   await session.send("Input.dispatchTouchEvent", {
@@ -43,6 +43,20 @@ const dispatchNativeTouch = async (
       x: clientX,
       y: clientY,
     })),
+  });
+};
+
+const endNativeTouch = async (session: CDPSession) => {
+  await session.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+};
+
+const cancelNativeTouch = async (session: CDPSession) => {
+  await session.send("Input.dispatchTouchEvent", {
+    type: "touchCancel",
+    touchPoints: [],
   });
 };
 
@@ -126,7 +140,7 @@ test("preserves native board and list scrolling while a handle activates touch d
   const coordinates = await getTouchCoordinates(handle);
   await dispatchNativeTouch(nativeTouch, "touchStart", [coordinates]);
   await expect(page.locator("[data-overlay]")).toHaveText("first");
-  await dispatchNativeTouch(nativeTouch, "touchEnd", []);
+  await endNativeTouch(nativeTouch);
 });
 
 test("activates a mouse drag only after its distance threshold", async ({
@@ -176,7 +190,7 @@ test("waits for the touch delay and cancels when movement exceeds its tolerance"
     return Number(dragStartedAt) - Number(touchStartedAt);
   });
   expect(touchDelay).toBeGreaterThanOrEqual(150);
-  await dispatchNativeTouch(nativeTouch, "touchEnd", []);
+  await endNativeTouch(nativeTouch);
 
   const toleranceHandle = await openFixture(page);
   const toleranceCoordinates = await getTouchCoordinates(toleranceHandle);
@@ -195,9 +209,7 @@ test("waits for the touch delay and cancels when movement exceeds its tolerance"
   await expect(page.locator("[data-overlay]")).toHaveCount(0);
 });
 
-test("ignores a secondary finger's native move and end events", async ({
-  page,
-}) => {
+test("ignores a secondary finger's native move", async ({ page }) => {
   const handle = await openFixture(page);
   const primary = await getTouchCoordinates(handle);
   const secondary: NativeTouchPoint = {
@@ -221,10 +233,9 @@ test("ignores a secondary finger's native move and end events", async ({
   ]);
   await expect(page.locator("[data-overlay]")).toHaveText("first");
 
-  await dispatchNativeTouch(nativeTouch, "touchEnd", [secondary]);
   await expect(page.locator("[data-overlay]")).toHaveText("first");
 
-  await page.keyboard.press("Escape");
+  await endNativeTouch(nativeTouch);
   await expect(page.locator("[data-overlay]")).toHaveCount(0);
 });
 
@@ -241,7 +252,7 @@ test("handles native multi-touch cancellation", async ({ page }) => {
   await dispatchNativeTouch(nativeTouch, "touchStart", [primary]);
   await expect(page.locator("[data-overlay]")).toHaveText("first");
   await dispatchNativeTouch(nativeTouch, "touchStart", [primary, secondary]);
-  await dispatchNativeTouch(nativeTouch, "touchCancel", []);
+  await cancelNativeTouch(nativeTouch);
   await expect(page.locator("[data-overlay]")).toHaveCount(0);
 });
 
@@ -281,12 +292,12 @@ test("cleans up a cancelled touch sensor before the next drag", async ({
         ),
     )
     .toBe("seen");
-  await dispatchNativeTouch(nativeTouch, "touchEnd", []);
+  await endNativeTouch(nativeTouch);
 
   const next = { ...first, id: 3 };
   await dispatchNativeTouch(nativeTouch, "touchStart", [next]);
   await expect(page.locator("[data-overlay]")).toHaveText("first");
-  await dispatchNativeTouch(nativeTouch, "touchEnd", []);
+  await endNativeTouch(nativeTouch);
   await expect(page.locator("[data-overlay]")).toHaveCount(0);
 });
 

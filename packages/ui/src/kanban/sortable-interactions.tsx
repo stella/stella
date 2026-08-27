@@ -35,6 +35,7 @@ import { GripVerticalIcon } from "lucide-react";
 
 import { Button } from "../components/button";
 import { cn } from "../lib/utils";
+import { isActiveTouchChange } from "./touch-identity";
 
 export const KANBAN_MOUSE_ACTIVATION_DISTANCE = 8;
 
@@ -64,13 +65,15 @@ const getTouchIdentifier = (event: Event): number | null => {
   );
 };
 
-const includesTouchIdentifier = (touches: TouchList, identifier: number) => {
+const getTouchIdentifiers = (touches: TouchList) => {
+  const identifiers: number[] = [];
   for (let index = 0; index < touches.length; index += 1) {
-    if (touches.item(index)?.identifier === identifier) {
-      return true;
+    const identifier = touches.item(index)?.identifier;
+    if (identifier !== undefined) {
+      identifiers.push(identifier);
     }
   }
-  return false;
+  return identifiers;
 };
 
 /**
@@ -145,12 +148,11 @@ class KanbanTouchSensor extends TouchSensor {
     this.detachIdentityListeners();
   };
 
-  private readonly isPrimaryTouchChange = (event: TouchEvent) => {
-    if (this.touchIdentifier === null) {
-      return true;
-    }
-    return includesTouchIdentifier(event.changedTouches, this.touchIdentifier);
-  };
+  private readonly isPrimaryTouchChange = (event: TouchEvent) =>
+    isActiveTouchChange({
+      activeTouchIdentifier: this.touchIdentifier,
+      changedTouchIdentifiers: getTouchIdentifiers(event.changedTouches),
+    });
 
   private readonly detachIdentityListeners = () => {
     this.identityListeners.abort();
