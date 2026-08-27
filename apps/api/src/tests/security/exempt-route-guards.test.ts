@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
+import * as v from "valibot";
 
 /**
  * Restores the mutation-endpoint census `permission-guards.test.ts` used to
@@ -129,15 +130,25 @@ const parseRouteFile = (relPath: string): Endpoint[] => {
   return endpoints;
 };
 
+const oxlintConfigModuleSchema = v.object({
+  default: v.object({
+    overrides: v.optional(
+      v.array(
+        v.object({
+          files: v.optional(v.array(v.string())),
+          rules: v.optional(v.record(v.string(), v.unknown())),
+        }),
+      ),
+    ),
+  }),
+});
+
 describe("route-boundary exemptions (require-safe-route-handlers off)", () => {
   test("the oxlint exemption list for handler route files matches the checked-in list", async () => {
     const oxlintConfigPath = nodePath.join(REPO_ROOT, "oxlint.config.ts");
-    const oxlintConfig = (
-      (await import(oxlintConfigPath)) as {
-        default: {
-          overrides?: { files?: string[]; rules?: Record<string, unknown> }[];
-        };
-      }
+    const oxlintConfig = v.parse(
+      oxlintConfigModuleSchema,
+      await import(oxlintConfigPath),
     ).default;
 
     const exemptFiles = new Set<string>();

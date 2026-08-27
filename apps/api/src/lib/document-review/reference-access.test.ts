@@ -108,7 +108,7 @@ describe("document review reference access", () => {
       },
     ]);
     expect(scoped.finding.targetCitations).toEqual(
-      PAYLOAD.checkKind === "reference" ? PAYLOAD.finding.targetCitations : [],
+      PAYLOAD.finding.targetCitations,
     );
   });
 

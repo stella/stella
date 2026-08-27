@@ -374,20 +374,19 @@ export const generateAnalysis = async (
 
   // The text the reader sees: in development that may be the tree's own
   // parse rather than the stored one, and the anchors must agree.
-  const reparsed =
-    devReparseEnabled() && decision.source !== null
-      ? await reparseForDev({
-          adapterKey: decision.source.adapterKey,
-          caseNumber: decision.caseNumber,
-          court: decision.court,
-          decisionDate: decision.decisionDate,
-          decisionType: decision.decisionType,
-          documentUrl: decision.documentUrl,
-          ecli: decision.ecli,
-          id: decisionId,
-          metadata: decision.metadata,
-        })
-      : null;
+  const reparsed = devReparseEnabled()
+    ? await reparseForDev({
+        adapterKey: decision.source.adapterKey,
+        caseNumber: decision.caseNumber,
+        court: decision.court,
+        decisionDate: decision.decisionDate,
+        decisionType: decision.decisionType,
+        documentUrl: decision.documentUrl,
+        ecli: decision.ecli,
+        id: decisionId,
+        metadata: decision.metadata,
+      })
+    : null;
   const ast = reparsed ?? parseUsableDocumentAst(decision.documentAst);
   if (ast === null) {
     return Result.ok({
