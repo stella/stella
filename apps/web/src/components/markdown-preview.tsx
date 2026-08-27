@@ -43,11 +43,10 @@ export const MarkdownPreview = ({
   />
 );
 
-// Markdown previews render untrusted document content. A remote image
-// source would be fetched the moment the inspector opens, leaking
-// document-open activity to an attacker-controlled URL (tracking pixel /
-// SSRF). Only render images whose data is embedded in the document; for
-// anything else, fall back to the alt text so nothing hits the network.
+// Markdown previews render untrusted document content, so opening one must
+// not itself trigger a network request driven by that content. Only render
+// images whose data is embedded in the document; for anything else, fall
+// back to the alt text so nothing hits the network.
 const SafePreviewImage = ({
   alt,
   node: _node,

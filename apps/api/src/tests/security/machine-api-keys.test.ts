@@ -1,14 +1,17 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { MACHINE_API_KEY_PREFIX } from "@/api/lib/machine-api-key-config";
+import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import type { McpEffectiveAuthority } from "@/api/mcp/effective-authority";
 
 /**
  * Machine API keys as an MCP credential.
  *
  * The property under test is not "a key works" — it is that a key is held to
- * *exactly* the authorization a JWT bearer token is held to, and that the extra
- * ways a key can go wrong (revoked, rotated away, owner demoted, owner removed
- * from the org, metadata naming a foreign org) all fail closed.
+ * *exactly* the authorization a JWT bearer token is held to, narrowed by its own
+ * permission set, and that the extra ways a key can go wrong (revoked, rotated
+ * away, owner demoted, owner removed from the org, metadata naming a foreign
+ * org) all fail closed.
  *
  * `verifyApiKey` and `resolveMemberAuthorization` are mocked because both are
  * thin wrappers over the database; what this file exercises is the decision
@@ -117,9 +120,26 @@ describe("resolveMachineApiKeySession", () => {
     expect(fromKey.credential).toEqual({
       id: KEY_ID,
       name: "Machine API key",
+      permissions: { workspace: ["read"] },
       type: "machine_api_key",
     });
     expect(fromJwt.credential).toEqual({ type: "delegated_user" });
+  });
+
+  test("carries the key's permission set onto the session it resolves to", async () => {
+    // The stored set is what the key is held to at call time, not merely what
+    // was compared against the owner's role here: a session that dropped it
+    // would leave the key acting with the owner's entire role, and the set
+    // would restrict nothing after authentication.
+    givenKey({ permissions: { timeEntry: ["read"] } });
+    givenMemberRole("owner");
+
+    const session = await resolveMachineApiKeySession(CREDENTIAL);
+
+    expect(session.credential).toMatchObject({
+      permissions: { timeEntry: ["read"] },
+      type: "machine_api_key",
+    });
   });
 
   test("resolves to a real user id, which is what makes the member and RLS checks apply", async () => {
@@ -272,6 +292,71 @@ describe("resolveMachineApiKeySession", () => {
       unknown.message,
     ]);
     expect(messages.size).toBe(1);
+  });
+});
+
+describe("hasEffectiveAuthority", () => {
+  test("holds a credential to the intersection of its role and its own set", () => {
+    // Both halves must grant. The role half alone would make the stored set
+    // decorative; the credential half alone would let a set outlive the role
+    // that justified it.
+    const authority: McpEffectiveAuthority = {
+      memberRole: "owner",
+      credentialPermissions: { timeEntry: ["read"] },
+    };
+
+    expect(hasEffectiveAuthority(authority, { timeEntry: ["read"] })).toBe(
+      true,
+    );
+    // Owner grants it; the credential does not name the resource.
+    expect(hasEffectiveAuthority(authority, { clause: ["create"] })).toBe(
+      false,
+    );
+    // The credential names the resource but not the action.
+    expect(hasEffectiveAuthority(authority, { timeEntry: ["delete"] })).toBe(
+      false,
+    );
+  });
+
+  test("a credential set never widens the role", () => {
+    expect(
+      hasEffectiveAuthority(
+        {
+          memberRole: "intern",
+          credentialPermissions: { organizationSettings: ["update"] },
+        },
+        { organizationSettings: ["update"] },
+      ),
+    ).toBe(false);
+  });
+
+  test("no credential set leaves the role deciding, which is the token path", () => {
+    expect(
+      hasEffectiveAuthority({ memberRole: "owner" }, { clause: ["create"] }),
+    ).toBe(true);
+    expect(
+      hasEffectiveAuthority({ memberRole: "intern" }, { clause: ["create"] }),
+    ).toBe(false);
+  });
+
+  test("a credential set naming several resources must cover all of them", () => {
+    const authority: McpEffectiveAuthority = {
+      memberRole: "owner",
+      credentialPermissions: { timeEntry: ["read"], clause: ["create"] },
+    };
+
+    expect(
+      hasEffectiveAuthority(authority, {
+        timeEntry: ["read"],
+        clause: ["create"],
+      }),
+    ).toBe(true);
+    expect(
+      hasEffectiveAuthority(authority, {
+        timeEntry: ["read"],
+        clause: ["delete"],
+      }),
+    ).toBe(false);
   });
 });
 

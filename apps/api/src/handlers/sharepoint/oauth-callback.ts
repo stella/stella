@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import { eq, lt } from "drizzle-orm";
 import { t } from "elysia";
 
-import { sharepointConnections, sharepointOAuthState } from "@/api/db/schema";
+import {
+  organizationSettings,
+  sharepointConnections,
+  sharepointOAuthState,
+} from "@/api/db/schema";
 import { env } from "@/api/env";
 import { encryptSharepointSecret } from "@/api/handlers/sharepoint/crypto";
 import { assertSharepointConnectionEnabled } from "@/api/handlers/sharepoint/enablement";
@@ -62,27 +66,46 @@ const redirect = (input: CallbackRedirectInput) =>
 const sharepointOAuthCallback = createSafeRootHandler(
   config,
   async function* ({ query: input, safeDb, session, user, recordAuditEvent }) {
-    const gate = await assertSharepointConnectionEnabled({
-      organizationId: session.activeOrganizationId,
-      safeDb,
-    });
-    if (Result.isError(gate)) {
-      return Result.ok(redirect({ status: "error", reason: "not-enabled" }));
-    }
+    const run = async (): Promise<Result<Response, never>> => {
+      const gate = await assertSharepointConnectionEnabled({
+        organizationId: session.activeOrganizationId,
+        safeDb,
+      });
+      if (Result.isError(gate)) {
+        return Result.ok(redirect({ status: "error", reason: "not-enabled" }));
+      }
 
-    if (input.error) {
-      return Result.ok(redirect({ status: "error", reason: "consent-denied" }));
-    }
-    if (!input.code || !input.state) {
-      return Result.ok(redirect({ status: "error", reason: "missing-code" }));
-    }
-    const code = input.code;
-    const state = input.state;
-    const cutoff = new Date(Date.now() - STATE_TTL_MS);
+      if (input.error) {
+        return Result.ok(
+          redirect({ status: "error", reason: "consent-denied" }),
+        );
+      }
+      if (!input.code || !input.state) {
+        return Result.ok(redirect({ status: "error", reason: "missing-code" }));
+      }
+      const code = input.code;
+      const state = input.state;
+      const cutoff = new Date(Date.now() - STATE_TTL_MS);
 
-    try {
-      const stateRows = yield* Result.await(
-        safeDb((tx) =>
+      // A DB failure here is a Result.err, not a thrown exception: `yield*` on
+      // an Err closes this generator via `.return()`, which skips `catch`
+      // below (only `finally` would run). Await and branch explicitly instead
+      // of `yield*` so every failure — DB or thrown — still redirects rather
+      // than leaking a raw error body.
+      const redirectForFailure = (error: unknown) => {
+        if (HandlerError.is(error)) {
+          return redirect({ status: "error", reason: "invalid-secret" });
+        }
+        captureError(error, {
+          operation: "sharepoint_oauth_callback",
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        });
+        return redirect({ status: "error", reason: "unexpected" });
+      };
+
+      try {
+        const stateRowsResult = await safeDb((tx) =>
           tx
             .select({
               organizationId: sharepointOAuthState.organizationId,
@@ -94,78 +117,120 @@ const sharepointOAuthCallback = createSafeRootHandler(
             .from(sharepointOAuthState)
             .where(eq(sharepointOAuthState.state, state))
             .limit(1),
-        ),
-      );
-      const row = stateRows.at(0);
-
-      if (!row || row.createdAt < cutoff) {
-        return Result.ok(
-          redirect({ status: "error", reason: "expired-state" }),
         );
-      }
-      if (
-        row.organizationId !== session.activeOrganizationId ||
-        row.userId !== user.id
-      ) {
-        return Result.ok(
-          redirect({ status: "error", reason: "user-mismatch" }),
-        );
-      }
+        if (Result.isError(stateRowsResult)) {
+          return Result.ok(redirectForFailure(stateRowsResult.error));
+        }
+        const row = stateRowsResult.value.at(0);
 
-      const oauthConfig = getSharepointOAuthConfig();
-      if (Result.isError(oauthConfig)) {
-        return Result.ok(
-          redirect({ status: "error", reason: "not-configured" }),
-        );
-      }
+        if (!row || row.createdAt < cutoff) {
+          return Result.ok(
+            redirect({ status: "error", reason: "expired-state" }),
+          );
+        }
+        if (
+          row.organizationId !== session.activeOrganizationId ||
+          row.userId !== user.id
+        ) {
+          return Result.ok(
+            redirect({ status: "error", reason: "user-mismatch" }),
+          );
+        }
 
-      const token = await exchangeAuthorizationCode({
-        clientId: oauthConfig.value.clientId,
-        clientSecret: oauthConfig.value.clientSecret,
-        tenantId: oauthConfig.value.tenantId,
-        code,
-        codeVerifier: row.codeVerifier,
-        redirectUri: row.redirectUri,
-      });
-      if (Result.isError(token)) {
-        return Result.ok(
-          redirect({ status: "error", reason: "token-exchange" }),
-        );
-      }
+        const oauthConfig = getSharepointOAuthConfig();
+        if (Result.isError(oauthConfig)) {
+          return Result.ok(
+            redirect({ status: "error", reason: "not-configured" }),
+          );
+        }
 
-      const rowUserId = brandPersistedUserId(row.userId);
-      const accountLabel = await fetchAccountLabel(token.value.access_token);
+        const token = await exchangeAuthorizationCode({
+          clientId: oauthConfig.value.clientId,
+          clientSecret: oauthConfig.value.clientSecret,
+          tenantId: oauthConfig.value.tenantId,
+          code,
+          codeVerifier: row.codeVerifier,
+          redirectUri: row.redirectUri,
+        });
+        if (Result.isError(token)) {
+          return Result.ok(
+            redirect({ status: "error", reason: "token-exchange" }),
+          );
+        }
 
-      const encryptedAccess = await encryptSharepointSecret({
-        purpose: "sharepoint_access_token",
-        secret: token.value.access_token,
-        organizationId: row.organizationId,
-        userId: rowUserId,
-      });
-      const encryptedRefresh = token.value.refresh_token
-        ? await encryptSharepointSecret({
-            purpose: "sharepoint_refresh_token",
-            secret: token.value.refresh_token,
-            organizationId: row.organizationId,
-            userId: rowUserId,
-          })
-        : null;
+        const rowUserId = brandPersistedUserId(row.userId);
+        const accountLabel = await fetchAccountLabel(token.value.access_token);
 
-      yield* Result.await(
-        safeDb(
-          async (tx) =>
-            await tx.transaction(async (innerTx) => {
-              await innerTx
-                .delete(sharepointOAuthState)
-                .where(eq(sharepointOAuthState.state, state));
-              await innerTx
-                .delete(sharepointOAuthState)
-                .where(lt(sharepointOAuthState.createdAt, cutoff));
-              await innerTx
-                .insert(sharepointConnections)
-                .values({
-                  organizationId: row.organizationId,
-                  userId: rowUserId,
+        const encryptedAccess = await encryptSharepointSecret({
+          purpose: "sharepoint_access_token",
+          secret: token.value.access_token,
+          organizationId: row.organizationId,
+          userId: rowUserId,
+        });
+        const encryptedRefresh = token.value.refresh_token
+          ? await encryptSharepointSecret({
+              purpose: "sharepoint_refresh_token",
+              secret: token.value.refresh_token,
+              organizationId: row.organizationId,
+              userId: rowUserId,
+            })
+          : null;
+
+        const connectResult = await safeDb(async (tx) =>
+          tx.transaction(async (innerTx) => {
+            // Re-check enablement under the row lock: the Graph round trips
+            // above can take long enough for an admin to turn the connection
+            // off mid-flow, and the check at the top of this handler ran
+            // before any of that work started.
+            const settingsRows = await innerTx
+              .select({
+                sharepointConnectionEnabled:
+                  organizationSettings.sharepointConnectionEnabled,
+              })
+              .from(organizationSettings)
+              .where(
+                eq(organizationSettings.organizationId, row.organizationId),
+              )
+              .for("update");
+            if (!settingsRows.at(0)?.sharepointConnectionEnabled) {
+              return { status: "not-enabled" as const };
+            }
+
+            // Authoritative on the state token: a concurrent callback for the
+            // same state (replay, or a double-fired redirect) deletes zero
+            // rows here and must not also persist a connection.
+            const deletedState = await innerTx
+              .delete(sharepointOAuthState)
+              .where(eq(sharepointOAuthState.state, state))
+              .returning({ state: sharepointOAuthState.state });
+            await innerTx
+              .delete(sharepointOAuthState)
+              .where(lt(sharepointOAuthState.createdAt, cutoff));
+            if (deletedState.length === 0) {
+              return { status: "state-consumed" as const };
+            }
+
+            await innerTx
+              .insert(sharepointConnections)
+              .values({
+                organizationId: row.organizationId,
+                userId: rowUserId,
+                accessTokenEncrypted: encryptedAccess.ciphertext,
+                accessTokenIv: encryptedAccess.iv,
+                refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
+                refreshTokenIv: encryptedRefresh?.iv ?? null,
+                tokenType: token.value.token_type ?? "Bearer",
+                scope: token.value.scope ?? null,
+                accountLabel,
+                expiresAt: tokenExpiresAt(token.value),
+                status: "connected",
+              })
+              .onConflictDoUpdate({
+                target: [
+                  sharepointConnections.organizationId,
+                  sharepointConnections.userId,
+                ],
+                set: {
                   accessTokenEncrypted: encryptedAccess.ciphertext,
                   accessTokenIv: encryptedAccess.iv,
                   refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
@@ -175,53 +240,54 @@ const sharepointOAuthCallback = createSafeRootHandler(
                   accountLabel,
                   expiresAt: tokenExpiresAt(token.value),
                   status: "connected",
-                })
-                .onConflictDoUpdate({
-                  target: [
-                    sharepointConnections.organizationId,
-                    sharepointConnections.userId,
-                  ],
-                  set: {
-                    accessTokenEncrypted: encryptedAccess.ciphertext,
-                    accessTokenIv: encryptedAccess.iv,
-                    refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
-                    refreshTokenIv: encryptedRefresh?.iv ?? null,
-                    tokenType: token.value.token_type ?? "Bearer",
-                    scope: token.value.scope ?? null,
-                    accountLabel,
-                    expiresAt: tokenExpiresAt(token.value),
-                    status: "connected",
-                    updatedAt: new Date(),
-                  },
-                });
-              await recordAuditEvent(innerTx, {
-                action: AUDIT_ACTION.UPDATE,
-                resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-                resourceId: row.organizationId,
-                workspaceId: null,
-                metadata: {
-                  connectionUserId: rowUserId,
-                  operation: "sharepoint_oauth_connect",
+                  updatedAt: new Date(),
                 },
               });
-            }),
-        ),
-      );
-
-      return Result.ok(redirect({ status: "connected" }));
-    } catch (error) {
-      if (HandlerError.is(error)) {
-        return Result.ok(
-          redirect({ status: "error", reason: "invalid-secret" }),
+            await recordAuditEvent(innerTx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+              resourceId: row.organizationId,
+              workspaceId: null,
+              metadata: {
+                connectionUserId: rowUserId,
+                operation: "sharepoint_oauth_connect",
+              },
+            });
+            return { status: "connected" as const };
+          }),
         );
+        if (Result.isError(connectResult)) {
+          return Result.ok(redirectForFailure(connectResult.error));
+        }
+
+        switch (connectResult.value.status) {
+          case "not-enabled": {
+            return Result.ok(
+              redirect({ status: "error", reason: "not-enabled" }),
+            );
+          }
+          case "state-consumed": {
+            return Result.ok(
+              redirect({ status: "error", reason: "expired-state" }),
+            );
+          }
+          case "connected": {
+            return Result.ok(redirect({ status: "connected" }));
+          }
+          default: {
+            const exhaustive: never = connectResult.value;
+            return exhaustive;
+          }
+        }
+      } catch (error) {
+        return Result.ok(redirectForFailure(error));
       }
-      captureError(error, {
-        operation: "sharepoint_oauth_callback",
-        organizationId: session.activeOrganizationId,
-        userId: user.id,
-      });
-      return Result.ok(redirect({ status: "error", reason: "unexpected" }));
-    }
+    };
+
+    // `run` always resolves `Result.ok(...)` (every failure branch above
+    // redirects instead of erroring), so this is a real `yield*` outside any
+    // try — it exists to unwrap `run`'s result, not to propagate a DB Err.
+    return Result.ok(yield* Result.await(run()));
   },
 );
 

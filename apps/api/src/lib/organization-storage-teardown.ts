@@ -35,7 +35,10 @@ import {
   ocrDerivativeCursorFilter,
   ocrDerivativePageOrder,
 } from "@/api/lib/ocr-derivative-pages";
-import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
+import {
+  cancelRecoverableUploads,
+  pendingUploadS3KeysForDeletion,
+} from "@/api/lib/pending-upload-keys";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -613,15 +616,26 @@ export const recordOrganizationStorageTeardown = async ({
     });
   }
 
+  // Seal before enumerating, exactly as the matter deletion does: mark every
+  // matter `deleting` so no further lease is granted, then cancel the leases
+  // already out. Without this an upload could publish after its keys were
+  // read and survive the cascade with no row naming it.
+  const workspaceIds = workspaceRows.map(({ id }) => id);
+  if (workspaceIds.length > 0) {
+    // audit: skip — internal seal wrapping the organization deletion the
+    // endpoint already answers for.
+    await tx
+      .update(workspaces)
+      .set({ status: "deleting" })
+      .where(inArray(workspaces.id, workspaceIds));
+  }
+  await cancelRecoverableUploads(tx, workspaceIds);
+
   await recordChatAttachmentPage(scope, record);
   await recordTemplatePage(scope, record);
   await recordTemplateVersionPage(scope, record);
   await recordStyleSetPage(scope, record);
-  await recordMatterStorage(
-    scope,
-    workspaceRows.map(({ id }) => id),
-    record,
-  );
+  await recordMatterStorage(scope, workspaceIds, record);
 
   return { requestIds };
 };

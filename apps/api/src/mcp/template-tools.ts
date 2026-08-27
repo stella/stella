@@ -2,8 +2,6 @@ import { panic, Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { roles } from "@stll/permissions";
-
 import type { Transaction } from "@/api/db/root";
 import { entities, templates } from "@/api/db/schema";
 import type { TemplatePersistenceResult } from "@/api/db/schema";
@@ -61,6 +59,7 @@ import {
 } from "@/api/lib/templates/template-fill-service";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   claimTemplatePersistenceRequest,
   fingerprintTemplatePersistenceRequest,
@@ -585,10 +584,10 @@ const decodeTemplatePageCursor = (cursor: string): string | null => {
 const handleListTemplatesTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_TEMPLATES_PROJECTION>
 > = async ({ args, context }) => {
-  const hasPermission = roles[context.memberRole].authorize({
+  const hasPermission = hasEffectiveAuthority(context, {
     workspace: ["read"],
   });
-  if (!hasPermission.success) {
+  if (!hasPermission) {
     return errorResult("Forbidden");
   }
 
@@ -741,10 +740,10 @@ const fillTemplateArgsSchema = v.strictObject({
 });
 
 const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
-  const hasPermission = roles[context.memberRole].authorize({
+  const hasPermission = hasEffectiveAuthority(context, {
     template: ["use"],
   });
-  if (!hasPermission.success) {
+  if (!hasPermission) {
     return errorResult("Forbidden");
   }
 
@@ -1054,13 +1053,13 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     });
   }
 
-  const templatePermission = roles[context.memberRole].authorize({
+  const templatePermission = hasEffectiveAuthority(context, {
     template: ["use"],
   });
-  const entityPermission = roles[context.memberRole].authorize({
+  const entityPermission = hasEffectiveAuthority(context, {
     entity: [input.action === "create_document" ? "create" : "update"],
   });
-  if (!templatePermission.success || !entityPermission.success) {
+  if (!templatePermission || !entityPermission) {
     return errorResult("Forbidden");
   }
 
@@ -1405,10 +1404,10 @@ const createTemplateFromDocx = async ({
 }): Promise<
   InternalToolResult<v.InferInput<typeof SAVE_TEMPLATE_PROJECTION>>
 > => {
-  const hasPermission = roles[context.memberRole].authorize({
+  const hasPermission = hasEffectiveAuthority(context, {
     template: ["create"],
   });
-  if (!hasPermission.success) {
+  if (!hasPermission) {
     return errorResult("Forbidden");
   }
 
@@ -1495,10 +1494,10 @@ const configureExistingTemplate = async ({
 }): Promise<
   InternalToolResult<v.InferInput<typeof SAVE_TEMPLATE_PROJECTION>>
 > => {
-  const hasPermission = roles[context.memberRole].authorize({
+  const hasPermission = hasEffectiveAuthority(context, {
     template: ["update"],
   });
-  if (!hasPermission.success) {
+  if (!hasPermission) {
     return errorResult("Forbidden");
   }
 

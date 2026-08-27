@@ -38,6 +38,7 @@ export const ProposalBodyEditor = ({
 
   return (
     <MarkdownHybridEditor
+      imagePolicy="data-only"
       baseline={toEditorMarkdown(proposal.baseBody)}
       key={`${proposal.id}:${String(editable)}`}
       markdown={toEditorMarkdown(proposal.body)}

@@ -5,7 +5,6 @@ import * as v from "valibot";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { docxToMarkdown } from "@stll/folio-core/server";
-import { roles } from "@stll/permissions";
 
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { workspaces } from "@/api/db/schema";
@@ -68,6 +67,7 @@ import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import { serializeAuthorizedCorpusMcpResourceName } from "@/api/mcp/resource-serialization";
 import {
   defineTextFieldSpec,
@@ -1941,10 +1941,10 @@ const setPracticeJurisdictionsArgsSchema = v.strictObject({
 const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<
   v.InferInput<typeof SET_PRACTICE_JURISDICTIONS_PROJECTION>
 > = async ({ args, context }) => {
-  const hasPermission = roles[context.memberRole].authorize({
+  const hasPermission = hasEffectiveAuthority(context, {
     organizationSettings: ["update"],
   });
-  if (!hasPermission.success) {
+  if (!hasPermission) {
     return errorResult("Forbidden");
   }
 

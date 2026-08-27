@@ -21,6 +21,7 @@ const freshGuards = () =>
   });
 
 const org = (id: string) => toSafeId<"organization">(id);
+const user = (id: string) => toSafeId<"user">(id);
 
 describe("resolveInvokeRateLimit", () => {
   test("defaults to the generous per-capability budget", () => {
@@ -64,6 +65,7 @@ describe("consumeInvokeCapabilityRateLimit", () => {
     const input = {
       capabilityId: "entities.translate",
       organizationId: org("org_a"),
+      userId: user("user_a"),
       guards,
     };
     for (let i = 0; i < max; i += 1) {
@@ -81,6 +83,7 @@ describe("consumeInvokeCapabilityRateLimit", () => {
     const translate = {
       capabilityId: "entities.translate",
       organizationId: org("org_a"),
+      userId: user("user_a"),
       guards,
     };
     for (let i = 0; i < max; i += 1) {
@@ -94,6 +97,7 @@ describe("consumeInvokeCapabilityRateLimit", () => {
         await consumeInvokeCapabilityRateLimit({
           capabilityId: "entities.upload",
           organizationId: org("org_a"),
+          userId: user("user_a"),
           guards,
         })
       ).ok,
@@ -120,6 +124,7 @@ describe("consumeInvokeCapabilityRateLimit", () => {
         clientIp: "192.0.2.1",
         consumeSkillSource,
         organizationId: org("org_a"),
+        userId: user("user_a"),
       });
     }
 
@@ -130,6 +135,7 @@ describe("consumeInvokeCapabilityRateLimit", () => {
           clientIp: "192.0.2.1",
           consumeSkillSource,
           organizationId: org("org_b"),
+          userId: user("user_a"),
         })
       ).ok,
     ).toBe(true);
@@ -140,10 +146,37 @@ describe("consumeInvokeCapabilityRateLimit", () => {
           clientIp: "192.0.2.1",
           consumeSkillSource,
           organizationId: org("org_a"),
+          userId: user("user_a"),
         })
       ).ok,
     ).toBe(false);
     expect(counts.get("192.0.2.1")).toBe(max + 1);
+  });
+
+  test("distinct callers in one organization share no budget", async () => {
+    // The budget bounds what one caller can spend, so exhausting it must not
+    // reach across to a colleague on the same capability.
+    const guards = freshGuards();
+    const max = resolveInvokeRateLimit("entities.translate").max;
+    const first = {
+      capabilityId: "entities.translate",
+      organizationId: org("org_a"),
+      userId: user("user_a"),
+      guards,
+    };
+    for (let i = 0; i < max; i += 1) {
+      // eslint-disable-next-line no-await-in-loop -- sequential counter increments are the unit under test
+      await consumeInvokeCapabilityRateLimit(first);
+    }
+    expect((await consumeInvokeCapabilityRateLimit(first)).ok).toBe(false);
+    expect(
+      (
+        await consumeInvokeCapabilityRateLimit({
+          ...first,
+          userId: user("user_b"),
+        })
+      ).ok,
+    ).toBe(true);
   });
 
   test("distinct organizations share no budget", async () => {
@@ -152,6 +185,7 @@ describe("consumeInvokeCapabilityRateLimit", () => {
     const orgA = {
       capabilityId: "entities.translate",
       organizationId: org("org_a"),
+      userId: user("user_a"),
       guards,
     };
     for (let i = 0; i < max; i += 1) {
@@ -164,6 +198,7 @@ describe("consumeInvokeCapabilityRateLimit", () => {
         await consumeInvokeCapabilityRateLimit({
           capabilityId: "entities.translate",
           organizationId: org("org_b"),
+          userId: user("user_a"),
           guards,
         })
       ).ok,

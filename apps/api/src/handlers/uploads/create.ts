@@ -140,6 +140,9 @@ const config = {
     "against the exact size and checksum, so any deviation is rejected. " +
     "Step 3: call uploads.update with the uploadId to commit the record. " +
     "Call uploads.delete instead if the PUT fails.",
+  // permissions-exempt: the static gate is workspace:read because the
+  // resource-appropriate grant depends on the request's purpose, which
+  // authorizeUploadPurpose (uploads/permissions.ts) checks in-handler.
   permissions: uploadRoutePermission,
   access: "write",
   mcp: { type: "capability", reason: "file_transport" },

@@ -18,6 +18,11 @@ const CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH = nodePath.join(
   "20260803120000_chat_thread_turn_workspace_cascade",
   "migration.sql",
 );
+const DOCX_SUGGESTION_SOURCE_MATTERS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260827120000_docx_suggestion_source_matters",
+  "migration.sql",
+);
 const AGENT_SKILL_REVISIONS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260827080000_agent_skill_revisions",
@@ -112,6 +117,17 @@ export const installPgliteWorkspaceAccessObjects = async (
   for (const migrationPath of migrationPaths) {
     // oxlint-disable-next-line no-await-in-loop -- migration batches must stay ordered
     await installPgliteMigration({ db, migrationPath });
+  }
+  // The replay above rewrites every `workspace_*` policy to the plain matter
+  // check, so a table whose policies carry a further predicate in the schema
+  // needs its own ALTER POLICY statements replayed afterwards. The column
+  // itself already exists from the push, so only the policy statements run.
+  const policyStatements = readMigrationStatements(
+    DOCX_SUGGESTION_SOURCE_MATTERS_MIGRATION_PATH,
+  ).filter((statement) => executableSql(statement).startsWith("ALTER POLICY"));
+  for (const statement of policyStatements) {
+    // oxlint-disable-next-line no-await-in-loop -- policy DDL must execute in source order
+    await db.execute(sql.raw(statement));
   }
 };
 

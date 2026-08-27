@@ -266,7 +266,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `properties.create-batch`   | write              | stella:matters_write | —       | generic invoke → `stella capability properties create-batch`   |
 | `properties.delete`         | write, destructive | stella:matters_write | —       | generic invoke → `stella capability properties delete`         |
 | `properties.list`           | read               | stella:read          | —       | curated tool `list_properties`                                 |
-| `properties.preview`        | read               | stella:read          | —       | generic invoke → `stella capability properties preview`        |
+| `properties.preview`        | write              | stella:matters_write | —       | generic invoke → `stella capability properties preview`        |
 | `properties.suggest-prompt` | write              | stella:matters_write | —       | generic invoke → `stella capability properties suggest-prompt` |
 | `properties.update`         | write              | stella:matters_write | —       | generic invoke → `stella capability properties update`         |
 

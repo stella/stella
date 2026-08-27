@@ -101,9 +101,15 @@ const createHumanSession = async () =>
     orgSlugPrefix: "agent-test",
   });
 
+/** Hint for ceremonies whose confirm step no human in the test completes. */
+const unclaimedHint = () => `nobody-${Bun.randomUUIDv7()}@stella.dev`;
+
 describe("agent-auth service_auth flow", () => {
   test("registration returns an RFC 8628 ceremony shape", async () => {
-    const response = await postIdentity({ type: "service_auth" });
+    const response = await postIdentity({
+      type: "service_auth",
+      login_hint: unclaimedHint(),
+    });
     expect(response.status).toBe(200);
     const body = await readJson(response);
 
@@ -164,8 +170,18 @@ describe("agent-auth service_auth flow", () => {
     expect(res.status).toBe(422);
   });
 
+  test("a service_auth registration without login_hint is rejected", async () => {
+    // The hint is the only thing that binds the ceremony to one account, so a
+    // registration cannot start without it.
+    const res = await postIdentity({ type: "service_auth" });
+    expect(res.status).toBe(422);
+  });
+
   test("poll is authorization_pending before confirm", async () => {
-    const regRes = await postIdentity({ type: "service_auth" });
+    const regRes = await postIdentity({
+      type: "service_auth",
+      login_hint: unclaimedHint(),
+    });
     const reg = await readJson(regRes);
 
     const pendingRes = await postToken({
@@ -180,7 +196,10 @@ describe("agent-auth service_auth flow", () => {
   });
 
   test("second poll inside the interval is throttled with slow_down", async () => {
-    const regRes = await postIdentity({ type: "service_auth" });
+    const regRes = await postIdentity({
+      type: "service_auth",
+      login_hint: unclaimedHint(),
+    });
     const claimToken = String((await readJson(regRes))["claim_token"]);
 
     await postToken({
@@ -198,7 +217,10 @@ describe("agent-auth service_auth flow", () => {
   test("confirm binds the human + org and the poll mints a matching JWT", async () => {
     const human = await createHumanSession();
 
-    const regRes = await postIdentity({ type: "service_auth" });
+    const regRes = await postIdentity({
+      type: "service_auth",
+      login_hint: human.email,
+    });
     const reg = await readJson(regRes);
     const claimToken = String(reg["claim_token"]);
     const userCode = String(asJson(reg["claim"])["user_code"]);
@@ -251,7 +273,10 @@ describe("agent-auth service_auth flow", () => {
   });
 
   test("confirm without a session is rejected", async () => {
-    const regRes = await postIdentity({ type: "service_auth" });
+    const regRes = await postIdentity({
+      type: "service_auth",
+      login_hint: unclaimedHint(),
+    });
     const reg = await readJson(regRes);
     const confirmRes = await postConfirm(
       { user_code: String(asJson(reg["claim"])["user_code"]) },
@@ -301,7 +326,9 @@ describe("agent-auth service_auth flow", () => {
     const first = await createHumanSession();
     const second = await createHumanSession();
 
-    const reg = await readJson(await postIdentity({ type: "service_auth" }));
+    const reg = await readJson(
+      await postIdentity({ type: "service_auth", login_hint: first.email }),
+    );
     const userCode = String(asJson(reg["claim"])["user_code"]);
     const claimToken = String(reg["claim_token"]);
 

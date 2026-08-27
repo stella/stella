@@ -71,13 +71,18 @@ type SourceStatus = {
   insertedLastHour: number;
   inserted24h: number;
   failures24h: number;
+  /**
+   * The last ingestion run for this source. Deliberately no error text: a
+   * failure message is verbatim publisher or driver output, so the failure is
+   * reported as `status` here and as the classified `topErrors` below.
+   */
   lastEvent: {
     status: string;
     inserted: number;
     skipped: number;
     durationMs: number;
     finishedAt: string;
-    errorMessage: string | null;
+    failed: boolean;
   } | null;
   topErrors: { errorType: string; count: number }[];
   reconciliation: SourceReconciliationStatus | null;
@@ -253,7 +258,7 @@ export const getIngestionStatus = async (
               skipped: lastEvent.skipped,
               durationMs: lastEvent.durationMs,
               finishedAt: lastEvent.finishedAt.toISOString(),
-              errorMessage: lastEvent.errorMessage,
+              failed: lastEvent.errorMessage !== null,
             }
           : null,
         topErrors: topFailures.map((f) => ({

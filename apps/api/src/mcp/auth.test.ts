@@ -173,7 +173,12 @@ describe("isMcpSession", () => {
     const credentials = [
       { type: "agent_run", runId: "run_1" },
       { type: "oauth_client", clientId: "client_1" },
-      { type: "machine_api_key", id: "key_1", name: "Automation" },
+      {
+        type: "machine_api_key",
+        id: "key_1",
+        name: "Automation",
+        permissions: { workspace: ["read"] },
+      },
       { type: "delegated_user" },
     ];
 
@@ -231,6 +236,29 @@ describe("isMcpSession", () => {
         scopes: ["read"],
         userId: "user_1",
         workspaceIds: undefined,
+      },
+      // A key credential carries the permission set authorization holds it to,
+      // so one recovered without a usable set is not a session.
+      {
+        credential: {
+          type: "machine_api_key",
+          id: "key_1",
+          name: "Automation",
+        },
+        organizationId: "org_1",
+        scopes: ["read"],
+        userId: "user_1",
+      },
+      {
+        credential: {
+          type: "machine_api_key",
+          id: "key_1",
+          name: "Automation",
+          permissions: { notARealResource: ["read"] },
+        },
+        organizationId: "org_1",
+        scopes: ["read"],
+        userId: "user_1",
       },
     ];
 

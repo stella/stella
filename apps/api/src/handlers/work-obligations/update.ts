@@ -67,6 +67,23 @@ const changesOwnerOfClosedObligation = (
   (existing.status === WORK_OBLIGATION_STATUS.COMPLETED ||
     existing.status === WORK_OBLIGATION_STATUS.CANCELLED);
 
+// Self-assignment skips the AWAITING_ACKNOWLEDGEMENT step and goes straight
+// to ACTIVE (see the ownerUserId branch below), because the caller is the
+// same person who would otherwise acknowledge. That shortcut is fine when
+// claiming unowned work, but taking over another member's already-owned
+// work the same way would let anyone with entity:update reassign work out
+// from under its accountable owner without their consent. Restrict that
+// case to admin/owner, same as the other supervisory overrides in this
+// codebase (see catalogue/list-catalogue.ts's canDeleteTeamSkills).
+const selfAssignsOverAnotherOwner = (
+  body: UpdateWorkObligationBody,
+  existing: LockedWorkObligation,
+  currentUserId: string,
+): boolean =>
+  body.ownerUserId === currentUserId &&
+  existing.ownerUserId !== null &&
+  existing.ownerUserId !== currentUserId;
+
 type WorkObligationTransitionViolation =
   | "target_after_deadline"
   | "delegation_reason_required"
@@ -130,6 +147,7 @@ const updateWorkObligation = createSafeHandler(
     safeDb,
     workspaceId,
     user,
+    memberRole,
     params,
     body,
     recordAuditEvent,
@@ -198,6 +216,14 @@ const updateWorkObligation = createSafeHandler(
 
         if (changesOwnerOfClosedObligation(body, existing)) {
           return { status: "closed_owner_change" as const };
+        }
+
+        if (
+          selfAssignsOverAnotherOwner(body, existing, user.id) &&
+          memberRole.role !== "admin" &&
+          memberRole.role !== "owner"
+        ) {
+          return { status: "self_assign_forbidden" as const };
         }
 
         if (
@@ -491,6 +517,14 @@ const updateWorkObligation = createSafeHandler(
           new HandlerError({
             status: 409,
             message: "Reopen the work before changing its owner",
+          }),
+        );
+      case "self_assign_forbidden":
+        return Result.err(
+          new HandlerError({
+            status: 403,
+            message:
+              "Only an admin or owner can reassign work already owned by someone else",
           }),
         );
       case "target_after_deadline":

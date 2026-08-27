@@ -12,7 +12,7 @@ import {
   safeUuid,
   safeWorkspaceId,
   user,
-  wsPolicies,
+  wsDataScopePolicies,
   timestamptz,
 } from "./common";
 import { entities } from "./entities";
@@ -95,6 +95,17 @@ export const docxSuggestions = p.pgTable(
       (): AnyPgColumn => chatThreads.id,
       { onDelete: "set null" },
     ),
+    /**
+     * Matters whose content contributed to this suggestion, carried over from
+     * the originating thread's own data scope and narrowed to what the author
+     * could read at the time. Empty means nothing outside this matter fed it.
+     * Non-empty values gate RLS reads the way `chat_threads.data_workspace_ids`
+     * does, so model text restating another matter cannot outlive access to it.
+     */
+    sourceDataWorkspaceIds: safeWorkspaceId("source_data_workspace_ids")
+      .array()
+      .notNull()
+      .default([]),
     /** Opaque durable JSON; validate at every read and write boundary. */
     opPayload: jsonb("op_payload").notNull(),
     /** AI rationale / reviewer note, when the model supplied one. */
@@ -134,6 +145,8 @@ export const docxSuggestions = p.pgTable(
         foreignColumns: [entities.id, entities.workspaceId],
       })
       .onDelete("cascade"),
-    ...wsPolicies(),
+    // No index over the source matters: the scope is only ever read row-wise
+    // by the policy below, never searched.
+    ...wsDataScopePolicies("source_data_workspace_ids"),
   ],
 );

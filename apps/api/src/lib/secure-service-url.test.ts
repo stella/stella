@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   isRailwayPrivateHostname,
+  isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
 
@@ -35,5 +36,24 @@ describe("secure service URL", () => {
     ["postgres.railway.internal.example.com", false],
   ])("classifies Railway private hostnames: %s", (hostname, expected) => {
     expect(isRailwayPrivateHostname(hostname)).toBe(expected);
+  });
+
+  test.each([
+    "https://converter.example.com",
+    "http://localhost:3003",
+    "http://gotenberg:3000",
+    "http://gotenberg.railway.internal:3000",
+  ])("accepts a Gotenberg endpoint on a protected channel: %s", (url) => {
+    expect(isSecureGotenbergUrl(url)).toBe(true);
+  });
+
+  test.each([
+    "http://converter.example.com",
+    "http://10.0.0.20:3000",
+    "http://gotenberg:3001",
+    "http://gotenberg:3000@evil.example.com",
+    "not a URL",
+  ])("rejects a Gotenberg endpoint on an open channel: %s", (url) => {
+    expect(isSecureGotenbergUrl(url)).toBe(false);
   });
 });

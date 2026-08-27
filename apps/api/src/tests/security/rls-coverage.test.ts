@@ -543,6 +543,25 @@ describe("policy coverage", () => {
     expect(deletePolicy?.using_expr).toBe("false");
   });
 
+  test("docx_suggestions carries the contributing-matter subset check", async () => {
+    const policies = await fetchStellaPolicies(testDb);
+    const tablePolicies = policies.filter(
+      (p) => p.table_name === "docx_suggestions",
+    );
+
+    // A suggestion is model output: it can restate content the originating
+    // thread pulled from another matter, so every command applies the same
+    // subset check the thread itself enforces on top of the matter scope.
+    for (const command of ["r", "a", "w", "d"] as const) {
+      const policy = tablePolicies.find((p) => p.command === command);
+      expect(policy?.permissive).toBe(true);
+      const expr = command === "a" ? policy?.check_expr : policy?.using_expr;
+      expect(expr).toContain("workspace_id");
+      expect(expr).toContain(SETTING_WORKSPACE_IDS);
+      expect(expr).toContain("source_data_workspace_ids");
+    }
+  });
+
   test("usage governance tables expose only intended app-role access", async () => {
     const policies = await fetchStellaPolicies(testDb);
     const tablePrivileges = await fetchStellaTablePrivileges(testDb);

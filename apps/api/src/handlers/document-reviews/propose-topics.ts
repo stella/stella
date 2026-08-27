@@ -31,6 +31,7 @@ const proposeTopics = createSafeHandler(
     body,
     session,
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
     user,
   }) {
@@ -40,6 +41,7 @@ const proposeTopics = createSafeHandler(
       return Result.err(validTopics.error);
     }
     yield* requireTanStackAIAvailableForRole({
+      configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "pdf",
     });

@@ -36,13 +36,18 @@ import type {
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
 import { enqueueDocumentReviewRun } from "@/api/lib/document-review/run-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 import { estimateDocumentRunUnits } from "@/api/lib/usage/run-estimate";
 
 const config = {
   description:
     "Start an asynchronous review of one document against a playbook and/or reference documents. Returns a run ID to poll.",
-  permissions: { workspace: ["read"] },
+  // entity:update because every run processes an existing target document
+  // (and, when applied, writes edits back onto it) the same way
+  // entities/ocr/create.ts does; workspace:read alone would let a member
+  // with no document-processing grant start metered AI review runs.
+  permissions: { workspace: ["read"], entity: ["update"] },
   // Creating a run writes a row and enqueues metered model work, so it must
   // never be reachable through a read-only consent even though the permission
   // gate that fronts the whole review surface is a workspace read.
@@ -83,6 +88,7 @@ const createDocumentReviewRun = createSafeHandler(
   config,
   async function* ({
     body,
+    memberRole,
     orgAIConfig,
     recordAuditEvent,
     safeDb,
@@ -177,6 +183,17 @@ const createDocumentReviewRun = createSafeHandler(
     const playbookId = body.playbookId;
     let playbook: PinnedPlaybook | null = null;
     if (playbookId !== undefined) {
+      // The config's blanket entity:update grant covers a references-only
+      // review; pinning a playbook additionally requires playbook:apply,
+      // mirrored here the way playbooks/run.ts's config permission and the
+      // MCP run_playbook tool's in-handler check both require it, since a
+      // request may omit playbookId and the top-level gate cannot demand it
+      // unconditionally.
+      if (!hasMemberPermission(memberRole, { playbook: ["apply"] })) {
+        return Result.err(
+          new HandlerError({ status: 403, message: "Forbidden" }),
+        );
+      }
       const loaded = yield* Result.await(
         safeDb(async (tx) => {
           // RLS scopes both reads to the caller's organization.

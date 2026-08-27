@@ -15,7 +15,7 @@ const config = {
     "predecessor, over the same server-resolved text diff " +
     "entities.version-diff returns. Returns summary null for identical " +
     "versions, skipping the model call entirely. Consumes AI usage.",
-  permissions: { workspace: ["read"] },
+  permissions: { workspace: ["read"], chat: ["create"] },
   mcp: { type: "capability", reason: "document_processing" },
   access: "write",
   params: workspaceParams({

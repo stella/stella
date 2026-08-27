@@ -147,6 +147,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "QUERY_EXPANSION_MODE",
   "REPORT_SPECS_DIR",
   "REPORT_SPECS_S3_PREFIX",
+  "REDIS_TLS_REJECT_UNAUTHORIZED",
   "REQUIRE_PERSONAL_AI_KEY",
   "S3_BUCKET",
   "S3_CREDENTIALS_PROVIDER",
@@ -194,7 +195,7 @@ const EXAMPLE_VALUES: Record<string, string> = {
   GOTENBERG_PASSWORD: "gotenberg",
   GOTENBERG_URL: "http://localhost:3003",
   GOTENBERG_USERNAME: "gotenberg",
-  MICROSOFT_AUTH_TENANT_ID: "common",
+  MICROSOFT_AUTH_TENANT_ID: "00000000-0000-0000-0000-000000000000",
   POSTHOG_KEY: "phc_",
   POSTHOG_HOST: "https://eu.i.posthog.com",
   PUBLIC_URL: "http://localhost:3001",
@@ -326,7 +327,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   GOTENBERG_PASSWORD:
     "Password for the Gotenberg sidecar's HTTP basic authentication.",
   GOTENBERG_URL:
-    "Gotenberg document-conversion URL. Use HTTPS across untrusted networks; private Compose uses authenticated HTTP.",
+    "Gotenberg document-conversion URL. A deployed environment requires " +
+    "HTTPS, a loopback sidecar, or a private deployment network.",
   GOTENBERG_USERNAME:
     "Username for the Gotenberg sidecar's HTTP basic authentication.",
   MICROSOFT_AUTH_CLIENT_ID:
@@ -334,7 +336,9 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   MICROSOFT_AUTH_CLIENT_SECRET:
     "Microsoft OAuth client secret; required when the matching web login flag is enabled.",
   MICROSOFT_AUTH_TENANT_ID:
-    'Microsoft tenant ID, or "common" for work and personal Microsoft accounts.',
+    "Microsoft directory (tenant) ID. Must name one directory: the shared " +
+    '"common", "organizations", and "consumers" endpoints admit any ' +
+    "Microsoft account and are rejected.",
   OPERATOR_METRICS_TOKEN:
     "Bearer token for registration metrics. Unset disables the endpoint; use a long random value.",
   POSTHOG_KEY:
@@ -345,6 +349,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Public API origin for verification links and OAuth callbacks. Defaults to BETTER_AUTH_URL.",
   QUERY_EXPANSION_MODE:
     'Morphological expansion of case-law search terms: "off" builds today\'s query, "shadow" runs the unexpanded query and records leaf counts comparing it with the expanded one (never the query text). "on" runs the expanded query and is currently refused at startup, pending cursors that carry the dictionary version.',
+  REDIS_TLS_REJECT_UNAUTHORIZED:
+    "Whether a rediss:// connection verifies the server certificate chain. " +
+    "Leave on unless the endpoint presents a certificate no trust anchor can " +
+    "validate and the private network is the boundary instead.",
   REDIS_URL:
     "Valkey or Redis URL used for cross-instance broadcasts and rate limits. Treated as secret because it may contain credentials.",
   S3_ACCESS_KEY_ID:

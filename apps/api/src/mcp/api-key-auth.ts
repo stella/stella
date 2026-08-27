@@ -124,6 +124,10 @@ export const resolveMachineApiKeySession = async (
       type: "machine_api_key",
       id: key.id,
       name: key.name ?? "Machine API key",
+      // The set the check above proved the owner's role can grant. It travels
+      // with the session so authorization can hold the key to it, rather than
+      // to the whole role the owner happens to have.
+      permissions: parsedPermissions.permissions,
     },
     organizationId,
     scopes: [...scopes],

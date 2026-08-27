@@ -42,6 +42,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
@@ -707,7 +708,7 @@ const decodeTimeEntryPageCursor = (
 const handleListTimeEntriesTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_TIME_ENTRIES_PROJECTION>
 > = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ timeEntry: ["read"] }).success) {
+  if (!hasEffectiveAuthority(context, { timeEntry: ["read"] })) {
     return errorResult("Forbidden");
   }
 
@@ -748,9 +749,9 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
     if (!entryRow) {
       return notFoundResult("Time entry not found or not accessible");
     }
-    const canReview = roles[context.memberRole].authorize({
+    const canReview = hasEffectiveAuthority(context, {
       timeEntry: ["approve"],
-    }).success;
+    });
     if (!canReview && entryRow.userId !== context.userId) {
       return notFoundResult("Time entry not found or not accessible");
     }
@@ -810,9 +811,9 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
     }
   }
   const limit = input.limit ?? DEFAULT_LIST_LIMIT;
-  const canReview = roles[context.memberRole].authorize({
+  const canReview = hasEffectiveAuthority(context, {
     timeEntry: ["approve"],
-  }).success;
+  });
   if (
     !canReview &&
     input.user_id !== undefined &&
@@ -1013,9 +1014,7 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
 
   // Create branch.
   if (input.time_entry_id === undefined) {
-    if (
-      !roles[context.memberRole].authorize({ timeEntry: ["create"] }).success
-    ) {
+    if (!hasEffectiveAuthority(context, { timeEntry: ["create"] })) {
       return errorResult("Forbidden");
     }
     const workspaceId = ensureActiveWorkspace({
@@ -1067,7 +1066,7 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
   }
 
   // Update branch.
-  if (!roles[context.memberRole].authorize({ timeEntry: ["update"] }).success) {
+  if (!hasEffectiveAuthority(context, { timeEntry: ["update"] })) {
     return errorResult("Forbidden");
   }
   const timeEntryId = brandPersistedTimeEntryId(input.time_entry_id);
@@ -1147,7 +1146,7 @@ const deleteTimeEntryArgsSchema = v.strictObject({
 const handleDeleteTimeEntryTool: TypedMcpToolHandler<
   v.InferInput<typeof DELETE_TIME_ENTRY_PROJECTION>
 > = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ timeEntry: ["delete"] }).success) {
+  if (!hasEffectiveAuthority(context, { timeEntry: ["delete"] })) {
     return errorResult("Forbidden");
   }
 
@@ -1195,7 +1194,7 @@ const resolveRateArgsSchema = v.strictObject({
 });
 
 const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ rate: ["read"] }).success) {
+  if (!hasEffectiveAuthority(context, { rate: ["read"] })) {
     return errorResult("Forbidden");
   }
 
@@ -1332,7 +1331,7 @@ const readInvoiceDetail = async ({
 const handleListInvoicesTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_INVOICES_PROJECTION>
 > = async ({ args, context }) => {
-  if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
+  if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
     return errorResult("Forbidden");
   }
 
@@ -1507,10 +1506,7 @@ const getUsageArgsSchema = v.strictObject({});
 const handleGetUsageTool: TypedMcpToolHandler<
   v.InferInput<typeof GET_USAGE_PROJECTION>
 > = async ({ args, context }) => {
-  if (
-    !roles[context.memberRole].authorize({ organizationSettings: ["update"] })
-      .success
-  ) {
+  if (!hasEffectiveAuthority(context, { organizationSettings: ["update"] })) {
     return errorResult("Forbidden");
   }
 

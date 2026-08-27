@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
+import type { PermissionInput } from "@stll/permissions";
+
 import { rlsDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { workspaces } from "@/api/db/schema";
@@ -61,6 +63,13 @@ export type McpRequestContext = {
   accessibleWorkspaces: AccessibleWorkspace[];
   /** Resolved transport client IP used by shared gateway/REST abuse budgets. */
   clientIp?: string | null;
+  /**
+   * The credential's own permission set, when it carries one (machine API
+   * keys). Authorization ANDs it with `memberRole` through
+   * `hasEffectiveAuthority`; absent means the credential is bounded by its role
+   * alone, which is the JWT bearer case.
+   */
+  credentialPermissions?: PermissionInput | undefined;
   /**
    * OAuth scopes granted to this session (the access token's `scope` claim).
    * `invoke_capability` gates each capability on its catalog scope against this
@@ -297,6 +306,9 @@ export const resolveMcpSessionContext = async (
     accessibleWorkspaces: usableWorkspaces,
     clientIp,
     createOperationDatabaseScope,
+    ...(session.credential?.type === "machine_api_key"
+      ? { credentialPermissions: session.credential.permissions }
+      : {}),
     enabledRegistrySlugs,
     grantedScopes: session.scopes,
     memberRole,

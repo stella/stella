@@ -281,6 +281,7 @@ export const persistMessage = async (props: PersistMessageProps) => {
  * terminal state.
  */
 export const finalizeAssistantTurn = async ({
+  acceptedSendMode,
   dataScopeExpansion,
   existingIds,
   execution,
@@ -292,6 +293,7 @@ export const finalizeAssistantTurn = async ({
   userId,
   workspaceId,
 }: {
+  acceptedSendMode: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
   existingIds: Set<SafeId<"chatMessage">>;
   execution: ChatTurnExecution;
@@ -317,6 +319,7 @@ export const finalizeAssistantTurn = async ({
   }
 
   const persistResult = await persistMessage({
+    acceptedSendMode,
     dataScopeExpansion,
     persistencePlan,
     recordAuditEvent,
@@ -607,7 +610,19 @@ const runPersistMessage = async ({
   }
 
   if (persistencePlan.type === "none") {
-    if (turnAcceptance === undefined && turnSettlement === undefined) {
+    // A turn accepted in anonymized send mode marks the thread even when it
+    // writes no message (a resend of an already-persisted user message):
+    // readers gate raw-content reuse on that mark, so it must not depend on
+    // which persistence plan the turn happened to take.
+    const marksUsedAnonymization = shouldMarkThreadUsedAnonymization({
+      messages: [],
+      sendMode: acceptedSendMode,
+    });
+    if (
+      turnAcceptance === undefined &&
+      turnSettlement === undefined &&
+      !marksUsedAnonymization
+    ) {
       return Result.ok();
     }
     const turnResult = await safeDb(async (tx) => {
@@ -626,6 +641,15 @@ const runPersistMessage = async ({
         tx,
         workspaceId,
       });
+      if (marksUsedAnonymization) {
+        // audit: skip — thread-level turn bookkeeping. The sibling plans
+        // leave the same chat_threads mark unaudited and audit the message
+        // rows they write; this plan writes no message row.
+        await tx
+          .update(chatThreads)
+          .set({ usedAnonymization: true })
+          .where(eq(chatThreads.id, threadId));
+      }
       await applyChatTurnWritesOnTx({
         acceptance: turnAcceptance,
         settlement: turnSettlement,

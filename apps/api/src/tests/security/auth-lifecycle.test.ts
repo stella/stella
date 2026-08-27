@@ -99,7 +99,7 @@ describe("self-host auth bootstrap lifecycle", () => {
     expect(authSource).toContain("isSelfhostLocalPasswordAuthEnabled()");
     expect(authSource).toContain("assertSelfhostBootstrapSignUp(ctx.body)");
     expect(authSource).toContain("assertSelfhostEmailOtpAllowed(ctx.path)");
-    expect(authSource).toContain("NEW_SESSION_SECURITY_PATHS");
+    expect(authSource).toContain("isSessionCreatingAuthPath");
     expect(authSource).toContain("SIGN_IN_EMAIL_PATH");
     expect(authSource).toContain("isTransactionalEmailConfigured()");
     expect(selfhostAuthSource).toContain('"/sign-up/email"');
@@ -133,5 +133,35 @@ describe("self-host auth bootstrap lifecycle", () => {
     expect(authSchemaSource).toContain("'credential'");
     expect(migrationSource).toContain("account_credential_singleton_uidx");
     expect(migrationSource).toContain("WHERE provider_id = 'credential'");
+  });
+});
+
+describe("two-factor management lifecycle", () => {
+  test("every transition is gated on a fresh confirmation code", () => {
+    const authSource = readSecurityFixture("../../lib/auth.ts");
+    const gateStart = authSource.indexOf("const requireTwoFactorManageOtp");
+    expect(gateStart).toBeGreaterThanOrEqual(0);
+    const gateSource = authSource.slice(
+      gateStart,
+      authSource.indexOf("\n};", gateStart),
+    );
+
+    // Enrollment binds the authenticator that guards every later change, so
+    // it is confirmed the same way disable, rotation, and backup-code
+    // regeneration are. The one exemption is a deployment with no transactional
+    // email transport, which cannot deliver a code at all: current
+    // second-factor state alone never waives the gate, so both clauses must
+    // stay in the same condition.
+    expect(gateSource.replaceAll(/\s+/gu, " ")).toContain(
+      'session.user["twoFactorEnabled"] !== true && !isTransactionalEmailConfigured()',
+    );
+    expect(gateSource).toContain('purpose: "two-factor-manage"');
+
+    // The code-issuing endpoint mirrors the gate: refusing to send a code for
+    // a transition the gate demands one for would deadlock enrollment.
+    const sendSource = readSecurityFixture(
+      "../../handlers/me/two-factor-send-manage-otp.ts",
+    );
+    expect(sendSource).not.toContain("twoFactorEnabled");
   });
 });

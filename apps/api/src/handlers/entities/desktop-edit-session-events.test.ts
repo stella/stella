@@ -39,7 +39,6 @@ describe("desktop edit session events", () => {
   test("rejects missing tokens before reading session state", async () => {
     const response = await desktopEditSessionEventsHandler({
       headers: {},
-      query: {},
       sessionId,
     });
 
@@ -63,7 +62,6 @@ describe("desktop edit session events", () => {
 
     const response = await desktopEditSessionEventsHandler({
       headers: { authorization: `Bearer ${sessionToken}` },
-      query: {},
       sessionId,
     });
 
@@ -102,7 +100,6 @@ describe("desktop edit session events", () => {
     let settled = false;
     const responsePromise = desktopEditSessionEventsHandler({
       headers: { authorization: `Bearer ${sessionToken}` },
-      query: {},
       sessionId,
     }).then((response) => {
       settled = true;

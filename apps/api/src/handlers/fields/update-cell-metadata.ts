@@ -42,6 +42,7 @@ const config = {
 type UpdateCellMetadataResult =
   | { status: "ok" }
   | { status: "entity-not-found" }
+  | { status: "entity-read-only" }
   | { status: "property-not-found" };
 
 const normalizeManualFlags = (flags: string[]) =>
@@ -109,6 +110,7 @@ const updateCellMetadata = createSafeHandler(
             id: entities.id,
             currentVersionId: entities.currentVersionId,
             kind: entities.kind,
+            readOnly: entities.readOnly,
           })
           .from(entities)
           .where(
@@ -122,6 +124,10 @@ const updateCellMetadata = createSafeHandler(
 
         if (!entity) {
           return { status: "entity-not-found" };
+        }
+
+        if (entity.readOnly) {
+          return { status: "entity-read-only" };
         }
 
         if (!entity.currentVersionId) {
@@ -287,6 +293,12 @@ const updateCellMetadata = createSafeHandler(
           status: 404,
           message: "Property not found in workspace",
         }),
+      );
+    }
+
+    if (txResult.status === "entity-read-only") {
+      return Result.err(
+        new HandlerError({ status: 409, message: "Entity is read-only" }),
       );
     }
 

@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
+import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
@@ -45,6 +46,7 @@ export type SynthesizedCapabilityContext = {
   pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) => boolean;
   memberRole: { role: MemberRole };
   orgAIConfig: OrgAIConfig | null;
+  orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   recordAuditEvent: AuditRecorder;
   createAuditRecorder: (opts?: {
@@ -81,9 +83,8 @@ export const synthesizeCapabilityContext = async ({
   request: Request;
   workspaceId: SafeId<"workspace"> | undefined;
 }): Promise<SynthesizedCapabilityContext> => {
-  const { orgAIConfig, promptCachingEnabled } = await loadOrgSettingsForAuth(
-    context.organizationId,
-  );
+  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
+    await loadOrgSettingsForAuth(context.organizationId);
 
   const recordAuditEvent =
     workspaceId === undefined
@@ -138,6 +139,7 @@ export const synthesizeCapabilityContext = async ({
       operationDatabaseScope.pinServerValidatedWorkspaceId,
     memberRole: { role: context.memberRole },
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
     recordAuditEvent,
     createAuditRecorder: (opts) =>

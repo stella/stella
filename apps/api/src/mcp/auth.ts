@@ -1,8 +1,15 @@
 import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
 import type { JWTPayload } from "jose";
+import * as v from "valibot";
+
+import type { PermissionInput } from "@stll/permissions";
 
 import { getAuthEndpointUrl, getAuthIssuerUrl } from "@/api/lib/auth-paths";
-import { isMachineApiKeyCredential } from "@/api/lib/machine-api-key-config";
+import {
+  isMachineApiKeyCredential,
+  machineApiKeyPermissionsSchema,
+  parseMachineApiKeyPermissions,
+} from "@/api/lib/machine-api-key-config";
 import { isRecord } from "@/api/lib/type-guards";
 import { AGENT_RUN_TOKEN_PURPOSE } from "@/api/mcp/agent-run-token";
 import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
@@ -20,7 +27,20 @@ export type McpSession = {
   credential?:
     | { type: "agent_run"; runId: string }
     | { type: "oauth_client"; clientId: string }
-    | { type: "machine_api_key"; id: string; name: string }
+    /**
+     * `permissions` is the key's own permission set, already checked to be a
+     * subset of its owner's current role when the credential resolved. It rides
+     * on the credential because it is the credential's attenuation, and the
+     * authorization path ANDs it with the role
+     * (`mcp/effective-authority.ts`). A key with no usable set never resolves,
+     * so the field is required on this branch.
+     */
+    | {
+        type: "machine_api_key";
+        id: string;
+        name: string;
+        permissions: PermissionInput;
+      }
     | { type: "delegated_user" };
   /** Optional server-issued attenuation; absent means the full live access set. */
   workspaceIds?: string[];
@@ -52,6 +72,20 @@ const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) &&
   value.every((item) => typeof item === "string" && item.length > 0);
 
+/**
+ * A credential permission set recovered from the transport slot is re-validated
+ * against the canonical statement map, exactly as it was when the key first
+ * resolved: the slot is opaque state, so its permission set is re-derived
+ * rather than trusted.
+ */
+const isCredentialPermissions = (value: unknown): value is PermissionInput => {
+  const parsed = v.safeParse(machineApiKeyPermissionsSchema, value);
+  return (
+    parsed.success &&
+    parseMachineApiKeyPermissions(parsed.output).type === "valid"
+  );
+};
+
 const isMcpCredential = (
   value: unknown,
 ): value is NonNullable<McpSession["credential"]> => {
@@ -70,7 +104,8 @@ const isMcpCredential = (
         typeof value["id"] === "string" &&
         value["id"].length > 0 &&
         typeof value["name"] === "string" &&
-        value["name"].length > 0
+        value["name"].length > 0 &&
+        isCredentialPermissions(value["permissions"])
       );
     case "delegated_user":
       return true;

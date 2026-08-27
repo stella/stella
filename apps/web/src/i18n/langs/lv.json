@@ -3266,6 +3266,7 @@
         "disabledSuccess": "Divfaktoru autentifikācija atspējota",
         "downloadCodes": "Lejupielādēt kā teksta failu",
         "enable": "Iespējot divfaktoru autentifikāciju",
+        "enableOtpDescription": "Mēs nosūtījām apstiprinājuma kodu uz jūsu e-pastu. Ievadiet to zemāk, lai apstiprinātu divfaktoru autentifikācijas iespējošanu.",
         "enabledStatus": "Iespējota",
         "enabledSuccess": "Divfaktoru autentifikācija iespējota",
         "enterCodeToConfirm": "Lai apstiprinātu iestatīšanu, ievadiet apstiprinājuma kodu no savas autentifikācijas lietotnes.",

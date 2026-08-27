@@ -21,6 +21,9 @@ const RUN_ID = toSafeId<"documentReviewRun">(
 const REFERENCE_FIELD_ID = toSafeId<"field">(
   "33333333-3333-4333-8333-333333333333",
 );
+const REFERENCE_WORKSPACE_ID = toSafeId<"workspace">(
+  "66666666-6666-4666-8666-666666666666",
+);
 
 const FORBIDDEN_XML_CONTROLS = "\u0000\u0001\u0008\u000b\u000c\u000e\u001f";
 
@@ -54,6 +57,9 @@ describe("document review run export", () => {
 
     let selectCallCount = 0;
     const { safeDb } = createScopedDbMock({
+      query: {
+        workspaces: { findMany: async () => [{ id: WORKSPACE_ID }] },
+      },
       select: () => {
         selectCallCount += 1;
         if (selectCallCount === 1) {
@@ -169,5 +175,119 @@ describe("document review run export", () => {
       SPREADSHEET_EXPORT_LIMITS.cellTextChars,
     );
     expect(topicCell).toEndWith("\n[truncated]");
+  });
+
+  test("omits reference text from a matter the caller cannot read", async () => {
+    let selectCallCount = 0;
+    const { safeDb } = createScopedDbMock({
+      // The reference matter is no longer readable, so row security returns
+      // none of the matters the run pinned.
+      query: { workspaces: { findMany: async () => [] } },
+      select: () => {
+        selectCallCount += 1;
+        if (selectCallCount === 1) {
+          return {
+            from: () => ({
+              innerJoin: () => ({
+                where: () => ({
+                  limit: async () => [
+                    {
+                      id: RUN_ID,
+                      targetName: "Draft agreement.docx",
+                      basis: {
+                        type: "references",
+                        references: [
+                          {
+                            workspaceId: REFERENCE_WORKSPACE_ID,
+                            workspaceName: "Precedent matter",
+                            entityId: toSafeId<"entity">(
+                              "44444444-4444-4444-8444-444444444444",
+                            ),
+                            fileFieldId: REFERENCE_FIELD_ID,
+                            entityVersionId: toSafeId<"entityVersion">(
+                              "55555555-5555-4555-8555-555555555555",
+                            ),
+                            contentSha256: "a".repeat(64),
+                            name: "Precedent agreement",
+                          },
+                        ],
+                        perspective: { type: "neutral" },
+                      },
+                    },
+                  ],
+                }),
+              }),
+            }),
+          };
+        }
+
+        return {
+          from: () => ({
+            where: () => ({
+              orderBy: () => ({
+                limit: async () => [
+                  {
+                    topicTitle: "Liability cap",
+                    decision: "open",
+                    payload: {
+                      checkKind: "reference",
+                      finding: {
+                        findingId: "finding-1",
+                        topicId: "topic-1",
+                        issue: "Liability cap",
+                        assessment: "different",
+                        consensus: "single",
+                        explanation: {
+                          type: "comparison",
+                          text: "Different cap.",
+                        },
+                        recommendation: null,
+                        impact: "unknown",
+                        severity: "medium",
+                        targetCitations: [
+                          { blockId: "target-1", text: "Draft wording." },
+                        ],
+                        referenceCitations: [
+                          {
+                            fileFieldId: REFERENCE_FIELD_ID,
+                            citations: [
+                              {
+                                blockId: "reference-1",
+                                text: "Precedent wording.",
+                              },
+                            ],
+                          },
+                        ],
+                        fix: null,
+                      },
+                    },
+                  },
+                ],
+              }),
+            }),
+          }),
+        };
+      },
+    });
+    const context = asTestRaw<ExportDocumentReviewRunContext>({
+      memberRole: { role: "owner" },
+      params: { workspaceId: WORKSPACE_ID, runId: RUN_ID },
+      query: { format: "csv" },
+      recordAuditEvent: async () => undefined,
+      safeDb,
+      session: { activeOrganizationId: "organization_test" },
+      user: { id: "user_test" },
+      workspaceId: WORKSPACE_ID,
+    });
+
+    const response = await exportDocumentReviewRun.handler(context);
+
+    expect(response).toBeInstanceOf(Response);
+    if (!(response instanceof Response)) {
+      return;
+    }
+    const csv = await response.text();
+    expect(csv).toContain("Draft wording.");
+    expect(csv).not.toContain("Precedent wording.");
   });
 });

@@ -42,6 +42,20 @@ export type DecryptOrgAIConfigRowResult =
   | { status: "ok"; config: OrgAIConfig | null }
   | { status: "corrupt"; error: unknown };
 
+/**
+ * Whether the request context managed to read the org's stored AI config.
+ * `unreadable` means a stored row exists but did not decrypt, which is not
+ * the same as "no config": a caller that treats it as absent would run the
+ * org's traffic on the instance provider and meter it to the wrong source.
+ */
+export const ORG_AI_CONFIG_STATUS = {
+  ok: "ok",
+  unreadable: "unreadable",
+} as const;
+
+export type OrgAIConfigStatus =
+  (typeof ORG_AI_CONFIG_STATUS)[keyof typeof ORG_AI_CONFIG_STATUS];
+
 export const decryptOrgAIConfigRow = async ({
   decrypt,
   organizationId,

@@ -38,6 +38,7 @@ import listSavedSearches from "@/api/handlers/saved-searches/list";
 import getTemplate from "@/api/handlers/templates/get";
 import readTimeEntryById from "@/api/handlers/time-entries/get";
 import listWorkObligations from "@/api/handlers/work-obligations/queues/list";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -67,6 +68,7 @@ type TestHandlerContext = {
   ) => Promise<{ id: SafeId<"workspace">; status: "active" } | null>;
   memberRole: { role: "owner" };
   orgAIConfig: null;
+  orgAIConfigStatus: "ok";
   promptCachingEnabled: false;
   recordAuditEvent: AuditRecorder;
   request: Request;
@@ -648,6 +650,7 @@ const createWorkspaceContext = ({
         : null,
     memberRole: { role: "owner" },
     orgAIConfig: null,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     request: new Request(`https://example.test/workspaces/${workspaceId}`),

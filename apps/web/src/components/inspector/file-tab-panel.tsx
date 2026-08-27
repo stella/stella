@@ -1132,6 +1132,7 @@ export const FileTabPanel = ({
       // the draft; the existing Save button uploads a new file version.
       return (
         <MarkdownHybridEditor
+          imagePolicy="data-only"
           key={tab.id}
           markdown={markdownText}
           onMarkdownChange={setMarkdownDraft}

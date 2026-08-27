@@ -282,6 +282,48 @@ export const wsPolicies = () => [
   }),
 ];
 
+/**
+ * Workspace policies for a table that also holds model-derived content whose
+ * provenance can reach outside its own matter. The named `uuid[]` column lists
+ * every contributing matter; empty means none, the way a global chat thread
+ * embeds no matter data. A non-empty value must stay a subset of the session's
+ * accessible matters, exactly as `chat_threads.data_workspace_ids` and
+ * `ai_memories.source_data_workspace_ids` enforce, so derived text stops being
+ * readable once the actor loses access to a matter that fed it.
+ */
+export const wsDataScopePolicies = (sourceColumn: string) => {
+  const column = sql.raw(sourceColumn);
+  const check = sql`(
+  ${workspaceCheck} AND
+  (
+    cardinality(${column}) = 0
+    OR ${workspaceArrayCheck(column)}
+  )
+)`;
+  return [
+    p.pgPolicy("workspace_select", {
+      for: "select",
+      to: stella,
+      using: check,
+    }),
+    p.pgPolicy("workspace_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: check,
+    }),
+    p.pgPolicy("workspace_update", {
+      for: "update",
+      to: stella,
+      using: check,
+    }),
+    p.pgPolicy("workspace_delete", {
+      for: "delete",
+      to: stella,
+      using: check,
+    }),
+  ];
+};
+
 const workspaceOrganizationCheck = sql`(
   ${workspaceCheck} AND ${organizationCheck}
 )`;

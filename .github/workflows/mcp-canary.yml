@@ -41,11 +41,30 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+      # The dispatch input takes any URL, and the token is a bearer credential
+      # the probe sends to whatever it is pointed at, so the two are resolved
+      # together here: the credential travels only to the configured endpoint,
+      # and a run aimed anywhere else gets the public probes alone.
+      - name: Resolve the probe target
+        id: target
+        env:
+          CONFIGURED_BASE_URL: ${{ vars.MCP_CANARY_BASE_URL }}
+          INPUT_BASE_URL: ${{ inputs.base_url }}
+        run: |
+          configured="${CONFIGURED_BASE_URL:-https://api.stll.app}"
+          target="${INPUT_BASE_URL:-$configured}"
+          echo "base_url=$target" >> "$GITHUB_OUTPUT"
+          if [ "$target" = "$configured" ]; then
+            echo "authenticated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "authenticated=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # The token is optional on purpose: without it the public probes still
       # run and the authenticated ones report as skipped, so a missing secret
       # never masquerades as full coverage.
       - name: Probe the MCP transport contract
         env:
-          MCP_CANARY_BASE_URL: ${{ inputs.base_url || vars.MCP_CANARY_BASE_URL || 'https://api.stll.app' }}
-          MCP_CANARY_TOKEN: ${{ secrets.MCP_CANARY_TOKEN }}
+          MCP_CANARY_BASE_URL: ${{ steps.target.outputs.base_url }}
+          MCP_CANARY_TOKEN: ${{ steps.target.outputs.authenticated == 'true' && secrets.MCP_CANARY_TOKEN || '' }}
         run: bun run canary:mcp

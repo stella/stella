@@ -19,6 +19,7 @@ import {
   getEmailOtpMinimumResponseDuration,
   getAuth,
   getNewAccountEmailOtpAction,
+  isSessionCreatingAuthPath,
   isSixDigitOtpBody,
   isTwoFactorRedirectResponse,
   NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
@@ -391,6 +392,28 @@ describe("isTwoFactorRedirectResponse", () => {
     expect(isTwoFactorRedirectResponse({ token: "abc" })).toBe(false);
     expect(isTwoFactorRedirectResponse(null)).toBe(false);
     expect(isTwoFactorRedirectResponse(undefined)).toBe(false);
+  });
+});
+
+describe("isSessionCreatingAuthPath", () => {
+  test("covers every sign-in surface that establishes a session", () => {
+    // The hosted flow is passwordless email OTP; social providers all land on
+    // the shared callback; the credential path serves the self-host bootstrap
+    // admin, and first verification signs the new account in.
+    expect(isSessionCreatingAuthPath("/sign-in/email-otp")).toBe(true);
+    expect(isSessionCreatingAuthPath("/callback/google")).toBe(true);
+    expect(isSessionCreatingAuthPath("/callback/microsoft")).toBe(true);
+    expect(isSessionCreatingAuthPath("/sign-in/email")).toBe(true);
+    expect(isSessionCreatingAuthPath("/email-otp/verify-email")).toBe(true);
+  });
+
+  test("ignores paths that establish no session", () => {
+    expect(isSessionCreatingAuthPath("/email-otp/send-verification-otp")).toBe(
+      false,
+    );
+    expect(isSessionCreatingAuthPath("/oauth2/authorize")).toBe(false);
+    expect(isSessionCreatingAuthPath("/get-session")).toBe(false);
+    expect(isSessionCreatingAuthPath(undefined)).toBe(false);
   });
 });
 

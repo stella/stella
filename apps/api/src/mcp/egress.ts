@@ -1,4 +1,3 @@
-import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -79,11 +78,15 @@ export async function finalizeToolEgress({
 /**
  * Anonymize a flat list of text fields grouped by their `workspaceId` scope.
  * All fields sharing a scope are fed to `anonymizeTextFields` in one call so
- * placeholders stay consistent within a workspace (and, via the shared
- * gazetteer, across the whole payload). Each field's anonymized value is
- * written back through its `apply`; a field the redactor drops falls back to
- * `[REDACTED]` rather than leaking the original. Shared by `compatSearch` and
- * the generic `structured` variant.
+ * placeholders stay consistent within that workspace. Each field's anonymized
+ * value is written back through its `apply`; a field the redactor drops falls
+ * back to `[REDACTED]` rather than leaking the original. Shared by
+ * `compatSearch` and the generic `structured` variant.
+ *
+ * The gazetteer is deliberately left to `anonymizeTextFields`, which loads it
+ * per group: the deny-list is org-wide terms plus the *group's* workspace
+ * terms, so one payload-wide load would hold every group to the firm-wide half
+ * alone and drop workspace-scoped terms.
  */
 const anonymizeTextFieldsByWorkspace = async ({
   context,
@@ -95,11 +98,6 @@ const anonymizeTextFieldsByWorkspace = async ({
   if (fields.length === 0) {
     return;
   }
-
-  const gazetteerEntries = await loadAnonymizationGazetteerEntries({
-    organizationId: context.organizationId,
-    scopedDb: context.scopedDb,
-  });
 
   const byWorkspace = new Map<string, McpStructuredTextField[]>();
   for (const field of fields) {
@@ -115,7 +113,6 @@ const anonymizeTextFieldsByWorkspace = async ({
     // oxlint-disable-next-line no-await-in-loop -- per-workspace anonymization bounds gazetteer/DB load across tenants
     const anonymized = await anonymizeTextFields({
       fields: group.map((field) => field.value),
-      gazetteerEntries,
       organizationId: context.organizationId,
       scopedDb: context.scopedDb,
       workspaceId,

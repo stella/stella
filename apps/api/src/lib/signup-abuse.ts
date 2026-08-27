@@ -130,28 +130,37 @@ export const evaluateNewAccountOtpPolicy = async ({
   email: string;
 }): Promise<NewAccountOtpPolicyResult> => {
   const normalizedEmail = normalizeAuthEmail(email);
-  if (await accountExists(normalizedEmail)) {
-    return { status: "allowed", reason: "existing_account" };
-  }
 
+  // Both counters are consumed before the account-existence branch, so a
+  // request for a registered address and one for an unregistered address
+  // leave identical counter state behind. Consuming them afterwards makes
+  // the branch measurable: the caller can exhaust a counter it shares (its
+  // own IP) and read the account's existence off whether it moved.
   const emailRateLimitResult = await consumeSignupOtpRateLimit({
     ...(context ? { context } : {}),
     identity: normalizedEmail,
     kind: "email",
   });
+  const ipRateLimitResult = clientIp
+    ? await consumeSignupOtpRateLimit({
+        ...(context ? { context } : {}),
+        identity: clientIp,
+        kind: "ip",
+      })
+    : null;
+
+  // New-account capacity does not gate sign-in for an account that already
+  // exists; that address is governed by the auth rate limits instead.
+  if (await accountExists(normalizedEmail)) {
+    return { status: "allowed", reason: "existing_account" };
+  }
+
   if (emailRateLimitResult.status === "rate_limited") {
     return emailRateLimitResult;
   }
 
-  if (clientIp) {
-    const ipRateLimitResult = await consumeSignupOtpRateLimit({
-      ...(context ? { context } : {}),
-      identity: clientIp,
-      kind: "ip",
-    });
-    if (ipRateLimitResult.status === "rate_limited") {
-      return ipRateLimitResult;
-    }
+  if (ipRateLimitResult?.status === "rate_limited") {
+    return ipRateLimitResult;
   }
 
   if (isDisposableEmailAddress(normalizedEmail)) {

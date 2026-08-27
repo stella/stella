@@ -58,11 +58,15 @@ const createDocxSuggestions = createSafeHandler(
     // only checks the thread exists, so a body-supplied id could otherwise
     // link this workspace's suggestion to another tenant's thread.
     const originThreadId = body.originThreadId ?? null;
+    let sourceDataWorkspaceIds: SafeId<"workspace">[] = [];
     if (originThreadId !== null) {
       const threadRows = yield* Result.await(
         safeDb((tx) =>
           tx
-            .select({ workspaceId: chatThreads.workspaceId })
+            .select({
+              workspaceId: chatThreads.workspaceId,
+              dataWorkspaceIds: chatThreads.dataWorkspaceIds,
+            })
             .from(chatThreads)
             .where(eq(chatThreads.id, originThreadId))
             .limit(1),
@@ -77,6 +81,13 @@ const createDocxSuggestions = createSafeHandler(
           }),
         );
       }
+      // A suggestion restates whatever the thread put in front of the model,
+      // so it inherits the thread's provenance. Reading the thread row through
+      // the scoped transaction is what narrows that scope to the caller: the
+      // thread's own policy only returns it while every matter in
+      // `data_workspace_ids` is still accessible, which is exactly the subset
+      // this table's insert check requires.
+      sourceDataWorkspaceIds = thread.dataWorkspaceIds;
     }
 
     const prepared = body.suggestions.map((suggestion, index) => {
@@ -93,6 +104,7 @@ const createDocxSuggestions = createSafeHandler(
           workspaceId,
           entityId: params.entityId,
           originThreadId,
+          sourceDataWorkspaceIds,
           opPayload: operation,
           comment: suggestion.comment ?? null,
           severity: suggestion.severity,

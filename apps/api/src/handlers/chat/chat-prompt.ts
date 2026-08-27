@@ -72,7 +72,11 @@ import {
 import type { OfficeEvidencePayload } from "@/api/lib/files/office-evidence-types";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
-import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
+import {
+  sanitizeForPrompt,
+  sanitizePromptLine,
+  untrustedText,
+} from "@/api/lib/prompt-safety";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 
 const TITLE_MAX_LENGTH = 80;
@@ -463,6 +467,12 @@ const resolveActiveFilePromptContext = async ({
   ) {
     return Result.ok(activeFilePromptBase);
   }
+  // Name the file the server resolved, not the name the client sent
+  // alongside the entity id: only the stored one is authoritative.
+  const promptBase = {
+    ...activeFilePromptBase,
+    fileName: content.fileName,
+  };
   if (resolveOfficeEvidenceFormat(content.mimeType)) {
     const officeCitationSnapshot = await loadOfficeEvidence({
       organizationId,
@@ -479,7 +489,7 @@ const resolveActiveFilePromptContext = async ({
       workspaceId,
     });
     return Result.ok({
-      ...activeFilePromptBase,
+      ...promptBase,
       ...(officeCitationSnapshot ? { officeCitationSnapshot } : {}),
     });
   }
@@ -488,7 +498,7 @@ const resolveActiveFilePromptContext = async ({
     mimeType: content.mimeType,
   });
   if (!emailMimeType) {
-    return Result.ok(activeFilePromptBase);
+    return Result.ok(promptBase);
   }
 
   const readResult = await Result.tryPromise({
@@ -508,7 +518,7 @@ const resolveActiveFilePromptContext = async ({
       fieldId: fileFieldId,
       workspaceId,
     });
-    return Result.ok(activeFilePromptBase);
+    return Result.ok(promptBase);
   }
   const previewResult = await emailToPreview(readResult.value, emailMimeType);
   if (Result.isError(previewResult)) {
@@ -517,11 +527,11 @@ const resolveActiveFilePromptContext = async ({
       mimeType: emailMimeType,
       workspaceId,
     });
-    return Result.ok(activeFilePromptBase);
+    return Result.ok(promptBase);
   }
 
   return Result.ok({
-    ...activeFilePromptBase,
+    ...promptBase,
     emailCitationSnapshot: { blocks: previewResult.value.citationBlocks },
   });
 };
@@ -790,7 +800,7 @@ export const buildActiveDraftPrompt = (
   activeDraft: IncomingActiveDraft,
   toolAvailability: ChatToolAvailability,
 ) => {
-  const safeName = sanitizePromptValue({
+  const safeName = sanitizePromptLine({
     maxLength: 200,
     text: activeDraft.fileName,
   });
@@ -1033,14 +1043,20 @@ const buildWorkspaceContextSections = ({
   workspaceName,
 }: BuildWorkspaceContextSectionsProps): string[] => {
   const matterRef = refRegistry.toMatterRef(workspaceId);
+  // Tenant-authored strings reach the prompt the same way client-supplied
+  // ones do, so they take the same single-line sanitizer.
+  const safeWorkspaceName = sanitizePromptLine({
+    maxLength: 200,
+    text: workspaceName,
+  });
   const sections = [
-    `Connected to matter "${workspaceName}" (matter ref: ${matterRef}, ${entityCount.toLocaleString()} entities). Default any matter-scoped reads to this matter unless the user asks otherwise. Entity refs are NOT pre-listed — discover them via tools when needed.`,
+    `Connected to matter "${safeWorkspaceName}" (matter ref: ${matterRef}, ${entityCount.toLocaleString()} entities). Default any matter-scoped reads to this matter unless the user asks otherwise. Entity refs are NOT pre-listed — discover them via tools when needed.`,
   ];
   if (extractedProperties.length > 0) {
     const propertyList = extractedProperties
       .map(
         (property) =>
-          `"${property.name}" (${refRegistry.toPropertyRef(property.propertyId)}, ${property.valueType})`,
+          `"${sanitizePromptLine({ maxLength: 120, text: property.name })}" (${refRegistry.toPropertyRef(property.propertyId)}, ${property.valueType})`,
       )
       .join(", ");
     sections.push(
@@ -1123,7 +1139,7 @@ const buildActiveFilePrompt = ({
   toolAvailability,
   workspaceId,
 }: BuildActiveFilePromptProps) => {
-  const safeName = sanitizePromptValue({
+  const safeName = sanitizePromptLine({
     maxLength: 200,
     text: activeFile.fileName,
   });
@@ -1249,7 +1265,7 @@ const buildEditableBlocksPromptParts = (snapshot: ActiveDocxEditSnapshot) => {
       } = {
         blockId: block.id,
         kind: block.kind,
-        text: sanitizePromptValue({
+        text: sanitizePromptLine({
           maxLength: ACTIVE_DOCX_EDIT_BLOCK_TEXT_MAX_CHARS,
           text: block.text,
         }),
@@ -1283,7 +1299,7 @@ export const buildActiveTemplatePrompt = (
   activeTemplate: IncomingActiveTemplate,
   toolAvailability: ChatToolAvailability,
 ) => {
-  const safeName = sanitizePromptValue({
+  const safeName = sanitizePromptLine({
     maxLength: 200,
     text: activeTemplate.fileName,
   });
@@ -1432,22 +1448,22 @@ const buildActiveDecisionPrompt = ({
   decisionType,
 }: BuildActiveDecisionPromptProps) =>
   [
-    `The user is currently viewing case-law decision "${sanitizePromptValue({
+    `The user is currently viewing case-law decision "${sanitizePromptLine({
       maxLength: 200,
       text: caseNumber,
     })}".`,
     `Reference it as ${buildPromptMentionExample({
-      label: sanitizePromptValue({ maxLength: 200, text: caseNumber }),
+      label: sanitizePromptLine({ maxLength: 200, text: caseNumber }),
       prefix: CHAT_REFERENCE_HREF_PREFIXES.decision,
       id: decisionId,
     })}.`,
     [
-      `Court: ${sanitizePromptValue({ maxLength: 200, text: court })}`,
+      `Court: ${sanitizePromptLine({ maxLength: 200, text: court })}`,
       country
-        ? `Country: ${sanitizePromptValue({ maxLength: 80, text: country })}`
+        ? `Country: ${sanitizePromptLine({ maxLength: 80, text: country })}`
         : null,
       decisionType
-        ? `Decision type: ${sanitizePromptValue({
+        ? `Decision type: ${sanitizePromptLine({
             maxLength: 120,
             text: decisionType,
           })}`
@@ -1511,7 +1527,7 @@ const formatAnnotationsForPrompt = (
     const label =
       first.kind === "comment"
         ? `Comment by ${author}`
-        : `Highlight by ${author}${first.color ? ` (${sanitizePromptValue({ maxLength: 20, text: first.color })})` : ""}`;
+        : `Highlight by ${author}${first.color ? ` (${sanitizePromptLine({ maxLength: 20, text: first.color })})` : ""}`;
     const body = group.find((row) => row.body !== null)?.body ?? null;
     const note =
       body === null
@@ -1645,16 +1661,16 @@ const buildActiveExternalSection = ({
   }
 
   const metadata = [
-    `title: ${sanitizePromptValue({ maxLength: 200, text: activeExternal.title })}`,
-    `url: ${sanitizePromptValue({ maxLength: 500, text: activeExternal.url })}`,
+    `title: ${sanitizePromptLine({ maxLength: 200, text: activeExternal.title })}`,
+    `url: ${sanitizePromptLine({ maxLength: 500, text: activeExternal.url })}`,
     activeExternal.provider
-      ? `provider: ${sanitizePromptValue({ maxLength: 120, text: activeExternal.provider })}`
+      ? `provider: ${sanitizePromptLine({ maxLength: 120, text: activeExternal.provider })}`
       : "",
     activeExternal.connectorSlug
-      ? `connector: ${sanitizePromptValue({ maxLength: 80, text: activeExternal.connectorSlug })}`
+      ? `connector: ${sanitizePromptLine({ maxLength: 80, text: activeExternal.connectorSlug })}`
       : "",
     activeExternal.sourceToolName
-      ? `tool: ${sanitizePromptValue({ maxLength: 120, text: activeExternal.sourceToolName })}`
+      ? `tool: ${sanitizePromptLine({ maxLength: 120, text: activeExternal.sourceToolName })}`
       : "",
   ].filter((line) => line.length > 0);
   const snippet = activeExternal.snippet
@@ -1722,7 +1738,7 @@ export const buildActiveSkillSection = (
   }
 
   const version = activeSkillContext.version
-    ? `\nVersion: ${sanitizePromptValue({
+    ? `\nVersion: ${sanitizePromptLine({
         maxLength: 80,
         text: activeSkillContext.version,
       })}`
@@ -1746,7 +1762,7 @@ export const buildActiveSkillSection = (
     .slice(0, ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT)
     .map(
       (resource) =>
-        `- ${sanitizePromptValue({
+        `- ${sanitizePromptLine({
           maxLength: 512,
           text: resource.path,
         })} (${resource.kind})`,
@@ -1764,11 +1780,11 @@ export const buildActiveSkillSection = (
 
   return [
     "ACTIVE SKILL CONTEXT: The user is currently inside this stella skill.",
-    `Display name: ${sanitizePromptValue({
+    `Display name: ${sanitizePromptLine({
       maxLength: 120,
       text: activeSkillContext.displayName,
     })}`,
-    `Canonical skill name for load-skill/read-skill-resource: ${sanitizePromptValue(
+    `Canonical skill name for load-skill/read-skill-resource: ${sanitizePromptLine(
       {
         maxLength: 80,
         text: activeSkillContext.toolName,
@@ -1978,14 +1994,6 @@ export const buildUserContextBlock = (userContext: UserContext | null) => {
   return lines.join("\n");
 };
 
-type SanitizePromptValueProps = {
-  maxLength: number;
-  text: string;
-};
-
-const sanitizePromptValue = ({ maxLength, text }: SanitizePromptValueProps) =>
-  text.replace(/[\r\n]/gu, " ").slice(0, maxLength);
-
 // Untrusted multi-line content embedded in the prompt (document bodies,
 // external snippets, case-law decision text) goes through the shared
 // `sanitizeForPrompt` primitive rather than a local truncate-only helper:
@@ -1997,5 +2005,7 @@ const sanitizePromptValue = ({ maxLength, text }: SanitizePromptValueProps) =>
 const sanitizePromptBlock = ({
   maxLength,
   text,
-}: SanitizePromptValueProps): string =>
-  sanitizeForPrompt(untrustedText(text), { maxLength });
+}: {
+  maxLength: number;
+  text: string;
+}): string => sanitizeForPrompt(untrustedText(text), { maxLength });

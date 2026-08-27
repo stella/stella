@@ -1,4 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { decodePaginationCursor } from "@/api/lib/pagination";
@@ -42,6 +44,7 @@ describe("myTasksHandler", () => {
       scopedDb,
       status: null,
       userId: toSafeId<"user">("user-test"),
+      activeWorkspaceIds: [toSafeId<"workspace">("workspace-test")],
     });
 
     expect(page.items.map((task) => task.id)).toEqual(entityIds.slice(0, 2));
@@ -79,11 +82,50 @@ describe("myTasksHandler", () => {
       scopedDb,
       status: "open",
       userId: toSafeId<"user">("user-test"),
+      activeWorkspaceIds: [toSafeId<"workspace">("workspace-test")],
     });
 
     expect(page).toEqual({ items: [], limit: 2, nextCursor: null });
     expect(wherePage).toHaveBeenCalledTimes(1);
     expect(limitPage).toHaveBeenCalledWith(3);
     expect(getCallCount()).toBe(1);
+  });
+
+  test("scopes the assignee query to the caller's active workspaces", async () => {
+    const wherePage = mock((_condition?: SQL) => ({
+      orderBy: () => ({ limit: mock(async () => []) }),
+    }));
+    const { scopedDb } = createScopedDbMock({
+      query: {
+        entities: { findMany: mock(async () => []) },
+      },
+      select: () => ({
+        from: () => ({
+          innerJoin: () => ({ where: wherePage }),
+        }),
+      }),
+    });
+    const activeWorkspaceId = toSafeId<"workspace">(
+      "00000000-0000-4000-8000-0000000000aa",
+    );
+
+    await myTasksHandler({
+      cursor: null,
+      limit: 2,
+      scopedDb,
+      status: null,
+      userId: toSafeId<"user">("user-test"),
+      activeWorkspaceIds: [activeWorkspaceId],
+    });
+
+    const [condition] = wherePage.mock.calls.at(0) ?? [];
+    if (!condition) {
+      throw new Error(
+        "expected wherePage to have been called with a condition",
+      );
+    }
+    const compiled = new PgDialect().sqlToQuery(condition.getSQL());
+    expect(compiled.sql).toContain("workspace_id");
+    expect(compiled.params).toContain(activeWorkspaceId);
   });
 });

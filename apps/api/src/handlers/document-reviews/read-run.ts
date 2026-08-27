@@ -20,6 +20,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { tallyDecisions } from "@/api/lib/document-review/decision-counts";
+import { resolveReferenceScope } from "@/api/lib/document-review/reference-access";
 import {
   basisPlaybook,
   DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX,
@@ -110,6 +111,10 @@ const readDocumentReviewRun = createSafeHandler(
       ),
     );
 
+    const scopeReference = yield* Result.await(
+      resolveReferenceScope(safeDb, run.basis),
+    );
+
     // Is the pinned playbook still the one an author would run today? One
     // equality between two version ids, so it is answered on read rather than
     // maintained as a flag every future approval would have to invalidate.
@@ -168,7 +173,7 @@ const readDocumentReviewRun = createSafeHandler(
         checkKind: finding.checkKind,
         positionId: finding.positionId,
         outcome: finding.outcome,
-        payload: finding.payload,
+        payload: scopeReference(finding.payload),
         decision: finding.decision,
         decidedBy: finding.decidedBy,
         decidedAt:

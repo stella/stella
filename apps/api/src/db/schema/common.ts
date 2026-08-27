@@ -58,6 +58,7 @@ import {
   workspaceViewTemplatePolicies,
   wsOrganizationPolicies,
   wsOrganizationReadOnlyPolicies,
+  wsDataScopePolicies,
   wsOrganizationScopedRequestPolicies,
   wsPolicies,
 } from "@/api/db/rls";
@@ -506,6 +507,7 @@ export {
   workspaceViewTemplatePolicies,
   wsOrganizationPolicies,
   wsOrganizationReadOnlyPolicies,
+  wsDataScopePolicies,
   wsOrganizationScopedRequestPolicies,
   wsPolicies,
 };

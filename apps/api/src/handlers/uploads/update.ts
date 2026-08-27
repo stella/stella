@@ -68,6 +68,9 @@ const config = {
     "agent_skill (skillId, name, version) shape depending on the purpose the " +
     "upload was created with. Idempotent: replaying it on an already " +
     "finalized upload returns the same result rather than duplicating.",
+  // permissions-exempt: the static gate is workspace:read because the
+  // resource-appropriate grant depends on the upload's purpose, which
+  // authorizeUploadPurpose (uploads/permissions.ts) checks in-handler.
   permissions: uploadRoutePermission,
   access: "write",
   mcp: { type: "capability", reason: "file_transport" },

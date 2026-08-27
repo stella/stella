@@ -20,20 +20,12 @@ const twoFactorSendManageOtp = createSafeSessionHandler(
     const currentUserId = ctx.user.id;
     const request = ctx.request;
 
-    // 1. Fetch user details; refuse if 2FA is not currently enabled — there
-    // is nothing to gate a management-confirmation code for.
-    const { email: emailStr, twoFactorEnabled } = yield* Result.await(
+    // 1. Fetch the address the code goes to. Every two-factor transition is
+    // gated on this code, enrollment included, so the current enablement
+    // state does not decide whether a code may be requested.
+    const { email: emailStr } = yield* Result.await(
       getUserEmailAndTwoFactorEnabled(currentUserId),
     );
-
-    if (!twoFactorEnabled) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Two-factor authentication is not enabled",
-        }),
-      );
-    }
 
     // 2. Generate and store a cryptographically secure 6-digit OTP
     const otp = yield* Result.await(

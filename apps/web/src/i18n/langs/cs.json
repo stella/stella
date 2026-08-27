@@ -3266,6 +3266,7 @@
         "disabledSuccess": "Dvoufaktorové ověření vypnuto",
         "downloadCodes": "Stáhnout jako textový soubor",
         "enable": "Zapnout dvoufaktorové ověření",
+        "enableOtpDescription": "Na váš e-mail jsme odeslali ověřovací kód. Pro potvrzení zapnutí dvoufaktorového ověření jej zadejte níže.",
         "enabledStatus": "Zapnuto",
         "enabledSuccess": "Dvoufaktorové ověření zapnuto",
         "enterCodeToConfirm": "Pro potvrzení nastavení zadejte ověřovací kód z ověřovací aplikace.",

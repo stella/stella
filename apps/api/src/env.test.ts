@@ -120,6 +120,36 @@ describe("API environment", () => {
     expect(result.stdout.toString().trim()).toBe("true");
   });
 
+  test("rejects a plaintext remote conversion endpoint in production", () => {
+    const result = bootApiEnvironment({
+      ...baseEnv,
+      CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+      GOTENBERG_URL: "http://converter.example.com",
+      NODE_ENV: "production",
+      USE_MOCK_AI: "false",
+    });
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain("GOTENBERG_URL must use HTTPS");
+  });
+
+  test("rejects Microsoft's shared authorization endpoint as a tenant", () => {
+    const result = bootApiEnvironment({
+      ...baseEnv,
+      CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+      MICROSOFT_AUTH_CLIENT_ID: "client-id",
+      MICROSOFT_AUTH_CLIENT_SECRET: "client-secret",
+      MICROSOFT_AUTH_TENANT_ID: "common",
+      NODE_ENV: "production",
+      USE_MOCK_AI: "false",
+    });
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(
+      "MICROSOFT_AUTH_TENANT_ID must name one directory",
+    );
+  });
+
   test("rejects static credential placeholders for the env provider", () => {
     const result = bootApiEnvironment({
       ...baseEnv,

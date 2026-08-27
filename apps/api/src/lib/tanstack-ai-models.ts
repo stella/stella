@@ -46,6 +46,9 @@ import {
   type OrgAIConfig,
   type OrgAIProviderConfig,
 } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createStellaOpenRouterText } from "@/api/lib/stella-openrouter-text-adapter";
@@ -845,12 +848,21 @@ const assertTanStackBYOKModelRoleSupport = ({
 };
 
 export const requireTanStackAIAvailableForRole = ({
+  configStatus,
   orgConfig,
   role,
 }: {
+  configStatus: OrgAIConfigStatus;
   orgConfig: OrgAIConfig | null;
   role: ModelRole;
 }): Result<void, HandlerError> => {
+  // A stored config that did not decrypt is not the same as no config: the
+  // null below would otherwise resolve to the instance provider, running an
+  // org that configured its own key on the shared one and metering it there.
+  if (configStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+    return Result.err(storedAIConfigUnreadableError(undefined));
+  }
+
   if (!orgConfig) {
     if (!hasTanStackInstanceProvider()) {
       return Result.err(byokRoleNotConfiguredError(role));

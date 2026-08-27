@@ -3266,6 +3266,7 @@
         "disabledSuccess": "Autenticación de dos factores desactivada",
         "downloadCodes": "Descargar como archivo de texto",
         "enable": "Activar la autenticación de dos factores",
+        "enableOtpDescription": "Hemos enviado un código de verificación a su correo electrónico. Ingréselo a continuación para confirmar la activación de la autenticación de dos factores.",
         "enabledStatus": "Activada",
         "enabledSuccess": "Autenticación de dos factores activada",
         "enterCodeToConfirm": "Introduzca el código de verificación de su aplicación de autenticación para confirmar la configuración.",

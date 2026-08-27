@@ -24,6 +24,7 @@ import {
   EMAIL_ATTACHMENT_RESPONSE_DISPOSITION,
   getEmailAttachmentResponseBytes,
 } from "./email-attachment-preview";
+import { scanEmailAttachmentForSave } from "./email-attachment-save-scan";
 
 const EMAIL_ATTACHMENT_DISPOSITION_PATTERN = "^(?:inline|download)$";
 
@@ -52,6 +53,8 @@ const attachmentUnreadable = () =>
     { message: "Failed to parse email attachment" },
     { status: 422 },
   );
+const attachmentRejected = (message: string) =>
+  Response.json({ message }, { status: 422 });
 
 export default createSafeHandler(
   config,
@@ -80,6 +83,18 @@ export default createSafeHandler(
     if (attachment.status === EMAIL_ATTACHMENT_LOAD_STATUS.unreadable) {
       return Result.ok(attachmentUnreadable());
     }
+
+    // Preview and download stream the same bytes email-attachment/create.ts
+    // persists as a document, so they carry the same scan requirement.
+    const scanResult = await scanEmailAttachmentForSave({
+      bytes: attachment.bytes,
+      fileName: attachment.fileName,
+      mimeType: attachment.mimeType,
+    });
+    if (Result.isError(scanResult)) {
+      return Result.ok(attachmentRejected(scanResult.error.message));
+    }
+
     const attachmentMimeType = resolveEmailAttachmentMimeType({
       fileName: attachment.fileName,
       mimeType: attachment.mimeType,

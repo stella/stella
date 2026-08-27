@@ -202,10 +202,19 @@ const config = {
  */
 const prefillTemplate = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params, body, orgAIConfig, user }) {
+  async function* ({
+    safeDb,
+    session,
+    params,
+    body,
+    orgAIConfig,
+    orgAIConfigStatus,
+    user,
+  }) {
     const organizationId = session.activeOrganizationId;
 
     yield* requireTanStackAIAvailableForRole({
+      configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
     });

@@ -229,10 +229,12 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // Presigned-upload coordination (presign / finalize / abort). One domain,
   // three upload purposes with different underlying permissions
   // (entity:create, entity:update, agentSkill:create), so the domain takes the
-  // workspace write bucket — the broadest of the three surfaces it can touch —
-  // and `authorizeUploadPurpose` still re-checks the exact per-purpose
-  // permission inside the handler. Deliberately NOT `stella:skills`, which
-  // would let a skills-only consent presign an entity write.
+  // workspace write bucket and `authorizeUploadPurpose` re-checks the exact
+  // per-purpose permission inside the handler. Deliberately NOT
+  // `stella:skills`, which would let a skills-only consent presign an entity
+  // write. The converse is closed at invoke: the purpose an upload carries adds
+  // its own required scope and permission (`mcp/upload-purpose-gate.ts`), so a
+  // workspace write consent alone cannot presign or finalize a skill pack.
   uploads: "stella:matters_write",
   usage: "stella:read",
   "view-templates": "stella:matters_write",

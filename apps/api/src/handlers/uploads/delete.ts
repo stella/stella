@@ -40,6 +40,9 @@ const config = {
     "Idempotent: aborting an already aborted upload succeeds. Fails if the " +
     "upload was already finalized -- delete the resulting entity or skill " +
     "instead.",
+  // permissions-exempt: the static gate is workspace:read because the
+  // resource-appropriate grant depends on the upload's purpose, which
+  // authorizeUploadPurpose (uploads/permissions.ts) checks in-handler.
   permissions: uploadRoutePermission,
   access: "write",
   mcp: { type: "capability", reason: "file_transport" },

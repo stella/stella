@@ -78,6 +78,9 @@ export const BETTER_AUTH_ORGANIZATION_OPTIONS = {
   creatorRole: "owner",
   invitationExpiresIn: 60 * 60 * 48,
   membershipLimit: 500,
+  // An invitation grants access to a firm's matters, so the address it was
+  // sent to has to be one the recipient proved they hold.
+  requireEmailVerificationOnInvitation: true,
 } as const;
 
 /** Adapter switches which must match in every host. */
