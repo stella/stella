@@ -271,6 +271,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "disposable-email-domains-js",
   "domhandler",
   "driver.js",
+  "entities",
   "eslint",
   "expect-type",
   "expo-doctor",
