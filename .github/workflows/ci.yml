@@ -1790,6 +1790,7 @@ jobs:
       && needs.ci-plan.outputs.marketing_screenshots_required == 'true'
     uses: ./.github/workflows/marketing-screenshots.yml
     permissions:
+      actions: read
       contents: read
     with:
       mode: check

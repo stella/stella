@@ -58,6 +58,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
+      # Polling the calling run's artifacts for the handed-over web build.
+      actions: read
       contents: read
 
     steps:
