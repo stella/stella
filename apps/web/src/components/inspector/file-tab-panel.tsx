@@ -19,7 +19,10 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
-import { useReviewStore } from "@/components/ai-suggestions/review-store";
+import {
+  REVIEW_SUGGESTION_ORIGIN,
+  useReviewStore,
+} from "@/components/ai-suggestions/review-store";
 import { DocxBrowserEditor } from "@/components/docx/docx-browser-editor";
 import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
 import { getDocxEditBlockReason } from "@/components/docx/docx-browser-editor.logic";
@@ -47,6 +50,7 @@ import {
   MetadataPanelSkeleton,
   TabFacetBar,
 } from "@/components/inspector/file-facets";
+import type { Facet } from "@/components/inspector/file-facets";
 import {
   FACETS,
   FULLVIEW_FACETS,
@@ -64,7 +68,6 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { PlaybookFacet } from "@/components/inspector/playbook-facet";
-import { SuggestionsFacet } from "@/components/inspector/suggestions-facet";
 import { VersionsFacet } from "@/components/inspector/versions-facet";
 import { MarkdownFolioEditor } from "@/components/markdown/markdown-folio-editor";
 import {
@@ -146,6 +149,28 @@ type FileTabPanelProps = {
   setScaleOffsets: Dispatch<SetStateAction<Map<string, number>>>;
   startRename: (tab: FileTab) => void;
   tab: FileTab;
+};
+
+/**
+ * Glow the chat input under the file viewer when a reviewer opens the
+ * document-review facet on a document the chat has already proposed changes
+ * to, so they see the "From chat" group came from the composer right below.
+ *
+ * Gated on there being such a proposal: the facet is also the playbook-review
+ * launcher, and pulsing the composer every time someone opens it would say
+ * nothing.
+ */
+const pulseChatInputForReview = (facet: Facet, entityId: string): void => {
+  if (facet !== "playbook") {
+    return;
+  }
+  const store = useReviewStore.getState();
+  const hasChatProposal = (store.sessions[entityId] ?? []).some(
+    (item) => item.origin === REVIEW_SUGGESTION_ORIGIN.chat,
+  );
+  if (hasChatProposal) {
+    store.pulseChatInput(entityId);
+  }
 };
 
 /** Strip the file extension (e.g. ".pdf", ".docx") from a filename. */
@@ -1001,13 +1026,7 @@ export const FileTabPanel = ({
           mimeType={tab.mimeType}
           onChange={(next) => {
             setFileFacet(tab.id, next);
-            if (next === "suggestions") {
-              // Glow the chat input under the file viewer so
-              // the user sees the suggestions they're reading
-              // came from the chat right below — closes the
-              // loop between panel and producer.
-              useReviewStore.getState().pulseChatInput(tab.entityId);
-            }
+            pulseChatInputForReview(next, tab.entityId);
           }}
           pulseSeq={tab.facetPulseSeq}
           workspaceId={tab.workspaceId}
@@ -1080,13 +1099,6 @@ export const FileTabPanel = ({
               workspaceId={tab.workspaceId}
             />
           )}
-          {fullViewFacet === "suggestions" && (
-            <SuggestionsFacet
-              entityId={tab.entityId}
-              fileFieldId={tab.id}
-              workspaceId={tab.workspaceId}
-            />
-          )}
           {fullViewFacet === "playbook" && (
             <PlaybookFacet
               entityId={tab.entityId}
@@ -1127,6 +1139,7 @@ export const FileTabPanel = ({
       mimeType={tab.mimeType}
       onChange={(next) => {
         setFileFacet(tab.id, next);
+        pulseChatInputForReview(next, tab.entityId);
       }}
       pulseSeq={tab.facetPulseSeq}
       workspaceId={tab.workspaceId}
@@ -1213,70 +1226,6 @@ export const FileTabPanel = ({
               currentFieldId={tab.id}
               entityId={tab.entityId}
               workspaceId={tab.workspaceId}
-            />
-          )}
-          {sidepeekFacet === "suggestions" && (
-            <SuggestionsFacet
-              entityId={tab.entityId}
-              fileFieldId={tab.id}
-              workspaceId={tab.workspaceId}
-              // Quick fix: sidepeek's DOCX editor unmounts when
-              // the user switches off Preview, so Accept on a
-              // suggestion has no live editor to apply against.
-              // Route to the DOCX main view, where the editor is
-              // mounted by default and the same `<SuggestionsFacet>`
-              // (rendered by the fullscreen branch above) reuses
-              // the registration.
-              // Replace with an in-app approval flow that doesn't need the
-              // full editor mounted.
-              //
-              // Only the *active* tab is allowed to redirect.
-              // Non-active PDF tabs stay mounted (CSS-hidden) so
-              // their facet panels still run effects; without
-              // this gate a background tab whose facet happens
-              // to be "suggestions" would hijack the route to
-              // its own document view. Per Codex review on
-              // PR #80.
-              {...(isActive
-                ? {
-                    onMissingEditor: () => {
-                      // Pre-select the suggestions facet on
-                      // the inspector store so the document
-                      // route's inspector lands directly on
-                      // this panel instead of the default
-                      // Preview.
-                      setFileFacet(tab.id, "suggestions");
-                      // Replace the current history entry
-                      // rather than pushing a new one. This is
-                      // an automatic, user-didn't-click-anything
-                      // redirect: pushing creates a back-button
-                      // trap (Back returns to the previous
-                      // sidepeek state, which immediately
-                      // remounts SuggestionsFacet without an
-                      // editor and pushes again — bouncing).
-                      // With `replace` the same Back gesture
-                      // takes the user out of the suggestions
-                      // flow entirely. Per Codex review on
-                      // PR #80.
-                      detached(
-                        navigate({
-                          to: "/workspaces/$workspaceId/$viewId/document",
-                          params: {
-                            workspaceId: tab.workspaceId,
-                            viewId: peekPdfViewId,
-                          },
-                          replace: true,
-                          search: (prev) => ({
-                            ...prev,
-                            entity: tab.entityId,
-                            field: tab.id,
-                          }),
-                        }),
-                        "file-tab-panel.navigate",
-                      );
-                    },
-                  }
-                : {})}
             />
           )}
           {sidepeekFacet === "playbook" && (

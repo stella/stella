@@ -2,8 +2,8 @@
  * ReviewBar — floating bottom-center pill over the DOCX editor that
  * drives a keyboard-first review loop through the AI's pending
  * suggestions. Shares the review-store (and {@link useReviewActions})
- * with the inspector ReviewPanel, so stepping / accepting / rejecting
- * here and there can never disagree.
+ * with the inspector's document-review facet, so stepping / accepting /
+ * rejecting here and there can never disagree.
  *
  * Keyboard (active while the bar is visible and focus is in the editor
  * or on the bar, never in the chat composer or a form field). The bindings

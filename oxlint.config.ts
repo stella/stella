@@ -1015,7 +1015,6 @@ export default defineConfig({
               "apps/web/src/components/ai-rewrite-control.tsx",
               "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx",
               "apps/web/src/components/ai-suggestions/host.tsx",
-              "apps/web/src/components/ai-suggestions/review-panel.impl.tsx",
               "apps/web/src/components/app-sidebar.tsx",
               "apps/web/src/components/bilingual-run-panel.tsx",
               "apps/web/src/components/chat-mention-list.tsx",

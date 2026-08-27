@@ -421,28 +421,49 @@ export const ToolApprovalCard = ({
   const submittedApprovalIdRef = useRef<string | null>(null);
   const [responded, setResponded] = useState(false);
 
-  const {
-    canAllowInConversation,
-    canAlwaysAllow,
-    externalInput,
-    externalMcpConnectorSlug,
-    externalMcpProviderName,
-    isApprovalRequested,
-    isApproved,
-    isBlocked,
-    isDocxEditBatch,
-    isProcessing,
-    isPublicOfficialApproval,
-    isDenied,
-    label,
-    showsExternalInput,
-  } = getToolApprovalState({
-    blockedApprovalTools,
-    defaultLabel: t(getChatToolTitleKey(name)),
-    name,
-    part,
-    responded,
-  });
+  const isApprovalRequested = part.state === "approval-requested";
+  const isApprovalResponded = part.state === "approval-responded";
+  const isStructuredEditFailure =
+    part.name === "edit_workspace_document" &&
+    part.state === "complete" &&
+    part.output !== undefined &&
+    !part.output.success;
+  const isApproved =
+    part.state === "complete" &&
+    part.output !== undefined &&
+    !isStructuredEditFailure;
+  const isDenied =
+    isStructuredEditFailure ||
+    (part.state === "approval-responded" && part.approval.approved === false);
+  const isProcessing =
+    isApprovalResponded || (responded && isApprovalRequested);
+  const isBlocked = blockedApprovalTools?.has(name) ?? false;
+  const isExternalMcpApproval = isExternalMcpToolName(name);
+  const showsExternalInput =
+    isExternalMcpApproval || isExternalInputChatToolName(name);
+  // High-impact writes may only be approved once or denied: no persistent
+  // grant can auto-approve a later call.
+  const isApprovalOnce = isApprovalOnceChatToolName(name);
+  const canAllowInConversation =
+    name !== "apply-active-docx-edits" &&
+    !isApprovalOnce &&
+    !isNonPersistentGrantChatToolName(name);
+  const canAlwaysAllow = canAllowInConversation;
+  const isPublicOfficialApproval = isPublicOfficialChatToolName(name);
+  /**
+   * DOCX edit batches always go to the side review panel — never
+   * gated by a chat-level Allow/Deny. The card collapses to a
+   * compact status and auto-approves once so the queueing
+   * handler can register the suggestions.
+   */
+  const isDocxEditBatch = name === "apply-active-docx-edits";
+  const externalMcpProviderName = getExternalMcpProviderName(name);
+  const label = externalMcpProviderName ?? t(getChatToolTitleKey(name));
+  const externalMcpConnectorSlug = getExternalMcpConnectorSlug(name);
+  const externalInput =
+    showsExternalInput && part.state !== "input-streaming"
+      ? getApprovalPartInput(part)
+      : undefined;
   const { data: mcpConnectorsData } = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: externalMcpConnectorSlug !== null,
@@ -494,10 +515,44 @@ export const ToolApprovalCard = ({
     return true;
   };
 
-  const handleOpenReviewPanel = getDocxReviewPanelHandler({
-    isDocxEditBatch,
-    part,
-  });
+  // Clicking a DOCX-edit-batch card jumps the user to the document-review
+  // facet for the entity those edits target, where the batch lists under
+  // "From chat". The output's `queued` ids are the same client-side
+  // suggestion ids the review store keys its session entries by, so we look
+  // up the entity by matching any of them.
+  const docxEditBatchOutput =
+    isDocxEditBatch &&
+    part.name === "apply-active-docx-edits" &&
+    part.state === "complete"
+      ? part.output
+      : undefined;
+  const queuedIds =
+    docxEditBatchOutput?.queued !== undefined
+      ? docxEditBatchOutput.queued.map((q) => q.id)
+      : null;
+  const handleOpenReviewFacet =
+    queuedIds !== null && queuedIds.length > 0
+      ? () => {
+          const opIds = new Set(queuedIds);
+          const sessions = useReviewStore.getState().sessions;
+          const entityIdMatch = Object.entries(sessions).find(([, items]) =>
+            items.some((item) => opIds.has(item.id)),
+          )?.[0];
+          if (!entityIdMatch) {
+            return;
+          }
+          const inspector = useInspectorTabsStore.getState();
+          const tab = inspector.tabs.find(
+            (candidate) =>
+              candidate.type === "pdf" && candidate.entityId === entityIdMatch,
+          );
+          if (!tab) {
+            return;
+          }
+          inspector.setActive(tab.id);
+          inspector.setFileFacet(tab.id, "playbook", { pulse: true });
+        }
+      : null;
 
   return (
     // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- conditional role/handlers are paired below; the linter can't see they're always set together
@@ -507,22 +562,22 @@ export const ToolApprovalCard = ({
         isApprovalRequested && !isProcessing
           ? "border-border bg-muted/30"
           : "bg-muted/40 border-transparent",
-        handleOpenReviewPanel &&
+        handleOpenReviewFacet &&
           "hover:bg-muted/50 cursor-pointer transition-colors",
       )}
-      onClick={handleOpenReviewPanel ?? undefined}
+      onClick={handleOpenReviewFacet ?? undefined}
       onKeyDown={
-        handleOpenReviewPanel
+        handleOpenReviewFacet
           ? (event) => {
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
-                handleOpenReviewPanel();
+                handleOpenReviewFacet();
               }
             }
           : undefined
       }
-      role={handleOpenReviewPanel ? "button" : undefined}
-      tabIndex={handleOpenReviewPanel ? 0 : undefined}
+      role={handleOpenReviewFacet ? "button" : undefined}
+      tabIndex={handleOpenReviewFacet ? 0 : undefined}
     >
       {automaticResponse?.shouldRespond && (
         <AutomaticApprovalResponse
@@ -545,18 +600,63 @@ export const ToolApprovalCard = ({
         )}
       </div>
 
-      <ToolApprovalSummary
-        activeFileName={activeFileName}
-        externalInput={showsExternalInput ? externalInput : undefined}
-        isAwaitingExternalDecision={
-          isApprovalRequested &&
-          !isProcessing &&
-          !isBlocked &&
-          !isPublicOfficialApproval
-        }
-        part={part}
-        providerName={externalMcpProviderName ?? label}
-      />
+      {/* Rich summary */}
+      {part.name === "update-entity-fields" &&
+        part.state !== "input-streaming" &&
+        part.input !== undefined && <UpdateSummary input={part.input} />}
+      {part.name === "apply-active-docx-edits" &&
+        part.state !== "input-streaming" &&
+        part.input !== undefined && (
+          <ActiveDocxEditSummary input={part.input} />
+        )}
+      {part.name === "create_workspace_document" &&
+        part.state !== "input-streaming" &&
+        part.input !== undefined && (
+          <CreateWorkspaceDocumentSummary input={part.input} />
+        )}
+      {part.name === "edit_workspace_document" &&
+        part.state !== "input-streaming" &&
+        part.input !== undefined && (
+          <EditWorkspaceDocumentSummary
+            activeFileName={activeFileName}
+            input={part.input}
+          />
+        )}
+      {part.name === "edit_workspace_document" &&
+        part.state === "complete" &&
+        part.output !== undefined && (
+          <EditWorkspaceDocumentResult output={part.output} />
+        )}
+      {part.name === "spawn_subagents" &&
+        part.state !== "input-streaming" &&
+        part.input !== undefined && (
+          <SpawnSubagentsSubtaskList
+            isAwaitingApproval={isApprovalRequested}
+            subagents={part.input.subagents}
+          />
+        )}
+      {showsExternalInput &&
+        part.state !== "input-streaming" &&
+        externalInput !== undefined && (
+          <ExternalMcpInputSummary
+            input={externalInput}
+            isAwaitingDecision={
+              isApprovalRequested &&
+              !isProcessing &&
+              !isBlocked &&
+              !isPublicOfficialApproval
+            }
+            providerName={externalMcpProviderName ?? label}
+          />
+        )}
+      {isRegistryWriteSummaryToolName(name) &&
+        part.state !== "input-streaming" &&
+        getApprovalPartInput(part) !== undefined && (
+          <RegistryWriteSummary
+            input={getApprovalPartInput(part)}
+            toolName={name}
+          />
+        )}
 
       {/* Actions — hidden for DOCX edit batches (reviewed in the side panel). */}
       {approvalId &&
@@ -624,68 +724,6 @@ export const ToolApprovalCard = ({
   );
 };
 
-const ToolApprovalSummary = ({
-  activeFileName,
-  externalInput,
-  isAwaitingExternalDecision,
-  part,
-  providerName,
-}: {
-  activeFileName: string | undefined;
-  externalInput: unknown;
-  isAwaitingExternalDecision: boolean;
-  part: ApprovalToolPart;
-  providerName: string;
-}) => {
-  if (part.state === "input-streaming") {
-    return null;
-  }
-
-  const name = getApprovalToolName(part);
-  const input = getApprovalPartInput(part);
-  return (
-    <>
-      {part.name === "update-entity-fields" && part.input !== undefined && (
-        <UpdateSummary input={part.input} />
-      )}
-      {part.name === "apply-active-docx-edits" && part.input !== undefined && (
-        <ActiveDocxEditSummary input={part.input} />
-      )}
-      {part.name === "create_workspace_document" &&
-        part.input !== undefined && (
-          <CreateWorkspaceDocumentSummary input={part.input} />
-        )}
-      {part.name === "edit_workspace_document" && part.input !== undefined && (
-        <EditWorkspaceDocumentSummary
-          activeFileName={activeFileName}
-          input={part.input}
-        />
-      )}
-      {part.name === "edit_workspace_document" &&
-        part.state === "complete" &&
-        part.output !== undefined && (
-          <EditWorkspaceDocumentResult output={part.output} />
-        )}
-      {part.name === "spawn_subagents" && part.input !== undefined && (
-        <SpawnSubagentsSubtaskList
-          isAwaitingApproval={part.state === "approval-requested"}
-          subagents={part.input.subagents}
-        />
-      )}
-      {externalInput !== undefined && (
-        <ExternalMcpInputSummary
-          input={externalInput}
-          isAwaitingDecision={isAwaitingExternalDecision}
-          providerName={providerName}
-        />
-      )}
-      {isRegistryWriteSummaryToolName(name) && input !== undefined && (
-        <RegistryWriteSummary input={input} toolName={name} />
-      )}
-    </>
-  );
-};
-
 type SummaryMatter = { color: string | null; id: string; name: string };
 
 /**
@@ -718,111 +756,6 @@ const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
  * reads everywhere else in the app. The id itself is what the user least needs
  * to see when deciding whether to allow a write.
  */
-const getDocxReviewPanelHandler = ({
-  isDocxEditBatch,
-  part,
-}: {
-  isDocxEditBatch: boolean;
-  part: ApprovalToolPart;
-}) => {
-  const output =
-    isDocxEditBatch &&
-    part.name === "apply-active-docx-edits" &&
-    part.state === "complete"
-      ? part.output
-      : undefined;
-  const queued = output?.queued;
-  if (queued === undefined || queued.length === 0) {
-    return null;
-  }
-  const queuedIds = queued.map((item) => item.id);
-  return () => {
-    const opIds = new Set(queuedIds);
-    const sessions = useReviewStore.getState().sessions;
-    const entityIdMatch = Object.entries(sessions).find(([, items]) =>
-      items.some((item) => opIds.has(item.id)),
-    )?.[0];
-    if (!entityIdMatch) {
-      return;
-    }
-    const inspector = useInspectorTabsStore.getState();
-    const tab = inspector.tabs.find(
-      (candidate) =>
-        candidate.type === "pdf" && candidate.entityId === entityIdMatch,
-    );
-    if (!tab) {
-      return;
-    }
-    inspector.setActive(tab.id);
-    inspector.setFileFacet(tab.id, "suggestions", { pulse: true });
-  };
-};
-
-const getToolApprovalState = ({
-  blockedApprovalTools,
-  defaultLabel,
-  name,
-  part,
-  responded,
-}: {
-  blockedApprovalTools: ReturnType<
-    typeof useChatApproval
-  >["blockedApprovalTools"];
-  defaultLabel: string;
-  name: ApprovalToolName;
-  part: ApprovalToolPart;
-  responded: boolean;
-}) => {
-  const isApprovalRequested = part.state === "approval-requested";
-  const isApprovalResponded = part.state === "approval-responded";
-  const isStructuredEditFailure =
-    part.name === "edit_workspace_document" &&
-    part.state === "complete" &&
-    part.output !== undefined &&
-    !part.output.success;
-  const isApproved =
-    part.state === "complete" &&
-    part.output !== undefined &&
-    !isStructuredEditFailure;
-  const isDenied =
-    isStructuredEditFailure ||
-    (part.state === "approval-responded" && part.approval.approved === false);
-  const isBlocked = blockedApprovalTools?.has(name) ?? false;
-  const isExternalMcpApproval = isExternalMcpToolName(name);
-  const showsExternalInput =
-    isExternalMcpApproval || isExternalInputChatToolName(name);
-  const isApprovalOnce = isApprovalOnceChatToolName(name);
-  const canAllowInConversation =
-    name !== "apply-active-docx-edits" &&
-    !isApprovalOnce &&
-    !isNonPersistentGrantChatToolName(name);
-  const isDocxEditBatch = name === "apply-active-docx-edits";
-  const externalMcpProviderName = getExternalMcpProviderName(name);
-
-  return {
-    canAllowInConversation,
-    canAlwaysAllow: canAllowInConversation,
-    externalInput:
-      showsExternalInput && part.state !== "input-streaming"
-        ? getApprovalPartInput(part)
-        : undefined,
-    externalMcpConnectorSlug: getExternalMcpConnectorSlug(name),
-    externalMcpProviderName,
-    isApprovalRequested,
-    isApprovalResponded,
-    isApproved,
-    isBlocked,
-    isDenied,
-    isDocxEditBatch,
-    isExternalMcpApproval,
-    isProcessing: isApprovalResponded || (responded && isApprovalRequested),
-    isPublicOfficialApproval: isPublicOfficialChatToolName(name),
-    isStructuredEditFailure,
-    label: externalMcpProviderName ?? defaultLabel,
-    showsExternalInput,
-  };
-};
-
 const RegistryWriteSummaryRow = ({
   label,
   matter,

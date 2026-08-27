@@ -1,6 +1,6 @@
 /**
  * Review store — holds pending AI-edit suggestions per active
- * document while the user reviews them in the side panel.
+ * document while the user reviews them in the document-review facet.
  *
  * Lives in memory only (no persistence): a thread reset, document
  * close, or page reload clears the session, matching the user
@@ -34,7 +34,7 @@ export type ReviewSuggestionStatus =
   | "skipped";
 
 /**
- * Redline preview captured at queue time so the inspector panel
+ * Redline preview captured at queue time so the review card
  * can render an in-place mini-diff per suggestion without touching
  * the document. Carries just enough surrounding text for the
  * reviewer to recognise where the change lands; the source of
@@ -91,9 +91,25 @@ export type ReviewSuggestionPreview =
       position: "after" | "before";
     };
 
+/**
+ * Where a proposal came from. A document review stages each finding's fix as
+ * a suggestion of its own; everything else on the document was proposed in the
+ * chat over it. The review facet groups by this, so it is a named origin
+ * rather than an "is this from a review" flag.
+ */
+export const REVIEW_SUGGESTION_ORIGIN = {
+  chat: "chat",
+  review: "review",
+} as const;
+
+export type ReviewSuggestionOrigin =
+  (typeof REVIEW_SUGGESTION_ORIGIN)[keyof typeof REVIEW_SUGGESTION_ORIGIN];
+
 export type ReviewSuggestion = {
   /** Operation id from the AI tool call (uuid). */
   id: string;
+  /** Which surface proposed this change. */
+  origin: ReviewSuggestionOrigin;
   /** Block id the suggestion targets. */
   blockId: string;
   /**
@@ -108,7 +124,7 @@ export type ReviewSuggestion = {
   /** Pre-formatted human summary, e.g. `Replace "30 days" with "45 days"`. */
   summary: string;
   /**
-   * Redline-shaped preview the panel renders inline. Captured at
+   * Redline-shaped preview the review card renders inline. Captured at
    * queue time from the snapshot we sent to the AI; immutable
    * afterwards (the document may have moved on, but the preview
    * still represents what the AI proposed against the snapshot
@@ -138,7 +154,7 @@ export type ReviewSuggestion = {
   undoHandle: DocumentOperationUndoHandle | null;
   /**
    * The editor-shaped operation, kept on the suggestion for the
-   * lifetime of the session. The panel feeds this to
+   * lifetime of the session. The accept path feeds this to
    * `editor.applyDocumentOperations` when the user accepts. Retained
    * after Accept / Reject so a later "Revert" can put the
    * suggestion back into the pending queue without losing the
@@ -175,27 +191,25 @@ type ReviewState = {
   sessions: Record<string, ReviewSuggestion[]>;
   /** Per-entity apply mode preference; defaults to tracked-changes. */
   applyMode: Record<string, FolioAIEditApplyMode>;
-  /** Per-entity panel visibility (manual dismiss). */
-  panelDismissed: Record<string, boolean>;
   /**
    * Per-entity focused suggestion id — the one the review bar's
-   * prev/next stepper is currently parked on and the panel scrolls
-   * into view / highlights. Shared so the floating bar and the
-   * inspector panel can never disagree about which suggestion is
+   * prev/next stepper is currently parked on and the review facet
+   * scrolls into view / highlights. Shared so the floating bar and the
+   * facet's list can never disagree about which suggestion is
    * "current". `null` (or absent) when nothing is focused yet.
    */
   focusedId: Record<string, string | null>;
   /**
-   * Per-entity monotonic counter bumped whenever the user clicks
-   * the AI-suggestions facet chip. The chat input bar subscribes
-   * and plays a one-shot glow so the user sees that the suggestions
-   * they're looking at come from the chat right below — closing
-   * the loop between panel and producer.
+   * Per-entity monotonic counter bumped when the reviewer opens the
+   * document-review facet on a document the chat has proposed changes
+   * to. The chat input bar subscribes and plays a one-shot glow so the
+   * reviewer sees the "From chat" group came from the composer right
+   * below — closing the loop between the list and its producer.
    */
   chatInputPulse: Record<string, number>;
   /**
-   * Hide accepted / rejected / skipped items from the panel list so
-   * the reviewer's eye stays on the pending queue. Hidden items
+   * Hide accepted / rejected / skipped items from the review facet's
+   * list so the reviewer's eye stays on the pending queue. Hidden items
    * still live in the store (revert keeps working) — they're
    * filtered out at render time only. Global preference, applies
    * across all open documents.
@@ -218,9 +232,8 @@ type ReviewActions = {
   ) => void;
   /**
    * Merge server-loaded suggestions into the session on reload. Dedups
-   * by `id` (only ids not already present are added) and never touches
-   * `panelDismissed`, so hydration cannot force the panel back open.
-   * Seeds a fresh session when none exists yet.
+   * by `id` (only ids not already present are added). Seeds a fresh
+   * session when none exists yet.
    */
   hydrateSuggestions: (entityId: string, items: ReviewSuggestion[]) => void;
   updateSuggestion: (
@@ -235,72 +248,31 @@ type ReviewActions = {
   ) => void;
   setApplyMode: (entityId: string, mode: FolioAIEditApplyMode) => void;
   setFocusedId: (entityId: string, id: string | null) => void;
-  dismissPanel: (entityId: string) => void;
   resetSession: (entityId: string) => void;
   pulseChatInput: (entityId: string) => void;
   setHideAccepted: (value: boolean) => void;
 };
 
 /**
- * Apply the panel's filter rules to a session's suggestions, in
- * order:
+ * What a review list shows of a session.
  *
- * 1. `hideAccepted` drops everything except `pending` and
- *    `applying`. The "applying" status stays so the loading
- *    indicator doesn't flicker out from under the user mid-apply.
- * 2. `filter` (severity or area key, when set) keeps only
- *    matching items. `groupAxis` tells us which field to compare.
- *
- * Pulled out as a pure helper so the panel's useMemo body stays
- * thin and so the rules can be unit-tested without React.
+ * `hideAccepted` drops everything except `pending` and `applying`. The
+ * "applying" status stays so the loading indicator doesn't flicker out from
+ * under the reviewer mid-apply.
  */
 export const filterReviewSuggestions = (
   suggestions: readonly ReviewSuggestion[],
-  options: {
-    hideAccepted: boolean;
-    filter: string | null;
-    groupAxis: "severity" | "area";
-  },
-): readonly ReviewSuggestion[] => {
-  let next: readonly ReviewSuggestion[] = suggestions;
-  if (options.hideAccepted) {
-    next = next.filter(
-      (item) => item.status === "pending" || item.status === "applying",
-    );
-  }
-  if (options.filter !== null) {
-    next = next.filter((item) =>
-      options.groupAxis === "severity"
-        ? item.severity === options.filter
-        : item.area === options.filter,
-    );
-  }
-  return next;
-};
-
-/**
- * Compute initials from a display name as a fallback when the user
- * hasn't set their own in account settings. Word convention: up to
- * 3 uppercase chars taken from the leading letter of each word.
- */
-export const computeInitialsFrom = (name: string): string => {
-  const parts = name
-    .trim()
-    .split(/\s+/u)
-    .filter((part) => part.length > 0);
-  if (parts.length === 0) {
-    return "";
-  }
-  return parts
-    .slice(0, 3)
-    .map((part) => part[0]?.toLocaleUpperCase() ?? "")
-    .join("");
-};
+  options: { hideAccepted: boolean },
+): readonly ReviewSuggestion[] =>
+  options.hideAccepted
+    ? suggestions.filter(
+        (item) => item.status === "pending" || item.status === "applying",
+      )
+    : suggestions;
 
 export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
   sessions: {},
   applyMode: {},
-  panelDismissed: {},
   focusedId: {},
   chatInputPulse: {},
   hideAccepted: false,
@@ -338,12 +310,6 @@ export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
         sessions: {
           ...state.sessions,
           [entityId]: [...existing, ...fresh],
-        },
-        // Re-show the panel on every new batch even if previously
-        // dismissed — the user just got new content to review.
-        panelDismissed: {
-          ...state.panelDismissed,
-          [entityId]: false,
         },
       };
     });
@@ -416,9 +382,6 @@ export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
     set((state) => {
       const existing = state.sessions[entityId];
       if (!existing) {
-        // Seed a fresh session. Deliberately does NOT set
-        // `panelDismissed` (unlike `appendSuggestions`): hydration on
-        // reload must not force the review panel open.
         return {
           sessions: { ...state.sessions, [entityId]: items },
         };
@@ -508,20 +471,12 @@ export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
     });
   },
 
-  dismissPanel: (entityId) => {
-    set((state) => ({
-      panelDismissed: { ...state.panelDismissed, [entityId]: true },
-    }));
-  },
-
   resetSession: (entityId) => {
     set((state) => {
       const { [entityId]: _, ...restSessions } = state.sessions;
-      const { [entityId]: __, ...restDismissed } = state.panelDismissed;
-      const { [entityId]: ___, ...restFocused } = state.focusedId;
+      const { [entityId]: __, ...restFocused } = state.focusedId;
       return {
         sessions: restSessions,
-        panelDismissed: restDismissed,
         focusedId: restFocused,
       };
     });

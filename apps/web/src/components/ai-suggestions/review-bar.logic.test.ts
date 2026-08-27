@@ -16,6 +16,7 @@ const suggestion = (
   area: "Terms",
   blockId: `block-${id}`,
   id,
+  origin: "chat",
   pendingOperation: null,
   preview: { anchor: id, type: "commentOnBlock" },
   revisionIds: null,

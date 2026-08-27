@@ -1,7 +1,7 @@
 /** Composable document review: playbook, reference documents, or both. */
 
 import { useRef, useState } from "react";
-import type { ComponentType, RefObject } from "react";
+import type { ComponentType, ReactNode, RefObject } from "react";
 
 import {
   useInfiniteQuery,
@@ -15,6 +15,8 @@ import {
   CheckIcon,
   ChevronRightIcon,
   ClipboardCheckIcon,
+  EyeIcon,
+  EyeOffIcon,
   FlagIcon,
   MessageSquareIcon,
   PanelLeftIcon,
@@ -52,6 +54,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { AcceptAllButton } from "@/components/ai-suggestions/accept-all-button";
 import {
   activeDocxKey,
   useActiveDocxStore,
@@ -129,8 +132,17 @@ import {
   PositionQuickRow,
   type ReferenceNameLookup,
 } from "@/components/ai-suggestions/review-position-row";
-import { useReviewStore } from "@/components/ai-suggestions/review-store";
-import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
+import { RedlinePreview } from "@/components/ai-suggestions/review-redline-preview";
+import {
+  filterReviewSuggestions,
+  getReviewFocusedId,
+  REVIEW_SUGGESTION_ORIGIN,
+  useReviewStore,
+} from "@/components/ai-suggestions/review-store";
+import type {
+  ReviewSeverityKey,
+  ReviewSuggestion,
+} from "@/components/ai-suggestions/review-store";
 import {
   isDealBreakingSeverity,
   isNegotiableVerdict,
@@ -317,6 +329,12 @@ export const PlaybookFacet = ({
   });
   const suggestions = useReviewStore(
     (state) => state.sessions[entityId] ?? EMPTY_SUGGESTIONS,
+  );
+  // Changes the chat proposed over this document. A run stages its own fixes
+  // as suggestions too, but those belong to the finding that proposed them and
+  // are resolved from its card, so only the chat's get a group of their own.
+  const chatSuggestions = suggestions.filter(
+    (item) => item.origin === REVIEW_SUGGESTION_ORIGIN.chat,
   );
 
   // Which version of the document is on screen now. The tab's facet bar reads
@@ -540,6 +558,38 @@ export const PlaybookFacet = ({
     return false;
   };
 
+  const acceptSuggestion = (suggestion: ReviewSuggestion) => {
+    detached(
+      reviewActions.acceptOne(suggestion),
+      "playbook-facet.accept-suggestion",
+    );
+  };
+
+  // Everything pending on the document, whichever surface proposed it: the
+  // queue is the document's, not one group's.
+  const queueControls = (
+    <ReviewQueueControls
+      onAcceptAll={reviewActions.acceptMany}
+      suggestions={suggestions}
+    />
+  );
+
+  /** The chat's proposals as a group. The results view keeps the queue
+   *  controls in its own header; the launcher has no header, so they ride
+   *  along on the group's heading row instead. */
+  const chatSectionWith = (controls: ReactNode) => (
+    <ChatSuggestionsSection
+      controls={controls}
+      editorAvailable={editorAvailable}
+      entityId={entityId}
+      onAccept={acceptSuggestion}
+      onFocus={reviewActions.navigateTo}
+      onReject={reviewActions.rejectOne}
+      onScrollToBlock={scrollToBlock}
+      suggestions={chatSuggestions}
+    />
+  );
+
   if (
     session?.status === "starting" ||
     session?.status === "proposing-positions"
@@ -647,9 +697,11 @@ export const PlaybookFacet = ({
       <>
         {sizeConfirmDialog}
         <ReviewRunPanel
+          chatSection={chatSectionWith(null)}
           currentEntityVersionId={currentEntityVersionId}
           editorAvailable={editorAvailable}
           editorRef={targetEditorRef}
+          queueControls={queueControls}
           history={{
             mode: historyRunId === null ? "tracked" : "history",
             onBackToLatest: () => viewTrackedRun(entityId, fileFieldId),
@@ -658,12 +710,7 @@ export const PlaybookFacet = ({
             runs,
             shownRunId,
           }}
-          onAcceptSuggestion={(suggestion) => {
-            detached(
-              reviewActions.acceptOne(suggestion),
-              "playbook-facet.accept-suggestion",
-            );
-          }}
+          onAcceptSuggestion={acceptSuggestion}
           onAddCounterpartyNote={addCounterpartyNote}
           onOpenReferenceCitation={openReferenceCitation}
           onRejectSuggestion={reviewActions.rejectOne}
@@ -688,6 +735,7 @@ export const PlaybookFacet = ({
     <>
       {sizeConfirmDialog}
       <Launcher
+        chatSection={chatSectionWith(queueControls)}
         history={
           runs.length === 0
             ? null
@@ -763,6 +811,10 @@ export type ReviewRunHistoryView = {
 type ReviewRunPanelProps = {
   workspaceId: string;
   runId: string;
+  /** The document's chat-proposed changes, listed under the run's findings. */
+  chatSection: ReactNode;
+  /** Accept-all / hide-accepted / pending count over the whole queue. */
+  queueControls: ReactNode;
   organizationId: string;
   history: ReviewRunHistoryView;
   /** Where this document reads its review, when the facet is looking at the
@@ -800,6 +852,8 @@ type ReviewRunPanelProps = {
 const ReviewRunPanel = ({
   workspaceId,
   runId,
+  chatSection,
+  queueControls,
   organizationId,
   history,
   paneSwap,
@@ -939,6 +993,8 @@ const ReviewRunPanel = ({
   return (
     <ResultsView
       basis={restored.basis}
+      chatSection={chatSection}
+      queueControls={queueControls}
       decisionCounts={run.decisionCounts}
       decisionPending={decide.isPending}
       editorAvailable={editorAvailable}
@@ -1102,6 +1158,9 @@ type LauncherPlaybook = Pick<PlaybookListItem, "id" | "name" | "status">;
 
 type LauncherProps = {
   playbooks: readonly LauncherPlaybook[];
+  /** The document's chat-proposed changes. A document nobody has run a review
+   *  over can still carry them, and the launcher is where they list. */
+  chatSection: ReactNode;
   target: { entityId: string; fileFieldId: string };
   workspaceId: string;
   /** Runs this document has already had, when it has any: choosing a new basis
@@ -1112,6 +1171,7 @@ type LauncherProps = {
 
 const Launcher = ({
   playbooks,
+  chatSection,
   target,
   workspaceId,
   history,
@@ -1173,6 +1233,10 @@ const Launcher = ({
           target={target}
           workspaceId={workspaceId}
         />
+        {/* Nothing has been reviewed against a standard yet, but the chat may
+            already have proposed changes; they are what the panel shows until
+            a run gives it more. */}
+        {chatSection}
       </div>
       {history !== null && <ReviewHistorySection history={history} />}
       {/* Pinned right above the action it describes, outside the scroll. */}
@@ -2032,6 +2096,10 @@ type ReviewRunProgress = {
 
 type ResultsViewProps = {
   basis: RestoredReviewBasis;
+  /** The document's chat-proposed changes, as their own group under the run. */
+  chatSection: ReactNode;
+  /** Accept-all / hide-accepted / pending count over the whole queue. */
+  queueControls: ReactNode;
   findings: readonly RestoredReviewFinding[];
   decisionCounts: Parameters<typeof reviewDecisionProgress>[0];
   decisionPending: boolean;
@@ -2088,6 +2156,8 @@ type SetReviewFindingFlags = (
 
 const ResultsView = ({
   basis,
+  chatSection,
+  queueControls,
   findings,
   decisionCounts,
   decisionPending,
@@ -2191,68 +2261,75 @@ const ResultsView = ({
         ) : (
           <NoReviewIssues />
         )}
+        {chatSection}
       </div>
     );
   })();
 
   return (
     <div className="bg-background flex h-full flex-col">
-      <header className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold">
-            {t("inspector.review.title")}
-          </h2>
-          <p className="text-muted-foreground truncate text-xs">
-            <BidiText as="span">
-              {buildRunSummarySentence({
-                targetName,
-                targetVersionNumber,
-                references: basis.references,
-                playbookName: basis.playbookName,
-                playbookProposed: basis.provenance === "ephemeral",
-                perspective: basis.perspective,
-              })}
-            </BidiText>
-          </p>
-          {/* One line, whichever it is: while the worker runs it counts the
+      <header className="space-y-2 border-b px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold">
+              {t("inspector.review.title")}
+            </h2>
+            <p className="text-muted-foreground truncate text-xs">
+              <BidiText as="span">
+                {buildRunSummarySentence({
+                  targetName,
+                  targetVersionNumber,
+                  references: basis.references,
+                  playbookName: basis.playbookName,
+                  playbookProposed: basis.provenance === "ephemeral",
+                  perspective: basis.perspective,
+                })}
+              </BidiText>
+            </p>
+            {/* One line, whichever it is: while the worker runs it counts the
               positions it has answered, and when the last batch lands it
               becomes the run's own summary — no row appears or disappears. */}
-          <RunHeaderStatusLine
-            decided={decisions.decided}
-            flagged={flaggedCount}
-            progress={runProgress}
-            total={results.length}
-          />
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <PaneSwapToggle swap={paneSwap} />
-          {/* Only a run whose positions were never saved has a playbook to
+            <RunHeaderStatusLine
+              decided={decisions.decided}
+              flagged={flaggedCount}
+              progress={runProgress}
+              total={results.length}
+            />
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <PaneSwapToggle swap={paneSwap} />
+            {/* Only a run whose positions were never saved has a playbook to
               make; one that ran against a definition already has one. */}
-          {basis.provenance === "ephemeral" && (
-            <Button
-              disabled={saveAsPlaybookPending}
-              onClick={onSaveAsPlaybook}
-              size="xs"
-              variant="outline"
-            >
-              {SAVE_AS_PLAYBOOK_LABEL}
+            {basis.provenance === "ephemeral" && (
+              <Button
+                disabled={saveAsPlaybookPending}
+                onClick={onSaveAsPlaybook}
+                size="xs"
+                variant="outline"
+              >
+                {SAVE_AS_PLAYBOOK_LABEL}
+              </Button>
+            )}
+            <ReviewExportMenu
+              // The counterparty file is the document, so it is addressed by the
+              // field it lives on: nothing the run knows is in scope.
+              counterparty={
+                targetName.length === 0
+                  ? null
+                  : { fileFieldId: targetFileFieldId, fileName: targetName }
+              }
+              runId={runId}
+              workspaceId={workspaceId}
+            />
+            <Button onClick={onReviewAgain} size="xs" variant="outline">
+              {t("inspector.review.reviewAgain")}
             </Button>
-          )}
-          <ReviewExportMenu
-            // The counterparty file is the document, so it is addressed by the
-            // field it lives on: nothing the run knows is in scope.
-            counterparty={
-              targetName.length === 0
-                ? null
-                : { fileFieldId: targetFileFieldId, fileName: targetName }
-            }
-            runId={runId}
-            workspaceId={workspaceId}
-          />
-          <Button onClick={onReviewAgain} size="xs" variant="outline">
-            {t("inspector.review.reviewAgain")}
-          </Button>
+          </div>
         </div>
+        {/* The document's own queue, on its own row: it answers to the
+            document rather than to this run, and the row above is already
+            carrying everything the run offers. */}
+        {queueControls}
       </header>
 
       <ReviewHistorySection history={history} />
@@ -3822,4 +3899,268 @@ const findingCaption = (
   }
   const { rationale } = finding;
   return rationale !== null && rationale.length > 0 ? rationale : null;
+};
+
+// -- Changes proposed in the chat --
+
+// TODO(i18n): English until the review surface is localized as a whole.
+const FROM_CHAT_LABEL = "From chat";
+const PENDING_COUNT_LABEL = (count: string): string => `${count} pending`;
+
+/** Severity as a word, so the meta slot reads without a legend. Total over the
+ *  vocabulary: a new severity must say how it reads rather than render blank. */
+const SEVERITY_LABEL_KEY = {
+  high: "docxReview.severityHigh",
+  medium: "docxReview.severityMedium",
+  low: "docxReview.severityLow",
+  unspecified: "docxReview.severityUnspecified",
+} as const satisfies Record<ReviewSeverityKey, TranslationKey>;
+
+/**
+ * What a reviewer can do to the whole queue at once: accept everything still
+ * pending, stop showing what they have already answered, and see how much is
+ * left. Scoped to the document rather than to a group, because the changes are
+ * applied to the document — which surface proposed each one does not change
+ * what "accept all" means.
+ */
+const ReviewQueueControls = ({
+  suggestions,
+  onAcceptAll,
+}: {
+  suggestions: readonly ReviewSuggestion[];
+  onAcceptAll: (items: readonly ReviewSuggestion[]) => Promise<void>;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const hideAccepted = useReviewStore((state) => state.hideAccepted);
+  const setHideAccepted = useReviewStore((state) => state.setHideAccepted);
+  const pending = suggestions.filter((item) => item.status === "pending");
+  if (suggestions.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex shrink-0 items-center justify-end gap-1">
+      <span className="text-muted-foreground me-auto text-xs tabular-nums">
+        {PENDING_COUNT_LABEL(format.number(pending.length))}
+      </span>
+      <Tooltip
+        content={t("docxReview.hideAccepted")}
+        render={
+          <Button
+            aria-label={t("docxReview.hideAccepted")}
+            aria-pressed={hideAccepted}
+            onClick={() => setHideAccepted(!hideAccepted)}
+            size="icon-xs"
+            variant="ghost"
+          />
+        }
+      >
+        {hideAccepted ? (
+          <EyeOffIcon className="size-3.5" />
+        ) : (
+          <EyeIcon className="size-3.5" />
+        )}
+      </Tooltip>
+      <AcceptAllButton
+        onAcceptAll={onAcceptAll}
+        pendingItems={pending}
+        size="xs"
+        variant="outline"
+      >
+        {t("docxReview.acceptAll")}
+      </AcceptAllButton>
+    </div>
+  );
+};
+
+type ChatSuggestionsSectionProps = {
+  entityId: string;
+  /** The chat's proposals for this document, in the order they were made. */
+  suggestions: readonly ReviewSuggestion[];
+  /** Rendered on the heading row. The launcher puts the queue controls here;
+   *  the results view has its own header for them. */
+  controls: ReactNode;
+  editorAvailable: boolean;
+  onAccept: (suggestion: ReviewSuggestion) => void;
+  onReject: (suggestion: ReviewSuggestion) => void;
+  /** Park the in-document stepper on this change; the floating bar reads the
+   *  same focused id, so the two can never point at different changes. */
+  onFocus: (suggestion: ReviewSuggestion) => void;
+  onScrollToBlock: (blockId: string) => void;
+};
+
+/**
+ * The changes the chat proposed over this document, as their own group.
+ *
+ * They answer no position, so they are counted and filtered on their own and
+ * stay out of the run's coverage and deviation tallies. Everything else about
+ * them is the run's: the same header row, the same accept and reject, the same
+ * focused change as the floating stepper.
+ */
+const ChatSuggestionsSection = ({
+  entityId,
+  suggestions,
+  controls,
+  editorAvailable,
+  onAccept,
+  onReject,
+  onFocus,
+  onScrollToBlock,
+}: ChatSuggestionsSectionProps) => {
+  const format = useFormatter();
+  const hideAccepted = useReviewStore((state) => state.hideAccepted);
+  const focusedId = useReviewStore((state) =>
+    getReviewFocusedId(state, entityId),
+  );
+  const listRef = useRef<HTMLUListElement>(null);
+
+  // The stepper moved the focus, in the document or from the floating bar:
+  // bring the card it landed on into view here too.
+  useExternalSyncEffect(() => {
+    if (focusedId === null) {
+      return;
+    }
+    listRef.current
+      ?.querySelector(`[data-suggestion-id="${CSS.escape(focusedId)}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [focusedId]);
+
+  if (suggestions.length === 0) {
+    return null;
+  }
+
+  const visible = filterReviewSuggestions(suggestions, { hideAccepted });
+
+  return (
+    <section className="mt-4">
+      <div className="mb-2 flex items-center justify-between gap-2 px-1">
+        <h3
+          className={cn(REVIEW_SECTION_LABEL_CLASS, "flex items-center gap-2")}
+        >
+          <span>{FROM_CHAT_LABEL}</span>
+          <span className="text-foreground-ghost tabular-nums">
+            {format.number(visible.length)}
+          </span>
+        </h3>
+        {controls}
+      </div>
+      <ul className="space-y-1.5" ref={listRef}>
+        {visible.map((item) => (
+          <ChatSuggestionCard
+            editorAvailable={editorAvailable}
+            focused={focusedId === item.id}
+            item={item}
+            key={item.id}
+            onAccept={() => onAccept(item)}
+            onFocus={() => onFocus(item)}
+            onReject={() => onReject(item)}
+            onScrollToBlock={onScrollToBlock}
+          />
+        ))}
+      </ul>
+    </section>
+  );
+};
+
+/**
+ * One change the chat proposed: what it does, why, and the redline it would
+ * write. The same card shape as a finding — header row, one caption, the
+ * comparison, then the actions — so a reviewer reads one list, not two.
+ */
+const ChatSuggestionCard = ({
+  item,
+  focused,
+  editorAvailable,
+  onAccept,
+  onFocus,
+  onReject,
+  onScrollToBlock,
+}: {
+  item: ReviewSuggestion;
+  focused: boolean;
+  editorAvailable: boolean;
+  onAccept: () => void;
+  onFocus: () => void;
+  onReject: () => void;
+  onScrollToBlock: (blockId: string) => void;
+}) => {
+  const t = useTranslations();
+  const isResolved = item.status !== "pending" && item.status !== "applying";
+
+  return (
+    <li
+      className={cn(
+        "bg-card overflow-hidden rounded-lg border",
+        focused && "ring-ring ring-1",
+        isResolved && "opacity-60",
+      )}
+      data-suggestion-id={item.id}
+    >
+      <button
+        className="hover:bg-muted/70 w-full transition-colors"
+        onClick={onFocus}
+        type="button"
+      >
+        <PositionHeader
+          label={
+            <>
+              {item.blockLabel !== undefined && (
+                <span className={POSITION_HEADER_META_CLASS}>
+                  {item.blockLabel}
+                </span>
+              )}
+              {item.severity !== "unspecified" && (
+                <span className={cn(POSITION_HEADER_META_CLASS, "text-end")}>
+                  {t(SEVERITY_LABEL_KEY[item.severity])}
+                </span>
+              )}
+            </>
+          }
+          title={
+            <BidiText as="span" className="text-foreground font-medium">
+              {item.summary}
+            </BidiText>
+          }
+        />
+      </button>
+      <div className="space-y-3 border-t px-3 py-3">
+        {item.comment !== undefined && (
+          <p className="text-muted-foreground text-sm leading-6 text-pretty">
+            <BidiText as="span">{item.comment}</BidiText>
+          </p>
+        )}
+        <RedlinePreview
+          preview={item.preview}
+          rejected={item.status === "rejected"}
+          srSummary={item.summary}
+        />
+        {item.status === "skipped" && item.skipReason !== undefined && (
+          <p className="text-destructive text-xs">
+            {t("docxReview.skipped", { reason: item.skipReason })}
+          </p>
+        )}
+        <section
+          aria-label={t("inspector.review.decision")}
+          className="flex flex-wrap items-center gap-2 border-t pt-3"
+        >
+          <SuggestionButtons
+            editorAvailable={editorAvailable}
+            onAccept={onAccept}
+            onReject={onReject}
+            suggestion={item}
+          />
+          <Button
+            className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs"
+            disabled={!editorAvailable}
+            onClick={() => onScrollToBlock(item.blockId)}
+            size="sm"
+            variant="ghost"
+          >
+            {SHOW_IN_DOCUMENT_LABEL}
+          </Button>
+        </section>
+      </div>
+    </li>
+  );
 };

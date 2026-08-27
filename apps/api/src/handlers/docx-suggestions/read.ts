@@ -18,6 +18,34 @@ import { docxSuggestionCursor } from "./cursor";
 import { DOCX_SUGGESTIONS_PAGE_SIZE_DEFAULT } from "./schemas";
 
 /**
+ * Where a suggestion came from, as the reader groups it: a document review
+ * stages each finding's fix as a suggestion of its own, everything else was
+ * proposed in the chat over the document. Named rather than shipping the
+ * finding id, because a client listing suggestions has no run to resolve one
+ * against; named rather than a flag, because a third producer would need a
+ * name here rather than a second boolean.
+ *
+ * The response type is what the web client's own origin union is checked
+ * against, so the two cannot drift apart without failing that build.
+ */
+const DOCX_SUGGESTION_ORIGIN = {
+  chat: "chat",
+  review: "review",
+} as const;
+
+type DocxSuggestionOrigin =
+  (typeof DOCX_SUGGESTION_ORIGIN)[keyof typeof DOCX_SUGGESTION_ORIGIN];
+
+// Annotated: an inline ternary in the projection literal would widen to
+// `string`, and the client would lose the union.
+const suggestionOrigin = (
+  originReviewFindingId: string | null,
+): DocxSuggestionOrigin =>
+  originReviewFindingId === null
+    ? DOCX_SUGGESTION_ORIGIN.chat
+    : DOCX_SUGGESTION_ORIGIN.review;
+
+/**
  * List an entity's persisted suggestions (pending and resolved), oldest
  * first, cursor-paginated. `entity read` permission (workspace-level read
  * grant). The client re-derives block id / summary / inline preview from
@@ -121,6 +149,7 @@ const listDocxSuggestions = createSafeHandler(
             status: docxSuggestions.status,
             appliedMode: docxSuggestions.appliedMode,
             createdAt: docxSuggestions.createdAt,
+            originReviewFindingId: docxSuggestions.originReviewFindingId,
             createdAtCursor:
               docxSuggestionCursor.cursorValue.as("created_at_cursor"),
           })
@@ -151,6 +180,7 @@ const listDocxSuggestions = createSafeHandler(
         status: item.status,
         appliedMode: item.appliedMode,
         createdAt: item.createdAt,
+        origin: suggestionOrigin(item.originReviewFindingId),
       })),
     });
   },

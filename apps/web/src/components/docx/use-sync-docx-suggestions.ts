@@ -127,6 +127,7 @@ export const useSyncDocxSuggestions = ({
 
       const item: ReviewSuggestion = {
         id: row.id,
+        origin: row.origin,
         blockId: folioOperationBlockId(op),
         type: op.type,
         summary: summarizeOperation(op),

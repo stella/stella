@@ -2,7 +2,7 @@
  * useReviewActions — the single owner of accept / reject / revert /
  * batch / navigate behaviour for AI DOCX suggestions.
  *
- * Both the inspector ReviewPanel and the floating ReviewBar consume
+ * Both the inspector's document-review facet and the floating ReviewBar consume
  * this hook, so the two surfaces resolve a suggestion the exact same
  * way (apply the tracked-change op, record the outcome on the store,
  * keep `pendingOperation` for a later revert) and can never drift.

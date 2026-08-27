@@ -6,7 +6,6 @@ import { useTranslations } from "use-intl";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
-import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { FacetBar } from "@/components/inspector/inspector-facet-bar";
 import type {
   FileFacet,
@@ -51,19 +50,14 @@ export const FullViewPreviewGuard = ({
 };
 
 /**
- * Per-tab wrapper around the shared `FacetBar`. Three jobs:
+ * Per-tab wrapper around the shared `FacetBar`. Two jobs:
  *  - Resolve the active version label ("v1", "v3", …) for the
  *    current field id and feed it as `activeBadge`.
- *  - Hide the AI-suggestions chip on tabs where the chat can't
- *    produce one (PDFs, files without DOCX-edit support).
- *  - Mark the AI-suggestions chip as inactive on DOCX tabs that
- *    haven't received any AI proposals yet, so the affordance is
- *    visible without inviting clicks that would land on an empty
- *    panel.
+ *  - Hide the document-review chip on tabs the review can't target
+ *    (PDFs, files without DOCX-edit support).
  *
- * Lives as its own component so the version + review-store reads
- * stay scoped per tab — no conditional hooks inside the parent's
- * pdfTabs.map.
+ * Lives as its own component so the version read stays scoped per
+ * tab — no conditional hooks inside the parent's pdfTabs.map.
  */
 type TabFacetBarProps = {
   facet: Facet;
@@ -75,9 +69,9 @@ type TabFacetBarProps = {
   fileName: string;
   mimeType: string | undefined;
   /**
-   * Base list before this component drops/disables the suggestions
-   * chip. Sidepeek passes the full list (preview, metadata, versions,
-   * suggestions); fullscreen passes the preview-less variant.
+   * Base list before this component drops the chips a tab cannot use.
+   * Sidepeek passes the full list; fullscreen passes the preview-less
+   * variant.
    */
   baseFacets: readonly Facet[];
 };
@@ -97,47 +91,25 @@ export const TabFacetBar = ({
   const { data } = useQuery(entityVersionsOptions({ workspaceId, entityId }));
   const version = data?.versions.find((v) => v.file?.fieldId === fieldId);
   const activeBadge = version ? `v${String(version.versionNumber)}` : undefined;
-  const suggestionCount = useReviewStore(
-    (state) => state.sessions[entityId]?.length ?? 0,
-  );
   const isDocx = mimeType === DOCX_MIME;
   const isEmail = isEmailFile({ fileName, mimeType });
-  const { facets, disabledFacets } = useMemo(() => {
-    // The chat-suggestions and playbook-review surfaces are
-    // DOCX-only (they need folio block ids to target). Drop both on
-    // non-DOCX tabs. The playbook chip stays enabled on DOCX even
-    // before a run — it doubles as the launcher for "Review with
-    // playbook"; only the suggestions chip is disabled until the
-    // chat queues a proposal.
-    if (!isDocx) {
-      return {
-        facets: baseFacets.filter(
-          (f) =>
-            f !== "suggestions" &&
-            f !== "playbook" &&
-            (isEmail || f !== "attachments"),
-        ),
-        disabledFacets: undefined,
-      };
-    }
-    if (suggestionCount === 0) {
-      return {
-        facets: baseFacets.filter((f) => isEmail || f !== "attachments"),
-        disabledFacets: new Set<Facet>(["suggestions"]),
-      };
-    }
-    return {
-      facets: baseFacets.filter((f) => isEmail || f !== "attachments"),
-      disabledFacets: undefined,
-    };
-  }, [baseFacets, isDocx, isEmail, suggestionCount]);
+  const facets = useMemo(
+    () =>
+      // The document-review surface is DOCX-only (it needs folio block ids to
+      // target), so its chip is absent on every other tab. On DOCX it stays
+      // enabled even before a run: it doubles as the launcher, and it is where
+      // changes the chat proposed are listed.
+      baseFacets.filter(
+        (f) => (isDocx || f !== "playbook") && (isEmail || f !== "attachments"),
+      ),
+    [baseFacets, isDocx, isEmail],
+  );
 
   const labels: Record<Facet, string> = {
     preview: t("common.preview"),
     attachments: t("emailViewer.attachments"),
     metadata: t("common.metadata"),
     versions: t("fileDetail.versionHistory"),
-    suggestions: t("docxReview.title"),
     playbook: t("inspector.review.title"),
     anonymization: t("inspector.facet.anonymization"),
   };
@@ -145,7 +117,6 @@ export const TabFacetBar = ({
   return (
     <FacetBar
       activeBadge={activeBadge}
-      disabledFacets={disabledFacets}
       facet={facet}
       facets={facets}
       labels={labels}

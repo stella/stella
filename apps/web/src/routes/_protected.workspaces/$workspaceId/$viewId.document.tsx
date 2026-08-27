@@ -339,19 +339,7 @@ const AnonymizeScrollSync = () => {
 
 const InspectorFieldLifecycle = ({ fieldId }: { fieldId: string }) => {
   useMountEffect(() => () => {
-    const inspectorState = useInspectorTabsStore.getState();
-    for (const tab of inspectorState.tabs) {
-      if (tab.type !== "pdf" || tab.id !== fieldId) {
-        continue;
-      }
-
-      if (tab.metadataLane === "expanded" && tab.facet === "suggestions") {
-        inspectorState.setFileFacet(fieldId, "metadata");
-      }
-      break;
-    }
-
-    inspectorState.setFileMetadataLane(fieldId, "closed");
+    useInspectorTabsStore.getState().setFileMetadataLane(fieldId, "closed");
   });
 
   return null;

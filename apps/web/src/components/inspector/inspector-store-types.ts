@@ -13,7 +13,6 @@ export const FILE_FACETS = [
   "attachments",
   "metadata",
   "versions",
-  "suggestions",
   "playbook",
   "anonymization",
 ] as const;
