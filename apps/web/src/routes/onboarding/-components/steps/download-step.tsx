@@ -251,7 +251,13 @@ const DesktopSetupPanel = () => {
         title={t("settings.account.desktopClipboardTitle")}
       />
       <p className="text-muted-foreground text-sm leading-relaxed text-pretty">
-        {t("settings.account.desktopClipboardDescription")}
+        {t("settings.account.desktopClipboardDescription")}{" "}
+        <kbd
+          className="bg-muted text-foreground rounded-md px-1.5 py-0.5 font-mono text-xs"
+          dir="ltr"
+        >
+          {shortcut}
+        </kbd>
       </p>
       <DesktopDownloadButtons platform={platform} />
     </SetupPanel>
