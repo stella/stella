@@ -7,7 +7,8 @@ import {
   LocalHistoryStrategy,
   StringValue,
 } from "@vscode/markdown-editor";
-import { autorun } from "@vscode/observables";
+import { createEffect } from "@vscode/observables";
+import { panic } from "better-result";
 // The editor takes keyboard input through the EditContext API, which WebKit and
 // Gecko do not ship yet. The polyfill installs itself only when the API is
 // missing, so Chromium keeps the native path.
@@ -69,7 +70,7 @@ export const MarkdownHybridEditor = ({
   useMountEffect(() => {
     const host = hostRef.current;
     if (!host) {
-      return;
+      panic("markdown editor host is not mounted");
     }
     const view = new EditorView(model, {
       classNames: ["md-theme-vscode-default", "md-theme-stella"],
@@ -86,13 +87,12 @@ export const MarkdownHybridEditor = ({
     });
     // Seeded content must not read as an edit; only later changes emit.
     let lastEmitted = model.sourceText.get().value;
-    const subscription = autorun((reader) => {
+    const subscription = createEffect((reader) => {
       const text = model.sourceText.read(reader).value;
-      if (text === lastEmitted) {
-        return;
+      if (text !== lastEmitted) {
+        lastEmitted = text;
+        emit(text);
       }
-      lastEmitted = text;
-      emit(text);
     });
     return () => {
       // A pending debounced edit would otherwise be lost on tab switch.
