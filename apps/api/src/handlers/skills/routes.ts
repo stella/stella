@@ -166,7 +166,6 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
   })
   .get("/:skillId/proposals", listSkillProposals.handler, {
     params: listSkillProposals.config.params,
-    query: listSkillProposals.config.query,
     permissions: listSkillProposals.config.permissions,
   })
   .get("/:skillId/proposals/:proposalId", getSkillProposal.handler, {

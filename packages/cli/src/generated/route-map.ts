@@ -28397,6 +28397,7 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       properties: {
                         body: {
+                          minLength: 1,
                           maxLength: 80000,
                           type: "string",
                         },
@@ -28641,7 +28642,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "skills", "proposals-list"],
                 capabilityId: "skills.proposals.list",
                 description:
-                  "List the change proposals raised against an agent skill, newest first and without their bodies, optionally filtered by status. baseIsCurrent reports whether a proposal still branches from the skill's newest revision.",
+                  "List the change proposals raised against an agent skill, newest first and without their bodies. baseIsCurrent reports whether a proposal still branches from the skill's newest revision.",
                 access: "read",
                 flags: [
                   {
@@ -28654,7 +28655,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "skillId",
                   },
                 ],
-                inputOnly: ["query.status"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 inputSchema: {
@@ -28671,31 +28672,6 @@ export const generatedRouteMap: RouteNode = {
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
-                        },
-                      },
-                    },
-                    query: {
-                      type: "object",
-                      properties: {
-                        status: {
-                          anyOf: [
-                            {
-                              const: "draft",
-                              type: "string",
-                            },
-                            {
-                              const: "proposed",
-                              type: "string",
-                            },
-                            {
-                              const: "accepted",
-                              type: "string",
-                            },
-                            {
-                              const: "rejected",
-                              type: "string",
-                            },
-                          ],
                         },
                       },
                     },
@@ -28740,6 +28716,15 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "decision",
                   },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--allow-stale",
+                    prop: "allowStale",
+                    required: false,
+                    part: "body",
+                    partPath: "allowStale",
+                  },
                 ],
                 inputOnly: [],
                 paginated: false,
@@ -28756,6 +28741,9 @@ export const generatedRouteMap: RouteNode = {
                           default: "accepted",
                           type: "string",
                           enum: ["accepted", "rejected"],
+                        },
+                        allowStale: {
+                          type: "boolean",
                         },
                       },
                     },
@@ -28840,6 +28828,7 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       properties: {
                         body: {
+                          minLength: 1,
                           maxLength: 80000,
                           type: "string",
                         },
