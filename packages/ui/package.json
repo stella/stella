@@ -176,6 +176,7 @@
     "prepack": "bun run build"
   },
   "dependencies": {
+    "better-result": "catalog:",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "input-otp": "^1.5.0",

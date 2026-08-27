@@ -63,3 +63,20 @@ export {
   resolveKanbanGrouping,
   selectKanbanRows,
 } from "./grouping";
+export type {
+  BuildKanbanBoardMatrixParams,
+  CreateKanbanDropIntentParams,
+  KanbanBoardAxis,
+  KanbanBoardCell,
+  KanbanBoardCoordinate,
+  KanbanBoardLane,
+  KanbanBoardMatrix,
+  KanbanDropAxisChange,
+  KanbanDropIntent,
+  ResolveKanbanGroupValueParams,
+} from "./matrix";
+export {
+  buildKanbanBoardMatrix,
+  createKanbanDropIntent,
+  KANBAN_BOARD_AXES,
+} from "./matrix";
