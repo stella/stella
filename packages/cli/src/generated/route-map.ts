@@ -25127,8 +25127,8 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "properties", "preview"],
                 capabilityId: "properties.preview",
                 description:
-                  "Run a column prompt against one document without creating the column or storing anything, so a prompt can be tried before it is saved. Pass the prompt, the value type, the entityId to run it against, any select options, and the columns it depends on. Returns status ready with the generated value, skipped when the dependency values are missing or unusable on that document, unsupported when the document cannot be processed, or empty when the model returned nothing.",
-                access: "read",
+                  "Run a column prompt against one document without creating the column or storing anything, so a prompt can be tried before it is saved. Pass the prompt, the value type, the entityId to run it against, any select options, and the columns it depends on. Returns status ready with the generated value, skipped when the dependency values are missing or unusable on that document, unsupported when the document cannot be processed, or empty when the model returned nothing. Consumes AI usage.",
+                access: "write",
                 flags: [
                   {
                     flag: "--workspace",
@@ -25165,7 +25165,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 paginated: false,
                 destructive: false,
-                scope: "read",
+                scope: "matters_write",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,

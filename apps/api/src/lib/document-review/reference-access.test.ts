@@ -1,12 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { NEUTRAL_PERSPECTIVE } from "@/api/lib/document-review/contract";
 import { buildIssuesTableRows } from "@/api/lib/document-review/issues-table";
 import {
   basisReferenceWorkspaceIds,
   createReferenceScope,
 } from "@/api/lib/document-review/reference-access";
-import type { DocumentReviewFindingPayload } from "@/api/lib/document-review/run-contract";
+import type {
+  DocumentReviewFindingPayload,
+  DocumentReviewRunBasis,
+} from "@/api/lib/document-review/run-contract";
 
 const OWN_WORKSPACE_ID = toSafeId<"workspace">(
   "11111111-1111-4111-8111-111111111111",
@@ -35,14 +39,14 @@ const pinnedReference = (
   name,
 });
 
-const BASIS = {
+const BASIS: DocumentReviewRunBasis = {
   type: "references",
-  perspective: { type: "neutral" },
+  perspective: NEUTRAL_PERSPECTIVE,
   references: [
     pinnedReference(OWN_WORKSPACE_ID, OWN_FIELD_ID, "Own precedent"),
     pinnedReference(OTHER_WORKSPACE_ID, OTHER_FIELD_ID, "Other precedent"),
   ],
-} as const;
+};
 
 const PAYLOAD: DocumentReviewFindingPayload = {
   checkKind: "reference",

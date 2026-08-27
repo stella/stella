@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { MACHINE_API_KEY_PREFIX } from "@/api/lib/machine-api-key-config";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import type { McpEffectiveAuthority } from "@/api/mcp/effective-authority";
 
 /**
  * Machine API keys as an MCP credential.
@@ -299,10 +300,10 @@ describe("hasEffectiveAuthority", () => {
     // Both halves must grant. The role half alone would make the stored set
     // decorative; the credential half alone would let a set outlive the role
     // that justified it.
-    const authority = {
+    const authority: McpEffectiveAuthority = {
       memberRole: "owner",
       credentialPermissions: { timeEntry: ["read"] },
-    } as const;
+    };
 
     expect(hasEffectiveAuthority(authority, { timeEntry: ["read"] })).toBe(
       true,
@@ -339,10 +340,10 @@ describe("hasEffectiveAuthority", () => {
   });
 
   test("a credential set naming several resources must cover all of them", () => {
-    const authority = {
+    const authority: McpEffectiveAuthority = {
       memberRole: "owner",
       credentialPermissions: { timeEntry: ["read"], clause: ["create"] },
-    } as const;
+    };
 
     expect(
       hasEffectiveAuthority(authority, {

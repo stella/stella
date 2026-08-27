@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
@@ -91,7 +92,7 @@ describe("myTasksHandler", () => {
   });
 
   test("scopes the assignee query to the caller's active workspaces", async () => {
-    const wherePage = mock(() => ({
+    const wherePage = mock((_condition?: SQL) => ({
       orderBy: () => ({ limit: mock(async () => []) }),
     }));
     const { scopedDb } = createScopedDbMock({
@@ -117,12 +118,13 @@ describe("myTasksHandler", () => {
       activeWorkspaceIds: [activeWorkspaceId],
     });
 
-    const condition = wherePage.mock.calls.at(0)?.[0] as {
-      getSQL: () => unknown;
-    };
-    const compiled = new PgDialect().sqlToQuery(
-      condition.getSQL() as Parameters<PgDialect["sqlToQuery"]>[0],
-    );
+    const [condition] = wherePage.mock.calls.at(0) ?? [];
+    if (!condition) {
+      throw new Error(
+        "expected wherePage to have been called with a condition",
+      );
+    }
+    const compiled = new PgDialect().sqlToQuery(condition.getSQL());
     expect(compiled.sql).toContain("workspace_id");
     expect(compiled.params).toContain(activeWorkspaceId);
   });
