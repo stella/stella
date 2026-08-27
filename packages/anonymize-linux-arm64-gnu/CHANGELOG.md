@@ -1,5 +1,7 @@
 # @stll/anonymize-linux-arm64-gnu
 
+## 2.9.0
+
 ## 2.8.3
 
 ## 2.8.2

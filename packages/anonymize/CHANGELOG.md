@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.9.0
+
+### Minor Changes
+
+- [#479](https://github.com/stella/anonymize/pull/479) [`21cc2c5`](https://github.com/stella/anonymize/commit/21cc2c594e68b7a6a22f9c82330fea8dd6f28b8f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the cross-runtime `createPipeline` API with exact single-language,
+  multi-language, and all-language selection.
+
 ## 2.8.3
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-linux-x64-gnu",
-  "version": "2.8.3",
+  "version": "2.9.0",
   "description": "Linux x64 GNU native binding for @stll/anonymize",
   "keywords": [
     "anonymization",
