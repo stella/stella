@@ -2698,9 +2698,7 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "Markdown-forrás",
-    "showFormatted": "Formázott",
-    "showRaw": "Forrás megjelenítése"
+    "rawLabel": "Markdown-forrás"
   },
   "memory": {
     "addPlaceholder": "Adjon hozzá egy megjegyzést, amelyet az asszisztensnek meg kell jegyeznie…",

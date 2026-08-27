@@ -69,6 +69,13 @@ const RUNTIME_ASSET_CONTRACTS = [
   },
   {
     expectedCount: 1,
+    // @vscode/diff (the markdown editor's baseline diff) loads its binary via
+    // `new URL(..., import.meta.url)`, so Vite emits it as a hashed asset.
+    label: "markdown editor diff WASM",
+    pattern: "dist/client/assets/diff_wasm_bg-*.wasm",
+  },
+  {
+    expectedCount: 1,
     label: "anonymization WASM glue",
     pattern: "dist/client/native/index.js",
   },

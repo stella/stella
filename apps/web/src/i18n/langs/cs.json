@@ -2698,9 +2698,7 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "Zdroj Markdownu",
-    "showFormatted": "Formátovaný text",
-    "showRaw": "Zobrazit zdroj"
+    "rawLabel": "Zdroj Markdownu"
   },
   "memory": {
     "addPlaceholder": "Přidejte poznámku, kterou si má asistent zapamatovat…",

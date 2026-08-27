@@ -2698,9 +2698,7 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "Markdowni lähtekood",
-    "showFormatted": "Vormindatud",
-    "showRaw": "Kuva lähtekood"
+    "rawLabel": "Markdowni lähtekood"
   },
   "memory": {
     "addPlaceholder": "Lisage märkus, mille assistent peaks meelde jätma…",

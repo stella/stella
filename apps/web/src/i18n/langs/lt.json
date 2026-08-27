@@ -2698,9 +2698,7 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "Markdown pirminis tekstas",
-    "showFormatted": "Suformatuota",
-    "showRaw": "Rodyti pirminį tekstą"
+    "rawLabel": "Markdown pirminis tekstas"
   },
   "memory": {
     "addPlaceholder": "Pridėkite pastabą, kurią asistentas turėtų įsiminti…",

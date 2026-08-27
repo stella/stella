@@ -1,0 +1,60 @@
+/*
+ * Maps the editor's variable-driven `md-theme-vscode-default` theme onto the
+ * app's design tokens. The theme only references `--vscode-*` names, so
+ * supplying them on the editor root is the whole integration: light/dark and
+ * any future palette change flow through automatically.
+ */
+.md-editor.md-theme-stella {
+  --markdown-font-family: var(--font-sans);
+  --markdown-font-size: 0.875rem;
+  --vscode-editor-font-family:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+
+  --vscode-editor-background: var(--background);
+  --vscode-editor-foreground: var(--foreground);
+  --vscode-editorCursor-foreground: var(--foreground);
+  --vscode-descriptionForeground: var(--muted-foreground);
+  --vscode-disabledForeground: var(--muted-foreground);
+  --vscode-errorForeground: var(--destructive);
+  --vscode-focusBorder: var(--ring);
+  --vscode-contrastBorder: transparent;
+
+  --vscode-textLink-foreground: var(--primary);
+  --vscode-textSeparator-foreground: var(--border);
+  --vscode-textBlockQuote-background: var(--muted);
+  --vscode-textBlockQuote-border: var(--border);
+  --vscode-textCodeBlock-background: var(--muted);
+  --vscode-textPreformat-background: var(--muted);
+  --vscode-textPreformat-foreground: var(--foreground);
+
+  --vscode-editorWidget-background: var(--popover);
+  --vscode-editorWidget-foreground: var(--popover-foreground);
+  --vscode-editorWidget-border: var(--border);
+  --vscode-widget-border: var(--border);
+  --vscode-widget-shadow: rgb(0 0 0 / 0.16);
+
+  --vscode-input-background: var(--background);
+  --vscode-input-foreground: var(--foreground);
+  --vscode-input-border: var(--input);
+  --vscode-input-placeholderForeground: var(--muted-foreground);
+  --vscode-inputOption-activeBackground: var(--accent);
+  --vscode-inputOption-activeForeground: var(--accent-foreground);
+  --vscode-inputOption-hoverBackground: var(--accent);
+  --vscode-inputValidation-errorBorder: var(--destructive);
+
+  --vscode-button-background: var(--primary);
+  --vscode-button-foreground: var(--primary-foreground);
+  --vscode-button-border: transparent;
+  --vscode-button-secondaryBackground: var(--secondary);
+  --vscode-button-secondaryForeground: var(--secondary-foreground);
+  --vscode-button-secondaryHoverBackground: var(--accent);
+  --vscode-button-secondaryBorder: var(--border);
+
+  --vscode-editor-findMatchBackground: var(--highlight);
+  --vscode-editor-findMatchBorder: var(--ring);
+  --vscode-editor-findMatchHighlightBackground: var(--highlight);
+
+  min-height: 100%;
+  padding-block: 0.75rem;
+}

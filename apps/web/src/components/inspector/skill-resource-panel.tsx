@@ -9,7 +9,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 
 import { MarkdownPreview } from "@/components/markdown-preview";
-import { MarkdownFolioEditor } from "@/components/markdown/markdown-folio-editor";
+import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
 import {
   toEditorMarkdown,
   toStoredMarkdown,
@@ -66,10 +66,10 @@ export const SkillResourcePanel = ({
     tab.origin !== "built-in" &&
     tab.origin !== "bundled" &&
     tab.skillId !== null;
-  // Markdown edits in the shared Folio WYSIWYG editor (auto-saving), so the ICP
-  // never touches raw markdown (a "Show raw" toggle is there for power users).
+  // Markdown edits in the shared hybrid editor (auto-saving), so the ICP
+  // never leaves the formatted view; syntax only shows on the block being edited.
   // Other text files keep the raw editor below.
-  const useFolio =
+  const useHybridEditor =
     renderMode === "markdown" && isEditable && tab.skillId !== null;
 
   const [editing, setEditing] = useState(false);
@@ -127,10 +127,8 @@ export const SkillResourcePanel = ({
     setEditing(false);
   };
 
-  // Autosave path for the Folio editor. The editor emits debounced markdown with
-  // skill frontmatter stripped and guide comments shown as callouts; map it back
-  // to the stored shape (frontmatter re-prepended, callouts → guide comments)
-  // before persisting. Saves are serialized: one PATCH in flight at a time, the
+  // Autosave path for the hybrid editor. The editor emits debounced markdown
+  // with the skill frontmatter stripped; re-prepend it before persisting. Saves are serialized: one PATCH in flight at a time, the
   // newest markdown coalesced behind it. Concurrent PATCHes could be applied by
   // the server out of order, silently persisting stale content even when the
   // client discards the stale response. Queues are keyed per tab — the panel
@@ -201,7 +199,7 @@ export const SkillResourcePanel = ({
     <div className="bg-background flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <InspectorTabHeader
         actions={
-          isEditable && !useFolio ? (
+          isEditable && !useHybridEditor ? (
             <div className="flex items-center gap-1">
               {editing ? (
                 <>
@@ -257,8 +255,8 @@ export const SkillResourcePanel = ({
         }
         onClose={onClose}
       />
-      {useFolio && tab.skillId !== null ? (
-        <MarkdownFolioEditor
+      {useHybridEditor && tab.skillId !== null ? (
+        <MarkdownHybridEditor
           key={tab.id}
           markdown={toEditorMarkdown(tab.content)}
           onMarkdownChange={persistMarkdown}
