@@ -2,7 +2,7 @@
 "@stll/anonymize": patch
 ---
 
-Close six detection gaps that let a value survive redaction.
+Close seven detection gaps that let a value survive redaction.
 
 - Treat a dash as a compound edge only when a word character sits on its far
   side. A closed-up attribution ("—John Smith") was read as a hyphen compound,
@@ -21,6 +21,11 @@ Close six detection gaps that let a value survive redaction.
 - Scope US state abbreviations to the resolved country set. An empty or
   region-only deny-list scope loaded the matching cities while yielding no state
   list, which removed the STATE ZIP address-tail evidence.
+- Keep both halves of an address that a barrier entity splits. A case number,
+  date, or person between the street and the city divides the seed cluster,
+  which is what keeps that entity out of the address span; each half was then
+  judged alone, and a street with no city beside it fell below the two-kind
+  evidence floor and was dropped.
 - Redact URL-shaped tokens that fail to parse. `new URL()` throws on shapes such
   as `https://internal.corp:port/path`; the replacer returned those verbatim and
   reported no redaction.
