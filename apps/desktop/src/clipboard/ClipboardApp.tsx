@@ -85,7 +85,7 @@ import {
   highlightClipboardText,
   isClipboardCopyShortcut,
   isClipboardNameInput,
-  nextClipboardIndex,
+  adjacentClipboardIndex,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
 } from "./clipboard-logic";
@@ -359,7 +359,11 @@ const ClipboardCard = ({
         onClick={() => onCopy(item)}
         onContextMenu={(event) => onOpenMenu(event, item, index)}
         onFocus={() => onSelect(index)}
-        onMouseEnter={() => onSelect(index)}
+        onPointerMove={(event) => {
+          if (event.pointerType === "mouse") {
+            onSelect(index);
+          }
+        }}
         type="button"
       >
         <div className="relative min-h-0 flex-1 self-stretch overflow-hidden p-5">
@@ -1406,9 +1410,15 @@ const ClipboardApp = () => {
   };
 
   const navigate = (direction: "next" | "previous") => {
-    selectIndex(
-      nextClipboardIndex(activeIndex, direction, filteredItems.length),
+    const nextIndex = adjacentClipboardIndex(
+      activeIndex,
+      direction,
+      filteredItems.length,
     );
+    if (nextIndex === null) {
+      return;
+    }
+    selectIndex(nextIndex);
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {

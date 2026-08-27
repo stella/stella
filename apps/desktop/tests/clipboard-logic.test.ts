@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  adjacentClipboardIndex,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
   clipboardSourceTintIndex,
@@ -9,7 +10,6 @@ import {
   highlightClipboardText,
   isClipboardCopyShortcut,
   isClipboardNameInput,
-  nextClipboardIndex,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
 } from "../src/clipboard/clipboard-logic";
@@ -142,11 +142,12 @@ test("source apps receive a stable tint from the bounded palette", () => {
 });
 
 describe("keyboard indexes", () => {
-  test("timeline navigation stops at either edge", () => {
-    expect(nextClipboardIndex(0, "next", 2)).toBe(1);
-    expect(nextClipboardIndex(1, "next", 2)).toBe(1);
-    expect(nextClipboardIndex(1, "previous", 2)).toBe(0);
-    expect(nextClipboardIndex(0, "previous", 2)).toBe(0);
+  test("timeline navigation has no target beyond either edge", () => {
+    expect(adjacentClipboardIndex(0, "next", 2)).toBe(1);
+    expect(adjacentClipboardIndex(1, "next", 2)).toBeNull();
+    expect(adjacentClipboardIndex(1, "previous", 2)).toBe(0);
+    expect(adjacentClipboardIndex(0, "previous", 2)).toBeNull();
+    expect(adjacentClipboardIndex(0, "next", 0)).toBeNull();
   });
 
   test("quick copy only accepts visible slots one through nine", () => {
