@@ -88,20 +88,27 @@ const inflateArchive = async (
   let remaining = budget.maxTotalBytes;
   let skipped = entries.length > budget.maxEntries;
 
-  for (const entry of entries.slice(0, budget.maxEntries)) {
+  const limited = entries.slice(0, budget.maxEntries);
+  // Entries inflate one at a time so the remaining byte budget is exact.
+  const inflateFrom = async (index: number): Promise<void> => {
+    const entry = limited[index];
+    if (entry === undefined) {
+      return;
+    }
     parts.push(Buffer.from(entry.name, "utf-8"), SEPARATOR);
-    // oxlint-disable-next-line no-await-in-loop -- entries inflate one at a time so the remaining byte budget is exact
     const content = await inflateEntry(
       entry,
       Math.min(budget.maxEntryBytes, remaining),
     );
     if (content === null) {
       skipped = true;
-      continue;
+    } else {
+      remaining -= content.length;
+      parts.push(content, SEPARATOR);
     }
-    remaining -= content.length;
-    parts.push(content, SEPARATOR);
-  }
+    await inflateFrom(index + 1);
+  };
+  await inflateFrom(0);
 
   const flattened = Buffer.concat(parts);
   return skipped

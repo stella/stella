@@ -527,7 +527,7 @@ describe("ooxml threats", () => {
       // Repeated so DEFLATE genuinely compresses the part.
       contentTypesXml: XXE_CONTENT_TYPES.repeat(20),
     });
-    const raw = new TextDecoder("latin1").decode(buffer);
+    const raw = Buffer.from(buffer).toString("latin1");
     expect(raw).not.toContain("<!ENTITY");
 
     const r = Result.unwrap(

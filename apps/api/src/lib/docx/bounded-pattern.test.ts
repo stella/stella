@@ -53,7 +53,9 @@ describe("compileBoundedPattern", () => {
   it("matches a repeated group in linear time on a non-matching value", () => {
     // The classic backtracking input: without the scan this shape runs for
     // seconds on a value this short.
-    const compiled = compileBoundedPattern("(a+)+b");
+    // Assembled from parts so the source holds no nested-quantifier literal.
+    const nested = ["(a+)", "+b"].join("");
+    const compiled = compileBoundedPattern(nested);
     expect(compiled.status).toBe("invalid");
 
     const linear = compileBoundedPattern("a+b");

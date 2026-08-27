@@ -1161,18 +1161,15 @@ const driveVmUntilSettled = async ({
 
     if (drained.value > 0) {
       idlePasses = 0;
-      // oxlint-disable-next-line no-await-in-loop -- VM event loop: microtask yield between VM steps while the VM still drains jobs
-      await Promise.resolve();
-      continue;
+    } else {
+      idlePasses += 1;
+      if (idlePasses >= VM_IDLE_PASSES_BEFORE_STALL) {
+        return Result.err(createStalledError());
+      }
     }
 
-    idlePasses += 1;
-    if (idlePasses >= VM_IDLE_PASSES_BEFORE_STALL) {
-      return Result.err(createStalledError());
-    }
-
-    // oxlint-disable-next-line no-await-in-loop -- VM event loop: macrotask yield keeps host timers and I/O live while the VM is idle
-    await Bun.sleep(0);
+    // oxlint-disable-next-line no-await-in-loop -- VM event loop: a microtask yield between steps while the VM drains jobs, a macrotask yield while it is idle so host timers and I/O stay live
+    await (drained.value > 0 ? Promise.resolve() : Bun.sleep(0));
   }
 };
 
