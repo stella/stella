@@ -9,9 +9,8 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type {
-  createScopedQuery} from "@/api/tests/security/test-utils";
-import {
-  type TestDatabase,
+  createScopedQuery,
+  TestDatabase,
 } from "@/api/tests/security/test-utils";
 
 let testDb: TestDatabase;
@@ -52,6 +51,7 @@ beforeAll(async () => {
   await testDb.insert(folioCollabRoomTokens).values([
     {
       expiresAt: new Date(Date.now() + 60_000),
+      generation: 0,
       id: createSafeId<"folioCollabRoomToken">(),
       permissions: { canEdit: true },
       roomId: roomA,
@@ -61,6 +61,7 @@ beforeAll(async () => {
     },
     {
       expiresAt: new Date(Date.now() + 60_000),
+      generation: 0,
       id: createSafeId<"folioCollabRoomToken">(),
       permissions: { canEdit: true },
       roomId: roomB,

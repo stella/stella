@@ -1,4 +1,5 @@
-import { and, eq } from "drizzle-orm";
+import { panic } from "better-result";
+import { and, asc, eq, inArray, lt } from "drizzle-orm";
 
 import { roles } from "@stll/permissions";
 
@@ -8,6 +9,7 @@ import { rootDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { FolioCollabTokenPermissions } from "@/api/db/schema";
 import {
+  bufferObjectCleanupIntents,
   desktopEditSessions,
   folioCollabRooms,
   folioCollabRoomTokens,
@@ -18,6 +20,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
+import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import {
@@ -27,11 +30,17 @@ import {
 } from "@/api/lib/folio-collab-room-contract";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import {
+  getS3,
+  readS3ObjectIfPresent,
+  writeS3ObjectWithRetry,
+} from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const FOLIO_COLLAB_TOKEN_PART_LENGTH = 32;
+const FOLIO_COLLAB_TOKEN_CLEANUP_BATCH_SIZE = 100;
+const FOLIO_COLLAB_SNAPSHOT_CLEANUP_GRACE_MS = 60_000;
 
 export {
   FOLIO_COLLAB_SNAPSHOT_MAX_BASE64_LENGTH,
@@ -154,6 +163,7 @@ export type AuthorizedFolioCollabRoom = {
 };
 
 type IssueFolioCollabTokenOptions = {
+  generation: number;
   permissions: FolioCollabTokenPermissions;
   roomId: SafeId<"folioCollabRoom">;
   tx: Transaction;
@@ -162,6 +172,7 @@ type IssueFolioCollabTokenOptions = {
 };
 
 export const issueFolioCollabToken = async ({
+  generation,
   permissions,
   roomId,
   tx,
@@ -169,9 +180,33 @@ export const issueFolioCollabToken = async ({
   workspaceId,
 }: IssueFolioCollabTokenOptions) => {
   const token = createFolioCollabToken();
-  const tokenExpiresAt = computeFolioCollabTokenExpiresAt();
+  const now = new Date();
+  const tokenExpiresAt = computeFolioCollabTokenExpiresAt(now);
+  const expiredTokens = await tx
+    .select({ id: folioCollabRoomTokens.id })
+    .from(folioCollabRoomTokens)
+    .where(
+      and(
+        eq(folioCollabRoomTokens.workspaceId, workspaceId),
+        lt(folioCollabRoomTokens.expiresAt, now),
+      ),
+    )
+    .orderBy(asc(folioCollabRoomTokens.expiresAt))
+    .limit(FOLIO_COLLAB_TOKEN_CLEANUP_BATCH_SIZE);
+  if (expiredTokens.length > 0) {
+    await tx.delete(folioCollabRoomTokens).where(
+      and(
+        eq(folioCollabRoomTokens.workspaceId, workspaceId),
+        inArray(
+          folioCollabRoomTokens.id,
+          expiredTokens.map(({ id }) => id),
+        ),
+      ),
+    );
+  }
   await tx.insert(folioCollabRoomTokens).values({
     expiresAt: tokenExpiresAt,
+    generation,
     id: createSafeId<"folioCollabRoomToken">(),
     permissions,
     roomId,
@@ -206,38 +241,65 @@ export const refreshFolioCollabToken = async ({
 
 export type FolioCollabRoomAuthorizationResult =
   | { status: "authorized"; value: AuthorizedFolioCollabRoom }
+  | { status: "generation-conflict" }
   | { status: "missing" }
   | { status: "token-expired" }
   | { status: "workspace-access-revoked" };
 
 type FolioCollabRoomDecisionInput = {
+  actualGeneration: number;
   expiresAt: Date;
   now: Date;
   organizationRole: string | null;
   tokenCanEdit: boolean;
+  tokenGeneration: number;
+  workspaceClientId: string | null;
   workspaceMemberId: string | null;
 };
 
+export const canUseFolioCollabWorkspace = ({
+  organizationRole,
+  workspaceClientId,
+  workspaceMemberId,
+}: Pick<
+  FolioCollabRoomDecisionInput,
+  "organizationRole" | "workspaceClientId" | "workspaceMemberId"
+>) =>
+  organizationRole !== null &&
+  isMemberRole(organizationRole) &&
+  (workspaceMemberId !== null ||
+    (workspaceClientId !== null &&
+      (organizationRole === "owner" || organizationRole === "admin")));
+
 export const decideFolioCollabRoomAuthorization = ({
+  actualGeneration,
   expiresAt,
   now,
   organizationRole,
   tokenCanEdit,
+  tokenGeneration,
+  workspaceClientId,
   workspaceMemberId,
 }: FolioCollabRoomDecisionInput):
   | { status: "authorized"; canEdit: boolean }
+  | { status: "generation-conflict" }
   | { status: "token-expired" }
   | { status: "workspace-access-revoked" } => {
   if (expiresAt.getTime() <= now.getTime()) {
     return { status: "token-expired" };
   }
 
+  if (tokenGeneration !== actualGeneration) {
+    return { status: "generation-conflict" };
+  }
+
   const role = organizationRole;
-  const canUseWorkspace =
-    role !== null &&
-    isMemberRole(role) &&
-    (role === "owner" || role === "admin" || workspaceMemberId !== null);
-  if (!canUseWorkspace) {
+  const canUseWorkspace = canUseFolioCollabWorkspace({
+    organizationRole: role,
+    workspaceClientId,
+    workspaceMemberId,
+  });
+  if (role === null || !isMemberRole(role) || !canUseWorkspace) {
     return { status: "workspace-access-revoked" };
   }
 
@@ -269,8 +331,10 @@ export const authorizeFolioCollabRoom = async ({
       permissions: folioCollabRoomTokens.permissions,
       propertyId: folioCollabRooms.propertyId,
       tokenId: folioCollabRoomTokens.id,
+      tokenGeneration: folioCollabRoomTokens.generation,
       userId: folioCollabRoomTokens.userId,
       workspaceId: folioCollabRooms.workspaceId,
+      workspaceClientId: workspaces.clientId,
       workspaceMemberId: workspaceMembers.id,
     })
     .from(folioCollabRoomTokens)
@@ -310,10 +374,13 @@ export const authorizeFolioCollabRoom = async ({
   }
 
   const decision = decideFolioCollabRoomAuthorization({
+    actualGeneration: row.generation,
     expiresAt: row.expiresAt,
     now: new Date(),
     organizationRole: row.organizationRole,
     tokenCanEdit: row.permissions.canEdit,
+    tokenGeneration: row.tokenGeneration,
+    workspaceClientId: row.workspaceClientId,
     workspaceMemberId: row.workspaceMemberId,
   });
   if (decision.status !== "authorized") {
@@ -353,6 +420,13 @@ export const touchFolioCollabRoom = async (
 ): Promise<TouchFolioCollabRoomResult> => {
   const touchedAt = new Date();
   return await value.scopedDb(async (tx) => {
+    await lockDocxEditTarget({
+      entityId: value.entityId,
+      propertyId: value.propertyId,
+      tx,
+      workspaceId: value.workspaceId,
+    });
+
     const desktopSessions = await tx
       .select({ id: desktopEditSessions.id })
       .from(desktopEditSessions)
@@ -393,25 +467,29 @@ export const touchFolioCollabRoom = async (
 
 export const loadFolioCollabSnapshot = async (
   value: AuthorizedFolioCollabRoom,
+  readObject = readS3ObjectIfPresent,
 ) => {
-  const rooms = await value.scopedDb(async (tx) =>
-    tx
-      .select({
-        generation: folioCollabRooms.generation,
-        yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
-        yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
-      })
-      .from(folioCollabRooms)
-      .where(
-        and(
-          eq(folioCollabRooms.id, value.roomId),
-          eq(folioCollabRooms.workspaceId, value.workspaceId),
-        ),
-      )
-      .limit(1),
-  );
+  const readPointer = async () => {
+    const rooms = await value.scopedDb(async (tx) =>
+      tx
+        .select({
+          generation: folioCollabRooms.generation,
+          yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+          yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
+        })
+        .from(folioCollabRooms)
+        .where(
+          and(
+            eq(folioCollabRooms.id, value.roomId),
+            eq(folioCollabRooms.workspaceId, value.workspaceId),
+          ),
+        )
+        .limit(1),
+    );
+    return rooms.at(0) ?? null;
+  };
 
-  const room = rooms.at(0);
+  let room = await readPointer();
   if (!room) {
     return null;
   }
@@ -419,13 +497,35 @@ export const loadFolioCollabSnapshot = async (
     return { generation: room.generation, snapshotBase64: null };
   }
 
-  const key = createFileKey({
-    fileId: room.yjsSnapshotFileId,
-    mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-    organizationId: value.organizationId,
-    workspaceId: value.workspaceId,
-  });
-  const buffer = await readS3ArrayBuffer(key);
+  const readSnapshot = async (fileId: SafeId<"userFile">) =>
+    await readObject(
+      createFileKey({
+        fileId,
+        mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+        organizationId: value.organizationId,
+        workspaceId: value.workspaceId,
+      }),
+      AbortSignal.timeout(10_000),
+    );
+
+  let buffer = await readSnapshot(room.yjsSnapshotFileId);
+  if (buffer === null) {
+    const previousFileId = room.yjsSnapshotFileId;
+    room = await readPointer();
+    if (!room) {
+      return null;
+    }
+    if (!room.yjsSnapshotUpdatedAt) {
+      return { generation: room.generation, snapshotBase64: null };
+    }
+    if (room.yjsSnapshotFileId === previousFileId) {
+      return panic("Current collaboration snapshot object is missing");
+    }
+    buffer = await readSnapshot(room.yjsSnapshotFileId);
+    if (buffer === null) {
+      return panic("Replacement collaboration snapshot object is missing");
+    }
+  }
 
   return {
     generation: room.generation,
@@ -562,9 +662,27 @@ export const storeFolioCollabSnapshot = async ({
       } as const;
     }
 
+    if (room.yjsSnapshotUpdatedAt !== null) {
+      const previousKey = createFileKey({
+        fileId: room.yjsSnapshotFileId,
+        mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+        organizationId: value.organizationId,
+        workspaceId: value.workspaceId,
+      });
+      // audit: skip; this is bounded storage-cleanup bookkeeping for an
+      // immutable snapshot superseded by the room update in this transaction.
+      await tx.insert(bufferObjectCleanupIntents).values({
+        id: createSafeId<"pendingUpload">(),
+        nextAttemptAt: new Date(
+          storedAt.getTime() + FOLIO_COLLAB_SNAPSHOT_CLEANUP_GRACE_MS,
+        ),
+        objectKey: previousKey,
+        organizationId: value.organizationId,
+        workspaceId: value.workspaceId,
+      });
+    }
+
     return {
-      previousSnapshotFileId:
-        room.yjsSnapshotUpdatedAt === null ? null : room.yjsSnapshotFileId,
       status: "stored",
     } as const;
   });
@@ -580,18 +698,6 @@ export const storeFolioCollabSnapshot = async ({
       workspaceId: value.workspaceId,
     });
     return result;
-  }
-
-  if (result.previousSnapshotFileId !== null) {
-    await deleteStoredRoomFile({
-      file: {
-        fileId: result.previousSnapshotFileId,
-        mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-      },
-      organizationId: value.organizationId,
-      roomId: value.roomId,
-      workspaceId: value.workspaceId,
-    });
   }
 
   return {

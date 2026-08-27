@@ -71,9 +71,12 @@ CREATE TABLE "folio_collab_room_tokens" (
   "workspace_id" uuid NOT NULL,
   "user_id" text NOT NULL,
   "token_hash" varchar(64) NOT NULL,
+  "generation" bigint NOT NULL,
   "permissions" jsonb NOT NULL,
   "expires_at" timestamptz NOT NULL,
-  "created_at" timestamptz DEFAULT now() NOT NULL
+  "created_at" timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT "folio_collab_room_tokens_generation_check"
+    CHECK ("generation" >= 0)
 );--> statement-breakpoint
 ALTER TABLE "folio_collab_room_tokens" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 
@@ -109,12 +112,12 @@ CREATE INDEX "folio_collab_rooms_workspace_property_idx"
   ON "folio_collab_rooms" ("workspace_id", "property_id");--> statement-breakpoint
 CREATE INDEX "folio_collab_rooms_workspace_activity_idx"
   ON "folio_collab_rooms" ("workspace_id", "last_activity_at");--> statement-breakpoint
-CREATE INDEX "folio_collab_room_tokens_workspace_id_idx"
-  ON "folio_collab_room_tokens" ("workspace_id");--> statement-breakpoint
+CREATE INDEX "folio_collab_room_tokens_workspace_expiry_idx"
+  ON "folio_collab_room_tokens" ("workspace_id", "expires_at");--> statement-breakpoint
 CREATE INDEX "folio_collab_room_tokens_room_id_idx"
   ON "folio_collab_room_tokens" ("room_id");--> statement-breakpoint
-CREATE INDEX "folio_collab_room_tokens_expires_at_idx"
-  ON "folio_collab_room_tokens" ("expires_at");--> statement-breakpoint
+CREATE INDEX "folio_collab_room_tokens_user_id_idx"
+  ON "folio_collab_room_tokens" ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "folio_collab_room_tokens_token_hash_uidx"
   ON "folio_collab_room_tokens" ("token_hash");--> statement-breakpoint
 

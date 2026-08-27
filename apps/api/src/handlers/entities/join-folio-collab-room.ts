@@ -12,6 +12,7 @@ import {
   desktopEditSessions,
   folioCollabRooms,
   workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -29,7 +30,10 @@ import {
 } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FOLIO_COLLAB_SEED_CLAIM_STALE_MS } from "@/api/lib/folio-collab-room-contract";
-import { issueFolioCollabToken } from "@/api/lib/folio-collab-rooms";
+import {
+  canUseFolioCollabWorkspace,
+  issueFolioCollabToken,
+} from "@/api/lib/folio-collab-rooms";
 import { isMemberRole } from "@/api/lib/member-roles";
 
 const joinFolioCollabRoomBodySchema = t.Object({
@@ -74,9 +78,17 @@ const canStillEditWorkspace = async ({
   const memberships = await tx
     .select({
       organizationRole: member.role,
+      workspaceClientId: workspaces.clientId,
       workspaceMemberId: workspaceMembers.id,
     })
     .from(member)
+    .innerJoin(
+      workspaces,
+      and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.organizationId, organizationId),
+      ),
+    )
     .leftJoin(
       workspaceMembers,
       and(
@@ -94,10 +106,11 @@ const canStillEditWorkspace = async ({
     return false;
   }
 
-  const canUseWorkspace =
-    membership.organizationRole === "owner" ||
-    membership.organizationRole === "admin" ||
-    membership.workspaceMemberId !== null;
+  const canUseWorkspace = canUseFolioCollabWorkspace({
+    organizationRole: membership.organizationRole,
+    workspaceClientId: membership.workspaceClientId,
+    workspaceMemberId: membership.workspaceMemberId,
+  });
   return (
     canUseWorkspace &&
     roles[membership.organizationRole].authorize({ entity: ["update"] }).success
@@ -415,6 +428,7 @@ export const joinFolioCollabRoomHandler = async function* ({
       }
 
       const { token, tokenExpiresAt } = await issueFolioCollabToken({
+        generation,
         permissions: { canEdit: true },
         roomId: room.id,
         tx,

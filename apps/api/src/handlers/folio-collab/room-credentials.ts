@@ -30,7 +30,7 @@ export const authorizeFolioCollabCredentials = async (
 ): Promise<
   Result<
     { room: AuthorizedFolioCollabRoom; token: string },
-    HandlerError<401 | 403 | 404>
+    HandlerError<401 | 403 | 404 | 409>
   >
 > => {
   const credentials = validatePostAuth(
@@ -50,6 +50,14 @@ export const authorizeFolioCollabCredentials = async (
       new HandlerError({
         status: 401,
         message: "Collaborative edit token expired.",
+      }),
+    );
+  }
+  if (authorized.status === "generation-conflict") {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "Collaborative room generation changed.",
       }),
     );
   }

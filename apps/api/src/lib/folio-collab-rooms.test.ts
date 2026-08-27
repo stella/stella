@@ -16,6 +16,7 @@ type QueryBuilder = {
 };
 
 let nextRows: Record<string, unknown>[] = [];
+let scopedRows: Record<string, unknown>[][] = [];
 const builder: QueryBuilder = {
   select: () => builder,
   from: () => builder,
@@ -24,10 +25,20 @@ const builder: QueryBuilder = {
   where: () => builder,
   limit: async () => nextRows,
 };
+const scopedBuilder: QueryBuilder = {
+  select: () => scopedBuilder,
+  from: () => scopedBuilder,
+  innerJoin: () => scopedBuilder,
+  leftJoin: () => scopedBuilder,
+  where: () => scopedBuilder,
+  limit: async () => scopedRows.shift() ?? [],
+};
 
 void mock.module("@/api/db/root", () => ({ rootDb: builder, rlsDb: {} }));
 void mock.module("@/api/lib/root-scoped-db", () => ({
-  createRootScopedDb: () => "SCOPED_DB_SENTINEL",
+  createRootScopedDb:
+    () => async (callback: (tx: QueryBuilder) => Promise<unknown>) =>
+      await callback(scopedBuilder),
   createRootSafeDb: () => "SAFE_DB_SENTINEL",
 }));
 
@@ -39,6 +50,7 @@ const {
   decideFolioCollabRoomAuthorization,
   FOLIO_COLLAB_TOKEN_TTL_MS,
   FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+  loadFolioCollabSnapshot,
 } = await import("@/api/lib/folio-collab-rooms");
 const { DOCX_MIME_TYPE } = await import("@/api/mime-types");
 
@@ -62,8 +74,10 @@ const validRow = (overrides: Row = {}): Row => ({
   permissions: { canEdit: true },
   propertyId,
   tokenId: toSafeId<"folioCollabRoomToken">("fcrt_1"),
+  tokenGeneration: 3,
   userId: "user_1",
   workspaceId,
+  workspaceClientId: "client_1",
   workspaceMemberId: null,
   ...overrides,
 });
@@ -95,6 +109,26 @@ describe("authorizeFolioCollabRoom", () => {
     ).toEqual({ status: "workspace-access-revoked" });
   });
 
+  test("requires personal-matter membership even for organization admins", async () => {
+    expect(
+      await authorize(
+        validRow({ workspaceClientId: null, workspaceMemberId: null }),
+      ),
+    ).toEqual({ status: "workspace-access-revoked" });
+
+    expect(
+      await authorize(
+        validRow({ workspaceClientId: null, workspaceMemberId: "wm_1" }),
+      ),
+    ).toMatchObject({ status: "authorized" });
+  });
+
+  test("rejects credentials minted for an abandoned seed generation", async () => {
+    expect(await authorize(validRow({ tokenGeneration: 2 }))).toEqual({
+      status: "generation-conflict",
+    });
+  });
+
   test("downgrades edit permission on the next authorization", async () => {
     const result = await authorize(
       validRow({ organizationRole: "intern", workspaceMemberId: "wm_1" }),
@@ -110,10 +144,13 @@ describe("authorizeFolioCollabRoom", () => {
   test("preserves an explicitly read-only token", () => {
     expect(
       decideFolioCollabRoomAuthorization({
+        actualGeneration: 3,
         expiresAt: new Date(Date.now() + FOLIO_COLLAB_TOKEN_TTL_MS),
         now: new Date(),
         organizationRole: "owner",
         tokenCanEdit: false,
+        tokenGeneration: 3,
+        workspaceClientId: "client_1",
         workspaceMemberId: null,
       }),
     ).toEqual({ status: "authorized", canEdit: false });
@@ -132,6 +169,45 @@ describe("folio collaboration room token lifetime", () => {
 });
 
 describe("folio collaboration room snapshot generation", () => {
+  test("retries the current pointer when a concurrent store removes the old object", async () => {
+    const authorized = await authorize(validRow());
+    expect(authorized.status).toBe("authorized");
+    if (authorized.status !== "authorized") {
+      return;
+    }
+
+    scopedRows = [
+      [
+        {
+          generation: 3,
+          yjsSnapshotFileId,
+          yjsSnapshotUpdatedAt: new Date(),
+        },
+      ],
+      [
+        {
+          generation: 3,
+          yjsSnapshotFileId: toSafeId<"userFile">("file_yjs_next"),
+          yjsSnapshotUpdatedAt: new Date(),
+        },
+      ],
+    ];
+    const snapshotObjects: (ArrayBuffer | null)[] = [
+      null,
+      new TextEncoder().encode("next").buffer,
+    ];
+
+    expect(
+      await loadFolioCollabSnapshot(
+        authorized.value,
+        async () => snapshotObjects.shift() ?? null,
+      ),
+    ).toEqual({
+      generation: 3,
+      snapshotBase64: "bmV4dA==",
+    });
+  });
+
   test("rejects a store from a stale generation", () => {
     expect(
       decideFolioCollabSnapshotStore({

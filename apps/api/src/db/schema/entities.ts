@@ -841,6 +841,7 @@ export const folioCollabRoomTokens = p.pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     tokenHash: p.varchar("token_hash", { length: 64 }).notNull(),
+    generation: p.bigint("generation", { mode: "number" }).notNull(),
     permissions: jsonb("permissions")
       .$type<FolioCollabTokenPermissions>()
       .notNull(),
@@ -848,9 +849,11 @@ export const folioCollabRoomTokens = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
-    p.index("folio_collab_room_tokens_workspace_id_idx").on(table.workspaceId),
+    p
+      .index("folio_collab_room_tokens_workspace_expiry_idx")
+      .on(table.workspaceId, table.expiresAt),
     p.index("folio_collab_room_tokens_room_id_idx").on(table.roomId),
-    p.index("folio_collab_room_tokens_expires_at_idx").on(table.expiresAt),
+    p.index("folio_collab_room_tokens_user_id_idx").on(table.userId),
     p
       .uniqueIndex("folio_collab_room_tokens_token_hash_uidx")
       .on(table.tokenHash),
@@ -861,6 +864,10 @@ export const folioCollabRoomTokens = p.pgTable(
         name: "folio_collab_room_tokens_room_workspace_fk",
       })
       .onDelete("cascade"),
+    p.check(
+      "folio_collab_room_tokens_generation_check",
+      sql`${table.generation} >= 0`,
+    ),
     ...wsPolicies(),
   ],
 );

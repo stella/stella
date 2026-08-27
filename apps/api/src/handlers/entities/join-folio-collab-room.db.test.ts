@@ -6,11 +6,12 @@ import {
   expect,
   test,
 } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, sql } from "drizzle-orm";
 
-import { folioCollabRooms } from "@/api/db/schema";
+import { folioCollabRooms, folioCollabRoomTokens } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { issueFolioCollabToken } from "@/api/lib/folio-collab-rooms";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -172,5 +173,48 @@ describe("folio collaboration room seed generation CAS", () => {
         seedState: "seeded",
       }),
     ).toBe("seeded");
+  });
+});
+
+describe("folio collaboration room token retention", () => {
+  test("each issuance removes at most one bounded page of expired tokens", async () => {
+    const generation = 1;
+    const roomId = await insertRoom({ generation, seedState: "empty" });
+    const expiredAt = new Date(Date.now() - 60_000);
+    await testDb.insert(folioCollabRoomTokens).values(
+      Array.from({ length: 101 }, (_, index) => ({
+        expiresAt: expiredAt,
+        generation,
+        id: createSafeId<"folioCollabRoomToken">(),
+        permissions: { canEdit: true },
+        roomId,
+        tokenHash: index.toString(16).padStart(64, "0"),
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      })),
+    );
+
+    await testDb.transaction(
+      async (tx) =>
+        await issueFolioCollabToken({
+          generation,
+          permissions: { canEdit: true },
+          roomId,
+          tx,
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        }),
+    );
+
+    const remainingExpired = await testDb
+      .select({ id: folioCollabRoomTokens.id })
+      .from(folioCollabRoomTokens)
+      .where(
+        and(
+          eq(folioCollabRoomTokens.roomId, roomId),
+          lt(folioCollabRoomTokens.expiresAt, new Date()),
+        ),
+      );
+    expect(remainingExpired).toHaveLength(1);
   });
 });
