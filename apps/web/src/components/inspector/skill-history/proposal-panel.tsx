@@ -160,6 +160,7 @@ export const ProposalActionBar = ({
   initialSummary,
   isAuthor,
   canManage,
+  isStale,
   onSummaryChange,
   onSubmitForReview,
   onDelete,

@@ -85,7 +85,7 @@ export const RevisionMenu = ({
                     minute: "2-digit",
                     month: "short",
                   }),
-                  number: revision.revisionNumber,
+                  number: String(revision.revisionNumber),
                 })}
               </span>
             </MenuItem>
