@@ -1,14 +1,42 @@
 import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 
-import { createDocx, createEmptyDocument } from "@stll/folio-core/server";
+import {
+  createDocx,
+  createEmptyDocument,
+  extractDocxText,
+} from "@stll/folio-core/server";
 
 import {
   createStellaStyleEditorPreset,
   applyStyleSetEditorSettings,
   readStyleSetEditorPreset,
+  createStyleSetEditorPreviewBuffer,
 } from "@/api/lib/style-set-editor";
-import { styleSetEditorSettingsSchema } from "@/api/lib/style-set-editor-contract";
+import {
+  styleSetEditorSettingsSchema,
+  styleSetPreviewFromEditorSchema,
+} from "@/api/lib/style-set-editor-contract";
+import type { StyleSetPreviewContent } from "@/api/lib/style-set-editor-contract";
+
+const previewContent = {
+  title: "SIMPLE AGREEMENT FOR FUTURE EQUITY",
+  introduction: "Agreement introduction.",
+  investmentHeading: "Investment",
+  investmentBody: "Investment terms.",
+  equityFinancingHeading: "Equity financing",
+  equityFinancingBody: "Equity financing terms.",
+  conversionPriceHeading: "Conversion price",
+  conversionPriceBody: "Conversion price terms.",
+  shareClassHeading: "Share class",
+  shareClassBody: "Share class terms.",
+  liquidityEventHeading: "Liquidity event",
+  liquidityEventBody: "Liquidity event terms.",
+  companyRepresentationsHeading: "Company representations",
+  companyRepresentationsBody: "Company representation terms.",
+  generalHeading: "General",
+  generalBody: "General terms.",
+} satisfies StyleSetPreviewContent;
 
 describe("style set visual editing", () => {
   test("accepts only font sizes representable as OOXML half-points", () => {
@@ -19,6 +47,32 @@ describe("style set visual editing", () => {
       Value.Check(styleSetEditorSettingsSchema, {
         ...settings,
         body: { ...settings.body, fontSizePt: 10.25 },
+      }),
+    ).toBe(false);
+  });
+
+  test("bounds preview content and requires saved style set identities", () => {
+    const { settings } = createStellaStyleEditorPreset();
+
+    expect(
+      Value.Check(styleSetPreviewFromEditorSchema, {
+        type: "stella",
+        settings,
+        content: previewContent,
+      }),
+    ).toBe(true);
+    expect(
+      Value.Check(styleSetPreviewFromEditorSchema, {
+        type: "saved",
+        settings,
+        content: previewContent,
+      }),
+    ).toBe(false);
+    expect(
+      Value.Check(styleSetPreviewFromEditorSchema, {
+        type: "stella",
+        settings,
+        content: { ...previewContent, title: "x".repeat(2001) },
       }),
     ).toBe(false);
   });
@@ -55,6 +109,39 @@ describe("style set visual editing", () => {
         (font) => font.name === "Palatino Linotype",
       ),
     ).toBe(true);
+  });
+
+  test("renders the full preview as a styled Folio document", async () => {
+    const source = createStellaStyleEditorPreset();
+    const buffer = await createStyleSetEditorPreviewBuffer({
+      source: source.preset,
+      name: "Preview",
+      settings: source.settings,
+      content: previewContent,
+    });
+    const extracted = await extractDocxText(buffer);
+
+    expect(extracted.paragraphs.map(({ text }) => text)).toEqual(
+      Object.values(previewContent),
+    );
+    expect(extracted.paragraphs.map(({ style }) => style)).toEqual([
+      "Title",
+      "BodyText",
+      "ClauseHeading1",
+      "BodyText",
+      "ClauseParagraph1",
+      "BodyText",
+      "ClauseParagraph2",
+      "BodyText",
+      "ClauseParagraph2",
+      "BodyText",
+      "ClauseParagraph1",
+      "BodyText",
+      "ClauseHeading1",
+      "BodyText",
+      "ClauseHeading1",
+      "BodyText",
+    ]);
   });
 
   test("preserves source presets and unedited style resources", () => {
@@ -169,6 +256,34 @@ describe("style set visual editing", () => {
     expect(reopened.settings.level1.hangingPt).toBe(0);
     expect(projectedFirstLevel?.pPr?.indentFirstLine).toBe(240);
     expect(projectedFirstLevel?.pPr?.hangingIndent).toBe(false);
+  });
+
+  test("projects flagged hanging indents and preserves their semantics", () => {
+    const source = createStellaStyleEditorPreset();
+    const firstLevel = source.preset.styleSet.numbering?.abstractNums
+      .find((definition) => definition.abstractNumId === 1)
+      ?.levels.find((item) => item.ilvl === 0);
+    if (!firstLevel?.pPr?.hangingIndent || !firstLevel.pPr.indentFirstLine) {
+      throw new Error("Expected a positive flagged hanging indent");
+    }
+    expect(firstLevel.pPr.indentFirstLine).toBeGreaterThan(0);
+
+    const expectedHangingPt = firstLevel.pPr.indentFirstLine / 20;
+    expect(source.settings.level1.hangingPt).toBe(expectedHangingPt);
+
+    const projected = applyStyleSetEditorSettings(
+      source.preset,
+      "Variant",
+      source.settings,
+    );
+    const projectedFirstLevel = projected.styleSet.numbering?.abstractNums
+      .find((definition) => definition.abstractNumId === 1)
+      ?.levels.find((item) => item.ilvl === 0);
+
+    expect(projectedFirstLevel?.pPr?.hangingIndent).toBe(true);
+    expect(Math.abs(projectedFirstLevel?.pPr?.indentFirstLine ?? 0)).toBe(
+      firstLevel.pPr.indentFirstLine,
+    );
   });
 
   test("reuses the editor numbering definition after numbering is toggled", () => {
