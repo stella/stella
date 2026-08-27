@@ -16,7 +16,7 @@ export type ReviewSeverityLevel =
 
 type ReviewSeverityDotProps = {
   level: ReviewSeverityLevel;
-  className?: string;
+  className?: string | undefined;
 };
 
 /** The dot that precedes a severity label, and the one place a severity level
@@ -30,7 +30,7 @@ export const ReviewSeverityDot = ({
 
 type ReviewStatusDotProps = {
   tone: ReviewStatusTone;
-  className?: string;
+  className?: string | undefined;
 };
 
 /** The same dot keyed by tone, for vocabularies that are not severities

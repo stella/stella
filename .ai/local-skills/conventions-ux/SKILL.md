@@ -64,6 +64,32 @@ Small, almost invisible touches. Linear is a good reference.
   actions, including search query refinement and prompt editing.
   Do not use generic sparkles for this function.
 
+## Review chrome
+
+Review-like surfaces (document review, playbook findings, AI
+suggestions, skill proposals, version history, comments) render
+their status badges, severity dots, accept/reject controls,
+comment cards, out-of-date notices and diff text through
+`@stll/ui/review/*`. Do not mint a local chip class map, a local
+`<ins>`/`<del>` style, or a bespoke accept/reject button pair: map
+the surface's vocabulary onto `ReviewStatusTone` /
+`ReviewSeverityLevel` with a total `as const satisfies
+Record<...>` map and pass it in.
+
+## Editors
+
+Two editors, two jobs, and they never swap:
+
+- **Document model → Folio.** Anything that is a document (`.docx`,
+  drafts, templates, redlines, tracked changes) is edited in Folio.
+- **Source text → the hybrid markdown editor.** Skills, prompts and
+  knowledge files are plain source; they are edited in the hybrid
+  markdown editor.
+
+Never route one through the other: a document forced through the
+markdown editor loses its formatting model, and source text forced
+through Folio gains one it does not have.
+
 ## Reduce Visual Noise
 
 - Secondary information (counts, metadata) subtle by default.
