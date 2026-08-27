@@ -268,6 +268,8 @@ run_step "Desktop release promotion self-test" bash \
   scripts/promote-desktop-release.test.sh
 run_step "Web container platform self-test" bun test \
   scripts/check-web-docker-platform.test.ts
+run_step "Published export artifact guard self-test" bun test \
+  scripts/published-export-guards.test.ts
 run_step "API release contract self-test" bun test \
   --preload ./apps/api/src/tests/setup-env.ts \
   scripts/check-api-cli-contract.test.ts \

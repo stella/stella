@@ -141,9 +141,9 @@ jobs:
           package_checks_required=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              .github/workflows/ci.yml)
+              .github/workflows/ci.yml|.github/actions/setup-playwright/action.yml)
                 # This workflow owns package-check scheduling and the
-                # code-quality job itself, so its changes must exercise both.
+                # browser test setup, so either change must exercise both.
                 package_checks_required=true
                 ;;
               .github/*|.provenance.yml|provenance/*)
@@ -878,6 +878,10 @@ jobs:
       # Its unit coverage is what keeps a malformed source map — a wildcard, a
       # conditions object, a target outside src, a missing root — out of a
       # publishable package.
+      - name: Test published export artifact guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/published-export-guards.test.ts
+
       - name: Test publish manifest transformation
         # scripts/publish-manifest.ts imports better-result, so this needs the
         # install above; a workflow-only PR skips both.
@@ -1783,11 +1787,16 @@ jobs:
   # tolerance can stay tight:
   # baselines and comparison render on the same image.
   marketing-screenshots:
-    needs: ci-plan
+    # A bounded poll can expire while web-build is still waiting for a runner;
+    # declare the producer so artifact consumers start only after it succeeds.
+    needs: [ci-plan, web-build]
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
-       || github.event_name == 'workflow_dispatch')
+      always()
+      && (needs.ci-plan.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.marketing_screenshots_required == 'true'
+      && (needs.ci-plan.outputs.web_build_required != 'true'
+          || needs.web-build.result == 'success')
     uses: ./.github/workflows/marketing-screenshots.yml
     permissions:
       actions: read
