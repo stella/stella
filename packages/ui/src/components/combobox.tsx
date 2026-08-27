@@ -6,6 +6,8 @@ import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
 import { ChevronsUpDownIcon, XIcon } from "lucide-react";
 
 import { containedHandler } from "../hooks/use-contained-handler";
+import { CONTROL_SIZE } from "../lib/control-size";
+import type { ControlSize } from "../lib/control-size";
 import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
 import { Input } from "./input";
@@ -39,16 +41,18 @@ const ComboboxChipsInput = ({
   size,
   ...props
 }: Omit<ComboboxPrimitive.Input.Props, "size"> & {
-  size?: "sm" | "default" | "lg" | number;
+  size?: ControlSize | number;
   ref?: React.Ref<HTMLInputElement>;
 }) => {
-  const sizeValue = size ?? "default";
+  const sizeValue = size ?? CONTROL_SIZE.default;
+  const controlSize =
+    typeof sizeValue === "number" ? CONTROL_SIZE.default : sizeValue;
 
   return (
     <ComboboxPrimitive.Input
       className={cn(
         "min-w-12 flex-1 text-base outline-none sm:text-sm [[data-slot=combobox-chip]+&]:ps-0.5",
-        sizeValue === "sm" ? "ps-1.5" : "ps-2",
+        COMBOBOX_CHIPS_INPUT_SIZE_CLASS_NAMES[controlSize],
         className,
       )}
       data-size={typeof sizeValue === "string" ? sizeValue : undefined}
@@ -70,17 +74,22 @@ const ComboboxInput = ({
   showTrigger?: boolean;
   showClear?: boolean;
   startAddon?: React.ReactNode;
-  size?: "sm" | "default" | "lg" | number;
+  size?: ControlSize | number;
   ref?: React.Ref<HTMLInputElement>;
 }) => {
-  const sizeValue = size ?? "default";
+  const sizeValue = size ?? CONTROL_SIZE.default;
+  const controlSize =
+    typeof sizeValue === "number" ? CONTROL_SIZE.default : sizeValue;
 
   return (
     <ComboboxPrimitive.InputGroup className="text-foreground relative w-full not-has-[>*.w-full]:w-fit has-disabled:opacity-64">
       {Boolean(startAddon) && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 start-px z-10 flex items-center ps-[calc(--spacing(3)-1px)] opacity-80 has-[+[data-size=sm]]:ps-[calc(--spacing(2.5)-1px)] [&_svg]:-mx-0.5 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4"
+          className={cn(
+            "pointer-events-none absolute inset-y-0 start-px z-10 flex items-center opacity-80 [&_svg]:-mx-0.5 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
+            COMBOBOX_START_ADDON_SIZE_CLASS_NAMES[controlSize],
+          )}
           data-slot="combobox-start-addon"
         >
           {startAddon}
@@ -89,10 +98,8 @@ const ComboboxInput = ({
       <ComboboxPrimitive.Input
         className={cn(
           Boolean(startAddon) &&
-            "*:data-[slot=combobox-input]:ps-[calc(--spacing(8.5)-1px)] data-[size=sm]:*:data-[slot=combobox-input]:ps-[calc(--spacing(7.5)-1px)] sm:*:data-[slot=combobox-input]:ps-[calc(--spacing(8)-1px)] sm:data-[size=sm]:*:data-[slot=combobox-input]:ps-[calc(--spacing(7)-1px)]",
-          sizeValue === "sm"
-            ? "has-[+[data-slot=combobox-trigger],+[data-slot=combobox-clear]]:*:data-[slot=combobox-input]:pe-6.5"
-            : "has-[+[data-slot=combobox-trigger],+[data-slot=combobox-clear]]:*:data-[slot=combobox-input]:pe-7",
+            COMBOBOX_INPUT_START_ADDON_SIZE_CLASS_NAMES[controlSize],
+          COMBOBOX_INPUT_SIZE_CLASS_NAMES[controlSize],
           className,
         )}
         data-slot="combobox-input"
@@ -109,7 +116,7 @@ const ComboboxInput = ({
         <ComboboxTrigger
           className={cn(
             "absolute top-1/2 inline-flex size-8 shrink-0 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md border border-transparent opacity-80 transition-opacity outline-none hover:opacity-100 has-[+[data-slot=combobox-clear]]:hidden sm:size-7 pointer-coarse:after:absolute pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
-            sizeValue === "sm" ? "end-0" : "end-0.5",
+            COMBOBOX_ACTION_SIZE_CLASS_NAMES[controlSize],
           )}
         >
           <ChevronsUpDownIcon />
@@ -119,7 +126,7 @@ const ComboboxInput = ({
         <ComboboxClear
           className={cn(
             "absolute top-1/2 inline-flex size-8 shrink-0 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md border border-transparent opacity-80 transition-opacity outline-none hover:opacity-100 has-[+[data-slot=combobox-clear]]:hidden sm:size-7 pointer-coarse:after:absolute pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
-            sizeValue === "sm" ? "end-0" : "end-0.5",
+            COMBOBOX_ACTION_SIZE_CLASS_NAMES[controlSize],
           )}
         >
           <XIcon />
@@ -128,6 +135,42 @@ const ComboboxInput = ({
     </ComboboxPrimitive.InputGroup>
   );
 };
+
+const COMBOBOX_CHIPS_INPUT_SIZE_CLASS_NAMES = {
+  [CONTROL_SIZE.sm]: "ps-1.5",
+  [CONTROL_SIZE.default]: "ps-2",
+  [CONTROL_SIZE.lg]: "ps-2",
+} as const satisfies Record<ControlSize, string>;
+
+const COMBOBOX_START_ADDON_SIZE_CLASS_NAMES = {
+  [CONTROL_SIZE.sm]: "ps-[calc(--spacing(2.5)-1px)]",
+  [CONTROL_SIZE.default]: "ps-[calc(--spacing(3)-1px)]",
+  [CONTROL_SIZE.lg]: "ps-[calc(--spacing(3)-1px)]",
+} as const satisfies Record<ControlSize, string>;
+
+const COMBOBOX_INPUT_START_ADDON_SIZE_CLASS_NAMES = {
+  [CONTROL_SIZE.sm]:
+    "*:data-[slot=combobox-input]:ps-[calc(--spacing(7.5)-1px)] sm:*:data-[slot=combobox-input]:ps-[calc(--spacing(7)-1px)]",
+  [CONTROL_SIZE.default]:
+    "*:data-[slot=combobox-input]:ps-[calc(--spacing(8.5)-1px)] sm:*:data-[slot=combobox-input]:ps-[calc(--spacing(8)-1px)]",
+  [CONTROL_SIZE.lg]:
+    "*:data-[slot=combobox-input]:ps-[calc(--spacing(8.5)-1px)] sm:*:data-[slot=combobox-input]:ps-[calc(--spacing(8)-1px)]",
+} as const satisfies Record<ControlSize, string>;
+
+const COMBOBOX_INPUT_SIZE_CLASS_NAMES = {
+  [CONTROL_SIZE.sm]:
+    "has-[+[data-slot=combobox-trigger],+[data-slot=combobox-clear]]:*:data-[slot=combobox-input]:pe-6.5",
+  [CONTROL_SIZE.default]:
+    "has-[+[data-slot=combobox-trigger],+[data-slot=combobox-clear]]:*:data-[slot=combobox-input]:pe-7",
+  [CONTROL_SIZE.lg]:
+    "has-[+[data-slot=combobox-trigger],+[data-slot=combobox-clear]]:*:data-[slot=combobox-input]:pe-7",
+} as const satisfies Record<ControlSize, string>;
+
+const COMBOBOX_ACTION_SIZE_CLASS_NAMES = {
+  [CONTROL_SIZE.sm]: "end-0",
+  [CONTROL_SIZE.default]: "end-0.5",
+  [CONTROL_SIZE.lg]: "end-0.5",
+} as const satisfies Record<ControlSize, string>;
 
 const ComboboxTrigger = ({
   className,

@@ -6,21 +6,24 @@ import { Field as FieldPrimitive } from "@base-ui/react/field";
 import { mergeProps } from "@base-ui/react/merge-props";
 
 import { useContentDir } from "../hooks/use-content-dir";
+import { CONTROL_SIZE } from "../lib/control-size";
+import type { ControlSize } from "../lib/control-size";
 import { cn } from "../lib/utils";
 
 type TextareaProps = React.ComponentProps<"textarea"> & {
-  size?: "sm" | "default" | "lg" | number;
+  size?: ControlSize | number;
   unstyled?: boolean;
 };
 
 const Textarea = ({
   className,
-  size = "default",
+  size = CONTROL_SIZE.default,
   unstyled = false,
   dir,
   onChange,
   ...props
 }: TextareaProps) => {
+  const controlSize = typeof size === "number" ? CONTROL_SIZE.default : size;
   const contentDir = useContentDir({
     dir,
     value: props.value,
@@ -47,10 +50,7 @@ const Textarea = ({
           <textarea
             className={cn(
               "field-sizing-content min-h-17.5 w-full rounded-[inherit] px-[calc(--spacing(3)-1px)] py-[calc(--spacing(1.5)-1px)] outline-none max-sm:min-h-20.5",
-              size === "sm" &&
-                "min-h-16.5 px-[calc(--spacing(2.5)-1px)] py-[calc(--spacing(1)-1px)] max-sm:min-h-19.5",
-              size === "lg" &&
-                "min-h-18.5 py-[calc(--spacing(2)-1px)] max-sm:min-h-21.5",
+              TEXTAREA_SIZE_CLASS_NAMES[controlSize],
             )}
             data-slot="textarea"
             {...mergeProps(defaultProps, props, { onChange: handleChange })}
@@ -61,5 +61,12 @@ const Textarea = ({
     </span>
   );
 };
+
+const TEXTAREA_SIZE_CLASS_NAMES = {
+  [CONTROL_SIZE.sm]:
+    "min-h-16.5 px-[calc(--spacing(2.5)-1px)] py-[calc(--spacing(1)-1px)] max-sm:min-h-19.5",
+  [CONTROL_SIZE.default]: undefined,
+  [CONTROL_SIZE.lg]: "min-h-18.5 py-[calc(--spacing(2)-1px)] max-sm:min-h-21.5",
+} as const satisfies Record<ControlSize, string | undefined>;
 
 export { Textarea, type TextareaProps };

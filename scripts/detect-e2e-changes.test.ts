@@ -582,7 +582,13 @@ describe("detect-e2e-changes", () => {
     ).toHaveLength(4);
     const ciChecks = workflowJob("ci-checks");
     expect(ciChecks).toContain("Check UI browser test scope");
+    expect(ciChecks).toContain("apps/web/src/routes/dev");
     expect(ciChecks).toContain("Test UI browser interactions");
+    expect(ciChecks).toContain("Test UI playground visuals");
+    expect(ciChecks).toContain("bun --filter @stll/web test:e2e:ui-playground");
+    expect(workflowStep(ciChecks, "Install UI browser test runtime")).toContain(
+      "dependency-mode: full",
+    );
     expect(marketingCapture).toContain(
       [
         "uses: ./.github/actions/setup-playwright",

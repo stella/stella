@@ -555,8 +555,22 @@ jobs:
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
             .github/actions/setup-playwright/action.yml \
             .github/workflows/ci.yml \
+            apps/web/e2e/playwright.ui-playground.config.ts \
+            apps/web/e2e/ui-playground \
+            apps/web/package.json \
+            apps/web/public/prepaint-init.js \
+            apps/web/src/app-providers.tsx \
+            apps/web/src/components/theme-provider.tsx \
+            apps/web/src/fonts.css \
+            apps/web/src/i18n \
+            apps/web/src/routes/__root.tsx \
+            apps/web/src/routes/dev.tsx \
+            apps/web/src/routes/dev \
+            apps/web/src/styles/app.css \
+            apps/web/vite.config.ts \
             bun.lock \
             package.json \
+            packages/locales \
             packages/ui; then
             echo "required=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -825,10 +839,16 @@ jobs:
       - name: Install UI browser test runtime
         if: steps.ui-browser-tests.outputs.required == 'true'
         uses: ./.github/actions/setup-playwright
+        with:
+          dependency-mode: full
 
       - name: Test UI browser interactions
         if: steps.ui-browser-tests.outputs.required == 'true'
         run: bun --filter @stll/ui test:browser
+
+      - name: Test UI playground visuals
+        if: steps.ui-browser-tests.outputs.required == 'true'
+        run: bun --filter @stll/web test:e2e:ui-playground
 
       - name: Property-test convention guard
         run: |
