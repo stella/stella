@@ -467,6 +467,7 @@ describe("workspace INSERT — wrong scope", () => {
           id: testId(),
           workspaceId: ids.wsB1,
           entityId: ids.entityB1,
+          versionNumber: 2,
         }),
     },
     {
