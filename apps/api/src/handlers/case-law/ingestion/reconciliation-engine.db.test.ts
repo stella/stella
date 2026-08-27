@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, mock, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -190,6 +190,23 @@ const unwalkableSliceStub: SourceReconciliation = {
       });
     }
     return await Promise.resolve({ items: [], totalPages: 1 });
+  },
+};
+
+/**
+ * The same publisher, with a build that fails the way a database driver does:
+ * the whole failed statement in the outer message and the SQLSTATE one
+ * `cause` hop down, which is the shape a query wrapper produces.
+ */
+const drivenFailureStub: SourceReconciliation = {
+  ...stubReconciliation,
+  buildDecision: async () => {
+    const cause = Object.assign(new Error('column "reason" does not exist'), {
+      errno: "42703",
+    });
+    return await Promise.reject(
+      new Error(`Failed query: select ${"a, ".repeat(300)}from x`, { cause }),
+    );
   },
 };
 
@@ -1387,4 +1404,46 @@ test("the docket half of the identity index applies the same filter", async () =
     summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, parked: 1 },
   });
   expect(builds).toHaveLength(1);
+});
+
+test("a failed item build reports the SQLSTATE without logging any message text", async () => {
+  // Two halves of one invariant. Parking stores the tag alone, so this log
+  // line is the only record of why a listed decision could not be built, and
+  // a tag reading "DrizzleQueryError" is nothing an operator can act on: the
+  // SQLSTATE sits one `cause` hop down and has to be reported. But the
+  // logger's sanitizer is a key denylist, so any message text this sink
+  // emitted would reach telemetry verbatim, and a driver message quotes the
+  // statement and can quote the row that failed. Fixed vocabulary only.
+  const sourceId = await seedSource();
+  const loggerModule = await import("@/api/lib/observability/logger");
+  const warned: Record<string, unknown>[] = [];
+  // Spread both levels rather than redeclaring them: the module also exports
+  // `sanitizeLogAttributes`, and a mock that drops it is exactly what this
+  // suite's sibling guard forbids.
+  await mock.module("@/api/lib/observability/logger", () => ({
+    ...loggerModule,
+    logger: {
+      ...loggerModule.logger,
+      warn: (_event: string, attributes: Record<string, unknown>) => {
+        warned.push(attributes);
+      },
+    },
+  }));
+
+  try {
+    await runUnit(sourceId, drivenFailureStub);
+  } finally {
+    await mock.module("@/api/lib/observability/logger", () => loggerModule);
+  }
+
+  const failure = warned.find(
+    (attributes) => attributes["identityKey"] !== undefined,
+  );
+  expect(failure?.["error.cause.pg_code"]).toBe("42703");
+  // Over every value, not a named key: the guard has to hold for a field
+  // added later, and the point is that no attribute carries message text.
+  for (const value of Object.values(failure ?? {})) {
+    expect(String(value)).not.toContain("Failed query");
+    expect(String(value)).not.toContain("does not exist");
+  }
 });
