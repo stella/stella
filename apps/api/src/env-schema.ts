@@ -13,13 +13,6 @@ const featureFlagSchema = v.optional(
   "false",
 );
 
-/** Microsoft's shared authorization endpoints, which are not a directory. */
-const MICROSOFT_AUTH_MULTI_TENANT_IDS = new Set([
-  "common",
-  "consumers",
-  "organizations",
-]);
-
 type EmailProviderInput = {
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
   SMTP_HOST?: string | undefined;
@@ -537,17 +530,6 @@ export const envApiInvariantViolation = ({
     // the private-network forms that rework needed.
     if (!isSecureGotenbergUrl(GOTENBERG_URL)) {
       return "GOTENBERG_URL must use HTTPS unless it targets a loopback address or a private deployment network.";
-    }
-    // Microsoft's shared endpoints admit any account, personal ones included,
-    // so the tenant stops being an identity boundary. Name the directory.
-    if (
-      (MICROSOFT_AUTH_CLIENT_ID || MICROSOFT_AUTH_CLIENT_SECRET) &&
-      MICROSOFT_AUTH_TENANT_ID !== undefined &&
-      MICROSOFT_AUTH_MULTI_TENANT_IDS.has(
-        MICROSOFT_AUTH_TENANT_ID.toLowerCase(),
-      )
-    ) {
-      return `MICROSOFT_AUTH_TENANT_ID must name one directory, not ${[...MICROSOFT_AUTH_MULTI_TENANT_IDS].join(" / ")}.`;
     }
   }
   if (E2E_DISABLE_AUTH_RATE_LIMIT && nodeEnv !== "development") {
