@@ -311,7 +311,12 @@ fn should_reject_entity(
       return Ok(true);
     }
   }
+  // The boilerplate heuristic reads line shape, and contracts are routinely
+  // set in all caps, so a party named in an all-caps clause looks like a
+  // heading. A legal-form suffix is positive evidence of a company and
+  // outweighs that, as it already does for the length cap.
   if entity.label == ORGANIZATION_LABEL
+    && entity.source != DetectionSource::LegalForm
     && is_all_caps_candidate(text)
     && is_all_caps_boilerplate_line(document, offsets, entity)?
   {
@@ -2164,6 +2169,32 @@ mod tests {
     .unwrap();
 
     assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn keeps_legal_form_organizations_on_all_caps_lines() {
+    // Contracts are routinely set in all caps. The boilerplate heuristic
+    // reads the surrounding line, so a party named in an all-caps clause
+    // looks like a heading; a legal-form suffix is positive evidence that it
+    // is a company, and must survive the line-shape veto.
+    let text = "THIS AGREEMENT IS WITH ACME LIMITED IN PRAGUE.\n";
+    let start = text.find("ACME LIMITED").unwrap();
+    let end = start.saturating_add("ACME LIMITED".len());
+    let entities = filter_entity_false_positives(
+      vec![PipelineEntity::detected(
+        u32::try_from(start).unwrap(),
+        u32::try_from(end).unwrap(),
+        ORGANIZATION_LABEL,
+        "ACME LIMITED",
+        0.8,
+        DetectionSource::LegalForm,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
   }
 
   #[test]
