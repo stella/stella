@@ -2702,8 +2702,6 @@ type Messages = {
   };
   "markdownEditor": {
     "rawLabel": "Markdown source";
-    "showFormatted": "Formatted";
-    "showRaw": "Show raw";
   };
   "memory": {
     "addPlaceholder": "Add a note for the assistant to remember…";

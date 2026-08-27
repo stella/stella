@@ -66,7 +66,7 @@ import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provide
 import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import { SuggestionsFacet } from "@/components/inspector/suggestions-facet";
 import { VersionsFacet } from "@/components/inspector/versions-facet";
-import { MarkdownFolioEditor } from "@/components/markdown/markdown-folio-editor";
+import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
 import {
   PeekPdfControls,
   PeekPdfViewer,
@@ -921,11 +921,10 @@ export const FileTabPanel = ({
           </div>
         );
       }
-      // Unified on Folio: workspace .md edits in the same WYSIWYG editor as
-      // skills (with a "Show raw" escape hatch). Edits feed the draft; the
-      // existing Save button uploads a new file version.
+      // Workspace .md edits use the same hybrid editor as skills. Edits feed
+      // the draft; the existing Save button uploads a new file version.
       return (
-        <MarkdownFolioEditor
+        <MarkdownHybridEditor
           key={tab.id}
           markdown={markdownText}
           onMarkdownChange={setMarkdownDraft}

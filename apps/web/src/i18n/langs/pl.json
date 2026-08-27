@@ -2698,9 +2698,7 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "Źródło Markdown",
-    "showFormatted": "Sformatowany tekst",
-    "showRaw": "Pokaż źródło"
+    "rawLabel": "Źródło Markdown"
   },
   "memory": {
     "addPlaceholder": "Dodaj notatkę, którą asystent ma zapamiętać…",

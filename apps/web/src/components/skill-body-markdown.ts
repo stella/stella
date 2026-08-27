@@ -1,25 +1,8 @@
-// Boundary transforms between a stored skill markdown file and what the Folio
-// WYSIWYG editor edits. Two concerns the editor must not show as raw text:
-//
-//  1. YAML frontmatter (SKILL.md only) — that's metadata, edited via the form
-//     fields. It's split off before editing and re-prepended verbatim on save.
-//  2. `<!-- guide: … -->` coaching notes — invisible HTML comments in a WYSIWYG
-//     view. They become visible blockquote callouts (`> 💡 …`) the user reads
-//     and deletes in place, and serialize back to comments on save so the
-//     coaching counter keeps tracking what's left.
-//
-// The guide⇄callout transform is a reversible string mapping around the Folio
-// bridge (fromMarkdown/toMarkdown), so the ported exporter stays untouched.
-
-// Leads a guide callout's blockquote. Distinguishes coaching notes from the
-// `> e.g. …` example blockquotes that blueprints also carry.
-const GUIDE_CALLOUT_LEAD = "💡 ";
-// The captured text is whitespace-normalised by the caller, so the pattern
-// keeps no `\s*` around the lazy capture (that ambiguity is backtracking-prone).
-const GUIDE_COMMENT_PATTERN = /<!--\s*guide:(?<text>[\s\S]*?)-->/gu;
-// One callout line: `> 💡 text`. Matched per line (toMarkdown renders a
-// single-line blockquote for a single-line quote paragraph).
-const GUIDE_CALLOUT_PATTERN = /^> 💡 (?<text>.*)$/gmu;
+// Boundary between a stored SKILL.md and what the markdown editor edits. The
+// YAML frontmatter is metadata edited via the form fields, so it is split off
+// before editing and re-prepended verbatim on save. Everything else, including
+// `<!-- guide: … -->` coaching comments, is edited as-is: the hybrid editor
+// shows HTML comments in place, so no lossy rewrite is needed.
 
 type SplitBody = {
   /** Frontmatter block including the closing `---` and trailing newline, or "". */
@@ -30,8 +13,7 @@ type SplitBody = {
 
 export const splitFrontmatter = (raw: string): SplitBody => {
   // Normalize CRLF so the fence detection works for files authored on Windows.
-  // The editor and exporter both emit LF, so the normalized form is also what
-  // gets stored back on save.
+  // The editor emits LF, so the normalized form is also what gets stored back.
   const lf = raw.replaceAll("\r\n", "\n");
   if (!lf.startsWith("---\n")) {
     return { frontmatter: "", content: lf };
@@ -51,43 +33,14 @@ export const splitFrontmatter = (raw: string): SplitBody => {
   return { frontmatter: lf.slice(0, cut), content: lf.slice(cut) };
 };
 
-const guidesToCallouts = (md: string): string =>
-  md.replace(GUIDE_COMMENT_PATTERN, (_match, text: string) => {
-    const oneLine = text.replace(/\s+/gu, " ").trim();
-    return `> ${GUIDE_CALLOUT_LEAD}${oneLine}`;
-  });
-
-const calloutsToGuides = (md: string): string =>
-  md.replace(
-    GUIDE_CALLOUT_PATTERN,
-    (_match, text: string) => `<!-- guide: ${text.trim()} -->`,
-  );
-
-// The live editor materialises the Heading style's bold onto the heading runs,
-// so toMarkdown faithfully emits `# **Title**`. An ATX heading is already
-// emphasised, so the inner bold is redundant noise in the stored body. Strip it
-// only when it wraps the whole heading (a partial emphasis like `# Foo **bar**`
-// is intentional and left alone).
-const HEADING_WHOLE_BOLD_PATTERN =
-  /^(?<hashes>#{1,6}) \*\*(?<title>.+?)\*\*$/gmu;
-const stripRedundantHeadingBold = (md: string): string =>
-  md.replace(HEADING_WHOLE_BOLD_PATTERN, "$<hashes> $<title>");
-
-/** Stored markdown → what the editor opens: frontmatter stripped, guides shown. */
+/** Stored markdown → what the editor opens: frontmatter stripped. */
 export const toEditorMarkdown = (raw: string): string =>
-  guidesToCallouts(splitFrontmatter(raw).content);
+  splitFrontmatter(raw).content;
 
 /**
- * Editor markdown → stored markdown: callouts back to guide comments, original
- * frontmatter re-prepended. The frontmatter is preserved verbatim because the
- * authoritative metadata lives in DB columns (edited via the form fields), not
- * in the body.
+ * Editor markdown → stored markdown: original frontmatter re-prepended. It is
+ * preserved verbatim because the authoritative metadata lives in DB columns
+ * (edited via the form fields), not in the body.
  */
-export const toStoredMarkdown = (
-  editorMarkdown: string,
-  raw: string,
-): string => {
-  const { frontmatter } = splitFrontmatter(raw);
-  const body = stripRedundantHeadingBold(calloutsToGuides(editorMarkdown));
-  return `${frontmatter}${body}`;
-};
+export const toStoredMarkdown = (editorMarkdown: string, raw: string): string =>
+  `${splitFrontmatter(raw).frontmatter}${editorMarkdown}`;

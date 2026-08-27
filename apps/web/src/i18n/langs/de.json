@@ -2698,9 +2698,7 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "Markdown-Quelltext",
-    "showFormatted": "Formatiert",
-    "showRaw": "Quelltext anzeigen"
+    "rawLabel": "Markdown-Quelltext"
   },
   "memory": {
     "addPlaceholder": "Fügen Sie eine Notiz hinzu, die sich der Assistent merken soll…",

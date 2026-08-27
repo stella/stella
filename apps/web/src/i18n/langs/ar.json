@@ -2698,9 +2698,7 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "مصدر Markdown",
-    "showFormatted": "منسَّق",
-    "showRaw": "عرض المصدر الخام"
+    "rawLabel": "مصدر Markdown"
   },
   "memory": {
     "addPlaceholder": "أضف ملاحظة ليتذكرها المساعد…",

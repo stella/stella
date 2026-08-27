@@ -2698,9 +2698,7 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "Código fuente Markdown",
-    "showFormatted": "Con formato",
-    "showRaw": "Mostrar código fuente"
+    "rawLabel": "Código fuente Markdown"
   },
   "memory": {
     "addPlaceholder": "Añada una nota para que el asistente la recuerde…",

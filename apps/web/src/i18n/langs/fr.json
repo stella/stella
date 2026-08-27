@@ -2698,9 +2698,7 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "Source Markdown",
-    "showFormatted": "Mis en forme",
-    "showRaw": "Afficher le code source"
+    "rawLabel": "Source Markdown"
   },
   "memory": {
     "addPlaceholder": "Ajoutez une note dont l'assistant se souviendra…",

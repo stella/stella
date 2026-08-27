@@ -2698,9 +2698,7 @@
     }
   },
   "markdownEditor": {
-    "rawLabel": "Markdown avotteksts",
-    "showFormatted": "Formatēts",
-    "showRaw": "Rādīt avottekstu"
+    "rawLabel": "Markdown avotteksts"
   },
   "memory": {
     "addPlaceholder": "Pievienojiet piezīmi, kas asistentam jāatceras…",
