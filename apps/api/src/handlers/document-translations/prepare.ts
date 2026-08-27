@@ -8,8 +8,9 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
+import { readDocxDeclaredSourceLanguage } from "@/api/lib/document-translation/docx-language";
 import { inspectDocxComments } from "@/api/lib/document-translation/docx-review";
-import { detectDocumentTranslationSourceLanguage } from "@/api/lib/document-translation/source-language";
+import { resolveDocumentTranslationSourceLanguage } from "@/api/lib/document-translation/source-language";
 import { extractText } from "@/api/lib/docx/extract-text";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-docx-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -47,16 +48,30 @@ const prepareDocumentTranslation = createSafeHandler<
 
   const inspection = await Result.tryPromise({
     try: async () => {
-      const [comments, extracted] = await Promise.all([
+      const [comments, extracted, declaredLanguage] = await Promise.all([
         inspectDocxComments(loaded.buffer),
         extractText(new Uint8Array(loaded.buffer)),
+        Result.tryPromise({
+          try: async () => await readDocxDeclaredSourceLanguage(loaded.buffer),
+          catch: (cause) => cause,
+        }),
       ]);
+      if (Result.isError(declaredLanguage)) {
+        captureError(declaredLanguage.error, {
+          source: "document-translation-docx-language",
+        });
+      }
       const text = extracted.paragraphs
         .map((paragraph) => paragraph.text)
         .join("\n");
       return {
         hasComments: comments.hasComments,
-        sourceLanguage: detectDocumentTranslationSourceLanguage(text),
+        sourceLanguage: resolveDocumentTranslationSourceLanguage({
+          declaredLanguage: Result.isError(declaredLanguage)
+            ? null
+            : declaredLanguage.value,
+          text,
+        }),
       };
     },
     catch: (cause) => cause,

@@ -108,6 +108,46 @@ describe("TanStack AI structured output generation", () => {
     expect(jsonSchema.properties).toHaveProperty("answer");
   });
 
+  test("keeps trim normalization outside the provider JSON schema", () => {
+    const rawSchema = v.strictObject({
+      answer: v.pipe(v.string(), v.trim(), v.minLength(1)),
+    });
+    const tanStackSchema = toTanStackValibotSchema(rawSchema);
+
+    const jsonSchema = realTanStackAI.convertSchemaToJsonSchema(tanStackSchema);
+
+    if (!jsonSchema) {
+      throw new TypeError("Expected TanStack to convert the schema.");
+    }
+    expect(jsonSchema.properties?.["answer"]).toEqual({
+      minLength: 1,
+      type: "string",
+    });
+    expect(v.parse(rawSchema, { answer: "  normalized  " })).toEqual({
+      answer: "normalized",
+    });
+  });
+
+  test("still rejects unsupported output transformations", () => {
+    const tanStackSchema = toTanStackValibotSchema(
+      v.pipe(v.string(), v.toLowerCase()),
+    );
+
+    expect(() =>
+      realTanStackAI.convertSchemaToJsonSchema(tanStackSchema),
+    ).toThrow('The "to_lower_case" action cannot be converted to JSON Schema.');
+  });
+
+  test("rejects unknown JSON Schema targets instead of silently changing drafts", () => {
+    const tanStackSchema = toTanStackValibotSchema(v.string());
+
+    expect(() =>
+      tanStackSchema["~standard"].jsonSchema.input({
+        target: "future-draft",
+      }),
+    ).toThrow("Unsupported JSON Schema target: future-draft");
+  });
+
   test("projects plain JSON schemas even when they contain a standard-looking key", () => {
     const schema = projectSchemaInputJsonSchema(
       {

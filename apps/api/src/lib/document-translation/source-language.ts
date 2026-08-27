@@ -68,3 +68,18 @@ export const detectDocumentTranslationSourceLanguage = (
     ? { type: "ambiguous", candidates }
     : { type: "unknown" };
 };
+
+export const resolveDocumentTranslationSourceLanguage = ({
+  declaredLanguage,
+  text,
+}: {
+  declaredLanguage: DocumentTranslationSourceLanguageCode | null;
+  text: string;
+}): DocumentTranslationSourceLanguageDetection =>
+  declaredLanguage === null
+    ? detectDocumentTranslationSourceLanguage(text)
+    : {
+        type: "detected",
+        language: declaredLanguage,
+        confidence: "high",
+      };

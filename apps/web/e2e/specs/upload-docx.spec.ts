@@ -139,6 +139,7 @@ test.describe("DOCX upload + inspector", () => {
     });
     await expect(translateAction).toBeVisible();
     await translateAction.click();
+    await expect(translateAction).toBeHidden();
     const translationDialog = page.getByRole("dialog", {
       name: "Translate document",
     });
@@ -148,8 +149,6 @@ test.describe("DOCX upload + inspector", () => {
       .filter({ hasText: "Close" })
       .click();
     await expect(translationDialog).toBeHidden();
-    await page.keyboard.press("Escape");
-    await expect(translateAction).toBeHidden();
 
     await fileButton.click();
 

@@ -23,6 +23,16 @@ const paragraph = (text: string, styleId = "Normal"): Paragraph => ({
   content: [{ type: "run", formatting: {}, content: [{ type: "text", text }] }],
 });
 
+const structuralColumnBreak = (): Paragraph => ({
+  type: "paragraph",
+  content: [
+    {
+      type: "run",
+      content: [{ type: "break", breakType: "column" }],
+    },
+  ],
+});
+
 /** A clause, a heading, a signature label, and a signature table. */
 const buildBilingual = async () => {
   const doc = createEmptyDocument({
@@ -148,5 +158,49 @@ describe("buildOperations applied to a bilingual document", () => {
     expect(
       buildOperations([{ ...row, disposition: "translate" }], new Map()),
     ).toEqual([]);
+  });
+
+  test("only builds operations for rows present in Folio's editable snapshot", async () => {
+    const doc = createEmptyDocument({
+      preset: createStellaStyleDocumentPreset(),
+    });
+    doc.package.document.content = [
+      paragraph("Before"),
+      structuralColumnBreak(),
+      paragraph("After"),
+    ];
+    const { buffer } = await createBilingualDocx(await createDocx(doc), {
+      targetStyleSuffix: "en",
+    });
+    const { dropped, units } = flattenBilingualRows(
+      await readBilingualDocx(buffer),
+    );
+    expect(dropped).toBe(0);
+    expect(units.map(({ sourceText }) => sourceText)).toEqual([
+      "Before",
+      "After",
+    ]);
+
+    const rows: StoredRow[] = [];
+    for (const unit of units) {
+      rows.push({
+        disposition: "keep",
+        inTable: unit.inTable,
+        kind: unit.kind,
+        ordinal: unit.ordinal,
+        rowId: unit.rowId,
+        sourceParaId: unit.sourceParaId,
+        sourceText: unit.sourceText,
+        status: "pending",
+        targetText: null,
+      });
+    }
+    const operations = buildOperations(rows, new Map());
+    const applied = await applyFolioAIEditsToBuffer(buffer, operations, {
+      author: "test",
+      mode: "direct",
+    });
+
+    expect(applied.skipped).toEqual([]);
   });
 });

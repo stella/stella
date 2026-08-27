@@ -957,7 +957,19 @@ const translateBilingualWithAI = async (
       }),
     catch: (cause) => cause,
   });
-  if (Result.isError(applied) || applied.value.skipped.length > 0) {
+  if (Result.isError(applied)) {
+    captureError(applied.error, { runId: actor.runId });
+    return Result.err("format_validation_failed");
+  }
+  if (applied.value.skipped.length > 0) {
+    logger.warn("document_translation.operations_skipped", {
+      count: String(applied.value.skipped.length),
+      reasons: [
+        ...new Set(applied.value.skipped.map(({ reason }) => reason)),
+      ].join(","),
+      runId: actor.runId,
+      workspaceId: actor.workspaceId,
+    });
     return Result.err("format_validation_failed");
   }
   return Result.ok({

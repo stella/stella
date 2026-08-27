@@ -164,6 +164,51 @@ type RowActionsProps = {
     | undefined;
 };
 
+type TranslationTarget = {
+  encrypted: boolean;
+  fieldId: string;
+  mimeType: string;
+};
+
+type TranslationDialogState =
+  | { type: "closed" }
+  | { target: TranslationTarget; type: "open" };
+
+const getTranslationTarget = ({
+  cellMetadataTarget,
+  entity,
+  file,
+  isBulk,
+}: {
+  cellMetadataTarget: RowActionsProps["cellMetadataTarget"];
+  entity: WorkspaceEntity;
+  file: ReturnType<typeof getFirstFile>;
+  isBulk: boolean;
+}): TranslationTarget | null => {
+  if (isBulk) {
+    return null;
+  }
+  const contextField = cellMetadataTarget
+    ? entity.fields[cellMetadataTarget.propertyId]
+    : undefined;
+  const target = (() => {
+    if (!cellMetadataTarget) {
+      return file;
+    }
+    if (contextField?.content.type !== "file") {
+      return null;
+    }
+    return {
+      encrypted: contextField.content.encrypted,
+      fieldId: contextField.id,
+      mimeType: contextField.content.mimeType,
+    };
+  })();
+  return target !== null && isDocumentTranslationSourceEligible(target)
+    ? target
+    : null;
+};
+
 const OcrExportMenuItems = ({
   exportStatus,
   onDownload,
@@ -219,12 +264,15 @@ export const RowActions = ({
   const uploadVersion = useUploadVersion();
   const requestChatAbout = useRequestChatAbout(workspaceId);
   const retryCell = useRetryCell(toSafeId<"workspace">(workspaceId));
+  const canCreateEntity = usePermissions({ entity: ["create"] });
   const [copyToMatterOpen, setCopyToMatterOpen] = useState(false);
   const [copyToMatterEntities, setCopyToMatterEntities] = useState<
     CopyToMatterEntity[]
   >([]);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isOcrPending, setIsOcrPending] = useState(false);
+  const [translationDialogState, setTranslationDialogState] =
+    useState<TranslationDialogState>({ type: "closed" });
   const { data: properties } = useQuery(propertiesOptions(workspaceId));
   const uploadVersionInputRef = useRef<HTMLInputElement>(null);
   const file = getFirstFile(entity);
@@ -234,6 +282,23 @@ export const RowActions = ({
   const bulkTargets = isBulk ? selectedEntities : [entity];
   const isCellContext =
     !isBulk && cellMetadataTarget !== null && cellMetadataTarget !== undefined;
+  const translationTarget = getTranslationTarget({
+    cellMetadataTarget,
+    entity,
+    file,
+    isBulk,
+  });
+  const openTranslationDialog = () => {
+    if (translationTarget === null) {
+      return;
+    }
+    setTranslationDialogState({ target: translationTarget, type: "open" });
+  };
+  const handleTranslationDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setTranslationDialogState({ type: "closed" });
+    }
+  };
   const ocrSources = getOcrSources(entity.fields);
   let rowActionContext: RowActionContext = "row";
   if (isBulk) {
@@ -877,14 +942,15 @@ export const RowActions = ({
 
         {/* --- Features --- */}
         <RowFeatureMenuActions
-          cellMetadataTarget={cellMetadataTarget}
+          canCreateEntity={canCreateEntity}
           entity={entity}
           file={file}
           isBulk={isBulk}
           isFolder={isFolder}
           onChatAbout={handleChatAbout}
           onOpenVersionHistory={openVersionHistory}
-          workspaceId={workspaceId}
+          onTranslate={openTranslationDialog}
+          translationTarget={translationTarget}
         />
         <RowCellOcrExportMenuActions
           isCellContext={isCellContext}
@@ -915,6 +981,18 @@ export const RowActions = ({
         onOpenChange={handleCopyToMatterOpenChange}
         open={copyToMatterOpen}
         sourceWorkspaceId={workspaceId}
+      />
+      <RowTranslationDialog
+        canCreateEntity={canCreateEntity}
+        entity={entity}
+        onOpenChange={handleTranslationDialogOpenChange}
+        open={translationDialogState.type === "open"}
+        target={
+          translationDialogState.type === "open"
+            ? translationDialogState.target
+            : null
+        }
+        workspaceId={workspaceId}
       />
       {/* Hidden file input for upload new version */}
       {canUploadVersion && (
@@ -1135,46 +1213,27 @@ const RowFolderDesktopMenuActions = ({
 };
 
 const RowFeatureMenuActions = ({
-  cellMetadataTarget,
+  canCreateEntity,
   entity,
   file,
   isBulk,
   isFolder,
   onChatAbout,
   onOpenVersionHistory,
-  workspaceId,
+  onTranslate,
+  translationTarget,
 }: {
-  cellMetadataTarget: RowActionsProps["cellMetadataTarget"];
+  canCreateEntity: boolean;
   entity: WorkspaceEntity;
   file: ReturnType<typeof getFirstFile>;
   isBulk: boolean;
   isFolder: boolean;
   onChatAbout: () => void;
   onOpenVersionHistory: (() => void) | undefined;
-  workspaceId: string;
+  onTranslate: () => void;
+  translationTarget: TranslationTarget | null;
 }) => {
   const t = useTranslations();
-  const canCreateEntity = usePermissions({ entity: ["create"] });
-  const viewMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId",
-    shouldThrow: false,
-  });
-  const contextField = cellMetadataTarget
-    ? entity.fields[cellMetadataTarget.propertyId]
-    : undefined;
-  const translationFile = (() => {
-    if (!cellMetadataTarget) {
-      return file;
-    }
-    if (contextField?.content.type !== "file") {
-      return null;
-    }
-    return {
-      encrypted: contextField.content.encrypted,
-      fieldId: contextField.id,
-      mimeType: contextField.content.mimeType,
-    };
-  })();
   return (
     <>
       {!isBulk &&
@@ -1191,26 +1250,51 @@ const RowFeatureMenuActions = ({
         <MessageSquareIcon />
         {t("chat.chatAbout")}
       </MenuItem>
-      {!isBulk &&
-        translationFile &&
-        isDocumentTranslationSourceEligible(translationFile) && (
-          <TranslateDocumentDialog
-            disabled={!canCreateEntity}
-            entityId={entity.entityId}
-            entityVersionKey={entity.version}
-            fieldId={translationFile.fieldId}
-            isDocx={translationFile.mimeType === DOCX_MIME}
-            trigger={
-              <MenuItem closeOnClick={false} disabled={!canCreateEntity}>
-                <LanguagesIcon />
-                {t("common.translate")}
-              </MenuItem>
-            }
-            viewId={viewMatch?.params.viewId ?? "all"}
-            workspaceId={workspaceId}
-          />
-        )}
+      {translationTarget !== null && (
+        <MenuItem disabled={!canCreateEntity} onClick={onTranslate}>
+          <LanguagesIcon />
+          {t("common.translate")}
+        </MenuItem>
+      )}
     </>
+  );
+};
+
+const RowTranslationDialog = ({
+  canCreateEntity,
+  entity,
+  onOpenChange,
+  open,
+  target,
+  workspaceId,
+}: {
+  canCreateEntity: boolean;
+  entity: WorkspaceEntity;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  target: TranslationTarget | null;
+  workspaceId: string;
+}) => {
+  const viewMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/$viewId",
+    shouldThrow: false,
+  });
+  if (target === null) {
+    return null;
+  }
+  return (
+    <TranslateDocumentDialog
+      disabled={!canCreateEntity}
+      entityId={entity.entityId}
+      entityVersionKey={entity.version}
+      fieldId={target.fieldId}
+      isDocx={target.mimeType === DOCX_MIME}
+      mode="controlled"
+      onOpenChange={onOpenChange}
+      open={open}
+      viewId={viewMatch?.params.viewId ?? "all"}
+      workspaceId={workspaceId}
+    />
   );
 };
 
