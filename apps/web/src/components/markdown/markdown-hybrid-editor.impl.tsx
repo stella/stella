@@ -168,19 +168,18 @@ export const MarkdownHybridEditor = ({
         emit(text);
       }
     });
-    const commentsSubscription = autorun((reader) => {
+    const commentsSubscription = createEffect((reader) => {
       const present = new Set(
         commentsModel.comments.read(reader).map((comment) => comment.id),
       );
       const removed = [...pushedCommentIds.current].filter(
         (id) => !present.has(id),
       );
-      if (removed.length === 0) {
-        return;
-      }
-      pushedCommentIds.current = present;
-      for (const id of removed) {
-        deleteComment(id);
+      if (removed.length > 0) {
+        pushedCommentIds.current = present;
+        for (const id of removed) {
+          deleteComment(id);
+        }
       }
     });
     return () => {
