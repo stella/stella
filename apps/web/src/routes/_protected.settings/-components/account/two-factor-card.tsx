@@ -39,6 +39,7 @@ import {
   HTTP_TOO_MANY_REQUESTS,
   isTwoFactorEnabledUser,
 } from "@/lib/auth";
+import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
 import { sessionOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
@@ -87,6 +88,17 @@ export const TwoFactorCard = () => {
   const requiresPassword = accountsQuery.data
     ? accountsQuery.data.some((account) => account.providerId === "credential")
     : undefined;
+
+  // Transactional email is optional, and a deployment without it cannot send
+  // the emailed confirmation step. Enrollment there rests on the account
+  // password instead (see `requireTwoFactorManageOtp` in
+  // apps/api/src/lib/auth.ts), so the enable dialog must not ask for a code it
+  // will never receive. `undefined` while unresolved, like `requiresPassword`.
+  const capabilitiesQuery = useQuery({
+    ...authCapabilitiesOptions,
+    enabled: isAnyDialogOpen,
+  });
+  const canEmailConfirmationCode = capabilitiesQuery.data?.transactionalEmail;
 
   return (
     <Frame>
@@ -139,6 +151,7 @@ export const TwoFactorCard = () => {
       </FramePanel>
 
       <EnableTwoFactorDialog
+        canEmailConfirmationCode={canEmailConfirmationCode}
         onOpenChange={setIsEnableOpen}
         open={isEnableOpen}
         requiresPassword={requiresPassword}
@@ -295,10 +308,14 @@ type EnableStep = "confirm" | "code" | "setup" | "verify" | "codes";
 type TotpEnrollment = { totpURI: string; backupCodes: string[] };
 
 const EnableTwoFactorDialog = ({
+  canEmailConfirmationCode,
   onOpenChange,
   open,
   requiresPassword,
 }: {
+  // `undefined` until the capability lookup resolves; see the parent's comment
+  // on `canEmailConfirmationCode`.
+  canEmailConfirmationCode: boolean | undefined;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   // `undefined` until the account-type lookup resolves; see the parent's
@@ -360,12 +377,15 @@ const EnableTwoFactorDialog = ({
       // so this calls the underlying `$fetch` directly with the raw path,
       // mirroring the disable and regenerate dialogs. Better Auth's own
       // `enable` endpoint additionally requires the account password for
-      // credential accounts; omit it for passwordless users.
+      // credential accounts; omit it for passwordless users. `otp` is absent
+      // on a deployment that cannot email one, where the gate stands down.
       const { data, error } = await authClient.$fetch("/two-factor/enable", {
         method: "POST",
-        body: requiresPassword
-          ? { method: "totp", otp: submittedCode, password: submittedPassword }
-          : { method: "totp", otp: submittedCode },
+        body: {
+          method: "totp",
+          ...(submittedCode === "" ? {} : { otp: submittedCode }),
+          ...(requiresPassword ? { password: submittedPassword } : {}),
+        },
       });
 
       if (error) {
@@ -381,7 +401,12 @@ const EnableTwoFactorDialog = ({
       setStep("setup");
     },
     onError: (error) => {
+      // The confirmation code is single-use and is spent by the attempt that
+      // failed, so the entered one can never work again. Return to the first
+      // step, where the same button requests a fresh code (and where a
+      // rejected password can be retyped).
       setCode("");
+      setStep("confirm");
       analytics.captureError(error);
     },
   });
@@ -550,10 +575,19 @@ const EnableTwoFactorDialog = ({
             <Button
               disabled={
                 requiresPassword === undefined ||
+                canEmailConfirmationCode === undefined ||
                 (requiresPassword && password.length === 0)
               }
-              loading={sendEnableOtpMutation.isPending}
-              onClick={() => sendEnableOtpMutation.mutate()}
+              loading={
+                sendEnableOtpMutation.isPending || enableMutation.isPending
+              }
+              onClick={() => {
+                if (canEmailConfirmationCode) {
+                  sendEnableOtpMutation.mutate();
+                  return;
+                }
+                enableMutation.mutate({ code: "", password });
+              }}
               variant="default"
             >
               {t("settings.account.twoFactor.enable")}
@@ -694,7 +728,10 @@ const DisableTwoFactorDialog = ({
       });
     },
     onError: (error) => {
+      // Single-use code, spent by the failed attempt: go back to the step that
+      // requests a fresh one instead of leaving an input nothing can satisfy.
       setCode("");
+      setStep("confirm");
       analytics.captureError(error);
     },
   });
@@ -878,7 +915,10 @@ const RegenerateBackupCodesDialog = ({
       });
     },
     onError: (error) => {
+      // Single-use code, spent by the failed attempt: go back to the step that
+      // requests a fresh one instead of leaving an input nothing can satisfy.
       setCode("");
+      setStep("confirm");
       analytics.captureError(error);
     },
   });

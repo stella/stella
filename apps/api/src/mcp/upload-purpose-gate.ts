@@ -1,6 +1,9 @@
 import { and, eq } from "drizzle-orm";
 
+import type { PermissionInput } from "@stll/permissions";
+
 import { pendingUploads } from "@/api/db/schema";
+import { UPLOAD_PURPOSE_PERMISSION } from "@/api/handlers/uploads/permissions";
 import type { UploadPurpose } from "@/api/handlers/uploads/permissions";
 import { isUuid } from "@/api/lib/custom-schema";
 import { brandPersistedPendingUploadId } from "@/api/lib/safe-id-boundaries";
@@ -26,19 +29,36 @@ export const UPLOAD_PURPOSE_SCOPE = {
   agent_skill: "stella:skills",
 } as const satisfies Record<UploadPurpose, McpOAuthScope>;
 
+type UploadPurposeGate = {
+  /**
+   * Where the purpose comes from. `create` declares it in the request; the
+   * calls that name a stored upload re-derive it from that row, so relabelling
+   * the second call cannot widen what the first reserved.
+   */
+  source: "body" | "pendingUpload";
+  /**
+   * Whether the purpose's own consent applies on top of the domain scope.
+   * `domain` for a call that finalizes nothing: abandoning staged bytes does
+   * not reach the resource the purpose would have produced, so the domain
+   * scope is the whole consent. The permission still follows the purpose on
+   * every call, which is what the handlers themselves gate on.
+   */
+  consent: "purpose" | "domain";
+};
+
 /**
- * Where a capability's upload purpose comes from. `create` declares it in the
- * request; `update` (finalize) names a stored upload, and the purpose is
- * re-derived from that row so relabelling the second call cannot widen what the
- * first consented to. `uploads.delete` is absent on purpose: abandoning staged
- * bytes finalizes nothing, so it stays on the domain scope.
+ * Every `uploads.*` capability whose grant depends on the request rather than
+ * on its static config. Exported so the catalog guard can hold the two sides
+ * together: a new upload capability that reaches `authorizeUploadPurpose`
+ * without an entry here would run its purpose gate on the member role alone.
  */
-const UPLOAD_PURPOSE_SOURCE_BY_CAPABILITY = new Map<
+export const UPLOAD_PURPOSE_GATE_BY_CAPABILITY = new Map<
   string,
-  "body" | "pendingUpload"
+  UploadPurposeGate
 >([
-  ["uploads.create", "body"],
-  ["uploads.update", "pendingUpload"],
+  ["uploads.create", { source: "body", consent: "purpose" }],
+  ["uploads.update", { source: "pendingUpload", consent: "purpose" }],
+  ["uploads.delete", { source: "pendingUpload", consent: "domain" }],
 ]);
 
 const UPLOAD_PURPOSES = new Set<string>(Object.keys(UPLOAD_PURPOSE_SCOPE));
@@ -92,32 +112,53 @@ const readStoredPurpose = async ({
   return isUploadPurpose(purpose) ? purpose : null;
 };
 
-type UploadPurposeScopeInput = {
+type UploadPurposeRequirementInput = {
   body: unknown;
   capabilityId: string;
   context: McpRequestContext;
   params: unknown;
 };
 
+/** What this invocation's upload purpose requires beyond its static config. */
+export type UploadPurposeRequirement = {
+  /**
+   * The grant the purpose spends. The static config permission for `uploads.*`
+   * is `workspace:read` because the resource-appropriate grant is only known
+   * once the purpose is, so the dispatch path reads it here and the handler
+   * checks the same map (`UPLOAD_PURPOSE_PERMISSION`) again on every surface.
+   */
+  permission: PermissionInput;
+  /** The consent the purpose spends, or `null` when the domain scope covers it. */
+  scope: McpOAuthScope | null;
+};
+
 /**
- * The extra scope this invocation requires beyond its catalog scope, or `null`
- * when the capability carries no upload purpose.
+ * What this invocation requires beyond its catalog scope and config
+ * permission, or `null` when the capability carries no upload purpose (and for
+ * a purpose-gated call whose upload row does not exist: the handler answers
+ * that with its own 404).
  */
-export const resolveUploadPurposeScope = async ({
+export const resolveUploadPurposeRequirement = async ({
   body,
   capabilityId,
   context,
   params,
-}: UploadPurposeScopeInput): Promise<McpOAuthScope | null> => {
-  const source = UPLOAD_PURPOSE_SOURCE_BY_CAPABILITY.get(capabilityId);
-  if (source === undefined) {
+}: UploadPurposeRequirementInput): Promise<UploadPurposeRequirement | null> => {
+  const gate = UPLOAD_PURPOSE_GATE_BY_CAPABILITY.get(capabilityId);
+  if (gate === undefined) {
     return null;
   }
 
   const purpose =
-    source === "body"
+    gate.source === "body"
       ? readBodyPurpose(body)
       : await readStoredPurpose({ context, params });
+  if (purpose === null) {
+    return null;
+  }
 
-  return purpose === null ? null : UPLOAD_PURPOSE_SCOPE[purpose];
+  return {
+    permission: UPLOAD_PURPOSE_PERMISSION[purpose],
+    scope: gate.consent === "purpose" ? UPLOAD_PURPOSE_SCOPE[purpose] : null,
+  };
 };

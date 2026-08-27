@@ -88,5 +88,10 @@ export const authCapabilitiesRoute = new Elysia({
     localPassword: isSelfhostLocalPasswordAuthEnabled(),
     bootstrap,
     social: getSocialAuthCapabilities(),
+    // Whether this deployment can deliver a confirmation code at all. Separate
+    // from `emailOtp` (a sign-in option, which the bootstrap state also
+    // suppresses): account settings read this to decide whether an emailed
+    // confirmation step is part of a flow.
+    transactionalEmail: isTransactionalEmailConfigured(),
   };
 });

@@ -63,7 +63,7 @@ import {
   stringProp,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
-import { resolveUploadPurposeScope } from "@/api/mcp/upload-purpose-scope";
+import { resolveUploadPurposeRequirement } from "@/api/mcp/upload-purpose-gate";
 
 // --- Catalog + dispatch runtime views ---------------------------------------
 
@@ -1344,17 +1344,21 @@ const executeInvoke = async ({
     };
   }
 
-  // 8. Purpose-dependent scope. One `uploads.*` domain scope covers three
-  // purposes that finalize into different resources, so the catalog scope alone
-  // would let a workspace-write consent install a skill. The purpose is read
-  // from the validated request on create and re-derived from the stored row on
-  // finalize, so relabelling the second call cannot widen the first.
-  const purposeScope = await resolveUploadPurposeScope({
+  // 8. Purpose-dependent requirements. One `uploads.*` domain scope and one
+  // `workspace:read` config permission cover three purposes that finalize into
+  // different resources, so neither static value alone says what the call
+  // spends: the catalog scope would let a workspace-write consent install a
+  // skill, and the config permission is the baseline every member holds. The
+  // purpose is read from the validated request on create and re-derived from
+  // the stored row on finalize/abort, so relabelling the second call cannot
+  // widen the first.
+  const purposeRequirement = await resolveUploadPurposeRequirement({
     body: validatedBody,
     capabilityId: id,
     context,
     params: handlerParams,
   });
+  const purposeScope = purposeRequirement?.scope ?? null;
   if (purposeScope !== null && !context.grantedScopes.includes(purposeScope)) {
     const requiredScopes = [...requiredScopesOf(entry), purposeScope];
     return structuredErrorResult({
@@ -1370,14 +1374,22 @@ const executeInvoke = async ({
 
   // 9. Authority. The safe wrapper checks the member role on its own, but only
   // the role: a machine API key's permission set lives on the MCP session, so
-  // this is the one place the two can be ANDed. It runs on both paths and
-  // before the limiter below, so a caller who may not perform the capability is
-  // refused without consuming anyone else's budget. Configs without permissions
-  // (session-kind) skip the check, exactly as their wrapper does.
+  // this is the one place the two can be ANDed. Every grant this call spends is
+  // checked here, the config's and the purpose's alike, because a handler that
+  // decides a grant from the request reads the role by itself. It runs on both
+  // paths and before the limiter below, so a caller who may not perform the
+  // capability is refused without consuming anyone else's budget. Configs
+  // without permissions (session-kind) skip the check, exactly as their wrapper
+  // does.
   const permissions = endpoint.config.permissions;
+  const requiredPermissions = [
+    ...(permissions === undefined ? [] : [permissions]),
+    ...(purposeRequirement === null ? [] : [purposeRequirement.permission]),
+  ];
   if (
-    permissions !== undefined &&
-    !hasEffectiveAuthority(context, permissions)
+    requiredPermissions.some(
+      (required) => !hasEffectiveAuthority(context, required),
+    )
   ) {
     return structuredErrorResult({
       code: "permission_denied",

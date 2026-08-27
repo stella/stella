@@ -40,9 +40,9 @@ const EMIT_DELAY_MS = 400;
 
 const NO_COMMENTS: readonly MarkdownEditorComment[] = [];
 
-/** Strips every rendered `<img>` under `host` whose source fails the data-only policy. */
-const enforceDataOnlyImagePolicy = (host: HTMLElement) => {
-  for (const img of host.querySelectorAll("img")) {
+/** Strips every rendered `<img>` under `root` whose source fails the data-only policy. */
+const enforceDataOnlyImagePolicy = (root: HTMLElement) => {
+  for (const img of root.querySelectorAll("img")) {
     if (!isSafeMarkdownPreviewImageSrc(img.getAttribute("src"))) {
       img.removeAttribute("src");
     }
@@ -167,11 +167,23 @@ export const MarkdownHybridEditor = ({
         model.setTaskCheckboxChecked(item, checked);
       },
     });
-    // The engine builds each image element's `src` straight from the source
-    // url and exposes no render hook to intercept it, so a disallowed source
-    // is stripped off the DOM instead: the observer starts before the initial
-    // content is appended so every later block (re)render is covered, and an
-    // immediate pass right after the append covers the first one.
+    // The engine builds each image element's `src` straight from the source url
+    // and exposes no render hook to intercept it, so a source outside the policy
+    // is cleared off the DOM instead. Timing is what makes that effective: the
+    // constructor assigns those urls synchronously, and the browser only starts
+    // an image request at the microtask checkpoint after the current task, so
+    // clearing the attribute in this same task means no request is issued. The
+    // pass runs on the constructed element and again after the append, covering
+    // content the engine renders at either point; the observer then covers every
+    // later block (re)render.
+    //
+    // Filtering the markdown text instead would be simpler but wrong here: this
+    // is an editor, and the filtered text is what the model would emit on the
+    // next keystroke, so the document would silently lose image destinations the
+    // user never touched.
+    if (imagePolicy === "data-only") {
+      enforceDataOnlyImagePolicy(view.element);
+    }
     const imageObserver =
       imagePolicy === "data-only"
         ? new MutationObserver(() => enforceDataOnlyImagePolicy(host))

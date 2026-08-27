@@ -233,8 +233,8 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // per-purpose permission inside the handler. Deliberately NOT
   // `stella:skills`, which would let a skills-only consent presign an entity
   // write. The converse is closed at invoke: the purpose an upload carries adds
-  // its own required scope (`mcp/upload-purpose-scope.ts`), so a workspace
-  // write consent alone cannot presign or finalize a skill pack.
+  // its own required scope and permission (`mcp/upload-purpose-gate.ts`), so a
+  // workspace write consent alone cannot presign or finalize a skill pack.
   uploads: "stella:matters_write",
   usage: "stella:read",
   "view-templates": "stella:matters_write",

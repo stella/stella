@@ -148,8 +148,13 @@ describe("two-factor management lifecycle", () => {
 
     // Enrollment binds the authenticator that guards every later change, so
     // it is confirmed the same way disable, rotation, and backup-code
-    // regeneration are: the gate reads no current second-factor state.
-    expect(gateSource).not.toContain("twoFactorEnabled");
+    // regeneration are. The one exemption is a deployment with no transactional
+    // email transport, which cannot deliver a code at all: current
+    // second-factor state alone never waives the gate, so both clauses must
+    // stay in the same condition.
+    expect(gateSource.replaceAll(/\s+/gu, " ")).toContain(
+      'session.user["twoFactorEnabled"] !== true && !isTransactionalEmailConfigured()',
+    );
     expect(gateSource).toContain('purpose: "two-factor-manage"');
 
     // The code-issuing endpoint mirrors the gate: refusing to send a code for

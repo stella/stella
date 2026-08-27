@@ -438,12 +438,27 @@ export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
  * Resolves the session itself (this runs as a global `before` hook, ahead of
  * each endpoint's own session middleware) and no-ops when there is no
  * session, because the endpoint's own middleware will reject the request.
+ *
+ * One deployment shape is exempt: transactional email is optional, and an
+ * instance without a transport cannot deliver a manage code at all, so
+ * requiring one would leave first-time enrollment unreachable there. Those
+ * users enroll on the two-factor plugin's own password check, which for a
+ * credential account is the same factor their sign-in uses. An account that
+ * already carries a second factor still needs the code for every transition,
+ * on every deployment.
  */
 const requireTwoFactorManageOtp = async ({
   body,
   session,
 }: RequireTwoFactorManageOtpArgs): Promise<void> => {
   if (!session) {
+    return;
+  }
+
+  if (
+    session.user["twoFactorEnabled"] !== true &&
+    !isTransactionalEmailConfigured()
+  ) {
     return;
   }
 

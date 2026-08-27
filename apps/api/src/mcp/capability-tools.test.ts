@@ -60,6 +60,8 @@ void mock.module("@/api/mcp/capability-feature", () => ({
 
 const { handleMcpToolCall } = await import("@/api/mcp/tools");
 const { mapHandlerResult } = await import("@/api/mcp/capability-tools");
+const { UPLOAD_PURPOSE_GATE_BY_CAPABILITY } =
+  await import("@/api/mcp/upload-purpose-gate");
 const { synthesizeCapabilityContext } =
   await import("@/api/mcp/capability-context");
 const { ElysiaCustomStatusResponse } = await import("elysia");
@@ -825,7 +827,7 @@ describe("invoke_capability execution", () => {
   });
 });
 
-describe("invoke_capability upload purpose scope", () => {
+describe("invoke_capability upload purpose gate", () => {
   const skillPackBody = {
     purpose: "agent_skill",
     scope: "team",
@@ -941,6 +943,112 @@ describe("invoke_capability upload purpose scope", () => {
       toolName: "invoke_capability",
     });
     expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+  });
+
+  // The permission half of the same gate. `uploads.*` declares workspace:read
+  // in its config because the grant a call actually spends is only known once
+  // its purpose is; the handler re-derives that grant from the member role, so
+  // the dispatch path is where a credential's own set is ANDed into it.
+  test("a purpose the role does not grant -> permission_denied", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "uploads.create",
+        input: { body: skillPackBody, params: { workspaceId: "ws_1" } },
+        validateOnly: true,
+      },
+      // intern holds workspace:read (the config gate) but no agentSkill grant.
+      context: createContext({
+        grantedScopes: ["stella:matters_write", "stella:skills"],
+        memberRole: "intern",
+      }),
+      toolName: "invoke_capability",
+    });
+    expect(errorEnvelope(result).code).toBe("permission_denied");
+  });
+
+  test("a purpose the credential set does not cover -> permission_denied", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "uploads.create",
+        input: { body: skillPackBody, params: { workspaceId: "ws_1" } },
+        validateOnly: true,
+      },
+      context: createContext({
+        credentialPermissions: { workspace: ["read"] },
+        grantedScopes: ["stella:matters_write", "stella:skills"],
+      }),
+      toolName: "invoke_capability",
+    });
+    expect(errorEnvelope(result).code).toBe("permission_denied");
+  });
+
+  test("a credential set covering the purpose admits the same call", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "uploads.create",
+        input: { body: skillPackBody, params: { workspaceId: "ws_1" } },
+        validateOnly: true,
+      },
+      context: createContext({
+        credentialPermissions: {
+          agentSkill: ["create"],
+          workspace: ["read"],
+        },
+        grantedScopes: ["stella:matters_write", "stella:skills"],
+      }),
+      toolName: "invoke_capability",
+    });
+    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+  });
+
+  test("finalize spends the stored purpose's permission", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "uploads.update",
+        input: { params: { workspaceId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
+        validateOnly: true,
+      },
+      context: createContext({
+        credentialPermissions: { workspace: ["read"] },
+        grantedScopes: ["stella:matters_write", "stella:skills"],
+        workspaceIds: [WORKSPACE_ID],
+        scopedDb: storedPurposeDb("agent_skill"),
+      }),
+      toolName: "invoke_capability",
+    });
+    expect(errorEnvelope(result).code).toBe("permission_denied");
+  });
+
+  test("abort spends it too, though it stays on the domain scope", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "uploads.delete",
+        confirm: true,
+        input: { params: { workspaceId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
+        validateOnly: true,
+      },
+      context: createContext({
+        credentialPermissions: { workspace: ["read"] },
+        grantedScopes: ["stella:matters_write"],
+        workspaceIds: [WORKSPACE_ID],
+        scopedDb: storedPurposeDb("entity_create"),
+      }),
+      toolName: "invoke_capability",
+    });
+    expect(errorEnvelope(result).code).toBe("permission_denied");
+  });
+
+  test("every uploads capability is covered by the purpose gate", () => {
+    // The gate is keyed by capability id, so a new `uploads.*` capability that
+    // ran its purpose check in the handler alone would be invisible here.
+    const uploadCapabilityIds = capabilityCatalog
+      .filter((entry) => entry.id.startsWith("uploads."))
+      .map((entry) => entry.id);
+
+    expect(uploadCapabilityIds.length).toBeGreaterThan(0);
+    expect([...UPLOAD_PURPOSE_GATE_BY_CAPABILITY.keys()].toSorted()).toEqual(
+      uploadCapabilityIds.toSorted(),
+    );
   });
 });
 

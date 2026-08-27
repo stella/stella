@@ -20,15 +20,14 @@ import { SecretInput } from "@/components/secret-input";
 import { env } from "@/env";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
 import { browserAuthBaseUrl } from "@/lib/api-url";
 import {
   authClient,
   HTTP_TOO_MANY_REQUESTS,
   isTwoFactorRedirect,
 } from "@/lib/auth";
+import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
 import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
@@ -77,24 +76,6 @@ const authCapabilitiesFallback = {
   },
 } as const satisfies AuthCapabilities;
 
-const authCapabilitiesQueryOptions = {
-  queryKey: ["auth-capabilities"] as const,
-  queryFn: async ({ signal }: { signal: AbortSignal }) => {
-    const response = await api.auth.capabilities.get({
-      fetch: { signal },
-    });
-
-    if (response.error) {
-      throw new APIError({
-        status: 500,
-        message: "Failed to load auth capabilities",
-      });
-    }
-
-    return response.data;
-  },
-};
-
 const renderTermsLink = (chunks: ReactNode) => (
   <a
     className="hover:text-foreground underline"
@@ -116,7 +97,7 @@ export const SignInPanel = ({
   const analytics = useAnalytics();
   const navigate = useNavigate();
   const { data: authCapabilities = authCapabilitiesFallback } = useQuery(
-    authCapabilitiesQueryOptions,
+    authCapabilitiesOptions,
   );
   const [socialLoading, setSocialLoading] = useState<
     "google" | "microsoft" | null
