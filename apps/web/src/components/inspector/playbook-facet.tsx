@@ -2919,20 +2919,20 @@ const ReviewFreshnessNotice = ({
   }
 
   return (
-    <div className="border-warning/30 bg-warning/10 mb-2 rounded-lg border px-3 py-2">
-      <ul className="text-warning-foreground space-y-1 text-xs">
-        {notices.map((notice) => (
-          <li key={notice}>{t(notice)}</li>
-        ))}
-      </ul>
+    // A statement of fact, not an alarm: the usual reason the document moved
+    // on is the reviewer accepting this run's own changes.
+    <div className="text-muted-foreground mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-1 text-xs">
+      {notices.map((notice) => (
+        <span key={notice}>{t(notice)}</span>
+      ))}
       {/* A run whose playbook was deleted is a record of what was reviewed,
           not something that can be measured again against that playbook. */}
       {freshness.playbook !== "missing" && (
         <Button
-          className="mt-2"
+          className="h-auto min-h-0 p-0 text-xs"
           onClick={onReviewAgain}
           size="xs"
-          variant="outline"
+          variant="link"
         >
           {t("inspector.review.reviewAgain")}
         </Button>
