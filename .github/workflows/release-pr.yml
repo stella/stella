@@ -18,7 +18,7 @@ jobs:
     permissions:
       contents: read
     # The repository owner publishes this versioned shared contract.
-    uses: stella/.github/.github/workflows/changeset-release-pr.yml@232337e5623d0551ed2c034ce5e5b9ee4d193bac
+    uses: stella/.github/.github/workflows/changeset-release-pr.yml@7198083e27bdd963cacc0b7d70ca54fe3ec83393
     with:
       bun-version-file: package.json
     secrets:
