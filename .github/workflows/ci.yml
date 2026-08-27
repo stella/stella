@@ -1249,7 +1249,10 @@ jobs:
         run: bun --filter @stll/web build
 
       - name: Upload production E2E web build
-        if: needs.ci-plan.outputs.e2e_core_required == 'true'
+        # The e2e shards and the marketing capture both serve this build.
+        if: >-
+          needs.ci-plan.outputs.e2e_core_required == 'true'
+          || needs.ci-plan.outputs.marketing_screenshots_required == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-web-build
@@ -1787,9 +1790,13 @@ jobs:
       && needs.ci-plan.outputs.marketing_screenshots_required == 'true'
     uses: ./.github/workflows/marketing-screenshots.yml
     permissions:
+      actions: read
       contents: read
     with:
       mode: check
+      # Serve the same production build the e2e shards use whenever web-build
+      # runs in this workflow; the capture job builds it otherwise.
+      web-build-artifact: ${{ needs.ci-plan.outputs.web_build_required == 'true' && 'e2e-web-build' || '' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

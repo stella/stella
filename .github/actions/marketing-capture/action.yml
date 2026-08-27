@@ -8,11 +8,21 @@ description: Seed the app on the CI runner and either compare or rewrite the com
 #
 # The checkout stays with the caller: check captures the triggering ref,
 # update captures the branch it was told to regenerate.
+#
+# The web app is served from a production build, the same way the e2e shards
+# serve it, never from the Vite dev server: a cold dev start on a busy runner
+# can exceed any fixed wait, and a mid-session dependency re-optimize tears
+# frames. PR CI hands over the `web-build` job's artifact; the nightly and
+# update callers have no such job and build here.
 
 inputs:
   mode:
     description: check compares committed baselines; update rewrites them in the workspace
     required: true
+  web-build-artifact:
+    description: Name of a production web build artifact published earlier in this run; empty builds the web app here
+    required: false
+    default: ""
   dockerhub-username:
     description: Docker Hub username for authenticated infrastructure image pulls
     required: false
@@ -58,6 +68,19 @@ runs:
         cd ../web
         cp .env.example .env
 
+    - name: Build production web
+      # No artifact was handed over (nightly, update): build the same bundle
+      # the `web-build` job in ci.yml produces, flags included, so a capture
+      # renders the feature-complete surface on every caller.
+      if: inputs.web-build-artifact == ''
+      shell: bash
+      env:
+        VITE_FEATURE_TIME_BILLING: "true"
+        VITE_PUBLIC_LAW_ENABLED: "true"
+        VITE_PUBLIC_TOOLS_ENABLED: "true"
+        VITE_WORKFLOWS_ENABLED: "true"
+      run: bun --filter @stll/web build
+
     - name: Start docker stack and API server
       id: e2e-stack
       uses: ./.github/actions/setup-e2e-stack
@@ -83,24 +106,82 @@ runs:
         echo "::error::E2E stack status is '$STATUS', not 'ready'; marketing screenshots were neither compared nor regenerated"
         exit 1
 
-    - name: Start web dev server
+    - name: Wait for production web build
+      # Same bounded poll as the e2e shards: the build job runs concurrently
+      # with this one, and once it has ended without publishing the artifact
+      # can never appear.
+      if: inputs.web-build-artifact != ''
+      shell: bash
+      env:
+        ARTIFACT_NAME: ${{ inputs.web-build-artifact }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        for attempt in {1..180}; do
+          count=$(gh api --method GET \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+            -f name="$ARTIFACT_NAME" \
+            --jq '[.artifacts[] | select(.expired == false)] | length')
+          if [[ "$count" -gt 0 ]]; then
+            echo "Production web build ready after $((attempt * 2))s"
+            exit 0
+          fi
+          if (( attempt % 5 == 0 )); then
+            conclusion=$(gh api --paginate \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" \
+              --jq '.jobs[] | select(.name == "web-build") | .conclusion // "in_progress"' \
+              | head -n 1)
+            case "$conclusion" in
+              failure|cancelled|skipped|timed_out)
+                echo "::error::web-build ended with status '$conclusion' without publishing the $ARTIFACT_NAME artifact"
+                exit 1
+                ;;
+            esac
+          fi
+          sleep 2
+        done
+        echo "::error::Production web build artifact was not published"
+        exit 1
+
+    - name: Download production web build
+      if: inputs.web-build-artifact != ''
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      with:
+        name: ${{ inputs.web-build-artifact }}
+        path: apps/web/dist
+
+    - name: Validate production web build
+      # An artifact is only handed over by PR CI, which captures the triggering
+      # commit, so the build must be for exactly that commit.
+      if: inputs.web-build-artifact != ''
+      shell: bash
+      run: |
+        for side in client server; do
+          manifest="apps/web/dist/$side/version.json"
+          commit=$(jq -r '.commit' "$manifest")
+          if [[ "$commit" != "$GITHUB_SHA" ]]; then
+            echo "::error::$side build is for $commit, expected $GITHUB_SHA"
+            exit 1
+          fi
+        done
+
+    - name: Start production web server
       shell: bash
       run: |
         cd apps/web
-        nohup bun --bun vite --port 3000 > /tmp/web.log 2>&1 &
+        NODE_ENV=production PORT=3000 nohup bun start-runtime.js > /tmp/web.log 2>&1 &
         echo $! > /tmp/web.pid
 
-    - name: Wait for web dev server
+    - name: Wait for production web server
       shell: bash
       run: |
         for i in {1..60}; do
-          if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000 > /dev/null 2>&1; then
-            echo "Web up after ${i}s"
+          if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000/health > /dev/null 2>&1; then
+            echo "Production web up after ${i}s"
             exit 0
           fi
           sleep 1
         done
-        echo "::error::Web never came up"
+        echo "::error::Production web never came up"
         tail -200 /tmp/web.log || true
         exit 1
 
@@ -126,22 +207,7 @@ runs:
           bun --filter @stll/web test:e2e:marketing
         fi
 
-    - name: Guard against mid-test Vite re-optimize
-      # Before the update-mode commit in the caller: a mid-session reload
-      # produces torn frames, which must never be pushed as a baseline. Also
-      # runs after a failed capture, so a reload is reported as the cause
-      # rather than as a pixel diff.
-      if: always() && steps.e2e-stack.outputs.status == 'ready'
-      shell: bash
-      run: |
-        if grep -q "optimized dependencies changed. reloading" /tmp/web.log; then
-          echo "::error::Vite re-optimized dependencies mid-session and forced a reload. Add the lazy/runtime dependency named below to optimizeDeps.include in apps/web/vite.config.ts."
-          grep -nE "new dependencies optimized|optimized dependencies changed" /tmp/web.log || true
-          exit 1
-        fi
-        echo "No mid-session dep re-optimize detected."
-
-    - name: Stop web dev server
+    - name: Stop production web server
       if: always() && steps.e2e-stack.outputs.status == 'ready'
       shell: bash
       run: |
