@@ -8,6 +8,7 @@ import { useShallow } from "zustand/shallow";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Frame } from "@stll/ui/frame";
+import { getInitials } from "@stll/ui/initials";
 import {
   SortableHead,
   Table,
@@ -24,7 +25,6 @@ import Tooltip from "@/components/tooltip";
 import { useMatterContextMenu } from "@/components/workspaces/matter-context-menu";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import { getInitials } from "@/lib/get-initials";
 import { getMatterColor } from "@/lib/matter-colors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type {

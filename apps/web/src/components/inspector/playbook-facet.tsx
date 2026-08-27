@@ -39,6 +39,16 @@ import {
   InspectorTitle,
 } from "@stll/ui/inspector";
 import { LoaderState } from "@stll/ui/loader";
+import { ReviewOutOfDateNotice } from "@stll/ui/review/review-out-of-date-notice";
+import type { ReviewOutOfDateReason } from "@stll/ui/review/review-out-of-date-notice";
+import type { ReviewSeverityLevel } from "@stll/ui/review/review-severity-dot";
+import {
+  ReviewSeverityDot,
+  reviewSeverityTone,
+  ReviewStatusDot,
+} from "@stll/ui/review/review-severity-dot";
+import type { ReviewStatusTone } from "@stll/ui/review/review-status-badge";
+import { ReviewStatusBadge } from "@stll/ui/review/review-status-badge";
 import { TextSeparator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
@@ -2171,30 +2181,19 @@ const ReviewFreshnessNotice = ({
   if (playbookNotice !== null) {
     notices.push(playbookNotice);
   }
-  if (notices.length === 0) {
-    return null;
-  }
+  const reasons: ReviewOutOfDateReason[] = notices.map((notice) => ({
+    id: notice,
+    label: t(notice),
+  }));
 
   return (
-    <div className="border-warning/30 bg-warning/10 mb-2 rounded-lg border px-3 py-2">
-      <ul className="text-warning-foreground space-y-1 text-xs">
-        {notices.map((notice) => (
-          <li key={notice}>{t(notice)}</li>
-        ))}
-      </ul>
-      {/* A run whose playbook was deleted is a record of what was reviewed,
-          not something that can be measured again against that playbook. */}
-      {freshness.playbook !== "missing" && (
-        <Button
-          className="mt-2"
-          onClick={onReviewAgain}
-          size="xs"
-          variant="outline"
-        >
-          {t("inspector.review.reviewAgain")}
-        </Button>
-      )}
-    </div>
+    <ReviewOutOfDateNotice
+      actionLabel={t("inspector.review.reviewAgain")}
+      // A run whose playbook was deleted is a record of what was reviewed,
+      // not something that can be measured again against that playbook.
+      onAction={freshness.playbook === "missing" ? undefined : onReviewAgain}
+      reasons={reasons}
+    />
   );
 };
 
@@ -2506,30 +2505,21 @@ const ReviewResultCard = ({
           </BidiText>
           <div className="flex flex-wrap items-center gap-1.5">
             {playbook?.verdict !== null && playbook?.verdict !== undefined && (
-              <span
+              <ReviewStatusBadge
+                // Not-applicable reads as "out of scope" rather than a gap.
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium",
-                  verdictChipClass(playbook.verdict),
+                  playbook.verdict === "not-applicable" && "border-dashed",
                 )}
+                icon={<ReviewStatusDot tone={VERDICT_TONE[playbook.verdict]} />}
+                tone={VERDICT_TONE[playbook.verdict]}
               >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "size-1.5 rounded-full",
-                    verdictDotClass(playbook.verdict),
-                  )}
-                />
                 {verdictLabels[playbook.verdict]}
-              </span>
+              </ReviewStatusBadge>
             )}
             {playbook !== null && (
               <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px] font-medium">
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "size-1.5 rounded-full",
-                    severityDotClass(playbook.severity),
-                  )}
+                <ReviewSeverityDot
+                  level={PLAYBOOK_SEVERITY_LEVEL[playbook.severity]}
                 />
                 {severityLabels[playbook.severity]}
               </span>
@@ -2540,65 +2530,44 @@ const ReviewResultCard = ({
             {reference !== null &&
               (isDirectedImpact(reference.impact) ? (
                 <>
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium",
-                      impactChipClass(reference.impact),
-                    )}
+                  <ReviewStatusBadge
+                    icon={
+                      <ReviewStatusDot tone={IMPACT_TONE[reference.impact]} />
+                    }
+                    tone={IMPACT_TONE[reference.impact]}
                   >
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        "size-1.5 rounded-full",
-                        impactDotClass(reference.impact),
-                      )}
-                    />
                     {impactLabel(reference.impact, perspective)}
-                  </span>
+                  </ReviewStatusBadge>
                   {reference.severity !== undefined && (
                     <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px] font-medium">
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          "size-1.5 rounded-full",
-                          severityDotClass(reference.severity),
-                        )}
+                      <ReviewSeverityDot
+                        level={PLAYBOOK_SEVERITY_LEVEL[reference.severity]}
                       />
                       {severityLabels[reference.severity]}
                     </span>
                   )}
                 </>
               ) : (
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium",
-                    referenceAssessmentChipClass(reference.assessment),
-                  )}
+                <ReviewStatusBadge
+                  icon={
+                    <ReviewStatusDot
+                      tone={REFERENCE_ASSESSMENT_TONE[reference.assessment]}
+                    />
+                  }
+                  tone={REFERENCE_ASSESSMENT_TONE[reference.assessment]}
                 >
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      "size-1.5 rounded-full",
-                      referenceAssessmentDotClass(reference.assessment),
-                    )}
-                  />
                   {assessmentLabels[reference.assessment]}
-                </span>
+                </ReviewStatusBadge>
               ))}
             {reference?.consensus === "mixed" && (
-              <span className="border-warning/30 text-warning-foreground inline-flex items-center rounded-full border px-1.5 py-0.5 text-[11px] font-medium">
+              <ReviewStatusBadge tone="warning">
                 {t("inspector.review.referencesDisagree")}
-              </span>
+              </ReviewStatusBadge>
             )}
             {decision !== REVIEW_DECISION.OPEN && (
-              <span
-                className={cn(
-                  "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[11px] font-medium",
-                  DECISION_CHIP[decision],
-                )}
-              >
+              <ReviewStatusBadge tone={DECISION_TONE[decision]}>
                 {t(DECISION_LABEL[decision])}
-              </span>
+              </ReviewStatusBadge>
             )}
           </div>
         </div>
@@ -2688,7 +2657,7 @@ const ReviewResultCard = ({
             reference={reference}
             references={references}
           />
-          <ReviewDecisionActions
+          <FindingDecisionFooter
             decision={decision}
             onAskInChat={() =>
               useInspectorCommandStore.getState().requestFileChatDraft({
@@ -2718,11 +2687,11 @@ const ReviewResultCard = ({
 
 /** How a recorded decision reads on the card. Both maps are total over the
  *  decisions a reviewer can take, so a new disposition must state its label
- *  and its colour here rather than rendering as nothing. */
-const DECISION_CHIP = {
-  accepted: "border-success/30 text-success",
-  dismissed: "border-border text-muted-foreground",
-} as const satisfies Record<DecidedReviewDecision, string>;
+ *  and its weight here rather than rendering as nothing. */
+const DECISION_TONE = {
+  accepted: "success",
+  dismissed: "neutral",
+} as const satisfies Record<DecidedReviewDecision, ReviewStatusTone>;
 
 const DECISION_LABEL = {
   accepted: "inspector.review.decisions.accepted",
@@ -2738,7 +2707,7 @@ const DECISION_LABEL = {
  * A card joins one finding per check kind, so the decision is recorded against
  * every row behind it: a reviewer answers the topic, not the executor.
  */
-const ReviewDecisionActions = ({
+const FindingDecisionFooter = ({
   decision,
   pending,
   onAskInChat,
@@ -3177,21 +3146,17 @@ const RiskSummaryCard = ({
         <h3 className="text-foreground-strong-muted text-[11px] font-medium tracking-[0.06em] uppercase">
           {t("knowledge.playbooks.risk.summaryTitle")}
         </h3>
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
-            riskChipClass(rollup.overallRisk),
-          )}
+        {/* The overall-risk badge escalates with the level: "critical" is the
+            one filled state (an outright violation of a non-negotiable
+            position), the rest stay outlined like the finding cards below. */}
+        <ReviewStatusBadge
+          icon={<ReviewSeverityDot level={rollup.overallRisk} />}
+          size="sm"
+          tone={reviewSeverityTone(rollup.overallRisk)}
+          variant={rollup.overallRisk === "critical" ? "strong" : "outline"}
         >
-          <span
-            aria-hidden="true"
-            className={cn(
-              "size-1.5 rounded-full",
-              riskDotClass(rollup.overallRisk),
-            )}
-          />
           {riskLabels[rollup.overallRisk]}
-        </span>
+        </ReviewStatusBadge>
       </div>
 
       <p className="text-muted-foreground text-xs">
@@ -3232,13 +3197,7 @@ const RiskSummaryCard = ({
                 className="text-muted-foreground flex items-center gap-1 text-[11px]"
                 key={verdict}
               >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "size-1.5 rounded-full",
-                    verdictDotClass(verdict),
-                  )}
-                />
+                <ReviewStatusDot tone={VERDICT_TONE[verdict]} />
                 {verdictLabels[verdict]}
                 <span className="text-foreground-ghost tabular-nums">
                   {format.number(count)}
@@ -3290,15 +3249,7 @@ const TopIssueRow = ({
   editorAvailable,
   onScrollToBlock,
 }: TopIssueRowProps) => {
-  const dot = (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "size-1.5 shrink-0 rounded-full",
-        severityDotClass(severity),
-      )}
-    />
-  );
+  const dot = <ReviewSeverityDot level={PLAYBOOK_SEVERITY_LEVEL[severity]} />;
 
   if (blockId === null || !editorAvailable) {
     return (
@@ -3577,68 +3528,23 @@ const impactLabel = (
     ? `${IMPACT_FOR_SIDE_LABEL[impact]} ${perspective.role}`
     : IMPACT_LABEL[impact];
 
-const IMPACT_CHIP_CLASS = {
-  unfavourable: "border-warning/30 text-warning-foreground",
-  favourable: "border-success/30 text-success",
-  neutral: "border-border text-muted-foreground",
-} as const satisfies Record<DirectedImpact, string>;
+/** Which way a directed comparison cuts, on the shared review palette. */
+const IMPACT_TONE = {
+  unfavourable: "warning",
+  favourable: "success",
+  neutral: "neutral",
+} as const satisfies Record<DirectedImpact, ReviewStatusTone>;
 
-const IMPACT_DOT_CLASS = {
-  unfavourable: "bg-warning",
-  favourable: "bg-success",
-  neutral: "bg-muted-foreground",
-} as const satisfies Record<DirectedImpact, string>;
-
-const impactChipClass = (impact: DirectedImpact): string =>
-  IMPACT_CHIP_CLASS[impact];
-const impactDotClass = (impact: DirectedImpact): string =>
-  IMPACT_DOT_CLASS[impact];
-
-const REFERENCE_ASSESSMENT_ALIGNED = "border-success/30 text-success";
-const REFERENCE_ASSESSMENT_DIFFERENT =
-  "border-warning/30 text-warning-foreground";
-const REFERENCE_ASSESSMENT_MISSING =
-  "border-warning/30 text-warning-foreground";
-const REFERENCE_ASSESSMENT_NEUTRAL = "border-border text-muted-foreground";
-
-const referenceAssessmentChipClass = (
-  assessment: ReferenceAssessment,
-): string => {
-  switch (assessment) {
-    case "aligned":
-      return REFERENCE_ASSESSMENT_ALIGNED;
-    case "different":
-      return REFERENCE_ASSESSMENT_DIFFERENT;
-    case "missing-from-target":
-      return REFERENCE_ASSESSMENT_MISSING;
-    case "additional-in-target":
-    case "deal-specific":
-    case "not-comparable":
-      return REFERENCE_ASSESSMENT_NEUTRAL;
-    default:
-      assessment satisfies never;
-      return "";
-  }
-};
-
-const referenceAssessmentDotClass = (
-  assessment: ReferenceAssessment,
-): string => {
-  switch (assessment) {
-    case "aligned":
-      return "bg-success";
-    case "different":
-    case "missing-from-target":
-      return "bg-warning";
-    case "additional-in-target":
-    case "deal-specific":
-    case "not-comparable":
-      return "bg-muted-foreground";
-    default:
-      assessment satisfies never;
-      return "";
-  }
-};
+/** How a clause compares to its references. "Additional", "deal-specific" and
+ *  "not comparable" are observations, not problems, so they stay neutral. */
+const REFERENCE_ASSESSMENT_TONE = {
+  aligned: "success",
+  different: "warning",
+  "missing-from-target": "warning",
+  "additional-in-target": "neutral",
+  "deal-specific": "neutral",
+  "not-comparable": "neutral",
+} as const satisfies Record<ReferenceAssessment, ReviewStatusTone>;
 
 const useRiskLevelLabels = (): Record<OverallRisk, string> => {
   const t = useTranslations();
@@ -3651,117 +3557,22 @@ const useRiskLevelLabels = (): Record<OverallRisk, string> => {
   };
 };
 
-// The overall-risk chip escalates visually with the level: "critical" is the
-// one solid-fill state (it means an outright violation of a non-negotiable
-// position), the rest reuse the same outlined verdict/severity token pairs
-// as the finding cards below.
-const RISK_CHIP_CRITICAL =
-  "border-transparent bg-destructive text-destructive-foreground";
-const RISK_CHIP_HIGH = "border-destructive/30 text-destructive";
-const RISK_CHIP_MEDIUM = "border-warning/30 text-warning-foreground";
-const RISK_CHIP_LOW = "border-border text-muted-foreground";
-const RISK_CHIP_NONE = "border-success/30 text-success";
+/** Verdict tiers on the shared review palette. Not-applicable is neutral and
+ *  distinct from missing: out of scope, not a gap — the dashed border at the
+ *  call site carries that difference. */
+const VERDICT_TONE = {
+  compliant: "success",
+  fallback: "warning",
+  deviation: "destructive",
+  missing: "neutral",
+  "not-applicable": "neutral",
+} as const satisfies Record<PlaybookVerdict, ReviewStatusTone>;
 
-const riskChipClass = (risk: OverallRisk): string => {
-  switch (risk) {
-    case "critical":
-      return RISK_CHIP_CRITICAL;
-    case "high":
-      return RISK_CHIP_HIGH;
-    case "medium":
-      return RISK_CHIP_MEDIUM;
-    case "low":
-      return RISK_CHIP_LOW;
-    case "none":
-      return RISK_CHIP_NONE;
-    default:
-      risk satisfies never;
-      return "";
-  }
-};
-
-const riskDotClass = (risk: OverallRisk): string => {
-  switch (risk) {
-    // The "critical" dot sits on the chip's own solid destructive
-    // background, so it needs the foreground shade for contrast; "high"
-    // sits on a transparent chip like the severity dots elsewhere.
-    case "critical":
-      return "bg-destructive-foreground";
-    case "high":
-      return "bg-destructive";
-    case "medium":
-      return "bg-warning";
-    case "low":
-      return "bg-foreground-strong-muted";
-    case "none":
-      return "bg-success";
-    default:
-      risk satisfies never;
-      return "";
-  }
-};
-
-// Verdict tiers map to the same green/amber/red/gray semantic
-// tokens the verdict property uses elsewhere. Each `dark:`-safe pair
-// is declared as a constant so the hardcoded-colour rule treats it
-// as a token reference, not a raw value.
-const verdictDotClass = (verdict: PlaybookVerdict): string => {
-  switch (verdict) {
-    case "compliant":
-      return "bg-success";
-    case "fallback":
-      return "bg-warning";
-    case "deviation":
-      return "bg-destructive";
-    case "missing":
-      return "bg-muted-foreground";
-    // Neutral, distinct from missing: not-applicable is out of scope, not a gap.
-    case "not-applicable":
-      return "bg-border";
-    default:
-      verdict satisfies never;
-      return "";
-  }
-};
-
-const VERDICT_CHIP_COMPLIANT = "border-success/30 text-success";
-const VERDICT_CHIP_FALLBACK = "border-warning/30 text-warning-foreground";
-const VERDICT_CHIP_DEVIATION = "border-destructive/30 text-destructive";
-const VERDICT_CHIP_MISSING = "border-border text-muted-foreground";
-// A dashed neutral chip so not-applicable reads as "out of scope" rather than a
-// solid-bordered missing gap.
-const VERDICT_CHIP_NOT_APPLICABLE =
-  "border-dashed border-border text-muted-foreground";
-
-const verdictChipClass = (verdict: PlaybookVerdict): string => {
-  switch (verdict) {
-    case "compliant":
-      return VERDICT_CHIP_COMPLIANT;
-    case "fallback":
-      return VERDICT_CHIP_FALLBACK;
-    case "deviation":
-      return VERDICT_CHIP_DEVIATION;
-    case "missing":
-      return VERDICT_CHIP_MISSING;
-    case "not-applicable":
-      return VERDICT_CHIP_NOT_APPLICABLE;
-    default:
-      verdict satisfies never;
-      return "";
-  }
-};
-
-const severityDotClass = (severity: PlaybookSeverity): string => {
-  switch (severity) {
-    case "blocker":
-    case "high":
-      return "bg-destructive";
-    case "medium":
-      return "bg-warning";
-    case "low":
-      return "bg-foreground-strong-muted";
-    default:
-      severity satisfies never;
-      return "";
-  }
-};
+/** A playbook severity stops at "blocker"; the shared scale calls that level
+ *  "critical" and adds a "none" the playbook vocabulary has no word for. */
+const PLAYBOOK_SEVERITY_LEVEL = {
+  blocker: "critical",
+  high: "high",
+  medium: "medium",
+  low: "low",
+} as const satisfies Record<PlaybookSeverity, ReviewSeverityLevel>;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { getInitials } from "./get-initials";
+import { getInitials } from "./initials";
 
 describe("getInitials", () => {
   it("returns two initials for multi-word names", () => {

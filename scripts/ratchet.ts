@@ -1325,7 +1325,6 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     exclude: (file) =>
       isExcludedSource(file) ||
       [
-        "apps/web/src/components/user-avatar.tsx",
         "apps/web/src/components/public-workspace-shell.tsx",
         "apps/web/src/routes/auth/organization.tsx",
         "apps/web/src/routes/dev/-components/ui-playground.tsx",

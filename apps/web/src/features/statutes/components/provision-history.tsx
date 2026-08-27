@@ -4,6 +4,10 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import {
+  ReviewDiffDeletion,
+  ReviewDiffInsertion,
+} from "@stll/ui/review/review-diff-text";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
@@ -20,10 +24,6 @@ import {
 } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import {
-  TRACKED_DELETION_STYLE,
-  TRACKED_INSERTION_STYLE,
-} from "@/lib/track-changes-style";
 
 type ProvisionHistoryProps = {
   /** The provision heading's anchor, the id the history is filed under. */
@@ -189,19 +189,19 @@ const ProvisionDiffRun = ({ segment }: { segment: ProvisionDiffSegment }) => {
 
   if (segment.kind === "inserted") {
     return (
-      <ins style={TRACKED_INSERTION_STYLE}>
+      <ReviewDiffInsertion>
         <span className="sr-only">{t("statutes.diffInserted")}</span>
         {segment.text}
-      </ins>
+      </ReviewDiffInsertion>
     );
   }
 
   if (segment.kind === "removed") {
     return (
-      <del style={TRACKED_DELETION_STYLE}>
+      <ReviewDiffDeletion>
         <span className="sr-only">{t("statutes.diffRemoved")}</span>
         {segment.text}
-      </del>
+      </ReviewDiffDeletion>
     );
   }
 

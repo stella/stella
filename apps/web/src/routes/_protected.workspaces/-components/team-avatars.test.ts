@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
+import { getInitials } from "@stll/ui/initials";
+
 import { getDisplayName } from "@/lib/get-display-name";
-import { getInitials } from "@/lib/get-initials";
 
 describe("team avatar labels", () => {
   it("derives stable initials from names", () => {

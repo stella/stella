@@ -3431,7 +3431,6 @@
     "basedOnCurrent": "Az aktuális változaton alapul",
     "clearComparison": "Összehasonlítás törlése",
     "commentFromEarlierRevision": "Korábbi változathoz írva",
-    "commentMeta": "{author} · {date}",
     "comments": "Megjegyzések",
     "commentsEmpty": "Jelöljön ki szöveget a megjegyzéshez.",
     "noRevisions": "Még nincs változat",

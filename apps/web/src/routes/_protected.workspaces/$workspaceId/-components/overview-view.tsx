@@ -32,6 +32,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { UNKNOWN_AUTHOR_LABEL } from "@stll/ui/review/review-author-avatar";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
 import {
@@ -46,7 +47,7 @@ import { EmptyScreen } from "@/components/empty-screen";
 import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { PersonMentionLabel } from "@/components/person-mention-label";
-import { UNKNOWN_USER_LABEL, UserIdentity } from "@/components/user-avatar";
+import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getWeekStart, toISODate } from "@/components/workspaces/entity-utils";
 import type { TaskStatus } from "@/components/workspaces/tasks/task-detail-constants";
@@ -368,7 +369,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
       return {
         ...member,
-        name: getDisplayName(member.name, member.email) ?? UNKNOWN_USER_LABEL,
+        name: getDisplayName(member.name, member.email) ?? UNKNOWN_AUTHOR_LABEL,
         daily,
       };
     });

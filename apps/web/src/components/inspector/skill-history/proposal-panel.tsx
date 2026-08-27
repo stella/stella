@@ -6,6 +6,9 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@stll/ui/popover";
+import { ReviewDecisionActions } from "@stll/ui/review/review-decision-actions";
+import type { ReviewStatusTone } from "@stll/ui/review/review-status-badge";
+import { ReviewStatusBadge } from "@stll/ui/review/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
@@ -117,23 +120,20 @@ export const ProposalStatusBadge = ({
   const t = useTranslations();
 
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium",
-        STATUS_TONE[status],
-      )}
-    >
+    <ReviewStatusBadge tone={STATUS_TONE[status]} variant="solid">
       {t(PROPOSAL_STATUS_LABEL_KEY[status])}
-    </span>
+    </ReviewStatusBadge>
   );
 };
 
+/** Where a proposal stands, on the product's shared review palette. Total over
+ *  the status vocabulary, so a new status has to state its weight. */
 const STATUS_TONE = {
-  draft: "bg-muted text-muted-foreground",
-  proposed: "bg-warning/12 text-warning-foreground",
-  accepted: "bg-success/12 text-success",
-  rejected: "bg-muted text-muted-foreground",
-} as const satisfies Record<SkillProposalStatus, string>;
+  draft: "neutral",
+  proposed: "warning",
+  accepted: "success",
+  rejected: "neutral",
+} as const satisfies Record<SkillProposalStatus, ReviewStatusTone>;
 
 type ProposalActionBarProps = {
   status: SkillProposalStatus;
@@ -197,14 +197,16 @@ export const ProposalActionBar = ({
         </Button>
       ) : null}
       {canManage && isOpen ? (
-        <>
-          <Button onClick={onAccept} size="xs">
-            {isStale ? t("skillHistory.acceptStale") : t("common.accept")}
-          </Button>
-          <Button onClick={onReject} size="xs" variant="outline">
-            {t("skillHistory.reject")}
-          </Button>
-        </>
+        <ReviewDecisionActions
+          acceptLabel={
+            isStale ? t("skillHistory.acceptStale") : t("common.accept")
+          }
+          onAccept={onAccept}
+          onReject={onReject}
+          rejectLabel={t("skillHistory.reject")}
+          size="xs"
+          state="pending"
+        />
       ) : null}
       {isAuthor && isOpen ? (
         <Button onClick={onDelete} size="xs" variant="destructive-outline">
