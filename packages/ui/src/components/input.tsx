@@ -6,13 +6,15 @@ import { Input as InputPrimitive } from "@base-ui/react/input";
 import { SearchIcon } from "lucide-react";
 
 import { isStructuredInputType, useContentDir } from "../hooks/use-content-dir";
+import { CONTROL_SIZE } from "../lib/control-size";
+import type { ControlSize } from "../lib/control-size";
 import { cn } from "../lib/utils";
 
 type InputProps = Omit<
   InputPrimitive.Props & React.RefAttributes<HTMLInputElement>,
   "size" | "style"
 > & {
-  size?: "sm" | "default" | "lg" | number;
+  size?: ControlSize | number;
   style?: React.CSSProperties;
   unstyled?: boolean;
   nativeInput?: boolean;
@@ -20,13 +22,14 @@ type InputProps = Omit<
 
 const Input = ({
   className,
-  size = "default",
+  size = CONTROL_SIZE.default,
   unstyled = false,
   nativeInput = false,
   dir,
   onChange,
   ...props
 }: InputProps) => {
+  const controlSize = typeof size === "number" ? CONTROL_SIZE.default : size;
   const contentDir = useContentDir({
     // Structured/neutral-value types (token, URL, number, date…) stay LTR
     // unless the caller forces a direction; only free-text resolves by content.
@@ -42,9 +45,7 @@ const Input = ({
   };
   const inputClassName = cn(
     "placeholder:text-foreground-placeholder h-8.5 w-full min-w-0 rounded-[inherit] px-[calc(--spacing(3)-1px)] leading-8.5 outline-none [transition:background-color_5000000s_ease-in-out_0s] sm:h-7.5 sm:leading-7.5",
-    size === "sm" &&
-      "h-7.5 px-[calc(--spacing(2.5)-1px)] leading-7.5 sm:h-6.5 sm:leading-6.5",
-    size === "lg" && "h-9.5 leading-9.5 sm:h-8.5 sm:leading-8.5",
+    INPUT_SIZE_CLASS_NAMES[controlSize],
     props.type === "search" &&
       "ps-8 [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none [&::-webkit-search-results-button]:appearance-none [&::-webkit-search-results-decoration]:appearance-none",
     props.type === "file" &&
@@ -93,5 +94,12 @@ const Input = ({
     </span>
   );
 };
+
+const INPUT_SIZE_CLASS_NAMES = {
+  [CONTROL_SIZE.sm]:
+    "h-7.5 px-[calc(--spacing(2.5)-1px)] leading-7.5 sm:h-6.5 sm:leading-6.5",
+  [CONTROL_SIZE.default]: undefined,
+  [CONTROL_SIZE.lg]: "h-9.5 leading-9.5 sm:h-8.5 sm:leading-8.5",
+} as const satisfies Record<ControlSize, string | undefined>;
 
 export { Input, type InputProps };

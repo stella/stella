@@ -62,6 +62,7 @@ export * from "./hooks/use-mobile";
 export * from "./hooks/use-viewport-width";
 export * from "./inspector";
 export * from "./kanban";
+export * from "./lib/control-size";
 export * from "./lib/initials";
 export * from "./lib/option-color";
 export * from "./lib/overlay-layer";

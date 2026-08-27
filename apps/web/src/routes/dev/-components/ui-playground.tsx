@@ -194,6 +194,7 @@ import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { AIKeyRequiredDialog } from "@/components/require-ai-key";
 import { detached } from "@/lib/detached";
+import { ControlSizesPlayground } from "@/routes/dev/-components/control-sizes-playground";
 
 const renderPlaygroundAnchor = ({
   children,
@@ -468,6 +469,8 @@ export function UiPlayground() {
 
           <TabsPanel value="forms">
             <PlaygroundGrid>
+              <ControlSizesPlayground />
+
               <PlaygroundSection
                 description="Inputs, textareas, labels, descriptions, invalid states, and grouped adornments."
                 title="Fields"

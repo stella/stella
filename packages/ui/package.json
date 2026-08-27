@@ -43,6 +43,7 @@
     "./color-picker": "./src/components/color-picker.tsx",
     "./combobox": "./src/components/combobox.tsx",
     "./command": "./src/components/command.tsx",
+    "./control-size": "./src/lib/control-size.ts",
     "./calendar": "./src/calendar/index.ts",
     "./data-table": "./src/data-table/index.ts",
     "./date-picker-popover": "./src/components/date-picker-popover.tsx",

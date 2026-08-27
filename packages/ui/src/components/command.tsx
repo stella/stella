@@ -7,6 +7,8 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { SearchIcon } from "lucide-react";
 
 import { useContentDir } from "../hooks/use-content-dir";
+import { CONTROL_SIZE } from "../lib/control-size";
+import type { ControlSize } from "../lib/control-size";
 import { cn } from "../lib/utils";
 import { DialogPopup } from "./dialog";
 
@@ -51,14 +53,14 @@ const CommandDialogPopup = ({
 );
 
 type CommandInputProps = Omit<AutocompletePrimitive.Input.Props, "size"> & {
-  size?: "sm" | "default" | "lg" | number;
+  size?: ControlSize | number;
   wrapperClassName?: string;
   ref?: React.Ref<HTMLInputElement>;
 };
 
 const CommandInput = ({
   className,
-  size = "lg",
+  size = CONTROL_SIZE.lg,
   wrapperClassName,
   dir,
   onChange,
@@ -87,9 +89,9 @@ const CommandInput = ({
       <AutocompletePrimitive.Input
         className={cn(
           "placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-base outline-none disabled:cursor-not-allowed disabled:opacity-64 sm:text-sm",
-          size === "sm" && "h-7 text-sm",
-          size === "default" && "h-8",
-          size === "lg" && "h-9",
+          typeof size === "number"
+            ? undefined
+            : COMMAND_INPUT_SIZE_CLASS_NAMES[size],
           className,
         )}
         data-slot="command-input"
@@ -101,6 +103,12 @@ const CommandInput = ({
     </div>
   );
 };
+
+const COMMAND_INPUT_SIZE_CLASS_NAMES = {
+  [CONTROL_SIZE.sm]: "h-7 text-sm",
+  [CONTROL_SIZE.default]: "h-8",
+  [CONTROL_SIZE.lg]: "h-9",
+} as const satisfies Record<ControlSize, string>;
 
 const CommandPanel = ({ className, ...props }: React.ComponentProps<"div">) => (
   <div
