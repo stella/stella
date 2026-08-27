@@ -1415,22 +1415,25 @@ test("a failed item build reports the SQLSTATE without logging any message text"
   // emitted would reach telemetry verbatim, and a driver message quotes the
   // statement and can quote the row that failed. Fixed vocabulary only.
   const sourceId = await seedSource();
-  const realLoggerModule = await import("@/api/lib/observability/logger");
+  const loggerModule = await import("@/api/lib/observability/logger");
   const warned: Record<string, unknown>[] = [];
+  // Spread both levels rather than redeclaring them: the module also exports
+  // `sanitizeLogAttributes`, and a mock that drops it is exactly what this
+  // suite's sibling guard forbids.
   await mock.module("@/api/lib/observability/logger", () => ({
+    ...loggerModule,
     logger: {
+      ...loggerModule.logger,
       warn: (_event: string, attributes: Record<string, unknown>) => {
         warned.push(attributes);
       },
-      error: () => undefined,
-      info: () => undefined,
     },
   }));
 
   try {
     await runUnit(sourceId, drivenFailureStub);
   } finally {
-    await mock.module("@/api/lib/observability/logger", () => realLoggerModule);
+    await mock.module("@/api/lib/observability/logger", () => loggerModule);
   }
 
   const failure = warned.find(
