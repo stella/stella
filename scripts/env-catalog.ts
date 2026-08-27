@@ -336,9 +336,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   MICROSOFT_AUTH_CLIENT_SECRET:
     "Microsoft OAuth client secret; required when the matching web login flag is enabled.",
   MICROSOFT_AUTH_TENANT_ID:
-    "Microsoft directory (tenant) ID. Must name one directory: the shared " +
-    '"common", "organizations", and "consumers" endpoints admit any ' +
-    "Microsoft account and are rejected.",
+    "Microsoft OAuth tenant selector accepted by the configured application registration.",
   OPERATOR_METRICS_TOKEN:
     "Bearer token for registration metrics. Unset disables the endpoint; use a long random value.",
   POSTHOG_KEY:

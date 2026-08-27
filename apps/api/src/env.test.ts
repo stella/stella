@@ -133,7 +133,7 @@ describe("API environment", () => {
     expect(result.stderr.toString()).toContain("GOTENBERG_URL must use HTTPS");
   });
 
-  test("rejects Microsoft's shared authorization endpoint as a tenant", () => {
+  test("accepts Microsoft's shared authorization endpoint for multi-tenant sign-in", () => {
     const result = bootApiEnvironment({
       ...baseEnv,
       CONTENT_ENCRYPTION_KEY: "a".repeat(64),
@@ -144,10 +144,8 @@ describe("API environment", () => {
       USE_MOCK_AI: "false",
     });
 
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr.toString()).toContain(
-      "MICROSOFT_AUTH_TENANT_ID must name one directory",
-    );
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString().trim()).toBe("true");
   });
 
   test("rejects static credential placeholders for the env provider", () => {
