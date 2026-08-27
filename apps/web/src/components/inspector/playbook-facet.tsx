@@ -98,6 +98,7 @@ import {
   restoredRunId,
   reviewDecisionProgress,
   reviewRunView,
+  reviewSkeletonCardCount,
 } from "@/components/ai-suggestions/document-review-run.logic";
 import type {
   PinnedPosition,
@@ -659,7 +660,7 @@ export const PlaybookFacet = ({
   // first; showing the launcher meanwhile would flash a review the document
   // has already had.
   if (restoreAllowed && sessionRunId === null && runHistoryPending) {
-    return <ReviewLoadingState />;
+    return <ReviewLauncherSkeleton />;
   }
 
   // Rendered alongside whichever branch is on screen: a refused start
@@ -942,7 +943,9 @@ const ReviewRunPanel = ({
   // read error only surfaces while there is nothing to show.
   if (runDetail === undefined || restored === null) {
     return runError === null ? (
-      <ReviewLoadingState />
+      <ReviewResultsSkeleton
+        cardCount={reviewSkeletonCardCount({ runs: history.runs, runId })}
+      />
     ) : (
       <ErrorState
         message={t("common.unexpectedError")}
@@ -1994,7 +1997,7 @@ const ReviewProgressState = ({
 // The facet is asking the server what this document's latest run is; the
 // answer decides between a restored review and the launcher, so the skeleton
 // is the launcher's own shape: a section label and two option groups.
-const ReviewLoadingState = () => {
+const ReviewLauncherSkeleton = () => {
   const t = useTranslations();
   return (
     <div
@@ -2005,6 +2008,62 @@ const ReviewLoadingState = () => {
       <Skeleton className="h-4 w-1/3" />
       <Skeleton className="h-20 w-full rounded-lg" />
       <Skeleton className="h-20 w-full rounded-lg" />
+    </div>
+  );
+};
+
+/**
+ * The wait for a run whose findings have not arrived yet. Its shape is the
+ * results view's, row for row — the summary sentence, the queue row, the two
+ * filter tabs, the clause band, then the cards — so nothing jumps when the run
+ * lands. `cardCount` is what the history row said the run was planned against,
+ * which is why the column does not resize under the reader.
+ */
+const ReviewResultsSkeleton = ({ cardCount }: { cardCount: number }) => {
+  const t = useTranslations();
+  return (
+    <div
+      aria-busy="true"
+      aria-label={t("common.loading")}
+      className="bg-background flex h-full flex-col"
+    >
+      <header className="space-y-2 border-b px-3 py-2.5">
+        <div className="min-w-0 space-y-1.5">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-3 w-3/4" />
+          <Skeleton className="h-3 w-40" />
+        </div>
+        {/* The document's queue row: pending count, hide-accepted, accept-all. */}
+        <div className="flex items-center gap-1">
+          <Skeleton className="me-auto h-3 w-20" />
+          <Skeleton className="size-6 rounded-md" />
+          <Skeleton className="h-6 w-24 rounded-md" />
+        </div>
+      </header>
+      <div className="flex-1 overflow-hidden px-2 py-2">
+        <div className="mb-2 flex items-center justify-between gap-2 px-1">
+          <Skeleton className="h-3 w-16" />
+          <div className="bg-muted flex gap-0.5 rounded-lg p-0.5">
+            <Skeleton className="h-8 w-20 rounded-md" />
+            <Skeleton className="h-8 w-20 rounded-md" />
+          </div>
+        </div>
+        {/* The clause band sits where the deal strip paints it, so the list
+            below starts on the same line either way. */}
+        <div className="relative mb-2 h-9 w-full">
+          <Skeleton className="absolute start-0 end-0 top-[13px] h-2.5 rounded-full" />
+        </div>
+        <ul className="space-y-1.5">
+          {Array.from({ length: cardCount }, (_unused, index) => (
+            <li className="bg-card rounded-lg border" key={index}>
+              <span className="flex min-h-11 w-full items-center gap-2 px-3 py-2.5">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="ms-auto h-3 w-16 shrink-0" />
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 };

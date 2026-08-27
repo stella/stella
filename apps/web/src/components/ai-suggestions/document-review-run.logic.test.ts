@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  documentReviewRunDetailSeeds,
+  documentReviewRunKeys,
+} from "@/components/ai-suggestions/document-review-queries";
 import type {
   DecidedReviewFinding,
   DocumentReviewDecision,
@@ -15,8 +19,12 @@ import {
   resolveRunConflictAttachment,
   restoreReviewRun,
   reviewDecisionProgress,
+  reviewSkeletonCardCount,
 } from "@/components/ai-suggestions/document-review-run.logic";
-import type { ReviewRunHistoryEntry } from "@/components/ai-suggestions/document-review-run.logic";
+import type {
+  ReviewRunHistoryEntry,
+  ReviewRunSkeletonEntry,
+} from "@/components/ai-suggestions/document-review-run.logic";
 import { toSafeId } from "@/lib/safe-id";
 
 const ACTIVE_RUN_ID = "0198f2c4-6a55-7c31-9a10-3b1d2f4c5e60";
@@ -432,5 +440,105 @@ describe("whether a completed review still describes the document", () => {
         currentEntityVersionId: CURRENT_VERSION_ID,
       }),
     ).toEqual({ documentChanged: true, playbook: "missing" });
+  });
+});
+
+const SEEDED_WORKSPACE_ID = "0198f2c4-1e55-7c31-9a10-3b1d2f4c5ec0";
+
+describe("seeding a run's detail from the history answer", () => {
+  test("pairs the latest run with the key the run panel reads", () => {
+    const latest = cachedRun([finding(FIRST_FINDING_ID, "open")]);
+
+    expect(
+      documentReviewRunDetailSeeds(SEEDED_WORKSPACE_ID, { latest }),
+    ).toEqual([
+      [
+        documentReviewRunKeys.detail({
+          workspaceId: SEEDED_WORKSPACE_ID,
+          runId: COMPLETED_RUN_ID,
+        }),
+        latest,
+      ],
+    ]);
+  });
+
+  test("seeds nothing for a document with no runs", () => {
+    expect(
+      documentReviewRunDetailSeeds(SEEDED_WORKSPACE_ID, { latest: null }),
+    ).toEqual([]);
+  });
+
+  test("keys the run the page answered with, not the one asked about", () => {
+    const latest = cachedRun([]);
+    const [seed] = documentReviewRunDetailSeeds(SEEDED_WORKSPACE_ID, {
+      latest: { ...latest, run: { ...latest.run, id: OTHER_RUN_ID } },
+    });
+
+    expect(seed?.[0]).toEqual(
+      documentReviewRunKeys.detail({
+        workspaceId: SEEDED_WORKSPACE_ID,
+        runId: OTHER_RUN_ID,
+      }),
+    );
+  });
+});
+
+const skeletonEntry = (
+  id: string,
+  status: ReviewRunSkeletonEntry["status"],
+  total: number,
+): ReviewRunSkeletonEntry => ({ ...historyEntry(id, status), total });
+
+describe("sizing the wait for a run", () => {
+  test("draws a card per position the run was planned against", () => {
+    expect(
+      reviewSkeletonCardCount({
+        runs: [skeletonEntry(NEWER_COMPLETED_RUN_ID, "completed", 9)],
+        runId: null,
+      }),
+    ).toBe(9);
+  });
+
+  test("sizes the named run, not whichever one would be restored", () => {
+    expect(
+      reviewSkeletonCardCount({
+        runs: [
+          skeletonEntry(NEWER_COMPLETED_RUN_ID, "completed", 9),
+          skeletonEntry(OLDER_COMPLETED_RUN_ID, "completed", 4),
+        ],
+        runId: OLDER_COMPLETED_RUN_ID,
+      }),
+    ).toBe(4);
+  });
+
+  test("falls back while the history has not arrived", () => {
+    expect(reviewSkeletonCardCount({ runs: [], runId: null })).toBe(6);
+  });
+
+  test("falls back for a run named by nothing in the history", () => {
+    expect(
+      reviewSkeletonCardCount({
+        runs: [skeletonEntry(NEWER_COMPLETED_RUN_ID, "completed", 9)],
+        runId: FAILED_RUN_ID,
+      }),
+    ).toBe(6);
+  });
+
+  test("falls back for a queued run, which has planned nothing yet", () => {
+    expect(
+      reviewSkeletonCardCount({
+        runs: [skeletonEntry(ACTIVE_RUN_ID, "queued", 0)],
+        runId: null,
+      }),
+    ).toBe(6);
+  });
+
+  test("caps a long playbook at what the column can hold", () => {
+    expect(
+      reviewSkeletonCardCount({
+        runs: [skeletonEntry(NEWER_COMPLETED_RUN_ID, "completed", 200)],
+        runId: null,
+      }),
+    ).toBe(12);
   });
 });

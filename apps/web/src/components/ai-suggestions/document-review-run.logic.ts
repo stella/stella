@@ -102,6 +102,42 @@ export const restoredRunId = (restore: ReviewRunRestore): string | null =>
   restore.type === "none" ? null : restore.runId;
 
 /**
+ * How many result cards the wait should draw when the run behind it is not
+ * loaded yet. The history row already states how many positions the run was
+ * planned against, so the skeleton can be the right height rather than a
+ * guess that resizes under the reader.
+ */
+const REVIEW_SKELETON_CARDS_FALLBACK = 6;
+/** A long playbook would otherwise paint hundreds of grey rows below the fold;
+ *  a wait only has to fill the viewport it is standing in for. */
+const REVIEW_SKELETON_CARDS_MAX = 12;
+
+/** The columns the skeleton reads, on top of what the restore decision needs. */
+export type ReviewRunSkeletonEntry = ReviewRunHistoryEntry &
+  Pick<DocumentReviewRunSummary, "total">;
+
+type ReviewSkeletonCardCountArgs = {
+  runs: readonly ReviewRunSkeletonEntry[];
+  /** The run the wait is for, when it is already known. `null` leaves the
+   *  restore decision to name it, exactly as the facet will. */
+  runId: string | null;
+};
+
+export const reviewSkeletonCardCount = ({
+  runs,
+  runId,
+}: ReviewSkeletonCardCountArgs): number => {
+  const wanted = runId ?? restoredRunId(resolveReviewRunRestore(runs));
+  const total = runs.find((run) => run.id === wanted)?.total ?? 0;
+  // A queued run has planned nothing yet, so it states no total; there is
+  // nothing better than the fallback to draw.
+  if (total <= 0) {
+    return REVIEW_SKELETON_CARDS_FALLBACK;
+  }
+  return Math.min(total, REVIEW_SKELETON_CARDS_MAX);
+};
+
+/**
  * The run a rejected create should attach to. The server refuses a second run
  * while one is active, so that active run is the review this request asked
  * for; if it settled in the meantime, its findings are that answer. Anything

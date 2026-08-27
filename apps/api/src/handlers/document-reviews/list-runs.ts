@@ -13,6 +13,11 @@
  * what the run was measured against and for whom — rather than sent whole: the
  * snapshot embeds every confirmed position, which a list of ten runs has no
  * use for.
+ *
+ * `includeLatest` answers with the newest run in full as well. Opening the
+ * review facet needs both this history and the run it restores; asking for the
+ * run by id afterwards is a second sequential round the reader waits through,
+ * and the id only becomes known from this very answer.
  */
 
 import { Result } from "better-result";
@@ -29,6 +34,7 @@ import {
   DECISION_COUNT_COLUMNS,
   toDecisionCounts,
 } from "@/api/lib/document-review/decision-counts";
+import { readDocumentReviewRunDetail } from "@/api/lib/document-review/read-run-detail";
 import type { PlaybookPinProvenance } from "@/api/lib/document-review/run-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
@@ -94,12 +100,16 @@ const config = {
     fileFieldId: tSafeId("field"),
     cursor: t.Optional(t.String({ maxLength: 512 })),
     limit: t.Optional(t.Integer({ minimum: 1, maximum: RUNS_PAGE_SIZE_MAX })),
+    // Send the newest run's findings with the page. Only the first page has a
+    // newest run to send, so a cursored request answers with `latest: null`
+    // even when it asks.
+    includeLatest: t.Optional(t.Boolean()),
   }),
 } satisfies HandlerConfig;
 
 const listDocumentReviewRuns = createSafeHandler(
   config,
-  async function* ({ query, safeDb, workspaceId }) {
+  async function* ({ query, safeDb, session, workspaceId }) {
     const limit = query.limit ?? RUNS_PAGE_SIZE_DEFAULT;
     const cursorCondition = yield* runHistoryCursorCondition(query.cursor);
 
@@ -161,10 +171,30 @@ const listDocumentReviewRuns = createSafeHandler(
         runHistoryCursor.encode(item.createdAtCursor, item.id),
     });
 
+    // The newest run, in full, for a caller that will read it next anyway.
+    // Deliberately the newest run rather than "the one the facet will restore":
+    // which run a reader is shown is a client decision, and restating it here
+    // would be a second copy of that rule free to drift from the first. A page
+    // reached by cursor has no newest run to speak for.
+    const latestRunId =
+      query.includeLatest === true && query.cursor === undefined
+        ? (page.items.at(0)?.id ?? null)
+        : null;
+    const latest =
+      latestRunId === null
+        ? null
+        : yield* readDocumentReviewRunDetail({
+            safeDb,
+            workspaceId,
+            organizationId: session.activeOrganizationId,
+            runId: latestRunId,
+          });
+
     // The cursor projection is a pagination mechanism, not part of the run, so
     // the response object is listed out rather than spread from the row.
     return Result.ok({
       ...page,
+      latest,
       items: page.items.map((run) => ({
         id: run.id,
         status: run.status,

@@ -80,14 +80,23 @@ export const documentReviewSourcesOptions = ({
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
 
+type FetchDocumentReviewRunsOptions = {
+  /** Answer with the newest run's findings as well. The facet needs both the
+   *  history and the run it restores, and the run's id is only known from this
+   *  answer — asking for it afterwards is a second sequential round. */
+  includeLatest?: boolean;
+  signal?: AbortSignal;
+};
+
 /**
  * A document's review history, newest first. Exported as a plain call as well
  * as query options: when a create loses the race to an already active run
- * (409), the store reads the history directly to attach to that run.
+ * (409), the store reads the history directly to attach to that run — and
+ * wants nothing but the run ids, so it leaves `includeLatest` off.
  */
 export const fetchDocumentReviewRuns = async (
   { workspaceId, entityId, fileFieldId }: DocumentReviewRunTarget,
-  signal?: AbortSignal,
+  { includeLatest = false, signal }: FetchDocumentReviewRunsOptions = {},
 ) =>
   unwrapEden(
     await api
@@ -97,6 +106,7 @@ export const fetchDocumentReviewRuns = async (
           entityId: toSafeId<"entity">(entityId),
           fileFieldId: toSafeId<"field">(fileFieldId),
           limit: DOCUMENT_REVIEW_RUN_HISTORY_LIMIT,
+          includeLatest,
         },
         ...(signal === undefined ? {} : { fetch: { signal } }),
       }),
@@ -108,15 +118,67 @@ export type DocumentReviewRunPage = Awaited<
 export type DocumentReviewRunSummary = DocumentReviewRunPage["items"][number];
 export type DocumentReviewRunStatus = DocumentReviewRunSummary["status"];
 
+/**
+ * The run-detail cache entries a history page can fill on its own: one pair
+ * per run the page answered in full, keyed the way `documentReviewRunOptions`
+ * reads it.
+ *
+ * The return type is stated rather than inferred, and that is the point: the
+ * second member is the *point read's* type, so a `latest` projection that
+ * drifted from `runs/:runId` fails here instead of seeding the cache with a
+ * shape the panel cannot read.
+ */
+export type DocumentReviewRunDetailSeed = readonly [
+  ReturnType<typeof documentReviewRunKeys.detail>,
+  DocumentReviewRunDetail,
+];
+
+export const documentReviewRunDetailSeeds = (
+  workspaceId: string,
+  page: Pick<DocumentReviewRunPage, "latest">,
+): DocumentReviewRunDetailSeed[] => {
+  const { latest } = page;
+  if (latest === null) {
+    return [];
+  }
+  return [
+    [
+      documentReviewRunKeys.detail({ workspaceId, runId: latest.run.id }),
+      latest,
+    ],
+  ];
+};
+
 export const documentReviewRunsOptions = (target: DocumentReviewRunTarget) =>
   queryOptions({
     queryKey: documentReviewRunKeys.history(target),
-    queryFn: async ({ signal }) =>
-      await fetchDocumentReviewRuns(target, signal),
+    queryFn: async ({ client, signal }) => {
+      const page = await fetchDocumentReviewRuns(target, {
+        includeLatest: true,
+        signal,
+      });
+      // Fill the detail cache before the page is handed back, so the panel
+      // that mounts on this answer finds its run already there. Done here
+      // rather than at a call site because the route loader starts this read
+      // too, and the seed has to land whoever asked.
+      for (const [key, detail] of documentReviewRunDetailSeeds(
+        target.workspaceId,
+        page,
+      )) {
+        client.setQueryData(key, detail);
+      }
+      return page;
+    },
     // The facet reads this once per open to decide what to restore; a stale
     // answer would resurrect a run the user has already moved past.
     staleTime: 0,
   });
+
+/** How long a run detail seeded from the history read counts as current. Just
+ *  wide enough to cover the mount that consumes it: re-reading the run the
+ *  same answer already carried asks the same question twice in one breath.
+ *  Progress does not depend on it — the poll below is not gated by staleness. */
+const DOCUMENT_REVIEW_RUN_DETAIL_FRESH_MS = 2000;
 
 const fetchDocumentReviewRun = async (
   { workspaceId, runId }: DocumentReviewRunRef,
@@ -230,7 +292,7 @@ export const documentReviewRunOptions = (ref: DocumentReviewRunRef) =>
   queryOptions({
     queryKey: documentReviewRunKeys.detail(ref),
     queryFn: async ({ signal }) => await fetchDocumentReviewRun(ref, signal),
-    staleTime: 0,
+    staleTime: DOCUMENT_REVIEW_RUN_DETAIL_FRESH_MS,
     // Progress and findings arrive while the worker executes, and this read
     // answers with both — so the poll that advances the progress line is the
     // same one that brings the next batch of findings in.

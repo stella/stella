@@ -40,6 +40,7 @@ import { stellaToast } from "@stll/ui/toast";
 import "@stll/folio-react/editor.css";
 import { cn, composeRefs } from "@stll/ui/utils";
 
+import { documentReviewRunsOptions } from "@/components/ai-suggestions/document-review-queries";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import {
   useDocxFitZoom,
@@ -220,6 +221,26 @@ export const Route = createFileRoute(
           docxSuggestionsOptions({
             workspaceId: params.workspaceId,
             entityId: deps.entity,
+          }),
+          (error: unknown) => {
+            getAnalytics().captureError(error);
+          },
+        ),
+        "document.prefetch",
+      );
+
+      // The review facet opens on this document's run history, and that answer
+      // carries the latest run in full — so one loader-started read leaves both
+      // the facet's decision and the run panel warm. Without it the first click
+      // on the review tab waits through two dependent rounds behind a skeleton.
+      // DOCX only: the facet does not mount for any other field type.
+      detached(
+        prefetchRouteQuery(
+          context.queryClient,
+          documentReviewRunsOptions({
+            workspaceId: params.workspaceId,
+            entityId: deps.entity,
+            fileFieldId: deps.field,
           }),
           (error: unknown) => {
             getAnalytics().captureError(error);

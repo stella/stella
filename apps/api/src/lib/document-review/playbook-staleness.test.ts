@@ -7,8 +7,8 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { resolvePlaybookStaleness } from "@/api/handlers/document-reviews/playbook-staleness";
 import { toSafeId } from "@/api/lib/branded-types";
+import { resolvePlaybookStaleness } from "@/api/lib/document-review/playbook-staleness";
 import type { PinnedPlaybook } from "@/api/lib/document-review/run-contract";
 
 const DEFINITION_ID = toSafeId<"playbookDefinition">(
