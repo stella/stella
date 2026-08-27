@@ -153,8 +153,10 @@ export const sanitizeFeedbackText = (input: string): SanitizeFeedbackResult => {
     try {
       url = new URL(core);
     } catch {
-      // Not a parseable URL; leave it untouched rather than guess.
-      return match;
+      // Not a parseable URL, so fail closed: the only preserved case is the
+      // positively-recognised public repo URL, which needs a successful parse.
+      bump();
+      return `${REDACTED_URL}${trailing}`;
     }
     if (isPreservedPublicUrl(url)) {
       return match;

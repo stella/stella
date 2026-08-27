@@ -66,6 +66,18 @@ describe("sanitizeFeedbackText", () => {
       redactions: 1,
     },
     {
+      name: "unparseable URL-shaped token is redacted",
+      input: "see https://internal.corp:port/path now",
+      expected: "see [redacted-url] now",
+      redactions: 1,
+    },
+    {
+      name: "unparseable URL-shaped token keeps trailing period",
+      input: "open https://[customer-internal.example/path.",
+      expected: "open [redacted-url].",
+      redactions: 1,
+    },
+    {
       name: "allowlisted github URL is preserved",
       input: "repo at https://github.com/stella/anonymize works",
       expected: "repo at https://github.com/stella/anonymize works",
