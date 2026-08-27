@@ -148,6 +148,8 @@ test.describe("DOCX upload + inspector", () => {
       .filter({ hasText: "Close" })
       .click();
     await expect(translationDialog).toBeHidden();
+    await page.keyboard.press("Escape");
+    await expect(translateAction).toBeHidden();
 
     await fileButton.click();
 
