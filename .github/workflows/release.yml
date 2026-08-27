@@ -739,6 +739,7 @@ jobs:
         packages/mcp/package.json
         packages/anonymize-linux-x64-gnu/package.json
         packages/anonymize-linux-arm64-gnu/package.json
+        packages/anonymize-darwin-arm64/package.json
         packages/anonymize-darwin-x64/package.json
         packages/anonymize-win32-x64-msvc/package.json
       artifact-pattern: npm-tarball-*
