@@ -3,8 +3,13 @@
  * use when they open.
  */
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import {
+  DOCUMENT_TRANSLATION_SOURCE_LANGUAGES,
+  type DocumentTranslationSourceLanguageCode,
+} from "@stll/api-contract/document-translation";
 import {
   Combobox,
   ComboboxEmpty,
@@ -21,26 +26,28 @@ import {
   type DeepLTargetLanguageCode,
 } from "@/lib/deepl/languages";
 
-type DocumentLanguagePickerProps = {
+type LanguagePickerProps = {
   id: string;
   label: string;
-  value: DeepLTargetLanguageCode;
+  languages: readonly { code: DeepLTargetLanguageCode }[];
+  value: DeepLTargetLanguageCode | null;
   onChange: (code: DeepLTargetLanguageCode) => void;
   disabled?: boolean | undefined;
 };
 
-export const DocumentLanguagePicker = ({
+const LanguagePicker = ({
   id,
   label,
+  languages,
   value,
   onChange,
   disabled = false,
-}: DocumentLanguagePickerProps) => {
+}: LanguagePickerProps) => {
   const t = useTranslations();
   const locale = useLocale();
 
   const options: LanguageOption[] = (() => {
-    const items: LanguageOption[] = DEEPL_TARGET_LANGUAGES.map((lang) => ({
+    const items = languages.map((lang) => ({
       code: lang.code,
       label: t(`common.languages.${lang.code}`),
     }));
@@ -94,6 +101,42 @@ type LanguageOption = {
   label: string;
 };
 
+type DocumentLanguagePickerProps = Omit<LanguagePickerProps, "languages">;
+
+export const DocumentLanguagePicker = (props: DocumentLanguagePickerProps) => (
+  <LanguagePicker {...props} languages={DEEPL_TARGET_LANGUAGES} />
+);
+
+type DocumentSourceLanguagePickerProps = {
+  id: string;
+  label: string;
+  value: DocumentTranslationSourceLanguageCode | null;
+  onChange: (code: DocumentTranslationSourceLanguageCode) => void;
+  disabled?: boolean | undefined;
+};
+
+const isSourceLanguageCode = (
+  code: DeepLTargetLanguageCode,
+): code is DocumentTranslationSourceLanguageCode =>
+  DOCUMENT_TRANSLATION_SOURCE_LANGUAGES.some(
+    (language) => language.code === code,
+  );
+
+export const DocumentSourceLanguagePicker = ({
+  onChange,
+  ...props
+}: DocumentSourceLanguagePickerProps) => (
+  <LanguagePicker
+    {...props}
+    languages={DOCUMENT_TRANSLATION_SOURCE_LANGUAGES}
+    onChange={(code) =>
+      isSourceLanguageCode(code)
+        ? onChange(code)
+        : panic("Source-language picker returned a target-only language")
+    }
+  />
+);
+
 const DEFAULT_TARGET_LANG: DeepLTargetLanguageCode = "EN-GB";
 const FALLBACK_SOURCE_LANG: DeepLTargetLanguageCode = "CS";
 
@@ -127,4 +170,14 @@ export const defaultLanguagePair = (locale: string): DefaultLanguagePair => {
   const target =
     source === DEFAULT_TARGET_LANG ? FALLBACK_SOURCE_LANG : DEFAULT_TARGET_LANG;
   return { source, target };
+};
+
+/** Default a new translation toward the user's UI language when supported. */
+export const defaultTargetLanguage = (
+  locale: string,
+): DeepLTargetLanguageCode => {
+  const mapped = isMappedLocale(locale)
+    ? LOCALE_TO_LANGUAGE[locale]
+    : locale.toUpperCase();
+  return isLanguageCode(mapped) ? mapped : DEFAULT_TARGET_LANG;
 };

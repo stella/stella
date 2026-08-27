@@ -7,12 +7,18 @@
  */
 
 import { useRef, useState } from "react";
+import type { ReactElement } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { LanguagesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  documentTranslationSourceForTarget,
+  type DocumentTranslationSourceLanguageDetection,
+} from "@stll/api-contract/document-translation";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -28,10 +34,12 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import {
-  defaultLanguagePair,
+  defaultTargetLanguage,
   DocumentLanguagePicker,
+  DocumentSourceLanguagePicker,
 } from "@/components/document-language-picker";
 import {
+  documentTranslationPreparationOptions,
   documentTranslationRunOptions,
   isDocumentTranslationRunActive,
   type DocumentTranslationRun,
@@ -39,8 +47,10 @@ import {
 import {
   canStartDocumentTranslation,
   commentPolicyStateForSource,
+  resolvedDocumentTranslationSource,
   type DocumentTranslationCommentPolicy,
   type DocumentTranslationCommentPolicyState,
+  type DocumentTranslationSourceSelection,
 } from "@/components/translate-document-dialog.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -55,24 +65,50 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
-type TranslationOutput = "translated" | "bilingual";
-type TranslationEngine = "deepl" | "ai";
-const TRANSLATION_CHOICES = {
-  "translated:deepl": { output: "translated", engine: "deepl" },
-  "translated:ai": { output: "translated", engine: "ai" },
-  "bilingual:ai": { output: "bilingual", engine: "ai" },
-} as const satisfies Record<
-  string,
-  { output: TranslationOutput; engine: TranslationEngine }
->;
-type TranslationChoice = keyof typeof TRANSLATION_CHOICES;
+type TranslationChoice = "bilingual:ai" | "translated:ai" | "translated:deepl";
+
+type SourceStatusKeyOptions = {
+  selection: DocumentTranslationSourceSelection;
+  detection: DocumentTranslationSourceLanguageDetection | null;
+  hasError: boolean;
+  isPending: boolean;
+};
+
+type SourceStatusKey =
+  | "translate.dialog.sourceDetected"
+  | "translate.dialog.sourceDetecting"
+  | "translate.dialog.sourceDetectionFailed"
+  | "translate.dialog.sourceManual"
+  | "translate.dialog.sourceNeedsSelection";
+
+const sourceStatusKey = ({
+  selection,
+  detection,
+  hasError,
+  isPending,
+}: SourceStatusKeyOptions): SourceStatusKey => {
+  if (isPending) {
+    return "translate.dialog.sourceDetecting";
+  }
+  if (selection.type === "manual") {
+    return "translate.dialog.sourceManual";
+  }
+  if (hasError) {
+    return "translate.dialog.sourceDetectionFailed";
+  }
+  return detection?.type === "detected"
+    ? "translate.dialog.sourceDetected"
+    : "translate.dialog.sourceNeedsSelection";
+};
 
 type TranslateDocumentDialogProps = {
   workspaceId: string;
   viewId: string;
   entityId: string;
   fieldId: string;
+  entityVersionKey: number | string;
   isDocx: boolean;
+  trigger?: ReactElement | undefined;
   /** Disable when the underlying field is missing or the user cannot create output. */
   disabled?: boolean | undefined;
 };
@@ -83,7 +119,9 @@ export const TranslateDocumentDialog = ({
   viewId,
   entityId,
   fieldId,
+  entityVersionKey,
   isDocx,
+  trigger,
   disabled = false,
 }: TranslateDocumentDialogProps) => {
   const t = useTranslations();
@@ -101,11 +139,17 @@ export const TranslateDocumentDialog = ({
 
   const [open, setOpen] = useState(false);
   const [choice, setChoice] = useState<TranslationChoice>(DEFAULT_CHOICE);
-  const [sourceLang, setSourceLang] = useState<DeepLTargetLanguageCode>(
-    () => defaultLanguagePair(locale).source,
-  );
-  const [targetLang, setTargetLang] = useState<DeepLTargetLanguageCode>(
-    () => defaultLanguagePair(locale).target,
+  const documentKey = `${entityId}:${fieldId}`;
+  const [sourceSelectionState, setSourceSelectionState] = useState<{
+    documentKey: string;
+    selection: DocumentTranslationSourceSelection;
+  }>(() => ({ documentKey, selection: { type: "automatic" } }));
+  const sourceSelection =
+    sourceSelectionState.documentKey === documentKey
+      ? sourceSelectionState.selection
+      : ({ type: "automatic" } as const);
+  const [targetLang, setTargetLang] = useState<DeepLTargetLanguageCode>(() =>
+    defaultTargetLanguage(locale),
   );
   const [runId, setRunId] = useState<string | null>(null);
   const [commentPolicyState, setCommentPolicyState] =
@@ -115,7 +159,23 @@ export const TranslateDocumentDialog = ({
     entityId,
     fieldId,
   });
-  const commentsFound = activeCommentPolicyState.type === "required";
+  const preparationQuery = useQuery({
+    ...documentTranslationPreparationOptions({
+      workspaceId,
+      entityId,
+      fieldId,
+      entityVersionKey,
+    }),
+    enabled: open && isDocx && runId === null,
+  });
+  const sourceDetection = preparationQuery.data?.sourceLanguage ?? null;
+  const sourceLang = resolvedDocumentTranslationSource({
+    selection: sourceSelection,
+    detection: sourceDetection,
+  });
+  const commentsFound =
+    activeCommentPolicyState.type === "required" ||
+    preparationQuery.data?.hasComments === true;
   const commentPolicy =
     activeCommentPolicyState.type === "required"
       ? activeCommentPolicyState.policy
@@ -129,9 +189,12 @@ export const TranslateDocumentDialog = ({
     });
   const terminalNotifiedRunRef = useRef<string | null>(null);
   const pollingErrorRunRef = useRef<string | null>(null);
+  const preparationErrorRef = useRef<unknown>(null);
 
   const isDeepL = choice.endsWith(":deepl");
-  const sameLanguage = !isDeepL && sourceLang === targetLang;
+  const targetSourceLanguage = documentTranslationSourceForTarget(targetLang);
+  const sameLanguage =
+    sourceLang !== null && sourceLang === targetSourceLanguage;
   const canUseDeepL = availability?.configured === true;
   const runQuery = useQuery({
     ...documentTranslationRunOptions({
@@ -156,6 +219,13 @@ export const TranslateDocumentDialog = ({
   });
 
   useExternalSyncEffect(() => {
+    if (
+      preparationQuery.error !== null &&
+      preparationErrorRef.current !== preparationQuery.error
+    ) {
+      preparationErrorRef.current = preparationQuery.error;
+      analytics.captureError(preparationQuery.error);
+    }
     const run = runQuery.data?.run;
     if (
       runQuery.error !== null &&
@@ -215,6 +285,7 @@ export const TranslateDocumentDialog = ({
   }, [
     analytics,
     openOutput,
+    preparationQuery.error,
     runQuery.data,
     runQuery.error,
     runId,
@@ -225,20 +296,51 @@ export const TranslateDocumentDialog = ({
 
   const translateMutation = useMutation({
     mutationFn: async () => {
-      const { output, engine } = TRANSLATION_CHOICES[choice];
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["document-translations"].runs.post({
-          entityId: toSafeId<"entity">(entityId),
-          fieldId: toSafeId<"field">(fieldId),
-          output,
-          engine,
-          ...(commentPolicy === null ? {} : { commentPolicy }),
-          ...(!isDeepL ? { sourceLang } : {}),
-          targetLang,
-        });
+      const client = api.workspaces({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      })["document-translations"].runs;
+      const common = {
+        entityId: toSafeId<"entity">(entityId),
+        fieldId: toSafeId<"field">(fieldId),
+        ...(commentPolicy === null ? {} : { commentPolicy }),
+        targetLang,
+      };
+      const data = await (async () => {
+        switch (choice) {
+          case "translated:deepl":
+            return unwrapEden(
+              await client.post({
+                ...common,
+                output: "translated",
+                engine: "deepl",
+              }),
+            );
+          case "translated:ai":
+          case "bilingual:ai": {
+            if (sourceLang === null) {
+              return panic("AI translation started without a source language");
+            }
+            const entityVersionId =
+              preparationQuery.data?.entityVersionId ??
+              panic("AI translation started without a prepared version");
+            return unwrapEden(
+              await client.post({
+                ...common,
+                output: choice === "translated:ai" ? "translated" : "bilingual",
+                engine: "ai",
+                sourceLang,
+                entityVersionId,
+              }),
+            );
+          }
+          default: {
+            const exhaustiveChoice: never = choice;
+            return exhaustiveChoice;
+          }
+        }
+      })();
       return {
-        data: unwrapEden(response),
+        data,
         sourceEntityId: entityId,
         sourceFieldId: fieldId,
       };
@@ -280,6 +382,8 @@ export const TranslateDocumentDialog = ({
     isRunning,
     isStarting,
     hasCommentPolicy: commentPolicy !== null,
+    hasPreparedAiSource: preparationQuery.data !== undefined,
+    hasResolvedAiSource: sourceLang !== null,
     requiresCommentPolicy: commentsFound,
     sameLanguage,
   });
@@ -296,16 +400,19 @@ export const TranslateDocumentDialog = ({
       open={open}
     >
       <DialogTrigger
+        disabled={disabled}
         render={
-          <Button
-            aria-label={t("common.translate")}
-            disabled={disabled}
-            size="icon-xs"
-            tooltip={t("common.translate")}
-            variant="ghost"
-          >
-            <LanguagesIcon className="size-3.5" />
-          </Button>
+          trigger ?? (
+            <Button
+              aria-label={t("common.translate")}
+              disabled={disabled}
+              size="icon-xs"
+              tooltip={t("common.translate")}
+              variant="ghost"
+            >
+              <LanguagesIcon className="size-3.5" />
+            </Button>
+          )
         }
       />
       <DialogPopup>
@@ -396,12 +503,30 @@ export const TranslateDocumentDialog = ({
                 </p>
               ) : null}
               {!isDeepL ? (
-                <DocumentLanguagePicker
-                  id="translate-source"
-                  label={t("bilingual.dialog.sourceLanguage")}
-                  onChange={setSourceLang}
-                  value={sourceLang}
-                />
+                <div className="flex flex-col gap-1.5">
+                  <DocumentSourceLanguagePicker
+                    disabled={preparationQuery.isPending}
+                    id="translate-source"
+                    label={t("bilingual.dialog.sourceLanguage")}
+                    onChange={(language) =>
+                      setSourceSelectionState({
+                        documentKey,
+                        selection: { type: "manual", language },
+                      })
+                    }
+                    value={sourceLang}
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    {t(
+                      sourceStatusKey({
+                        selection: sourceSelection,
+                        detection: sourceDetection,
+                        hasError: preparationQuery.error !== null,
+                        isPending: preparationQuery.isPending,
+                      }),
+                    )}
+                  </p>
+                </div>
               ) : null}
               <DocumentLanguagePicker
                 id="translate-target"

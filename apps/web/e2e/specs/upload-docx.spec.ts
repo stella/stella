@@ -131,6 +131,26 @@ test.describe("DOCX upload + inspector", () => {
       name: "stella-e2e.docx",
     });
     await expect(fileButton).toBeVisible({ timeout: 30_000 });
+
+    await fileButton.click({ button: "right" });
+    const translateAction = page.getByRole("menuitem", {
+      exact: true,
+      name: "Translate",
+    });
+    await expect(translateAction).toBeVisible();
+    await translateAction.click();
+    const translationDialog = page.getByRole("dialog", {
+      name: "Translate document",
+    });
+    await expect(translationDialog).toBeVisible();
+    await translationDialog
+      .getByRole("button", { exact: true, name: "Close" })
+      .filter({ hasText: "Close" })
+      .click();
+    await expect(translationDialog).toBeHidden();
+    await page.keyboard.press("Escape");
+    await expect(translateAction).toBeHidden();
+
     await fileButton.click();
 
     // Prove the optional overlay itself mounted; asserting only document text

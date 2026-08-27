@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { isDocumentTranslationDeepLSupportedMimeType } from "@stll/api-contract/document-translation";
+
 import {
   documentTranslationRuns,
   entities,
@@ -23,7 +25,6 @@ import {
   DOCUMENT_TRANSLATION_OUTPUT,
   isExecutableTranslationCombination,
 } from "@/api/lib/document-translation/contract";
-import { isDeepLSupportedMimeType } from "@/api/lib/document-translation/deepl-formats";
 import { inspectDocxComments } from "@/api/lib/document-translation/docx-review";
 import { handoffCommittedDocumentTranslationRun } from "@/api/lib/document-translation/handoff";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -68,18 +69,6 @@ const createDocumentTranslationRun = createSafeHandler<
         }),
       );
     }
-    if (
-      body.engine === DOCUMENT_TRANSLATION_ENGINE.AI &&
-      (body.sourceLang === undefined || body.sourceLang === "auto")
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "AI translation requires a source language",
-        }),
-      );
-    }
-
     const sources = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -118,6 +107,18 @@ const createDocumentTranslationRun = createSafeHandler<
         new HandlerError({ status: 404, message: "Source document not found" }),
       );
     }
+    if (
+      body.engine === DOCUMENT_TRANSLATION_ENGINE.AI &&
+      body.entityVersionId !== source.entityVersionId
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message:
+            "The document changed after translation was prepared. Reopen the translation dialog.",
+        }),
+      );
+    }
     const sourceContent = source.content;
     if (sourceContent.encrypted) {
       return Result.err(
@@ -140,7 +141,7 @@ const createDocumentTranslationRun = createSafeHandler<
     }
     if (
       body.engine === DOCUMENT_TRANSLATION_ENGINE.DEEPL &&
-      !isDeepLSupportedMimeType(sourceContent.mimeType)
+      !isDocumentTranslationDeepLSupportedMimeType(sourceContent.mimeType)
     ) {
       return Result.err(
         new HandlerError({

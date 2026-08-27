@@ -1,6 +1,7 @@
 import Elysia from "elysia";
 
 import createDocumentTranslationRun from "@/api/handlers/document-translations/create-run";
+import prepareDocumentTranslation from "@/api/handlers/document-translations/prepare";
 import readDocumentTranslationRun from "@/api/handlers/document-translations/read-run";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 
@@ -10,6 +11,11 @@ export const documentTranslationsRoute = new Elysia({
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })
+  .post("/prepare", prepareDocumentTranslation.handler, {
+    body: prepareDocumentTranslation.config.body,
+    params: prepareDocumentTranslation.config.params,
+    permissions: prepareDocumentTranslation.config.permissions,
+  })
   .post("/runs", createDocumentTranslationRun.handler, {
     body: createDocumentTranslationRun.config.body,
     params: createDocumentTranslationRun.config.params,
