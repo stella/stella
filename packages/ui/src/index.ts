@@ -8,6 +8,7 @@
 
 export * from "./components/accordion";
 export * from "./components/alert-dialog";
+export * from "./components/application-shell";
 export * from "./components/avatar";
 export * from "./components/bidi-text";
 export * from "./components/brand-icons";

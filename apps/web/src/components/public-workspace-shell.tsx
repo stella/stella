@@ -11,6 +11,7 @@ import {
 import { CircleUserRoundIcon, PanelLeftIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { ApplicationShell } from "@stll/ui/application-shell";
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
@@ -24,7 +25,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarHeader,
-  SidebarInset,
   SidebarMenu,
   SidebarMenuBadge,
   SidebarMenuButton,
@@ -114,25 +114,31 @@ export const PublicWorkspaceShell = ({
   const shell = (
     <PublicSignInRequestContext value={requestAuth}>
       <SidebarProvider>
-        {authStatus.isAuthenticated ? (
-          <Suspense
-            fallback={
+        <ApplicationShell
+          header={topBar}
+          inspector={inspector ?? defaultInspector}
+          sidebar={
+            authStatus.isAuthenticated ? (
+              <Suspense
+                fallback={
+                  <PublicSidebar
+                    authStatus={authStatus}
+                    requestAuth={requestAuth}
+                  />
+                }
+              >
+                <AppSidebar />
+              </Suspense>
+            ) : (
               <PublicSidebar
                 authStatus={authStatus}
                 requestAuth={requestAuth}
               />
-            }
-          >
-            <AppSidebar />
-          </Suspense>
-        ) : (
-          <PublicSidebar authStatus={authStatus} requestAuth={requestAuth} />
-        )}
-        <SidebarInset className="flex flex-col">
-          {topBar}
+            )
+          }
+        >
           <Outlet />
-        </SidebarInset>
-        {inspector ?? defaultInspector}
+        </ApplicationShell>
         {authRedirectTo !== null && (
           <Suspense fallback={null}>
             <SignInDialog
