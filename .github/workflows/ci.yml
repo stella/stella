@@ -878,6 +878,10 @@ jobs:
       # Its unit coverage is what keeps a malformed source map — a wildcard, a
       # conditions object, a target outside src, a missing root — out of a
       # publishable package.
+      - name: Test published export artifact guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/published-export-guards.test.ts
+
       - name: Test publish manifest transformation
         # scripts/publish-manifest.ts imports better-result, so this needs the
         # install above; a workflow-only PR skips both.
