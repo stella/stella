@@ -910,12 +910,20 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
             >
               {hasChildren ? (
                 <Tooltip
-                  content={folder.name}
+                  content={
+                    isExpanded
+                      ? t("workspaces.importOrganizer.collapseFolder")
+                      : t("workspaces.importOrganizer.expandFolder")
+                  }
                   render={
                     <button
                       className="hover:bg-muted rounded p-0.5"
                       aria-expanded={isExpanded}
-                      aria-label={folder.name}
+                      aria-label={
+                        isExpanded
+                          ? t("workspaces.importOrganizer.collapseFolder")
+                          : t("workspaces.importOrganizer.expandFolder")
+                      }
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleExpand(folder.entityId);
