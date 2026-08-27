@@ -1406,12 +1406,14 @@ test("the docket half of the identity index applies the same filter", async () =
   expect(builds).toHaveLength(1);
 });
 
-test("a failed item build records the database cause, not just the error tag", async () => {
-  // Parking stores the tag alone, so this log line is the only record of why
-  // a listed decision could not be built. A driver error spends its whole
-  // outer message on the failed statement and carries the SQLSTATE one
-  // `cause` hop down: a sink that reads the tag reports "DrizzleQueryError"
-  // and nothing an operator can act on.
+test("a failed item build reports the SQLSTATE without logging any message text", async () => {
+  // Two halves of one invariant. Parking stores the tag alone, so this log
+  // line is the only record of why a listed decision could not be built, and
+  // a tag reading "DrizzleQueryError" is nothing an operator can act on: the
+  // SQLSTATE sits one `cause` hop down and has to be reported. But the
+  // logger's sanitizer is a key denylist, so any message text this sink
+  // emitted would reach telemetry verbatim, and a driver message quotes the
+  // statement and can quote the row that failed. Fixed vocabulary only.
   const sourceId = await seedSource();
   const realLoggerModule = await import("@/api/lib/observability/logger");
   const warned: Record<string, unknown>[] = [];
@@ -1435,7 +1437,10 @@ test("a failed item build records the database cause, not just the error tag", a
     (attributes) => attributes["identityKey"] !== undefined,
   );
   expect(failure?.["error.cause.pg_code"]).toBe("42703");
-  // Bounded apart from the outer message: the statement alone would consume
-  // the whole budget and leave the cause truncated away.
-  expect(failure?.["error.detail"]).toContain('column "reason" does not exist');
+  // Over every value, not a named key: the guard has to hold for a field
+  // added later, and the point is that no attribute carries message text.
+  for (const value of Object.values(failure ?? {})) {
+    expect(String(value)).not.toContain("Failed query");
+    expect(String(value)).not.toContain("does not exist");
+  }
 });

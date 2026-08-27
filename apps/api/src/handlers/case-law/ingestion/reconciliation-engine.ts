@@ -52,7 +52,6 @@ import {
   allocateSourceObservationOrder,
   PROCESS_DECISION_STATUS,
   processDecision,
-  wrappedErrorDetail,
 } from "@/api/handlers/case-law/ingestion/pipeline";
 import type {
   FailedSliceCandidate,
@@ -835,13 +834,15 @@ const ingestListedItem = async ({
       adapterKey,
       slice,
       identityKey: item.identityKey,
+      // The park below keeps only the tag, which cannot separate a publisher
+      // refusing one document from the corpus refusing to store it. These two
+      // carry that distinction as fixed vocabulary (driver and system codes,
+      // the SQLSTATE, the schema identifiers Postgres names) rather than as
+      // message text, which quotes the statement and can quote the row that
+      // failed; the logger's sanitizer is a key denylist, so text this sink
+      // emitted would reach telemetry verbatim.
       ...errorSystemFields(error),
       ...pgErrorFields(error),
-      // The park below keeps only the tag, which cannot separate a
-      // publisher refusing one document from the corpus refusing to store
-      // it. "message" is stripped by the logger sanitizer, so the reason
-      // travels under "error.detail". Case-law data is public, no PII concern.
-      "error.detail": wrappedErrorDetail(error),
     });
     await park(errorTag(error));
   }
@@ -1315,7 +1316,6 @@ export const runReconciliationWorkUnit = async ({
               reason: unit.reason,
               ...errorSystemFields(error),
               ...pgErrorFields(error),
-              "error.detail": wrappedErrorDetail(error),
             });
             throw error;
           }),
