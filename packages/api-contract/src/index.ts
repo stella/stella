@@ -112,16 +112,6 @@ export type {
   DocumentPropertyKey,
   DocumentPropertyValue,
 } from "./document-properties";
-export {
-  DOCUMENT_TRANSLATION_SOURCE_LANGUAGES,
-  DOCUMENT_TRANSLATION_TARGET_LANGUAGES,
-  documentTranslationSourceForTarget,
-} from "./document-translation";
-export type {
-  DocumentTranslationSourceLanguageCode,
-  DocumentTranslationSourceLanguageDetection,
-  DocumentTranslationTargetLanguageCode,
-} from "./document-translation";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
 export {

@@ -60,7 +60,7 @@ describe("document translation source resolution", () => {
   });
 
   test.each([
-    { type: "ambiguous", candidates: ["CS", "SK"] as const },
+    { type: "ambiguous", candidates: ["CS", "SK"] } as const,
     { type: "unknown" } as const,
   ])("requires a manual choice for $type detection", (detection) => {
     expect(

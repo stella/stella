@@ -90,11 +90,11 @@ const sourceStatusKey = ({
   if (isPending) {
     return "translate.dialog.sourceDetecting";
   }
-  if (hasError) {
-    return "translate.dialog.sourceDetectionFailed";
-  }
   if (selection.type === "manual") {
     return "translate.dialog.sourceManual";
+  }
+  if (hasError) {
+    return "translate.dialog.sourceDetectionFailed";
   }
   return detection?.type === "detected"
     ? "translate.dialog.sourceDetected"
