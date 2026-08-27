@@ -11,6 +11,7 @@ import type {
   NativePipelineEntity,
   OperatorType,
   PipelineConfig,
+  SupportedLanguage,
 } from "@stll/anonymize-wasm";
 
 /**
@@ -210,12 +211,57 @@ export type ChatAnonRuntime<
   deanonymise: typeof deanonymise;
 };
 
+// Keep this runtime value local so importing the shared chat contract on the
+// browser main thread does not pull in the WASM entrypoint. The two type checks
+// make additions or removals in the upstream supported-language union fail the
+// build until this list follows them.
+const CHAT_ANON_SUPPORTED_LANGUAGES = [
+  "cs",
+  "de",
+  "en",
+  "es",
+  "fr",
+  "hu",
+  "it",
+  "lv",
+  "pl",
+  "pt-br",
+  "ro",
+  "sk",
+  "sv",
+] as const satisfies readonly SupportedLanguage[];
+
+type MissingChatAnonSupportedLanguage = Exclude<
+  SupportedLanguage,
+  (typeof CHAT_ANON_SUPPORTED_LANGUAGES)[number]
+>;
+
+true satisfies MissingChatAnonSupportedLanguage extends never ? true : never;
+
+const supportedPipelineLanguages: ReadonlySet<string> = new Set(
+  CHAT_ANON_SUPPORTED_LANGUAGES,
+);
+
+const isSupportedPipelineLanguage = (
+  language: string,
+): language is SupportedLanguage => supportedPipelineLanguages.has(language);
+
 export const normalizeChatAnonLocaleLanguage = (
   locale: string | undefined,
-): string | null => {
-  const [languagePart] = locale?.split(/[-_]/u) ?? [];
-  const language = languagePart?.trim().toLowerCase();
-  return language && /^[a-z]{2}$/u.test(language) ? language : null;
+): SupportedLanguage | null => {
+  const normalized = locale?.trim().toLowerCase().replaceAll("_", "-");
+  if (!normalized) {
+    return null;
+  }
+  const subtags = normalized.split("-");
+  while (subtags.length > 0) {
+    const candidate = subtags.join("-");
+    if (isSupportedPipelineLanguage(candidate)) {
+      return candidate;
+    }
+    subtags.pop();
+  }
+  return null;
 };
 
 export const buildChatAnonPipelineConfig = ({
