@@ -1,5 +1,11 @@
 import { lazy, Suspense, useState } from "react";
-import type { Dispatch, MouseEvent, RefObject, SetStateAction } from "react";
+import type {
+  Dispatch,
+  MouseEvent,
+  ReactElement,
+  RefObject,
+  SetStateAction,
+} from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -153,6 +159,238 @@ const stripExtension = (name: string): string => {
   return name.slice(0, dotIndex);
 };
 
+const getFileTabDisplayState = ({
+  activeId,
+  minimized,
+  scaleOffsets,
+  tab,
+}: Pick<
+  FileTabPanelProps,
+  "activeId" | "minimized" | "scaleOffsets" | "tab"
+>) => {
+  const isActive = tab.id === activeId;
+  const nativePreviewKind = getFileTabNativePreviewKind({
+    fileName: tab.fileName,
+    mimeType: tab.mimeType,
+  });
+  const isNativeDocxDisplay = tab.mimeType === DOCX_MIME;
+  const isEmailDisplay = nativePreviewKind === "email";
+  const storedScaleOffset = scaleOffsets.get(tab.id);
+  const scaleOffset = storedScaleOffset ?? 0;
+  return {
+    canResetZoom: scaleOffset !== 0,
+    desktopEditFileType: getDesktopEditFileType({
+      fileName: tab.fileName,
+      mimeType: tab.mimeType,
+    }),
+    isActive,
+    isEmailDisplay,
+    isEmailViewerActive: isEmailDisplay && isActive && !minimized,
+    isMarkdownDisplay: nativePreviewKind === "markdown",
+    isNativeDocxDisplay,
+    isOfficeDisplay: nativePreviewKind === "office",
+    requiresPdfMeasurement:
+      !isNativeDocxDisplay && nativePreviewKind !== "office",
+    needsPropertyResolution:
+      isNativeDocxDisplay && tab.propertyId === undefined,
+    officeViewerFormat: getNativeOfficeViewerFormat(tab.mimeType),
+    renderId: tab.renderId ?? tab.id,
+    scaleOffset,
+  };
+};
+
+const getFileTabEntityState = ({
+  entityData,
+  entityQueryError,
+  needsPropertyResolution,
+  tab,
+}: {
+  entityData:
+    | {
+        extractionFileFieldId?: string | null | undefined;
+        fields: { id: string; propertyId?: string | undefined }[];
+      }
+    | undefined;
+  entityQueryError: boolean;
+  needsPropertyResolution: boolean;
+  tab: FileTabPanelProps["tab"];
+}) => {
+  const resolvedEmailChatMode = getEmailChatMode({
+    extractionFileFieldId: entityData?.extractionFileFieldId,
+    fieldId: tab.id,
+  });
+  const shouldSurfaceEmailResolutionError =
+    shouldSurfaceEmailChatResolutionError({
+      hasData: entityData !== undefined,
+      isError: entityQueryError,
+    });
+  return {
+    emailChatMode: shouldSurfaceEmailResolutionError
+      ? EMAIL_CHAT_MODE.resolutionError
+      : resolvedEmailChatMode,
+    filePropertyId:
+      tab.propertyId ??
+      (needsPropertyResolution
+        ? entityData?.fields.find((field) => field.id === tab.id)?.propertyId
+        : undefined),
+    resolvedEmailChatMode,
+    shouldSurfaceEmailResolutionError,
+  };
+};
+
+const getEmailAttachmentState = ({
+  isActive,
+  scaleOffsets,
+  selectedEmailAttachmentId,
+  tab,
+}: {
+  isActive: boolean;
+  scaleOffsets: FileTabPanelProps["scaleOffsets"];
+  selectedEmailAttachmentId: string | null;
+  tab: FileTabPanelProps["tab"];
+}) => {
+  const selectedEmailAttachmentPreviewId = selectedEmailAttachmentId
+    ? getEmailAttachmentPreviewId({
+        attachmentId: selectedEmailAttachmentId,
+        fieldId: tab.id,
+        workspaceId: tab.workspaceId,
+      })
+    : null;
+  const facet = tab.facet ?? "preview";
+  const isPreviewActive = isActive && facet === "preview";
+  return {
+    emailAttachmentOverlayActivation:
+      isActive && tab.facet === "attachments"
+        ? FILE_CHAT_OVERLAY_ACTIVATION.active
+        : FILE_CHAT_OVERLAY_ACTIVATION.deferred,
+    emailAttachmentScaleOffset: selectedEmailAttachmentPreviewId
+      ? (scaleOffsets.get(selectedEmailAttachmentPreviewId) ?? 0)
+      : 0,
+    emailPreviewOverlayActivation: isPreviewActive
+      ? FILE_CHAT_OVERLAY_ACTIVATION.active
+      : FILE_CHAT_OVERLAY_ACTIVATION.deferred,
+    emailSidepeekOverlayActivation:
+      isPreviewActive || (isActive && tab.facet === "attachments")
+        ? FILE_CHAT_OVERLAY_ACTIVATION.active
+        : FILE_CHAT_OVERLAY_ACTIVATION.deferred,
+    selectedEmailAttachmentPreviewId,
+  };
+};
+
+const getFileTabEditorState = ({
+  canUpdateEntity,
+  desktopEditFileType,
+  editingDocxTabId,
+  entityData,
+  filePropertyId,
+  flashingDocxEditTabId,
+  isNativeDocxDisplay,
+  tab,
+}: {
+  canUpdateEntity: boolean;
+  desktopEditFileType: ReturnType<typeof getDesktopEditFileType>;
+  editingDocxTabId: string | null;
+  entityData:
+    | { fields: { id: string; propertyId?: string | undefined }[] }
+    | undefined;
+  filePropertyId: string | undefined;
+  flashingDocxEditTabId: string | null;
+  isNativeDocxDisplay: boolean;
+  tab: FileTabPanelProps["tab"];
+}) => {
+  const isEditingNativeDocx =
+    isNativeDocxDisplay &&
+    editingDocxTabId === tab.id &&
+    filePropertyId !== undefined;
+  const isCurrentDesktopEditField =
+    filePropertyId !== undefined &&
+    entityData?.fields.some(
+      (field) => field.id === tab.id && field.propertyId === filePropertyId,
+    ) === true;
+  return {
+    canUnlockNativeDocx:
+      canUpdateEntity &&
+      isNativeDocxDisplay &&
+      filePropertyId !== undefined &&
+      !isEditingNativeDocx,
+    desktopEditTarget:
+      canUpdateEntity &&
+      desktopEditFileType !== null &&
+      filePropertyId !== undefined &&
+      isCurrentDesktopEditField
+        ? { fileType: desktopEditFileType, propertyId: filePropertyId }
+        : null,
+    isEditingNativeDocx,
+    isMetadataLaneExpanded: (tab.metadataLane ?? "closed") === "expanded",
+    isPromptingDocxUnlock: flashingDocxEditTabId === tab.id,
+  };
+};
+
+const shouldQueryFileTabEntity = ({
+  canUpdateEntity,
+  desktopEditFileType,
+  isActive,
+  isEmailViewerActive,
+  minimized,
+  needsPropertyResolution,
+}: {
+  canUpdateEntity: boolean;
+  desktopEditFileType: ReturnType<typeof getDesktopEditFileType>;
+  isActive: boolean;
+  isEmailViewerActive: boolean;
+  minimized: boolean;
+  needsPropertyResolution: boolean;
+}) =>
+  isEmailViewerActive ||
+  needsPropertyResolution ||
+  (isActive && !minimized && canUpdateEntity && desktopEditFileType !== null);
+
+type MarkdownSyncInput = {
+  fieldId: string;
+  isDirty: boolean;
+  isMarkdownDisplay: boolean;
+  serverText: string | undefined;
+};
+
+const shouldSyncMarkdownDraft = ({
+  lastSyncInput,
+  syncInput,
+}: {
+  lastSyncInput: MarkdownSyncInput | null;
+  syncInput: MarkdownSyncInput;
+}) =>
+  lastSyncInput === null ||
+  lastSyncInput.fieldId !== syncInput.fieldId ||
+  lastSyncInput.isDirty !== syncInput.isDirty ||
+  lastSyncInput.isMarkdownDisplay !== syncInput.isMarkdownDisplay ||
+  lastSyncInput.serverText !== syncInput.serverText;
+
+const getFileTabChromeState = ({
+  isEditingNativeDocx,
+  isEmailDisplay,
+  isMarkdownDisplay,
+  isOfficeDisplay,
+  tab,
+}: {
+  isEditingNativeDocx: boolean;
+  isEmailDisplay: boolean;
+  isMarkdownDisplay: boolean;
+  isOfficeDisplay: boolean;
+  tab: FileTabPanelProps["tab"];
+}) => {
+  const isPreviewFacet = (tab.facet ?? "preview") === "preview";
+  return {
+    canOpenFullView: !isEmailDisplay && !isMarkdownDisplay,
+    isPreviewFacet,
+    isPreviewOverlayVisible:
+      isPreviewFacet &&
+      !isEditingNativeDocx &&
+      !isEmailDisplay &&
+      !isMarkdownDisplay &&
+      !isOfficeDisplay,
+  };
+};
+
 export const FileTabPanel = ({
   activeId,
   canUpdateEntity,
@@ -200,85 +438,66 @@ export const FileTabPanel = ({
   const replaceFileFieldId = useInspectorTabsStore((s) => s.replaceFileFieldId);
   const setFileFacet = useInspectorTabsStore((s) => s.setFileFacet);
   const requestDocxEdit = useInspectorCommandStore((s) => s.requestDocxEdit);
-  const isActive = tab.id === activeId;
-  const isNativeDocxDisplay = tab.mimeType === DOCX_MIME;
-  const nativePreviewKind = getFileTabNativePreviewKind({
-    fileName: tab.fileName,
-    mimeType: tab.mimeType,
-  });
-  const isEmailDisplay = nativePreviewKind === "email";
-  const isEmailViewerActive = isEmailDisplay && isActive && !minimized;
-  const isMarkdownDisplay = nativePreviewKind === "markdown";
-  const officeViewerFormat = getNativeOfficeViewerFormat(tab.mimeType);
-  const isOfficeDisplay = nativePreviewKind === "office";
-  const desktopEditFileType = getDesktopEditFileType({
-    fileName: tab.fileName,
-    mimeType: tab.mimeType,
-  });
+  const {
+    canResetZoom,
+    desktopEditFileType,
+    isActive,
+    isEmailDisplay,
+    isEmailViewerActive,
+    isMarkdownDisplay,
+    isNativeDocxDisplay,
+    isOfficeDisplay,
+    needsPropertyResolution,
+    officeViewerFormat,
+    renderId,
+    requiresPdfMeasurement,
+    scaleOffset,
+  } = getFileTabDisplayState({ activeId, minimized, scaleOffsets, tab });
   // A DOCX tab opened by a caller that knows only the file field (a review's
   // reference, a search hit) still needs the field's property to mount the
   // editor; read it off the entity rather than leaving the viewer empty.
-  const needsPropertyResolution =
-    isNativeDocxDisplay && tab.propertyId === undefined;
   const entityQuery = useQuery({
     ...entityOptions(tab.workspaceId, tab.entityId),
-    enabled:
-      isEmailViewerActive ||
-      needsPropertyResolution ||
-      (isActive &&
-        !minimized &&
-        canUpdateEntity &&
-        desktopEditFileType !== null),
+    enabled: shouldQueryFileTabEntity({
+      canUpdateEntity,
+      desktopEditFileType,
+      isActive,
+      isEmailViewerActive,
+      minimized,
+      needsPropertyResolution,
+    }),
     refetchInterval: ({ state }) =>
       getEmailExtractionRefetchInterval({
         extractionFileFieldId: state.data?.extractionFileFieldId,
         isEmailViewerActive,
       }),
   });
-  const filePropertyId =
-    tab.propertyId ??
-    (needsPropertyResolution
-      ? entityQuery.data?.fields.find((field) => field.id === tab.id)
-          ?.propertyId
-      : undefined);
-  const resolvedEmailChatMode = getEmailChatMode({
-    extractionFileFieldId: entityQuery.data?.extractionFileFieldId,
-    fieldId: tab.id,
+  const {
+    emailChatMode,
+    filePropertyId,
+    resolvedEmailChatMode,
+    shouldSurfaceEmailResolutionError,
+  } = getFileTabEntityState({
+    entityData: entityQuery.data,
+    entityQueryError: entityQuery.isError,
+    needsPropertyResolution,
+    tab,
   });
-  const shouldSurfaceEmailResolutionError =
-    shouldSurfaceEmailChatResolutionError({
-      hasData: entityQuery.data !== undefined,
-      isError: entityQuery.isError,
-    });
-  const emailChatMode = shouldSurfaceEmailResolutionError
-    ? EMAIL_CHAT_MODE.resolutionError
-    : resolvedEmailChatMode;
   const [selectedEmailAttachmentId, setSelectedEmailAttachmentId] = useState<
     string | null
   >(null);
-  const selectedEmailAttachmentPreviewId = selectedEmailAttachmentId
-    ? getEmailAttachmentPreviewId({
-        attachmentId: selectedEmailAttachmentId,
-        fieldId: tab.id,
-        workspaceId: tab.workspaceId,
-      })
-    : null;
-  const emailAttachmentScaleOffset = selectedEmailAttachmentPreviewId
-    ? (scaleOffsets.get(selectedEmailAttachmentPreviewId) ?? 0)
-    : 0;
-  const emailPreviewOverlayActivation =
-    isActive && (tab.facet ?? "preview") === "preview"
-      ? FILE_CHAT_OVERLAY_ACTIVATION.active
-      : FILE_CHAT_OVERLAY_ACTIVATION.deferred;
-  const emailAttachmentOverlayActivation =
-    isActive && tab.facet === "attachments"
-      ? FILE_CHAT_OVERLAY_ACTIVATION.active
-      : FILE_CHAT_OVERLAY_ACTIVATION.deferred;
-  const emailSidepeekOverlayActivation =
-    isActive &&
-    ((tab.facet ?? "preview") === "preview" || tab.facet === "attachments")
-      ? FILE_CHAT_OVERLAY_ACTIVATION.active
-      : FILE_CHAT_OVERLAY_ACTIVATION.deferred;
+  const {
+    emailAttachmentOverlayActivation,
+    emailAttachmentScaleOffset,
+    emailPreviewOverlayActivation,
+    emailSidepeekOverlayActivation,
+    selectedEmailAttachmentPreviewId,
+  } = getEmailAttachmentState({
+    isActive,
+    scaleOffsets,
+    selectedEmailAttachmentId,
+    tab,
+  });
   const openEmailAttachment = (attachmentId: string | null) => {
     setSelectedEmailAttachmentId(attachmentId);
     setFileFacet(tab.id, "attachments");
@@ -303,12 +522,8 @@ export const FileTabPanel = ({
   >(null);
   const markdownText = markdownTextQuery.data?.text ?? "";
   const markdownIsDirty = markdownDraft !== markdownText;
-  const [lastMarkdownSyncInput, setLastMarkdownSyncInput] = useState<{
-    fieldId: string;
-    isDirty: boolean;
-    isMarkdownDisplay: boolean;
-    serverText: string | undefined;
-  } | null>(null);
+  const [lastMarkdownSyncInput, setLastMarkdownSyncInput] =
+    useState<MarkdownSyncInput | null>(null);
   const markdownSaveMutation = useMutation({
     mutationFn: async ({
       entityId,
@@ -368,14 +583,12 @@ export const FileTabPanel = ({
     isDirty: markdownIsDirty,
     isMarkdownDisplay,
     serverText: markdownTextQuery.data?.text,
-  };
+  } satisfies MarkdownSyncInput;
   if (
-    lastMarkdownSyncInput === null ||
-    lastMarkdownSyncInput.fieldId !== markdownSyncInput.fieldId ||
-    lastMarkdownSyncInput.isDirty !== markdownSyncInput.isDirty ||
-    lastMarkdownSyncInput.isMarkdownDisplay !==
-      markdownSyncInput.isMarkdownDisplay ||
-    lastMarkdownSyncInput.serverText !== markdownSyncInput.serverText
+    shouldSyncMarkdownDraft({
+      lastSyncInput: lastMarkdownSyncInput,
+      syncInput: markdownSyncInput,
+    })
   ) {
     setLastMarkdownSyncInput(markdownSyncInput);
     if (!isMarkdownDisplay) {
@@ -406,30 +619,22 @@ export const FileTabPanel = ({
   // Justification bbox highlighting on Folio is a separate
   // follow-up; until then the bbox overlay is omitted on
   // DOCX, but the doc itself remains editable.
-  const isEditingNativeDocx =
-    isNativeDocxDisplay &&
-    editingDocxTabId === tab.id &&
-    filePropertyId !== undefined;
-  const canUnlockNativeDocx =
-    canUpdateEntity &&
-    isNativeDocxDisplay &&
-    filePropertyId !== undefined &&
-    !isEditingNativeDocx;
-  const isPromptingDocxUnlock = flashingDocxEditTabId === tab.id;
-  const metadataLane = tab.metadataLane ?? "closed";
-  const isMetadataLaneExpanded = metadataLane === "expanded";
-  const isCurrentDesktopEditField =
-    filePropertyId !== undefined &&
-    entityQuery.data?.fields.some(
-      (field) => field.id === tab.id && field.propertyId === filePropertyId,
-    ) === true;
-  const desktopEditTarget =
-    canUpdateEntity &&
-    desktopEditFileType !== null &&
-    filePropertyId !== undefined &&
-    isCurrentDesktopEditField
-      ? { fileType: desktopEditFileType, propertyId: filePropertyId }
-      : null;
+  const {
+    canUnlockNativeDocx,
+    desktopEditTarget,
+    isEditingNativeDocx,
+    isMetadataLaneExpanded,
+    isPromptingDocxUnlock,
+  } = getFileTabEditorState({
+    canUpdateEntity,
+    desktopEditFileType,
+    editingDocxTabId,
+    entityData: entityQuery.data,
+    filePropertyId,
+    flashingDocxEditTabId,
+    isNativeDocxDisplay,
+    tab,
+  });
   const desktopOpenButton =
     desktopEditTarget !== null ? (
       <DesktopOpenButton
@@ -482,7 +687,7 @@ export const FileTabPanel = ({
           "bg-background flex flex-1 flex-col overflow-hidden",
           !isActive && "hidden",
         )}
-        key={tab.renderId ?? tab.id}
+        key={renderId}
       >
         <FullViewPreviewGuard
           facet={tab.facet}
@@ -691,7 +896,14 @@ export const FileTabPanel = ({
   // facets unmounts the editor; if the user is on a non-
   // preview facet, we hide the toggle entirely (Full view
   // alone) rather than show a button that would no-op.
-  const isPreviewFacet = (tab.facet ?? "preview") === "preview";
+  const { canOpenFullView, isPreviewFacet, isPreviewOverlayVisible } =
+    getFileTabChromeState({
+      isEditingNativeDocx,
+      isEmailDisplay,
+      isMarkdownDisplay,
+      isOfficeDisplay,
+      tab,
+    });
   const markdownActions = (() => {
     if (!isMarkdownDisplay) {
       return null;
@@ -791,7 +1003,7 @@ export const FileTabPanel = ({
       {downloadButton}
       {desktopOpenButton}
       {isPreviewFacet && (markdownActions ?? editToggle)}
-      {!isEmailDisplay && !isMarkdownDisplay && fullViewButton}
+      {canOpenFullView && fullViewButton}
     </>
   );
 
@@ -799,22 +1011,17 @@ export const FileTabPanel = ({
   // viewer body — zoom controls only. The Edit / Save mode
   // toggle lives in the tab header (`fileActions` above) so
   // primary state changes have one stable location.
-  const previewOverlay =
-    (tab.facet ?? "preview") === "preview" &&
-    !isEditingNativeDocx &&
-    !isEmailDisplay &&
-    !isMarkdownDisplay &&
-    !isOfficeDisplay ? (
-      <div className="bg-background/80 supports-[backdrop-filter]:bg-background/65 absolute end-2 top-2 z-10 flex items-center gap-1 rounded-md border p-0.5 shadow-sm backdrop-blur">
-        <PeekPdfControls
-          canResetZoom={scaleOffsets.get(tab.id) !== 0}
-          onResetZoom={() => handleResetZoom(tab.id)}
-          onZoomIn={() => handleZoom(tab.id, "in")}
-          onZoomOut={() => handleZoom(tab.id, "out")}
-          scaleOffset={scaleOffsets.get(tab.id) ?? 0}
-        />
-      </div>
-    ) : null;
+  const previewOverlay = isPreviewOverlayVisible ? (
+    <div className="bg-background/80 supports-[backdrop-filter]:bg-background/65 absolute end-2 top-2 z-10 flex items-center gap-1 rounded-md border p-0.5 shadow-sm backdrop-blur">
+      <PeekPdfControls
+        canResetZoom={canResetZoom}
+        onResetZoom={() => handleResetZoom(tab.id)}
+        onZoomIn={() => handleZoom(tab.id, "in")}
+        onZoomOut={() => handleZoom(tab.id, "out")}
+        scaleOffset={scaleOffset}
+      />
+    </div>
+  ) : null;
 
   const contextBar = (
     <InspectorTabHeader
@@ -1010,12 +1217,12 @@ export const FileTabPanel = ({
                 return next;
               });
               setScaleOffsets((prev) => {
-                const scaleOffset = prev.get(tab.id);
-                if (scaleOffset === undefined) {
+                const savedScaleOffset = prev.get(tab.id);
+                if (savedScaleOffset === undefined) {
                   return prev;
                 }
                 const next = new Map(prev);
-                next.set(fieldId, scaleOffset);
+                next.set(fieldId, savedScaleOffset);
                 return next;
               });
               useInspectorTabsStore
@@ -1025,7 +1232,7 @@ export const FileTabPanel = ({
           }}
           onScrollTopChange={handleDocxScrollTopChange}
           propertyId={filePropertyId}
-          scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+          scaleOffset={scaleOffset}
           showActionBar={false}
           surface="inspector"
           workspaceId={tab.workspaceId}
@@ -1044,7 +1251,7 @@ export const FileTabPanel = ({
         onError={handleViewerError}
         onPeekNavigate={closeAll}
         onWheelZoom={(deltaY) => handleWheelZoom(tab.id, deltaY)}
-        scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+        scaleOffset={scaleOffset}
         viewId={peekPdfViewId}
         workspaceId={tab.workspaceId}
       />
@@ -1053,27 +1260,29 @@ export const FileTabPanel = ({
 
   const viewerPane = (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      {tab.justificationFieldId && !isEmailDisplay && !isMarkdownDisplay && (
-        <Suspense
-          fallback={
-            <div
-              className={cn(
-                "text-muted-foreground flex items-center border-b px-3 text-xs italic",
-                TOOLBAR_ROW_HEIGHT,
-              )}
-            >
-              {t("common.loading")}...
-            </div>
-          }
-        >
-          <DocumentAiSourceBar
-            activeTab={tab}
-            fieldId={tab.justificationFieldId}
-            isActiveTab={isActive}
-            workspaceId={tab.workspaceId}
-          />
-        </Suspense>
-      )}
+      {tab.justificationFieldId !== undefined &&
+        !isEmailDisplay &&
+        !isMarkdownDisplay && (
+          <Suspense
+            fallback={
+              <div
+                className={cn(
+                  "text-muted-foreground flex items-center border-b px-3 text-xs italic",
+                  TOOLBAR_ROW_HEIGHT,
+                )}
+              >
+                {t("common.loading")}...
+              </div>
+            }
+          >
+            <DocumentAiSourceBar
+              activeTab={tab}
+              fieldId={tab.justificationFieldId}
+              isActiveTab={isActive}
+              workspaceId={tab.workspaceId}
+            />
+          </Suspense>
+        )}
       <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
         {fileViewer}
         {previewOverlay}
@@ -1314,34 +1523,55 @@ export const FileTabPanel = ({
         "flex flex-1 flex-col overflow-hidden",
         !isActive && "hidden",
       )}
-      key={tab.renderId ?? tab.id}
+      key={renderId}
     >
-      {isNativeDocxDisplay || isOfficeDisplay ? (
-        <>
-          {contextBar}
-          {facetBar}
-          {sidepeekContent}
-        </>
-      ) : (
-        <>
-          {contextBar}
-          {facetBar}
-          <div className="min-h-0 min-w-0 flex-1">
-            <MeasuredPdfProvider
-              active={isActive}
-              fallback={{
-                suspense: <PeekSuspenseFallback />,
-                error: <InspectorPdfErrorFallback />,
-              }}
-              fieldId={tab.id}
-              initialScaleOffset={scaleOffsets.get(tab.id) ?? 0}
-              onError={handleViewerError}
-            >
-              {sidepeekContent}
-            </MeasuredPdfProvider>
-          </div>
-        </>
-      )}
+      {contextBar}
+      {facetBar}
+      <FileTabMeasurementBoundary
+        active={isActive}
+        fieldId={tab.id}
+        measured={requiresPdfMeasurement}
+        onError={handleViewerError}
+        scaleOffset={scaleOffset}
+      >
+        {sidepeekContent}
+      </FileTabMeasurementBoundary>
+    </div>
+  );
+};
+
+const FileTabMeasurementBoundary = ({
+  active,
+  children,
+  fieldId,
+  measured,
+  onError,
+  scaleOffset,
+}: {
+  active: boolean;
+  children: ReactElement;
+  fieldId: string;
+  measured: boolean;
+  onError: () => void;
+  scaleOffset: number;
+}): ReactElement => {
+  if (!measured) {
+    return children;
+  }
+  return (
+    <div className="min-h-0 min-w-0 flex-1">
+      <MeasuredPdfProvider
+        active={active}
+        fallback={{
+          suspense: <PeekSuspenseFallback />,
+          error: <InspectorPdfErrorFallback />,
+        }}
+        fieldId={fieldId}
+        initialScaleOffset={scaleOffset}
+        onError={onError}
+      >
+        {children}
+      </MeasuredPdfProvider>
     </div>
   );
 };

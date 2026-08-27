@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import type { InferOk } from "better-result";
 import { deepEquals } from "bun";
 import { and, eq } from "drizzle-orm";
 
@@ -161,6 +162,7 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";
@@ -201,6 +203,7 @@ import {
   requireTanStackAIAvailableForRole,
   validateTanStackDevModelOverride,
 } from "@/api/lib/tanstack-ai-models";
+import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 import { getAppBaseUrl } from "@/api/mcp/tool-utils";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -364,11 +367,932 @@ const stampValidatedMessageWithActiveDraftContext = ({
 type ClaimedChatTurnOwnership =
   | { status: "unclaimed" }
   | {
-      status: "preflight";
+      status: "preflight" | "streaming";
       execution: ChatTurnExecution;
       owningAssistantMessage?: PersistableChatMessage | undefined;
+    };
+
+type ChatSendLifecycleOptions = {
+  externalMcpToolsLoader: LazyExternalMcpToolsLoader;
+  recordAuditEvent: AuditRecorder;
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+/** Owns every resource that must be settled when a send stops before streaming. */
+class ChatSendLifecycle {
+  private readonly options: ChatSendLifecycleOptions;
+  private claimedTurn: ClaimedChatTurnOwnership = { status: "unclaimed" };
+  private connectorsHandedOff = false;
+  private pendingSideEffects:
+    | {
+        threadState: ChatThreadState;
+        uploadedFiles: UploadedChatFile[];
+      }
+    | undefined;
+
+  constructor(options: ChatSendLifecycleOptions) {
+    this.options = options;
+  }
+
+  adoptThread(threadState: ChatThreadState): void {
+    this.pendingSideEffects = { threadState, uploadedFiles: [] };
+  }
+
+  trackUploadedFiles(uploadedFiles: UploadedChatFile[]): void {
+    if (this.pendingSideEffects === undefined) {
+      panic("Cannot track chat uploads without rollback ownership");
     }
-  | { status: "streaming" };
+    this.pendingSideEffects.uploadedFiles = uploadedFiles;
+  }
+
+  releaseSideEffects(): void {
+    this.pendingSideEffects = undefined;
+  }
+
+  claimTurn(
+    execution: ChatTurnExecution,
+    owningAssistantMessage: PersistableChatMessage | undefined,
+  ): void {
+    this.claimedTurn = {
+      status: "preflight",
+      execution,
+      ...(owningAssistantMessage === undefined
+        ? {}
+        : { owningAssistantMessage }),
+    };
+  }
+
+  handOffConnectors(loaded: boolean): void {
+    this.connectorsHandedOff = loaded;
+  }
+
+  markStreaming(): void {
+    if (this.claimedTurn.status === "unclaimed") {
+      panic("Cannot stream a chat turn without durable ownership");
+    }
+    this.claimedTurn = {
+      status: "streaming",
+      execution: this.claimedTurn.execution,
+      owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
+    };
+  }
+
+  async failCurrentTurn(
+    code: ChatTurnFailureCode,
+    retryable: boolean,
+  ): Promise<void> {
+    if (this.claimedTurn.status === "unclaimed") {
+      panic("Cannot fail a chat turn without durable ownership");
+    }
+    const failureResult = await persistFailedChatTurn({
+      code,
+      execution: this.claimedTurn.execution,
+      recordAuditEvent: this.options.recordAuditEvent,
+      retryable,
+      owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
+      safeDb: this.options.safeDb,
+      threadId: this.options.threadId,
+      userId: this.options.userId,
+      workspaceId: this.options.workspaceId,
+    });
+    if (Result.isError(failureResult)) {
+      captureError(failureResult.error, { threadId: this.options.threadId });
+      return;
+    }
+    this.claimedTurn = { status: "unclaimed" };
+  }
+
+  async interruptCurrentTurn() {
+    if (this.claimedTurn.status === "unclaimed") {
+      return panic("Cannot interrupt a chat turn without durable ownership");
+    }
+    const settlementResult = await persistInterruptedChatTurn({
+      execution: this.claimedTurn.execution,
+      owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
+      recordAuditEvent: this.options.recordAuditEvent,
+      safeDb: this.options.safeDb,
+      threadId: this.options.threadId,
+      userId: this.options.userId,
+      workspaceId: this.options.workspaceId,
+    });
+    if (Result.isOk(settlementResult)) {
+      this.claimedTurn = { status: "unclaimed" };
+    }
+    return settlementResult;
+  }
+
+  async cleanup(): Promise<void> {
+    if (this.claimedTurn.status === "preflight") {
+      const failureResult = await persistFailedChatTurn({
+        code: "internal",
+        execution: this.claimedTurn.execution,
+        owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
+        recordAuditEvent: this.options.recordAuditEvent,
+        retryable: true,
+        safeDb: this.options.safeDb,
+        threadId: this.options.threadId,
+        userId: this.options.userId,
+        workspaceId: this.options.workspaceId,
+      });
+      if (Result.isError(failureResult)) {
+        captureError(failureResult.error, {
+          source: "send-message-claimed-turn-preflight-cleanup",
+          threadId: this.options.threadId,
+        });
+      }
+    }
+    if (this.pendingSideEffects !== undefined) {
+      const rollbackResult = await rollbackUnpersistedChatSideEffects({
+        recordAuditEvent: this.options.recordAuditEvent,
+        safeDb: this.options.safeDb,
+        threadId: this.options.threadId,
+        threadState: this.pendingSideEffects.threadState,
+        uploadedFiles: this.pendingSideEffects.uploadedFiles,
+        userId: this.options.userId,
+      });
+      if (Result.isError(rollbackResult)) {
+        captureError(rollbackResult.error, {
+          source: "send-message-unpersisted-side-effect-rollback",
+          threadId: this.options.threadId,
+        });
+      }
+    }
+    if (!this.connectorsHandedOff) {
+      await this.options.externalMcpToolsLoader.closeIfLoaded();
+    }
+  }
+}
+
+type ThreadValidationState = InferOk<
+  Awaited<ReturnType<typeof readThreadValidationState>>
+>;
+
+type AcceptIncomingTurnOptions = {
+  accessibleSet: ReadonlySet<string>;
+  accessibleWorkspaceIds: SafeId<"workspace">[];
+  body: ChatSendRequest;
+  effectiveContextMatterIds: SafeId<"workspace">[];
+  lifecycle: ChatSendLifecycle;
+  organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
+  safeDb: SafeDb;
+  thread: ChatThreadState;
+  uploadedMessage: PersistableChatMessage;
+  userId: SafeId<"user">;
+  validationThreadState: ThreadValidationState;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+/** Persists the incoming message and establishes the turn's durable owner. */
+const acceptIncomingTurn = async ({
+  accessibleSet,
+  accessibleWorkspaceIds,
+  body,
+  effectiveContextMatterIds,
+  lifecycle,
+  organizationId,
+  recordAuditEvent,
+  safeDb,
+  thread,
+  uploadedMessage,
+  userId,
+  validationThreadState,
+  workspaceId,
+}: AcceptIncomingTurnOptions) =>
+  await Result.gen(async function* () {
+    const parsedMessage = parseMessage({
+      accessibleWorkspaceIds,
+      message: uploadedMessage,
+    });
+    const isExplicitRegeneration =
+      body.turnIntent === CHAT_TURN_INTENT.regenerate;
+    if (
+      isExplicitRegeneration &&
+      (parsedMessage.message.role !== "user" ||
+        body.truncateAfterMessageId !== undefined)
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Regeneration requires one unambiguous user-message target",
+        }),
+      );
+    }
+    const replayTargetMessageId =
+      body.truncateAfterMessageId ??
+      (isExplicitRegeneration ? parsedMessage.message.id : undefined);
+
+    let messagesForPersistence: ChatThreadState["data"]["messages"] =
+      thread.data.messages;
+    let deleteMessageIdsBeforeLatest: SafeId<"chatMessage">[] = [];
+    let incomingMessageExists = false;
+    if (replayTargetMessageId !== undefined) {
+      if (parsedMessage.message.id !== replayTargetMessageId) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Truncation target must match the incoming message",
+          }),
+        );
+      }
+      const truncationTarget = yield* Result.await(
+        resolveTruncationTarget({
+          safeDb,
+          threadId: body.threadId,
+          targetMessageId: replayTargetMessageId,
+        }),
+      );
+      if (truncationTarget === null) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Truncation target was not found in the chat thread",
+          }),
+        );
+      }
+      messagesForPersistence = truncationTarget.messagesForPersistence;
+      deleteMessageIdsBeforeLatest =
+        truncationTarget.deleteMessageIdsBeforeLatest;
+      if (isExplicitRegeneration && truncationTarget.hasLaterUserMessage) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "Only the latest user turn can be regenerated",
+          }),
+        );
+      }
+    } else {
+      incomingMessageExists = yield* Result.await(
+        chatMessageExistsForThread({
+          messageId: brandPersistedChatMessageId(parsedMessage.message.id),
+          safeDb,
+          threadId: body.threadId,
+        }),
+      );
+    }
+
+    const baseLatestMessagePlan = planMessagePersistence({
+      message: parsedMessage.message,
+      storedMessages: messagesForPersistence,
+      incomingMessageExists,
+    });
+    if (
+      isExplicitRegeneration &&
+      baseLatestMessagePlan.persistencePlan.type !== "none"
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "Regeneration target is not a persisted user message",
+        }),
+      );
+    }
+    const latestMessagePlan = isExplicitRegeneration
+      ? {
+          existingIds: baseLatestMessagePlan.existingIds,
+          messages: baseLatestMessagePlan.messages,
+          persistencePlan: {
+            message: parsedMessage.message,
+            messageId: parsedMessage.message.id,
+            type: "update",
+          } satisfies MessagePersistencePlan,
+        }
+      : baseLatestMessagePlan;
+    if (
+      replayTargetMessageId !== undefined &&
+      latestMessagePlan.persistencePlan.type !== "update"
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Truncation requires updating an existing message",
+        }),
+      );
+    }
+
+    const recomputedDataWorkspaceIds =
+      replayTargetMessageId === undefined
+        ? null
+        : recomputeThreadDataScope({
+            accessibleSet,
+            baseWorkspaceId: workspaceId,
+            messages: latestMessagePlan.messages,
+          });
+    const incomingMessageWorkspaceIds = extractIncomingMessageWorkspaceIds({
+      mentions: parsedMessage.mentions,
+      message: parsedMessage.message,
+    }).filter((id) => accessibleSet.has(id));
+    const dataScopeAfterIncomingMessage =
+      recomputedDataWorkspaceIds ??
+      Array.from(
+        new Set([
+          ...thread.data.dataWorkspaceIds,
+          ...incomingMessageWorkspaceIds,
+        ]),
+      );
+    const toolWorkspaceIds = resolveToolWorkspaceIds({
+      pinnedIds: effectiveContextMatterIds,
+      accessibleWorkspaceIds,
+    });
+    const sandboxRunResult =
+      body.runMode === CHAT_RUN_MODE.agent
+        ? await Result.tryPromise({
+            try: async () =>
+              await resolveChatSandboxPlan({
+                organizationId,
+                runId: Bun.randomUUIDv7(),
+                userId,
+                workspaceIds: toolWorkspaceIds,
+              }),
+            catch: (cause) =>
+              cause instanceof HandlerError
+                ? cause
+                : new HandlerError({
+                    cause,
+                    message: "Failed to prepare agent sandbox run",
+                    status: 500,
+                  }),
+          })
+        : Result.ok(undefined);
+    if (Result.isError(sandboxRunResult)) {
+      return yield* Result.err(sandboxRunResult.error);
+    }
+    const sandboxRun = sandboxRunResult.value;
+    const turnAcceptance =
+      parsedMessage.message.role === "user" &&
+      latestMessagePlan.persistencePlan.type !== "none"
+        ? createChatTurnAcceptance({
+            organizationId,
+            threadId: body.threadId,
+            userId,
+            userMessageId: parsedMessage.message.id,
+            workspaceId,
+          })
+        : undefined;
+    const persistenceProps = {
+      acceptedSendMode: body.sendMode,
+      recordAuditEvent,
+      safeDb,
+      threadId: body.threadId,
+      turnAcceptance,
+      userId,
+      workspaceId,
+      persistencePlan: latestMessagePlan.persistencePlan,
+      dataScopeExpansion:
+        recomputedDataWorkspaceIds === null
+          ? { newWorkspaceIds: incomingMessageWorkspaceIds }
+          : undefined,
+      deleteMessageIds: deleteMessageIdsBeforeLatest,
+      dataScopeReplacement:
+        recomputedDataWorkspaceIds === null
+          ? undefined
+          : {
+              observedDataWorkspaceIds: thread.data.dataWorkspaceIds,
+              newDataWorkspaceIds: recomputedDataWorkspaceIds,
+            },
+    } as const;
+
+    let turnExecution: ChatTurnExecution | null;
+    if (parsedMessage.message.role === "assistant") {
+      if (latestMessagePlan.persistencePlan.type !== "update") {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "Interactive replay must update its owning message",
+          }),
+        );
+      }
+      const replayResult = await persistClaimedReplayMessage({
+        ...persistenceProps,
+        claim: {
+          acceptedTurnId: null,
+          continuationInteraction:
+            getResumedUserInteraction({
+              awaited: getAwaitingUserInteractions(
+                validationThreadState.persistedMessage === null
+                  ? null
+                  : chatMessageFromPersisted({
+                      content: validationThreadState.persistedMessage.content,
+                      id: parsedMessage.message.id,
+                      role: validationThreadState.persistedMessage.role,
+                    }),
+              ),
+              message: parsedMessage.message,
+            }) ?? undefined,
+          incomingMessageId: parsedMessage.message.id,
+          incomingMessageRole: parsedMessage.message.role,
+          organizationId,
+          threadId: body.threadId,
+          userId,
+          workspaceId,
+        },
+        persistencePlan: latestMessagePlan.persistencePlan,
+      });
+      if (Result.isError(replayResult)) {
+        return Result.err(replayResult.error);
+      }
+      turnExecution = replayResult.value;
+      if (turnExecution !== null) {
+        lifecycle.releaseSideEffects();
+      }
+    } else if (turnAcceptance === undefined) {
+      const persistenceResult = await persistMessage(persistenceProps);
+      if (Result.isError(persistenceResult)) {
+        return Result.err(persistenceResult.error);
+      }
+      turnExecution = yield* Result.await(
+        claimChatTurnForExecution({
+          acceptedTurnId: null,
+          incomingMessageId: parsedMessage.message.id,
+          incomingMessageRole: parsedMessage.message.role,
+          organizationId,
+          safeDb,
+          threadId: body.threadId,
+          userId,
+          workspaceId,
+        }),
+      );
+    } else {
+      const persistenceResult = await persistAcceptedMessageWithClaim({
+        ...persistenceProps,
+        turnAcceptance,
+      });
+      if (Result.isError(persistenceResult)) {
+        return Result.err(persistenceResult.error);
+      }
+      turnExecution = persistenceResult.value;
+    }
+    if (
+      parsedMessage.message.role !== "assistant" &&
+      latestMessagePlan.persistencePlan.type !== "none"
+    ) {
+      lifecycle.releaseSideEffects();
+    }
+    if (turnExecution === null) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "Chat turn has no durable execution owner",
+        }),
+      );
+    }
+    const owningAssistantMessage =
+      parsedMessage.message.role === "assistant"
+        ? parsedMessage.message
+        : undefined;
+    lifecycle.claimTurn(turnExecution, owningAssistantMessage);
+    return Result.ok({
+      dataScopeAfterIncomingMessage,
+      deleteMessageIdsBeforeLatest,
+      latestMessagePlan,
+      owningAssistantMessage,
+      parsedMessage,
+      replayTargetMessageId,
+      sandboxRun,
+      toolWorkspaceIds,
+      turnExecution,
+    });
+  });
+
+type ChatToolsInput = Parameters<typeof getChatTools>[0];
+
+type PrepareValidatedIncomingMessageOptions = {
+  authorization: {
+    accessibleWorkspaceIds: SafeId<"workspace">[];
+    memberRole: { role: ChatToolsInput["memberRole"] };
+    pinServerValidatedWorkspaceId: ChatToolsInput["pinServerValidatedWorkspaceId"];
+    requestedContextMatterIds: SafeId<"workspace">[];
+    workspaceStatusById: NonNullable<ChatToolsInput["workspaceStatusById"]>;
+  };
+  lifecycle: ChatSendLifecycle;
+  persistence: {
+    recordAuditEvent: AuditRecorder;
+    safeDb: SafeDb;
+    scopedDb: ChatToolsInput["scopedDb"];
+  };
+  prerequisites: {
+    activeDraftContext: InferOk<
+      Awaited<ReturnType<typeof validateActiveDraftContext>>
+    >;
+    activeFileForTools: ChatToolsInput["activeFile"];
+    validationThreadState: ThreadValidationState;
+  };
+  request: {
+    body: ChatSendRequest;
+    isClientConnectionAborted: () => boolean;
+    organizationId: SafeId<"organization">;
+    resume: Parameters<typeof validateMessage>[0]["resume"];
+    userId: SafeId<"user">;
+    workspaceId: SafeId<"workspace"> | null;
+  };
+  tools: {
+    disabledNativeToolSlugs: ChatToolsInput["disabledNativeToolSlugs"];
+    docxEditRepresentation: NonNullable<
+      ChatToolsInput["docxEditRepresentation"]
+    >;
+    editApplyMode: NonNullable<ChatToolsInput["editApplyMode"]>;
+    externalMcpToolsLoader: LazyExternalMcpToolsLoader;
+    orgAIConfig: OrgAIConfig | null;
+    refRegistry: ReturnType<typeof createChatRefRegistry>;
+    toolDefectMemo: ReturnType<typeof createChatToolDefectMemo>;
+    usageLane: UsageLaneDecision | undefined;
+    validationActiveSkillContext: ActiveChatSkillContext | null;
+  };
+};
+
+/** Validates the provider-facing message and adopts thread/file rollback ownership. */
+const prepareValidatedIncomingMessage = async ({
+  authorization: {
+    accessibleWorkspaceIds,
+    memberRole,
+    pinServerValidatedWorkspaceId,
+    requestedContextMatterIds,
+    workspaceStatusById,
+  },
+  lifecycle,
+  persistence: { recordAuditEvent, safeDb, scopedDb },
+  prerequisites: {
+    activeDraftContext,
+    activeFileForTools,
+    validationThreadState,
+  },
+  request: {
+    body,
+    isClientConnectionAborted,
+    organizationId,
+    resume,
+    userId,
+    workspaceId,
+  },
+  tools: {
+    disabledNativeToolSlugs,
+    docxEditRepresentation,
+    editApplyMode,
+    externalMcpToolsLoader,
+    orgAIConfig,
+    refRegistry,
+    toolDefectMemo,
+    usageLane,
+    validationActiveSkillContext,
+  },
+}: PrepareValidatedIncomingMessageOptions) =>
+  await Result.gen(async function* () {
+    if (isClientConnectionAborted()) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Client disconnected before AI work started",
+        }),
+      );
+    }
+
+    // Resolve the org's web-search providers once (BYOK key first,
+    // platform env key as fallback) and reuse for both the validation
+    // and streaming tool sets.
+    const webSearchProviders =
+      await loadWebSearchProvidersForOrg(organizationId);
+
+    if (isClientConnectionAborted()) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Client disconnected before AI work started",
+        }),
+      );
+    }
+
+    // Agent runs cannot use per-user external connectors. Keep them out of
+    // validation too, so an invalid external-tool part is rejected by the
+    // tool schema without starting connector discovery. Normal streaming
+    // still reuses a validation-triggered load through the memoized loader.
+    const externalToolsForValidation =
+      body.runMode === CHAT_RUN_MODE.agent
+        ? undefined
+        : await resolveExternalToolsForValidation(
+            body.message,
+            externalMcpToolsLoader,
+          );
+
+    if (isClientConnectionAborted()) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Client disconnected before AI work started",
+        }),
+      );
+    }
+
+    // Tool input schemas don't depend on `accessibleWorkspaceIds`
+    // (scope is checked at execute time, not in the schema), so we
+    // can validate the incoming message against the broad set and
+    // then rebuild the tools with the narrowed `effective` set
+    // before streaming. This lets the picker's scope actually
+    // govern tool authorization rather than just being persisted.
+    // Validation tools include the broadest workspace surface, but
+    // still honor thread/org gates for tools whose presence is an
+    // explicit user or administrator opt-in.
+    const validationTools = getChatTools({
+      organizationId,
+      memberRole: memberRole.role,
+      orgAIConfig,
+      pinServerValidatedWorkspaceId,
+      requestWorkspaceId: workspaceId,
+      refRegistry,
+      toolDefectMemo,
+      safeDb,
+      scopedDb,
+      threadId: body.threadId,
+      workspaceId,
+      userId,
+      // Schema validation only; this tool set's `spawn_subagents` never
+      // executes, so a raw (non-anonymizing) boundary is correct here —
+      // the real per-request boundary is created below and threaded
+      // into the streaming tool set instead.
+      thirdPartyBoundary: { type: "raw" },
+      // Schema validation runs against the user's full accessible
+      // set; per-tool scope checks happen at execute time below.
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds,
+      }),
+      activeFile: activeFileForTools,
+      hasActiveDocxEditClient: true,
+      hasActiveDocxFileClient: true,
+      editApplyMode,
+      docxEditRepresentation,
+      includeAllDocxEditToolsForValidation: true,
+      includeRememberToolForValidation: true,
+      webSearchEnabled: validationThreadState.webSearchEnabled,
+      webSearchProviders,
+      externalTools: externalToolsForValidation,
+      disabledNativeToolSlugs,
+      activeSkillContext: validationActiveSkillContext,
+      recordAuditEvent,
+      resolveMemorySourceWorkspaceIds: () =>
+        resolveMemorySourceWorkspaceIds({
+          accessibleWorkspaceIds: new Set(accessibleWorkspaceIds),
+          contextMatterIds: [],
+          dataWorkspaceIds: [],
+          registeredWorkspaceIds: refRegistry.getRegisteredWorkspaceIds(),
+          workspaceId,
+        }),
+      workspaceStatusById,
+    });
+
+    const validatedMessageResult = await validateMessage({
+      message: body.message,
+      persistedMessage: validationThreadState.persistedMessage,
+      resume,
+      safeDb,
+      threadId: body.threadId,
+      tools: validationTools,
+      userId,
+    });
+    if (Result.isError(validatedMessageResult)) {
+      // The wrapping try/finally closes `externalMcpToolsLoader` on this
+      // exit path too (a no-op if this message never needed the external
+      // tools) — no explicit close needed here.
+      return Result.err(validatedMessageResult.error);
+    }
+    const validatedMessage = validatedMessageResult.value;
+
+    // Captured once and threaded through to generateThreadTitle below: the
+    // generator's guard compares the thread's live title against this
+    // value to detect any rename (even one whose titleSource column went
+    // stale) rather than trusting titleSource alone.
+    const initialThreadTitle = extractTitle(validatedMessage.message.parts);
+
+    const thread = yield* Result.await(
+      loadThread({
+        initialDataWorkspaceIds:
+          activeDraftContext === null
+            ? []
+            : activeDraftContext.originDataWorkspaceIds,
+        initialContextMatterIds: requestedContextMatterIds,
+        organizationId,
+        recordAuditEvent,
+        safeDb,
+        threadId: body.threadId,
+        title: initialThreadTitle,
+        userId,
+        workspaceId,
+      }),
+    );
+    // Own the thread from creation through the first durable message. The
+    // enclosing finally is the sole rollback boundary for every later
+    // return, error, or SDK short-circuit before that persistence succeeds.
+    lifecycle.adoptThread(thread);
+
+    const activeDraft = body.activeDraft;
+    if (activeDraft !== undefined) {
+      const hasPersistedContext =
+        thread.type === "created"
+          ? false
+          : yield* Result.await(
+              safeDb(async (tx) =>
+                hasPersistedGeneratedDocumentActiveDraftContext({
+                  generatedDraft: {
+                    originChatMessageId: activeDraft.originChatMessageId,
+                    originChatThreadId: activeDraft.originChatThreadId,
+                    toolCallId: activeDraft.toolCallId,
+                  },
+                  organizationId,
+                  threadId: thread.data.id,
+                  tx,
+                  userId,
+                }),
+              ),
+            );
+      if (
+        !canUseChatThreadForGeneratedDocumentDraft({
+          hasPersistedContext,
+          threadType: thread.type,
+        })
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message:
+              "Active generated document draft is not bound to this chat",
+          }),
+        );
+      }
+    }
+
+    const stampedValidatedMessage = {
+      ...validatedMessage,
+      message: stampValidatedMessageWithActiveDraftContext({
+        activeDraft: body.activeDraft,
+        message: validatedMessage.message,
+      }),
+    };
+
+    // Existing-thread pin changes are durable side effects, so stop before
+    // applying them when any earlier validation or thread read observed a
+    // client disconnect. Created threads still need their rollback token
+    // cleaned up on this exit path.
+    if (isClientConnectionAborted()) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Client disconnected before AI work started",
+        }),
+      );
+    }
+
+    // The thread's persisted chat-model override wins over the org/instance
+    // default, but the dev-only body override still wins over everything
+    // (matches `assertDevModelOverride` above). Re-validated here (not just
+    // at write time in update-thread-model.ts) so a provider key removal or
+    // a catalog bump that drops the model falls back to the org default
+    // silently instead of failing the send.
+    const {
+      modelId: selectedChatModel,
+      reasoningEffort: selectedReasoningEffort,
+    } = resolveEffectiveChatModelSelection({
+      devModelId: body.devModelId,
+      threadChatModel: thread.data.chatModel,
+      threadReasoningEffort: thread.data.chatReasoningEffort,
+      orgAIConfig,
+    });
+
+    // Budget routing. Inside the included budget any selection
+    // stands. When the pre-flight resolved the reduced-cost lane, an
+    // unselected turn is served on the lane's own model. Two cases
+    // instead fall through to the pool, which must be able to cover
+    // them — the same 402 a pool-only org would see: an explicit
+    // model selection, and an agent-mode send (machine work never
+    // settles an interactive budget).
+    let chatModelOverride = selectedChatModel;
+    let chatReasoningEffort = selectedReasoningEffort;
+    let turnLane = usageLane ?? { lane: "pool" as const };
+    const explicitSelectionNeedsPool =
+      turnLane.lane === "fallback" &&
+      selectedChatModel !== undefined &&
+      selectedChatModel !== turnLane.forcedModelSelection;
+    const agentModeNeedsPool =
+      body.runMode === "agent" && turnLane.lane !== "pool";
+    if (explicitSelectionNeedsPool || agentModeNeedsPool) {
+      const poolCheck = yield* Result.await(
+        Result.tryPromise({
+          try: async () =>
+            await assertUsageAvailableForHandler({
+              metering: { actionType: "chat" },
+              organizationId,
+              orgAIConfig,
+              workspaceId: null,
+              userId,
+              safeDb,
+            }),
+          catch: (cause) =>
+            new HandlerError({
+              status: 500,
+              message: "Usage check failed",
+              cause,
+            }),
+        }),
+      );
+      if (poolCheck !== null) {
+        return Result.err(poolCheck);
+      }
+      turnLane = { lane: "pool" };
+    } else if (turnLane.lane === "fallback") {
+      chatModelOverride = turnLane.forcedModelSelection;
+      chatReasoningEffort = undefined;
+    }
+
+    // For an existing thread, accept a non-empty body update as
+    // "user changed scope, persist it"; an omitted/empty body keeps
+    // the stored value so re-sends from cached transports don't
+    // silently widen access. Persisted pins are always intersected
+    // with the currently accessible set so a revoked workspace
+    // cannot be re-authorized through a stale stored pin.
+    const storedPinsThisRequest =
+      thread.type === "existing" && body.contextMatterIds !== undefined
+        ? requestedContextMatterIds
+        : thread.data.contextMatterIds;
+    const effectiveContextMatterIds = intersectAccessibleWorkspaceIds({
+      pinnedIds: storedPinsThisRequest,
+      accessibleWorkspaceIds,
+    });
+    if (
+      thread.type === "existing" &&
+      !workspaceIdsEqual(
+        thread.data.contextMatterIds,
+        effectiveContextMatterIds,
+      )
+    ) {
+      yield* Result.await(
+        safeDb(async (tx) => {
+          await tx
+            .update(chatThreads)
+            .set({ contextMatterIds: effectiveContextMatterIds })
+            .where(eq(chatThreads.id, body.threadId));
+
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+            resourceId: body.threadId,
+            workspaceId,
+            changes: {
+              contextMatterIds: {
+                old: [...thread.data.contextMatterIds],
+                new: [...effectiveContextMatterIds],
+              },
+            },
+          });
+        }),
+      );
+    }
+
+    const thirdPartyBoundary = createChatThirdPartyBoundary({
+      anonymizationScopeId: workspaceId ?? body.threadId,
+      organizationId,
+      scopedDb,
+      sendMode: body.sendMode,
+      workspaceId: workspaceId ?? undefined,
+    });
+
+    if (isClientConnectionAborted()) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Client disconnected before AI work started",
+        }),
+      );
+    }
+
+    const uploadResult = await uploadMessageFilesWithRollback({
+      message: stampedValidatedMessage.message,
+      recordAuditEvent,
+      safeDb,
+      threadId: thread.data.id,
+      threadState: thread,
+      userId,
+    });
+    if (Result.isError(uploadResult)) {
+      // The upload helper already cleans a partial upload (and a newly
+      // created thread) before returning an error.
+      lifecycle.releaseSideEffects();
+      return Result.err(uploadResult.error);
+    }
+    lifecycle.trackUploadedFiles(uploadResult.value.uploadedFiles);
+
+    return Result.ok({
+      chatModelOverride,
+      chatReasoningEffort,
+      effectiveContextMatterIds,
+      initialThreadTitle,
+      thirdPartyBoundary,
+      thread,
+      turnLane,
+      uploadedMessage: uploadResult.value.message,
+      webSearchProviders,
+    });
+  });
 
 const sendMessage = createSafeRootHandler(
   config,
@@ -412,7 +1336,7 @@ const sendMessage = createSafeRootHandler(
       role: "chat",
     });
 
-    const correlationMismatch =
+    const hasEnvelopeCorrelationMismatch = (): boolean =>
       transportBody.threadId !== body.threadId ||
       transportBody.runId !== body.runId ||
       transportParentRunId !== parentRunId ||
@@ -422,7 +1346,7 @@ const sendMessage = createSafeRootHandler(
         (message) =>
           message.id === body.message.id && message.role === body.message.role,
       );
-    if (correlationMismatch) {
+    if (hasEnvelopeCorrelationMismatch()) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -597,11 +1521,8 @@ const sendMessage = createSafeRootHandler(
     // callers ask — `createLazyExternalMcpToolsLoader` caches the first
     // call's promise, so a validation-triggered load is reused by the
     // streaming pass instead of running discovery twice.
-    // `externalMcpToolsHandedOffToStreaming` below tracks whether
-    // ownership of closing these connectors (if ever loaded) passed to the
-    // streaming try/catch, so every other exit path (validation failure,
-    // any early return or throw between here and streaming) still closes
-    // them exactly once.
+    // The lifecycle owner tracks whether closing loaded connectors passed to
+    // the streaming response, so every earlier exit still closes them once.
     const externalMcpToolsLoader = createLazyExternalMcpToolsLoader(
       async () =>
         await loadExternalMcpToolsForUser({
@@ -611,734 +1532,113 @@ const sendMessage = createSafeRootHandler(
           userId: user.id,
         }),
     );
-    let externalMcpToolsHandedOffToStreaming = false;
-    let pendingUnpersistedSideEffects:
-      | {
-          threadState: ChatThreadState;
-          uploadedFiles: UploadedChatFile[];
-        }
-      | undefined;
-    let claimedChatTurnOwnership: ClaimedChatTurnOwnership = {
-      status: "unclaimed",
-    };
+    const lifecycle = new ChatSendLifecycle({
+      externalMcpToolsLoader,
+      recordAuditEvent,
+      safeDb,
+      threadId: body.threadId,
+      userId: user.id,
+      workspaceId,
+    });
 
     // The try/finally starts immediately after the loader is constructed
     // (rather than just around the streaming pass) so that a throw from
     // any of the awaited steps below — web-search provider load,
     // tool-set construction, message validation — still closes
     // `externalMcpToolsLoader` (a no-op if nothing was ever loaded)
-    // instead of leaking MCP clients. The streaming pass further below
-    // takes over ownership once it starts consuming the clients (flips
-    // `externalMcpToolsHandedOffToStreaming`); until then this `finally` is
-    // the sole owner. `Result.gen`'s `yield*` short-circuit resumes the
+    // instead of leaking MCP clients. The streaming pass takes over connector
+    // ownership once it starts consuming the clients; until then this
+    // `finally` is the sole owner. `Result.gen`'s `yield*` short-circuit resumes the
     // generator via `.return()`, which unwinds this `finally` like a normal
     // early `return` would.
     try {
-      if (isClientConnectionAborted()) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Client disconnected before AI work started",
-          }),
-        );
-      }
-
-      // Resolve the org's web-search providers once (BYOK key first,
-      // platform env key as fallback) and reuse for both the validation
-      // and streaming tool sets.
-      const webSearchProviders = await loadWebSearchProvidersForOrg(
-        session.activeOrganizationId,
-      );
-
-      if (isClientConnectionAborted()) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Client disconnected before AI work started",
-          }),
-        );
-      }
-
-      // Agent runs cannot use per-user external connectors. Keep them out of
-      // validation too, so an invalid external-tool part is rejected by the
-      // tool schema without starting connector discovery. Normal streaming
-      // still reuses a validation-triggered load through the memoized loader.
-      const externalToolsForValidation =
-        body.runMode === CHAT_RUN_MODE.agent
-          ? undefined
-          : await resolveExternalToolsForValidation(
-              body.message,
-              externalMcpToolsLoader,
-            );
-
-      if (isClientConnectionAborted()) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Client disconnected before AI work started",
-          }),
-        );
-      }
-
-      // Tool input schemas don't depend on `accessibleWorkspaceIds`
-      // (scope is checked at execute time, not in the schema), so we
-      // can validate the incoming message against the broad set and
-      // then rebuild the tools with the narrowed `effective` set
-      // before streaming. This lets the picker's scope actually
-      // govern tool authorization rather than just being persisted.
-      // Validation tools include the broadest workspace surface, but
-      // still honor thread/org gates for tools whose presence is an
-      // explicit user or administrator opt-in.
-      const validationTools = getChatTools({
-        organizationId: session.activeOrganizationId,
-        memberRole: memberRole.role,
-        orgAIConfig,
-        pinServerValidatedWorkspaceId,
-        requestWorkspaceId: workspaceId,
-        refRegistry,
-        toolDefectMemo,
-        safeDb,
-        scopedDb,
-        threadId: body.threadId,
-        workspaceId,
-        userId: user.id,
-        // Schema validation only; this tool set's `spawn_subagents` never
-        // executes, so a raw (non-anonymizing) boundary is correct here —
-        // the real per-request boundary is created below and threaded
-        // into the streaming tool set instead.
-        thirdPartyBoundary: { type: "raw" },
-        // Schema validation runs against the user's full accessible
-        // set; per-tool scope checks happen at execute time below.
-        toolWorkspaceIds: resolveToolWorkspaceIds({
-          pinnedIds: [],
-          accessibleWorkspaceIds,
-        }),
-        activeFile: activeFileForTools,
-        hasActiveDocxEditClient: true,
-        hasActiveDocxFileClient: true,
-        editApplyMode,
-        docxEditRepresentation,
-        includeAllDocxEditToolsForValidation: true,
-        includeRememberToolForValidation: true,
-        webSearchEnabled: validationThreadState.webSearchEnabled,
-        webSearchProviders,
-        externalTools: externalToolsForValidation,
-        disabledNativeToolSlugs,
-        activeSkillContext: validationActiveSkillContext,
-        recordAuditEvent,
-        resolveMemorySourceWorkspaceIds: () =>
-          resolveMemorySourceWorkspaceIds({
-            accessibleWorkspaceIds: new Set(accessibleWorkspaceIds),
-            contextMatterIds: [],
-            dataWorkspaceIds: [],
-            registeredWorkspaceIds: refRegistry.getRegisteredWorkspaceIds(),
-            workspaceId,
-          }),
-        workspaceStatusById,
-      });
-
-      const validatedMessageResult = await validateMessage({
-        message: body.message,
-        persistedMessage: validationThreadState.persistedMessage,
-        resume,
-        safeDb,
-        threadId: body.threadId,
-        tools: validationTools,
-        userId: user.id,
-      });
-      if (Result.isError(validatedMessageResult)) {
-        // The wrapping try/finally closes `externalMcpToolsLoader` on this
-        // exit path too (a no-op if this message never needed the external
-        // tools) — no explicit close needed here.
-        return Result.err(validatedMessageResult.error);
-      }
-      const validatedMessage = validatedMessageResult.value;
-
-      // Captured once and threaded through to generateThreadTitle below: the
-      // generator's guard compares the thread's live title against this
-      // value to detect any rename (even one whose titleSource column went
-      // stale) rather than trusting titleSource alone.
-      const initialThreadTitle = extractTitle(validatedMessage.message.parts);
-
-      const thread = yield* Result.await(
-        loadThread({
-          initialDataWorkspaceIds:
-            activeDraftContext === null
-              ? []
-              : activeDraftContext.originDataWorkspaceIds,
-          initialContextMatterIds: requestedContextMatterIds,
-          organizationId: session.activeOrganizationId,
-          recordAuditEvent,
-          safeDb,
-          threadId: body.threadId,
-          title: initialThreadTitle,
-          userId: user.id,
-          workspaceId,
-        }),
-      );
-      // Own the thread from creation through the first durable message. The
-      // enclosing finally is the sole rollback boundary for every later
-      // return, error, or SDK short-circuit before that persistence succeeds.
-      pendingUnpersistedSideEffects = {
-        threadState: thread,
-        uploadedFiles: [],
-      };
-
-      const activeDraft = body.activeDraft;
-      if (activeDraft !== undefined) {
-        const hasPersistedContext =
-          thread.type === "created"
-            ? false
-            : yield* Result.await(
-                safeDb(async (tx) =>
-                  hasPersistedGeneratedDocumentActiveDraftContext({
-                    generatedDraft: {
-                      originChatMessageId: activeDraft.originChatMessageId,
-                      originChatThreadId: activeDraft.originChatThreadId,
-                      toolCallId: activeDraft.toolCallId,
-                    },
-                    organizationId: session.activeOrganizationId,
-                    threadId: thread.data.id,
-                    tx,
-                    userId: user.id,
-                  }),
-                ),
-              );
-        if (
-          !canUseChatThreadForGeneratedDocumentDraft({
-            hasPersistedContext,
-            threadType: thread.type,
-          })
-        ) {
-          return Result.err(
-            new HandlerError({
-              status: 409,
-              message:
-                "Active generated document draft is not bound to this chat",
-            }),
-          );
-        }
-      }
-
-      const stampedValidatedMessage = {
-        ...validatedMessage,
-        message: stampValidatedMessageWithActiveDraftContext({
-          activeDraft: body.activeDraft,
-          message: validatedMessage.message,
-        }),
-      };
-
-      // Existing-thread pin changes are durable side effects, so stop before
-      // applying them when any earlier validation or thread read observed a
-      // client disconnect. Created threads still need their rollback token
-      // cleaned up on this exit path.
-      if (isClientConnectionAborted()) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Client disconnected before AI work started",
-          }),
-        );
-      }
-
-      // The thread's persisted chat-model override wins over the org/instance
-      // default, but the dev-only body override still wins over everything
-      // (matches `assertDevModelOverride` above). Re-validated here (not just
-      // at write time in update-thread-model.ts) so a provider key removal or
-      // a catalog bump that drops the model falls back to the org default
-      // silently instead of failing the send.
-      const {
-        modelId: selectedChatModel,
-        reasoningEffort: selectedReasoningEffort,
-      } = resolveEffectiveChatModelSelection({
-        devModelId: body.devModelId,
-        threadChatModel: thread.data.chatModel,
-        threadReasoningEffort: thread.data.chatReasoningEffort,
-        orgAIConfig,
-      });
-
-      // Budget routing. Inside the included budget any selection
-      // stands. When the pre-flight resolved the reduced-cost lane, an
-      // unselected turn is served on the lane's own model. Two cases
-      // instead fall through to the pool, which must be able to cover
-      // them — the same 402 a pool-only org would see: an explicit
-      // model selection, and an agent-mode send (machine work never
-      // settles an interactive budget).
-      let chatModelOverride = selectedChatModel;
-      let chatReasoningEffort = selectedReasoningEffort;
-      let turnLane = usageLane ?? { lane: "pool" as const };
-      const explicitSelectionNeedsPool =
-        turnLane.lane === "fallback" &&
-        selectedChatModel !== undefined &&
-        selectedChatModel !== turnLane.forcedModelSelection;
-      const agentModeNeedsPool =
-        body.runMode === "agent" && turnLane.lane !== "pool";
-      if (explicitSelectionNeedsPool || agentModeNeedsPool) {
-        const poolCheck = yield* Result.await(
-          Result.tryPromise({
-            try: async () =>
-              await assertUsageAvailableForHandler({
-                metering: { actionType: "chat" },
-                organizationId: session.activeOrganizationId,
-                orgAIConfig,
-                workspaceId: null,
-                userId: user.id,
-                safeDb,
-              }),
-            catch: (cause) =>
-              new HandlerError({
-                status: 500,
-                message: "Usage check failed",
-                cause,
-              }),
-          }),
-        );
-        if (poolCheck !== null) {
-          return Result.err(poolCheck);
-        }
-        turnLane = { lane: "pool" };
-      } else if (turnLane.lane === "fallback") {
-        chatModelOverride = turnLane.forcedModelSelection;
-        chatReasoningEffort = undefined;
-      }
-
-      // For an existing thread, accept a non-empty body update as
-      // "user changed scope, persist it"; an omitted/empty body keeps
-      // the stored value so re-sends from cached transports don't
-      // silently widen access. Persisted pins are always intersected
-      // with the currently accessible set so a revoked workspace
-      // cannot be re-authorized through a stale stored pin.
-      const storedPinsThisRequest =
-        thread.type === "existing" && body.contextMatterIds !== undefined
-          ? requestedContextMatterIds
-          : thread.data.contextMatterIds;
-      const effectiveContextMatterIds = intersectAccessibleWorkspaceIds({
-        pinnedIds: storedPinsThisRequest,
-        accessibleWorkspaceIds,
-      });
-      if (
-        thread.type === "existing" &&
-        !workspaceIdsEqual(
-          thread.data.contextMatterIds,
-          effectiveContextMatterIds,
-        )
-      ) {
-        yield* Result.await(
-          safeDb(async (tx) => {
-            await tx
-              .update(chatThreads)
-              .set({ contextMatterIds: effectiveContextMatterIds })
-              .where(eq(chatThreads.id, body.threadId));
-
-            await recordAuditEvent(tx, {
-              action: AUDIT_ACTION.UPDATE,
-              resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-              resourceId: body.threadId,
-              workspaceId,
-              changes: {
-                contextMatterIds: {
-                  old: [...thread.data.contextMatterIds],
-                  new: [...effectiveContextMatterIds],
-                },
-              },
-            });
-          }),
-        );
-      }
-
-      const thirdPartyBoundary = createChatThirdPartyBoundary({
-        anonymizationScopeId: workspaceId ?? body.threadId,
-        organizationId: session.activeOrganizationId,
-        scopedDb,
-        sendMode: body.sendMode,
-        workspaceId: workspaceId ?? undefined,
-      });
-
-      if (isClientConnectionAborted()) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Client disconnected before AI work started",
-          }),
-        );
-      }
-
-      const uploadResult = await uploadMessageFilesWithRollback({
-        message: stampedValidatedMessage.message,
-        recordAuditEvent,
-        safeDb,
-        threadId: thread.data.id,
-        threadState: thread,
-        userId: user.id,
-      });
-      if (Result.isError(uploadResult)) {
-        // The upload helper already cleans a partial upload (and a newly
-        // created thread) before returning an error.
-        pendingUnpersistedSideEffects = undefined;
-        return Result.err(uploadResult.error);
-      }
-      pendingUnpersistedSideEffects.uploadedFiles =
-        uploadResult.value.uploadedFiles;
-
-      const parsedMessage = parseMessage({
-        accessibleWorkspaceIds,
-        message: uploadResult.value.message,
-      });
-
-      const isExplicitRegeneration =
-        body.turnIntent === CHAT_TURN_INTENT.regenerate;
-      if (
-        isExplicitRegeneration &&
-        (parsedMessage.message.role !== "user" ||
-          body.truncateAfterMessageId !== undefined)
-      ) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message:
-              "Regeneration requires one unambiguous user-message target",
-          }),
-        );
-      }
-      const replayTargetMessageId =
-        body.truncateAfterMessageId ??
-        (isExplicitRegeneration ? parsedMessage.message.id : undefined);
-
-      let messagesForPersistence: ChatThreadState["data"]["messages"] =
-        thread.data.messages;
-      let deleteMessageIdsBeforeLatest: SafeId<"chatMessage">[] = [];
-      // The incoming message normally is new. Outside the truncation path the
-      // stored list is a bounded window that may exclude an old re-sent/edited
-      // id, so a targeted existence check guards against a duplicate insert.
-      let incomingMessageExists = false;
-      if (replayTargetMessageId !== undefined) {
-        if (parsedMessage.message.id !== replayTargetMessageId) {
-          return Result.err(
-            new HandlerError({
-              status: 400,
-              message: "Truncation target must match the incoming message",
-            }),
-          );
-        }
-
-        // Resolve the target against the full thread history, not the windowed
-        // in-memory list: a replay target can be older than the window. The
-        // retained prefix is needed to recompute the thread data scope.
-        const truncationTarget = yield* Result.await(
-          resolveTruncationTarget({
-            safeDb,
-            threadId: body.threadId,
-            targetMessageId: replayTargetMessageId,
-          }),
-        );
-        if (truncationTarget === null) {
-          return Result.err(
-            new HandlerError({
-              status: 400,
-              message: "Truncation target was not found in the chat thread",
-            }),
-          );
-        }
-
-        messagesForPersistence = truncationTarget.messagesForPersistence;
-        deleteMessageIdsBeforeLatest =
-          truncationTarget.deleteMessageIdsBeforeLatest;
-        if (isExplicitRegeneration && truncationTarget.hasLaterUserMessage) {
-          return Result.err(
-            new HandlerError({
-              status: 409,
-              message: "Only the latest user turn can be regenerated",
-            }),
-          );
-        }
-      } else {
-        incomingMessageExists = yield* Result.await(
-          chatMessageExistsForThread({
-            messageId: brandPersistedChatMessageId(parsedMessage.message.id),
-            safeDb,
-            threadId: body.threadId,
-          }),
-        );
-      }
-
-      const baseLatestMessagePlan = planMessagePersistence({
-        message: parsedMessage.message,
-        storedMessages: messagesForPersistence,
-        incomingMessageExists,
-      });
-      if (
-        isExplicitRegeneration &&
-        baseLatestMessagePlan.persistencePlan.type !== "none"
-      ) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: "Regeneration target is not a persisted user message",
-          }),
-        );
-      }
-      const latestMessagePlan = isExplicitRegeneration
-        ? {
-            existingIds: baseLatestMessagePlan.existingIds,
-            messages: baseLatestMessagePlan.messages,
-            persistencePlan: {
-              message: parsedMessage.message,
-              messageId: parsedMessage.message.id,
-              type: "update",
-            } satisfies MessagePersistencePlan,
-          }
-        : baseLatestMessagePlan;
-      if (
-        replayTargetMessageId !== undefined &&
-        latestMessagePlan.persistencePlan.type !== "update"
-      ) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Truncation requires updating an existing message",
-          }),
-        );
-      }
-
-      const recomputedDataWorkspaceIds =
-        replayTargetMessageId !== undefined
-          ? recomputeThreadDataScope({
-              accessibleSet,
-              baseWorkspaceId: workspaceId,
-              messages: latestMessagePlan.messages,
-            })
-          : null;
-
-      // Keep the thread's data scope aligned with the messages being
-      // stored. Normal sends append newly observed workspace IDs
-      // before persisting. Replay truncation recomputes the exact
-      // retained scope and writes it in the same transaction as the
-      // replay update below.
-      //
-      // Intersect with `accessibleWorkspaceIds` first: an unknown ID
-      // (model hallucination, copy-pasted UUID from elsewhere) added
-      // to `data_workspace_ids` would fail the RLS subset check on
-      // every subsequent message persist, silently breaking the
-      // thread.
-      const incomingMessageWorkspaceIds = extractIncomingMessageWorkspaceIds({
-        mentions: parsedMessage.mentions,
-        message: parsedMessage.message,
-      }).filter((id) => accessibleSet.has(id));
-      const dataScopeAfterIncomingMessage =
-        recomputedDataWorkspaceIds ??
-        Array.from(
-          new Set([
-            ...thread.data.dataWorkspaceIds,
-            ...incomingMessageWorkspaceIds,
-          ]),
-        );
-
-      // Resolve the opaque sandbox boundary before persisting or claiming the
-      // turn. A disabled or incomplete deployment must reject the explicit
-      // agent request without leaving a durable incoming message behind.
-      const toolWorkspaceIds = resolveToolWorkspaceIds({
-        pinnedIds: effectiveContextMatterIds,
-        accessibleWorkspaceIds,
-      });
-      const sandboxRunResult =
-        body.runMode === CHAT_RUN_MODE.agent
-          ? await Result.tryPromise({
-              try: async () =>
-                await resolveChatSandboxPlan({
-                  organizationId: session.activeOrganizationId,
-                  runId: Bun.randomUUIDv7(),
-                  userId: user.id,
-                  workspaceIds: toolWorkspaceIds,
-                }),
-              catch: (cause) =>
-                cause instanceof HandlerError
-                  ? cause
-                  : new HandlerError({
-                      cause,
-                      message: "Failed to prepare agent sandbox run",
-                      status: 500,
-                    }),
-            })
-          : Result.ok(undefined);
-      if (Result.isError(sandboxRunResult)) {
-        // The enclosing finally owns rollback of the created thread and any
-        // uploaded files, preserving the original sandbox preflight error.
-        return yield* Result.err(sandboxRunResult.error);
-      }
-      const sandboxRun = sandboxRunResult.value;
-      const turnAcceptance =
-        parsedMessage.message.role === "user" &&
-        latestMessagePlan.persistencePlan.type !== "none"
-          ? createChatTurnAcceptance({
-              organizationId: session.activeOrganizationId,
-              threadId: body.threadId,
-              userId: user.id,
-              userMessageId: parsedMessage.message.id,
-              workspaceId,
-            })
-          : undefined;
-
-      const persistenceProps = {
-        acceptedSendMode: body.sendMode,
-        recordAuditEvent,
-        safeDb,
-        threadId: body.threadId,
-        turnAcceptance,
-        userId: user.id,
-        workspaceId,
-        persistencePlan: latestMessagePlan.persistencePlan,
-        dataScopeExpansion:
-          recomputedDataWorkspaceIds === null
-            ? { newWorkspaceIds: incomingMessageWorkspaceIds }
-            : undefined,
-        deleteMessageIds: deleteMessageIdsBeforeLatest,
-        dataScopeReplacement:
-          recomputedDataWorkspaceIds === null
-            ? undefined
-            : {
-                observedDataWorkspaceIds: thread.data.dataWorkspaceIds,
-                newDataWorkspaceIds: recomputedDataWorkspaceIds,
-              },
-      } as const;
-      let turnExecution: ChatTurnExecution | null;
-      if (parsedMessage.message.role === "assistant") {
-        if (latestMessagePlan.persistencePlan.type !== "update") {
-          return Result.err(
-            new HandlerError({
-              status: 409,
-              message: "Interactive replay must update its owning message",
-            }),
-          );
-        }
-        const replayResult = await persistClaimedReplayMessage({
-          ...persistenceProps,
-          claim: {
-            acceptedTurnId: null,
-            continuationInteraction:
-              getResumedUserInteraction({
-                awaited: getAwaitingUserInteractions(
-                  validationThreadState.persistedMessage === null
-                    ? null
-                    : chatMessageFromPersisted({
-                        content: validationThreadState.persistedMessage.content,
-                        id: parsedMessage.message.id,
-                        role: validationThreadState.persistedMessage.role,
-                      }),
-                ),
-                message: parsedMessage.message,
-              }) ?? undefined,
-            incomingMessageId: parsedMessage.message.id,
-            incomingMessageRole: parsedMessage.message.role,
+      const preparedIncomingMessageResult =
+        await prepareValidatedIncomingMessage({
+          authorization: {
+            accessibleWorkspaceIds,
+            memberRole,
+            pinServerValidatedWorkspaceId,
+            requestedContextMatterIds,
+            workspaceStatusById,
+          },
+          lifecycle,
+          persistence: { recordAuditEvent, safeDb, scopedDb },
+          prerequisites: {
+            activeDraftContext,
+            activeFileForTools,
+            validationThreadState,
+          },
+          request: {
+            body,
+            isClientConnectionAborted,
             organizationId: session.activeOrganizationId,
-            threadId: body.threadId,
+            resume,
             userId: user.id,
             workspaceId,
           },
-          persistencePlan: latestMessagePlan.persistencePlan,
+          tools: {
+            disabledNativeToolSlugs,
+            docxEditRepresentation,
+            editApplyMode,
+            externalMcpToolsLoader,
+            orgAIConfig,
+            refRegistry,
+            toolDefectMemo,
+            usageLane,
+            validationActiveSkillContext,
+          },
         });
-        if (Result.isError(replayResult)) {
-          return Result.err(replayResult.error);
-        }
-        turnExecution = replayResult.value;
-        if (turnExecution !== null) {
-          pendingUnpersistedSideEffects = undefined;
-        }
-      } else {
-        if (turnAcceptance === undefined) {
-          const persistenceResult = await persistMessage(persistenceProps);
-          if (Result.isError(persistenceResult)) {
-            return Result.err(persistenceResult.error);
-          }
-          turnExecution = yield* Result.await(
-            claimChatTurnForExecution({
-              acceptedTurnId: null,
-              incomingMessageId: parsedMessage.message.id,
-              incomingMessageRole: parsedMessage.message.role,
-              organizationId: session.activeOrganizationId,
-              safeDb,
-              threadId: body.threadId,
-              userId: user.id,
-              workspaceId,
-            }),
-          );
-        } else {
-          const persistenceResult = await persistAcceptedMessageWithClaim({
-            ...persistenceProps,
-            turnAcceptance,
-          });
-          if (Result.isError(persistenceResult)) {
-            return Result.err(persistenceResult.error);
-          }
-          turnExecution = persistenceResult.value;
-        }
-        if (latestMessagePlan.persistencePlan.type !== "none") {
-          pendingUnpersistedSideEffects = undefined;
-        }
+      if (Result.isError(preparedIncomingMessageResult)) {
+        return Result.err(preparedIncomingMessageResult.error);
       }
-      if (turnExecution === null) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: "Chat turn has no durable execution owner",
-          }),
-        );
+      const {
+        chatModelOverride,
+        chatReasoningEffort,
+        effectiveContextMatterIds,
+        initialThreadTitle,
+        thirdPartyBoundary,
+        thread,
+        turnLane,
+        uploadedMessage,
+        webSearchProviders,
+      } = preparedIncomingMessageResult.value;
+
+      const acceptedTurnResult = await acceptIncomingTurn({
+        accessibleSet,
+        accessibleWorkspaceIds,
+        body,
+        effectiveContextMatterIds,
+        lifecycle,
+        organizationId: session.activeOrganizationId,
+        recordAuditEvent,
+        safeDb,
+        thread,
+        uploadedMessage,
+        userId: user.id,
+        validationThreadState,
+        workspaceId,
+      });
+      if (Result.isError(acceptedTurnResult)) {
+        return Result.err(acceptedTurnResult.error);
       }
-      claimedChatTurnOwnership = {
-        status: "preflight",
-        execution: turnExecution,
-        ...(parsedMessage.message.role === "assistant"
-          ? { owningAssistantMessage: parsedMessage.message }
-          : {}),
-      };
-      const owningAssistantMessage =
-        parsedMessage.message.role === "assistant"
-          ? parsedMessage.message
-          : undefined;
-      const failCurrentTurn = async (
-        code: ChatTurnFailureCode,
-        retryable: boolean,
-      ): Promise<void> => {
-        const failureResult = await persistFailedChatTurn({
-          code,
-          execution: turnExecution,
-          recordAuditEvent,
-          retryable,
-          owningAssistantMessage,
-          safeDb,
-          threadId: body.threadId,
-          userId: user.id,
-          workspaceId,
-        });
-        if (Result.isError(failureResult)) {
-          captureError(failureResult.error, { threadId: body.threadId });
-          return;
-        }
-        claimedChatTurnOwnership = { status: "unclaimed" };
-      };
-      // Like `persistFailedChatTurn`, a pre-stream disconnect must hydrate as
-      // the same terminal assistant turn as a streamed interruption.
-      const interruptCurrentTurn = async () => {
-        const settlementResult = await persistInterruptedChatTurn({
-          execution: turnExecution,
-          owningAssistantMessage,
-          recordAuditEvent,
-          safeDb,
-          threadId: body.threadId,
-          userId: user.id,
-          workspaceId,
-        });
-        if (Result.isOk(settlementResult)) {
-          claimedChatTurnOwnership = { status: "unclaimed" };
-        }
-        return settlementResult;
-      };
+      const {
+        dataScopeAfterIncomingMessage,
+        deleteMessageIdsBeforeLatest,
+        latestMessagePlan,
+        owningAssistantMessage,
+        parsedMessage,
+        replayTargetMessageId,
+        sandboxRun,
+        toolWorkspaceIds,
+        turnExecution,
+      } = acceptedTurnResult.value;
 
       // The incoming message is durable now, so a disconnect must not run the
       // pre-persistence rollback (which would delete files referenced by that
       // message). It should still stop before connector discovery and any
       // metered provider work.
       if (isClientConnectionAborted()) {
-        yield* Result.await(interruptCurrentTurn());
+        yield* Result.await(lifecycle.interruptCurrentTurn());
         return Result.err(
           new HandlerError({
             status: 400,
@@ -1360,7 +1660,7 @@ const sendMessage = createSafeRootHandler(
       const createMeteredAIAbortSignal = () =>
         AbortSignal.timeout(CHAT_METERED_PROVIDER_TIMEOUT_MS);
       if (isClientConnectionAborted()) {
-        yield* Result.await(interruptCurrentTurn());
+        yield* Result.await(lifecycle.interruptCurrentTurn());
         return Result.err(
           new HandlerError({
             status: 400,
@@ -1385,12 +1685,12 @@ const sendMessage = createSafeRootHandler(
         workspaceId,
       });
       if (Result.isError(messagesForContextResult)) {
-        await failCurrentTurn("provider-error", true);
+        await lifecycle.failCurrentTurn("provider-error", true);
         return Result.err(messagesForContextResult.error);
       }
 
       if (isClientConnectionAborted()) {
-        yield* Result.await(interruptCurrentTurn());
+        yield* Result.await(lifecycle.interruptCurrentTurn());
         return Result.err(
           new HandlerError({
             status: 400,
@@ -1446,7 +1746,7 @@ const sendMessage = createSafeRootHandler(
         refRegistry,
       });
       if (Result.isError(chatContextResult)) {
-        await failCurrentTurn(
+        await lifecycle.failCurrentTurn(
           "internal",
           !(chatContextResult.error instanceof HandlerError) ||
             chatContextResult.error.status >= 500,
@@ -1456,7 +1756,7 @@ const sendMessage = createSafeRootHandler(
       const chatContext = chatContextResult.value;
 
       if (isClientConnectionAborted()) {
-        yield* Result.await(interruptCurrentTurn());
+        yield* Result.await(lifecycle.interruptCurrentTurn());
         return Result.err(
           new HandlerError({
             status: 400,
@@ -1482,7 +1782,7 @@ const sendMessage = createSafeRootHandler(
           })
         : Result.ok(undefined);
       if (Result.isError(externalMcpToolsResult)) {
-        await failCurrentTurn("connector-discovery", true);
+        await lifecycle.failCurrentTurn("connector-discovery", true);
         return Result.err(externalMcpToolsResult.error);
       }
       const externalMcpTools = externalMcpToolsResult.value;
@@ -1592,7 +1892,7 @@ const sendMessage = createSafeRootHandler(
 
       // A normal chat hands loaded clients to the stream. Agent runs leave
       // this false so the outer finally closes any validation-only load.
-      externalMcpToolsHandedOffToStreaming = externalMcpTools !== undefined;
+      lifecycle.handOffConnectors(externalMcpTools !== undefined);
       const response = yield* Result.await(
         Result.tryPromise({
           try: async () => {
@@ -1714,7 +2014,7 @@ const sendMessage = createSafeRootHandler(
                     captureError(persistResult.error, {
                       threadId: body.threadId,
                     });
-                    await failCurrentTurn("persistence", true);
+                    await lifecycle.failCurrentTurn("persistence", true);
                     throw new HandlerError({
                       status: 500,
                       message: "Failed to persist assistant turn",
@@ -1815,9 +2115,12 @@ const sendMessage = createSafeRootHandler(
                 // refusal). No terminal middleware hook runs in that branch,
                 // so settle the claimed turn here instead of leaving it
                 // indefinitely running.
-                await failCurrentTurn("internal", chatResponse.status >= 500);
+                await lifecycle.failCurrentTurn(
+                  "internal",
+                  chatResponse.status >= 500,
+                );
               } else {
-                claimedChatTurnOwnership = { status: "streaming" };
+                lifecycle.markStreaming();
               }
 
               return chatResponse;
@@ -1825,7 +2128,7 @@ const sendMessage = createSafeRootHandler(
               if (externalMcpTools !== undefined) {
                 await externalMcpTools.close();
               }
-              await failCurrentTurn("internal", true);
+              await lifecycle.failCurrentTurn("internal", true);
               throw error;
             }
           },
@@ -1842,51 +2145,7 @@ const sendMessage = createSafeRootHandler(
 
       return Result.ok(response);
     } finally {
-      if (claimedChatTurnOwnership.status === "preflight") {
-        const failureResult = await persistFailedChatTurn({
-          code: "internal",
-          execution: claimedChatTurnOwnership.execution,
-          owningAssistantMessage:
-            claimedChatTurnOwnership.owningAssistantMessage,
-          recordAuditEvent,
-          retryable: true,
-          safeDb,
-          threadId: body.threadId,
-          userId: user.id,
-          workspaceId,
-        });
-        if (Result.isError(failureResult)) {
-          captureError(failureResult.error, {
-            source: "send-message-claimed-turn-preflight-cleanup",
-            threadId: body.threadId,
-          });
-        }
-      }
-      if (pendingUnpersistedSideEffects !== undefined) {
-        const rollbackResult = await rollbackUnpersistedChatSideEffects({
-          recordAuditEvent,
-          safeDb,
-          threadId: body.threadId,
-          threadState: pendingUnpersistedSideEffects.threadState,
-          uploadedFiles: pendingUnpersistedSideEffects.uploadedFiles,
-          userId: user.id,
-        });
-        if (Result.isError(rollbackResult)) {
-          // Preserve the request's original outcome while recording cleanup
-          // failure for the orphan-recovery path; control flow from a finally
-          // block must not silently replace the send result.
-          captureError(rollbackResult.error, {
-            source: "send-message-unpersisted-side-effect-rollback",
-            threadId: body.threadId,
-          });
-        }
-      }
-      // No-op if `getExternalMcpTools` was never called on this exit path
-      // (the message needed neither validation nor streaming to load
-      // external tools before failing/returning early).
-      if (!externalMcpToolsHandedOffToStreaming) {
-        await externalMcpToolsLoader.closeIfLoaded();
-      }
+      await lifecycle.cleanup();
     }
   },
 );

@@ -25,6 +25,7 @@ function declaredCanonicalClass({ selected }: { selected: boolean }) {
   return cn("rounded-md", selected && "ring-1");
 }
 
+// oxlint-disable-next-line complexity -- fixture intentionally enumerates classname-composition branches for another lint rule
 const MatterRow = ({ active, className, status }: MatterRowProps) => {
   // oxlint-disable-next-line no-var -- fixture: var bindings must not launder dynamic class composition
   var mutableWrittenClass = "bg-background";

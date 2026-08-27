@@ -483,12 +483,11 @@ const PropertyComposerBody = ({
   // was renamed/removed, or if the user switched away from a select
   // content type. The backend rejects mismatched fallbacks; sanitising
   // here keeps the UI honest without round-tripping through setState.
-  const effectiveFallback =
-    fallback !== null &&
-    needsOptions &&
-    options.some((o) => o.value === fallback)
-      ? fallback
-      : null;
+  const effectiveFallback = getEffectiveFallback({
+    fallback,
+    needsOptions,
+    options,
+  });
 
   // Keep the auto-included file chips in sync if the underlying
   // properties list changes (e.g., a file property is created from
@@ -499,46 +498,23 @@ const PropertyComposerBody = ({
     validFileIds.has(id),
   );
 
-  const dependencyIds = [
-    ...new Set([...effectiveSelectedFileIds, ...textareaMentions]),
-  ];
-
-  const availableFileToAdd = fileProperties.filter(
-    (p) => !effectiveSelectedFileIds.includes(p.id),
-  );
-
-  // The dependency list the save sends, derived on every render so the cap
-  // below sees the same count the server will. Per-dependency conditions
-  // configured via the conditions sub-modal are preserved; new mentions
-  // default to null. The "Applies to" scope owns the classifier slot: drop
-  // the classifier dependency only when it is (or was) a scope gate, then
-  // re-add the gate below for the chosen document type. A plain classifier
-  // mention with no scope is preserved with its condition.
-  const dependencies: PropertyDependency[] = [];
-  for (const id of dependencyIds) {
-    const isScopeGate =
-      id === classifier?.id &&
-      !(scopeDocType === null && initialScopeDocType === null);
-    if (isScopeGate) {
-      continue;
-    }
-    dependencies.push({
-      dependsOnPropertyId: toSafeId<"property">(id),
-      condition: initialDependencyConditions.get(id) ?? null,
-    });
-  }
-  if (classifier && scopeDocType !== null) {
-    dependencies.push(buildDocTypeGate(classifier.id, scopeDocType));
-  }
-
-  // Mirrors the server rule: a list stored under an earlier, larger cap may
-  // be kept or shrunk, never grown past the cap.
-  const dependencyCap = Math.max(
-    PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX,
-    editingTool?.type === "ai-model" ? editingTool.dependencies.length : 0,
-  );
-  const canAddDependency = dependencies.length < dependencyCap;
-  const overDependencyCap = dependencies.length > dependencyCap;
+  const {
+    availableFileToAdd,
+    canAddDependency,
+    dependencies,
+    dependencyCap,
+    dependencyIds,
+    overDependencyCap,
+  } = getPropertyDependencyState({
+    classifier,
+    editingTool,
+    effectiveSelectedFileIds,
+    fileProperties,
+    initialDependencyConditions,
+    initialScopeDocType,
+    scopeDocType,
+    textareaMentions,
+  });
 
   // Manual properties skip the prompt + dependency requirements; the
   // user fills values by hand. Select-type rules still apply.
@@ -831,6 +807,75 @@ const PropertyComposerBody = ({
     </>
   );
 };
+
+const getPropertyDependencyState = ({
+  classifier,
+  editingTool,
+  effectiveSelectedFileIds,
+  fileProperties,
+  initialDependencyConditions,
+  initialScopeDocType,
+  scopeDocType,
+  textareaMentions,
+}: {
+  classifier: ReturnType<typeof resolveDocumentTypeClassifier>;
+  editingTool: WorkspaceProperty["tool"] | undefined;
+  effectiveSelectedFileIds: string[];
+  fileProperties: WorkspaceProperty[];
+  initialDependencyConditions: Map<string, PropertyDependency["condition"]>;
+  initialScopeDocType: string | null;
+  scopeDocType: string | null;
+  textareaMentions: string[];
+}) => {
+  const dependencyIds = [
+    ...new Set([...effectiveSelectedFileIds, ...textareaMentions]),
+  ];
+  const dependencies: PropertyDependency[] = [];
+  for (const id of dependencyIds) {
+    const isScopeGate =
+      id === classifier?.id &&
+      !(scopeDocType === null && initialScopeDocType === null);
+    if (isScopeGate) {
+      continue;
+    }
+    dependencies.push({
+      dependsOnPropertyId: toSafeId<"property">(id),
+      condition: initialDependencyConditions.get(id) ?? null,
+    });
+  }
+  if (classifier && scopeDocType !== null) {
+    dependencies.push(buildDocTypeGate(classifier.id, scopeDocType));
+  }
+  const dependencyCap = Math.max(
+    PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX,
+    editingTool?.type === "ai-model" ? editingTool.dependencies.length : 0,
+  );
+  return {
+    availableFileToAdd: fileProperties.filter(
+      (property) => !effectiveSelectedFileIds.includes(property.id),
+    ),
+    canAddDependency: dependencies.length < dependencyCap,
+    dependencies,
+    dependencyCap,
+    dependencyIds,
+    overDependencyCap: dependencies.length > dependencyCap,
+  };
+};
+
+const getEffectiveFallback = ({
+  fallback,
+  needsOptions,
+  options,
+}: {
+  fallback: string | null;
+  needsOptions: boolean;
+  options: WorkspacePropertyOption[];
+}) =>
+  fallback !== null &&
+  needsOptions &&
+  options.some((option) => option.value === fallback)
+    ? fallback
+    : null;
 
 type ComposerCardProps = {
   workspaceId: string;

@@ -248,6 +248,107 @@ export const decodeTraversalCursor = (
 export const encodeTraversalCursor = (mode: string, offset: number): string =>
   `${mode}:${offset}`;
 
+type ParsedPageItems = {
+  decisions: IngestionResult[];
+  itemsSkipped: number;
+  processedThroughIndex: number;
+};
+
+type ParsePageItemsOptions = {
+  adapterKey: string;
+  items: unknown[];
+  itemConcurrency?: number | undefined;
+  page: number;
+  parseItem: PagePaginationOptions<unknown>["parseItem"];
+  signal?: AbortSignal | undefined;
+};
+
+const parsePageItems = async ({
+  adapterKey,
+  items,
+  itemConcurrency,
+  page,
+  parseItem,
+  signal,
+}: ParsePageItemsOptions): Promise<ParsedPageItems> => {
+  const decisions: IngestionResult[] = [];
+  let itemsSkipped = 0;
+  let processedThroughIndex = 0;
+  const chunkSize = Math.max(1, itemConcurrency ?? 1);
+  // Complete chunks sequentially so an abort can rewind to the last durable
+  // chunk boundary. Replaying that chunk is safe because inserts are
+  // idempotent; advancing past an in-flight chunk would lose decisions.
+  for (let i = 0; i < items.length; i += chunkSize) {
+    if (signal?.aborted) {
+      break;
+    }
+    const chunk = items.slice(i, i + chunkSize);
+    // oxlint-disable-next-line no-await-in-loop -- sequential chunk processing: abort/rewind bookkeeping depends on prior chunk completing
+    const results = await Promise.allSettled(
+      chunk.map(async (item) => await parseItem(item, signal)),
+    );
+    if (signal?.aborted) {
+      break;
+    }
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        if (result.value) {
+          decisions.push(result.value);
+        }
+      } else {
+        // A poison item is isolated from the rest of the page. The skip is
+        // counted and logged below so it remains operator-visible.
+        itemsSkipped++;
+      }
+    }
+    processedThroughIndex = i + chunk.length;
+  }
+  if (itemsSkipped > 0) {
+    logger.warn("case_law.ingestion.page_items_skipped", {
+      adapterKey,
+      page,
+      skipped: itemsSkipped,
+      total: items.length,
+    });
+  }
+  return { decisions, itemsSkipped, processedThroughIndex };
+};
+
+const resolveNextCursor = ({
+  encode,
+  fetched,
+  fetchedItemsCount,
+  hasMore,
+  offset,
+  pageSize,
+  pageStartOffset,
+  processedItemsCount,
+  processedThroughIndex,
+  signal,
+}: {
+  encode: (offset: number) => string;
+  fetched: number;
+  fetchedItemsCount: number;
+  hasMore: boolean;
+  offset: number;
+  pageSize: number;
+  pageStartOffset: number;
+  processedItemsCount: number;
+  processedThroughIndex: number;
+  signal?: AbortSignal | undefined;
+}): string => {
+  if (signal?.aborted) {
+    return encode(offset + processedThroughIndex);
+  }
+  if (hasMore) {
+    return encode(fetched);
+  }
+  if (fetchedItemsCount > 0) {
+    return encode(offset + processedItemsCount);
+  }
+  return encode(Math.max(0, pageStartOffset - pageSize));
+};
+
 export const createPagePaginatedFetch = <TResponse>(
   opts: PagePaginationOptions<TResponse>,
 ) => {
@@ -409,51 +510,15 @@ export const createPagePaginatedFetch = <TResponse>(
         const fetchMs = Math.round(performance.now() - fetchT0);
         const { items: fetchedItems, total } = opts.extractItems(data);
         const items = fetchedItems.slice(itemsAlreadyFetched);
-        const decisions: IngestionResult[] = [];
-
-        let itemsSkipped = 0;
-        // Process items in parallel batches when the adapter
-        // opts in via itemConcurrency. Default is serial.
-        // On abort, discard the in-flight chunk's results and keep
-        // processedThroughIndex at the previous chunk boundary so the
-        // next cycle re-fetches and re-processes that chunk.
-        // Idempotent inserts handle the resulting duplicates.
-        let processedThroughIndex = 0;
-        const chunkSize = Math.max(1, opts.itemConcurrency ?? 1);
-        for (let i = 0; i < items.length; i += chunkSize) {
-          if (signal?.aborted) {
-            break;
-          }
-          const chunk = items.slice(i, i + chunkSize);
-          // oxlint-disable-next-line no-await-in-loop -- sequential chunk processing: abort/rewind bookkeeping depends on prior chunk completing
-          const results = await Promise.allSettled(
-            chunk.map(async (item) => await opts.parseItem(item, signal)),
-          );
-          if (signal?.aborted) {
-            break;
-          }
-          for (const result of results) {
-            if (result.status === "fulfilled") {
-              if (result.value) {
-                decisions.push(result.value);
-              }
-            } else {
-              // Skip individual items that fail to parse;
-              // don't abort the entire page.
-              itemsSkipped++;
-            }
-          }
-          processedThroughIndex = i + chunk.length;
-        }
-
-        if (itemsSkipped > 0) {
-          logger.warn("case_law.ingestion.page_items_skipped", {
-            adapterKey: opts.adapterKey,
-            page,
-            skipped: itemsSkipped,
-            total: items.length,
-          });
-        }
+        const parsedItems = await parsePageItems({
+          adapterKey: opts.adapterKey,
+          items,
+          itemConcurrency: opts.itemConcurrency,
+          page,
+          parseItem: opts.parseItem,
+          signal,
+        });
+        const { decisions, itemsSkipped, processedThroughIndex } = parsedItems;
 
         const totalMs = Math.round(performance.now() - fetchT0);
         logger.info("case_law.ingestion.page_completed", {
@@ -481,14 +546,18 @@ export const createPagePaginatedFetch = <TResponse>(
         // re-processing the already consumed page tail.
         // When exhausted with zero results (overshot past end),
         // step back so the cursor recovers into the valid range.
-        let nextCursor = encode(Math.max(0, pageStartOffset - opts.pageSize));
-        if (signal?.aborted) {
-          nextCursor = encode(offset + processedThroughIndex);
-        } else if (hasMore) {
-          nextCursor = encode(fetched);
-        } else if (fetchedItems.length > 0) {
-          nextCursor = encode(offset + items.length);
-        }
+        let nextCursor = resolveNextCursor({
+          encode,
+          fetched,
+          fetchedItemsCount: fetchedItems.length,
+          hasMore,
+          offset,
+          pageSize: opts.pageSize,
+          pageStartOffset,
+          processedItemsCount: items.length,
+          processedThroughIndex,
+          signal,
+        });
 
         // A bounded walk returns to its own start rather than carrying on
         // deeper. Reaching the edge of the window is not the end of

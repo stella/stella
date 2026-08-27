@@ -233,6 +233,89 @@ const taskUpdateValues = ({
   updatedAt: new Date(),
 });
 
+type LockedWorkObligation = NonNullable<
+  Awaited<ReturnType<typeof lockWorkObligation>>
+>;
+
+type ResolveWorkflowStatusTransitionOptions = {
+  governedWorkflow: boolean;
+  requestedStatus: string | undefined;
+  userId: SafeId<"user">;
+  workflow: LockedWorkObligation;
+  workflowReason: string | undefined;
+};
+
+const reopenedWorkflowStatus = (workflow: LockedWorkObligation) => {
+  if (workflow.ownerUserId === null) {
+    return WORK_OBLIGATION_STATUS.UNASSIGNED;
+  }
+  if (workflow.acknowledgedAt === null) {
+    return WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
+  }
+  return WORK_OBLIGATION_STATUS.ACTIVE;
+};
+
+const resolveWorkflowStatusTransition = ({
+  governedWorkflow,
+  requestedStatus,
+  userId,
+  workflow,
+  workflowReason,
+}: ResolveWorkflowStatusTransitionOptions) => {
+  if (requestedStatus === "done" && workflow.status !== "completed") {
+    if (
+      governedWorkflow &&
+      (workflow.status !== WORK_OBLIGATION_STATUS.ACTIVE ||
+        workflow.ownerUserId !== userId)
+    ) {
+      throw new HandlerError({
+        status: 409,
+        message:
+          "Only the acknowledged accountable owner can complete this work",
+      });
+    }
+    return {
+      eventType: WORK_OBLIGATION_EVENT_TYPE.COMPLETED,
+      status: WORK_OBLIGATION_STATUS.COMPLETED,
+    };
+  }
+
+  if (
+    requestedStatus === "cancelled" &&
+    workflow.status !== WORK_OBLIGATION_STATUS.CANCELLED
+  ) {
+    if (
+      governedWorkflow &&
+      workflow.status !== WORK_OBLIGATION_STATUS.UNASSIGNED &&
+      !workflowReason
+    ) {
+      throw new HandlerError({
+        status: 400,
+        message: "A reason is required when cancelling assigned work",
+      });
+    }
+    return {
+      eventType: WORK_OBLIGATION_EVENT_TYPE.CANCELLED,
+      status: WORK_OBLIGATION_STATUS.CANCELLED,
+    };
+  }
+
+  const reopensClosedWorkflow =
+    requestedStatus !== undefined &&
+    requestedStatus !== "done" &&
+    requestedStatus !== "cancelled" &&
+    (workflow.status === WORK_OBLIGATION_STATUS.COMPLETED ||
+      workflow.status === WORK_OBLIGATION_STATUS.CANCELLED);
+  if (!reopensClosedWorkflow) {
+    return { eventType: undefined, status: workflow.status };
+  }
+
+  return {
+    eventType: WORK_OBLIGATION_EVENT_TYPE.REOPENED,
+    status: reopenedWorkflowStatus(workflow),
+  };
+};
+
 export type UpdateTaskHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
@@ -324,60 +407,14 @@ export const updateTaskHandler = async function* ({
         const nextLegacyHardDeadlineDate = updatesLegacyDeadline
           ? body.dueDate
           : undefined;
-        let nextWorkflowStatus = workflow.status;
-        let workflowEventType:
-          | "completed"
-          | "cancelled"
-          | "reopened"
-          | undefined;
-
-        if (body.status === "done" && workflow.status !== "completed") {
-          if (
-            features.governedWorkflow &&
-            (workflow.status !== WORK_OBLIGATION_STATUS.ACTIVE ||
-              workflow.ownerUserId !== userId)
-          ) {
-            throw new HandlerError({
-              status: 409,
-              message:
-                "Only the acknowledged accountable owner can complete this work",
-            });
-          }
-          nextWorkflowStatus = WORK_OBLIGATION_STATUS.COMPLETED;
-          workflowEventType = WORK_OBLIGATION_EVENT_TYPE.COMPLETED;
-        } else if (
-          body.status === "cancelled" &&
-          workflow.status !== WORK_OBLIGATION_STATUS.CANCELLED
-        ) {
-          if (
-            features.governedWorkflow &&
-            workflow.status !== WORK_OBLIGATION_STATUS.UNASSIGNED &&
-            !workflowReason
-          ) {
-            throw new HandlerError({
-              status: 400,
-              message: "A reason is required when cancelling assigned work",
-            });
-          }
-          nextWorkflowStatus = WORK_OBLIGATION_STATUS.CANCELLED;
-          workflowEventType = WORK_OBLIGATION_EVENT_TYPE.CANCELLED;
-        } else if (
-          body.status !== undefined &&
-          body.status !== "done" &&
-          body.status !== "cancelled" &&
-          (workflow.status === WORK_OBLIGATION_STATUS.COMPLETED ||
-            workflow.status === WORK_OBLIGATION_STATUS.CANCELLED)
-        ) {
-          if (workflow.ownerUserId === null) {
-            nextWorkflowStatus = WORK_OBLIGATION_STATUS.UNASSIGNED;
-          } else if (workflow.acknowledgedAt === null) {
-            nextWorkflowStatus =
-              WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
-          } else {
-            nextWorkflowStatus = WORK_OBLIGATION_STATUS.ACTIVE;
-          }
-          workflowEventType = WORK_OBLIGATION_EVENT_TYPE.REOPENED;
-        }
+        const { eventType: workflowEventType, status: nextWorkflowStatus } =
+          resolveWorkflowStatusTransition({
+            governedWorkflow: features.governedWorkflow,
+            requestedStatus: body.status,
+            userId,
+            workflow,
+            workflowReason,
+          });
 
         if (nextWorkflowStatus !== workflow.status && workflowEventType) {
           workflowSet.status = nextWorkflowStatus;

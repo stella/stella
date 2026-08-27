@@ -1445,130 +1445,139 @@ const loadDocumentProcessingStates = async ({
     }).success &&
     context.grantedScopes.includes("stella:matters_write");
 
-  let contentState: DocumentContentState;
-  if (
-    !sourceFile.encrypted &&
-    sourceFile.mimeType === DOCX_MIME_TYPE &&
-    currentExtracted === null &&
-    nativeRun?.status === "failed" &&
-    nativeRun.errorCode !== "search_index_failed"
-  ) {
-    contentState = {
-      status: "failed",
-      processingKind: DOCUMENT_PROCESSING_KIND,
-      runId: nativeRun.id,
-      sourceVersionId: current.currentVersionId,
-      errorCode: DOCUMENT_PROCESSING_FAILURE_CODE,
-      retryable: true,
-    };
-  } else if (!sourceFile.encrypted && sourceFile.mimeType === DOCX_MIME_TYPE) {
-    contentState = {
-      status: "ready",
-      source: "direct_docx",
-      sourceVersionId: current.currentVersionId,
-      updatedAt: current.currentVersionCreatedAt.toISOString(),
-    };
-  } else if (currentExtracted && currentExtracted.charCount > 0) {
-    contentState = {
-      status: "ready",
-      source: "extracted_text",
-      sourceVersionId: current.currentVersionId,
-      updatedAt: currentExtracted.extractedAt.toISOString(),
-    };
-  } else if (
-    ocrRun?.status === "failed" &&
-    ocrRun.errorCode !== "search_index_failed"
-  ) {
-    contentState = {
-      status: "failed",
-      processingKind: DOCUMENT_PROCESSING_KIND,
-      runId: ocrRun.id,
-      sourceVersionId: current.currentVersionId,
-      errorCode: DOCUMENT_PROCESSING_FAILURE_CODE,
-      retryable: true,
-    };
-  } else if (ocrRun?.status === "queued" || ocrRun?.status === "running") {
-    contentState = {
-      status: "pending",
-      processingKind: DOCUMENT_PROCESSING_KIND,
-      runId: ocrRun.id,
-      sourceVersionId: current.currentVersionId,
-    };
-  } else if (
-    ocrRun?.status === "cancelled" &&
-    ocrRun.errorCode === "workspace_unavailable"
-  ) {
-    contentState = {
-      status: "unsupported",
-      sourceVersionId: current.currentVersionId,
-      reason:
-        "Document processing is unavailable while the matter is not active.",
-    };
-  } else if (
-    currentExtracted?.charCount === 0 &&
-    (ocrRun === undefined || ocrTerminalCancellation) &&
-    extractionMimeType === PDF_MIME_TYPE &&
-    (settings?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE) ===
-      "off"
-  ) {
-    contentState = {
-      status: DOCUMENT_PROCESSING_REQUIRED_STATUS,
-      sourceVersionId: current.currentVersionId,
-      remediation: canQueueManualOcr
-        ? {
-            type: "action",
-            tool: "invoke_capability",
-            arguments: {
-              capability: "entities.ocr.create",
-              input: {
-                params: { workspaceId, entityId },
-                body: {
-                  // A source file is present in this branch by construction.
-                  fieldId:
-                    sourceFieldId ??
-                    panic("OCR remediation requires a source field"),
+  const resolveContentState = (): DocumentContentState => {
+    if (
+      !sourceFile.encrypted &&
+      sourceFile.mimeType === DOCX_MIME_TYPE &&
+      currentExtracted === null &&
+      nativeRun?.status === "failed" &&
+      nativeRun.errorCode !== "search_index_failed"
+    ) {
+      return {
+        status: "failed",
+        processingKind: DOCUMENT_PROCESSING_KIND,
+        runId: nativeRun.id,
+        sourceVersionId: current.currentVersionId,
+        errorCode: DOCUMENT_PROCESSING_FAILURE_CODE,
+        retryable: true,
+      };
+    }
+    if (!sourceFile.encrypted && sourceFile.mimeType === DOCX_MIME_TYPE) {
+      return {
+        status: "ready",
+        source: "direct_docx",
+        sourceVersionId: current.currentVersionId,
+        updatedAt: current.currentVersionCreatedAt.toISOString(),
+      };
+    }
+    if (currentExtracted && currentExtracted.charCount > 0) {
+      return {
+        status: "ready",
+        source: "extracted_text",
+        sourceVersionId: current.currentVersionId,
+        updatedAt: currentExtracted.extractedAt.toISOString(),
+      };
+    }
+    if (
+      ocrRun?.status === "failed" &&
+      ocrRun.errorCode !== "search_index_failed"
+    ) {
+      return {
+        status: "failed",
+        processingKind: DOCUMENT_PROCESSING_KIND,
+        runId: ocrRun.id,
+        sourceVersionId: current.currentVersionId,
+        errorCode: DOCUMENT_PROCESSING_FAILURE_CODE,
+        retryable: true,
+      };
+    }
+    if (ocrRun?.status === "queued" || ocrRun?.status === "running") {
+      return {
+        status: "pending",
+        processingKind: DOCUMENT_PROCESSING_KIND,
+        runId: ocrRun.id,
+        sourceVersionId: current.currentVersionId,
+      };
+    }
+    if (
+      ocrRun?.status === "cancelled" &&
+      ocrRun.errorCode === "workspace_unavailable"
+    ) {
+      return {
+        status: "unsupported",
+        sourceVersionId: current.currentVersionId,
+        reason:
+          "Document processing is unavailable while the matter is not active.",
+      };
+    }
+    if (
+      currentExtracted?.charCount === 0 &&
+      (ocrRun === undefined || ocrTerminalCancellation) &&
+      extractionMimeType === PDF_MIME_TYPE &&
+      (settings?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE) ===
+        "off"
+    ) {
+      return {
+        status: DOCUMENT_PROCESSING_REQUIRED_STATUS,
+        sourceVersionId: current.currentVersionId,
+        remediation: canQueueManualOcr
+          ? {
+              type: "action",
+              tool: "invoke_capability",
+              arguments: {
+                capability: "entities.ocr.create",
+                input: {
+                  params: { workspaceId, entityId },
+                  body: {
+                    fieldId:
+                      sourceFieldId ??
+                      panic("OCR remediation requires a source field"),
+                  },
                 },
               },
+            }
+          : {
+              type: "escalation",
+              requiredScope: "stella:matters_write",
+              requiredPermission: "entity:update",
+              instruction:
+                "Ask a matter editor to start document processing for this field.",
             },
-          }
-        : {
-            type: "escalation",
-            requiredScope: "stella:matters_write",
-            requiredPermission: "entity:update",
-            instruction:
-              "Ask a matter editor to start document processing for this field.",
-          },
-    };
-  } else if (currentExtracted) {
-    contentState = {
-      status: "ready",
-      source: "extracted_text",
-      sourceVersionId: current.currentVersionId,
-      updatedAt: currentExtracted.extractedAt.toISOString(),
-    };
-  } else if (nativeRun?.status === "failed") {
-    contentState = {
-      status: "failed",
-      processingKind: DOCUMENT_PROCESSING_KIND,
-      runId: nativeRun.id,
-      sourceVersionId: current.currentVersionId,
-      errorCode: DOCUMENT_PROCESSING_FAILURE_CODE,
-      retryable: true,
-    };
-  } else if (sourceFile.encrypted) {
-    contentState = {
-      status: "unsupported",
-      sourceVersionId: current.currentVersionId,
-      reason: "Encrypted document content cannot be extracted.",
-    };
-  } else if (!extractionCanBecomeAvailable) {
-    contentState = {
-      status: "unsupported",
-      sourceVersionId: current.currentVersionId,
-      reason: `Content extraction is not supported for ${sourceFile.mimeType}.`,
-    };
-  } else {
-    contentState = {
+      };
+    }
+    if (currentExtracted) {
+      return {
+        status: "ready",
+        source: "extracted_text",
+        sourceVersionId: current.currentVersionId,
+        updatedAt: currentExtracted.extractedAt.toISOString(),
+      };
+    }
+    if (nativeRun?.status === "failed") {
+      return {
+        status: "failed",
+        processingKind: DOCUMENT_PROCESSING_KIND,
+        runId: nativeRun.id,
+        sourceVersionId: current.currentVersionId,
+        errorCode: DOCUMENT_PROCESSING_FAILURE_CODE,
+        retryable: true,
+      };
+    }
+    if (sourceFile.encrypted) {
+      return {
+        status: "unsupported",
+        sourceVersionId: current.currentVersionId,
+        reason: "Encrypted document content cannot be extracted.",
+      };
+    }
+    if (!extractionCanBecomeAvailable) {
+      return {
+        status: "unsupported",
+        sourceVersionId: current.currentVersionId,
+        reason: `Content extraction is not supported for ${sourceFile.mimeType}.`,
+      };
+    }
+    return {
       status: "pending",
       processingKind: DOCUMENT_PROCESSING_KIND,
       runId:
@@ -1577,40 +1586,40 @@ const loadDocumentProcessingStates = async ({
           : null,
       sourceVersionId: current.currentVersionId,
     };
-  }
+  };
 
-  let searchIndexState: DocumentSearchIndexState;
-  if (searchFailure) {
-    searchIndexState = {
-      status: "failed",
-      runId: searchFailure.id,
-      sourceVersionId: current.currentVersionId,
-      errorCode: "search_index_failed",
-      retryable: true,
-    };
-  } else {
+  const resolveSearchIndexState = (): DocumentSearchIndexState => {
+    if (searchFailure) {
+      return {
+        status: "failed",
+        runId: searchFailure.id,
+        sourceVersionId: current.currentVersionId,
+        errorCode: "search_index_failed",
+        retryable: true,
+      };
+    }
     const sourceRunCompleted = completedIndexRun !== undefined;
     const freshUntrackedProjection =
       latestIndexRun === undefined &&
       searchDocument !== undefined &&
       searchDocument.updatedAt >= current.currentVersionCreatedAt;
-
     if (searchDocument && (sourceRunCompleted || freshUntrackedProjection)) {
-      searchIndexState = {
+      return {
         status: "ready",
         sourceVersionId: current.currentVersionId,
         updatedAt: (
           completedIndexRun?.finishedAt ?? searchDocument.updatedAt
         ).toISOString(),
       };
-    } else {
-      searchIndexState = {
-        status: "pending",
-        sourceVersionId: current.currentVersionId,
-      };
     }
-  }
+    return {
+      status: "pending",
+      sourceVersionId: current.currentVersionId,
+    };
+  };
 
+  const contentState = resolveContentState();
+  const searchIndexState = resolveSearchIndexState();
   return { contentState, searchIndexState };
 };
 

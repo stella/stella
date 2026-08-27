@@ -964,13 +964,14 @@ const buildCatalog = async (): Promise<BuildResult> => {
     }
   }
 
-  for (const endpoint of endpoints) {
+  /** Compile one discovered handler into its catalog and dispatch projections. */
+  const projectEndpoint = (endpoint: (typeof endpoints)[number]): void => {
     if (
       endpoint.exposure.type !== "tool" &&
       endpoint.exposure.type !== "covered" &&
       endpoint.exposure.type !== "capability"
     ) {
-      continue;
+      return;
     }
     const id = deriveCapabilityId({
       file: endpoint.file,
@@ -984,7 +985,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       errors.push(
         `malformed capability id "${id}" from ${endpoint.file}: every \`.\`-separated segment must be lowercase kebab-case (${CAPABILITY_ID_SEGMENT_PATTERN.source}). Capability ids are public, so give this endpoint its own kebab-case-named file and export it as the file's DEFAULT export instead of a named one`,
       );
-      continue;
+      return;
     }
     if (!isAllowedActionVerb(id)) {
       // The final id segment is the PUBLIC action verb (`stella contacts list`,
@@ -994,14 +995,14 @@ const buildCatalog = async (): Promise<BuildResult> => {
       errors.push(
         `non-conforming action verb "${deriveActionVerb(id)}" in capability id "${id}" from ${endpoint.file}: the final id segment must be one of ${[...CANONICAL_ACTION_VERBS].sort().join(", ")}, or an explicitly reviewed entry in DOMAIN_ACTION_VERBS. Prefer renaming the handler file to a canonical verb, or splitting a compound verb into a nested resource directory (\`clauses/categories/create.ts\` over \`clauses/categories-create.ts\`)`,
       );
-      continue;
+      return;
     }
     const existing = idToFile.get(id);
     if (existing !== undefined) {
       errors.push(
         `duplicate capability id "${id}" from ${existing} and ${endpoint.file}`,
       );
-      continue;
+      return;
     }
     idToFile.set(id, endpoint.file);
 
@@ -1110,7 +1111,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       accessResolution.status !== "resolved" ||
       scopeResolution.status !== "resolved"
     ) {
-      continue;
+      return;
     }
 
     const override = ENTRY_SCOPE_OVERRIDES[id];
@@ -1118,7 +1119,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       errors.push(
         `capability "${id}" pins unknown scope "${override}" in ENTRY_SCOPE_OVERRIDES`,
       );
-      continue;
+      return;
     }
     const isRead = accessResolution.access === "read";
     // The write/consent scope for this entry: an ENTRY_SCOPE_OVERRIDES pin names
@@ -1153,7 +1154,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       });
       if (entryScope.status === "error") {
         errors.push(entryScope.message);
-        continue;
+        return;
       }
       scope = entryScope.scope;
       const coveringAdditionalScopes = toolAdditionalScopesByName.get(toolName);
@@ -1161,7 +1162,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
         errors.push(
           `capability "${id}" references unknown covering tool "${toolName}"`,
         );
-        continue;
+        return;
       }
       additionalScopes = [...new Set(coveringAdditionalScopes)].filter(
         (requiredScope) => requiredScope !== scope,
@@ -1204,7 +1205,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       errors.push(
         `capability "${id}" has a malformed \`transport\` declaration; see CapabilityTransport in apps/api/src/lib/capability-transport.ts`,
       );
-      continue;
+      return;
     }
     const { transport } = transportParse;
     const transportErrors = checkTransportAgainstDerived({
@@ -1216,7 +1217,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       errors.push(message);
     }
     if (transportErrors.length > 0) {
-      continue;
+      return;
     }
     // Deployment feature gate: the covering tool's flag wins (mechanical
     // inheritance), the reviewed domain table covers the rest.
@@ -1250,6 +1251,10 @@ const buildCatalog = async (): Promise<BuildResult> => {
     if (source !== undefined) {
       entrySources.push({ id, source });
     }
+  };
+
+  for (const endpoint of endpoints) {
+    projectEndpoint(endpoint);
   }
 
   // Class guards over the built entries (context-fidelity, file-response,

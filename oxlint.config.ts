@@ -532,7 +532,7 @@ export default defineConfig({
     "class-methods-use-this": "off",
     "no-unmodified-loop-condition": "error",
     "no-loop-func": "error",
-    complexity: "off",
+    complexity: ["error", 50],
     "func-style": "off",
     "func-names": "off",
 

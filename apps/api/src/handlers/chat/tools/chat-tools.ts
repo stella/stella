@@ -491,6 +491,55 @@ const createCreateDocumentTools = () => ({
   [CREATE_DOCUMENT_TOOL_NAME]: createCreateDocumentTool(),
 });
 
+type CreateWorkspaceDocumentChatToolsProps = Pick<
+  GetChatToolsProps,
+  | "memberRole"
+  | "organizationId"
+  | "recordAuditEvent"
+  | "refRegistry"
+  | "requestWorkspaceId"
+  | "scopedDb"
+  | "toolWorkspaceIds"
+  | "userId"
+  | "workspaceStatusById"
+>;
+
+/**
+ * Mirrors the REST/MCP entity-create boundary for the direct chat mutation.
+ * Keeping the full gate here prevents registration from drifting away from
+ * the authorization required by its execution path.
+ */
+const createAuthorizedWorkspaceDocumentTools = ({
+  memberRole,
+  organizationId,
+  recordAuditEvent,
+  refRegistry,
+  requestWorkspaceId,
+  scopedDb,
+  toolWorkspaceIds,
+  userId,
+  workspaceStatusById,
+}: CreateWorkspaceDocumentChatToolsProps): ChatToolMap => {
+  if (
+    requestWorkspaceId === null ||
+    recordAuditEvent === undefined ||
+    !toolWorkspaceIds.includes(requestWorkspaceId) ||
+    workspaceStatusById?.get(requestWorkspaceId) !== "active" ||
+    !roles[memberRole].authorize({ entity: ["create"] }).success
+  ) {
+    return {};
+  }
+
+  return createCreateWorkspaceDocumentTools({
+    scopedDb,
+    organizationId,
+    userId,
+    workspaceId: requestWorkspaceId,
+    recordAuditEvent,
+    refRegistry,
+  });
+};
+
 type CreateRememberToolsProps = {
   canManageWorkspaceMemory: boolean;
   organizationId: SafeId<"organization">;
@@ -900,24 +949,17 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   //     this tool alone.
   // KNOWN LIMITATION: creates at the matter root every time — there is no
   // folder/parent targeting yet.
-  const canCreateWorkspaceDocument = roles[memberRole].authorize({
-    entity: ["create"],
-  }).success;
-  const createWorkspaceDocumentTools =
-    requestWorkspaceId !== null &&
-    recordAuditEvent !== undefined &&
-    toolWorkspaceIds.includes(requestWorkspaceId) &&
-    canCreateWorkspaceDocument &&
-    workspaceStatusById?.get(requestWorkspaceId) === "active"
-      ? createCreateWorkspaceDocumentTools({
-          scopedDb,
-          organizationId,
-          userId,
-          workspaceId: requestWorkspaceId,
-          recordAuditEvent,
-          refRegistry,
-        })
-      : {};
+  const createWorkspaceDocumentTools = createAuthorizedWorkspaceDocumentTools({
+    memberRole,
+    organizationId,
+    recordAuditEvent,
+    refRegistry,
+    requestWorkspaceId,
+    scopedDb,
+    toolWorkspaceIds,
+    userId,
+    workspaceStatusById,
+  });
 
   // edit_workspace_document is the headless (`auto`) counterpart to
   // `apply-active-docx-edits`: it writes a new entity version directly

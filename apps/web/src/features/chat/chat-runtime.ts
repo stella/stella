@@ -650,6 +650,79 @@ export const buildSendRequestBody = ({
     body.userContext = userContext;
   }
 
+  applyChatContext({ body, context });
+
+  const { editApplyMode, docxEditRepresentation } =
+    resolveChatRequestDocxEditPreferences({
+      context,
+      key,
+      messages,
+      requestBody,
+    });
+  if (editApplyMode !== undefined) {
+    body.editApplyMode = editApplyMode;
+  }
+
+  if (docxEditRepresentation !== undefined) {
+    body.docxEditRepresentation = docxEditRepresentation;
+  }
+
+  if (
+    message.role === "user" &&
+    (editApplyMode !== undefined || docxEditRepresentation !== undefined)
+  ) {
+    body.message.metadata = {
+      ...message.metadata,
+      docxEditPreferences: {
+        ...(editApplyMode === undefined ? {} : { editApplyMode }),
+        ...(docxEditRepresentation === undefined
+          ? {}
+          : { docxEditRepresentation }),
+      },
+    };
+  }
+
+  if (run.resume === undefined) {
+    if (run.parentRunId !== undefined) {
+      panic("Chat continuation parent is missing native resume data");
+    }
+    return body;
+  }
+  const continuationMessage = body.message;
+  if (
+    run.parentRunId === undefined ||
+    continuationMessage.role !== "assistant"
+  ) {
+    panic("Native chat resume must continue an assistant message");
+  }
+  return {
+    ...body,
+    message: { ...continuationMessage, role: "assistant" },
+    parentRunId: run.parentRunId,
+    resume: run.resume.map((resolution) => {
+      if (resolution.status === "cancelled") {
+        return {
+          interruptId: resolution.interruptId,
+          status: resolution.status,
+        };
+      }
+      const payload: unknown = resolution.payload;
+      return {
+        interruptId: resolution.interruptId,
+        ...(payload === undefined ? {} : { payload }),
+        status: resolution.status,
+      };
+    }),
+  };
+};
+
+const applyChatContext = ({
+  body,
+  context,
+}: {
+  body: ChatSendRequestDraft;
+  context: ChatThreadOptionsContext | undefined;
+}) => {
   const activeFile = context?.getActiveFile?.();
   if (activeFile) {
     body.activeFile = {
@@ -749,69 +822,6 @@ export const buildSendRequestBody = ({
       toSafeId<"workspace">(id),
     );
   }
-
-  const { editApplyMode, docxEditRepresentation } =
-    resolveChatRequestDocxEditPreferences({
-      context,
-      key,
-      messages,
-      requestBody,
-    });
-  if (editApplyMode !== undefined) {
-    body.editApplyMode = editApplyMode;
-  }
-
-  if (docxEditRepresentation !== undefined) {
-    body.docxEditRepresentation = docxEditRepresentation;
-  }
-
-  if (
-    message.role === "user" &&
-    (editApplyMode !== undefined || docxEditRepresentation !== undefined)
-  ) {
-    body.message.metadata = {
-      ...message.metadata,
-      docxEditPreferences: {
-        ...(editApplyMode === undefined ? {} : { editApplyMode }),
-        ...(docxEditRepresentation === undefined
-          ? {}
-          : { docxEditRepresentation }),
-      },
-    };
-  }
-
-  if (run.resume === undefined) {
-    if (run.parentRunId !== undefined) {
-      panic("Chat continuation parent is missing native resume data");
-    }
-    return body;
-  }
-  const continuationMessage = body.message;
-  if (
-    run.parentRunId === undefined ||
-    continuationMessage.role !== "assistant"
-  ) {
-    panic("Native chat resume must continue an assistant message");
-  }
-  return {
-    ...body,
-    message: { ...continuationMessage, role: "assistant" },
-    parentRunId: run.parentRunId,
-    resume: run.resume.map((resolution) => {
-      if (resolution.status === "cancelled") {
-        return {
-          interruptId: resolution.interruptId,
-          status: resolution.status,
-        };
-      }
-      const payload: unknown = resolution.payload;
-      return {
-        interruptId: resolution.interruptId,
-        ...(payload === undefined ? {} : { payload }),
-        status: resolution.status,
-      };
-    }),
-  };
 };
 
 const getRequestSendMode = (

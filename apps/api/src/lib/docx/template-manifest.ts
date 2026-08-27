@@ -438,28 +438,25 @@ const parseFieldSource = (el: slimdom.Element): FieldSource | null => {
   }
 };
 
-const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
-  const path = el.getAttribute("path") ?? "";
-  const label = el.getAttribute("label") ?? undefined;
-  const rawInputType = el.getAttribute("inputType");
-  const inputType =
-    rawInputType && isInputType(rawInputType) ? rawInputType : undefined;
-  const requiredAttr = el.getAttribute("required");
-  const required = requiredAttr !== null ? requiredAttr === "true" : undefined;
-
-  const field: FieldMeta = { path };
-  if (label !== undefined) {
+const applyStandardFieldAttributes = (
+  field: FieldMeta,
+  el: slimdom.Element,
+): void => {
+  const label = el.getAttribute("label");
+  if (label !== null) {
     field.label = label;
   }
   const hint = el.getAttribute("hint");
   if (hint !== null) {
     field.hint = hint;
   }
-  if (inputType) {
+  const inputType = el.getAttribute("inputType");
+  if (inputType !== null && isInputType(inputType)) {
     field.inputType = inputType;
   }
-  if (required !== undefined) {
-    field.required = required;
+  const required = el.getAttribute("required");
+  if (required !== null) {
+    field.required = required === "true";
   }
   const aiPrompt = el.getAttribute("aiPrompt");
   if (aiPrompt !== null) {
@@ -473,107 +470,102 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
   if (aiSeesDocument !== null) {
     field.aiSeesDocument = aiSeesDocument === "true";
   }
-  // A hand-edited value outside the field-path grammar is dropped so the
-  // isFieldMeta invariant holds downstream.
   const optionsFrom = el.getAttribute("optionsFrom");
   if (optionsFrom !== null && isFieldPath(optionsFrom)) {
     field.optionsFrom = optionsFrom;
   }
 
-  // Parse options
   const optionsEl = getFirstElementChild(el, "options");
-  if (optionsEl) {
-    const optionEls = getElementChildren(optionsEl, "option");
-    const options = optionEls
-      .map((o) => o.getAttribute("value"))
-      .filter((v): v is string => v !== null);
-    if (options.length > 0) {
-      field.options = options;
+  if (!optionsEl) {
+    return;
+  }
+  const options = getElementChildren(optionsEl, "option")
+    .map((option) => option.getAttribute("value"))
+    .filter((value): value is string => value !== null);
+  if (options.length > 0) {
+    field.options = options;
+  }
+};
+
+const parseFieldValidation = (
+  validationEl: slimdom.Element | null,
+): FieldValidation | undefined => {
+  if (!validationEl) {
+    return undefined;
+  }
+  const validation: FieldValidation = {};
+  const required = validationEl.getAttribute("required");
+  if (required !== null) {
+    validation.required = required === "true";
+  }
+  const numberAttributes = [
+    ["minLength", "minLength"],
+    ["maxLength", "maxLength"],
+    ["minItems", "minItems"],
+    ["maxItems", "maxItems"],
+  ] as const;
+  for (const [attribute, property] of numberAttributes) {
+    const value = validationEl.getAttribute(attribute);
+    if (value === null) {
+      continue;
+    }
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isFinite(parsed)) {
+      validation[property] = parsed;
     }
   }
+  const pattern = validationEl.getAttribute("pattern");
+  if (pattern !== null) {
+    validation.pattern = pattern;
+  }
+  return Object.keys(validation).length > 0 ? validation : undefined;
+};
 
-  // Parse validation
-  const validationEl = getFirstElementChild(el, "validation");
-  if (validationEl) {
-    const validation: FieldValidation = {};
-    const vRequired = validationEl.getAttribute("required");
-    if (vRequired !== null) {
-      validation.required = vRequired === "true";
-    }
-    const minLen = validationEl.getAttribute("minLength");
-    if (minLen !== null) {
-      const parsed = Number.parseInt(minLen, 10);
-      if (Number.isFinite(parsed)) {
-        validation.minLength = parsed;
-      }
-    }
-    const maxLen = validationEl.getAttribute("maxLength");
-    if (maxLen !== null) {
-      const parsed = Number.parseInt(maxLen, 10);
-      if (Number.isFinite(parsed)) {
-        validation.maxLength = parsed;
-      }
-    }
-    const pattern = validationEl.getAttribute("pattern");
-    if (pattern !== null) {
-      validation.pattern = pattern;
-    }
-    const minItems = validationEl.getAttribute("minItems");
-    if (minItems !== null) {
-      const parsed = Number.parseInt(minItems, 10);
-      if (Number.isFinite(parsed)) {
-        validation.minItems = parsed;
-      }
-    }
-    const maxItems = validationEl.getAttribute("maxItems");
-    if (maxItems !== null) {
-      const parsed = Number.parseInt(maxItems, 10);
-      if (Number.isFinite(parsed)) {
-        validation.maxItems = parsed;
-      }
-    }
-    if (Object.keys(validation).length > 0) {
-      field.validation = validation;
+const parseFieldLookup = (
+  lookupEl: slimdom.Element | null,
+): FieldMeta["lookup"] | undefined => {
+  if (!lookupEl) {
+    return undefined;
+  }
+  const registry = lookupEl.getAttribute("registry");
+  if (registry === null || !isLookupRegistry(registry)) {
+    return undefined;
+  }
+  const formatsEl = getFirstElementChild(lookupEl, "lookupFormats");
+  if (!formatsEl) {
+    return undefined;
+  }
+  const formats: FieldLookupFormat[] = [];
+  for (const formatEl of getElementChildren(formatsEl, "lookupFormat")) {
+    const key = formatEl.getAttribute("key");
+    const template = formatEl.getAttribute("template");
+    if (
+      key !== null &&
+      isLookupFormatKey(key) &&
+      template !== null &&
+      template.length <= LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH
+    ) {
+      formats.push({ key, template });
     }
   }
+  return formats.length > 0
+    ? { registry, formats: formats.slice(0, LOOKUP_FORMATS_MAX) }
+    : undefined;
+};
 
-  // A hand-edited registry outside the supported set is dropped so the
-  // isFieldMeta invariant holds downstream.
-  const lookupEl = getFirstElementChild(el, "lookup");
-  if (lookupEl) {
-    const registry = lookupEl.getAttribute("registry");
-    if (registry !== null && isLookupRegistry(registry)) {
-      // Output formats round-trip nested under the lookup element; the first
-      // child is the default for the bare marker. A hand-edited key outside the
-      // segment grammar or an over-long template is dropped, and a lookup with
-      // no valid format is itself dropped so the isFieldLookup invariant holds.
-      const formats: FieldLookupFormat[] = [];
-      const formatsEl = getFirstElementChild(lookupEl, "lookupFormats");
-      if (formatsEl) {
-        for (const formatEl of getElementChildren(formatsEl, "lookupFormat")) {
-          const key = formatEl.getAttribute("key");
-          const template = formatEl.getAttribute("template");
-          if (
-            key !== null &&
-            isLookupFormatKey(key) &&
-            template !== null &&
-            template.length <= LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH
-          ) {
-            formats.push({ key, template });
-          }
-        }
-      }
-      if (formats.length > 0) {
-        field.lookup = {
-          registry,
-          formats: formats.slice(0, LOOKUP_FORMATS_MAX),
-        };
-      }
-    }
-  }
+const hasDerivedValueSource = (field: FieldMeta): boolean =>
+  field.formula !== undefined ||
+  field.condition !== undefined ||
+  field.conditionAst !== undefined ||
+  field.aiPrompt !== undefined ||
+  field.aiAdapt !== undefined ||
+  field.lookup !== undefined ||
+  field.parts !== undefined;
 
-  // A hand-edited locale that is not a plausible BCP-47 tag (or an unknown
-  // style) is dropped so the isFieldMeta invariant holds downstream.
+const applyDerivedFieldAttributes = (
+  field: FieldMeta,
+  el: slimdom.Element,
+): void => {
   const dateFormatEl = getFirstElementChild(el, "dateFormat");
   if (dateFormatEl) {
     const candidate = {
@@ -585,86 +577,61 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
     }
   }
 
-  // parts + format round-trip together; a half-shape (hand-edited XML) is
-  // dropped so the "both present or both absent" invariant holds downstream.
   const format = el.getAttribute("format");
   const partsEl = getFirstElementChild(el, "parts");
-  const parts =
-    partsEl === null
-      ? []
-      : getElementChildren(partsEl, "part")
-          .map(parseFieldPart)
-          .filter((part): part is FieldPart => part !== null);
+  const parts = partsEl
+    ? getElementChildren(partsEl, "part")
+        .map(parseFieldPart)
+        .filter((part): part is FieldPart => part !== null)
+    : [];
   if (format !== null && parts.length > 0) {
     field.parts = parts;
     field.format = format;
   }
 
-  // A formula field's value is derived, never user-entered; a hand-edited
-  // formula on a field that already has another value source (AI prompt or
-  // adapt, lookup, composite parts) is dropped so the isFieldMeta invariant
-  // holds downstream.
   const formula = el.getAttribute("formula");
-  if (
-    formula !== null &&
-    field.aiPrompt === undefined &&
-    field.aiAdapt === undefined &&
-    field.lookup === undefined &&
-    field.parts === undefined
-  ) {
+  if (formula !== null && !hasDerivedValueSource(field)) {
     field.formula = formula;
   }
-
   const conditionAst = parseConditionAst({
     version: el.getAttribute("conditionAstVersion"),
     value: el.getAttribute("conditionAst"),
   });
-  if (
-    conditionAst !== undefined &&
-    field.formula === undefined &&
-    field.aiPrompt === undefined &&
-    field.aiAdapt === undefined &&
-    field.lookup === undefined &&
-    field.parts === undefined
-  ) {
+  if (conditionAst !== undefined && !hasDerivedValueSource(field)) {
     field.conditionAst = conditionAst;
   }
-
-  // A condition field is a boolean derived by rule; like a formula it cannot
-  // coexist with another value source. A hand-edited condition on a field that
-  // already has one is dropped so the isFieldMeta invariant holds downstream.
   const condition = el.getAttribute("condition");
-  if (
-    condition !== null &&
-    field.conditionAst === undefined &&
-    field.formula === undefined &&
-    field.aiPrompt === undefined &&
-    field.aiAdapt === undefined &&
-    field.lookup === undefined &&
-    field.parts === undefined
-  ) {
+  if (condition !== null && !hasDerivedValueSource(field)) {
     field.condition = condition;
   }
-
-  // A data binding is a derived value; a hand-edited source on a field that
-  // already carries another value source is dropped so the isFieldMeta
-  // invariant holds downstream.
   const sourceEl = getFirstElementChild(el, "source");
-  if (
-    sourceEl &&
-    field.formula === undefined &&
-    field.condition === undefined &&
-    field.conditionAst === undefined &&
-    field.aiPrompt === undefined &&
-    field.aiAdapt === undefined &&
-    field.lookup === undefined &&
-    field.parts === undefined
-  ) {
-    const source = parseFieldSource(sourceEl);
-    if (source !== null) {
-      field.source = source;
-    }
+  if (!sourceEl || hasDerivedValueSource(field)) {
+    return;
   }
+  const source = parseFieldSource(sourceEl);
+  if (source !== null) {
+    field.source = source;
+  }
+};
+
+const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
+  const path = el.getAttribute("path") ?? "";
+  const field: FieldMeta = { path };
+  applyStandardFieldAttributes(field, el);
+  const validation = parseFieldValidation(
+    getFirstElementChild(el, "validation"),
+  );
+  if (validation !== undefined) {
+    field.validation = validation;
+  }
+
+  // A hand-edited registry outside the supported set is dropped so the
+  // isFieldMeta invariant holds downstream.
+  const lookup = parseFieldLookup(getFirstElementChild(el, "lookup"));
+  if (lookup !== undefined) {
+    field.lookup = lookup;
+  }
+  applyDerivedFieldAttributes(field, el);
 
   return field;
 };

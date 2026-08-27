@@ -190,86 +190,128 @@ const isInspectorTab = (value: unknown): value is InspectorTab => {
   }
   const type = value["type"];
   const id = value["id"];
-  const label = value["label"];
   if (typeof type !== "string" || typeof id !== "string") {
     return false;
   }
+  return isInspectorTabType(value, type);
+};
+
+const isInspectorTabType = (value: Record<string, unknown>, type: string) => {
+  const label = value["label"];
   if (type === "task") {
-    const status = value["status"];
-    return (
-      typeof label === "string" &&
-      typeof value["isNew"] === "boolean" &&
-      (status === undefined || status === null || isTaskStatus(status))
-    );
+    return isInspectorTaskTab(value, label);
   }
   if (type === "chat") {
-    return (
-      typeof label === "string" &&
-      isOptionalString(value["workspaceId"]) &&
-      isStringArray(value["contextMatterIds"]) &&
-      isOptionalString(value["activeDecisionId"]) &&
-      isActiveSkillContext(value["activeSkill"])
-    );
+    return isInspectorChatTab(value, label);
   }
   if (type === "external") {
-    const workspaceId = value["workspaceId"];
-    return (
-      typeof label === "string" &&
-      typeof value["chatThreadId"] === "string" &&
-      typeof value["url"] === "string" &&
-      (workspaceId === null || typeof workspaceId === "string") &&
-      isOptionalString(value["connectorSlug"]) &&
-      isOptionalString(value["iconHref"]) &&
-      isOptionalString(value["provider"]) &&
-      isOptionalString(value["snippet"]) &&
-      isOptionalString(value["sourceToolName"]) &&
-      isOptionalString(value["text"])
-    );
+    return isInspectorExternalTab(value, label);
   }
   if (type === "matter") {
-    const color = value["color"];
-    return (
-      typeof label === "string" &&
-      typeof value["workspaceId"] === "string" &&
-      (color === undefined || color === null || typeof color === "string")
-    );
+    return isInspectorMatterTab(value, label);
   }
   if (type === "skill-resource") {
-    const skillId = value["skillId"];
-    const origin = value["origin"];
-    const target = value["target"];
-    return (
-      typeof label === "string" &&
-      typeof value["skillName"] === "string" &&
-      (skillId === null || typeof skillId === "string") &&
-      (origin === "authored" ||
-        origin === "built-in" ||
-        origin === "bundled" ||
-        origin === "upload" ||
-        origin === "url") &&
-      (target === undefined || target === "body" || target === "resource") &&
-      typeof value["resourcePath"] === "string" &&
-      typeof value["mimeType"] === "string" &&
-      typeof value["content"] === "string"
-    );
+    return isInspectorSkillResourceTab(value, label);
   }
   if (type === "pdf") {
-    const pdfFileId = value["pdfFileId"];
-    return (
-      typeof label === "string" &&
-      typeof value["fileName"] === "string" &&
-      typeof value["entityId"] === "string" &&
-      typeof value["workspaceId"] === "string" &&
-      (pdfFileId === null || typeof pdfFileId === "string") &&
-      isOptionalString(value["renderId"]) &&
-      isOptionalString(value["mimeType"]) &&
-      isOptionalString(value["justificationFieldId"]) &&
-      isOptionalString(value["propertyId"]) &&
-      isMetadataLane(value["metadataLane"]) &&
-      isFileFacet(value["facet"]) &&
-      isOptionalNumber(value["facetPulseSeq"])
-    );
+    return isInspectorPdfTab(value, label);
   }
+  return isInspectorViewTab(value, type, label);
+};
+
+const isInspectorTaskTab = (value: Record<string, unknown>, label: unknown) => {
+  const status = value["status"];
+  return (
+    typeof label === "string" &&
+    typeof value["isNew"] === "boolean" &&
+    (status === undefined || status === null || isTaskStatus(status))
+  );
+};
+
+const isInspectorChatTab = (value: Record<string, unknown>, label: unknown) =>
+  typeof label === "string" &&
+  isOptionalString(value["workspaceId"]) &&
+  isStringArray(value["contextMatterIds"]) &&
+  isOptionalString(value["activeDecisionId"]) &&
+  isActiveSkillContext(value["activeSkill"]);
+
+const isInspectorExternalTab = (
+  value: Record<string, unknown>,
+  label: unknown,
+) => {
+  const workspaceId = value["workspaceId"];
+  return (
+    typeof label === "string" &&
+    typeof value["chatThreadId"] === "string" &&
+    typeof value["url"] === "string" &&
+    (workspaceId === null || typeof workspaceId === "string") &&
+    isOptionalString(value["connectorSlug"]) &&
+    isOptionalString(value["iconHref"]) &&
+    isOptionalString(value["provider"]) &&
+    isOptionalString(value["snippet"]) &&
+    isOptionalString(value["sourceToolName"]) &&
+    isOptionalString(value["text"])
+  );
+};
+
+const isInspectorMatterTab = (
+  value: Record<string, unknown>,
+  label: unknown,
+) => {
+  const color = value["color"];
+  return (
+    typeof label === "string" &&
+    typeof value["workspaceId"] === "string" &&
+    (color === undefined || color === null || typeof color === "string")
+  );
+};
+
+const isInspectorSkillResourceTab = (
+  value: Record<string, unknown>,
+  label: unknown,
+) => {
+  const skillId = value["skillId"];
+  const origin = value["origin"];
+  const target = value["target"];
+  return (
+    typeof label === "string" &&
+    typeof value["skillName"] === "string" &&
+    (skillId === null || typeof skillId === "string") &&
+    (origin === "authored" ||
+      origin === "built-in" ||
+      origin === "bundled" ||
+      origin === "upload" ||
+      origin === "url") &&
+    (target === undefined || target === "body" || target === "resource") &&
+    typeof value["resourcePath"] === "string" &&
+    typeof value["mimeType"] === "string" &&
+    typeof value["content"] === "string"
+  );
+};
+
+const isInspectorPdfTab = (value: Record<string, unknown>, label: unknown) => {
+  const pdfFileId = value["pdfFileId"];
+  return (
+    typeof label === "string" &&
+    typeof value["fileName"] === "string" &&
+    typeof value["entityId"] === "string" &&
+    typeof value["workspaceId"] === "string" &&
+    (pdfFileId === null || typeof pdfFileId === "string") &&
+    isOptionalString(value["renderId"]) &&
+    isOptionalString(value["mimeType"]) &&
+    isOptionalString(value["justificationFieldId"]) &&
+    isOptionalString(value["propertyId"]) &&
+    isMetadataLane(value["metadataLane"]) &&
+    isFileFacet(value["facet"]) &&
+    isOptionalNumber(value["facetPulseSeq"])
+  );
+};
+
+const isInspectorViewTab = (
+  value: Record<string, unknown>,
+  type: string,
+  label: unknown,
+) => {
   if (type !== "view" || typeof label !== "string") {
     return false;
   }
