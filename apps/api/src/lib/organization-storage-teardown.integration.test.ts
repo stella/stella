@@ -12,7 +12,7 @@ import {
   entityDeletionCleanupRequests,
   entityVersions,
   fields,
-  folioCollabSessions,
+  folioCollabRooms,
   pendingUploads,
   properties,
   styleSets,
@@ -335,7 +335,7 @@ beforeAll(async () => {
     expiresAt: new Date(Date.now() + 60_000),
   });
 
-  // Matter two: a collaborative editing session with both of its slots.
+  // Matter two: a collaborative editing room with both of its slots.
   const collabSnapshotFileId = toSafeId<"userFile">(uuid());
   const collabDocxFileId = toSafeId<"userFile">(uuid());
   const secondMatterFileId = uuid();
@@ -345,13 +345,12 @@ beforeAll(async () => {
     thumbnailFileId: null,
     workspaceId: secondWorkspaceId,
   });
-  await testDb.insert(folioCollabSessions).values({
-    id: toSafeId<"folioCollabSession">(uuid()),
+  await testDb.insert(folioCollabRooms).values({
+    id: toSafeId<"folioCollabRoom">(uuid()),
     workspaceId: secondWorkspaceId,
     entityId: secondDocument.entityId,
     propertyId: secondDocument.propertyId,
     baseVersionId: secondDocument.entityVersionId,
-    createdBy: userId,
     fileName: "engagement-letter.docx",
     yjsSnapshotFileId: collabSnapshotFileId,
     docxCheckpointFileId: collabDocxFileId,

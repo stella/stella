@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { loadFolioCollabSnapshot } from "@/api/lib/folio-collab-rooms";
+import { touchFolioCollabRoom } from "@/api/lib/folio-collab-rooms";
 import { permissiveBodySchema } from "@/api/lib/permissive-route-schema";
 
 import { authorizeFolioCollabCredentials } from "./room-credentials";
@@ -13,15 +13,12 @@ const config = {
   body: permissiveBodySchema({ keys: ["roomId", "token"] }),
 } satisfies TokenHandlerConfig;
 
-const loadFolioCollabSnapshotHandler = createSafeTokenHandler(
+const heartbeatFolioCollabRoom = createSafeTokenHandler(
   config,
   async function* ({ body }) {
-    const { room: value } = yield* Result.await(
-      authorizeFolioCollabCredentials(body),
-    );
-
-    const snapshot = await loadFolioCollabSnapshot(value);
-    if (snapshot === null) {
+    const { room } = yield* Result.await(authorizeFolioCollabCredentials(body));
+    const heartbeat = await touchFolioCollabRoom(room);
+    if (heartbeat.status === "room-missing") {
       return Result.err(
         new HandlerError({
           status: 404,
@@ -29,9 +26,17 @@ const loadFolioCollabSnapshotHandler = createSafeTokenHandler(
         }),
       );
     }
+    if (heartbeat.status === "desktop-conflict") {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "This document has a desktop edit session open.",
+        }),
+      );
+    }
 
-    return Result.ok(snapshot);
+    return Result.ok({ activeAt: heartbeat.activeAt.toISOString() });
   },
 );
 
-export default loadFolioCollabSnapshotHandler;
+export default heartbeatFolioCollabRoom;

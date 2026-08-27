@@ -15,7 +15,7 @@ import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 // `processExtraction` reads through the `rootDb` module-level singleton
 // directly (no injected `safeDb`), so the query call is captured by mocking
 // that module, matching the established pattern (see
-// apps/api/src/lib/folio-collab-sessions.test.ts). Resolving `findFirst`
+// apps/api/src/lib/folio-collab-rooms.test.ts). Resolving `findFirst`
 // with `null` (entity not found) short-circuits the function right after
 // the query, before it would otherwise reach S3/search-provider calls this
 // test does not need to stub.

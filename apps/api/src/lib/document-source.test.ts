@@ -4,6 +4,12 @@ import * as v from "valibot";
 import { documentSourceSchema } from "@/api/lib/document-source";
 
 describe("documentSourceSchema", () => {
+  test("accepts browser collaboration provenance", () => {
+    expect(v.parse(documentSourceSchema, { kind: "collaboration" })).toEqual({
+      kind: "collaboration",
+    });
+  });
+
   test("accepts complete import provenance and rejects invalid sources", () => {
     expect(
       v.parse(documentSourceSchema, {

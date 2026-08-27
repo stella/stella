@@ -250,7 +250,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   desktop_edit_session: "other",
   expense: "other",
   flow_definition: "other",
-  folio_collab_session: "other",
+  folio_collab_room: "other",
   invoice: "other",
   machine_api_key: "other",
   legal_list: "other",

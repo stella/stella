@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -10,7 +10,7 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   desktopEditSessions,
   entityVersions,
-  folioCollabSessions,
+  folioCollabRooms,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -38,12 +38,7 @@ import {
   readVersionDesktopEditTarget,
 } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  collectFolioCollabStoredSessionFiles,
-  deleteFolioCollabStoredSessionFiles,
-  isFolioCollabSessionExpired,
-} from "@/api/lib/folio-collab-sessions";
-import type { FolioCollabStoredSessionFile } from "@/api/lib/folio-collab-sessions";
+import { FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS } from "@/api/lib/folio-collab-room-contract";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 
@@ -84,11 +79,6 @@ type ExistingOpenDesktopEditSession = {
   fileName: string;
   fileType: DesktopEditFileType;
   id: SafeId<"desktopEditSession">;
-};
-
-type ExpiredFolioCollabSessionFiles = {
-  files: FolioCollabStoredSessionFile[];
-  sessionId: SafeId<"folioCollabSession">;
 };
 
 const readExistingOpenDesktopEditSession = async ({
@@ -182,73 +172,32 @@ const expireStaleOwnDesktopEditSessions = async ({
   );
 };
 
-const expireStaleFolioCollabSessionConflict = async ({
+const hasActiveFolioCollabRoom = async ({
   entityId,
-  now,
   propertyId,
-  recordAuditEvent,
   tx,
   workspaceId,
 }: {
   entityId: SafeId<"entity">;
-  now: Date;
   propertyId: SafeId<"property">;
-  recordAuditEvent: AuditRecorder;
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
-}): Promise<
-  | { status: "none" }
-  | { status: "open" }
-  | ({ status: "expired" } & ExpiredFolioCollabSessionFiles)
-> => {
-  const collabSessions = await tx
-    .select({
-      createdAt: folioCollabSessions.createdAt,
-      docxCheckpointFileId: folioCollabSessions.docxCheckpointFileId,
-      docxCheckpointUpdatedAt: folioCollabSessions.docxCheckpointUpdatedAt,
-      id: folioCollabSessions.id,
-      yjsSnapshotFileId: folioCollabSessions.yjsSnapshotFileId,
-      yjsSnapshotUpdatedAt: folioCollabSessions.yjsSnapshotUpdatedAt,
-    })
-    .from(folioCollabSessions)
+}) => {
+  const rooms = await tx
+    .select({ id: folioCollabRooms.id })
+    .from(folioCollabRooms)
     .where(
       and(
-        eq(folioCollabSessions.entityId, entityId),
-        eq(folioCollabSessions.propertyId, propertyId),
-        eq(folioCollabSessions.workspaceId, workspaceId),
-        eq(folioCollabSessions.status, "open"),
+        eq(folioCollabRooms.entityId, entityId),
+        eq(folioCollabRooms.propertyId, propertyId),
+        eq(folioCollabRooms.workspaceId, workspaceId),
+        sql`${folioCollabRooms.lastActivityAt} > now() - (${FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS} * interval '1 millisecond')`,
       ),
     )
     .limit(1)
     .for("update");
 
-  const collabSession = collabSessions.at(0);
-  if (!collabSession) {
-    return { status: "none" };
-  }
-
-  if (!isFolioCollabSessionExpired(collabSession.createdAt, now)) {
-    return { status: "open" };
-  }
-
-  await tx
-    .update(folioCollabSessions)
-    .set({ closedAt: now, status: "cancelled" })
-    .where(eq(folioCollabSessions.id, collabSession.id));
-
-  await recordAuditEvent(tx, {
-    action: AUDIT_ACTION.UPDATE,
-    resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_SESSION,
-    resourceId: collabSession.id,
-    changes: { status: { old: "open", new: "cancelled" } },
-    metadata: { reason: "session_lifetime_expired" },
-  });
-
-  return {
-    files: collectFolioCollabStoredSessionFiles(collabSession),
-    sessionId: collabSession.id,
-    status: "expired",
-  };
+  return rooms.at(0) !== undefined;
 };
 
 const buildExistingOpenDesktopEditSessionResponse = async ({
@@ -443,9 +392,6 @@ export const openDesktopEditSessionHandler = async function* ({
 
   const runOpenSession = async ({ allowInsert }: { allowInsert: boolean }) => {
     const result = await safeDb(async (tx) => {
-      let expiredFolioCollabSessionFiles: ExpiredFolioCollabSessionFiles | null =
-        null;
-
       await lockDesktopEditTarget({
         entityId,
         propertyId,
@@ -475,7 +421,6 @@ export const openDesktopEditSessionHandler = async function* ({
 
       if (existingSession) {
         return {
-          expiredFolioCollabSessionFiles,
           value: await buildExistingOpenDesktopEditSessionResponse({
             existingSession,
             organizationId,
@@ -490,7 +435,7 @@ export const openDesktopEditSessionHandler = async function* ({
       }
 
       if (!allowInsert) {
-        return { expiredFolioCollabSessionFiles, value: null };
+        return { value: null };
       }
 
       const currentTarget = await readCurrentDesktopEditTarget({
@@ -502,7 +447,6 @@ export const openDesktopEditSessionHandler = async function* ({
 
       if (!currentTarget) {
         return {
-          expiredFolioCollabSessionFiles,
           value: {
             error: {
               message:
@@ -513,34 +457,22 @@ export const openDesktopEditSessionHandler = async function* ({
         } as const;
       }
 
-      const collabSessionConflict = await expireStaleFolioCollabSessionConflict(
-        {
+      if (
+        await hasActiveFolioCollabRoom({
           entityId,
-          now,
           propertyId,
-          recordAuditEvent,
           tx,
           workspaceId,
-        },
-      );
-
-      if (collabSessionConflict.status === "open") {
+        })
+      ) {
         return {
-          expiredFolioCollabSessionFiles,
           value: {
             error: {
-              message:
-                "This document already has a collaborative edit session open.",
+              message: "This document has active browser collaborators.",
               statusCode: 409 as const,
             },
           },
         } as const;
-      }
-      if (collabSessionConflict.status === "expired") {
-        expiredFolioCollabSessionFiles = {
-          files: collabSessionConflict.files,
-          sessionId: collabSessionConflict.sessionId,
-        };
       }
 
       const sessionId = createSafeId<"desktopEditSession">();
@@ -579,7 +511,6 @@ export const openDesktopEditSessionHandler = async function* ({
       });
 
       return {
-        expiredFolioCollabSessionFiles,
         value: {
           baseVersionNumber: currentTarget.baseVersionNumber,
           downloadUrl: await presignDesktopEditFileDownload({
@@ -600,15 +531,6 @@ export const openDesktopEditSessionHandler = async function* ({
 
     if (Result.isError(result)) {
       return Result.err(result.error);
-    }
-
-    if (result.value.expiredFolioCollabSessionFiles !== null) {
-      await deleteFolioCollabStoredSessionFiles({
-        files: result.value.expiredFolioCollabSessionFiles.files,
-        organizationId,
-        sessionId: result.value.expiredFolioCollabSessionFiles.sessionId,
-        workspaceId,
-      });
     }
 
     return Result.ok(result.value.value);

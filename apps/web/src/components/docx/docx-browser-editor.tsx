@@ -661,7 +661,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     canUnlock,
     externalCollaboration: collaboration,
     entityId,
-    fieldId,
     propertyId,
     initiallyRequested: canAutoRequestCollaboration,
     workspaceId,
@@ -730,22 +729,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     onCancelled: onClose,
   });
 
-  const saveActiveCheckpoint =
-    collaborationSession?.saveCheckpoint ?? saveDesktopCheckpoint;
-  const finalizeActiveSession =
-    collaborationSession?.finalize ?? finalizeDesktopSession;
+  const saveActiveCheckpoint = saveDesktopCheckpoint;
+  const finalizeActiveSession = finalizeDesktopSession;
   const cancelActiveSession = useCallback(async () => {
     if (collaborationSession !== null) {
-      const cancelled = await collaborationSession.cancel();
-      if (!cancelled) {
-        stellaToast.add({
-          description: t("folio.saveCheckpointFailedDescription"),
-          title: t("folio.saveCheckpointFailedTitle"),
-          type: "error",
-        });
-        return;
-      }
-
       cancelCollaboration();
       onClose();
       return;
@@ -757,7 +744,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     cancelDesktopSession,
     collaborationSession,
     onClose,
-    t,
   ]);
 
   useExternalSyncEffect(() => {
@@ -1018,6 +1004,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // document when it runs, so the trailing save captures edits made
   // during the in-flight save (latest wins).
   const runCheckpointSave = useLatestCallback(async () => {
+    if (isCollaborativeEditing) {
+      // The Hocuspocus provider streams Yjs updates; materializing DOCX in the
+      // browser is no longer part of the collaboration persistence path.
+      return;
+    }
+
     const ref = editorRef.current;
     if (!ref) {
       return;
@@ -1164,6 +1156,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       );
     }
 
+    if (isCollaborativeEditing) {
+      clearQueuedChangeCheckpoint();
+      cancelCollaboration();
+      onClose();
+      return;
+    }
+
     // Save the final version before finalizing
     clearQueuedChangeCheckpoint();
 
@@ -1185,27 +1184,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         hasPendingEditorChanges,
       })
     ) {
-      if (isCollaborativeEditing) {
-        if (collaborationSession === null) {
-          return;
-        }
-
-        const finalized = await collaborationSession.finalize();
-        if (finalized === null) {
-          setAutosaveStatus("pending");
-          stellaToast.add({
-            description: t("folio.saveCheckpointFailedDescription"),
-            title: t("folio.editSaveFailedTitle"),
-            type: "error",
-          });
-          return;
-        }
-        if (finalized.outcome === "finalized") {
-          onSaved?.(finalized.fieldId);
-        }
-        onClose();
-        return;
-      }
       await cancelActiveSession();
       return;
     }
@@ -1249,41 +1227,17 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
     finalizedBufferRef.current = buffer;
     hasSessionChangesRef.current = false;
-    if (isCollaborativeEditing) {
-      if (collaborationSession === null) {
-        return;
-      }
-
-      const collaborativeFinalized = await collaborationSession.finalize();
-      if (collaborativeFinalized === null) {
-        hasSessionChangesRef.current = true;
-        setAutosaveStatus("pending");
-        stellaToast.add({
-          description: t("folio.saveCheckpointFailedDescription"),
-          title: t("folio.editSaveFailedTitle"),
-          type: "error",
-        });
-        return;
-      }
-      if (collaborativeFinalized.outcome === "finalized") {
-        onSaved?.(collaborativeFinalized.fieldId);
-      }
-      onClose();
-      return;
-    }
-
     await finalizeActiveSession();
   }, [
     cancelActiveSession,
     clearQueuedChangeCheckpoint,
-    collaborationSession,
+    cancelCollaboration,
     entityId,
     fieldId,
     finalizeActiveSession,
     isCollaborativeEditing,
     isDirty,
     onClose,
-    onSaved,
     optimisticPreviewRef,
     previewFile,
     saveActiveCheckpoint,
@@ -1570,7 +1524,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   }
 
   const previewIdentity = previewFile.fileId;
-  const collaborationIdentity = collaborationSession?.sessionId ?? "local";
+  const collaborationIdentity = collaborationSession?.roomId ?? "local";
 
   // Reset the controlled comment state when the loaded document changes.
   // Adjust-state-during-render (not an effect) so the freshly-keyed DocxEditor
@@ -1740,7 +1694,6 @@ type UseDocxBrowserCollaborationOptions = {
   canUnlock: boolean;
   entityId: string;
   externalCollaboration?: DocxEditorCollaboration | undefined;
-  fieldId: string;
   initiallyRequested: boolean;
   propertyId: string;
   workspaceId: string;
@@ -1755,12 +1708,11 @@ const useDocxBrowserCollaboration = ({
   canUnlock,
   entityId,
   externalCollaboration,
-  fieldId,
   initiallyRequested,
   propertyId,
   workspaceId,
 }: UseDocxBrowserCollaborationOptions) => {
-  const targetKey = `${workspaceId}:${entityId}:${propertyId}:${fieldId}`;
+  const targetKey = `${workspaceId}:${entityId}:${propertyId}`;
   const [requestState, setRequestState] = useState<CollaborationRequestState>({
     requested: initiallyRequested,
     targetKey,
@@ -1781,7 +1733,6 @@ const useDocxBrowserCollaboration = ({
   const collaborationState = useFolioCollaborationSession({
     enabled: collaborationEnabled && requested && canUnlock,
     entityId,
-    fieldId,
     propertyId,
     user: currentUser
       ? {

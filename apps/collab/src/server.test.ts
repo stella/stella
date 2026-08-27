@@ -6,6 +6,7 @@ import { createCollabServer } from "./server";
 
 type FakeStellaApiOptions = {
   canEdit?: boolean;
+  generation?: number;
   initialSnapshotBase64?: string | null;
   refreshedToken?: string;
   replacementToken?: string;
@@ -16,10 +17,14 @@ type FakeStellaApiOptions = {
 
 type FakeStellaApi = {
   authorizeRequests: () => number;
+  authorizeRequestBodies: () => Record<string, unknown>[];
   destroy: () => Promise<void>;
+  heartbeatRequestBodies: () => Record<string, unknown>[];
   latestSnapshotBase64: () => string | null;
+  loadRequestBodies: () => Record<string, unknown>[];
   refreshRequests: () => number;
   storeRequestTokens: () => string[];
+  storeRequestBodies: () => Record<string, unknown>[];
   storeRequests: () => number;
   url: string;
 };
@@ -49,17 +54,13 @@ const waitFor = async (
   throw new Error(message);
 };
 
-const bodyString = async (request: Request) => {
+const requestBody = async (request: Request) => {
   const value = await request.json();
   if (typeof value !== "object" || value === null) {
     return {};
   }
 
-  return Object.fromEntries(
-    Object.entries(value).filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string",
-    ),
-  );
+  return Object.fromEntries(Object.entries(value));
 };
 
 const hasAwarenessUserName = (
@@ -78,82 +79,116 @@ const farFutureTokenExpiresAt = () =>
 
 const createFakeStellaApi = ({
   canEdit = true,
+  generation = 0,
   initialSnapshotBase64 = null,
   refreshedToken = "collab_token_refreshed",
   replacementToken,
-  roomName = "folio_collab_session_test",
+  roomName = "folio_collab_room_test",
   token = "collab_token_test",
   tokenExpiresAt = farFutureTokenExpiresAt(),
 }: FakeStellaApiOptions = {}): FakeStellaApi => {
   let authorizeRequests = 0;
+  const authorizeRequestBodies: Record<string, unknown>[] = [];
+  const heartbeatRequestBodies: Record<string, unknown>[] = [];
+  const loadRequestBodies: Record<string, unknown>[] = [];
   let latestSnapshotBase64 = initialSnapshotBase64;
   let refreshRequests = 0;
   const storeRequestTokens: string[] = [];
+  const storeRequestBodies: Record<string, unknown>[] = [];
   let storeRequests = 0;
   let currentToken = token;
 
   const server = Bun.serve({
     fetch: async (request) => {
       const url = new URL(request.url);
-      const body = await bodyString(request);
+      const body = await requestBody(request);
 
-      if (url.pathname === "/v1/folio-collab-sessions/authorize") {
+      if (url.pathname === "/v1/folio-collab-rooms/authorize") {
         authorizeRequests += 1;
+        authorizeRequestBodies.push(body);
         const requestToken = body["token"];
         const tokenAuthorized =
           requestToken === token ||
           (replacementToken !== undefined && requestToken === replacementToken);
 
-        if (body["sessionId"] !== roomName || !tokenAuthorized) {
+        if (body["roomId"] !== roomName || !tokenAuthorized) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
-        if (requestToken === replacementToken) {
+        if (
+          replacementToken !== undefined &&
+          requestToken === replacementToken
+        ) {
           currentToken = replacementToken;
         }
 
         return Response.json({
           canEdit,
+          generation,
+          roomId: roomName,
           roomName,
-          sessionId: roomName,
           tokenExpiresAt,
           userId: "user_test",
           workspaceId: "workspace_test",
         });
       }
 
-      if (url.pathname === "/v1/folio-collab-sessions/refresh-token") {
+      if (url.pathname === "/v1/folio-collab-rooms/refresh-token") {
         refreshRequests += 1;
 
-        if (body["sessionId"] !== roomName || body["token"] !== currentToken) {
+        if (body["roomId"] !== roomName || body["token"] !== currentToken) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
         currentToken = refreshedToken;
         return Response.json({
+          canEdit,
+          generation,
           token: refreshedToken,
           tokenExpiresAt: farFutureTokenExpiresAt(),
         });
       }
 
-      if (url.pathname === "/v1/folio-collab-sessions/snapshot/load") {
-        if (body["sessionId"] !== roomName || body["token"] !== currentToken) {
+      if (url.pathname === "/v1/folio-collab-rooms/heartbeat") {
+        heartbeatRequestBodies.push(body);
+        if (body["roomId"] !== roomName || body["token"] !== currentToken) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
-        return Response.json({ snapshotBase64: latestSnapshotBase64 });
+        return Response.json({ activeAt: new Date().toISOString() });
       }
 
-      if (url.pathname === "/v1/folio-collab-sessions/snapshot/store") {
-        if (body["sessionId"] !== roomName || body["token"] !== currentToken) {
+      if (url.pathname === "/v1/folio-collab-rooms/snapshot/load") {
+        loadRequestBodies.push(body);
+        if (body["roomId"] !== roomName || body["token"] !== currentToken) {
+          return Response.json({ message: "Unauthorized" }, { status: 401 });
+        }
+
+        return Response.json({
+          generation,
+          snapshotBase64: latestSnapshotBase64,
+        });
+      }
+
+      if (url.pathname === "/v1/folio-collab-rooms/snapshot/store") {
+        storeRequestBodies.push(body);
+        if (body["roomId"] !== roomName || body["token"] !== currentToken) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
         storeRequests += 1;
-        storeRequestTokens.push(body["token"] ?? "");
-        latestSnapshotBase64 = body["snapshotBase64"] ?? null;
+        storeRequestTokens.push(
+          typeof body["token"] === "string" ? body["token"] : "",
+        );
+        latestSnapshotBase64 =
+          typeof body["snapshotBase64"] === "string"
+            ? body["snapshotBase64"]
+            : null;
 
-        return Response.json({ storedAt: new Date().toISOString() });
+        return Response.json({
+          generation,
+          storedAt: new Date().toISOString(),
+        });
       }
 
       return Response.json({ message: "Not found" }, { status: 404 });
@@ -168,12 +203,16 @@ const createFakeStellaApi = ({
 
   return {
     authorizeRequests: () => authorizeRequests,
+    authorizeRequestBodies: () => authorizeRequestBodies,
     destroy: async () => {
       await server.stop(true);
     },
+    heartbeatRequestBodies: () => heartbeatRequestBodies,
     latestSnapshotBase64: () => latestSnapshotBase64,
+    loadRequestBodies: () => loadRequestBodies,
     refreshRequests: () => refreshRequests,
     storeRequestTokens: () => storeRequestTokens,
+    storeRequestBodies: () => storeRequestBodies,
     storeRequests: () => storeRequests,
     url: `http://127.0.0.1:${port}`,
   };
@@ -243,13 +282,13 @@ describe("collaboration server", () => {
     const firstDoc = new Doc();
     const secondDoc = new Doc();
     const firstProvider = createProvider({
-      name: "folio_collab_session_test",
+      name: "folio_collab_room_test",
       token: "collab_token_test",
       url: collabServer.websocketUrl,
       ydoc: firstDoc,
     });
     const secondProvider = createProvider({
-      name: "folio_collab_session_test",
+      name: "folio_collab_room_test",
       token: "collab_token_test",
       url: collabServer.websocketUrl,
       ydoc: secondDoc,
@@ -260,6 +299,22 @@ describe("collaboration server", () => {
         () => firstProvider.isAuthenticated && secondProvider.isAuthenticated,
         "Providers did not authenticate.",
       );
+
+      expect(fakeApi.authorizeRequestBodies()).toEqual([
+        { roomId: "folio_collab_room_test", token: "collab_token_test" },
+        { roomId: "folio_collab_room_test", token: "collab_token_test" },
+      ]);
+      expect(fakeApi.heartbeatRequestBodies()).toEqual([
+        { roomId: "folio_collab_room_test", token: "collab_token_test" },
+        { roomId: "folio_collab_room_test", token: "collab_token_test" },
+      ]);
+      await waitFor(
+        () => fakeApi.loadRequestBodies().length === 1,
+        "Server did not load the room snapshot.",
+      );
+      expect(fakeApi.loadRequestBodies()).toEqual([
+        { roomId: "folio_collab_room_test", token: "collab_token_test" },
+      ]);
 
       firstProvider.awareness?.setLocalStateField("user", {
         color: "#000000",
@@ -294,6 +349,11 @@ describe("collaboration server", () => {
       expect(getTextContent(restoredDoc, "body")).toBe(
         "hello collaborative folio",
       );
+      expect(fakeApi.storeRequestBodies()[0]).toMatchObject({
+        expectedGeneration: 0,
+        roomId: "folio_collab_room_test",
+        token: "collab_token_test",
+      });
       expect(fakeApi.authorizeRequests()).toBeGreaterThanOrEqual(2);
     } finally {
       firstProvider.destroy();
@@ -322,7 +382,7 @@ describe("collaboration server", () => {
 
     const ydoc = new Doc();
     const provider = createProvider({
-      name: "folio_collab_session_test",
+      name: "folio_collab_room_test",
       token: initialToken,
       url: collabServer.websocketUrl,
       ydoc,
@@ -346,6 +406,11 @@ describe("collaboration server", () => {
       );
 
       expect(fakeApi.storeRequestTokens()).toEqual([refreshedToken]);
+      expect(fakeApi.storeRequestBodies()[0]).toMatchObject({
+        expectedGeneration: 0,
+        roomId: "folio_collab_room_test",
+        token: refreshedToken,
+      });
     } finally {
       provider.destroy();
       ydoc.destroy();
@@ -372,7 +437,7 @@ describe("collaboration server", () => {
     const firstDoc = new Doc();
     const secondDoc = new Doc();
     const firstProvider = createProvider({
-      name: "folio_collab_session_test",
+      name: "folio_collab_room_test",
       token: initialToken,
       url: collabServer.websocketUrl,
       ydoc: firstDoc,
@@ -385,7 +450,7 @@ describe("collaboration server", () => {
       );
 
       const secondProvider = createProvider({
-        name: "folio_collab_session_test",
+        name: "folio_collab_room_test",
         token: replacementToken,
         url: collabServer.websocketUrl,
         ydoc: secondDoc,
@@ -428,7 +493,7 @@ describe("collaboration server", () => {
 
     const ydoc = new Doc();
     const provider = createProvider({
-      name: "folio_collab_session_test",
+      name: "folio_collab_room_test",
       token: "collab_token_test",
       url: collabServer.websocketUrl,
       ydoc,
@@ -467,7 +532,7 @@ describe("collaboration server", () => {
     try {
       provider = new HocuspocusProvider({
         document: ydoc,
-        name: "folio_collab_session_test",
+        name: "folio_collab_room_test",
         onAuthenticationFailed: () => {
           authenticationFailed = true;
         },

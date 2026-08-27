@@ -19,13 +19,13 @@ import createDesktopEditHandoff, {
 import downloadZip from "@/api/handlers/entities/download-zip";
 import duplicateEntity from "@/api/handlers/entities/duplicate";
 import readEntityById from "@/api/handlers/entities/get";
+import joinFolioCollabRoom from "@/api/handlers/entities/join-folio-collab-room";
 import readEntities from "@/api/handlers/entities/list";
 import listFiles from "@/api/handlers/entities/list-files";
 import listFolders from "@/api/handlers/entities/list-folders";
 import moveEntity from "@/api/handlers/entities/move";
 import requestOcr from "@/api/handlers/entities/ocr/create";
 import openDesktopEditSession from "@/api/handlers/entities/open-desktop-edit-session";
-import openFolioCollabSession from "@/api/handlers/entities/open-folio-collab-session";
 import organizeSuggestions from "@/api/handlers/entities/organize-suggestions";
 import readFieldFile from "@/api/handlers/entities/read-field-file";
 import readFilesystemTree from "@/api/handlers/entities/read-filesystem-tree";
@@ -151,9 +151,9 @@ export const entitiesRoute = new Elysia({
       permissions: readDesktopEditHandoffStatus.config.permissions,
     },
   )
-  .post("/folio-collab-sessions/open", openFolioCollabSession.handler, {
-    body: openFolioCollabSession.config.body,
-    permissions: openFolioCollabSession.config.permissions,
+  .post("/folio-collab-rooms/join", joinFolioCollabRoom.handler, {
+    body: joinFolioCollabRoom.config.body,
+    permissions: joinFolioCollabRoom.config.permissions,
   })
   .post("/desktop-edit-sessions/release", releaseDesktopEditLock.handler, {
     body: releaseDesktopEditLock.config.body,

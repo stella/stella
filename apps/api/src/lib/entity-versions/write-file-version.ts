@@ -8,7 +8,7 @@ import {
   entityVersions,
   fileChatThreads,
   fields,
-  folioCollabSessions,
+  folioCollabRooms,
   properties,
   workspaces,
 } from "@/api/db/schema";
@@ -27,7 +27,7 @@ import { fileContentWithMintedObject } from "@/api/lib/files/file-object-ids";
 import type { MintedFileId } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
-import { isFolioCollabSessionExpired } from "@/api/lib/folio-collab-sessions";
+import { FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS } from "@/api/lib/folio-collab-room-contract";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 export type FileVersionWritePolicy =
@@ -115,23 +115,19 @@ const hasOpenDocxEditSession = async ({
     return true;
   }
 
-  const openCollabSessions = await tx
-    .select({ createdAt: folioCollabSessions.createdAt })
-    .from(folioCollabSessions)
+  const activeCollabRooms = await tx
+    .select({ id: folioCollabRooms.id })
+    .from(folioCollabRooms)
     .where(
       and(
-        eq(folioCollabSessions.entityId, entityId),
-        eq(folioCollabSessions.propertyId, filePropertyId),
-        eq(folioCollabSessions.status, "open"),
-        eq(folioCollabSessions.workspaceId, workspaceId),
+        eq(folioCollabRooms.entityId, entityId),
+        eq(folioCollabRooms.propertyId, filePropertyId),
+        eq(folioCollabRooms.workspaceId, workspaceId),
+        sql`${folioCollabRooms.lastActivityAt} > now() - (${FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS} * interval '1 millisecond')`,
       ),
     )
     .limit(1);
-  const openCollabSession = openCollabSessions.at(0);
-  return (
-    openCollabSession !== undefined &&
-    !isFolioCollabSessionExpired(openCollabSession.createdAt, now)
-  );
+  return activeCollabRooms.at(0) !== undefined;
 };
 
 /**

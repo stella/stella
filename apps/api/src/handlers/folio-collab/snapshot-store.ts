@@ -8,23 +8,24 @@ import {
   FOLIO_COLLAB_SNAPSHOT_MAX_BASE64_LENGTH,
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
   storeFolioCollabSnapshot,
-} from "@/api/lib/folio-collab-sessions";
+} from "@/api/lib/folio-collab-rooms";
 import {
   permissiveBodySchema,
   validatePostAuth,
 } from "@/api/lib/permissive-route-schema";
 
-import { authorizeFolioCollabCredentials } from "./session-credentials";
+import { authorizeFolioCollabCredentials } from "./room-credentials";
 
 const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: permissiveBodySchema({
-    keys: ["sessionId", "snapshotBase64", "token"],
+    keys: ["expectedGeneration", "roomId", "snapshotBase64", "token"],
   }),
 } satisfies TokenHandlerConfig;
 
 /** Validated after authorization; see `permissive-route-schema.ts`. */
 const strictBodySchema = t.Object({
+  expectedGeneration: t.Integer({ minimum: 0 }),
   snapshotBase64: t.String({
     maxLength: FOLIO_COLLAB_SNAPSHOT_MAX_BASE64_LENGTH,
   }),
@@ -33,7 +34,7 @@ const strictBodySchema = t.Object({
 const storeFolioCollabSnapshotHandler = createSafeTokenHandler(
   config,
   async function* ({ body }) {
-    const { session: value } = yield* Result.await(
+    const { room: value } = yield* Result.await(
       authorizeFolioCollabCredentials(body),
     );
     if (!value.canEdit) {
@@ -51,7 +52,7 @@ const storeFolioCollabSnapshotHandler = createSafeTokenHandler(
         new HandlerError({ status: 422, message: validatedBody.message }),
       );
     }
-    const { snapshotBase64 } = validatedBody.value;
+    const { expectedGeneration, snapshotBase64 } = validatedBody.value;
 
     const snapshotBytes = Buffer.from(snapshotBase64, "base64");
     if (snapshotBytes.byteLength > FOLIO_COLLAB_SNAPSHOT_MAX_BYTES) {
@@ -63,12 +64,41 @@ const storeFolioCollabSnapshotHandler = createSafeTokenHandler(
       );
     }
 
-    const { storedAt } = await storeFolioCollabSnapshot({
+    const stored = await storeFolioCollabSnapshot({
+      expectedGeneration,
       snapshotBytes,
       value,
     });
 
-    return Result.ok({ storedAt: storedAt.toISOString() });
+    if (stored.status === "room-missing") {
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Collaborative editing room not found.",
+        }),
+      );
+    }
+    if (stored.status === "generation-conflict") {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "Collaborative room generation changed.",
+        }),
+      );
+    }
+    if (stored.status === "seed-owner-conflict") {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "Collaborative room seed is owned by another participant.",
+        }),
+      );
+    }
+
+    return Result.ok({
+      generation: expectedGeneration,
+      storedAt: stored.storedAt.toISOString(),
+    });
   },
 );
 

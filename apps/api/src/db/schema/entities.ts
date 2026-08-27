@@ -1,4 +1,9 @@
 import { DESKTOP_EDIT_FILE_TYPES } from "@/api/lib/desktop-edit-file-types";
+import {
+  FOLIO_COLLAB_CHECKPOINT_MAX_BYTES,
+  FOLIO_COLLAB_ROOM_SEED_STATES,
+  FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
+} from "@/api/lib/folio-collab-room-contract";
 
 import {
   AGENDA_AVAILABILITIES,
@@ -471,6 +476,9 @@ export const entityVersions = p.pgTable(
     p
       .uniqueIndex("entity_versions_id_entity_ws_uidx")
       .on(table.id, table.entityId, table.workspaceId),
+    p
+      .uniqueIndex("entity_versions_entity_number_uidx")
+      .on(table.entityId, table.versionNumber),
     p.index("entity_versions_entity_id_idx").on(table.entityId),
     p
       .index("entity_versions_stamp_idx")
@@ -541,12 +549,6 @@ export const DESKTOP_EDIT_SESSION_STATUSES = [
   // Set by the scheduler sweep when a session's token TTL lapses while
   // still "open"; treated as closed everywhere "open" is required.
   "expired",
-] as const;
-
-export const FOLIO_COLLAB_SESSION_STATUSES = [
-  "open",
-  "finalized",
-  "cancelled",
 ] as const;
 
 const DESKTOP_EDIT_FILE_TYPE_SQL_VALUES = sql.raw(
@@ -720,27 +722,23 @@ export const desktopEditHandoffs = p.pgTable(
   ],
 );
 
-export const folioCollabSessions = p.pgTable(
-  "folio_collab_sessions",
+const FOLIO_COLLAB_ROOM_SEED_STATE_SQL_VALUES = sql.raw(
+  FOLIO_COLLAB_ROOM_SEED_STATES.map((state) => `'${state}'`).join(", "),
+);
+
+export const folioCollabRooms = p.pgTable(
+  "folio_collab_rooms",
   {
-    id: pUuid<"folioCollabSession">().primaryKey(),
+    id: pUuid<"folioCollabRoom">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     entityId: safeUuid<"entity">("entity_id").notNull(),
     propertyId: safeUuid<"property">("property_id").notNull(),
+    generation: p.bigint("generation", { mode: "number" }).notNull().default(0),
     baseVersionId: safeUuid<"entityVersion">("base_version_id")
       .notNull()
-      .references(() => entityVersions.id, { onDelete: "cascade" }),
-    finalizedVersionId: safeUuid<"entityVersion">("finalized_version_id"),
-    createdBy: p
-      .text("created_by")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    status: p
-      .text("status", { enum: FOLIO_COLLAB_SESSION_STATUSES })
-      .notNull()
-      .default("open"),
+      .references(() => entityVersions.id),
     fileName: p.varchar("file_name", { length: 256 }).notNull(),
     yjsSnapshotFileId: safeUuid<"userFile">("yjs_snapshot_file_id").notNull(),
     yjsSnapshotSizeBytes: p.integer("yjs_snapshot_size_bytes"),
@@ -756,59 +754,85 @@ export const folioCollabSessions = p.pgTable(
       string[] | null
     >(),
     docxCheckpointUpdatedAt: timestamptz("docx_checkpoint_updated_at"),
+    seedState: p
+      .text("seed_state", { enum: FOLIO_COLLAB_ROOM_SEED_STATES })
+      .notNull()
+      .default("empty"),
     seedClaimedBy: p.text("seed_claimed_by").references(() => user.id, {
       onDelete: "set null",
     }),
     seedClaimedAt: timestamptz("seed_claimed_at"),
     seededAt: timestamptz("seeded_at"),
+    lastActivityAt: timestamptz("last_activity_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
-    closedAt: timestamptz("closed_at"),
   },
   (table) => [
-    p.index("folio_collab_sessions_workspace_id_idx").on(table.workspaceId),
-    p.index("folio_collab_sessions_entity_id_idx").on(table.entityId),
-    p.index("folio_collab_sessions_property_id_idx").on(table.propertyId),
     p
-      .index("folio_collab_sessions_base_version_id_idx")
-      .on(table.baseVersionId),
+      .uniqueIndex("folio_collab_rooms_target_uidx")
+      .on(table.workspaceId, table.entityId, table.propertyId),
     p
-      .foreignKey({
-        columns: [table.finalizedVersionId],
-        foreignColumns: [entityVersions.id],
-        name: "folio_collab_sessions_finalized_version_fk",
-      })
-      .onDelete("set null"),
+      .uniqueIndex("folio_collab_rooms_id_workspace_uidx")
+      .on(table.id, table.workspaceId),
     p
-      .uniqueIndex("folio_collab_sessions_open_uidx")
-      .on(table.workspaceId, table.entityId, table.propertyId)
-      .where(sql`${table.status} = 'open'`),
+      .index("folio_collab_rooms_workspace_entity_idx")
+      .on(table.workspaceId, table.entityId),
+    p
+      .index("folio_collab_rooms_workspace_property_idx")
+      .on(table.workspaceId, table.propertyId),
+    p
+      .index("folio_collab_rooms_workspace_activity_idx")
+      .on(table.workspaceId, table.lastActivityAt),
+    p.check(
+      "folio_collab_rooms_generation_check",
+      sql`${table.generation} >= 0`,
+    ),
+    p.check(
+      "folio_collab_rooms_seed_state_check",
+      sql`${table.seedState} in (${FOLIO_COLLAB_ROOM_SEED_STATE_SQL_VALUES})`,
+    ),
+    p.check(
+      "folio_collab_rooms_seed_fields_check",
+      sql`(
+        (${table.seedState} = 'empty' AND ${table.seedClaimedBy} IS NULL AND ${table.seedClaimedAt} IS NULL AND ${table.seededAt} IS NULL AND ${table.yjsSnapshotSizeBytes} IS NULL AND ${table.yjsSnapshotUpdatedAt} IS NULL)
+        OR (${table.seedState} = 'claimed' AND ${table.seedClaimedBy} IS NOT NULL AND ${table.seedClaimedAt} IS NOT NULL AND ${table.seededAt} IS NULL AND ${table.yjsSnapshotSizeBytes} IS NULL AND ${table.yjsSnapshotUpdatedAt} IS NULL)
+        OR (${table.seedState} = 'seeded' AND ${table.seedClaimedAt} IS NOT NULL AND ${table.seededAt} IS NOT NULL AND ${table.yjsSnapshotSizeBytes} IS NOT NULL AND ${table.yjsSnapshotUpdatedAt} IS NOT NULL)
+      )`,
+    ),
+    p.check(
+      "folio_collab_rooms_snapshot_size_check",
+      sql`${table.yjsSnapshotSizeBytes} IS NULL OR (${table.yjsSnapshotSizeBytes} >= 0 AND ${table.yjsSnapshotSizeBytes} <= ${FOLIO_COLLAB_SNAPSHOT_MAX_BYTES})`,
+    ),
+    p.check(
+      "folio_collab_rooms_checkpoint_size_check",
+      sql`${table.docxCheckpointSizeBytes} IS NULL OR (${table.docxCheckpointSizeBytes} >= 0 AND ${table.docxCheckpointSizeBytes} <= ${FOLIO_COLLAB_CHECKPOINT_MAX_BYTES})`,
+    ),
     p
       .foreignKey({
         columns: [table.entityId, table.workspaceId],
         foreignColumns: [entities.id, entities.workspaceId],
+        name: "folio_collab_rooms_entity_workspace_fk",
       })
       .onDelete("cascade"),
     p
       .foreignKey({
         columns: [table.propertyId, table.workspaceId],
         foreignColumns: [properties.id, properties.workspaceId],
+        name: "folio_collab_rooms_property_workspace_fk",
       })
       .onDelete("cascade"),
     ...wsPolicies(),
   ],
 );
 
-export const folioCollabSessionTokens = p.pgTable(
-  "folio_collab_session_tokens",
+export const folioCollabRoomTokens = p.pgTable(
+  "folio_collab_room_tokens",
   {
-    id: pUuid<"folioCollabSessionToken">().primaryKey(),
-    sessionId: safeUuid<"folioCollabSession">("session_id")
-      .notNull()
-      .references(() => folioCollabSessions.id, { onDelete: "cascade" }),
+    id: pUuid<"folioCollabRoomToken">().primaryKey(),
+    roomId: safeUuid<"folioCollabRoom">("room_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
@@ -824,14 +848,19 @@ export const folioCollabSessionTokens = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    p.index("folio_collab_room_tokens_workspace_id_idx").on(table.workspaceId),
+    p.index("folio_collab_room_tokens_room_id_idx").on(table.roomId),
+    p.index("folio_collab_room_tokens_expires_at_idx").on(table.expiresAt),
     p
-      .index("folio_collab_session_tokens_workspace_id_idx")
-      .on(table.workspaceId),
-    p.index("folio_collab_session_tokens_session_id_idx").on(table.sessionId),
-    p.index("folio_collab_session_tokens_expires_at_idx").on(table.expiresAt),
-    p
-      .uniqueIndex("folio_collab_session_tokens_token_hash_uidx")
+      .uniqueIndex("folio_collab_room_tokens_token_hash_uidx")
       .on(table.tokenHash),
+    p
+      .foreignKey({
+        columns: [table.roomId, table.workspaceId],
+        foreignColumns: [folioCollabRooms.id, folioCollabRooms.workspaceId],
+        name: "folio_collab_room_tokens_room_workspace_fk",
+      })
+      .onDelete("cascade"),
     ...wsPolicies(),
   ],
 );

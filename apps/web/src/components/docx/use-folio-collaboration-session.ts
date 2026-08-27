@@ -2,7 +2,6 @@ import { useState } from "react";
 
 import type { HocuspocusProvider } from "@hocuspocus/provider";
 import type * as HocuspocusProviderModule from "@hocuspocus/provider";
-import { useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 import type * as YProseMirror from "y-prosemirror";
@@ -14,31 +13,15 @@ import type { DocxEditorCollaboration } from "@stll/folio-react";
 import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
-import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
-import { filesKeys } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { entitiesKeys } from "@/lib/workspaces/queries/entities";
-
-type FinalizeFolioCollaborationSessionResult =
-  | {
-      outcome: "finalized";
-      entityId: string;
-      fieldId: string;
-      versionId: string;
-      versionNumber: number;
-    }
-  | { outcome: "no_changes" };
 
 export type FolioCollaborationSession = {
-  cancel: () => Promise<boolean>;
   collaboration: DocxEditorCollaboration;
-  finalize: () => Promise<FinalizeFolioCollaborationSessionResult | null>;
-  saveCheckpoint: (docxBuffer: ArrayBuffer) => Promise<boolean>;
+  roomId: string;
   seedDocumentBuffer: ArrayBuffer | null;
-  sessionId: string;
 };
 
 type FolioCollaborationSessionState =
@@ -49,14 +32,13 @@ type FolioCollaborationSessionState =
       collaboration: DocxEditorCollaboration;
       provider: HocuspocusProvider;
       session: FolioCollaborationSession;
-      sessionId: string;
+      roomId: string;
     }
   | { status: "error"; collaboration: null; message: string };
 
 type UseFolioCollaborationSessionOptions = {
   enabled: boolean;
   entityId: string;
-  fieldId: string;
   propertyId: string;
   /**
    * Collaborator identity for awareness. Null when no authenticated user is
@@ -123,13 +105,11 @@ const fetchSeedDocumentBuffer = async (seedDownloadUrl: string) => {
 export const useFolioCollaborationSession = ({
   enabled,
   entityId,
-  fieldId,
   propertyId,
   user,
   workspaceId,
 }: UseFolioCollaborationSessionOptions): FolioCollaborationSessionState => {
   const t = useTranslations();
-  const queryClient = useQueryClient();
   const [state, setState] = useState<FolioCollaborationSessionState>({
     status: "idle",
     collaboration: null,
@@ -157,33 +137,13 @@ export const useFolioCollaborationSession = ({
     let disposed = false;
     const isDisposed = () => disposed;
     let provider: HocuspocusProvider | null = null;
-    let openingSession: { sessionId: string; token: string } | null = null;
-    const cancelOpeningSession = async () => {
-      const session = openingSession;
-      if (session === null) {
-        return;
-      }
-
-      openingSession = null;
-      try {
-        // SAFETY: best-effort cleanup for an abandoned session open;
-        // the session either never opened or is about to be replaced,
-        // so there is no user-facing outcome to surface on failure.
-        // eslint-disable-next-line require-eden-error-check/require-eden-error-check
-        await api["folio-collab-sessions"]({
-          sessionId: session.sessionId,
-        }).cancel.post({ token: session.token });
-      } catch {
-        // Best-effort cleanup for abandoned session opens.
-      }
-    };
     setState({ status: "opening", collaboration: null });
 
     detached(
       (async () => {
         const { data, error } = await api
           .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          ["folio-collab-sessions"].open.post({
+          ["folio-collab-rooms"].join.post({
             entityId: toSafeId<"entity">(entityId),
             propertyId: toSafeId<"property">(propertyId),
           });
@@ -204,12 +164,10 @@ export const useFolioCollaborationSession = ({
           return;
         }
 
-        const sessionId = data.collabSessionId;
+        const roomId = data.roomId;
         let token = data.token;
-        openingSession = { sessionId, token };
 
         if (isDisposed()) {
-          await cancelOpeningSession();
           return;
         }
 
@@ -227,7 +185,6 @@ export const useFolioCollaborationSession = ({
         })();
 
         if (isDisposed()) {
-          await cancelOpeningSession();
           return;
         }
 
@@ -236,7 +193,6 @@ export const useFolioCollaborationSession = ({
         const { hocuspocus, yProseMirror, yjs } = collaborationRuntimeModules;
 
         if (isDisposed()) {
-          await cancelOpeningSession();
           return;
         }
 
@@ -248,10 +204,10 @@ export const useFolioCollaborationSession = ({
             return token;
           }
 
-          const refreshed = await api["folio-collab-sessions"][
+          const refreshed = await api["folio-collab-rooms"][
             "refresh-token"
           ].post({
-            sessionId,
+            roomId,
             token,
           });
 
@@ -275,7 +231,6 @@ export const useFolioCollaborationSession = ({
 
         const awareness = provider.awareness;
         if (!awareness) {
-          await cancelOpeningSession();
           provider.destroy();
           setState({
             status: "error",
@@ -290,105 +245,6 @@ export const useFolioCollaborationSession = ({
           name: userName,
         });
 
-        const invalidateSessionQueries = async () => {
-          await Promise.all([
-            queryClient.invalidateQueries({
-              queryKey: entitiesKeys.all(workspaceId),
-            }),
-            queryClient.invalidateQueries({
-              queryKey: filesKeys.byFieldId({
-                workspaceId,
-                fieldId,
-                purpose: "native-display",
-              }),
-            }),
-            queryClient.invalidateQueries({
-              queryKey: filesKeys.metadataByFieldId({
-                workspaceId,
-                fieldId,
-                purpose: "native-display",
-              }),
-            }),
-          ]);
-        };
-        const cancel = async () => {
-          const freshToken = await refreshTokenIfNeeded();
-          if (freshToken === null) {
-            return false;
-          }
-
-          const cancelled = await api["folio-collab-sessions"]({
-            sessionId,
-          }).cancel.post({ token: freshToken });
-
-          if (cancelled.error) {
-            return false;
-          }
-
-          await invalidateSessionQueries();
-          return true;
-        };
-        const saveCheckpoint = async (docxBuffer: ArrayBuffer) => {
-          const freshToken = await refreshTokenIfNeeded();
-          if (freshToken === null) {
-            return false;
-          }
-
-          const checkpoint = await api["folio-collab-sessions"]({
-            sessionId,
-          }).checkpoint.post({
-            file: new File([docxBuffer], data.fileName, {
-              type: DOCX_MIME,
-            }),
-            token: freshToken,
-          });
-
-          return !checkpoint.error;
-        };
-        const finalize = async () => {
-          const freshToken = await refreshTokenIfNeeded();
-          if (freshToken === null) {
-            return null;
-          }
-
-          const finalized = await api["folio-collab-sessions"]({
-            sessionId,
-          }).finalize.post({ token: freshToken });
-
-          if (finalized.error) {
-            return null;
-          }
-
-          const finalizedFieldId =
-            finalized.data.outcome === "finalized"
-              ? finalized.data.fieldId
-              : fieldId;
-          await Promise.all(
-            [
-              invalidateSessionQueries(),
-              finalizedFieldId !== fieldId
-                ? queryClient.invalidateQueries({
-                    queryKey: filesKeys.byFieldId({
-                      workspaceId,
-                      fieldId: finalizedFieldId,
-                      purpose: "native-display",
-                    }),
-                  })
-                : null,
-              finalizedFieldId !== fieldId
-                ? queryClient.invalidateQueries({
-                    queryKey: filesKeys.metadataByFieldId({
-                      workspaceId,
-                      fieldId: finalizedFieldId,
-                      purpose: "native-display",
-                    }),
-                  })
-                : null,
-            ].filter((promise) => promise !== null),
-          );
-
-          return finalized.data;
-        };
         const collaboration = {
           awareness,
           plugins: [
@@ -399,27 +255,18 @@ export const useFolioCollaborationSession = ({
           shouldSeed: data.shouldSeed,
           yXmlFragment,
         };
-        openingSession = null;
-
         setState({
           status: "ready",
-          sessionId,
+          roomId,
           provider,
           collaboration,
           session: {
-            cancel,
             collaboration,
-            finalize,
-            saveCheckpoint,
+            roomId,
             seedDocumentBuffer,
-            sessionId,
           },
         });
       })().catch((error: unknown) => {
-        detached(
-          cancelOpeningSession(),
-          "use-folio-collaboration-session.cancel-opening-session",
-        );
         if (isDisposed()) {
           return;
         }
@@ -435,19 +282,13 @@ export const useFolioCollaborationSession = ({
 
     return () => {
       disposed = true;
-      detached(
-        cancelOpeningSession(),
-        "use-folio-collaboration-session.cancel-opening-session",
-      );
       provider?.destroy();
     };
   }, [
     canConnect,
     collabUrl,
     entityId,
-    fieldId,
     propertyId,
-    queryClient,
     t,
     userColor,
     userName,

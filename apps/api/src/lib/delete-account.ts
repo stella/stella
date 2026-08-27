@@ -21,7 +21,6 @@ import {
   collectUserOrganizationAndWorkspaceIds,
   deleteChatThreadsAndFileLinks,
   deleteDesktopEditSessionsAndHandoffs,
-  deleteFolioCollabSessions,
   deleteMcpCredentialsAndOAuthState,
   deletePendingUploads,
   deletePersonalBillingRates,
@@ -31,6 +30,7 @@ import {
   lockUserRowForDeletion,
   reassignActiveTaskAssignmentsAndDropMemberships,
   recordAccountDeletionRequest,
+  resetFolioCollabUserState,
   revokeAuthCredentialsAndInvitations,
   revokeOAuthTokensAndGrants,
 } from "@/api/lib/account-deletion-steps";
@@ -336,6 +336,7 @@ export const verifyAndDeleteUser = async (
         await revokeOAuthTokensAndGrants(tx, currentUserId);
         await deleteMcpCredentialsAndOAuthState(tx, currentUserId);
         await clearWorkspaceLeadRole(tx, currentUserId);
+        await resetFolioCollabUserState(tx, currentUserId);
 
         const taskReassignmentCount =
           await reassignActiveTaskAssignmentsAndDropMemberships({
@@ -350,7 +351,6 @@ export const verifyAndDeleteUser = async (
           currentUserId,
           s3KeysToDelete,
         });
-        await deleteFolioCollabSessions({ tx, currentUserId, s3KeysToDelete });
         await deletePendingUploads({ tx, currentUserId, s3KeysToDelete });
         await deleteUserFiles({ tx, currentUserId, s3KeysToDelete });
         await deleteChatThreadsAndFileLinks(tx, currentUserId);

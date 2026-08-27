@@ -5,6 +5,7 @@ import type { SafeIdType } from "@/api/lib/branded-types";
 
 type NonResourceReason =
   | "association"
+  | "collaboration"
   | "credential"
   | "event"
   | "job"
@@ -157,8 +158,8 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   },
   flowRun: { type: "resource", resourceType: RESOURCE_TYPE.FLOW_RUN },
   flowRunStep: { type: "non_resource", reason: "subresource" },
-  folioCollabSession: { type: "non_resource", reason: "session" },
-  folioCollabSessionToken: { type: "non_resource", reason: "credential" },
+  folioCollabRoom: { type: "non_resource", reason: "collaboration" },
+  folioCollabRoomToken: { type: "non_resource", reason: "credential" },
   folder: { type: "alias", resourceType: RESOURCE_TYPE.ENTITY },
   infoSoudTrackedCase: { type: "non_resource", reason: "workflow" },
   invoice: { type: "resource", resourceType: RESOURCE_TYPE.INVOICE },
