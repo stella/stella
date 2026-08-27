@@ -95,13 +95,16 @@ const PROVIDER_SCHEMA_IGNORED_ACTIONS = ["trim"];
 const valibotJsonSchemaTarget = (
   target: StandardJSONSchemaV1.Target,
 ): NonNullable<ConversionConfig["target"]> => {
+  if (target === "draft-07") {
+    return "draft-07";
+  }
   if (target === "draft-2020-12") {
     return "draft-2020-12";
   }
   if (target === "openapi-3.0") {
     return "openapi-3.0";
   }
-  return "draft-07";
+  return panic(`Unsupported JSON Schema target: ${target}`);
 };
 
 // Providers (notably Google Gemini) reject tool schemas that carry keywords

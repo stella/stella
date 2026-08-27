@@ -11,6 +11,9 @@ import { W_NS } from "@/api/lib/docx/ooxml";
 const STYLES_PART = "word/styles.xml";
 const SETTINGS_PART = "word/settings.xml";
 const DOCUMENT_PART = "word/document.xml";
+const MIN_DOMINANT_LANGUAGE_SHARE = 0.8;
+
+type LanguageAttribute = "bidi" | "eastAsia" | "val";
 
 const sourceLanguageFromOoxmlTag = (
   rawTag: string | null,
@@ -32,9 +35,11 @@ const sourceLanguageFromOoxmlTag = (
 
 const languageAttribute = (
   element: slimdom.Element,
+  attribute: LanguageAttribute,
 ): DocumentTranslationSourceLanguageCode | null =>
   sourceLanguageFromOoxmlTag(
-    element.getAttributeNS(W_NS, "val") ?? element.getAttribute("w:val"),
+    element.getAttributeNS(W_NS, attribute) ??
+      element.getAttribute(`w:${attribute}`),
   );
 
 const parsePart = (xml: string | null): slimdom.Document | null =>
@@ -43,23 +48,61 @@ const parsePart = (xml: string | null): slimdom.Document | null =>
 const languageInside = (
   parent: slimdom.Element | null,
   localName: string,
+  attribute: LanguageAttribute,
 ): DocumentTranslationSourceLanguageCode | null => {
   const element = parent?.getElementsByTagNameNS(W_NS, localName).at(0);
-  return element ? languageAttribute(element) : null;
+  return element ? languageAttribute(element, attribute) : null;
 };
+
+const countMatches = (text: string, pattern: RegExp): number =>
+  Array.from(text.matchAll(pattern)).length;
+
+const languageAttributeForText = (text: string): LanguageAttribute => {
+  const eastAsianCount = countMatches(
+    text,
+    /\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana}|\p{Script=Hangul}/gu,
+  );
+  const bidirectionalCount = countMatches(
+    text,
+    /\p{Script=Arabic}|\p{Script=Hebrew}/gu,
+  );
+  const defaultCount =
+    countMatches(text, /\p{Letter}/gu) - eastAsianCount - bidirectionalCount;
+
+  if (eastAsianCount > defaultCount && eastAsianCount > bidirectionalCount) {
+    return "eastAsia";
+  }
+  if (
+    bidirectionalCount > defaultCount &&
+    bidirectionalCount > eastAsianCount
+  ) {
+    return "bidi";
+  }
+  return "val";
+};
+
+const documentText = (document: slimdom.Document | null): string =>
+  document
+    ? document
+        .getElementsByTagNameNS(W_NS, "t")
+        .map((element) => element.textContent)
+        .join(" ")
+    : "";
 
 const defaultRunLanguage = (
   styles: slimdom.Document | null,
+  attribute: LanguageAttribute,
 ): DocumentTranslationSourceLanguageCode | null => {
   const defaults = styles?.getElementsByTagNameNS(W_NS, "docDefaults").at(0);
-  return languageInside(defaults ?? null, "lang");
+  return languageInside(defaults ?? null, "lang", attribute);
 };
 
 const themeLanguage = (
   settings: slimdom.Document | null,
+  attribute: LanguageAttribute,
 ): DocumentTranslationSourceLanguageCode | null => {
   const element = settings?.getElementsByTagNameNS(W_NS, "themeFontLang").at(0);
-  return element ? languageAttribute(element) : null;
+  return element ? languageAttribute(element, attribute) : null;
 };
 
 const dominantExplicitLanguage = (
@@ -69,10 +112,22 @@ const dominantExplicitLanguage = (
     return null;
   }
   const counts = new Map<DocumentTranslationSourceLanguageCode, number>();
-  for (const element of document.getElementsByTagNameNS(W_NS, "lang")) {
-    const language = languageAttribute(element);
+  let totalLetters = 0;
+  for (const run of document.getElementsByTagNameNS(W_NS, "r")) {
+    const text = Array.from(run.getElementsByTagNameNS(W_NS, "t"))
+      .map((element) => element.textContent)
+      .join("");
+    const letterCount = countMatches(text, /\p{Letter}/gu);
+    if (letterCount === 0) {
+      continue;
+    }
+    const element = run.getElementsByTagNameNS(W_NS, "lang").at(0);
+    const language = element
+      ? languageAttribute(element, languageAttributeForText(text))
+      : null;
     if (language !== null) {
-      counts.set(language, (counts.get(language) ?? 0) + 1);
+      counts.set(language, (counts.get(language) ?? 0) + letterCount);
+      totalLetters += letterCount;
     }
   }
   let dominant: DocumentTranslationSourceLanguageCode | null = null;
@@ -82,6 +137,12 @@ const dominantExplicitLanguage = (
       dominant = language;
       dominantCount = count;
     }
+  }
+  if (
+    dominant === null ||
+    dominantCount / totalLetters < MIN_DOMINANT_LANGUAGE_SHARE
+  ) {
+    return null;
   }
   return dominant;
 };
@@ -104,9 +165,10 @@ export const readDocxDeclaredSourceLanguage = async (
   const styles = parsePart(stylesXml);
   const settings = parsePart(settingsXml);
   const document = parsePart(documentXml);
+  const attribute = languageAttributeForText(documentText(document));
   return (
-    defaultRunLanguage(styles) ??
-    themeLanguage(settings) ??
+    defaultRunLanguage(styles, attribute) ??
+    themeLanguage(settings, attribute) ??
     dominantExplicitLanguage(document)
   );
 };

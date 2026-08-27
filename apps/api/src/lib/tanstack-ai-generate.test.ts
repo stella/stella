@@ -138,6 +138,16 @@ describe("TanStack AI structured output generation", () => {
     ).toThrow('The "to_lower_case" action cannot be converted to JSON Schema.');
   });
 
+  test("rejects unknown JSON Schema targets instead of silently changing drafts", () => {
+    const tanStackSchema = toTanStackValibotSchema(v.string());
+
+    expect(() =>
+      tanStackSchema["~standard"].jsonSchema.input({
+        target: "future-draft",
+      }),
+    ).toThrow("Unsupported JSON Schema target: future-draft");
+  });
+
   test("projects plain JSON schemas even when they contain a standard-looking key", () => {
     const schema = projectSchemaInputJsonSchema(
       {

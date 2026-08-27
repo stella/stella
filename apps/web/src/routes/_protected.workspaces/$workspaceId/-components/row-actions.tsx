@@ -170,6 +170,10 @@ type TranslationTarget = {
   mimeType: string;
 };
 
+type TranslationDialogState =
+  | { type: "closed" }
+  | { target: TranslationTarget; type: "open" };
+
 const getTranslationTarget = ({
   cellMetadataTarget,
   entity,
@@ -267,7 +271,8 @@ export const RowActions = ({
   >([]);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isOcrPending, setIsOcrPending] = useState(false);
-  const [translationDialogOpen, setTranslationDialogOpen] = useState(false);
+  const [translationDialogState, setTranslationDialogState] =
+    useState<TranslationDialogState>({ type: "closed" });
   const { data: properties } = useQuery(propertiesOptions(workspaceId));
   const uploadVersionInputRef = useRef<HTMLInputElement>(null);
   const file = getFirstFile(entity);
@@ -283,6 +288,17 @@ export const RowActions = ({
     file,
     isBulk,
   });
+  const openTranslationDialog = () => {
+    if (translationTarget === null) {
+      return;
+    }
+    setTranslationDialogState({ target: translationTarget, type: "open" });
+  };
+  const handleTranslationDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setTranslationDialogState({ type: "closed" });
+    }
+  };
   const ocrSources = getOcrSources(entity.fields);
   let rowActionContext: RowActionContext = "row";
   if (isBulk) {
@@ -933,7 +949,7 @@ export const RowActions = ({
           isFolder={isFolder}
           onChatAbout={handleChatAbout}
           onOpenVersionHistory={openVersionHistory}
-          onTranslate={() => setTranslationDialogOpen(true)}
+          onTranslate={openTranslationDialog}
           translationTarget={translationTarget}
         />
         <RowCellOcrExportMenuActions
@@ -969,9 +985,13 @@ export const RowActions = ({
       <RowTranslationDialog
         canCreateEntity={canCreateEntity}
         entity={entity}
-        onOpenChange={setTranslationDialogOpen}
-        open={translationDialogOpen}
-        target={translationTarget}
+        onOpenChange={handleTranslationDialogOpenChange}
+        open={translationDialogState.type === "open"}
+        target={
+          translationDialogState.type === "open"
+            ? translationDialogState.target
+            : null
+        }
         workspaceId={workspaceId}
       />
       {/* Hidden file input for upload new version */}
