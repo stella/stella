@@ -3103,7 +3103,11 @@ fn has_hyphen_compound_edge(
   let start_byte = offsets.validate_offset(start)?;
   let end_byte = offsets.validate_offset(end)?;
 
-  let mut leading = full_text.get(..start_byte).unwrap_or_default().chars().rev();
+  let mut leading = full_text
+    .get(..start_byte)
+    .unwrap_or_default()
+    .chars()
+    .rev();
   if leading.next().is_some_and(is_dash)
     && leading.next().is_some_and(char::is_alphanumeric)
   {

@@ -810,8 +810,7 @@ impl PreparedAddressSeedData {
   fn unit_abbreviation_at(&self, full_text: &str, start: usize) -> bool {
     let end = unit_token_end(full_text, start);
     full_text.get(start..end).is_some_and(|token| {
-      !token.is_empty()
-        && self.unit_abbreviations.contains(&token.to_lowercase())
+      matches_unit_abbreviation(token, &self.unit_abbreviations)
     })
   }
 
@@ -1958,6 +1957,30 @@ fn unit_token_start(full_text: &str, offset: usize) -> usize {
   start
 }
 
+/// The vocabulary carries abbreviated spellings ("apt.", "ste."), but the
+/// closing dot is optional in practice and usually omitted ("Apt 5"). Accept
+/// either form: an exact lookup on "apt" otherwise ends the address span at the
+/// preceding city, leaving the unit in the clear.
+fn matches_unit_abbreviation(
+  token: &str,
+  unit_abbreviations: &BTreeSet<String>,
+) -> bool {
+  if token.is_empty() {
+    return false;
+  }
+  let lowered = token.to_lowercase();
+  if unit_abbreviations.contains(&lowered) {
+    return true;
+  }
+  if lowered.ends_with('.') {
+    return false;
+  }
+  let mut dotted = String::with_capacity(lowered.len().saturating_add(1));
+  dotted.push_str(&lowered);
+  dotted.push('.');
+  unit_abbreviations.contains(&dotted)
+}
+
 fn unit_token_end(full_text: &str, offset: usize) -> usize {
   let mut end = offset;
   while let Some((index, ch)) = next_char(full_text, end) {
@@ -2704,6 +2727,28 @@ mod tests {
   use proptest::prelude::*;
 
   use super::*;
+
+  #[test]
+  fn unit_abbreviations_match_with_and_without_the_dot() {
+    let abbreviations = ["apt.", "ste.", "unit."]
+      .into_iter()
+      .map(String::from)
+      .collect();
+
+    for token in ["Apt.", "apt.", "Apt", "apt", "STE", "Unit"] {
+      assert!(
+        matches_unit_abbreviation(token, &abbreviations),
+        "token {token:?}"
+      );
+    }
+
+    for token in ["", "apartment", "apt..", "flat"] {
+      assert!(
+        !matches_unit_abbreviation(token, &abbreviations),
+        "token {token:?}"
+      );
+    }
+  }
 
   #[test]
   fn us_state_zip_prefix_includes_optional_four_digit_extension() {
