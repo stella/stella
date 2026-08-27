@@ -130,4 +130,55 @@ describe("workspace kanban view adapter", () => {
       type: "none",
     });
   });
+
+  test("deduplicates stale persisted ordering before presenting lanes", () => {
+    if (state.subgroup === null) {
+      throw new Error("fixture must define subgroup state");
+    }
+    const duplicateOrderingState: KanbanSavedViewState = {
+      ...state,
+      subgroup: {
+        ...state.subgroup,
+        orderedGroups: [
+          { type: "option", value: "ada" },
+          { type: "option", value: "ada" },
+        ],
+      },
+    };
+    const view = resolveWorkspaceKanbanView({
+      schema,
+      state: duplicateOrderingState,
+    });
+    const matrix = buildKanbanBoardMatrix({
+      group: view.group,
+      resolveGroupValue: ({ grouping, row }) => {
+        switch (grouping.type) {
+          case "built-in":
+            return row.status;
+          case "property":
+            return row.owner;
+          case "none":
+            return null;
+          default: {
+            const exhaustive: never = grouping;
+            return exhaustive;
+          }
+        }
+      },
+      rows: [{ id: "one", owner: "ada", status: "open" }],
+      subgroup: view.subgroup,
+      uncategorizedLabel: "No value",
+    });
+    const presentation = presentKanbanBoard({
+      matrix,
+      state: duplicateOrderingState,
+    });
+
+    expect(
+      presentation.lanes.map((lane) =>
+        lane.lane.type === "group" ? lane.lane.group.value : null,
+      ),
+    ).toEqual(["ada"]);
+    expect(presentation.lanes.flatMap((lane) => lane.cells)).toHaveLength(1);
+  });
 });

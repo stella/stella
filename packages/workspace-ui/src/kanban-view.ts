@@ -187,6 +187,11 @@ const refersToGroup = (
 ): boolean =>
   references.some((reference) => sameGroupReference(reference, group));
 
+const containsGroup = (
+  groups: readonly KanbanGroup[],
+  group: KanbanGroup,
+): boolean => groups.some((candidate) => candidate.value === group.value);
+
 const orderGroups = (
   groups: readonly KanbanGroup[],
   orderedGroups: readonly KanbanSavedGroupReference[],
@@ -196,7 +201,7 @@ const orderGroups = (
     const group = groups.find((candidate) =>
       sameGroupReference(reference, candidate),
     );
-    if (group !== undefined) {
+    if (group !== undefined && !containsGroup(ordered, group)) {
       ordered.push(group);
     }
   }
