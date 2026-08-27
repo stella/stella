@@ -1787,11 +1787,16 @@ jobs:
   # tolerance can stay tight:
   # baselines and comparison render on the same image.
   marketing-screenshots:
-    needs: ci-plan
+    # A bounded poll can expire while web-build is still waiting for a runner;
+    # declare the producer so artifact consumers start only after it succeeds.
+    needs: [ci-plan, web-build]
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
-       || github.event_name == 'workflow_dispatch')
+      always()
+      && (needs.ci-plan.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.marketing_screenshots_required == 'true'
+      && (needs.ci-plan.outputs.web_build_required != 'true'
+          || needs.web-build.result == 'success')
     uses: ./.github/workflows/marketing-screenshots.yml
     permissions:
       actions: read

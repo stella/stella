@@ -390,8 +390,13 @@ describe("detect-e2e-changes", () => {
     expect(plan).toContain('echo "marketing_screenshots_required=false"');
 
     const screenshots = workflowJob("marketing-screenshots");
+    expect(screenshots).toContain("needs: [ci-plan, web-build]");
+    expect(screenshots).toContain("always()");
     expect(screenshots).toContain(
       "needs.ci-plan.outputs.marketing_screenshots_required == 'true'",
+    );
+    expect(screenshots).toContain(
+      "needs.ci-plan.outputs.web_build_required != 'true'\n          || needs.web-build.result == 'success'",
     );
     expect(screenshots).toContain(
       "uses: ./.github/workflows/marketing-screenshots.yml",
