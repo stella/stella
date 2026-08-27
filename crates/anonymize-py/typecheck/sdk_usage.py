@@ -46,6 +46,17 @@ def redact_with_default_package(text: str) -> int:
     return result.redaction.entity_count
 
 
+def create_semantic_pipeline(text: str) -> tuple[int, int, int]:
+    spanish = anonymize.create_pipeline(language="es")
+    multilingual = anonymize.create_pipeline(language=["cs", "en"])
+    all_languages = anonymize.create_pipeline(language="all")
+    return (
+        spanish.redact_text(text).redaction.entity_count,
+        multilingual.redact_text(text).redaction.entity_count,
+        all_languages.redact_text(text).redaction.entity_count,
+    )
+
+
 def redact_default_helper(text: str) -> str:
     return anonymize.redact_default_text_json(
         text,

@@ -215,6 +215,7 @@ jobs:
           rm -rf "$target"
           mkdir -p "$target"
           cp packages/anonymize/native-pipeline*.stlanonpkg "$target/"
+          cp packages/anonymize/default-pipeline-input.json.gz "$target/"
       - name: Archive build outputs
         shell: bash
         run: |
@@ -223,6 +224,7 @@ jobs:
           required=(
             packages/anonymize/dist
             packages/anonymize/native-wasm-dist
+            packages/anonymize/default-pipeline-input.json.gz
             packages/anonymize/wasm/dist
             packages/cli/dist
             packages/data/dist
@@ -241,6 +243,7 @@ jobs:
           python_packages=(
             crates/anonymize-py/python/stella_anonymize/native_packages/*.stlanonpkg
           )
+          python_default_input=crates/anonymize-py/python/stella_anonymize/native_packages/default-pipeline-input.json.gz
           sidecars=(packages/anonymize-*/stella_anonymize_napi.node)
           if [[ "${#native_packages[@]}" -eq 0 ]]; then
             echo "::error::Build did not produce a native pipeline package"
@@ -248,6 +251,10 @@ jobs:
           fi
           if [[ "${#python_packages[@]}" -eq 0 ]]; then
             echo "::error::Build did not stage the Python pipeline package"
+            exit 1
+          fi
+          if [[ ! -f "$python_default_input" ]]; then
+            echo "::error::Build did not stage the Python default pipeline input"
             exit 1
           fi
           if [[ "${#sidecars[@]}" -eq 0 ]]; then
@@ -262,9 +269,11 @@ jobs:
             packages/*/dist
             packages/anonymize/wasm/dist
             packages/anonymize/native-wasm-dist
+            packages/anonymize/default-pipeline-input.json.gz
             packages/anonymize/native-pipeline*.stlanonpkg
             packages/anonymize-*/stella_anonymize_napi.node
             crates/anonymize-py/python/stella_anonymize/native_packages/*.stlanonpkg
+            "$python_default_input"
           )
           tar -czf "$RUNNER_TEMP/ci-build.tar.gz" -- "${outputs[@]}"
       - name: Upload build outputs

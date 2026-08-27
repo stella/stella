@@ -1,5 +1,13 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    "packages/anonymize/wasm": {
+      "ignoreDependencies": ["@stll/anonymize-data"]
+    },
+    "packages/corpus": {
+      "entry": ["src/run.ts"]
+    }
+  },
   "rules": {
     "files": "off",
     "dependencies": "error",

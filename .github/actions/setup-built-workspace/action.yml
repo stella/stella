@@ -35,6 +35,7 @@ runs:
         required=(
           packages/anonymize/dist
           packages/anonymize/native-wasm-dist
+          packages/anonymize/default-pipeline-input.json.gz
           packages/anonymize/wasm/dist
           packages/cli/dist
           packages/data/dist
@@ -54,6 +55,7 @@ runs:
         python_packages=(
           crates/anonymize-py/python/stella_anonymize/native_packages/*.stlanonpkg
         )
+        python_default_input=crates/anonymize-py/python/stella_anonymize/native_packages/default-pipeline-input.json.gz
         sidecars=(packages/anonymize-*/stella_anonymize_napi.node)
         if [[ "${#native_packages[@]}" -eq 0 ]]; then
           echo "::error::Build artifact is missing native pipeline packages"
@@ -61,6 +63,10 @@ runs:
         fi
         if [[ "${#python_packages[@]}" -eq 0 ]]; then
           echo "::error::Build artifact is missing Python pipeline packages"
+          exit 1
+        fi
+        if [[ ! -f "$python_default_input" ]]; then
+          echo "::error::Build artifact is missing the Python default pipeline input"
           exit 1
         fi
         if [[ "${#sidecars[@]}" -eq 0 ]]; then

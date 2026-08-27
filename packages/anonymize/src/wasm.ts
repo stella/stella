@@ -46,6 +46,11 @@ import {
   summary_diagnostics_json as summaryDiagnosticsJsonWithBinding,
 } from "./native";
 import { createWasmBinding, isRawWasmModule } from "./wasm-binding";
+import { createSemanticPipeline } from "./create-pipeline";
+import {
+  normalizePipelineLanguageSelection,
+  type PipelineLanguageSelection,
+} from "./pipeline-language";
 
 export * from "./native";
 export { deanonymise, exportRedactionKey } from "./redact";
@@ -89,6 +94,11 @@ export type {
   ReviewDecision,
   ReviewedEntity,
 } from "./types";
+export { SUPPORTED_LANGUAGES } from "./pipeline-language";
+export type {
+  PipelineLanguageSelection,
+  SupportedLanguage,
+} from "./pipeline-language";
 // Config-driven pipeline surface: pure TS that delegates to
 // `binding.assembleStaticSearchConfigJson` / `assembleStaticSearchPackageBytes`,
 // which the wasm binding exposes with no cfg gating (crates/anonymize-napi/src/lib.rs),
@@ -128,6 +138,7 @@ const NATIVE_ASSET_DIR = "native";
 const ASSET_DIR_ENV = "STLL_ANONYMIZE_ASSET_DIR";
 const DEFAULT_PACKAGE_FILE = "native-pipeline.stlanonpkg";
 const LANGUAGE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const HTML_MEDIA_TYPES = new Set(["application/xhtml+xml", "text/html"]);
 const DEFAULT_PIPELINE_CACHE_KEY = "<default>";
 // Bounds `defaultPipelineCache` to a small, fixed number of prepared
 // pipelines: without a cap, a caller that varies `language` (e.g. many
@@ -138,6 +149,14 @@ const DEFAULT_PIPELINE_CACHE_MAX_ENTRIES = 32;
 
 let bindingPromise: Promise<NativeAnonymizeBinding> | undefined;
 const defaultPipelineCache = new Map<string, Promise<PreparedNativePipeline>>();
+const unavailablePackageUrls = new Set<string>();
+
+class PreparedPackageUnavailableError extends Error {
+  constructor(href: string, options?: ErrorOptions) {
+    super(`Prepared package is unavailable: ${href}`, options);
+    this.name = "PreparedPackageUnavailableError";
+  }
+}
 
 /** Instantiate (once) and return the wasm binding. Safe to call repeatedly:
  * the underlying wasm module is instantiated a single time and cached. */
@@ -240,16 +259,44 @@ const toPackageBytes = async (
   // from import.meta.url (loadDefaultPipeline, `new URL(..., import.meta.url)`)
   // fail there. Read those through node:fs instead of fetch.
   if (href.startsWith("file:")) {
-    return readFileUrlBytes(href);
+    try {
+      return await readFileUrlBytes(href);
+    } catch (error) {
+      if (isMissingFileError(error)) {
+        throw new PreparedPackageUnavailableError(href, { cause: error });
+      }
+      throw error;
+    }
   }
   const response = await fetch(href);
   if (!response.ok) {
+    if (response.status === 404) {
+      throw new PreparedPackageUnavailableError(href);
+    }
     throw new Error(
       `Failed to fetch prepared package (${response.status} ${response.statusText})`,
     );
   }
+  if (isHtmlResponse(response)) {
+    throw new PreparedPackageUnavailableError(href);
+  }
   return new Uint8Array(await response.arrayBuffer());
 };
+
+const isHtmlResponse = (response: Response): boolean => {
+  const contentType = response.headers.get("content-type");
+  if (contentType === null) {
+    return false;
+  }
+  const mediaType = contentType.split(";", 1).at(0)?.trim().toLowerCase();
+  return mediaType !== undefined && HTML_MEDIA_TYPES.has(mediaType);
+};
+
+const isMissingFileError = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  error.code === "ENOENT";
 
 /** Read a `file:` URL through node:fs. The import is dynamic and gated behind
  * the `file:` check (never reached in browsers); the specifier is a runtime
@@ -264,6 +311,10 @@ const readFileUrlBytes = async (fileUrl: string): Promise<Uint8Array> => {
 // --- Prepared-package loaders (the primary browser flow) ---------------------
 
 export type LoadPreparedPackageOptions = WasmBindingOptions;
+
+export type CreatePipelineOptions = WasmBindingOptions & {
+  language?: PipelineLanguageSelection;
+};
 
 /** Load a prepared package and return a pipeline ready to redact text. */
 export const loadPipeline = async (
@@ -311,6 +362,9 @@ export const loadDefaultPipeline = async (
   try {
     return await loadPipeline(defaultPackageUrl(language), options);
   } catch (error) {
+    if (!(error instanceof PreparedPackageUnavailableError)) {
+      throw error;
+    }
     const normalized =
       language === undefined ? undefined : normalizeLanguage(language);
     const baseLanguage = normalized?.split("-").at(0);
@@ -390,6 +444,50 @@ export const getDefaultPipeline = (
   touchDefaultPipelineCacheEntry(key, pipeline);
   return pipeline;
 };
+
+export const createPipeline = async ({
+  language,
+  ...bindingOptions
+}: CreatePipelineOptions = {}): Promise<PreparedNativePipeline> => {
+  const selection = normalizePipelineLanguageSelection(language);
+  if (selection.type === "all") {
+    const packageUrl = defaultPackageUrl();
+    if (!unavailablePackageUrls.has(packageUrl.href)) {
+      try {
+        return await getDefaultPipeline(undefined, bindingOptions);
+      } catch (error) {
+        if (!(error instanceof PreparedPackageUnavailableError)) {
+          throw error;
+        }
+        unavailablePackageUrls.add(packageUrl.href);
+      }
+    }
+    return createSemanticPipeline({
+      binding: await resolveBinding(bindingOptions),
+      selection,
+    });
+  }
+  const [singleLanguage, ...additionalLanguages] = selection.languages;
+  if (additionalLanguages.length === 0) {
+    const packageUrl = defaultPackageUrl(singleLanguage);
+    if (!unavailablePackageUrls.has(packageUrl.href)) {
+      try {
+        return await getDefaultPipeline(singleLanguage, bindingOptions);
+      } catch (error) {
+        if (!(error instanceof PreparedPackageUnavailableError)) {
+          throw error;
+        }
+        unavailablePackageUrls.add(packageUrl.href);
+      }
+    }
+  }
+  return createSemanticPipeline({
+    binding: await resolveBinding(bindingOptions),
+    selection,
+  });
+};
+
+export const create_pipeline = createPipeline;
 
 export const redactDefaultText = async (
   fullText: string,

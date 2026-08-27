@@ -631,11 +631,16 @@ jobs:
             echo "::error::native-pipeline.stlanonpkg missing from ${source_dir}; bun run build did not emit it"
             exit 1
           fi
+          if [[ ! -f "${source_dir}/default-pipeline-input.json.gz" ]]; then
+            echo "::error::default-pipeline-input.json.gz missing from ${source_dir}; bun run build did not emit it"
+            exit 1
+          fi
           mkdir -p "${target_dir}"
           shopt -s nullglob
           for package in "${source_dir}"/native-pipeline*.stlanonpkg; do
             cp "${package}" "${target_dir}/"
           done
+          cp "${source_dir}/default-pipeline-input.json.gz" "${target_dir}/"
 
       - name: Remove host cargo artifacts before the container build
         # "Build native pipeline packages" compiles the workspace against the

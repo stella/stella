@@ -29,15 +29,17 @@ Prepare or load the anonymizer once, then reuse it for documents.
 ```py
 import stella_anonymize as anonymize
 
-languages = anonymize.available_default_native_pipeline_languages()
-prepared = anonymize.preload_default_native_pipeline(
-    language="en" if "en" in languages else None
-)
+prepared = anonymize.create_pipeline(language="en", warmup="lazy-regex")
 text = "Contact Alice Smith at alice@example.com."
 result = prepared.redact_text(text, redact_string="***")
 
 print(result.redaction.redacted_text)
 ```
+
+`create_pipeline()` accepts one supported language, an exact non-empty
+sequence such as `["cs", "en"]`, or `"all"`. It uses a matching prepared
+artifact when one is bundled and otherwise prepares and caches the exact
+requested scope.
 
 Reverse replacement placeholders with the returned redaction map (a mapping of
 `placeholder -> original`, a sequence of `RedactionEntry`, or

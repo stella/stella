@@ -896,12 +896,9 @@ fn soft_wrapped_city_head_entries(cities: &[String]) -> Vec<String> {
   for city in cities {
     let normalized = normalize_for_search(city);
     let mut words = normalized.split_whitespace();
-    let (Some(head), Some(continuation)) = (words.next(), words.next()) else {
+    let (Some(head), Some(_)) = (words.next(), words.next()) else {
       continue;
     };
-    if !continuation.chars().next().is_some_and(char::is_lowercase) {
-      continue;
-    }
     let lower = js_lowercase(head);
     if seen.insert(lower) {
       result.push(String::from(head));
@@ -1177,6 +1174,21 @@ mod tests {
       excluded_all_caps_list: Vec::new(),
       common_words_set: HashSet::new(),
     }
+  }
+
+  #[test]
+  fn every_multi_word_city_contributes_a_soft_wrap_head() {
+    let entries = soft_wrapped_city_head_entries(&[
+      String::from("Merritt Island"),
+      String::from("Coeur d'Alene"),
+      String::from("Merritt Harbour"),
+      String::from("Oslo"),
+    ]);
+
+    assert_eq!(
+      entries,
+      vec![String::from("Merritt"), String::from("Coeur")]
+    );
   }
 
   #[test]

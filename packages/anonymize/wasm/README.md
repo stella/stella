@@ -18,13 +18,17 @@ and local document-provider tools remain Node-only. The binding is instantiated
 lazily on first use.
 
 ```ts
-import { loadDefaultPipeline } from "@stll/anonymize-wasm";
+import { createPipeline } from "@stll/anonymize-wasm";
 
-// Loads the compressed default package bundled in the tarball.
-const pipeline = await loadDefaultPipeline();
+const pipeline = await createPipeline({ language: "en" });
 const { redaction } = pipeline.redactText("A contract signed by Jan Novak.");
 console.log(redaction.redactedText);
 ```
+
+`createPipeline()` accepts one supported language, an exact non-empty
+combination such as `{ language: ["cs", "en"] }`, or `{ language: "all" }`.
+Language-scoped pipelines are assembled and cached from lazy dictionary chunks;
+`"all"` loads the bundled default prepared package.
 
 Bring your own prepared package (bytes, an `ArrayBuffer`, or a URL to fetch):
 
@@ -66,10 +70,15 @@ stllAnonymizeWasm({ packages: "none" });
 stllAnonymizeWasm({ packages: "all" });
 ```
 
-`"default"` selects the full-dictionary package that `loadDefaultPipeline()`
+`"default"` selects the full-dictionary package that `createPipeline()` with
+`language: "all"` or `loadDefaultPipeline()`
 (no argument) loads; a language code selects the scoped package that
 `loadDefaultPipeline("cs")` loads. Requesting a package that is not bundled
 fails the build.
+
+The semantic factory supports `cs`, `de`, `en`, `es`, `fr`, `hu`, `it`, `lv`,
+`pl`, `pt-br`, `ro`, `sk`, and `sv`. The lower-level artifact loader has
+bundled scoped packages for `cs`, `de`, and `en` only.
 
 Interplay with the runtime loaders: the plugin only controls which assets ship,
 not which the code asks for. Calling `loadDefaultPipeline(language)` for a

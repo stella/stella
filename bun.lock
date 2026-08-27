@@ -24,9 +24,11 @@
       "bin": {
         "stella-anonymize-build-native-package": "./scripts/build-native-pipeline-package.mjs",
       },
+      "dependencies": {
+        "@stll/anonymize-data": "^0.0.10",
+      },
       "devDependencies": {
         "@napi-rs/cli": "^3.8.6",
-        "@stll/anonymize-data": "workspace:*",
         "bun-types": "1.4.0",
         "fast-check": "^4.9.0",
         "fflate": "^0.8.3",
@@ -42,12 +44,6 @@
         "@stll/anonymize-linux-x64-gnu": "2.8.3",
         "@stll/anonymize-win32-x64-msvc": "2.8.3",
       },
-      "peerDependencies": {
-        "@stll/anonymize-data": "^0.0.10",
-      },
-      "optionalPeers": [
-        "@stll/anonymize-data",
-      ],
     },
     "packages/anonymize-darwin-arm64": {
       "name": "@stll/anonymize-darwin-arm64",
@@ -72,6 +68,9 @@
     "packages/anonymize/wasm": {
       "name": "@stll/anonymize-wasm",
       "version": "2.8.3",
+      "dependencies": {
+        "@stll/anonymize-data": "^0.0.10",
+      },
       "peerDependencies": {
         "vite": ">=5 <10",
       },

@@ -1,12 +1,18 @@
+pub mod build_support;
+
 use std::env;
 use std::error::Error;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use build_support::{copy_generated_file, report_missing_native_packages};
+
 const NATIVE_PACKAGE_SCOPED_PREFIX: &str = "native-pipeline.";
 const NATIVE_PACKAGE_SUFFIX: &str = ".stlanonpkg";
 const DEFAULT_NATIVE_PACKAGE: &str = "native-pipeline.stlanonpkg";
+const DEFAULT_PIPELINE_INPUT: &str = "default-pipeline-input.json.gz";
+const PIPELINE_LANGUAGE_SCOPES: &str = "pipeline-language-scopes.json";
 // Set by the wheel build (`bun run python:wheel`) so a wheel is never produced
 // without the bundled native pipeline packages. Plain `cargo build`/`test` runs
 // before the JS build has generated the packages, so those flows only warn.
@@ -73,24 +79,35 @@ fn copy_generated_native_packages() -> io::Result<()> {
       ),
     );
   }
+  let default_pipeline_input = source_dir.join(DEFAULT_PIPELINE_INPUT);
+  copy_generated_file(
+    &default_pipeline_input,
+    &target_dir.join(DEFAULT_PIPELINE_INPUT),
+    require_native,
+    &format!(
+      "semantic pipeline input `{DEFAULT_PIPELINE_INPUT}` is missing from {}; run `bun run build` before building the wheel",
+      source_dir.display()
+    ),
+  )?;
+  let language_scopes = source_dir
+    .join("src")
+    .join("data")
+    .join("language-scopes.json");
+  copy_generated_file(
+    &language_scopes,
+    &target_dir.join(PIPELINE_LANGUAGE_SCOPES),
+    require_native,
+    &format!(
+      "pipeline language scopes are missing from {}; reinstall the complete source tree",
+      language_scopes.display()
+    ),
+  )?;
   Ok(())
 }
 
 fn native_packages_required() -> bool {
   env::var(REQUIRE_NATIVE_PACKAGES_ENV)
     .is_ok_and(|value| !value.is_empty() && value != "0")
-}
-
-#[allow(clippy::disallowed_macros)]
-fn report_missing_native_packages(
-  require_native: bool,
-  message: &str,
-) -> io::Result<()> {
-  if require_native {
-    return Err(io::Error::new(io::ErrorKind::NotFound, message.to_owned()));
-  }
-  println!("cargo:warning={message}");
-  Ok(())
 }
 
 fn is_native_package_name(file_name: &str) -> bool {

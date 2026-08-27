@@ -49,6 +49,9 @@
   },
   "homepage": "https://github.com/stella/anonymize",
   "license": "Apache-2.0",
+  "dependencies": {
+    "@stll/anonymize-data": "^0.0.10"
+  },
   "peerDependencies": {
     "vite": ">=5 <10"
   },

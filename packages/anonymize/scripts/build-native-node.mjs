@@ -5,9 +5,13 @@ import {
   mkdirSync,
   readdirSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { gzipSync } from "node:zlib";
+
+import languageScopes from "../src/data/language-scopes.json" with { type: "json" };
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = dirname(dirname(packageRoot));
@@ -20,12 +24,20 @@ const pythonNativePackageRoot = join(
   "native_packages",
 );
 const DEFAULT_SCOPED_PACKAGE_LANGUAGES = ["cs", "de", "en"];
+const DEFAULT_PIPELINE_INPUT_FILE = "default-pipeline-input.json.gz";
 const NATIVE_PACKAGE_PATTERN =
   /^native-pipeline(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)?\.stlanonpkg$/u;
 const scopedPackageLanguages = languageListFromEnv(
   process.env.STELLA_ANONYMIZE_NATIVE_PACKAGE_LANGUAGES,
   DEFAULT_SCOPED_PACKAGE_LANGUAGES,
 );
+const supportedCityCountries = [
+  ...new Set(
+    Object.values(languageScopes.languages).flatMap(
+      ({ denyListCountries }) => denyListCountries,
+    ),
+  ),
+].toSorted();
 
 const sourceByPlatform = {
   darwin: "libstella_anonymize_napi.dylib",
@@ -64,6 +76,7 @@ if (sidecarRoot !== null) {
 removeNativePipelinePackages(packageRoot);
 removeNativePipelinePackages(pythonNativePackageRoot);
 mkdirSync(pythonNativePackageRoot, { recursive: true });
+await writeDefaultPipelineInput();
 
 const defaultPackagePath = join(packageRoot, "native-pipeline.stlanonpkg");
 buildNativePipelinePackage([
@@ -106,6 +119,31 @@ function copyNativePipelinePackageToPython(packagePath) {
   copyFileSync(
     packagePath,
     join(pythonNativePackageRoot, basename(packagePath)),
+  );
+}
+
+async function writeDefaultPipelineInput() {
+  const [
+    { DEFAULT_NATIVE_PIPELINE_CONFIG, SUPPORTED_LANGUAGES },
+    { loadDictionaryBundle },
+  ] = await Promise.all([
+    // eslint-disable-next-line stll/no-dynamic-import-specifier -- This build script imports its just-generated local SDK entry by absolute URL.
+    import(pathToFileURL(join(packageRoot, "dist", "index.mjs")).href),
+    import("@stll/anonymize-data/cities"),
+  ]);
+  const dictionaries = await loadDictionaryBundle({
+    cityCountries: supportedCityCountries,
+  });
+  const input = JSON.stringify({
+    config: DEFAULT_NATIVE_PIPELINE_CONFIG,
+    dictionaries,
+    supportedLanguages: SUPPORTED_LANGUAGES,
+  });
+  const outputPath = join(packageRoot, DEFAULT_PIPELINE_INPUT_FILE);
+  writeFileSync(outputPath, gzipSync(input));
+  copyFileSync(
+    outputPath,
+    join(pythonNativePackageRoot, DEFAULT_PIPELINE_INPUT_FILE),
   );
 }
 

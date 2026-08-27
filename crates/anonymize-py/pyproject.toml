@@ -23,4 +23,6 @@ python-source = "python"
 include = [
   { path = "python/stella_anonymize/ATTRIBUTION.md", format = "wheel" },
   { path = "python/stella_anonymize/native_packages/*.stlanonpkg", format = "wheel" },
+  { path = "python/stella_anonymize/native_packages/default-pipeline-input.json.gz", format = "wheel" },
+  { path = "python/stella_anonymize/native_packages/pipeline-language-scopes.json", format = "wheel" },
 ]

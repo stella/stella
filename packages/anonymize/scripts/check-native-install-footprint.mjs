@@ -11,7 +11,8 @@ import {
 import { fileURLToPath } from "node:url";
 
 const MEBIBYTE = 1024 * 1024;
-const MAX_NATIVE_INSTALL_BYTES = 70 * MEBIBYTE;
+const MAX_NATIVE_INSTALL_BYTES = 85 * MEBIBYTE;
+const DATA_PACKAGE_NAME = "@stll/anonymize-data";
 const npmExecutable = process.platform === "win32" ? "npm.cmd" : "npm";
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = dirname(dirname(packageRoot));
@@ -24,9 +25,13 @@ if (packageManifest.optionalDependencies?.["@stll/anonymize-wasm"]) {
     "@stll/anonymize must not install the browser WASM runtime as an optional dependency",
   );
 }
-if (Object.keys(packageManifest.dependencies ?? {}).length > 0) {
+const runtimeDependencies = Object.keys(packageManifest.dependencies ?? {});
+if (
+  runtimeDependencies.length !== 1 ||
+  runtimeDependencies.at(0) !== DATA_PACKAGE_NAME
+) {
   throw new Error(
-    "native install footprint must account for every runtime dependency",
+    `native install footprint expects ${DATA_PACKAGE_NAME} as its only runtime dependency`,
   );
 }
 
@@ -44,9 +49,17 @@ if (
 }
 
 const sidecarName = basename(sidecarDirectory);
+const dataDirectory = join(repoRoot, "packages", "data");
+const dataManifest = JSON.parse(
+  readFileSync(join(dataDirectory, "package.json"), "utf8"),
+);
+if (dataManifest.name !== DATA_PACKAGE_NAME) {
+  throw new Error(`${dataDirectory} must contain ${DATA_PACKAGE_NAME}`);
+}
 const rootBytes = packedUnpackedBytes(packageRoot);
 const sidecarBytes = packedUnpackedBytes(sidecarDirectory);
-const installedBytes = rootBytes + sidecarBytes;
+const dataBytes = packedUnpackedBytes(dataDirectory);
+const installedBytes = rootBytes + sidecarBytes + dataBytes;
 
 if (installedBytes > MAX_NATIVE_INSTALL_BYTES) {
   throw new Error(
@@ -61,6 +74,7 @@ console.log(
     nativeSidecar: sidecarName,
     ok: true,
     packedUnpackedMiB: Number((installedBytes / MEBIBYTE).toFixed(1)),
+    runtimeDependencies: [DATA_PACKAGE_NAME],
   }),
 );
 

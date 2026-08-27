@@ -29,6 +29,24 @@ from ._native import (
 
 BytesLike: TypeAlias = bytes | bytearray | memoryview
 PathLikeString: TypeAlias = str | PathLike[str]
+SupportedLanguage: TypeAlias = Literal[
+    "cs",
+    "de",
+    "en",
+    "es",
+    "fr",
+    "hu",
+    "it",
+    "lv",
+    "pl",
+    "pt-br",
+    "ro",
+    "sk",
+    "sv",
+]
+PipelineLanguageSelection: TypeAlias = (
+    SupportedLanguage | Sequence[SupportedLanguage] | Literal["all"]
+)
 
 class MaskOperatorConfig(TypedDict):
     type: Literal["mask"]
@@ -574,6 +592,11 @@ def get_default_native_pipeline(
     *,
     language: str | None = None,
     package_path: PathLikeString | None = None,
+    warmup: DefaultNativePipelineWarmup | None = None,
+) -> PreparedAnonymizer: ...
+def create_pipeline(
+    *,
+    language: PipelineLanguageSelection = "all",
     warmup: DefaultNativePipelineWarmup | None = None,
 ) -> PreparedAnonymizer: ...
 def preload_default_native_pipeline(

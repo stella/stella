@@ -81,10 +81,11 @@ Test behavior that the type system, framework, or linter cannot prove. Prefer
 invariants for offsets, replacement safety, deterministic output, and
 cross-runtime parity.
 
-Use public, minimal, synthetic fixtures. Do not commit or paste personal data,
-customer documents, repository secrets, or evaluation-only holdout examples.
-When reporting a bug, reduce it to invented text that still reproduces the
-behavior.
+Use minimal synthetic fixtures. Do not commit or paste personal data, customer
+documents, repository secrets, or evaluation-only holdout examples. When
+reporting a bug, reduce it to invented text that still reproduces the behavior.
+Provenance for the existing Czech public-corpus fixtures is documented
+[next to the fixtures](packages/anonymize/src/__test__/fixtures/contracts/cs/README.md).
 
 Report suspected vulnerabilities privately according to `SECURITY.md`; do not
 open a public issue for them.

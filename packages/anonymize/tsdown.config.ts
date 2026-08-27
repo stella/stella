@@ -5,6 +5,7 @@ export default defineConfig([
     entry: [
       "src/index.ts",
       "src/agent-surface.ts",
+      "src/build-native-package.ts",
       "src/capabilities.ts",
       "src/constants.ts",
       "src/feedback.ts",

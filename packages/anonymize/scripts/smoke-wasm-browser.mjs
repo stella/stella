@@ -11,7 +11,8 @@
  *     no cross-origin isolation headers.
  *   - A headless Chrome (system binary; see resolveChrome) navigates to the
  *     ordinary document, then dynamically imports the package browser entry
- *     (`/wasm.mjs`) and runs `loadDefaultPipeline("en")` + `redactText`. The
+ *     (`/wasm.mjs`) and runs `createPipeline({ language: "en" })` +
+ *     `redactText`. The
  *     module's own `import.meta.url` resolves the `native/` glue, wasm binary,
  *     and the `en` compressed package from the same origin.
  *
@@ -267,7 +268,7 @@ const runInPage = async ({ sample, externalDetectionDocument, pdfBase64 }) => {
       );
     }
   }
-  const pipeline = await module.loadDefaultPipeline("en");
+  const pipeline = await module.createPipeline({ language: "en" });
   const result = pipeline.redactText(sample);
   const session = pipeline.createRedactionSession("browser_archive_smoke_1");
   session.redactText(sample);

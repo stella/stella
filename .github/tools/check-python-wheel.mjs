@@ -20,8 +20,15 @@ const profile = process.env.ANONYMIZE_PYTHON_WHEEL_PROFILE ?? "ci";
 const prebuiltWheel = process.env.ANONYMIZE_PYTHON_WHEEL_PATH?.trim();
 const nativePackagePattern =
   /^native-pipeline(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)?\.stlanonpkg$/u;
+const defaultPipelineInput = "default-pipeline-input.json.gz";
 const legalFiles = ["LICENSE", "NOTICE"];
 const nativePackageSourceDir = join("packages", "anonymize");
+const pipelineLanguageScopesSource = join(
+  nativePackageSourceDir,
+  "src",
+  "data",
+  "language-scopes.json",
+);
 const attributionSource = join(nativePackageSourceDir, "ATTRIBUTION.md");
 const pythonNativePackageDir = join(
   "crates",
@@ -124,6 +131,8 @@ function assertWheelContents(wheelPath) {
     "stella_anonymize/native_packages/native-pipeline.cs.stlanonpkg",
     "stella_anonymize/native_packages/native-pipeline.de.stlanonpkg",
     "stella_anonymize/native_packages/native-pipeline.en.stlanonpkg",
+    "stella_anonymize/native_packages/default-pipeline-input.json.gz",
+    "stella_anonymize/native_packages/pipeline-language-scopes.json",
   ];
   const missing = required.filter((file) => !files.has(file));
   if (missing.length > 0) {
@@ -131,6 +140,14 @@ function assertWheelContents(wheelPath) {
   }
   if (![...files].some(isNativeExtension)) {
     throw new Error("wheel is missing the native _native extension");
+  }
+  const languageScopesEntry =
+    "stella_anonymize/native_packages/pipeline-language-scopes.json";
+  if (
+    readWheelEntry(wheelPath, languageScopesEntry) !==
+    readFileSync(pipelineLanguageScopesSource, "utf8")
+  ) {
+    throw new Error("wheel pipeline language scopes must match the SDK source");
   }
   for (const file of legalFiles) {
     const suffix = `.dist-info/licenses/${file}`;
@@ -171,6 +188,17 @@ function syncNativePipelinePackages() {
   if (!copied.includes("native-pipeline.stlanonpkg")) {
     throw new Error("native-pipeline.stlanonpkg has not been built");
   }
+  const defaultPipelineInputSource = join(
+    nativePackageSourceDir,
+    defaultPipelineInput,
+  );
+  if (!existsSync(defaultPipelineInputSource)) {
+    throw new Error(`${defaultPipelineInput} has not been built`);
+  }
+  copyFileSync(
+    defaultPipelineInputSource,
+    join(pythonNativePackageDir, defaultPipelineInput),
+  );
 }
 
 function assertPythonAttributionMatchesRuntimePackage() {
@@ -237,6 +265,7 @@ function smokeInstalledWheel(wheelPath) {
         "    'PreparedSearch',",
         "    'available_default_native_pipeline_languages',",
         "    'anonymize_docx',",
+        "    'create_pipeline',",
         "    'extract_docx_text',",
         "    'get_default_native_pipeline',",
         "    'inspect_pdf',",
@@ -314,6 +343,24 @@ function smokeInstalledWheel(wheelPath) {
         "    raise SystemExit('default package cache did not reuse prepared search')",
         "if anonymize.preload_default_native_pipeline(language='en') is not default_prepared:",
         "    raise SystemExit('preload did not return cached default package')",
+        "semantic_es = anonymize.create_pipeline(language='es')",
+        "if semantic_es is not anonymize.create_pipeline(language='es'):",
+        "    raise SystemExit('semantic pipeline cache did not reuse exact scope')",
+        "semantic_multi = anonymize.create_pipeline(language=['cs', 'en'])",
+        "if semantic_multi is semantic_es:",
+        "    raise SystemExit('distinct semantic scopes reused one pipeline')",
+        "semantic_all = anonymize.create_pipeline(language='all')",
+        "if semantic_all is not anonymize.get_default_native_pipeline():",
+        "    raise SystemExit('all-language semantic pipeline missed default cache')",
+        "try:",
+        "    anonymize.create_pipeline(language='nl')",
+        "except ValueError:",
+        "    pass",
+        "else:",
+        "    raise SystemExit('semantic pipeline accepted an unsupported language')",
+        "semantic_result = semantic_es.redact_text('Email test@example.com')",
+        "if semantic_result.redaction.entity_count != 1:",
+        "    raise SystemExit('semantic pipeline did not redact the email fixture')",
         "if anonymize.__version__ != anonymize.native_package_version():",
         "    raise SystemExit('module version did not match native version')",
         "print(json.dumps({",

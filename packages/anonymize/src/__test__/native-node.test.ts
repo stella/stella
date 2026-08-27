@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,6 +25,8 @@ import {
   available_default_native_pipeline_languages,
   availableDefaultNativePipelineLanguages,
   create_native_pipeline_from_default_package,
+  create_pipeline,
+  createPipeline,
   createNativePipelineFromDefaultPackage,
   createNativePipelineFromPackageFile,
   diagnostics_json,
@@ -44,6 +52,7 @@ import {
   redact_text_json,
   redact_text_stream_json,
   summary_diagnostics_json,
+  type PipelineLanguageSelection,
 } from "../native-node";
 import {
   SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS,
@@ -68,6 +77,15 @@ const packageJsonVersion = (): string => {
 const PACKAGE_VERSION = packageJsonVersion();
 const MISMATCHED_PACKAGE_VERSION =
   PACKAGE_VERSION === "0.0.0" ? "999.999.999" : "0.0.0";
+
+const captureCreatePipelineFailure = async (options: unknown) => {
+  try {
+    await Promise.resolve(Reflect.apply(createPipeline, undefined, [options]));
+  } catch (error) {
+    return error;
+  }
+  throw new Error("createPipeline did not reject invalid options");
+};
 
 describe("native node loader", () => {
   test("uses the embedded loader for explicit host target values", () => {
@@ -595,6 +613,109 @@ describe("native node loader", () => {
     }
   });
 
+  test("creates and caches an exact multi-language pipeline", async () => {
+    const assembledConfigs: unknown[] = [];
+    const binding = fakeNativeBinding(PACKAGE_VERSION, {
+      onAssembleStaticSearchPackageBytes: (configBytes) => {
+        assembledConfigs.push(
+          JSON.parse(new TextDecoder().decode(configBytes)),
+        );
+      },
+    });
+
+    const first = await createPipeline({
+      binding,
+      language: ["en", "cs", "en"],
+    });
+    const second = await createPipeline({
+      binding,
+      language: ["cs", "en"],
+    });
+
+    expect(second).toBe(first);
+    expect(assembledConfigs).toHaveLength(1);
+    expect(assembledConfigs.at(0)).toMatchObject({ languages: ["cs", "en"] });
+  });
+
+  test("bounds the exact-scope pipeline cache", async () => {
+    let preparedPipelineCount = 0;
+    const binding = fakeNativeBinding(PACKAGE_VERSION, {
+      onPreparedPackageBytes: () => {
+        preparedPipelineCount += 1;
+      },
+    });
+    const selections = [
+      ["cs", "de"],
+      ["cs", "en"],
+      ["cs", "es"],
+      ["cs", "fr"],
+      ["cs", "hu"],
+      ["cs", "it"],
+      ["cs", "lv"],
+      ["cs", "pl"],
+      ["cs", "pt-br"],
+    ] as const satisfies readonly PipelineLanguageSelection[];
+
+    const first = await createPipeline({
+      binding,
+      language: selections[0],
+    });
+    for (const language of selections.slice(1)) {
+      await createPipeline({ binding, language });
+    }
+    const repeated = await createPipeline({
+      binding,
+      language: selections[0],
+    });
+
+    expect(repeated).not.toBe(first);
+    expect(preparedPipelineCount).toBe(selections.length + 1);
+  });
+
+  test("uses an existing single-language artifact", async () => {
+    const packagePath = fileURLToPath(
+      new URL("../../native-pipeline.en.stlanonpkg", import.meta.url),
+    );
+    const createdFixture = !existsSync(packagePath);
+    try {
+      if (createdFixture) {
+        writeFileSync(packagePath, Uint8Array.of(41, 42, 43));
+      }
+      let trustedLoads = 0;
+      const binding = fakeNativeBinding(PACKAGE_VERSION, {
+        onTrustedPreparedPackageBytesWithoutCache: () => {
+          trustedLoads += 1;
+        },
+      });
+
+      const first = await createPipeline({ binding, language: "en" });
+      const second = await createPipeline({ binding, language: "en" });
+
+      expect(second).toBe(first);
+      expect(trustedLoads).toBe(1);
+    } finally {
+      if (createdFixture) {
+        rmSync(packagePath, { force: true });
+      }
+    }
+  });
+
+  test("rejects unsupported semantic language selections before binding", async () => {
+    const unsupported = await captureCreatePipelineFailure({ language: "nl" });
+    const empty = await captureCreatePipelineFailure({ language: [] });
+
+    expect(unsupported).toBeInstanceOf(Error);
+    expect(unsupported).toHaveProperty(
+      "message",
+      expect.stringContaining("Unsupported pipeline language"),
+    );
+    expect(empty).toBeInstanceOf(Error);
+    expect(empty).toHaveProperty(
+      "message",
+      expect.stringContaining("must not be empty"),
+    );
+  });
+
   test("shared default package SDK helpers expose snake-case aliases", () => {
     const aliasFunctions: Record<
       (typeof SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS)[number],
@@ -602,6 +723,7 @@ describe("native node loader", () => {
     > = {
       available_default_native_pipeline_languages,
       create_native_pipeline_from_default_package,
+      create_pipeline,
       get_default_native_pipeline,
       preload_default_native_pipeline,
       read_default_native_pipeline_package_file,
@@ -709,6 +831,30 @@ describe("native node loader", () => {
         },
       ]),
     ).toThrow('Default native pipeline warmup must be "lazy-regex" or "none"');
+  });
+
+  test("rejects unknown scoped pipeline warmup modes before assembly", async () => {
+    let assemblyCount = 0;
+    const binding = fakeNativeBinding(PACKAGE_VERSION, {
+      onAssembleStaticSearchPackageBytes: () => {
+        assemblyCount += 1;
+      },
+    });
+
+    const failure = await captureCreatePipelineFailure({
+      binding,
+      language: ["es", "sv"],
+      warmup: "eager",
+    });
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).toHaveProperty(
+      "message",
+      expect.stringContaining(
+        'Default native pipeline warmup must be "lazy-regex" or "none"',
+      ),
+    );
+    expect(assemblyCount).toBe(0);
   });
 
   test("shared SDK helpers delegate through the native binding", () => {
@@ -939,6 +1085,7 @@ type FakeNativeBindingOptions = {
   onRedactStaticEntitiesJson?: () => string;
   onDiagnosticsStreamJson?: (onBatch: NativeDiagnosticsBatchCallback) => string;
   onWarmLazyRegex?: () => void;
+  onAssembleStaticSearchPackageBytes?: (configBytes: Uint8Array) => void;
 };
 
 const fakeNativeBinding = (
@@ -1006,7 +1153,10 @@ const fakeNativeBinding = (
     prepareStaticSearchCompressedPackageBytes: () =>
       options.compressedPackageBytes ?? new Uint8Array(),
     assembleStaticSearchConfigJson: () => new Uint8Array(),
-    assembleStaticSearchPackageBytes: () => new Uint8Array(),
+    assembleStaticSearchPackageBytes: (configBytes) => {
+      options.onAssembleStaticSearchPackageBytes?.(configBytes);
+      return new Uint8Array();
+    },
     assembleStaticSearchCompressedPackageBytes: () => new Uint8Array(),
   };
 };

@@ -44,10 +44,14 @@ Contributing to the project is welcome.
 npm install @stll/anonymize
 ```
 
-```ts
-import { deanonymise, getDefaultNativePipeline } from "@stll/anonymize";
+Requires Node.js 20 or newer or Bun 1.4 or newer. Prebuilt native binaries ship
+for macOS (`arm64`, `x64`), glibc-based Linux (`arm64`, `x64`), and Windows
+(`x64`). Alpine Linux and other musl-based systems are not supported.
 
-const pipeline = getDefaultNativePipeline({ language: "en" });
+```ts
+import { createPipeline, deanonymise } from "@stll/anonymize";
+
+const pipeline = await createPipeline({ language: "en" });
 const { redaction } = pipeline.redactText(
   "Contact Alice Smith at alice@example.com.",
 );
@@ -60,11 +64,13 @@ console.log(original);
 // Contact Alice Smith at alice@example.com.
 ```
 
-Create the pipeline once and reuse it. Language-scoped packages are bundled for
-English, Czech, and German; an all-language package is bundled as well. Built-in
-data covers `cs`, `de`, `en`, `es`, `fr`, `hu`, `it`, `pl`, `pt-br`, `ro`,
-`sk`, and `sv`. The [Node package guide](packages/anonymize/README.md) covers
-sessions, custom detections, operators, diagnostics, and prepared packages; the
+Create the pipeline once and reuse it. Select one language, an exact combination
+such as `{ language: ["cs", "en"] }`, or `{ language: "all" }`. Supported codes
+are `cs`, `de`, `en`, `es`, `fr`, `hu`, `it`, `lv`, `pl`, `pt-br`, `ro`, `sk`,
+and `sv`. The factory uses a bundled prepared artifact when one matches and
+otherwise prepares the exact requested scope on first use. The
+[Node package guide](packages/anonymize/README.md) covers sessions, custom
+detections, operators, diagnostics, and prepared packages; the
 [capability manifest](packages/anonymize/src/capabilities.ts) is the exact list
 of public runtime surfaces and entity types.
 
@@ -75,9 +81,9 @@ npm install @stll/anonymize-wasm
 ```
 
 ```ts
-import { loadDefaultPipeline } from "@stll/anonymize-wasm";
+import { createPipeline } from "@stll/anonymize-wasm";
 
-const pipeline = await loadDefaultPipeline("en");
+const pipeline = await createPipeline({ language: "en" });
 const { redaction } = pipeline.redactText("A contract signed by Alice Smith.");
 ```
 
@@ -96,7 +102,7 @@ uv add stella-anonymize-core
 ```py
 import stella_anonymize as anonymize
 
-pipeline = anonymize.preload_default_native_pipeline(language="en")
+pipeline = anonymize.create_pipeline(language="en", warmup="lazy-regex")
 result = pipeline.redact_text(
     "Contact Alice Smith at alice@example.com."
 )
@@ -212,9 +218,9 @@ rendering, OCR, resource-limit, and verification contracts.
 Platform-specific Node.js binary packages are installed automatically as
 optional dependencies of `@stll/anonymize`. Node.js and Bun use the same native
 binding; Bun 1.4 or newer is required. A clean macOS arm64 npm install from the
-packed artifacts uses about 63 MiB on disk; CI caps the packed SDK plus every
-native sidecar at 70 MiB. Install `@stll/anonymize-wasm` separately only when
-you need the browser runtime.
+packed artifacts uses about 80 MiB on disk; CI caps the packed SDK, data
+package, and every native sidecar combination at 85 MiB. Install
+`@stll/anonymize-wasm` separately only when you need the browser runtime.
 
 ## Benchmarks
 

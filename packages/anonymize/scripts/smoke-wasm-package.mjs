@@ -72,6 +72,7 @@ const nativeNodeEntry = await import(pathToFileURL(nativeNodeEntryPath).href);
 const {
   getBinding,
   native_package_version: nativePackageVersion,
+  createPipeline,
   loadPipeline,
   loadDefaultPipeline,
   deanonymise,
@@ -105,6 +106,16 @@ assertFunctionMembers(
   binding.NativePreparedSearch,
   NATIVE_BINDING_PARITY_MEMBERS.factories,
 );
+
+const packageOnlyBinding = {
+  ...binding,
+  assembleStaticSearchConfigJson: () => {
+    throw new Error("bundled language package was assembled at runtime");
+  },
+};
+for (const language of ["cs", "de", "en"]) {
+  await createPipeline({ binding: packageOnlyBinding, language });
+}
 
 const docxBytes = minimalDocx("Contact 😀 Alice Smith");
 const nodeBinding = nativeNodeEntry.loadNativeAnonymizeBinding();
@@ -267,6 +278,18 @@ if (defaultEntities.length !== entities.length) {
     `loadDefaultPipeline() entity count ${defaultEntities.length} != byte-loaded ${entities.length}`,
   );
 }
+for (const city of ["Buenos Aires", "Monterrey"]) {
+  const cityEntities = defaultPipeline.redactText(
+    `Address: ${city}`,
+  ).resolvedEntities;
+  if (
+    !cityEntities.some(
+      ({ label, text }) => label === "address" && text === city,
+    )
+  ) {
+    throw new Error(`all-language package did not detect city: ${city}`);
+  }
+}
 
 // Regional locale tags fall back to the shipped base-language package: no
 // en-us package is bundled, so this must load native-pipeline.en.stlanonpkg.
@@ -283,6 +306,7 @@ console.log(
     entityCount: entities.length,
     labels: entities.map((entity) => entity.label),
     deanonymiseRoundTrip: true,
+    allLanguageCityScope: true,
     loadDefaultPipeline: true,
     regionalLanguageFallback: true,
     docxParity: true,

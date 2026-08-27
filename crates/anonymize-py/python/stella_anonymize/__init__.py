@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import gzip
 import math
 import re
 from collections.abc import Callable, Mapping, Sequence
@@ -113,6 +114,8 @@ __all__ = [
     "DiagnosticsBatchCallback",
     "ResultEventCallback",
     "DefaultNativePipelineWarmup",
+    "PipelineLanguageSelection",
+    "SupportedLanguage",
     "DEFAULT_NATIVE_PIPELINE_WARMUPS",
     "NativeSearchPackageInput",
     "PreparedAnonymizer",
@@ -133,6 +136,7 @@ __all__ = [
     "assemble_static_search_package_bytes",
     "available_default_native_pipeline_languages",
     "create_native_pipeline_from_default_package",
+    "create_pipeline",
     "deanonymise",
     "diagnostics_json",
     "diagnostics_stream_json",
@@ -818,6 +822,10 @@ class PreparedAnonymizer:
 
 PreparedSearch = PreparedAnonymizer
 _warmed_default_native_pipelines: WeakSet[PreparedAnonymizer] = WeakSet()
+SupportedLanguage = str
+PipelineLanguageSelection = SupportedLanguage | Sequence[SupportedLanguage]
+_DEFAULT_PIPELINE_INPUT = "default-pipeline-input.json.gz"
+_PIPELINE_LANGUAGE_SCOPES = "pipeline-language-scopes.json"
 
 
 def prepare_search_package(
@@ -928,6 +936,28 @@ def get_default_native_pipeline(
     )
 
 
+def create_pipeline(
+    *,
+    language: PipelineLanguageSelection = "all",
+    warmup: DefaultNativePipelineWarmup | None = None,
+) -> PreparedAnonymizer:
+    selection = _normalize_pipeline_language_selection(language)
+    resolved_warmup = _normalize_default_native_pipeline_warmup(warmup)
+    if selection is None:
+        return get_default_native_pipeline(warmup=resolved_warmup)
+    _validate_supported_pipeline_languages(selection)
+    if len(selection) == 1 and _default_native_pipeline_language_package_exists(
+        selection[0]
+    ):
+        return get_default_native_pipeline(
+            language=selection[0], warmup=resolved_warmup
+        )
+    return _apply_default_native_pipeline_warmup(
+        _get_scoped_pipeline(selection),
+        resolved_warmup,
+    )
+
+
 def preload_default_native_pipeline(
     *,
     language: str | None = None,
@@ -1020,6 +1050,117 @@ def _get_default_native_pipeline(
         package_path=package_path,
         warmup="none",
     )
+
+
+@lru_cache(maxsize=1)
+def _default_pipeline_input() -> tuple[
+    dict[str, object], dict[str, object], frozenset[str]
+]:
+    try:
+        resource = files(__name__).joinpath("native_packages", _DEFAULT_PIPELINE_INPUT)
+        payload = json.loads(gzip.decompress(resource.read_bytes()))
+    except (FileNotFoundError, ModuleNotFoundError, OSError) as error:
+        raise FileNotFoundError(
+            "Semantic language selection data is unavailable; reinstall "
+            "stella-anonymize-core from a complete wheel"
+        ) from error
+    if not isinstance(payload, dict):
+        raise TypeError("Default pipeline input must be an object")
+    config = payload.get("config")
+    dictionaries = payload.get("dictionaries")
+    supported_languages = payload.get("supportedLanguages")
+    if not isinstance(config, dict) or not isinstance(dictionaries, dict):
+        raise TypeError("Default pipeline input is missing config or dictionaries")
+    if not isinstance(supported_languages, list) or not all(
+        isinstance(language, str) for language in supported_languages
+    ):
+        raise TypeError("Default pipeline input has invalid supported languages")
+    supported = frozenset(supported_languages)
+    if supported != _supported_pipeline_languages():
+        raise TypeError("Default pipeline input language metadata does not match")
+    return config, dictionaries, supported
+
+
+@lru_cache(maxsize=1)
+def _supported_pipeline_languages() -> frozenset[str]:
+    try:
+        resource = files(__name__).joinpath(
+            "native_packages", _PIPELINE_LANGUAGE_SCOPES
+        )
+        payload = json.loads(resource.read_bytes())
+    except (FileNotFoundError, ModuleNotFoundError, OSError) as error:
+        raise FileNotFoundError(
+            "Pipeline language metadata is unavailable; reinstall "
+            "stella-anonymize-core from a complete wheel"
+        ) from error
+    if not isinstance(payload, dict):
+        raise TypeError("Pipeline language metadata must be an object")
+    languages = payload.get("languages")
+    if not isinstance(languages, dict) or not languages:
+        raise TypeError("Pipeline language metadata has invalid languages")
+    if not all(
+        isinstance(language, str) and language and isinstance(scope, dict)
+        for language, scope in languages.items()
+    ):
+        raise TypeError("Pipeline language metadata has invalid language scopes")
+    return frozenset(languages)
+
+
+def _normalize_pipeline_language_selection(
+    selection: PipelineLanguageSelection,
+) -> tuple[str, ...] | None:
+    if isinstance(selection, str):
+        normalized = selection.strip().lower()
+        if normalized == "all":
+            return None
+        requested = (normalized,)
+    elif isinstance(selection, Sequence) and not isinstance(
+        selection, (bytes, bytearray, memoryview)
+    ):
+        requested = tuple(
+            language.strip().lower()
+            if isinstance(language, str)
+            else _raise_pipeline_language_type_error()
+            for language in selection
+        )
+    else:
+        raise TypeError("Pipeline language must be a string or a sequence of strings")
+    if not requested:
+        raise ValueError("Pipeline language selection must not be empty")
+    return tuple(sorted(set(requested)))
+
+
+def _validate_supported_pipeline_languages(languages: tuple[str, ...]) -> None:
+    supported_languages = _supported_pipeline_languages()
+    unsupported = sorted(set(languages).difference(supported_languages))
+    if unsupported:
+        raise ValueError(
+            "Unsupported pipeline language(s): "
+            f"{', '.join(unsupported)}; expected one of: "
+            f"{', '.join(sorted(supported_languages))}"
+        )
+
+
+def _raise_pipeline_language_type_error() -> str:
+    raise TypeError("Pipeline language codes must be strings")
+
+
+@lru_cache(maxsize=8)
+def _get_scoped_pipeline(languages: tuple[str, ...]) -> PreparedAnonymizer:
+    default_config, dictionaries, _ = _default_pipeline_input()
+    config = dict(default_config)
+    if len(languages) == 1:
+        config["language"] = languages[0]
+        config.pop("languages", None)
+    else:
+        config["languages"] = list(languages)
+        config.pop("language", None)
+    package_bytes = assemble_static_search_package_bytes(
+        json.dumps(config, separators=(",", ":")),
+        json.dumps(dictionaries, separators=(",", ":")),
+        None,
+    )
+    return _prepared_anonymizer_from_trusted_package_bytes(package_bytes)
 
 
 @lru_cache(maxsize=8)

@@ -6,7 +6,12 @@ import { pathToFileURL } from "node:url";
 import {
   DEFAULT_NATIVE_PIPELINE_CONFIG,
   prepareNativePipelinePackage,
+  SUPPORTED_LANGUAGES,
 } from "../dist/index.mjs";
+import {
+  applyPipelineLanguageScope,
+  defaultDictionaryBundleOptions,
+} from "../dist/build-native-package.mjs";
 import { loadNativeAnonymizeBinding } from "../dist/native-node.mjs";
 
 const args = parseArgs(process.argv.slice(2));
@@ -100,20 +105,20 @@ function requiredValue(values, index, option) {
 
 async function loadPackageInput(options) {
   const input = await loadBasePackageInput(options);
+  const scopedConfig = applyPipelineLanguageScope(
+    applyCliLanguageScope(input.config, options),
+  );
   const withDictionaries =
-    !options.defaultDictionaries || input.config.dictionaries !== undefined
-      ? input
+    !options.defaultDictionaries || scopedConfig.dictionaries !== undefined
+      ? { ...input, config: scopedConfig }
       : {
           ...input,
           config: {
-            ...input.config,
-            dictionaries: await loadDefaultDictionaries(),
+            ...scopedConfig,
+            dictionaries: await loadDefaultDictionaries(scopedConfig),
           },
         };
-  return {
-    ...withDictionaries,
-    config: applyCliLanguageScope(withDictionaries.config, options),
-  };
+  return withDictionaries;
 }
 
 async function loadBasePackageInput(options) {
@@ -171,6 +176,11 @@ function normalizeLanguageOption(value, option) {
   if (language.length === 0) {
     throw new Error(`${option} requires a non-empty language code`);
   }
+  if (!SUPPORTED_LANGUAGES.includes(language)) {
+    throw new Error(
+      `Unsupported pipeline language ${JSON.stringify(value)}; expected one of: ${SUPPORTED_LANGUAGES.join(", ")}`,
+    );
+  }
   return language;
 }
 
@@ -185,7 +195,7 @@ function normalizeLanguageList(value) {
   return languages;
 }
 
-async function loadDefaultDictionaries() {
+async function loadDefaultDictionaries(pipelineConfig) {
   let loaded;
   try {
     // The bundle loads city dictionaries, so it ships in the data package's
@@ -203,7 +213,9 @@ async function loadDefaultDictionaries() {
       "@stll/anonymize-data/cities does not export loadDictionaryBundle",
     );
   }
-  return loaded.loadDictionaryBundle();
+  return loaded.loadDictionaryBundle(
+    defaultDictionaryBundleOptions(pipelineConfig),
+  );
 }
 
 function formatError(error) {

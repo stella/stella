@@ -71,23 +71,22 @@ export const applyPipelineLanguageScope = (
 
   const nameCorpusLanguages: string[] = [];
   const denyListCountries: string[] = [];
+  let hasResolvedScope = false;
   for (const language of languages) {
     const scope = resolveLanguageScope(language);
     if (scope === null) {
       continue;
     }
+    hasResolvedScope = true;
     uniquePush(nameCorpusLanguages, scope.nameCorpusLanguages ?? []);
     uniquePush(denyListCountries, scope.denyListCountries ?? []);
   }
 
   const next: Partial<PipelineConfig> = {};
-  if (
-    config.nameCorpusLanguages === undefined &&
-    nameCorpusLanguages.length > 0
-  ) {
+  if (config.nameCorpusLanguages === undefined && hasResolvedScope) {
     next.nameCorpusLanguages = nameCorpusLanguages;
   }
-  if (config.denyListCountries === undefined && denyListCountries.length > 0) {
+  if (config.denyListCountries === undefined && hasResolvedScope) {
     next.denyListCountries = denyListCountries;
   }
 

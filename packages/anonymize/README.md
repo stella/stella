@@ -19,46 +19,61 @@ is enabled.
 
 ```bash
 bun add @stll/anonymize
-# Optional data bundle for deny lists and dictionaries
-bun add @stll/anonymize-data
 ```
 
 The Node.js and Bun package is Rust-native and requires Node.js 20 or newer or
-Bun 1.4 or newer. Browser/WASM support is maintained through
-`@stll/anonymize-wasm`, which wraps the same native core.
+Bun 1.4 or newer. Prebuilt binaries ship for macOS (`arm64`, `x64`),
+glibc-based Linux (`arm64`, `x64`), and Windows (`x64`). Alpine Linux and other
+musl-based systems are not supported. Browser/WASM support is maintained
+through `@stll/anonymize-wasm`, which wraps the same native core.
 
 ## Usage: Node.js native SDK
 
 ```ts
-import {
-  availableDefaultNativePipelineLanguages,
-  getDefaultNativePipeline,
-} from "@stll/anonymize/native-node";
+import { createPipeline } from "@stll/anonymize/native-node";
 
-const languages = availableDefaultNativePipelineLanguages();
-const anonymizer = getDefaultNativePipeline(
-  languages.includes("en") ? { language: "en" } : {},
-);
+const anonymizer = await createPipeline({ language: "en" });
 const text = "Contact Alice Smith at alice@example.com.";
 const result = anonymizer.redactText(text);
 
 console.log(result.redaction.redactedText);
 ```
 
-Call `getDefaultNativePipeline()` once during service startup and reuse the returned anonymizer. The package ships with a prepared native package, so the normal request path avoids rebuilding search automata. Use `preloadDefaultNativePipeline()` or `preloadDefaultNativePipelineAsync()` when the first document should not pay lazy regex warm-up.
+Call `createPipeline()` once during service startup and reuse the returned
+anonymizer. Pass `warmup: "lazy-regex"` when the first document should not pay
+lazy regex warm-up.
 
-If your deployment knows the document language up front, select a scoped package at startup. The build emits `en`, `cs`, and `de` scoped packages by default, and `STELLA_ANONYMIZE_NATIVE_PACKAGE_LANGUAGES` can replace that list or be set to an empty value to build only the all-language package:
+The semantic language selector accepts one supported code, an exact non-empty
+combination, or `"all"`:
+
+```ts
+await createPipeline({ language: "es" });
+await createPipeline({ language: ["cs", "en"] });
+await createPipeline({ language: "all" });
+```
+
+Supported codes are `cs`, `de`, `en`, `es`, `fr`, `hu`, `it`, `lv`, `pl`,
+`pt-br`, `ro`, `sk`, and `sv`. Unsupported and empty selections fail before a
+pipeline is loaded. The factory uses a matching prepared artifact when one is
+bundled; otherwise it prepares and caches the exact requested scope. It never
+substitutes the all-language behavior for a narrower request.
+
+`getDefaultNativePipeline()` and related loaders remain the lower-level
+prepared-artifact API. The distributed package bundles the all-language
+artifact plus smaller `cs`, `de`, and `en` artifacts.
+
+Source builds emit the same three scoped artifacts by default.
+`STELLA_ANONYMIZE_NATIVE_PACKAGE_LANGUAGES` can replace that list or be set to
+an empty value to build only the all-language package:
 
 ```bash
 STELLA_ANONYMIZE_NATIVE_PACKAGE_LANGUAGES=en,cs,fr bun run build
 ```
 
-```ts
-const anonymizer = getDefaultNativePipeline({ language: "en" });
-```
-
-Regional codes use the exact package when present and otherwise fall back to
-the base language package, so `en-US` can use the shipped `en` artifact.
+For the lower-level artifact loader, regional codes use the exact package when
+present and otherwise fall back to the base language package, so `en-US` can
+use the shipped `en` artifact. The semantic factory accepts only the supported
+codes listed above.
 
 For build-time generated packages or caller-owned data, prepare the package before runtime and load the bytes in the process that handles documents.
 

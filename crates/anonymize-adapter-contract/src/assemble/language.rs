@@ -4,9 +4,8 @@
 //! per-field language matchers used by the ported getters:
 //! `selectedLanguageKeys` (`detectors/regex.ts`, date scoping) and
 //! `signingClauseLanguageMatches` (`build-unified-search.ts`, zone scoping).
-//! `applyPipelineLanguageScope` is intentionally not ported here: it only
-//! rewrites `nameCorpusLanguages` / `denyListCountries`, neither of which
-//! affects any field this slice assembles.
+//! `applyPipelineLanguageScope` is ported here because name-corpus and
+//! deny-list assembly both consume its derived scopes.
 
 use std::collections::HashSet;
 
@@ -84,6 +83,7 @@ pub(super) fn apply_pipeline_language_scope(
 
   let mut name_corpus_languages: Vec<String> = Vec::new();
   let mut deny_list_countries: Vec<String> = Vec::new();
+  let mut has_resolved_scope = false;
   for language in &languages {
     let normalized = normalize_language_key(language);
     if normalized.is_empty() {
@@ -97,17 +97,20 @@ pub(super) fn apply_pipeline_language_scope(
     let Some(scope) = scope else {
       continue;
     };
+    has_resolved_scope = true;
     unique_push(&mut name_corpus_languages, &scope.name_corpus_languages);
     unique_push(&mut deny_list_countries, &scope.deny_list_countries);
   }
 
   Ok(ScopedLanguages {
-    name_corpus_languages: config.name_corpus_languages.clone().or_else(|| {
-      (!name_corpus_languages.is_empty()).then_some(name_corpus_languages)
-    }),
-    deny_list_countries: config.deny_list_countries.clone().or_else(|| {
-      (!deny_list_countries.is_empty()).then_some(deny_list_countries)
-    }),
+    name_corpus_languages: config
+      .name_corpus_languages
+      .clone()
+      .or_else(|| has_resolved_scope.then_some(name_corpus_languages)),
+    deny_list_countries: config
+      .deny_list_countries
+      .clone()
+      .or_else(|| has_resolved_scope.then_some(deny_list_countries)),
   })
 }
 
@@ -236,4 +239,53 @@ pub(super) fn signing_clause_language_matches(
     normalized == normalized_entry
       || normalized.split('-').next() == Some(normalized_entry.as_str())
   })
+}
+
+#[cfg(test)]
+mod tests {
+  #![allow(clippy::expect_used)]
+
+  use stella_anonymize_core::assemble::{
+    PipelineConfig, StandaloneStreetDetection,
+  };
+
+  use super::apply_pipeline_language_scope;
+
+  fn pipeline_config(language: &str) -> PipelineConfig {
+    PipelineConfig {
+      threshold: 0.3,
+      enable_trigger_phrases: true,
+      enable_regex: true,
+      languages: None,
+      language: Some(String::from(language)),
+      enable_legal_forms: Some(true),
+      enable_name_corpus: true,
+      name_corpus_languages: None,
+      enable_deny_list: true,
+      deny_list_countries: None,
+      deny_list_regions: None,
+      deny_list_exclude_categories: None,
+      custom_deny_list: None,
+      custom_regexes: None,
+      enable_gazetteer: false,
+      enable_countries: Some(true),
+      enable_confidence_boost: true,
+      enable_coreference: true,
+      enable_zone_classification: Some(true),
+      enable_hotword_rules: Some(true),
+      standalone_street_detection: StandaloneStreetDetection::default(),
+      labels: Vec::new(),
+      workspace_id: String::from("language-scope-test"),
+      dictionaries: None,
+    }
+  }
+
+  #[test]
+  fn preserves_a_supported_languages_empty_name_scope() {
+    let scoped = apply_pipeline_language_scope(&pipeline_config("lv"))
+      .expect("Latvian language scope should parse");
+
+    assert_eq!(scoped.name_corpus_languages, Some(Vec::new()));
+    assert_eq!(scoped.deny_list_countries, Some(vec![String::from("LV")]));
+  }
 }

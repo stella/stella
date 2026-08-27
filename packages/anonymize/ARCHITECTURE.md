@@ -21,6 +21,8 @@ types, load prepared packages, and call the same Rust core.
   prepared-package loader.
 - `packages/anonymize/src/native-pipeline.ts`: build-time/package-time adapter
   from TypeScript config/data files into the Rust prepared package contract.
+- `packages/anonymize/src/create-pipeline.ts`: semantic language selection and
+  exact-scope preparation shared by the Node and browser SDKs.
 
 ## Native Distribution
 
@@ -41,10 +43,14 @@ and release matrix entries aligned through
 3. Optionally call `warmLazyRegex()` during service startup.
 4. Call `redactText()`, `redactTextJson()`, diagnostics, or stream helpers.
 
-The default product path ships an all-language package plus optional scoped
-language packages. When a caller knows the document language, use
-`getDefaultNativePipeline({ language })` so the runtime uses the smaller scoped
-artifact when available.
+The default product path is `createPipeline({ language })` in TypeScript and
+`create_pipeline(language=...)` in Python. The selector accepts one supported
+language, an exact non-empty language list, or `"all"`. A matching bundled
+prepared package is the fast path; otherwise the SDK assembles and caches the
+exact requested scope from the shared dictionaries. Artifact availability is
+not part of the semantic API and a narrower request never falls back to
+all-language behavior. Lower-level prepared-package loaders remain available
+for caller-owned artifacts and deployment control.
 
 The browser distribution uses `wasm32-unknown-unknown` and wasm-bindgen. It has
 ordinary unshared WebAssembly memory and does not depend on WASI, workers,

@@ -20,6 +20,7 @@
         "dist/**",
         "wasm/dist/**",
         "native-wasm-dist/**",
+        "default-pipeline-input.json.gz",
         "native-pipeline.stlanonpkg",
         "native-pipeline.*.stlanonpkg"
       ]

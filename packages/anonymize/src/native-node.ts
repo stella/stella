@@ -28,6 +28,17 @@ import {
   summary_diagnostics_json as summaryDiagnosticsJsonWithBinding,
 } from "./native";
 import { assertSupportedBunRuntime } from "./bun-version";
+import { createSemanticPipeline } from "./create-pipeline";
+import {
+  normalizePipelineLanguageSelection,
+  type PipelineLanguageSelection,
+} from "./pipeline-language";
+
+export { SUPPORTED_LANGUAGES } from "./pipeline-language";
+export type {
+  PipelineLanguageSelection,
+  SupportedLanguage,
+} from "./pipeline-language";
 
 export * from "./native";
 export {
@@ -68,6 +79,11 @@ export type NativeSdkOptions = LoadNativeBindingOptions & {
 
 export type NativeSdkPackageOptions = NativeSdkOptions & {
   compressed?: boolean;
+};
+
+export type CreatePipelineOptions = NativeSdkOptions & {
+  language?: PipelineLanguageSelection;
+  warmup?: DefaultNativePipelineWarmup;
 };
 
 export type DefaultNativePipelinePackageOptions = LoadNativeBindingOptions & {
@@ -432,6 +448,39 @@ export const getDefaultNativePipeline = (
 export const get_default_native_pipeline = (
   options: DefaultNativePipelinePackageOptions = {},
 ): PreparedNativePipeline => getDefaultNativePipeline(options);
+
+export const createPipeline = async ({
+  language,
+  warmup,
+  ...bindingOptions
+}: CreatePipelineOptions = {}): Promise<PreparedNativePipeline> => {
+  const selection = normalizePipelineLanguageSelection(language);
+  if (selection.type === "all") {
+    return getDefaultNativePipeline({
+      ...bindingOptions,
+      ...(warmup !== undefined ? { warmup } : {}),
+    });
+  }
+  const [singleLanguage, ...additionalLanguages] = selection.languages;
+  if (
+    additionalLanguages.length === 0 &&
+    existsSync(defaultNativePipelineLanguagePackageUrl(singleLanguage))
+  ) {
+    return getDefaultNativePipeline({
+      ...bindingOptions,
+      language: singleLanguage,
+      ...(warmup !== undefined ? { warmup } : {}),
+    });
+  }
+  const resolvedWarmup = normalizeDefaultNativePipelineWarmup(warmup);
+  const pipeline = await createSemanticPipeline({
+    binding: resolveNativeSdkBinding(bindingOptions),
+    selection,
+  });
+  return applyDefaultNativePipelineWarmup(pipeline, resolvedWarmup);
+};
+
+export const create_pipeline = createPipeline;
 
 export const preloadDefaultNativePipeline = (
   options: DefaultNativePipelinePackageOptions = {},
