@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -169,10 +169,6 @@ export const ViewSwitcher = ({
   const createLayoutOptions = hasOverviewView
     ? LAYOUT_OPTIONS.filter((layoutType) => layoutType !== "overview")
     : LAYOUT_OPTIONS;
-  const defaultPreviewKind = createLayoutOptions[0] ?? "table";
-  const [previewKind, setPreviewKind] = useState<ViewLayoutPreviewKind | null>(
-    defaultPreviewKind,
-  );
   const disallowedTemplateLayouts = new Set<ViewLayoutType>(
     hasOverviewView ? ["overview"] : [],
   );
@@ -191,11 +187,7 @@ export const ViewSwitcher = ({
   };
 
   const addControl = canCreateView ? (
-    <Menu
-      onOpenChange={() => {
-        setPreviewKind(defaultPreviewKind);
-      }}
-    >
+    <Menu>
       <MenuTrigger
         aria-label={t("common.add")}
         render={
@@ -209,61 +201,50 @@ export const ViewSwitcher = ({
         <PlusIcon />
       </MenuTrigger>
       <MenuPopup>
-        <MenuPreviewLayout
-          preview={
-            <ViewLayoutPreview kind={previewKind} workspaceId={workspaceId} />
-          }
-        >
-          {createLayoutOptions.map((layoutType) => {
-            const Icon = layoutIcons[layoutType];
-            return (
-              <MenuItem
-                key={layoutType}
-                onClick={() => {
-                  const viewId = crypto.randomUUID();
-                  createView.mutate(
-                    {
-                      id: viewId,
-                      // `layoutType` lets each locale inflect "New {layout}"
-                      // for the layout noun's gender (ICU select); the name
-                      // stays distinct from the default-view-name set.
-                      name: t("workspaces.views.newView", {
-                        layout: t(LAYOUT_LABEL_KEYS[layoutType]),
-                        layoutType,
-                      }),
-                      layout: defaultLayouts[layoutType],
+        <ViewLayoutMenuContent
+          options={[
+            ...createLayoutOptions.map((layoutType) => ({
+              kind: layoutType,
+              icon: layoutIcons[layoutType],
+              label: t(LAYOUT_LABEL_KEYS[layoutType]),
+              onSelect: () => {
+                const viewId = crypto.randomUUID();
+                createView.mutate(
+                  {
+                    id: viewId,
+                    // `layoutType` lets each locale inflect "New {layout}"
+                    // for the layout noun's gender (ICU select); the name
+                    // stays distinct from the default-view-name set.
+                    name: t("workspaces.views.newView", {
+                      layout: t(LAYOUT_LABEL_KEYS[layoutType]),
+                      layoutType,
+                    }),
+                    layout: defaultLayouts[layoutType],
+                  },
+                  {
+                    onSuccess: () => {
+                      onViewChange(viewId);
                     },
-                    {
-                      onSuccess: () => {
-                        onViewChange(viewId);
-                      },
-                      onError: () => {
-                        stellaToast.add({
-                          title: t("errors.failedToCreateView"),
-                          type: "error",
-                        });
-                      },
+                    onError: () => {
+                      stellaToast.add({
+                        title: t("errors.failedToCreateView"),
+                        type: "error",
+                      });
                     },
-                  );
-                }}
-                onFocus={() => setPreviewKind(layoutType)}
-                onMouseEnter={() => setPreviewKind(layoutType)}
-              >
-                <Icon />
-                {t(LAYOUT_LABEL_KEYS[layoutType])}
-              </MenuItem>
-            );
-          })}
-          <MenuSeparator />
-          <MenuItem
-            onClick={() => setIsTemplatePickerOpen(true)}
-            onFocus={() => setPreviewKind("template")}
-            onMouseEnter={() => setPreviewKind("template")}
-          >
-            <BookmarkIcon />
-            {t("workspaces.views.useTemplate")}
-          </MenuItem>
-        </MenuPreviewLayout>
+                  },
+                );
+              },
+            })),
+            {
+              kind: "template",
+              icon: BookmarkIcon,
+              label: t("workspaces.views.useTemplate"),
+              onSelect: () => setIsTemplatePickerOpen(true),
+              separatorBefore: true,
+            },
+          ]}
+          workspaceId={workspaceId}
+        />
       </MenuPopup>
     </Menu>
   ) : null;
@@ -362,6 +343,52 @@ export const ViewSwitcher = ({
   );
 };
 
+type ViewLayoutMenuOption = {
+  kind: ViewLayoutPreviewKind;
+  icon: React.ElementType;
+  label: string;
+  onSelect: () => void;
+  separatorBefore?: boolean;
+};
+
+type ViewLayoutMenuContentProps = {
+  options: ViewLayoutMenuOption[];
+  workspaceId: string;
+};
+
+const ViewLayoutMenuContent = ({
+  options,
+  workspaceId,
+}: ViewLayoutMenuContentProps) => {
+  const [highlightedKind, setHighlightedKind] =
+    useState<ViewLayoutPreviewKind | null>(null);
+  const previewKind = options.some(({ kind }) => kind === highlightedKind)
+    ? highlightedKind
+    : (options.at(0)?.kind ?? null);
+
+  return (
+    <MenuPreviewLayout
+      preview={
+        <ViewLayoutPreview kind={previewKind} workspaceId={workspaceId} />
+      }
+    >
+      {options.map(({ kind, icon: Icon, label, onSelect, separatorBefore }) => (
+        <Fragment key={kind}>
+          {separatorBefore && <MenuSeparator />}
+          <MenuItem
+            onClick={onSelect}
+            onFocus={() => setHighlightedKind(kind)}
+            onMouseEnter={() => setHighlightedKind(kind)}
+          >
+            <Icon />
+            {label}
+          </MenuItem>
+        </Fragment>
+      ))}
+    </MenuPreviewLayout>
+  );
+};
+
 type ViewRenameEditorProps = {
   workspaceId: string;
   view: WorkspaceView;
@@ -451,9 +478,6 @@ const useViewActionsMenu = ({
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [convertPreview, setConvertPreview] = useState<ViewLayoutType | null>(
-    null,
-  );
 
   const hasActions = canUpdateView || canCreateView || canDeleteView;
 
@@ -516,39 +540,27 @@ const useViewActionsMenu = ({
           </MenuItem>
         )}
         {canUpdateView && (
-          <MenuSub
-            onOpenChange={(open) => {
-              if (!open) {
-                setConvertPreview(null);
-              }
-            }}
-          >
+          <MenuSub>
             <MenuSubTrigger>
               <Icon />
               {t("common.convertTo")}
             </MenuSubTrigger>
             <MenuSubPopup>
-              <MenuPreviewLayout
-                preview={
-                  <ViewLayoutPreview
-                    kind={convertPreview}
-                    workspaceId={workspaceId}
-                  />
-                }
-              >
-                {LAYOUT_OPTIONS.flatMap((l) => {
-                  if (l === layout.type || l === "overview") {
+              <ViewLayoutMenuContent
+                options={LAYOUT_OPTIONS.flatMap((layoutType) => {
+                  if (layoutType === layout.type || layoutType === "overview") {
                     return [];
                   }
-                  const LayoutIcon = layoutIcons[l];
-                  return (
-                    <MenuItem
-                      key={l}
-                      onClick={() => {
+                  return [
+                    {
+                      kind: layoutType,
+                      icon: layoutIcons[layoutType],
+                      label: t(LAYOUT_LABEL_KEYS[layoutType]),
+                      onSelect: () => {
                         convertView.mutate(
                           {
                             viewId: id,
-                            targetType: l,
+                            targetType: layoutType,
                           },
                           {
                             onError: () => {
@@ -559,16 +571,12 @@ const useViewActionsMenu = ({
                             },
                           },
                         );
-                      }}
-                      onFocus={() => setConvertPreview(l)}
-                      onMouseEnter={() => setConvertPreview(l)}
-                    >
-                      <LayoutIcon />
-                      {t(LAYOUT_LABEL_KEYS[l])}
-                    </MenuItem>
-                  );
+                      },
+                    },
+                  ];
                 })}
-              </MenuPreviewLayout>
+                workspaceId={workspaceId}
+              />
             </MenuSubPopup>
           </MenuSub>
         )}
