@@ -77,6 +77,36 @@ try {
       `tarball embeds ${embeddedDependencyFiles.length} dependency file(s) under dist/node_modules; declare the dependency in runtime or peer metadata (first: ${embeddedDependencyFiles.at(0)})`,
     );
   }
+  const testArtifacts = [...packed].filter((file) =>
+    /(?:^|\/)(?:fixtures\/|[^/]+\.(?:test|spec)\.[cm]?[jt]sx?$|[^/]+\.playwright\.[cm]?[jt]sx?$)/u.test(
+      file,
+    ),
+  );
+  if (testArtifacts.length > 0) {
+    failures.push(
+      `tarball includes ${testArtifacts.length} test or fixture artifact(s) (first: ${testArtifacts.at(0)})`,
+    );
+  }
+
+  const bundledTestRuntimes = (
+    await Promise.all(
+      [...packed]
+        .filter((file) => file.startsWith("dist/") && file.endsWith(".js"))
+        .map(async (file) => ({
+          contents: await Bun.file(path.join(pkgDir, file)).text(),
+          file,
+        })),
+    )
+  )
+    .filter(({ contents }) =>
+      /from\s*["'](?:node:|@playwright\/test|playwright)["']/u.test(contents),
+    )
+    .map(({ file }) => file);
+  if (bundledTestRuntimes.length > 0) {
+    failures.push(
+      `tarball bundles Node or Playwright imports (first: ${bundledTestRuntimes.at(0)})`,
+    );
+  }
 
   // One check per subpath, run together: each pushes its own findings, so the
   // report names every broken entry rather than the first one.

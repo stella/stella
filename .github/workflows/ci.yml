@@ -545,6 +545,24 @@ jobs:
             echo "TURBO_SCM_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
           fi
 
+      - name: Check UI browser test scope
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        id: ui-browser-tests
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
+            .github/actions/setup-playwright/action.yml \
+            .github/workflows/ci.yml \
+            bun.lock \
+            package.json \
+            packages/ui; then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "required=false" >> "$GITHUB_OUTPUT"
+
       - name: Check i18n sync
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun run i18n:check
@@ -803,6 +821,14 @@ jobs:
           args=()
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
           bun run test -- --concurrency=2 "${args[@]}"
+
+      - name: Install UI browser test runtime
+        if: steps.ui-browser-tests.outputs.required == 'true'
+        uses: ./.github/actions/setup-playwright
+
+      - name: Test UI browser interactions
+        if: steps.ui-browser-tests.outputs.required == 'true'
+        run: bun --filter @stll/ui test:browser
 
       - name: Property-test convention guard
         run: |
