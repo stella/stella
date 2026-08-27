@@ -25,7 +25,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ReviewDiffDeletion,
   ReviewDiffInsertion,
-} from "@stll/ui/review/review-diff-text";
+} from "@stll/ui/review-diff-text";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";

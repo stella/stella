@@ -32,7 +32,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
-import { UNKNOWN_AUTHOR_LABEL } from "@stll/ui/review/review-author-avatar";
+import { UNKNOWN_AUTHOR_LABEL } from "@stll/ui/review-author-avatar";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
 import {

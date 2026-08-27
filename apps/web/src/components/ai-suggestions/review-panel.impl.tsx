@@ -30,20 +30,20 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Input } from "@stll/ui/input";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
-import type { ReviewDecisionState } from "@stll/ui/review/review-decision-actions";
-import { ReviewDecisionActions } from "@stll/ui/review/review-decision-actions";
-import type { ReviewDiffSegmentType } from "@stll/ui/review/review-diff-text";
+import type { ReviewDecisionState } from "@stll/ui/review-decision-actions";
+import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
+import type { ReviewDiffSegmentType } from "@stll/ui/review-diff-text";
 import {
   ReviewDiffDeletion,
   ReviewDiffInsertion,
   ReviewDiffText,
-} from "@stll/ui/review/review-diff-text";
-import type { ReviewSeverityLevel } from "@stll/ui/review/review-severity-dot";
+} from "@stll/ui/review-diff-text";
+import type { ReviewSeverityLevel } from "@stll/ui/review-severity-dot";
 import {
   ReviewSeverityDot,
   reviewSeverityTone,
-} from "@stll/ui/review/review-severity-dot";
-import { ReviewStatusBadge } from "@stll/ui/review/review-status-badge";
+} from "@stll/ui/review-severity-dot";
+import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import {
   Select,
   SelectItem,

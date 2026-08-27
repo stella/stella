@@ -39,16 +39,16 @@ import {
   InspectorTitle,
 } from "@stll/ui/inspector";
 import { LoaderState } from "@stll/ui/loader";
-import { ReviewOutOfDateNotice } from "@stll/ui/review/review-out-of-date-notice";
-import type { ReviewOutOfDateReason } from "@stll/ui/review/review-out-of-date-notice";
-import type { ReviewSeverityLevel } from "@stll/ui/review/review-severity-dot";
+import { ReviewOutOfDateNotice } from "@stll/ui/review-out-of-date-notice";
+import type { ReviewOutOfDateReason } from "@stll/ui/review-out-of-date-notice";
+import type { ReviewSeverityLevel } from "@stll/ui/review-severity-dot";
 import {
   ReviewSeverityDot,
   reviewSeverityTone,
   ReviewStatusDot,
-} from "@stll/ui/review/review-severity-dot";
-import type { ReviewStatusTone } from "@stll/ui/review/review-status-badge";
-import { ReviewStatusBadge } from "@stll/ui/review/review-status-badge";
+} from "@stll/ui/review-severity-dot";
+import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
+import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { TextSeparator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";

@@ -1,6 +1,6 @@
 import { useTranslations } from "use-intl";
 
-import { ReviewStatusBadge } from "@stll/ui/review/review-status-badge";
+import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 

@@ -6,9 +6,9 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@stll/ui/popover";
-import { ReviewDecisionActions } from "@stll/ui/review/review-decision-actions";
-import type { ReviewStatusTone } from "@stll/ui/review/review-status-badge";
-import { ReviewStatusBadge } from "@stll/ui/review/review-status-badge";
+import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
+import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
+import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 

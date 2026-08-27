@@ -1,6 +1,6 @@
 import { useTranslations } from "use-intl";
 
-import { ReviewCommentCard } from "@stll/ui/review/review-comment-card";
+import { ReviewCommentCard } from "@stll/ui/review-comment-card";
 import { ScrollArea } from "@stll/ui/scroll-area";
 
 import { useFormatter } from "@/i18n/formatting-context";

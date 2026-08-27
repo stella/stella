@@ -7,7 +7,7 @@ import { Button } from "@stll/ui/button";
 import {
   ReviewDiffDeletion,
   ReviewDiffInsertion,
-} from "@stll/ui/review/review-diff-text";
+} from "@stll/ui/review-diff-text";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 

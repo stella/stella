@@ -65,7 +65,7 @@ Review-like surfaces (document review, playbook findings, AI
 suggestions, skill proposals, version history, comments) render
 their status badges, severity dots, accept/reject controls,
 comment cards, out-of-date notices and diff text through
-`@stll/ui/review/*`. Do not mint a local chip class map, a local
+`@stll/ui/review-*`. Do not mint a local chip class map, a local
 `<ins>`/`<del>` style, or a bespoke accept/reject button pair: map
 the surface's vocabulary onto `ReviewStatusTone` /
 `ReviewSeverityLevel` with a total `as const satisfies

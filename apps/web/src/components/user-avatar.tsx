@@ -2,7 +2,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import {
   ReviewAuthorAvatar,
   UNKNOWN_AUTHOR_LABEL,
-} from "@stll/ui/review/review-author-avatar";
+} from "@stll/ui/review-author-avatar";
 import { cn } from "@stll/ui/utils";
 
 import { getDisplayName } from "@/lib/get-display-name";

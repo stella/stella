@@ -36,7 +36,7 @@ import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
-import { ReviewDecisionActions } from "@stll/ui/review/review-decision-actions";
+import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import {
   Select,
   SelectItem,
