@@ -38,6 +38,7 @@ import {
   canMoveMatterFolder,
   MAX_FOLDER_NAME_LENGTH,
   matterFolderPath,
+  matterFolderMoveDestinations,
   reparentPendingMatterFolder,
   resolveMatterTarget,
   selectExistingMatterTarget,
@@ -153,6 +154,7 @@ const FolderDragDropRow = ({
   const rowRef = useRef<HTMLDivElement>(null);
   const dragHandleRef = useRef<HTMLButtonElement>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
+  const [isMoveMenuOpen, setIsMoveMenuOpen] = useState(false);
   const handleMove = useLatestCallback(onMove);
   const sourceKind = source?.kind;
   const sourceFolderId =
@@ -186,21 +188,14 @@ const FolderDragDropRow = ({
     }
   })();
   const moveDestinations =
-    keyboardSourceData === undefined
+    !isMoveMenuOpen || keyboardSourceData === undefined
       ? []
-      : [
-          {
-            parentId: null,
-            name: t("workspaces.copyToMatter.rootFolder"),
-          },
-          ...folders.map((folder) => ({
-            parentId: folder.entityId,
-            name: folder.name,
-          })),
-        ].filter(({ parentId }) =>
-          canDropMatterFolder(keyboardSourceData, folders, parentId),
+      : matterFolderMoveDestinations(
+          folders,
+          keyboardSourceData,
+          t("workspaces.copyToMatter.rootFolder"),
         );
-  const handleEnabled = sourceEnabled && moveDestinations.length > 0;
+  const handleEnabled = sourceEnabled;
 
   useExternalSyncEffect(() => {
     const element = rowRef.current;
@@ -294,7 +289,7 @@ const FolderDragDropRow = ({
 
   const dragHandle =
     source === undefined ? null : (
-      <Menu>
+      <Menu onOpenChange={setIsMoveMenuOpen}>
         <Tooltip
           content={t("workspaces.copyToMatter.dragFolder")}
           render={
@@ -590,6 +585,18 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   /** Set by Escape so the blur that follows unmounting does not stage the draft. */
   const draftCancelledRef = useRef(false);
 
+  /** Reveal a destination and every ancestor that can otherwise hide it. */
+  const expandFolderPath = (folderId: string | null) => {
+    if (folders === undefined) {
+      return;
+    }
+    const path = matterFolderPath(folders, folderId);
+    if (path.length === 0) {
+      return;
+    }
+    setExpandedFolders((previous) => new Set([...previous, ...path]));
+  };
+
   const moveFolder = useLatestCallback(
     (source: MatterFolderDragData, targetParentId: string | null) => {
       switch (source.kind) {
@@ -598,11 +605,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
             return;
           }
           onChange(reparentPendingMatterFolder(value, targetParentId));
-          if (targetParentId !== null) {
-            setExpandedFolders((previous) =>
-              new Set(previous).add(targetParentId),
-            );
-          }
+          expandFolderPath(targetParentId);
           return;
         }
         case "existing": {
@@ -612,11 +615,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
           ) {
             return;
           }
-          if (targetParentId !== null) {
-            setExpandedFolders((previous) =>
-              new Set(previous).add(targetParentId),
-            );
-          }
+          expandFolderPath(targetParentId);
           moveEntity.mutate(
             {
               workspaceId,
@@ -684,19 +683,6 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
       }
       return next;
     });
-  };
-
-  /**
-   * Reveal a destination: the folder itself and every folder above it. The
-   * new-folder row lives inside `value.parentId`, so a collapsed ancestor
-   * anywhere up the chain would hide it.
-   */
-  const expandFolderPath = (folderId: string | null) => {
-    const path = matterFolderPath(folders, folderId);
-    if (path.length === 0) {
-      return;
-    }
-    setExpandedFolders((prev) => new Set([...prev, ...path]));
   };
 
   /**

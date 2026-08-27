@@ -128,6 +128,98 @@ type FolderLink = {
   parentId: string | null;
 };
 
+type NamedFolderLink = FolderLink & {
+  name: string;
+};
+
+type MatterFolderMoveSource =
+  | { kind: "existing"; folderId: string; parentId: string | null }
+  | { kind: "pending"; parentId: string | null };
+
+export type MatterFolderMoveDestination = {
+  parentId: string | null;
+  name: string;
+};
+
+/**
+ * Build the keyboard move menu only when it opens. One child graph finds an
+ * existing folder's descendants, and one name index identifies destinations
+ * that need an ancestor path to disambiguate them.
+ */
+export const matterFolderMoveDestinations = (
+  folders: readonly NamedFolderLink[],
+  source: MatterFolderMoveSource,
+  rootName: string,
+): MatterFolderMoveDestination[] => {
+  const folderById = new Map(
+    folders.map((folder) => [folder.entityId, folder]),
+  );
+  if (source.kind === "existing" && !folderById.has(source.folderId)) {
+    return [];
+  }
+
+  const childrenByParentId = new Map<string, string[]>();
+  const nameCounts = new Map<string, number>();
+  for (const folder of folders) {
+    nameCounts.set(folder.name, (nameCounts.get(folder.name) ?? 0) + 1);
+    if (folder.parentId === null) {
+      continue;
+    }
+    const childIds = childrenByParentId.get(folder.parentId);
+    if (childIds === undefined) {
+      childrenByParentId.set(folder.parentId, [folder.entityId]);
+    } else {
+      childIds.push(folder.entityId);
+    }
+  }
+
+  const invalidParentIds = new Set<string | null>([source.parentId]);
+  if (source.kind === "existing") {
+    const remaining = [source.folderId];
+    while (remaining.length > 0) {
+      const folderId = remaining.pop();
+      if (folderId === undefined || invalidParentIds.has(folderId)) {
+        continue;
+      }
+      invalidParentIds.add(folderId);
+      remaining.push(...(childrenByParentId.get(folderId) ?? []));
+    }
+  }
+
+  const destinationName = (folder: NamedFolderLink) => {
+    if (nameCounts.get(folder.name) === 1) {
+      return folder.name;
+    }
+    const names: string[] = [];
+    const seen = new Set<string>();
+    let current: NamedFolderLink | undefined = folder;
+    while (current !== undefined && !seen.has(current.entityId)) {
+      seen.add(current.entityId);
+      names.push(current.name);
+      current =
+        current.parentId === null
+          ? undefined
+          : folderById.get(current.parentId);
+    }
+    return names.toReversed().join(" / ");
+  };
+
+  const destinations: MatterFolderMoveDestination[] = [];
+  if (!invalidParentIds.has(null)) {
+    destinations.push({ parentId: null, name: rootName });
+  }
+  for (const folder of folders) {
+    if (invalidParentIds.has(folder.entityId)) {
+      continue;
+    }
+    destinations.push({
+      parentId: folder.entityId,
+      name: destinationName(folder),
+    });
+  }
+  return destinations;
+};
+
 /**
  * A folder and every folder above it, root-first. Expanding this whole path is
  * what keeps the new-folder row visible: expanding only the immediate parent

@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import {
   canMoveMatterFolder,
   matterFolderPath,
+  matterFolderMoveDestinations,
   reparentPendingMatterFolder,
   resolveMatterTarget,
   selectExistingMatterTarget,
@@ -201,6 +202,62 @@ describe("moving folders in the matter picker", () => {
   test("rejects folders and destinations outside the loaded tree", () => {
     expect(canMoveMatterFolder(TREE, "missing", null)).toBe(false);
     expect(canMoveMatterFolder(TREE, "child", "missing")).toBe(false);
+  });
+});
+
+describe("choosing a folder move destination with the keyboard", () => {
+  const TREE = [
+    { entityId: "correspondence", parentId: null, name: "Correspondence" },
+    { entityId: "client", parentId: "correspondence", name: "Client" },
+    { entityId: "archive", parentId: "correspondence", name: "Archive" },
+    { entityId: "other", parentId: null, name: "Other" },
+    { entityId: "other-archive", parentId: "other", name: "Archive" },
+  ];
+
+  test("excludes no-op and cyclic parents from the menu", () => {
+    expect(
+      matterFolderMoveDestinations(
+        TREE,
+        {
+          kind: "existing",
+          folderId: "correspondence",
+          parentId: null,
+        },
+        "(Root folder)",
+      ),
+    ).toEqual([
+      { parentId: "other", name: "Other" },
+      { parentId: "other-archive", name: "Other / Archive" },
+    ]);
+  });
+
+  test("disambiguates duplicate names with their ancestor paths", () => {
+    expect(
+      matterFolderMoveDestinations(
+        TREE,
+        { kind: "existing", folderId: "client", parentId: "correspondence" },
+        "(Root folder)",
+      ),
+    ).toContainEqual({
+      parentId: "other-archive",
+      name: "Other / Archive",
+    });
+  });
+
+  test("keeps every valid parent for a pending folder", () => {
+    const destinations = matterFolderMoveDestinations(
+      TREE,
+      { kind: "pending", parentId: "other" },
+      "(Root folder)",
+    );
+
+    expect(destinations).toContainEqual({
+      parentId: "client",
+      name: "Client",
+    });
+    expect(destinations.some(({ parentId }) => parentId === "other")).toBe(
+      false,
+    );
   });
 });
 
