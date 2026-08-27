@@ -20,6 +20,7 @@ so a bundler keeps only what is imported:
 
 ```tsx
 import { Button } from "@stll/ui/button";
+import { ApplicationShell } from "@stll/ui/application-shell";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { Inspector, InspectorDock } from "@stll/ui/inspector";
 import { cn } from "@stll/ui/utils";
@@ -28,6 +29,25 @@ import { cn } from "@stll/ui/utils";
 One flat subpath per module: `@stll/ui/<name>` for components, hooks, and
 helpers alike. `@stll/ui` re-exports all of them under one specifier for
 convenience; the subpaths are the real surface, and in-repo code uses those.
+
+## Application shell
+
+`ApplicationShell` keeps the navigation, page chrome and content, and an
+optional inline-end inspector as sibling columns. Pass the host application's
+surfaces as slots; route state, navigation behavior, and inspector behavior
+remain in the host.
+
+```tsx
+import { ApplicationShell } from "@stll/ui/application-shell";
+
+<ApplicationShell
+  header={<PageHeader />}
+  inspector={<InspectorDock />}
+  sidebar={<Navigation />}
+>
+  <Page />
+</ApplicationShell>;
+```
 
 ### Deprecated grouped subpaths
 

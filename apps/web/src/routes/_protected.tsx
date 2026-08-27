@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { ApplicationShell } from "@stll/ui/application-shell";
 import { Button } from "@stll/ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
@@ -42,7 +43,6 @@ import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
 import { ShortcutEchoHud } from "@/components/shortcut-echo-hud";
 import {
-  SidebarInset,
   SidebarProvider,
   SidebarTrigger,
   useSidebar,
@@ -376,10 +376,14 @@ function ProtectedComponent() {
             <ChatEditorProvider>
               <GlobalChatMentionRegistration />
               <DragAndDropLiveRegion />
-              <AppSidebar />
+              <ApplicationShell
+                header={<ProtectedContent />}
+                inspector={<WorkspaceInspectorSidePanel />}
+                sidebar={<AppSidebar />}
+              >
+                <Outlet />
+              </ApplicationShell>
               <CreateMatterDialog />
-              <ProtectedContent />
-              <WorkspaceInspectorSidePanel />
               <ShortcutEchoHud />
               <KeyboardShortcutsDialog />
             </ChatEditorProvider>
@@ -533,7 +537,7 @@ function ProtectedContent() {
   );
 
   return (
-    <SidebarInset className="flex flex-col">
+    <>
       <ApiVersionMismatchBanner />
       <SelfhostUpdateBanner />
       <header
@@ -584,8 +588,7 @@ function ProtectedContent() {
           </MenuPopup>
         </Menu>
       </header>
-      <Outlet />
-    </SidebarInset>
+    </>
   );
 }
 
