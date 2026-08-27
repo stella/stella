@@ -3,12 +3,13 @@ import { describe, expect, test } from "bun:test";
 import type { Transaction } from "@/api/db/root";
 import { toSafeId } from "@/api/lib/branded-types";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
+import { mintAuthProviderIdValue } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // `user.id` and `member.user_id` are text columns holding whatever the auth
-// provider mints. Better Auth's default generator produces base62 text, so
-// these two shapes are both stored ids, not just accepted input.
-const AUTH_GENERATED_ID = "AuthGeneratedIdAuthGeneratedId12";
+// provider mints. The default generator produces base62 text and a configured
+// one may produce UUIDs, so both shapes are stored ids, not just accepted input.
+const AUTH_GENERATED_ID = mintAuthProviderIdValue();
 const UUID_ID = "0191d14d-9a63-7d2e-a021-06053e542c85";
 
 const txReturning = (rows: { userId: string }[]) =>

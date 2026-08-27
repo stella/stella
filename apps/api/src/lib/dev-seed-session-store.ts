@@ -5,7 +5,7 @@ import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { sessionCookieName } from "@/api/lib/auth-cookie-name";
 import type { SafeId } from "@/api/lib/branded-types";
-import { parseExternalOrganizationId } from "@/api/lib/safe-id-boundaries";
+import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 
 const DEV_SEED_SESSION_LIFETIME_MS = 2 * 60 * 60 * 1000;
 
@@ -22,7 +22,8 @@ export const resolveMemberDevOrganization = async (
   organizationIdValue: string,
   userId: SafeId<"user">,
 ): Promise<SafeId<"organization"> | null> => {
-  const organizationId = parseExternalOrganizationId(organizationIdValue);
+  const organizationId =
+    parseAuthProviderId<"organization">(organizationIdValue);
   if (organizationId === null) {
     return null;
   }

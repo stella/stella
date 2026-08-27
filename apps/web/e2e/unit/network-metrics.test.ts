@@ -8,6 +8,7 @@ import {
   browserRequestInterval,
   diffNetworkBaseline,
   mergeNetworkBaseline,
+  mergeResampledMetrics,
   normalizeApiPath,
   responseSizeAllowance,
   waitForQuietPeriod,
@@ -81,6 +82,55 @@ describe("waterfallDepth", () => {
         { start: 20, end: 30 },
       ]),
     ).toBe(1);
+  });
+
+  test("a faster response can raise the reading by one", () => {
+    // Pins the asymmetry the route-smoke resampling exists for: the same two
+    // requests read as one round or two depending only on how quickly the
+    // first one answered. Any change that makes this deterministic can drop
+    // WATERFALL_DEPTH_RESAMPLES.
+    const overlapping = [
+      { start: 0, end: 100 },
+      { start: 90, end: 200 },
+    ];
+    const firstAnsweredFaster = [
+      { start: 0, end: 80 },
+      { start: 90, end: 200 },
+    ];
+
+    expect(waterfallDepth(overlapping)).toBe(1);
+    expect(waterfallDepth(firstAnsweredFaster)).toBe(2);
+  });
+
+  test("resampling keeps the shallowest depth but every other regression", () => {
+    const first: RouteNetworkMetrics = {
+      requests: ["GET /v1/a", "GET /v1/new"],
+      requestCounts: { "GET /v1/a": 2, "GET /v1/new": 1 },
+      depth: 4,
+      dbQueries: { "GET /v1/a": 40 },
+      missingDbQueryCounts: { "GET /v1/new": 1 },
+      responseSizes: { "GET /v1/a": 90_000 },
+      missingResponseSizeCounts: {},
+    };
+    const shallower: RouteNetworkMetrics = {
+      requests: ["GET /v1/a"],
+      requestCounts: { "GET /v1/a": 1 },
+      depth: 3,
+      dbQueries: { "GET /v1/a": 4 },
+      missingDbQueryCounts: {},
+      responseSizes: { "GET /v1/a": 1000 },
+      missingResponseSizeCounts: { "GET /v1/a": 1 },
+    };
+
+    expect(mergeResampledMetrics(first, shallower)).toEqual({
+      requests: ["GET /v1/a", "GET /v1/new"],
+      requestCounts: { "GET /v1/a": 2, "GET /v1/new": 1 },
+      depth: 3,
+      dbQueries: { "GET /v1/a": 40 },
+      missingDbQueryCounts: { "GET /v1/new": 1 },
+      responseSizes: { "GET /v1/a": 90_000 },
+      missingResponseSizeCounts: { "GET /v1/a": 1 },
+    });
   });
 
   test("an independent late request does not chain", () => {

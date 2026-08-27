@@ -57,6 +57,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeIdType } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { cents } from "@/api/lib/money";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
 import type {
   TestDatabase,
   TestDatabaseTransaction,
@@ -66,25 +70,26 @@ import type {
 
 const tid = () => Bun.randomUUIDv7();
 const wsId = () => toSafeId<"workspace">(tid());
-const orgId = () => toSafeId<"organization">(tid());
 const id = <T extends SafeIdType>() => toSafeId<T>(tid());
 
 // ── Test data IDs ──────────────────────────────────────
 
+// Auth-provider rows (user, organization, member) carry the shape the auth
+// provider mints, not a UUID, so the suites exercise the stored id format.
 export const createTestIds = () => ({
-  orgA: orgId(),
-  orgB: orgId(),
-  userA1: toSafeId<"user">(tid()),
-  userA2: toSafeId<"user">(tid()),
-  userB1: toSafeId<"user">(tid()),
-  userAdmin: toSafeId<"user">(tid()),
+  orgA: mintAuthProviderId<"organization">(),
+  orgB: mintAuthProviderId<"organization">(),
+  userA1: mintAuthProviderId<"user">(),
+  userA2: mintAuthProviderId<"user">(),
+  userB1: mintAuthProviderId<"user">(),
+  userAdmin: mintAuthProviderId<"user">(),
   wsA1: wsId(),
   wsA2: wsId(),
   wsB1: wsId(),
-  memberA1org: tid(),
-  memberA2org: tid(),
-  memberB1org: tid(),
-  memberAdminOrg: tid(),
+  memberA1org: mintAuthProviderIdValue(),
+  memberA2org: mintAuthProviderIdValue(),
+  memberB1org: mintAuthProviderIdValue(),
+  memberAdminOrg: mintAuthProviderIdValue(),
   memberA1wsA1: id<"workspaceMember">(),
   memberA1wsA2: id<"workspaceMember">(),
   memberA2wsA2: id<"workspaceMember">(),

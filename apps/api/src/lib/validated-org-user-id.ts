@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
-import { AUTH_GENERATED_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
+import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * A user ID that has been validated as belonging to the given organization.
@@ -15,12 +15,12 @@ import { AUTH_GENERATED_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
  * The membership query is what establishes the guarantee; the predicate only
  * gates branding. It is parsed with `v.parse`, so it must accept every id the
  * `member.user_id` column can hold or a confirmed member throws instead of
- * branding.
+ * branding; `parseAuthProviderId` is the parser that knows that shape.
  */
 const validatedOrgUserIdSchema = v.pipe(
   v.custom<SafeId<"user">>(
     (value) =>
-      typeof value === "string" && AUTH_GENERATED_ID_PATTERN.test(value),
+      typeof value === "string" && parseAuthProviderId<"user">(value) !== null,
   ),
   v.brand("ValidatedOrgUserId"),
 );

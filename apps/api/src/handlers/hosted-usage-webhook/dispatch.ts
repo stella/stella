@@ -31,7 +31,7 @@ import type {
   HostedUsageEntitlementPayload,
 } from "@/api/lib/hosted-usage-provider/event-schemas";
 import { recordWebhookAuditEvent } from "@/api/lib/hosted-usage-provider/webhook-store";
-import { parseExternalOrganizationId } from "@/api/lib/safe-id-boundaries";
+import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import {
   lockAssignmentCapacity,
   trimAssignmentsToCapacity,
@@ -429,7 +429,7 @@ export const handleHostedEntitlementUpsert = async ({
       if (metadataOrganizationId === null) {
         return { kind: "ignored", reason: "missing metadata.organization_id" };
       }
-      const organizationId = parseExternalOrganizationId(
+      const organizationId = parseAuthProviderId<"organization">(
         metadataOrganizationId,
       );
       if (organizationId === null) {
@@ -694,7 +694,7 @@ export const handleHostedAllocation = async ({
   if (!organizationIdRaw) {
     return { kind: "ignored", reason: "missing metadata.organization_id" };
   }
-  const organizationId = parseExternalOrganizationId(organizationIdRaw);
+  const organizationId = parseAuthProviderId<"organization">(organizationIdRaw);
   if (organizationId === null) {
     return { kind: "ignored", reason: "invalid metadata.organization_id" };
   }

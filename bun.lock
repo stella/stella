@@ -137,6 +137,7 @@
         "valibot": "catalog:",
       },
       "devDependencies": {
+        "@better-auth/core": "catalog:",
         "@electric-sql/pglite": "^0.5.4",
         "@faker-js/faker": "^10.6.0",
         "@modelcontextprotocol/client": "2.0.0",
@@ -928,6 +929,7 @@
     "@ag-ui/core": "0.1.1-canary.beta.0",
     "@base-ui/react": "1.7.0",
     "@better-auth/api-key": "1.7.1",
+    "@better-auth/core": "1.7.1",
     "@better-auth/oauth-provider": "1.7.1",
     "@libpdf/core": "0.4.1",
     "@mcp-ui/client": "7.1.1",
