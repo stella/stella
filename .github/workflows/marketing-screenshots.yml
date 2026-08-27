@@ -15,8 +15,10 @@ name: Marketing screenshots
 # allows main and release tags only, so the key is structurally unavailable
 # to a run on any other ref.
 #
-# Both render on the same runner image, which is why the baselines can be
-# treated as reproducible artifacts rather than a developer's local output.
+# Both render on the same runner image from a production web build (the
+# e2e shards' artifact on PRs, built in place otherwise), which is why the
+# baselines can be treated as reproducible artifacts rather than a
+# developer's local output.
 
 on:
   workflow_call:
@@ -27,6 +29,11 @@ on:
         type: string
       ref:
         description: Branch to check out and push regenerated baselines to; empty uses the triggering ref
+        required: false
+        default: ""
+        type: string
+      web-build-artifact:
+        description: Production web build artifact published earlier in the calling run; empty builds the web app in the capture job
         required: false
         default: ""
         type: string
@@ -64,6 +71,7 @@ jobs:
         uses: ./.github/actions/marketing-capture
         with:
           mode: ${{ inputs.mode }}
+          web-build-artifact: ${{ inputs.web-build-artifact }}
           dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
