@@ -493,7 +493,7 @@ describe("detect-e2e-changes", () => {
     expect(requireStack).toContain("::error::");
     expect(requireStack).toContain("exit 1");
     expect(marketingCapture.indexOf("- name: Require the stack")).toBeLessThan(
-      marketingCapture.indexOf("- name: Start web dev server"),
+      marketingCapture.indexOf("- name: Start production web server"),
     );
     // No capture, upload, or push step may still carry the skip that step
     // makes fatal; only `always()` cleanup and `failure()` diagnostics test it.
@@ -513,14 +513,11 @@ describe("detect-e2e-changes", () => {
     ).toHaveLength(2);
     expect(marketingWorkflow).not.toContain("test:e2e:marketing");
     expect(marketingCapture).toContain("test:e2e:marketing:update");
-    // Cleanup and the torn-frame guard stay inside the action so a failed
-    // capture still reports a mid-session reload as the cause.
-    for (const stepName of [
-      "Guard against mid-test Vite re-optimize",
-      "Stop web dev server",
-    ]) {
-      expect(actionStep(marketingCapture, stepName)).toContain("if: always()");
-    }
+    // Cleanup stays inside the action so a failed capture still releases the
+    // web server.
+    expect(
+      actionStep(marketingCapture, "Stop production web server"),
+    ).toContain("if: always()");
     // An unrecognised mode must fail loudly: the check job runs on anything
     // that is not update, so it reaches this validation instead of leaving
     // both jobs skipped and green.
@@ -545,6 +542,32 @@ describe("detect-e2e-changes", () => {
     expect(production).toContain("Validate production web build");
     expect(production.indexOf("Install Playwright browsers")).toBeLessThan(
       production.indexOf("Wait for production web build"),
+    );
+
+    // The marketing capture serves that same build, never the Vite dev
+    // server: PR CI hands the artifact over, and the callers without a
+    // web-build job (nightly, update) build in place with the same flags.
+    expect(marketingCapture).not.toContain("vite --port");
+    for (const stepName of [
+      "Wait for production web build",
+      "Download production web build",
+      "Validate production web build",
+    ]) {
+      expect(actionStep(marketingCapture, stepName)).toContain(
+        "if: inputs.web-build-artifact != ''",
+      );
+    }
+    const buildInPlace = actionStep(marketingCapture, "Build production web");
+    expect(buildInPlace).toContain("if: inputs.web-build-artifact == ''");
+    expect(buildInPlace).toContain("VITE_FEATURE_TIME_BILLING");
+    expect(marketingWorkflow).toContain(
+      `web-build-artifact: ${githubExpression("inputs.web-build-artifact")}`,
+    );
+    expect(workflowJob("marketing-screenshots")).toContain(
+      "web-build-artifact:",
+    );
+    expect(webBuild).toContain(
+      "needs.ci-plan.outputs.marketing_screenshots_required == 'true'",
     );
   });
 
