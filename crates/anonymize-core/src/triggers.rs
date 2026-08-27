@@ -19,6 +19,8 @@ const LINE_TRIGGER_LOOKAHEAD: usize = 2_048;
 const MATCH_PATTERN_LOOKAHEAD: usize = 512;
 const MAX_IDENTIFIER_VALUE_CHARS: usize = 128;
 const MAX_IDENTIFIER_ALPHA_RUN: usize = 12;
+/// ASCII and fullwidth colon, the separators form-field labels use.
+const FIELD_LABEL_SEPARATORS: [char; 2] = [':', '：'];
 pub const PERSON_OR_ORGANIZATION_TRIGGER_LABEL: &str = "person-or-organization";
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -375,6 +377,33 @@ pub(crate) fn process_trigger_matches(
       );
       continue;
     };
+    // A field label at offset 0 (`Name: Jane Roe`) leaves no prefix to keep:
+    // the name follows the label, so drop the label and its separator and
+    // judge the remainder.
+    if rule.label == crate::labels::PERSON_LABEL {
+      while let Some(value_start) =
+        leading_field_label_value_start(&value.text, &data.person_field_labels)
+      {
+        let Some(rest) = value.text.get(value_start..).map(str::to_owned)
+        else {
+          break;
+        };
+        let Some(offset) = byte_to_offset(value_start) else {
+          break;
+        };
+        value.start = value.start.saturating_add(offset);
+        value.text = rest;
+      }
+      if value.text.is_empty() {
+        record_trigger_rejection(
+          &mut diagnostics,
+          found,
+          rule,
+          "field-label-value",
+        );
+        continue;
+      }
+    }
     // Trailing role triggers (`…, director` / `…, ředitelem`) often sit
     // immediately before the next form field (`IČO: …`, `EIN: …`). Those
     // label-shaped values are not people. Preserve a complete person-shaped
@@ -1754,6 +1783,29 @@ fn inline_field_label_start(
     .iter()
     .filter_map(|label| configured_field_label_start(text, label))
     .min()
+}
+
+/// Offset of the value after a configured field label at offset 0
+/// (`Name: Jane Roe` gives the offset of `Jane`).
+///
+/// The longest matching label wins, so `Tax identification number: …` is not
+/// truncated to the `Tax id` label.
+fn leading_field_label_value_start(
+  text: &str,
+  configured_labels: &[String],
+) -> Option<usize> {
+  configured_labels
+    .iter()
+    .filter(|label| configured_field_label_start(text, label) == Some(0))
+    .filter_map(|label| {
+      let rest = text
+        .get(label.len()..)?
+        .trim_start()
+        .strip_prefix(FIELD_LABEL_SEPARATORS)?
+        .trim_start();
+      text.len().checked_sub(rest.len())
+    })
+    .max()
 }
 
 fn configured_field_label_start(text: &str, label: &str) -> Option<usize> {
@@ -3429,6 +3481,77 @@ mod tests {
 
       assert_eq!(entities.len(), 1, "{text}");
       assert_eq!(entities[0].text, expected, "{text}");
+    }
+  }
+
+  #[test]
+  fn person_trigger_strips_a_leading_field_label_before_the_name() {
+    let trigger = "represented by";
+    let data = PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from(trigger),
+        label: String::from("person"),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: Vec::new(),
+          max_length: None,
+        },
+        validations: vec![TriggerValidation::StartsUppercase],
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+      person_field_labels: vec![
+        String::from("Name"),
+        String::from("Title"),
+        String::from("Jméno"),
+      ],
+    })
+    .unwrap();
+
+    for (text, expected) in [
+      (
+        "the seller, represented by Name: Jane Roe, signed",
+        "Jane Roe",
+      ),
+      (
+        "the seller, represented by Title： Jane Roe, signed",
+        "Jane Roe",
+      ),
+      (
+        "the seller, represented by Name: Jane Roe Title: director, signed",
+        "Jane Roe",
+      ),
+      ("the seller, represented by Jméno: Jan Novák", "Jan Novák"),
+    ] {
+      let start = text.find(trigger).unwrap();
+      let end = start.saturating_add(trigger.len());
+      let entities = process_trigger_matches(
+        &[SearchMatch::Literal {
+          pattern: 0,
+          start: u32::try_from(start).unwrap(),
+          end: u32::try_from(end).unwrap(),
+        }],
+        PatternSlice { start: 0, end: 1 },
+        text,
+        &data,
+        &BTreeSet::new(),
+        None,
+      )
+      .unwrap();
+
+      assert_eq!(entities.len(), 1, "{text}");
+      assert_eq!(entities[0].text, expected, "{text}");
+      assert_eq!(
+        entities[0].start,
+        u32::try_from(text.find(expected).unwrap()).unwrap(),
+        "{text}"
+      );
     }
   }
 
