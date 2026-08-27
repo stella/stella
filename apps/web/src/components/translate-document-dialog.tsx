@@ -63,7 +63,6 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
-import { Slot } from "@/lib/slot";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 type TranslationChoice = "bilingual:ai" | "translated:ai" | "translated:deepl";
@@ -400,20 +399,10 @@ export const TranslateDocumentDialog = ({
       }}
       open={open}
     >
-      {trigger ? (
-        <Slot
-          onClick={(event) => {
-            if (event.defaultPrevented || disabled) {
-              return;
-            }
-            setOpen(true);
-          }}
-        >
-          {trigger}
-        </Slot>
-      ) : (
-        <DialogTrigger
-          render={
+      <DialogTrigger
+        disabled={disabled}
+        render={
+          trigger ?? (
             <Button
               aria-label={t("common.translate")}
               disabled={disabled}
@@ -423,9 +412,9 @@ export const TranslateDocumentDialog = ({
             >
               <LanguagesIcon className="size-3.5" />
             </Button>
-          }
-        />
-      )}
+          )
+        }
+      />
       <DialogPopup>
         <DialogHeader>
           <DialogTitle>{t("translate.dialog.title")}</DialogTitle>

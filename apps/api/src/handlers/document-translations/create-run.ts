@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { isDocumentTranslationDeepLSupportedMimeType } from "@stll/api-contract/document-translation";
+
 import {
   documentTranslationRuns,
   entities,
@@ -23,7 +25,6 @@ import {
   DOCUMENT_TRANSLATION_OUTPUT,
   isExecutableTranslationCombination,
 } from "@/api/lib/document-translation/contract";
-import { isDeepLSupportedMimeType } from "@/api/lib/document-translation/deepl-formats";
 import { inspectDocxComments } from "@/api/lib/document-translation/docx-review";
 import { handoffCommittedDocumentTranslationRun } from "@/api/lib/document-translation/handoff";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -140,7 +141,7 @@ const createDocumentTranslationRun = createSafeHandler<
     }
     if (
       body.engine === DOCUMENT_TRANSLATION_ENGINE.DEEPL &&
-      !isDeepLSupportedMimeType(sourceContent.mimeType)
+      !isDocumentTranslationDeepLSupportedMimeType(sourceContent.mimeType)
     ) {
       return Result.err(
         new HandlerError({

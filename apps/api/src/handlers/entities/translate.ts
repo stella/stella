@@ -13,6 +13,8 @@ import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
+import { isDocumentTranslationDeepLSupportedMimeType } from "@stll/api-contract/document-translation";
+
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -28,7 +30,6 @@ import {
   DeepLUpstreamError,
   translateDocument,
 } from "@/api/lib/deepl/deepl";
-import { isDeepLSupportedMimeType } from "@/api/lib/document-translation/deepl-formats";
 import { resolveTranslatedOutput } from "@/api/lib/document-translation/output";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -158,7 +159,7 @@ const translateEntity = createSafeHandler(
       );
     }
 
-    if (!isDeepLSupportedMimeType(sourceContent.mimeType)) {
+    if (!isDocumentTranslationDeepLSupportedMimeType(sourceContent.mimeType)) {
       return Result.err(
         new HandlerError({
           status: 400,

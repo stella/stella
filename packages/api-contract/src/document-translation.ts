@@ -136,3 +136,33 @@ export type DocumentTranslationSourceLanguageDetection =
       candidates: readonly DocumentTranslationSourceLanguageCode[];
     }
   | { type: "unknown" };
+
+export const DOCUMENT_TRANSLATION_DEEPL_MIME_TYPES = [
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/pdf",
+  "text/plain",
+  "text/html",
+  "application/xliff+xml",
+] as const satisfies readonly string[];
+
+const DOCUMENT_TRANSLATION_DEEPL_MIME_TYPE_SET = new Set<string>(
+  DOCUMENT_TRANSLATION_DEEPL_MIME_TYPES,
+);
+
+export const isDocumentTranslationDeepLSupportedMimeType = (
+  mimeType: string,
+): boolean => DOCUMENT_TRANSLATION_DEEPL_MIME_TYPE_SET.has(mimeType);
+
+type DocumentTranslationSourceEligibility = {
+  encrypted: boolean;
+  mimeType: string;
+};
+
+export const isDocumentTranslationSourceEligible = ({
+  encrypted,
+  mimeType,
+}: DocumentTranslationSourceEligibility): boolean =>
+  !encrypted && isDocumentTranslationDeepLSupportedMimeType(mimeType);

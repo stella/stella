@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { isDocumentTranslationSourceEligible } from "@stll/api-contract/document-translation";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -1169,6 +1170,7 @@ const RowFeatureMenuActions = ({
       return null;
     }
     return {
+      encrypted: contextField.content.encrypted,
       fieldId: contextField.id,
       mimeType: contextField.content.mimeType,
     };
@@ -1189,23 +1191,25 @@ const RowFeatureMenuActions = ({
         <MessageSquareIcon />
         {t("chat.chatAbout")}
       </MenuItem>
-      {!isBulk && translationFile && (
-        <TranslateDocumentDialog
-          disabled={!canCreateEntity}
-          entityId={entity.entityId}
-          entityVersionKey={entity.version}
-          fieldId={translationFile.fieldId}
-          isDocx={translationFile.mimeType === DOCX_MIME}
-          trigger={
-            <MenuItem closeOnClick={false} disabled={!canCreateEntity}>
-              <LanguagesIcon />
-              {t("common.translate")}
-            </MenuItem>
-          }
-          viewId={viewMatch?.params.viewId ?? "all"}
-          workspaceId={workspaceId}
-        />
-      )}
+      {!isBulk &&
+        translationFile &&
+        isDocumentTranslationSourceEligible(translationFile) && (
+          <TranslateDocumentDialog
+            disabled={!canCreateEntity}
+            entityId={entity.entityId}
+            entityVersionKey={entity.version}
+            fieldId={translationFile.fieldId}
+            isDocx={translationFile.mimeType === DOCX_MIME}
+            trigger={
+              <MenuItem closeOnClick={false} disabled={!canCreateEntity}>
+                <LanguagesIcon />
+                {t("common.translate")}
+              </MenuItem>
+            }
+            viewId={viewMatch?.params.viewId ?? "all"}
+            workspaceId={workspaceId}
+          />
+        )}
     </>
   );
 };
