@@ -29,7 +29,7 @@ const AUTH_PROVIDER_BRAND_CALLEES = new Set([
   "brandPersistedOrganizationId",
 ]);
 
-const UUID_MINTER = /^randomUUID/u;
+const UUID_MINTER_PREFIX = "randomUUID";
 
 type AstNode = { type: string } & Record<string, unknown>;
 
@@ -60,8 +60,7 @@ const mintsUuid = (argument: unknown): boolean => {
   if (!isAstNode(argument) || argument.type !== "CallExpression") {
     return false;
   }
-  const name = calleeName(argument.callee);
-  return name !== null && UUID_MINTER.test(name);
+  return calleeName(argument.callee)?.startsWith(UUID_MINTER_PREFIX) ?? false;
 };
 
 const firstTypeArgumentLiteral = (node: unknown): string | null => {
