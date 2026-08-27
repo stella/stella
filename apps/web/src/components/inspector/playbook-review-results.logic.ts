@@ -9,10 +9,7 @@
 
 import type { ReviewFlag } from "@stll/api-contract";
 
-import type {
-  ReferenceFile,
-  ReviewPerspective,
-} from "@/components/ai-suggestions/document-review-basis.logic";
+import type { ReferenceFile } from "@/components/ai-suggestions/document-review-basis.logic";
 import type { ReviewFinding } from "@/components/ai-suggestions/document-review-queries";
 import { isDecisionSettled } from "@/components/ai-suggestions/document-review-run.logic";
 import type {
@@ -186,12 +183,19 @@ export const sortReviewResultItems = (
         a.order - b.order,
     );
 
-// TODO(i18n): English until the review surface is localized as a whole.
-const PROPOSED_FROM_REFERENCES_LABEL = "positions proposed from the references";
-const NO_SIDE_LABEL = "no side";
 export const SUMMARY_SEPARATOR = " · ";
 
-type RunSummaryArgs = {
+/** The two phrases a basis sentence does not read out of the run, already in
+ *  the reader's language: where the positions came from when no playbook is
+ *  named, and the side the run was judged for. */
+type RunBasisLabels = {
+  /** "positions proposed from the references". */
+  proposedFromReferencesLabel: string;
+  /** "for the Purchaser", or the phrase for a run judged for no side. */
+  sideLabel: string;
+};
+
+type RunSummaryArgs = RunBasisLabels & {
   /** The reviewed document's name, or `""` while it is not known yet. */
   targetName: string;
   /** Its version number at the moment the run pinned it, when resolvable. */
@@ -201,7 +205,6 @@ type RunSummaryArgs = {
    *  ever confirmed for it. */
   playbookName: string;
   playbookProposed: boolean;
-  perspective: ReviewPerspective;
 };
 
 /**
@@ -219,7 +222,8 @@ export const buildRunSummarySentence = ({
   references,
   playbookName,
   playbookProposed,
-  perspective,
+  proposedFromReferencesLabel,
+  sideLabel,
 }: RunSummaryArgs): string => {
   const parts: string[] = [];
   if (targetName.length > 0) {
@@ -234,18 +238,14 @@ export const buildRunSummarySentence = ({
   }
   parts.push(
     playbookProposed || playbookName.length === 0
-      ? PROPOSED_FROM_REFERENCES_LABEL
+      ? proposedFromReferencesLabel
       : playbookName,
   );
-  parts.push(
-    perspective.type === "party"
-      ? `for the ${perspective.role}`
-      : NO_SIDE_LABEL,
-  );
+  parts.push(sideLabel);
   return parts.join(SUMMARY_SEPARATOR);
 };
 
-type RunHistoryBasisArgs = {
+type RunHistoryBasisArgs = RunBasisLabels & {
   /** The pinned playbook's name, as the list endpoint read it out of the
    *  basis; `null` for a run that pinned no snapshot name. */
   playbookName: string | null;
@@ -253,8 +253,6 @@ type RunHistoryBasisArgs = {
   /** `"3 references"`, already formatted in the caller's locale, or `null`
    *  when the run compared against no document. */
   references: string | null;
-  /** The party the run was judged for, or `null` for no side. */
-  perspectiveRole: string | null;
 };
 
 /**
@@ -266,7 +264,8 @@ export const buildRunHistoryBasisSentence = ({
   playbookName,
   playbookProposed,
   references,
-  perspectiveRole,
+  proposedFromReferencesLabel,
+  sideLabel,
 }: RunHistoryBasisArgs): string => {
   const parts: string[] = [];
   if (references !== null) {
@@ -276,10 +275,8 @@ export const buildRunHistoryBasisSentence = ({
     parts.push(playbookName);
   }
   if (parts.length === 0) {
-    parts.push(PROPOSED_FROM_REFERENCES_LABEL);
+    parts.push(proposedFromReferencesLabel);
   }
-  parts.push(
-    perspectiveRole === null ? NO_SIDE_LABEL : `for the ${perspectiveRole}`,
-  );
+  parts.push(sideLabel);
   return parts.join(SUMMARY_SEPARATOR);
 };

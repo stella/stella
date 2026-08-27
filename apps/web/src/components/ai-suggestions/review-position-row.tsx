@@ -11,6 +11,7 @@
 import { Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import {
@@ -22,11 +23,11 @@ import {
 } from "@stll/ui/menu";
 import { cn } from "@stll/ui/utils";
 
-import { ReviewStandardPassages } from "@/components/ai-suggestions/review-passage-side";
 import {
-  PositionHeader,
-  type PositionTermKind,
-} from "@/components/ai-suggestions/review-position-header";
+  PASSAGE_COLLAPSE,
+  ReviewStandardPassages,
+} from "@/components/ai-suggestions/review-passage-side";
+import { PositionHeader } from "@/components/ai-suggestions/review-position-header";
 import { Switch } from "@/components/switch";
 import type { TranslationKey } from "@/i18n/types";
 import type {
@@ -34,9 +35,6 @@ import type {
   PositionSeverity,
   ReferencePassage,
 } from "@/lib/knowledge/playbook-types";
-
-// TODO(i18n): English until the review surface is localized as a whole.
-const REFERENCE_DOCUMENT_LABEL = "Reference document";
 
 /** Reference passages carry the document they were quoted from by id only, so
  *  a caller that knows the run's pinned references can name them. */
@@ -74,14 +72,21 @@ const SEVERITY_CHIP_CLASS = {
 const isSeverity = (value: string): value is PositionSeverity =>
   SEVERITIES.some((severity) => severity === value);
 
-/** What kind of term this position compares, when its standard was read from a
- *  reference. An authored ladder states no kind, so its header shows none. */
-export const positionTermKind = (
-  position: Position,
-): PositionTermKind | null =>
-  position.mode === "graded" && position.standard.source === "reference"
-    ? position.standard.termKind
-    : null;
+const SEVERITY_CHIP_SHAPE_CLASS =
+  "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold";
+
+/** How much a position matters, as a word, where it cannot be changed: the
+ *  same chip the editors offer, minus the menu. */
+export const SeverityWord = ({ severity }: { severity: PositionSeverity }) => {
+  const t = useTranslations();
+  return (
+    <span
+      className={cn(SEVERITY_CHIP_SHAPE_CLASS, SEVERITY_CHIP_CLASS[severity])}
+    >
+      {t(SEVERITY_LABEL_KEYS[severity])}
+    </span>
+  );
+};
 
 export const SeverityChip = ({
   severity,
@@ -96,7 +101,8 @@ export const SeverityChip = ({
       <MenuTrigger
         aria-label={t("knowledge.playbooks.severityLabel")}
         className={cn(
-          "focus-visible:ring-ring shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold focus-visible:ring-2 focus-visible:outline-none",
+          "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
+          SEVERITY_CHIP_SHAPE_CLASS,
           SEVERITY_CHIP_CLASS[severity],
         )}
       >
@@ -127,6 +133,11 @@ export const SeverityChip = ({
  * draws its "Standard" column: one block per document, clause numbers hanging
  * in the margin, the same key-term marks, the same collapse. A playbook
  * position and the finding it produces must not read as two different things.
+ *
+ * Collapsed to the opening lines wherever a position appears in a list. The
+ * quote is the evidence behind the issue, and a reviewer reading twenty
+ * proposed positions is reading the issues; the expander names how many
+ * passages are behind it so the cost of opening it is stated.
  */
 export const ReferencePassageList = ({
   passages,
@@ -134,19 +145,27 @@ export const ReferencePassageList = ({
 }: {
   passages: readonly ReferencePassage[];
   referenceNames: ReferenceNameLookup | undefined;
-}) => (
-  <div className="space-y-3">
-    {groupPassagesByReference(passages).map((group) => (
-      <ReviewStandardPassages
-        key={group.fileFieldId}
-        label={
-          referenceNames?.get(group.fileFieldId) ?? REFERENCE_DOCUMENT_LABEL
-        }
-        passages={group.passages}
-      />
-    ))}
-  </div>
-);
+}) => {
+  const t = useTranslations();
+  return (
+    <div className="space-y-3">
+      {groupPassagesByReference(passages).map((group) => (
+        <ReviewStandardPassages
+          collapse={PASSAGE_COLLAPSE.compact}
+          expandLabel={t("inspector.review.passagesCount", {
+            count: group.passages.length,
+          })}
+          key={group.fileFieldId}
+          label={
+            referenceNames?.get(group.fileFieldId) ??
+            t("inspector.review.referenceDocument")
+          }
+          passages={group.passages}
+        />
+      ))}
+    </div>
+  );
+};
 
 type ReferencePassageGroup = {
   fileFieldId: string;
@@ -173,10 +192,32 @@ const groupPassagesByReference = (
 };
 
 /**
- * The confirm step's one-line position: the four fields a reviewer actually
- * changes before starting a run, in the same header the results card uses.
+ * One line of a position's own words, labelled so the two lines cannot be
+ * confused for each other: what a comparison will examine, and why the term
+ * exists at all. Empty renders nothing — a missing sentence is not worth a
+ * label of its own.
+ */
+const PositionNote = ({ label, text }: { label: string; text: string }) => {
+  if (text.trim().length === 0) {
+    return null;
+  }
+  return (
+    <p className="text-muted-foreground text-sm leading-6 text-pretty">
+      <span className="text-foreground-strong-muted font-medium">{label}</span>{" "}
+      <BidiText as="span">{text}</BidiText>
+    </p>
+  );
+};
+
+/**
+ * The proposed position as a reviewer meets it: the issue and how much it
+ * matters, then in the position's own words what will be examined and why the
+ * term is there, then the passages that state the standard — collapsed,
+ * because they are the evidence rather than the point.
+ *
  * Everything else a position can carry (tiers, ask, negotiation, the
- * deterministic check) belongs to the playbook editor.
+ * deterministic check) belongs to the playbook editor, not to the minute
+ * before a run starts.
  */
 export const PositionQuickRow = ({
   position,
@@ -188,14 +229,22 @@ export const PositionQuickRow = ({
   position: Position;
   index: number;
   referenceNames: ReferenceNameLookup | undefined;
-  onChange: (position: Position) => void;
-  onRemove: () => void;
+  /** Omitted while the proposal is still being written: a position the model
+   *  has not finished proposing is not one to edit, and an edit made against a
+   *  list that is about to be handed to the run would be lost. */
+  onChange?: ((position: Position) => void) | undefined;
+  onRemove?: (() => void) | undefined;
 }) => {
   const t = useTranslations();
   const passages =
     position.mode === "graded" && position.standard.source === "reference"
       ? position.standard.passages
       : null;
+  // Only a graded position states why the term is negotiated; an extract
+  // position captures a value and has no standard to be for or against.
+  const purpose =
+    position.mode === "graded" ? (position.purpose ?? null) : null;
+  const guidance = position.guidance ?? null;
 
   return (
     <div
@@ -206,51 +255,77 @@ export const PositionQuickRow = ({
     >
       <PositionHeader
         actions={
-          <>
-            <Switch
-              aria-label={t("knowledge.playbooks.enablePosition")}
-              checked={position.enabled}
-              className="shrink-0"
-              onCheckedChange={(enabled) => onChange({ ...position, enabled })}
-            />
-            <Button
-              aria-label={t("knowledge.playbooks.deletePosition")}
-              onClick={onRemove}
-              size="icon-xs"
-              type="button"
-              variant="ghost"
-            >
-              <Trash2Icon />
-            </Button>
-          </>
+          onChange === undefined ? null : (
+            <>
+              <Switch
+                aria-label={t("knowledge.playbooks.enablePosition")}
+                checked={position.enabled}
+                className="shrink-0"
+                onCheckedChange={(enabled) =>
+                  onChange({ ...position, enabled })
+                }
+              />
+              <Button
+                aria-label={t("knowledge.playbooks.deletePosition")}
+                onClick={onRemove}
+                size="icon-xs"
+                type="button"
+                variant="ghost"
+              >
+                <Trash2Icon />
+              </Button>
+            </>
+          )
         }
         index={index}
         label={
-          position.mode === "graded" && (
+          position.mode === "graded" &&
+          (onChange === undefined ? (
+            <SeverityWord severity={position.severity} />
+          ) : (
             <SeverityChip
               onChange={(severity) => onChange({ ...position, severity })}
               severity={position.severity}
             />
+          ))
+        }
+        title={
+          onChange === undefined ? (
+            <BidiText as="span" className="font-medium">
+              {position.issue}
+            </BidiText>
+          ) : (
+            <Input
+              aria-label={t("knowledge.playbooks.issueLabel")}
+              className="hover:border-input focus-visible:bg-background h-8 w-full border-transparent bg-transparent px-1.5 text-sm font-medium shadow-none"
+              maxLength={256}
+              onChange={(e) => onChange({ ...position, issue: e.target.value })}
+              placeholder={t("knowledge.playbooks.issuePlaceholder")}
+              value={position.issue}
+            />
           )
         }
-        termKind={positionTermKind(position)}
-        title={
-          <Input
-            aria-label={t("knowledge.playbooks.issueLabel")}
-            className="hover:border-input focus-visible:bg-background h-8 w-full border-transparent bg-transparent px-1.5 text-sm font-medium shadow-none"
-            maxLength={256}
-            onChange={(e) => onChange({ ...position, issue: e.target.value })}
-            placeholder={t("knowledge.playbooks.issuePlaceholder")}
-            value={position.issue}
-          />
-        }
       />
-      {passages !== null && (
-        <div className="px-3 pb-3">
-          <ReferencePassageList
-            passages={passages}
-            referenceNames={referenceNames}
-          />
+      {(purpose !== null || guidance !== null || passages !== null) && (
+        <div className="space-y-2 px-3 pb-3">
+          {guidance !== null && (
+            <PositionNote
+              label={t("inspector.review.checks")}
+              text={guidance}
+            />
+          )}
+          {purpose !== null && (
+            <PositionNote
+              label={t("inspector.review.whyItMatters")}
+              text={purpose}
+            />
+          )}
+          {passages !== null && (
+            <ReferencePassageList
+              passages={passages}
+              referenceNames={referenceNames}
+            />
+          )}
         </div>
       )}
     </div>

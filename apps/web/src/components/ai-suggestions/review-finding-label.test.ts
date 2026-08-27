@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import type { ReviewFinding } from "@/components/ai-suggestions/document-review-queries";
 import {
-  findingHeaderLabel,
-  findingLabel,
+  findingHeaderLabelMessage,
+  findingLabelMessage,
 } from "@/components/ai-suggestions/review-finding-label";
 
 const NEUTRAL = { type: "neutral" } as const;
@@ -25,63 +25,83 @@ const finding = (overrides: Partial<ReviewFinding>): ReviewFinding => ({
 
 describe("the judgment in words", () => {
   test("names the direction when the run judged one", () => {
-    expect(findingLabel(finding({ impact: "unfavourable" }), NEUTRAL)).toBe(
-      "Unfavourable",
-    );
+    expect(
+      findingLabelMessage(finding({ impact: "unfavourable" }), NEUTRAL),
+    ).toEqual({
+      type: "plain",
+      key: "inspector.review.impact.unfavourable",
+    });
   });
 
   test("names the side the direction is judged for", () => {
-    expect(findingLabel(finding({ impact: "favourable" }), PURCHASER)).toBe(
-      "Better for Purchaser",
-    );
+    expect(
+      findingLabelMessage(finding({ impact: "favourable" }), PURCHASER),
+    ).toEqual({
+      type: "forSide",
+      key: "inspector.review.impactForSide.favourable",
+      role: "Purchaser",
+    });
   });
 
   // "The document has nothing to answer with" is a different finding from
   // "the comparison reached no direction", so it is not folded into impact.
   test("a missing standard reads as missing whatever its impact", () => {
     expect(
-      findingLabel(
+      findingLabelMessage(
         finding({ verdict: "missing", impact: "unfavourable" }),
         NEUTRAL,
       ),
-    ).toBe("Missing");
+    ).toEqual({
+      type: "plain",
+      key: "knowledge.playbooks.verdict.missing",
+    });
   });
 
   test("falls back to the verdict when no direction was judged", () => {
-    expect(findingLabel(finding({ impact: "unknown" }), PURCHASER)).toBe(
-      "Deviation",
-    );
+    expect(
+      findingLabelMessage(finding({ impact: "unknown" }), PURCHASER),
+    ).toEqual({
+      type: "plain",
+      key: "knowledge.playbooks.verdict.deviation",
+    });
   });
 
   test("a finding with neither direction nor verdict compared nothing", () => {
-    expect(findingLabel(finding({ verdict: null }), NEUTRAL)).toBe(
-      "Not compared",
-    );
+    expect(findingLabelMessage(finding({ verdict: null }), NEUTRAL)).toEqual({
+      type: "plain",
+      key: "inspector.review.notCompared",
+    });
   });
 });
 
 describe("the card header's label", () => {
   test("repeats severity only where it stops a deal", () => {
     expect(
-      findingHeaderLabel(
+      findingHeaderLabelMessage(
         finding({ severity: "high", impact: "unfavourable" }),
         NEUTRAL,
-      ),
-    ).toBe("High · Unfavourable");
+      ).severityKey,
+    ).toBe("knowledge.playbooks.severity.high");
     expect(
-      findingHeaderLabel(
+      findingHeaderLabelMessage(
         finding({ severity: "blocker", verdict: "missing" }),
         NEUTRAL,
       ),
-    ).toBe("Blocker · Missing");
+    ).toEqual({
+      severityKey: "knowledge.playbooks.severity.blocker",
+      judgment: { type: "plain", key: "knowledge.playbooks.verdict.missing" },
+    });
   });
 
   test("leaves the lower severities to the row's place in the list", () => {
     expect(
-      findingHeaderLabel(
+      findingHeaderLabelMessage(
         finding({ severity: "low", impact: "neutral" }),
         NEUTRAL,
       ),
-    ).toBe("Neutral");
+    ).toEqual({
+      severityKey: null,
+      judgment: { type: "plain", key: "inspector.review.impact.neutral" },
+    });
   });
 });

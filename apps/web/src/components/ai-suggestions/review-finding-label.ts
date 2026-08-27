@@ -6,7 +6,13 @@
  * and ○ means "the document does not have this at all". Every map here is
  * total over the vocabulary the engine writes, so a verdict, impact, or
  * severity added on the server has to state its word before it can render.
+ *
+ * The maps hold translation keys rather than words: the judgment is decided
+ * here, where it can be tested without a locale, and rendered by
+ * `useReviewLabels` where one is available.
  */
+
+import { useTranslations } from "use-intl";
 
 import type { ReviewPerspective } from "@/components/ai-suggestions/document-review-basis.logic";
 import type {
@@ -15,19 +21,19 @@ import type {
   ReviewVerdict,
 } from "@/components/ai-suggestions/document-review-queries";
 import type { ReviewImpact } from "@/components/ai-suggestions/review-delta";
+import type { TranslationKey } from "@/i18n/types";
 
-// TODO(i18n): English until the review surface is localized as a whole.
-const VERDICT_LABEL = {
-  compliant: "Compliant",
-  fallback: "Fallback",
-  deviation: "Deviation",
-  missing: "Missing",
-  additional: "Additional",
-  "not-applicable": "Not applicable",
-} as const satisfies Record<ReviewVerdict, string>;
+const VERDICT_LABEL_KEYS = {
+  compliant: "knowledge.playbooks.verdict.compliant",
+  fallback: "knowledge.playbooks.verdict.fallback",
+  deviation: "knowledge.playbooks.verdict.deviation",
+  missing: "knowledge.playbooks.verdict.missing",
+  additional: "knowledge.playbooks.verdict.additional",
+  "not-applicable": "knowledge.playbooks.verdict.notApplicable",
+} as const satisfies Record<ReviewVerdict, TranslationKey>;
 
 /** A run that judged no direction and reached no verdict compared nothing. */
-const NOT_COMPARED_LABEL = "Not compared";
+const NOT_COMPARED_LABEL_KEY = "inspector.review.notCompared";
 
 export type DirectedImpact = Exclude<ReviewImpact, "unknown">;
 
@@ -39,24 +45,44 @@ export const isDirectedImpact = (
 
 // Labels name the side so "worse" is never ambiguous on a printed or shared
 // card.
-const IMPACT_LABEL = {
-  unfavourable: "Unfavourable",
-  favourable: "Favourable",
-  neutral: "Neutral",
-} as const satisfies Record<DirectedImpact, string>;
-const IMPACT_FOR_SIDE_LABEL = {
-  unfavourable: "Worse for",
-  favourable: "Better for",
-  neutral: "No effect for",
-} as const satisfies Record<DirectedImpact, string>;
+const IMPACT_LABEL_KEYS = {
+  unfavourable: "inspector.review.impact.unfavourable",
+  favourable: "inspector.review.impact.favourable",
+  neutral: "inspector.review.impact.neutral",
+} as const satisfies Record<DirectedImpact, TranslationKey>;
+const IMPACT_FOR_SIDE_LABEL_KEYS = {
+  unfavourable: "inspector.review.impactForSide.unfavourable",
+  favourable: "inspector.review.impactForSide.favourable",
+  neutral: "inspector.review.impactForSide.neutral",
+} as const satisfies Record<DirectedImpact, TranslationKey>;
 
-export const impactLabel = (
+type PlainLabelKey =
+  | (typeof VERDICT_LABEL_KEYS)[ReviewVerdict]
+  | typeof NOT_COMPARED_LABEL_KEY
+  | (typeof IMPACT_LABEL_KEYS)[DirectedImpact];
+
+type ForSideLabelKey = (typeof IMPACT_FOR_SIDE_LABEL_KEYS)[DirectedImpact];
+
+/**
+ * One judgment, ready to render: a key on its own, or a key plus the role it
+ * names. A union rather than a pre-formatted string so the decision stays
+ * testable and the wording stays in the catalogs.
+ */
+export type ReviewLabelMessage =
+  | { type: "plain"; key: PlainLabelKey }
+  | { type: "forSide"; key: ForSideLabelKey; role: string };
+
+export const impactLabelMessage = (
   impact: DirectedImpact,
   perspective: ReviewPerspective,
-): string =>
+): ReviewLabelMessage =>
   perspective.type === "party"
-    ? `${IMPACT_FOR_SIDE_LABEL[impact]} ${perspective.role}`
-    : IMPACT_LABEL[impact];
+    ? {
+        type: "forSide",
+        key: IMPACT_FOR_SIDE_LABEL_KEYS[impact],
+        role: perspective.role,
+      }
+    : { type: "plain", key: IMPACT_LABEL_KEYS[impact] };
 
 /**
  * The judgment in one phrase: the direction the run judged for, the verdict
@@ -64,19 +90,23 @@ export const impactLabel = (
  * nothing to answer with — checked before impact, because "nothing to compare"
  * is a different finding from "no verdict either way".
  */
-export const findingLabel = (
+export const findingLabelMessage = (
   finding: ReviewFinding,
   perspective: ReviewPerspective,
-): string => {
+): ReviewLabelMessage => {
   const { verdict, impact } = finding;
   if (verdict === "missing") {
-    return VERDICT_LABEL.missing;
+    return { type: "plain", key: VERDICT_LABEL_KEYS.missing };
   }
   const resolvedImpact = impact ?? "unknown";
   if (isDirectedImpact(resolvedImpact)) {
-    return impactLabel(resolvedImpact, perspective);
+    return impactLabelMessage(resolvedImpact, perspective);
   }
-  return verdict === null ? NOT_COMPARED_LABEL : VERDICT_LABEL[verdict];
+  return {
+    type: "plain",
+    key:
+      verdict === null ? NOT_COMPARED_LABEL_KEY : VERDICT_LABEL_KEYS[verdict],
+  };
 };
 
 /**
@@ -85,23 +115,57 @@ export const findingLabel = (
  * the two that stop a deal are the ones a reviewer scanning the list has to
  * see without opening anything.
  */
-const SEVERITY_WORD = {
-  blocker: "Blocker",
-  high: "High",
+const SEVERITY_WORD_KEYS = {
+  blocker: "knowledge.playbooks.severity.blocker",
+  high: "knowledge.playbooks.severity.high",
   medium: null,
   low: null,
-} as const satisfies Record<ReviewSeverity, string | null>;
+} as const satisfies Record<ReviewSeverity, TranslationKey | null>;
+
+export type FindingHeaderLabelMessage = {
+  /** The severity word, or `null` where the row's place already says it. */
+  severityKey: (typeof SEVERITY_WORD_KEYS)[ReviewSeverity];
+  judgment: ReviewLabelMessage;
+};
+
+/** The card header's right-aligned label, before it is put into words. */
+export const findingHeaderLabelMessage = (
+  finding: ReviewFinding,
+  perspective: ReviewPerspective,
+): FindingHeaderLabelMessage => ({
+  severityKey: SEVERITY_WORD_KEYS[finding.severity],
+  judgment: findingLabelMessage(finding, perspective),
+});
 
 const LABEL_SEPARATOR = " · ";
 
-/** The card header's right-aligned label: `High · Unfavourable`. */
-export const findingHeaderLabel = (
-  finding: ReviewFinding,
-  perspective: ReviewPerspective,
-): string => {
-  const severityWord = SEVERITY_WORD[finding.severity];
-  const judgment = findingLabel(finding, perspective);
-  return severityWord === null
-    ? judgment
-    : `${severityWord}${LABEL_SEPARATOR}${judgment}`;
+/** The judgments of the review surface, in the reader's language. */
+export const useReviewLabels = () => {
+  const t = useTranslations();
+  const label = (message: ReviewLabelMessage): string =>
+    message.type === "forSide"
+      ? t(message.key, { role: message.role })
+      : t(message.key);
+
+  return {
+    reviewLabel: label,
+    impactLabel: (impact: DirectedImpact, perspective: ReviewPerspective) =>
+      label(impactLabelMessage(impact, perspective)),
+    findingLabel: (finding: ReviewFinding, perspective: ReviewPerspective) =>
+      label(findingLabelMessage(finding, perspective)),
+    /** `High · Unfavourable`. */
+    findingHeaderLabel: (
+      finding: ReviewFinding,
+      perspective: ReviewPerspective,
+    ) => {
+      const { severityKey, judgment } = findingHeaderLabelMessage(
+        finding,
+        perspective,
+      );
+      const words = label(judgment);
+      return severityKey === null
+        ? words
+        : `${t(severityKey)}${LABEL_SEPARATOR}${words}`;
+    },
+  };
 };

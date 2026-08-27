@@ -54,6 +54,59 @@ export const documentReviewRunKeys = {
     ] as const,
 };
 
+/** One document's sides, keyed by the document rather than by a run: the
+ *  answer is a property of the file's current version, and the launcher asks
+ *  for it before any run exists. */
+export const documentReviewPartiesKeys = {
+  all: (workspaceId: string) =>
+    ["document-review-parties", workspaceId] as const,
+  target: (target: DocumentReviewRunTarget) =>
+    [
+      ...documentReviewPartiesKeys.all(target.workspaceId),
+      { entityId: target.entityId, fileFieldId: target.fileFieldId },
+    ] as const,
+};
+
+/**
+ * Which sides the reviewed document has, so "We act for" can be answered on
+ * the launcher instead of after a proposal has already been paid for.
+ *
+ * The server caches the detection per document version, so a re-run costs
+ * nothing; the client keeps the answer for the session because the reviewer
+ * moves between the launcher and the results while the document stands still.
+ */
+const fetchDocumentReviewParties = async (
+  { workspaceId, entityId, fileFieldId }: DocumentReviewRunTarget,
+  signal: AbortSignal,
+) =>
+  unwrapEden(
+    await api
+      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      ["document-reviews"].parties.post(
+        {
+          target: {
+            entityId: toSafeId<"entity">(entityId),
+            fileFieldId: toSafeId<"field">(fileFieldId),
+          },
+        },
+        { fetch: { signal } },
+      ),
+  );
+
+export type DocumentReviewPartiesAnswer = Awaited<
+  ReturnType<typeof fetchDocumentReviewParties>
+>;
+
+export const documentReviewPartiesOptions = (target: DocumentReviewRunTarget) =>
+  queryOptions({
+    queryKey: documentReviewPartiesKeys.target(target),
+    queryFn: async ({ signal }) =>
+      await fetchDocumentReviewParties(target, signal),
+    // The detection is pinned to a document version; a new version changes the
+    // document on screen, which is a navigation, not a refetch.
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+
 export const documentReviewSourcesOptions = ({
   workspaceId,
   q,

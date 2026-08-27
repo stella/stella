@@ -194,6 +194,11 @@ describe("the one caption sentence the card shows", () => {
   });
 });
 
+// The two phrases the caller resolves in its own locale; the sentence only
+// has to place them.
+const PROPOSED_FROM_REFERENCES = "positions proposed from the references";
+const NO_SIDE = "no side";
+
 describe("what the run says it read", () => {
   const reference = {
     workspaceId: "workspace-1",
@@ -212,7 +217,8 @@ describe("what the run says it read", () => {
         references: [reference],
         playbookName: "SPA (buyer)",
         playbookProposed: false,
-        perspective: { type: "party", role: "Purchaser", name: null },
+        proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
+        sideLabel: "for the Purchaser",
       }),
     ).toBe("Fusion SPA v4 · Elixir SPA · SPA (buyer) · for the Purchaser");
   });
@@ -225,7 +231,8 @@ describe("what the run says it read", () => {
         references: [reference],
         playbookName: "Positions confirmed for this review",
         playbookProposed: true,
-        perspective: { type: "neutral" },
+        proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
+        sideLabel: NO_SIDE,
       }),
     ).toBe(
       "Fusion SPA · Elixir SPA · positions proposed from the references · no side",
@@ -267,10 +274,11 @@ describe("what a history row says a run was measured against", () => {
   test("names the playbook a run was executed against", () => {
     expect(
       buildRunHistoryBasisSentence({
-        perspectiveRole: "Purchaser",
         playbookName: "Buy-side SPA",
         playbookProposed: false,
+        proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
         references: null,
+        sideLabel: "for the Purchaser",
       }),
     ).toBe("Buy-side SPA · for the Purchaser");
   });
@@ -278,10 +286,11 @@ describe("what a history row says a run was measured against", () => {
   test("names the references a run with no saved playbook compared against", () => {
     expect(
       buildRunHistoryBasisSentence({
-        perspectiveRole: null,
         playbookName: "Positions confirmed for this review",
         playbookProposed: true,
+        proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
         references: "2 references",
+        sideLabel: NO_SIDE,
       }),
     ).toBe("2 references · no side");
   });
@@ -291,10 +300,11 @@ describe("what a history row says a run was measured against", () => {
   test("falls back to where the positions came from", () => {
     expect(
       buildRunHistoryBasisSentence({
-        perspectiveRole: null,
         playbookName: null,
         playbookProposed: true,
+        proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
         references: null,
+        sideLabel: NO_SIDE,
       }),
     ).toBe("positions proposed from the references · no side");
   });

@@ -16,17 +16,17 @@ import { cn } from "@stll/ui/utils";
 import { REVIEW_CLAUSE_LABEL_CLASS } from "@/components/ai-suggestions/review-passage-side";
 import type { ReferenceStandard } from "@/lib/knowledge/playbook-types";
 
+/**
+ * How the proposal classified the term a reference-derived position compares.
+ *
+ * Internal: the grader reads it, no surface prints it. "Parameter" and
+ * "enumeration" are the schema's vocabulary for its own dispatch, not words a
+ * lawyer reads about their own contract, and the header row is worth more to
+ * the issue than to a taxonomy.
+ */
 export type PositionTermKind = ReferenceStandard["termKind"];
 
-// TODO(i18n): English until the review surface is localized as a whole.
-export const TERM_KIND_LABEL = {
-  parameter: "Parameter",
-  enumeration: "Enumeration",
-  presence: "Presence",
-  language: "Language",
-} as const satisfies Record<PositionTermKind, string>;
-
-/** Secondary words in the header row: the term kind, the judgment, a badge. */
+/** Secondary words in the header row: the judgment, a badge. */
 export const POSITION_HEADER_META_CLASS =
   "text-muted-foreground shrink-0 text-xs";
 
@@ -37,8 +37,6 @@ export type PositionHeaderProps = {
   index?: number | undefined;
   /** The issue: read-only text in the results, an input in the editors. */
   title: ReactNode;
-  /** What kind of term the position compares, when the standard says. */
-  termKind?: PositionTermKind | null | undefined;
   /** The right-aligned muted slot: the finding's judgment in the results, the
    *  severity chip and badges in the editors. */
   label?: ReactNode;
@@ -51,7 +49,6 @@ export const PositionHeader = ({
   leading,
   index,
   title,
-  termKind,
   label,
   actions,
   className,
@@ -69,11 +66,6 @@ export const PositionHeader = ({
       </span>
     )}
     <span className="min-w-0 flex-1 text-sm leading-6">{title}</span>
-    {termKind !== undefined && termKind !== null && (
-      <span className={POSITION_HEADER_META_CLASS}>
-        {TERM_KIND_LABEL[termKind]}
-      </span>
-    )}
     {label}
     {actions}
   </span>

@@ -2290,9 +2290,13 @@
     "review": {
       "actionNeeded": "Na riešenie",
       "addComment": "Pridať ako komentár",
+      "addNote": "Pridať poznámku pre protistranu",
+      "addNotePlaceholder": "Čo má vidieť protistrana",
+      "addNoteSubmit": "Pridať poznámku",
       "addReference": "Pridať {name} ako referenciu",
       "addTopic": "Pridať tému",
       "allDecided": "Všetky zistenia sú rozhodnuté.",
+      "askInChat": "Opýtať sa v chate",
       "assessment": {
         "additionalInTarget": "Navyše v cieľovom dokumente",
         "aligned": "Zhodné",
@@ -2302,11 +2306,27 @@
         "notComparable": "Nedá sa porovnať"
       },
       "basisCombined": "{count, plural, one {Kontrola podľa {name} a porovnanie s # referenčným dokumentom} few {Kontrola podľa {name} a porovnanie s # referenčnými dokumentmi} other {Kontrola podľa {name} a porovnanie s # referenčnými dokumentmi}}",
+      "basisDivider": "a / alebo",
       "basisPlaybook": "Kontrola podľa {name}",
       "basisReferences": "{count, plural, one {Porovnanie s # referenčným dokumentom} few {Porovnanie s # referenčnými dokumentmi} other {Porovnanie s # referenčnými dokumentmi}}",
       "changeBasis": "Zmeniť podklady kontroly",
+      "chatDraft": {
+        "finding": "Zistenie:",
+        "impact": "Dopad:",
+        "issue": "Téma:",
+        "question": "Ako mám v tomto bode prepracovať cieľový dokument?",
+        "rationale": "Odôvodnenie:"
+      },
+      "checks": "Posudzuje sa:",
       "commentFailed": "Komentár sa nepodarilo pridať",
       "comparedWithReferences": "{count, plural, one {Porovnané s # referenčným dokumentom} few {Porovnané s # referenčnými dokumentmi} other {Porovnané s # referenčnými dokumentmi}}",
+      "dealStrip": {
+        "flagged": "označené {count, number}",
+        "label": "Kde sa v dokumente nachádzajú zistenia",
+        "more": "+{count, number} ďalších",
+        "preamble": "Preambula"
+      },
+      "decidedCount": "rozhodnuté {count, number}",
       "decision": "Rozhodnutie",
       "decisionFailed": "Rozhodnutie sa nepodarilo uložiť",
       "decisions": {
@@ -2316,20 +2336,88 @@
       "description": "Vyberte pripravený playbook, referenčné dokumenty alebo oboje.",
       "dismiss": "Zamietnuť",
       "documentChanged": "Dokument sa od tejto kontroly zmenil.",
+      "export": {
+        "counterparty": "Odoslať protistrane",
+        "counterpartyFailed": "Dokument sa nepodarilo exportovať",
+        "counterpartyHint": "Dokument s vašimi sledovanými zmenami",
+        "counterpartyUnavailable": "Dokument otvorte, aby ste ho mohli exportovať",
+        "csv": "CSV",
+        "docx": "Dokument Word (.docx)",
+        "exporting": "Exportovanie",
+        "internal": "Interné memo",
+        "internalHint": "Zistenia, odôvodnenie a referencie",
+        "xlsx": "Zošit Excel (.xlsx)"
+      },
       "failed": "Kontrola dokumentu sa nepodarila",
+      "filterCoverage": "Pokrytie",
+      "filterDeviations": "Odchýlky",
+      "flag": "Označiť",
+      "flaggedPositions": "{total, plural, one {označené {flagged, number} z # pozície} few {označené {flagged, number} z # pozícií} other {označené {flagged, number} z # pozícií}}",
+      "fromChat": "Z chatu",
       "fromThisMatter": "Z tohto spisu",
+      "history": {
+        "backToLatest": "Späť na najnovšiu",
+        "decided": "rozhodnuté {decided, number} z {total, number}",
+        "references": "{count, plural, one {# referencia} few {# referencie} other {# referencií}}"
+      },
+      "impact": {
+        "favourable": "Výhodné",
+        "neutral": "Neutral",
+        "notJudged": "Neposúdené",
+        "unfavourable": "Nevýhodné"
+      },
+      "impactForSide": {
+        "favourable": "Lepšie pre {role}",
+        "neutral": "Bez dopadu na {role}",
+        "unfavourable": "Horšie pre {role}"
+      },
       "insertFailed": "Navrhované znenie sa nepodarilo vložiť",
       "insertSuggestion": "Vložiť navrhované znenie",
       "insufficientEvidence": "Poskytnuté dokumenty neobsahujú k tejto téme dostatok podkladov.",
+      "marginNotes": {
+        "above": "{count, number} vyššie",
+        "below": "{count, number} nižšie",
+        "documentNotRead": "Otvorte dokument v hlavnom paneli, aby sa zistenia pripli vedľa neho.",
+        "label": "Zistenia vedľa ustanovení, ktorých sa týkajú",
+        "unanchored": "Bez väzby na ustanovenie"
+      },
       "newTopic": "Nová téma kontroly",
+      "noChangeNeeded": "Zmena nie je potrebná",
+      "noEditor": "Zmeny prijmete po otvorení dokumentu",
       "noMaterialDifferences": "Nenašli sa žiadne podstatné rozdiely",
+      "noPassage": "Žiadna pasáž",
       "noPlaybooksMatch": "Žiadne zodpovedajúce playbooky.",
       "noReferencesFound": "Nenašli sa žiadne zodpovedajúce dokumenty DOCX.",
+      "notCompared": "Neporovnané",
+      "notComparedCount": "Neporovnané: {count, number}",
+      "noteAdded": "Poznámka pre protistranu bola pridaná",
+      "openPlaybooks": "Otvoriť playbooky",
+      "pane": {
+        "document": "Panel: zistenia vedľa dokumentu",
+        "margin": "Okraj: zistenia vedľa svojich ustanovení",
+        "review": "Hlavný: zistenia v širokom paneli"
+      },
+      "passagesCount": "{count, plural, one {# pasáž} few {# pasáže} other {# pasáží}}",
+      "pendingCount": "{count, plural, one {# čaká} few {# čakajú} other {# čaká}}",
+      "perspective": {
+        "neutral": "Neuvedené",
+        "other": "Iná…",
+        "otherPlaceholder": "Rola tak, ako ju označuje dokument",
+        "title": "Zastupujeme"
+      },
       "playbookDeleted": "Tento playbook už neexistuje; kontrola sa uchováva ako záznam.",
       "playbookFindings": "Zistenia z playbooku",
       "playbookOutdated": "Existuje novšia schválená verzia tohto playbooku.",
       "playbookSection": "Playbook",
       "playbookTopic": "Prevzaté z playbooku",
+      "presence": {
+        "absent": "Nie",
+        "present": "Áno"
+      },
+      "progressPositions": "{total, plural, one {{completed, number} z # pozície} few {{completed, number} z # pozícií} other {{completed, number} z # pozícií}}",
+      "proposing": "Navrhujú sa pozície… {count, number}",
+      "readOnlyRun": "Rozhodnuté v tejto kontrole",
+      "recommendation": "Odporúčanie:",
       "referenceDocument": "Referenčný dokument",
       "referenceFindings": "Porovnanie s referenciami",
       "referenceLimitReached": "Dosiahnutý limit referencií",
@@ -2342,21 +2430,42 @@
       "reopen": "Znovu otvoriť",
       "results": "Výsledky kontroly",
       "reviewAgain": "Spustiť ďalšiu kontrolu",
+      "reviewPositionsFirst": "Najprv skontrolovať pozície",
       "reviewedAgainstCombined": "{count, plural, one {Skontrolované podľa {name} a porovnané s # referenčným dokumentom} few {Skontrolované podľa {name} a porovnané s # referenčnými dokumentmi} other {Skontrolované podľa {name} a porovnané s # referenčnými dokumentmi}}",
       "reviewing": "Kontrola prebieha…",
       "reviewingHint": "Pri rozsiahlych dokumentoch to môže trvať niekoľko minút.",
       "run": "Spustiť kontrolu",
+      "runStatus": {
+        "queued": "V poradí"
+      },
+      "saveAsPlaybook": "Uložiť ako playbook",
+      "saveAsPlaybookFailed": "Túto kontrolu sa nepodarilo uložiť ako playbook",
+      "savedAsPlaybook": "Uložené ako playbook",
       "scoreTopics": "Skontrolovať tieto témy",
       "searchPlaybooks": "Hľadať playbooky",
+      "showInDocument": "Zobraziť v dokumente",
       "sizeConfirmStart": "Spustiť kontrolu",
       "sizeConfirmTitle": "Rozsiahla kontrola",
+      "standardColumn": "Štandard",
+      "standardColumnFrom": "Štandard ({name})",
+      "suggestionSkipped": "Už nezodpovedá dokumentu",
+      "suggestionStaged": "Pripravené ako sledovaná zmena v dokumente",
+      "summary": {
+        "forParty": "za {role}",
+        "noSide": "bez strany",
+        "proposedFromReferences": "pozície navrhnuté z referencií"
+      },
+      "targetAsReference": "Kontrolovaný dokument nemôže byť vlastnou referenciou.",
+      "targetColumn": "Tento dokument",
       "targetDocument": "Cieľový dokument",
       "title": "Kontrola dokumentu",
       "topicContext": "Doplňujúci kontext",
       "topicContextPlaceholder": "Čo má kontrola pri tejto téme zohľadniť?",
       "topicName": "Názov témy",
       "topicsDescription": "Potvrďte navrhnuté témy, pridajte vlastné alebo pred hodnotením doplňte kontext.",
-      "topicsTitle": "Čo má kontrola zahŕňať?"
+      "topicsTitle": "Čo má kontrola zahŕňať?",
+      "why": "Prečo",
+      "whyItMatters": "Prečo je to podstatné:"
     },
     "showPane": "Zobraziť panel",
     "swapViews": "Vymeniť hlavné zobrazenie a bočný panel",
@@ -2494,6 +2603,7 @@
       "addOption": "Pridať možnosť",
       "addPosition": "Pridať pozíciu",
       "addRule": "Pravidlo",
+      "adoptAsIdeal": "Prijať ako ideálne znenie",
       "advanced": "Zmeniť, ako to funguje",
       "all": "Všetky playbooky",
       "approval": {
@@ -2527,10 +2637,12 @@
       "convertToExtractDescription": "Týmto sa odstránia úrovne hodnotenia aj samotné hodnotenie tejto pozície. Túto akciu nemožno vrátiť späť.",
       "convertToExtractTitle": "Previesť iba na extrakciu?",
       "convertToGraded": "Pridať pravidlá hodnotenia",
+      "convertToRules": "Previesť na pravidlá",
       "createPlaybook": "Nový playbook",
       "created": "Playbook vytvorený",
       "customizeAnswer": "Zmeniť získavanú odpoveď",
       "customizeAnswerHint": "Upraviť otázku alebo formát odpovede.",
+      "decisionLine": "{runs, plural, one {prijaté {accepted, number} · zamietnuté {dismissed, number} · naprieč # kontrolou} few {prijaté {accepted, number} · zamietnuté {dismissed, number} · naprieč # kontrolami} other {prijaté {accepted, number} · zamietnuté {dismissed, number} · naprieč # kontrolami}}",
       "deleteFailed": "Playbook sa nepodarilo odstrániť",
       "deletePlaybook": "Odstrániť playbook",
       "deletePosition": "Odstrániť pozíciu",
@@ -2586,6 +2698,7 @@
         "title": "Vyjednávanie"
       },
       "noPositions": "Zatiaľ žiadne pozície. Pridajte prvú.",
+      "noSettledPosition": "Žiadna ustálená pozícia",
       "optionPlaceholder": "Hodnota možnosti",
       "optionsLabel": "Možnosti",
       "outline": "Osnova",
@@ -2594,6 +2707,7 @@
       "recent": "Nedávno použité",
       "recommended": "Odporúčané úvodné playbooky",
       "redLinePlaceholder": "Znenie, ktoré nie je nikdy prijateľné",
+      "referenceStandard": "Z referencie",
       "removeCheck": "Odstrániť kontrolu",
       "removeIdeal": "Odstrániť ideálne znenie",
       "reorderPosition": "Zmeniť poradie pozície",
@@ -2639,6 +2753,12 @@
       },
       "switchToAuto": "Generovať otázku a formát automaticky",
       "switchToManual": "Upraviť otázku a formát odpovede",
+      "termKind": {
+        "enumeration": "Výčet",
+        "language": "Language",
+        "parameter": "Premenná",
+        "presence": "Prítomnosť"
+      },
       "tier": {
         "acceptable": "Prijateľné",
         "fallback": "Náhradné",
@@ -2649,6 +2769,7 @@
       "updated": "Playbook aktualizovaný",
       "updatedAt": "Aktualizované {date}",
       "verdict": {
+        "additional": "Navyše",
         "compliant": "Vyhovuje",
         "deviation": "Odchýlka",
         "fallback": "Náhradné znenie",

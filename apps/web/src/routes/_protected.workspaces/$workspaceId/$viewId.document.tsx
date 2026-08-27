@@ -40,7 +40,10 @@ import { stellaToast } from "@stll/ui/toast";
 import "@stll/folio-react/editor.css";
 import { cn, composeRefs } from "@stll/ui/utils";
 
-import { documentReviewRunsOptions } from "@/components/ai-suggestions/document-review-queries";
+import {
+  documentReviewPartiesOptions,
+  documentReviewRunsOptions,
+} from "@/components/ai-suggestions/document-review-queries";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import {
   useDocxFitZoom,
@@ -238,6 +241,26 @@ export const Route = createFileRoute(
         prefetchRouteQuery(
           context.queryClient,
           documentReviewRunsOptions({
+            workspaceId: params.workspaceId,
+            entityId: deps.entity,
+            fileFieldId: deps.field,
+          }),
+          (error: unknown) => {
+            getAnalytics().captureError(error);
+          },
+        ),
+        "document.prefetch",
+      );
+
+      // "We act for" is the first thing the review launcher asks, and the
+      // answer is a detection over the document itself — cached per version
+      // server-side, so on every open but the first it costs a round trip and
+      // nothing else. Started here so the chips are on screen with the
+      // launcher rather than after it. DOCX only, like the facet.
+      detached(
+        prefetchRouteQuery(
+          context.queryClient,
+          documentReviewPartiesOptions({
             workspaceId: params.workspaceId,
             entityId: deps.entity,
             fileFieldId: deps.field,

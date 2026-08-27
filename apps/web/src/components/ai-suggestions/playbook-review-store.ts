@@ -15,13 +15,20 @@
 import { Result } from "better-result";
 import { create } from "zustand";
 
+import { REVIEW_START_MODE } from "@/components/ai-suggestions/document-review-basis.logic";
 import type {
   ReferenceFile,
-  ReviewParty,
   ReviewPerspective,
   ReviewSetup,
   ReviewSkippedTerm,
+  ReviewStartMode,
 } from "@/components/ai-suggestions/document-review-basis.logic";
+import {
+  mergeStreamedPosition,
+  REVIEW_PROPOSAL_EVENT,
+  streamReviewProposal,
+} from "@/components/ai-suggestions/document-review-proposal-stream";
+import type { IndexedPosition } from "@/components/ai-suggestions/document-review-proposal-stream";
 import { fetchDocumentReviewRuns } from "@/components/ai-suggestions/document-review-queries";
 import { resolveRunConflictAttachment } from "@/components/ai-suggestions/document-review-run.logic";
 import { runSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
@@ -32,7 +39,6 @@ import { userErrorMessage } from "@/lib/errors/user-safe";
 import type { Position } from "@/lib/knowledge/playbook-types";
 import { toSafeId } from "@/lib/safe-id";
 
-const POSITION_PROPOSAL_TIMEOUT_MS = 130_000;
 const RUN_CREATE_TIMEOUT_MS = 30_000;
 
 /** The create endpoint answers this when the document already has a run in
@@ -77,6 +83,24 @@ export type ReviewRunSelection =
 
 export const TRACKED_RUN_SELECTION: ReviewRunSelection = { type: "tracked" };
 
+/**
+ * The proposal as the stream has delivered it so far.
+ *
+ * Separate from the session's `positions` on purpose: this is what the model
+ * proposed, in the order it proposed it, and it never changes once written —
+ * `positions` is the plan the reviewer may then edit. Keeping the two apart is
+ * what lets the streamed cards stay on screen while the run they started is
+ * already claiming its findings.
+ */
+export type ReviewProposal = {
+  status: "streaming" | "done" | "failed";
+  /** The seeded positions, then each streamed one in the proposal's own
+   *  order. */
+  positions: Position[];
+  /** What the pass read and deliberately did not turn into a position. */
+  skipped: ReviewSkippedTerm[];
+};
+
 export type DocumentReviewSession = {
   status: ReviewStatus;
   setup: ReviewSetup | null;
@@ -90,13 +114,13 @@ export type DocumentReviewSession = {
   requestId: string | null;
   /** The list the run will be measured by, while the reviewer confirms it. */
   positions: Position[];
-  /** The target's parties as the position proposal read them; what the
-   *  reviewer picks a side from while confirming. */
-  parties: ReviewParty[];
   /** What the position proposal read but deliberately did not turn into a
    *  position; empty when no proposal ran (a playbook-only setup, or none
    *  started yet). */
   skipped: ReviewSkippedTerm[];
+  /** The streamed proposal behind this session, or `null` when none has been
+   *  asked for (a playbook-only setup, or a restored run). */
+  proposal: ReviewProposal | null;
   /**
    * A refused start whose estimated size needs the reviewer's explicit
    * go-ahead; the dialog re-issues the stored request with the estimate
@@ -128,6 +152,8 @@ type StartReviewArgs = {
   entityId: string;
   fileFieldId: string;
   unexpectedErrorMessage: string;
+  /** What the proposal is followed by: the run, or the confirm step. */
+  startMode: ReviewStartMode;
   /** The picked playbook's enabled positions, when there is one. */
   seededPositions: Position[];
 };
@@ -152,6 +178,13 @@ export type StartRunArgs = {
 
 type State = {
   sessions: Record<string, DocumentReviewSession>;
+  /**
+   * The side last chosen for each document, kept past the session it was
+   * chosen in. Going back to the launcher blanks the session, and re-picking
+   * "we act for the Purchaser" on every re-run of the same contract is the
+   * kind of retyping a reviewer notices.
+   */
+  perspectiveByDocument: Record<string, ReviewPerspective>;
 };
 
 type Actions = {
@@ -174,8 +207,9 @@ type Actions = {
     fileFieldId: string,
     positions: Position[],
   ) => void;
-  /** Which of the target's sides the run will be judged for; only while
-   *  the positions are being confirmed, which is when the sides are known. */
+  /** Which of the target's sides the run is judged for. Chosen on the
+   *  launcher, and changeable again while the positions are confirmed;
+   *  remembered for the document either way. */
   setPerspective: (
     entityId: string,
     fileFieldId: string,
@@ -201,10 +235,25 @@ const blankSession = (): DocumentReviewSession => ({
   selection: TRACKED_RUN_SELECTION,
   requestId: null,
   positions: [],
-  parties: [],
   skipped: [],
+  proposal: null,
   sizeConfirmation: null,
 });
+
+/**
+ * The in-flight proposal stream per document, held outside the store: it is a
+ * connection, not state anything renders, and a component subscribing to it
+ * would re-render on a value it can do nothing with. Starting a proposal
+ * hangs up the previous one for the same document; so does going back to the
+ * launcher, because nobody is left to read the rest of the checklist and the
+ * tokens are still being paid for.
+ */
+const proposalStreams = new Map<string, AbortController>();
+
+const abortProposalStream = (key: string) => {
+  proposalStreams.get(key)?.abort();
+  proposalStreams.delete(key);
+};
 
 const referenceRefs = (
   references: StartRunArgs["references"],
@@ -259,6 +308,7 @@ const requestRun = async ({
 
 export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
   sessions: {},
+  perspectiveByDocument: {},
 
   startReview: async ({
     workspaceId,
@@ -266,6 +316,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     entityId,
     fileFieldId,
     unexpectedErrorMessage,
+    startMode,
     seededPositions,
   }) => {
     const key = reviewSessionKey(entityId, fileFieldId);
@@ -276,6 +327,12 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     ) {
       return { ok: true };
     }
+    set((state) => ({
+      perspectiveByDocument: {
+        ...state.perspectiveByDocument,
+        [key]: setup.perspective,
+      },
+    }));
 
     if (setup.references.length === 0) {
       // No reference documents means no positions to agree on: the playbook's
@@ -308,37 +365,126 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
           setup,
           requestId,
           positions: seededPositions,
+          proposal: {
+            status: "streaming",
+            positions: [...seededPositions],
+            skipped: [],
+          },
         },
       },
     }));
 
-    const proposalResult = await Result.tryPromise(async () => {
-      const { data, error } = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["document-reviews"].positions.post(
-          {
-            target: {
-              entityId: toSafeId<"entity">(entityId),
-              fileFieldId: toSafeId<"field">(fileFieldId),
-            },
-            references: referenceRefs(setup.references),
-            seededPositions: [...seededPositions],
+    abortProposalStream(key);
+    const controller = new AbortController();
+    proposalStreams.set(key, controller);
+
+    // Streamed positions are placed by the index the server states rather than
+    // by arrival, and the seeds keep the front: the stream never re-sends
+    // them, so the list is seeds first, proposal second, in the proposal's own
+    // order.
+    let streamed: IndexedPosition[] = [];
+    const proposalPositions = (): Position[] => [
+      ...seededPositions,
+      ...streamed.map((entry) => entry.position),
+    ];
+
+    /** Fold one frame into the session, or answer `false` when this request is
+     *  no longer the one the session is waiting for. */
+    const applyEvent = (
+      apply: (proposal: ReviewProposal) => ReviewProposal,
+    ): boolean => {
+      let current = false;
+      set((state) => {
+        const session = state.sessions[key];
+        if (session?.requestId !== requestId || session.proposal === null) {
+          return state;
+        }
+        current = true;
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: { ...session, proposal: apply(session.proposal) },
           },
-          {
-            fetch: {
-              signal: AbortSignal.timeout(POSITION_PROPOSAL_TIMEOUT_MS),
-            },
+        };
+      });
+      return current;
+    };
+
+    const streamResult = await Result.tryPromise(
+      async () =>
+        await streamReviewProposal({
+          workspaceId,
+          target: { entityId, fileFieldId },
+          references: setup.references.map((reference) => ({
+            workspaceId: reference.workspaceId,
+            entityId: reference.entityId,
+            fileFieldId: reference.fileFieldId,
+          })),
+          seededPositions,
+          perspective: setup.perspective,
+          signal: controller.signal,
+          onEvent: (event) => {
+            switch (event.type) {
+              case REVIEW_PROPOSAL_EVENT.PARTIES:
+                // The launcher asked the same question before the reviewer
+                // picked a side, and the side is already in the request this
+                // stream is answering. Restating it changes nothing.
+                return true;
+              case REVIEW_PROPOSAL_EVENT.POSITION: {
+                streamed = mergeStreamedPosition(streamed, event);
+                return applyEvent((proposal) => ({
+                  ...proposal,
+                  positions: proposalPositions(),
+                }));
+              }
+              case REVIEW_PROPOSAL_EVENT.SKIPPED:
+                return applyEvent((proposal) => ({
+                  ...proposal,
+                  skipped: [...proposal.skipped, event.skipped],
+                }));
+              case REVIEW_PROPOSAL_EVENT.DONE:
+                return applyEvent((proposal) => ({
+                  ...proposal,
+                  status: "done",
+                }));
+              case REVIEW_PROPOSAL_EVENT.ERROR:
+                // Whatever already streamed stays valid; the list is simply
+                // not complete, and the reviewer decides what to do with it.
+                applyEvent((proposal) => ({ ...proposal, status: "failed" }));
+                return false;
+              default:
+                event satisfies never;
+                return true;
+            }
           },
-        );
-      return { data, error };
-    });
-    const proposalError = Result.isError(proposalResult)
-      ? null
-      : proposalResult.value.error;
-    if (Result.isError(proposalResult) || proposalError) {
-      const message = proposalError
-        ? userErrorMessage(proposalError, unexpectedErrorMessage)
-        : unexpectedErrorMessage;
+        }),
+    );
+
+    if (proposalStreams.get(key) === controller) {
+      proposalStreams.delete(key);
+    }
+
+    const session = get().sessions[key];
+    if (session?.requestId !== requestId) {
+      // Superseded: the reviewer went back to the launcher, or started
+      // another proposal for the same document.
+      return { ok: true };
+    }
+
+    const refusal =
+      !Result.isError(streamResult) && !streamResult.value.ok
+        ? streamResult.value.error
+        : null;
+    const proposalStatus = session.proposal?.status ?? "failed";
+    if (
+      Result.isError(streamResult) ||
+      refusal !== null ||
+      proposalStatus === "failed"
+    ) {
+      const message =
+        refusal === null
+          ? unexpectedErrorMessage
+          : userErrorMessage(refusal, unexpectedErrorMessage);
       set((state) => {
         const current = state.sessions[key];
         if (current?.requestId !== requestId) {
@@ -352,36 +498,69 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
               status: "error",
               error: message,
               requestId: null,
+              proposal:
+                current.proposal === null
+                  ? null
+                  : { ...current.proposal, status: "failed" },
             },
           },
         };
       });
-      return { ok: false, message, error: proposalError };
+      return { ok: false, message, error: refusal };
     }
 
+    const proposed = session.proposal?.positions ?? seededPositions;
+    if (startMode === REVIEW_START_MODE.confirmFirst) {
+      set((state) => {
+        const current = state.sessions[key];
+        if (current?.requestId !== requestId) {
+          return state;
+        }
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: {
+              ...current,
+              status: "editing-positions",
+              positions: proposed,
+              skipped: current.proposal?.skipped ?? [],
+              requestId: null,
+            },
+          },
+        };
+      });
+      return { ok: true };
+    }
+
+    // Start immediately. The streamed cards stay on screen until the run's own
+    // progress replaces them, so the reviewer never watches the list they were
+    // reading get taken away for a spinner.
     set((state) => {
       const current = state.sessions[key];
       if (current?.requestId !== requestId) {
         return state;
       }
-      const proposed = proposalResult.value.data;
       return {
         sessions: {
           ...state.sessions,
           [key]: {
             ...current,
-            status: "editing-positions",
-            // The proposal carries the seeds back, so its list is the whole
-            // plan rather than an addition to one.
-            positions: proposed === null ? seededPositions : proposed.positions,
-            parties: proposed === null ? [] : proposed.parties,
-            skipped: proposed === null ? [] : proposed.skipped,
+            skipped: current.proposal?.skipped ?? [],
             requestId: null,
           },
         },
       };
     });
-    return { ok: true };
+    return await get().startRun({
+      workspaceId,
+      entityId,
+      fileFieldId,
+      playbookId: setup.playbookId,
+      references: setup.references,
+      perspective: setup.perspective,
+      positions: proposed.filter((position) => position.enabled),
+      unexpectedErrorMessage,
+    });
   },
 
   confirmRunSize: async (entityId, fileFieldId) => {
@@ -630,10 +809,19 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     const key = reviewSessionKey(entityId, fileFieldId);
     set((state) => {
       const current = state.sessions[key];
+      const remembered = {
+        perspectiveByDocument: {
+          ...state.perspectiveByDocument,
+          [key]: perspective,
+        },
+      };
+      // A run is already measuring by the side it was given; changing it here
+      // would only disagree with the row.
       if (!current?.setup || current.status !== "editing-positions") {
-        return state;
+        return remembered;
       }
       return {
+        ...remembered,
         sessions: {
           ...state.sessions,
           [key]: { ...current, setup: { ...current.setup, perspective } },
@@ -665,6 +853,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
    */
   resetSession: (entityId, fileFieldId) => {
     const key = reviewSessionKey(entityId, fileFieldId);
+    abortProposalStream(key);
     set((state) => ({
       sessions: {
         ...state.sessions,

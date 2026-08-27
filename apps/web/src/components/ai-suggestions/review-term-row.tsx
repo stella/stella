@@ -1,3 +1,5 @@
+import { useTranslations } from "use-intl";
+
 import { BidiText } from "@stll/ui/bidi-text";
 import { cn } from "@stll/ui/utils";
 
@@ -6,10 +8,11 @@ import type {
   ReviewImpact,
 } from "@/components/ai-suggestions/review-delta";
 import { REVIEW_SECTION_LABEL_CLASS } from "@/components/ai-suggestions/review-passage-side";
+import type { TranslationKey } from "@/i18n/types";
 
-// TODO(i18n): English until the review surface is localized as a whole.
-const MISSING_VALUE_LABEL = "—";
-const CITATION_ARIA_LABEL = "Show in document";
+/** A dash, not a word: the cell is hidden from assistive technology, and the
+ *  column heading already says which document the empty value belongs to. */
+const MISSING_VALUE_GLYPH = "—";
 
 /**
  * Direction as a word. A reader who has never seen this table before has to be
@@ -17,12 +20,12 @@ const CITATION_ARIA_LABEL = "Show in document";
  * like every other secondary column: the row's place in the list already
  * carries how much it matters.
  */
-const IMPACT_LABEL = {
-  favourable: "Favourable",
-  unfavourable: "Unfavourable",
-  neutral: "Neutral",
-  unknown: "Not judged",
-} as const satisfies Record<ReviewImpact, string>;
+const IMPACT_LABEL_KEYS = {
+  favourable: "inspector.review.impact.favourable",
+  unfavourable: "inspector.review.impact.unfavourable",
+  neutral: "inspector.review.impact.neutral",
+  unknown: "inspector.review.impact.notJudged",
+} as const satisfies Record<ReviewImpact, TranslationKey>;
 
 /**
  * Fixed geometry, so the term reads across the row rather than wrapping a word
@@ -59,38 +62,41 @@ export const ReviewTermRow = ({
   delta,
   impact,
   onShowInDocument,
-}: ReviewTermRowProps) => (
-  <tr className="border-border border-b last:border-b-0">
-    <th
-      className={cn(
-        CELL_CLASS,
-        "text-foreground min-w-0 pe-3 text-start font-normal",
-      )}
-      scope="row"
-    >
-      <BidiText as="span">{label}</BidiText>
-    </th>
-    <td className={cn(CELL_CLASS, "pe-3 text-end tabular-nums")}>
-      <TermValue onShowInDocument={onShowInDocument} value={delta.target} />
-    </td>
-    <td
-      className={cn(
-        CELL_CLASS,
-        "text-muted-foreground pe-3 text-end tabular-nums",
-      )}
-    >
-      <TermValue value={delta.standard} />
-    </td>
-    <td
-      className={cn(
-        CELL_CLASS,
-        "text-muted-foreground text-end whitespace-nowrap",
-      )}
-    >
-      {IMPACT_LABEL[impact]}
-    </td>
-  </tr>
-);
+}: ReviewTermRowProps) => {
+  const t = useTranslations();
+  return (
+    <tr className="border-border border-b last:border-b-0">
+      <th
+        className={cn(
+          CELL_CLASS,
+          "text-foreground min-w-0 pe-3 text-start font-normal",
+        )}
+        scope="row"
+      >
+        <BidiText as="span">{label}</BidiText>
+      </th>
+      <td className={cn(CELL_CLASS, "pe-3 text-end tabular-nums")}>
+        <TermValue onShowInDocument={onShowInDocument} value={delta.target} />
+      </td>
+      <td
+        className={cn(
+          CELL_CLASS,
+          "text-muted-foreground pe-3 text-end tabular-nums",
+        )}
+      >
+        <TermValue value={delta.standard} />
+      </td>
+      <td
+        className={cn(
+          CELL_CLASS,
+          "text-muted-foreground text-end whitespace-nowrap",
+        )}
+      >
+        {t(IMPACT_LABEL_KEYS[impact])}
+      </td>
+    </tr>
+  );
+};
 
 type TermValueProps = {
   value: ParameterDelta["target"];
@@ -98,15 +104,16 @@ type TermValueProps = {
 };
 
 const TermValue = ({ value, onShowInDocument }: TermValueProps) => {
+  const t = useTranslations();
   if (value === null) {
-    return <span aria-hidden="true">{MISSING_VALUE_LABEL}</span>;
+    return <span aria-hidden="true">{MISSING_VALUE_GLYPH}</span>;
   }
   if (onShowInDocument === undefined) {
     return <BidiText as="span">{value.text}</BidiText>;
   }
   return (
     <button
-      aria-label={CITATION_ARIA_LABEL}
+      aria-label={t("inspector.review.showInDocument")}
       className="hover:text-foreground underline decoration-dotted underline-offset-2"
       onClick={() => onShowInDocument(value.citation.blockId)}
       type="button"

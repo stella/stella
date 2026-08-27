@@ -64,7 +64,6 @@ import {
   PositionHeader,
 } from "@/components/ai-suggestions/review-position-header";
 import {
-  positionTermKind,
   ReferencePassageList,
   type ReferenceNameLookup,
   SeverityChip,
@@ -196,18 +195,6 @@ const InlineAction = ({
 );
 
 // ── Root: position card ───────────────────────────────
-
-// TODO(i18n): English until the review surface is localized as a whole.
-const REFERENCE_STANDARD_LABEL = "From the reference";
-const CONVERT_TO_RULES_LABEL = "Convert to rules";
-const ADOPT_AS_IDEAL_LABEL = "Adopt as ideal language";
-const NO_SETTLED_POSITION_LABEL = "No settled position";
-const decisionLine = ({
-  accepted,
-  dismissed,
-  runs,
-}: PositionDecisionSummary): string =>
-  `accepted ${String(accepted)} · dismissed ${String(dismissed)} · across ${String(runs)} ${runs === 1 ? "review" : "reviews"}`;
 
 type PositionEditorProps = {
   organizationId: string;
@@ -423,7 +410,6 @@ export const PositionEditor = ({
             <GripVerticalIcon />
           </Button>
         }
-        termKind={positionTermKind(position)}
         title={
           <Input
             aria-invalid={showErrors && errors.issue !== undefined}
@@ -476,13 +462,14 @@ export const PositionEditor = ({
 // ── Collapsed tier dots ───────────────────────────────
 
 const CollapsedTierDots = ({ position }: { position: GradedPosition }) => {
+  const t = useTranslations();
   const tiers = positionTiers(position);
   // A reference standard has no ladder to count; the collapsed row says where
   // the standard comes from instead.
   if (tiers === null) {
     return (
       <span className={cn(POSITION_HEADER_META_CLASS, "hidden sm:inline")}>
-        {REFERENCE_STANDARD_LABEL}
+        {t("knowledge.playbooks.referenceStandard")}
       </span>
     );
   }
@@ -628,6 +615,7 @@ const PositionDecisionLine = ({
   standard: PositionStandard;
   onAdoptIdeal: (text: string) => void;
 }) => {
+  const t = useTranslations();
   if (decision === undefined) {
     return null;
   }
@@ -636,12 +624,16 @@ const PositionDecisionLine = ({
     <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
       <span className="tabular-nums">
         {isUnsettledPosition(decision)
-          ? NO_SETTLED_POSITION_LABEL
-          : decisionLine(decision)}
+          ? t("knowledge.playbooks.noSettledPosition")
+          : t("knowledge.playbooks.decisionLine", {
+              accepted: decision.accepted,
+              dismissed: decision.dismissed,
+              runs: decision.runs,
+            })}
       </span>
       {adoptable !== null && (
         <InlineAction onClick={() => onAdoptIdeal(adoptable)}>
-          {ADOPT_AS_IDEAL_LABEL}
+          {t("knowledge.playbooks.adoptAsIdeal")}
         </InlineAction>
       )}
     </div>
@@ -661,26 +653,29 @@ const ReferenceStandardSection = ({
   passages: readonly ReferencePassage[];
   referenceNames: ReferenceNameLookup | undefined;
   onConvertToRules: () => void;
-}) => (
-  <section className="border-border rounded-lg border">
-    <div className="flex items-center gap-2 px-3 py-2">
-      <span className={REVIEW_SECTION_LABEL_CLASS}>
-        {REFERENCE_STANDARD_LABEL}
-      </span>
-      <div className="ms-auto">
-        <InlineAction onClick={onConvertToRules}>
-          {CONVERT_TO_RULES_LABEL}
-        </InlineAction>
+}) => {
+  const t = useTranslations();
+  return (
+    <section className="border-border rounded-lg border">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <span className={REVIEW_SECTION_LABEL_CLASS}>
+          {t("knowledge.playbooks.referenceStandard")}
+        </span>
+        <div className="ms-auto">
+          <InlineAction onClick={onConvertToRules}>
+            {t("knowledge.playbooks.convertToRules")}
+          </InlineAction>
+        </div>
       </div>
-    </div>
-    <div className="px-3 pb-3">
-      <ReferencePassageList
-        passages={passages}
-        referenceNames={referenceNames}
-      />
-    </div>
-  </section>
-);
+      <div className="px-3 pb-3">
+        <ReferencePassageList
+          passages={passages}
+          referenceNames={referenceNames}
+        />
+      </div>
+    </section>
+  );
+};
 
 // ── Tier ladder ───────────────────────────────────────
 

@@ -13,6 +13,8 @@
  * lists turned into percentages, which is a job for `buildDealStrip`.
  */
 
+import { useTranslations } from "use-intl";
+
 import type { FolioAIBlock } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { cn } from "@stll/ui/utils";
@@ -26,13 +28,6 @@ import type {
 } from "@/components/ai-suggestions/review-deal-strip.logic";
 import { isDealBreakingSeverity } from "@/components/ai-suggestions/review-verdict";
 import Tooltip from "@/components/tooltip";
-import { useFormatter } from "@/i18n/formatting-context";
-
-// TODO(i18n): English until the review surface is localized as a whole.
-const DEAL_STRIP_LABEL = "Where the findings sit in the document";
-const DEAL_STRIP_FINDING_COUNT_LABEL = (count: string): string =>
-  `${count} flagged`;
-const DEAL_STRIP_MORE_LABEL = (count: string): string => `+${count} more`;
 
 /** How many titles a hover can carry before it stops being a hint. */
 const TOOLTIP_TITLE_LIMIT = 4;
@@ -88,9 +83,14 @@ export const ReviewDealStrip = ({
   findings,
   onSelect,
 }: ReviewDealStripProps) => {
+  const t = useTranslations();
   const { segments } = buildDealStrip({
     blocks: blocks.map(toStripBlock),
     findings: findings.map(toStripFinding),
+    labels: {
+      preamble: t("inspector.review.dealStrip.preamble"),
+      wholeDocument: t("common.document"),
+    },
   });
   // Nothing to map: the editor has not handed over the document yet, so the
   // strip would be a bar with no meaning rather than an empty one.
@@ -100,7 +100,7 @@ export const ReviewDealStrip = ({
 
   return (
     <div
-      aria-label={DEAL_STRIP_LABEL}
+      aria-label={t("inspector.review.dealStrip.label")}
       className="relative mb-2 h-9 w-full"
       role="group"
     >
@@ -147,7 +147,7 @@ const DealStripSegmentButton = ({
   segment: DealStripSegment;
   onSelect: (target: ReviewDealStripTarget) => void;
 }) => {
-  const format = useFormatter();
+  const t = useTranslations();
   // The finding that stops the deal is the one the clause is about; failing
   // that, the first one in document order.
   const lead = segment.marks.find((mark) => mark.accent) ?? segment.marks.at(0);
@@ -163,7 +163,7 @@ const DealStripSegmentButton = ({
           </BidiText>
           {flagged > 0 && (
             <span className="tabular-nums opacity-70">
-              {DEAL_STRIP_FINDING_COUNT_LABEL(format.number(flagged))}
+              {t("inspector.review.dealStrip.flagged", { count: flagged })}
             </span>
           )}
           {segment.marks.slice(0, TOOLTIP_TITLE_LIMIT).map((mark) => (
@@ -173,9 +173,9 @@ const DealStripSegmentButton = ({
           ))}
           {flagged > TOOLTIP_TITLE_LIMIT && (
             <span className="tabular-nums opacity-70">
-              {DEAL_STRIP_MORE_LABEL(
-                format.number(flagged - TOOLTIP_TITLE_LIMIT),
-              )}
+              {t("inspector.review.dealStrip.more", {
+                count: flagged - TOOLTIP_TITLE_LIMIT,
+              })}
             </span>
           )}
         </span>

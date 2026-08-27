@@ -1,15 +1,10 @@
+import { useTranslations } from "use-intl";
+
 import { BidiText } from "@stll/ui/bidi-text";
 import { cn } from "@stll/ui/utils";
 
 import type { ReviewDelta } from "@/components/ai-suggestions/review-delta";
 import { ColumnHeader } from "@/components/ai-suggestions/review-term-row";
-
-// TODO(i18n): English until the review surface is localized as a whole.
-const CITATION_ARIA_LABEL = "Show in document";
-
-/** Presence in words. A reviewer should not have to work out that a hollow
- *  circle means the item is missing. */
-const PRESENCE_LABEL = { present: "Yes", absent: "No" } as const;
 
 /** The two mark columns are sized for the word they hold; the item column
  *  takes the rest, so a term reads across the row instead of wrapping one
@@ -129,12 +124,13 @@ type RowLabelProps = {
 };
 
 const RowLabel = ({ label, citation, onShowInDocument }: RowLabelProps) => {
+  const t = useTranslations();
   if (citation === null || onShowInDocument === undefined) {
     return <BidiText as="span">{label}</BidiText>;
   }
   return (
     <button
-      aria-label={CITATION_ARIA_LABEL}
+      aria-label={t("inspector.review.showInDocument")}
       className="hover:text-foreground underline decoration-dotted underline-offset-2"
       onClick={() => onShowInDocument(citation.blockId)}
       type="button"
@@ -144,14 +140,21 @@ const RowLabel = ({ label, citation, onShowInDocument }: RowLabelProps) => {
   );
 };
 
-const PresenceCell = ({ present }: { present: boolean }) => (
-  <td
-    className={cn(
-      CELL_CLASS,
-      "text-center whitespace-nowrap",
-      present ? "text-foreground" : "text-muted-foreground",
-    )}
-  >
-    {present ? PRESENCE_LABEL.present : PRESENCE_LABEL.absent}
-  </td>
-);
+/** Presence in words. A reviewer should not have to work out that a hollow
+ *  circle means the item is missing. */
+const PresenceCell = ({ present }: { present: boolean }) => {
+  const t = useTranslations();
+  return (
+    <td
+      className={cn(
+        CELL_CLASS,
+        "text-center whitespace-nowrap",
+        present ? "text-foreground" : "text-muted-foreground",
+      )}
+    >
+      {present
+        ? t("inspector.review.presence.present")
+        : t("inspector.review.presence.absent")}
+    </td>
+  );
+};

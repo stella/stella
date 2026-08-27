@@ -44,7 +44,7 @@ import {
   InspectorHeaderText,
   InspectorTitle,
 } from "@stll/ui/inspector";
-import { LoaderState } from "@stll/ui/loader";
+import { Loader, LoaderState } from "@stll/ui/loader";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
@@ -65,6 +65,7 @@ import {
   isReviewSetupRunnable,
   isSamePerspective,
   NEUTRAL_PERSPECTIVE,
+  REVIEW_START_MODE,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import type {
   ReferenceFile,
@@ -72,9 +73,11 @@ import type {
   ReviewPerspective,
   ReviewSetup,
   ReviewSkippedTerm,
+  ReviewStartMode,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import {
   decideReviewFinding,
+  documentReviewPartiesOptions,
   documentReviewRunOptions,
   documentReviewRunsOptions,
   documentReviewSourcesOptions,
@@ -112,15 +115,16 @@ import {
   TRACKED_RUN_SELECTION,
   usePlaybookReviewStore,
 } from "@/components/ai-suggestions/playbook-review-store";
-import type { StartReviewResult } from "@/components/ai-suggestions/playbook-review-store";
+import type {
+  ReviewProposal,
+  StartReviewResult,
+} from "@/components/ai-suggestions/playbook-review-store";
 import { ReviewDealStrip } from "@/components/ai-suggestions/review-deal-strip";
 import type { DeltaCitation } from "@/components/ai-suggestions/review-delta";
 import { ReviewDeltaView } from "@/components/ai-suggestions/review-delta-view";
 import {
-  findingHeaderLabel,
-  findingLabel,
-  impactLabel,
   isDirectedImpact,
+  useReviewLabels,
 } from "@/components/ai-suggestions/review-finding-label";
 import { ReviewMarginNotes } from "@/components/ai-suggestions/review-margin-notes";
 import type { ReviewMarginNote } from "@/components/ai-suggestions/review-margin-notes";
@@ -150,6 +154,7 @@ import {
 } from "@/components/ai-suggestions/review-verdict";
 import { useFolioDocumentBlocks } from "@/components/ai-suggestions/use-folio-document-blocks";
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
+import { useReviewStartMode } from "@/components/ai-suggestions/use-review-start-mode";
 import { DocumentIcon } from "@/components/document-icon";
 import { DOCUMENT_PANE } from "@/components/inspector/document-pane";
 import type {
@@ -184,6 +189,7 @@ import {
   useReviewFlagLabel,
 } from "@/components/review-flags";
 import { SearchDialog } from "@/components/search-dialog";
+import { Switch } from "@/components/switch";
 import Tooltip from "@/components/tooltip";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import { getWordEditAuthorName } from "@/features/chat/hooks/use-chat-user-context";
@@ -283,6 +289,17 @@ export const PlaybookFacet = ({
       (state) =>
         state.byKey[activeDocxKey(entityId, fileFieldId)]?.registration,
     ),
+  );
+  // Whether this document's review stops to have its checklist confirmed, and
+  // the side it is judged for: both remembered per document, so a re-run of
+  // the same contract does not ask the same two questions again.
+  const { mode: startMode, setMode: setStartMode } = useReviewStartMode(
+    entityId,
+    fileFieldId,
+  );
+  const rememberedPerspective = usePlaybookReviewStore(
+    (state) =>
+      state.perspectiveByDocument[reviewSessionKey(entityId, fileFieldId)],
   );
   const session = usePlaybookReviewStore(
     (state) => state.sessions[reviewSessionKey(entityId, fileFieldId)],
@@ -406,6 +423,8 @@ export const PlaybookFacet = ({
     });
   };
 
+  // The document's remembered start mode is what a review runs with, whether
+  // it was launched from the picker or retried after a failure.
   const runReview = async (setup: ReviewSetup, seededPositions: Position[]) => {
     reportStartFailure(
       await startReview({
@@ -414,6 +433,7 @@ export const PlaybookFacet = ({
         entityId,
         fileFieldId,
         unexpectedErrorMessage: t("common.unexpectedError"),
+        startMode,
         seededPositions,
       }),
     );
@@ -542,9 +562,9 @@ export const PlaybookFacet = ({
     if (application.value === "applied") {
       stellaToast.add({
         type: "success",
-        title: NOTE_ADDED_TITLE,
+        title: t("inspector.review.noteAdded"),
         action: {
-          label: SHOW_IN_DOCUMENT_LABEL,
+          label: t("inspector.review.showInDocument"),
           onClick: () => scrollToBlock(blockId),
         },
       });
@@ -595,6 +615,16 @@ export const PlaybookFacet = ({
     session?.status === "starting" ||
     session?.status === "proposing-positions"
   ) {
+    // A proposal on screen keeps its cards: the run it started replaces them
+    // when it has progress of its own to report, not before.
+    if (session.proposal !== null) {
+      return (
+        <ProposalStreamView
+          proposal={session.proposal}
+          referenceNames={referenceNameLookup(session.setup?.references ?? [])}
+        />
+      );
+    }
     return <ReviewingState sourceName={pendingPlaybookName} />;
   }
 
@@ -627,11 +657,6 @@ export const PlaybookFacet = ({
             "playbook-facet.confirm-positions",
           );
         }}
-        onPerspectiveChange={(perspective) =>
-          setPerspective(entityId, fileFieldId, perspective)
-        }
-        parties={session.parties}
-        perspective={session.setup?.perspective ?? NEUTRAL_PERSPECTIVE}
         positions={session.positions}
         referenceNames={referenceNameLookup(session.setup?.references ?? [])}
         skipped={session.skipped}
@@ -750,7 +775,13 @@ export const PlaybookFacet = ({
                 shownRunId: null,
               }
         }
+        onPerspectiveChange={(perspective) =>
+          setPerspective(entityId, fileFieldId, perspective)
+        }
+        onStartModeChange={setStartMode}
+        perspective={rememberedPerspective ?? NEUTRAL_PERSPECTIVE}
         playbooks={playbooks}
+        startMode={startMode}
         target={{ entityId, fileFieldId }}
         workspaceId={workspaceId}
         onReview={(setup, seededPositions) => {
@@ -921,9 +952,9 @@ const ReviewRunPanel = ({
     onSuccess: () => {
       stellaToast.add({
         type: "success",
-        title: SAVED_AS_PLAYBOOK_TITLE,
+        title: t("inspector.review.savedAsPlaybook"),
         action: {
-          label: OPEN_PLAYBOOKS_LABEL,
+          label: t("inspector.review.openPlaybooks"),
           onClick: () => {
             detached(
               navigate({ to: "/knowledge/playbooks" }),
@@ -935,7 +966,10 @@ const ReviewRunPanel = ({
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({ type: "error", title: SAVE_AS_PLAYBOOK_FAILED });
+      stellaToast.add({
+        type: "error",
+        title: t("inspector.review.saveAsPlaybookFailed"),
+      });
     },
   });
 
@@ -1082,15 +1116,6 @@ const PLAYBOOK_FILTER_THRESHOLD = 6;
 const REFERENCE_SUGGESTION_LIMIT = 3;
 
 const SECTION_LABEL_CLASS = REVIEW_SECTION_LABEL_CLASS;
-// TODO(i18n): English until the review surface is localized as a whole.
-const LAUNCHER_BASIS_DIVIDER_LABEL = "and / or";
-const TARGET_AS_REFERENCE_LABEL =
-  "The reviewed document cannot be its own reference.";
-const RECOMMENDATION_LABEL = "Recommendation:";
-const WHY_LABEL = "Why";
-const FLAG_FINDING_LABEL = "Flag";
-const ASK_IN_CHAT_LABEL = "Ask in chat";
-const CHAT_DRAFT_QUESTION = "How should I redraft the target on this point?";
 const CHAT_DRAFT_PASSAGES_PER_DOCUMENT = 2;
 
 const escapeHtml = (value: string): string =>
@@ -1108,32 +1133,47 @@ const paragraph = (label: string, value: string): string =>
  * keep or rewrite. The chat over the document carries the document itself, so
  * the draft only needs to say which point is at issue.
  */
+/** The words the draft needs, resolved by the caller in the reader's
+ *  language. Each label carries its own colon, which is punctuation the
+ *  target locale owns rather than something the builder appends. */
+type FindingChatDraftLabels = {
+  issue: string;
+  finding: string;
+  rationale: string;
+  impact: string;
+  recommendation: string;
+  question: string;
+  /** The reviewed document, and the fallback name for a reference whose file
+   *  the run no longer resolves. */
+  target: string;
+  reference: string;
+};
+
 const buildFindingChatDraft = ({
   item,
   references,
-  perspective,
-  targetLabel,
-  referenceLabel,
+  impactLabel,
+  labels,
 }: {
   item: ReviewResultItem;
   references: readonly ReferenceFile[];
-  perspective: ReviewPerspective;
-  targetLabel: string;
-  referenceLabel: string;
+  /** The finding's direction in words, or `null` when it judged none. */
+  impactLabel: string | null;
+  labels: FindingChatDraftLabels;
 }): string => {
   const { finding } = item;
-  const parts: string[] = [paragraph("Issue:", item.title)];
+  const parts: string[] = [paragraph(labels.issue, item.title)];
   for (const citation of finding.citations.slice(
     0,
     CHAT_DRAFT_PASSAGES_PER_DOCUMENT,
   )) {
-    parts.push(paragraph(`${targetLabel}:`, `"${citation.text.trim()}"`));
+    parts.push(paragraph(`${labels.target}:`, `"${citation.text.trim()}"`));
   }
   for (const group of finding.referenceCitations ?? []) {
     const name =
       references.find(
         (candidate) => candidate.fileFieldId === group.fileFieldId,
-      )?.name ?? referenceLabel;
+      )?.name ?? labels.reference;
     for (const citation of group.citations.slice(
       0,
       CHAT_DRAFT_PASSAGES_PER_DOCUMENT,
@@ -1142,18 +1182,18 @@ const buildFindingChatDraft = ({
     }
   }
   if (finding.explanation?.type === "comparison") {
-    parts.push(paragraph("Finding:", finding.explanation.text));
+    parts.push(paragraph(labels.finding, finding.explanation.text));
   }
   if (finding.rationale !== null && finding.rationale.length > 0) {
-    parts.push(paragraph("Rationale:", finding.rationale));
+    parts.push(paragraph(labels.rationale, finding.rationale));
   }
-  if (isDirectedImpact(finding.impact)) {
-    parts.push(paragraph("Impact:", impactLabel(finding.impact, perspective)));
+  if (impactLabel !== null) {
+    parts.push(paragraph(labels.impact, impactLabel));
   }
   if (typeof finding.recommendation === "string") {
-    parts.push(paragraph(RECOMMENDATION_LABEL, finding.recommendation));
+    parts.push(paragraph(labels.recommendation, finding.recommendation));
   }
-  parts.push(`<p>${escapeHtml(CHAT_DRAFT_QUESTION)}</p>`);
+  parts.push(`<p>${escapeHtml(labels.question)}</p>`);
   return parts.join("");
 };
 
@@ -1169,6 +1209,11 @@ type LauncherProps = {
   /** Runs this document has already had, when it has any: choosing a new basis
    *  must not be the gesture that hides the reviews already taken. */
   history: ReviewRunHistoryView | null;
+  /** The side the run is judged for, chosen before anything is proposed. */
+  perspective: ReviewPerspective;
+  onPerspectiveChange: (perspective: ReviewPerspective) => void;
+  startMode: ReviewStartMode;
+  onStartModeChange: (mode: ReviewStartMode) => void;
   onReview: (setup: ReviewSetup, seededPositions: Position[]) => void;
 };
 
@@ -1178,6 +1223,10 @@ const Launcher = ({
   target,
   workspaceId,
   history,
+  perspective,
+  onPerspectiveChange,
+  startMode,
+  onStartModeChange,
   onReview,
 }: LauncherProps) => {
   const t = useTranslations();
@@ -1185,11 +1234,16 @@ const Launcher = ({
     null,
   );
   const [references, setReferences] = useState<ReferenceFile[]>([]);
-  // The side is chosen while confirming positions, once the proposal has read
-  // the target's parties; until then the setup carries no side.
+  // The document's own sides, read before a reference is even chosen: the
+  // question "whose side are we on" is about the contract on screen, and
+  // asking it after the proposal has been paid for is asking it too late.
+  const { data: partiesAnswer, isPending: partiesPending } = useQuery(
+    documentReviewPartiesOptions({ workspaceId, ...target }),
+  );
   const setup: ReviewSetup = {
     ...emptyReviewSetup(),
     playbookId: selectedPlaybookId,
+    perspective,
     references,
   };
   const user = useAuthenticatedUser();
@@ -1222,6 +1276,15 @@ const Launcher = ({
   return (
     <div className="bg-background flex h-full flex-col">
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        {partiesPending ? (
+          <PerspectivePickerSkeleton />
+        ) : (
+          <PerspectivePicker
+            onSelect={onPerspectiveChange}
+            parties={partiesAnswer?.parties ?? []}
+            value={perspective}
+          />
+        )}
         <PlaybookPicker
           onSelect={setSelectedPlaybookId}
           playbooks={playbooks}
@@ -1229,7 +1292,7 @@ const Launcher = ({
         />
         {/* The divider is the whole instruction: either source alone starts a
             review, both together combine them. */}
-        <TextSeparator>{LAUNCHER_BASIS_DIVIDER_LABEL}</TextSeparator>
+        <TextSeparator>{t("inspector.review.basisDivider")}</TextSeparator>
         <ReferenceFilePicker
           onChange={setReferences}
           references={references}
@@ -1243,7 +1306,8 @@ const Launcher = ({
       </div>
       {history !== null && <ReviewHistorySection history={history} />}
       {/* Pinned right above the action it describes, outside the scroll. */}
-      <div className="shrink-0 px-4 pb-2">
+      <div className="shrink-0 space-y-2 px-4 pb-2">
+        <StartModeToggle mode={startMode} onChange={onStartModeChange} />
         <LaunchBasisSummary
           playbookName={selectedPlaybookName}
           referenceCount={references.length}
@@ -1273,12 +1337,61 @@ const Launcher = ({
   );
 };
 
-// TODO(i18n): English until the review surface is localized as a whole.
-const PERSPECTIVE_SECTION_LABEL = "We act for";
-const PERSPECTIVE_NEUTRAL_LABEL = "Not specified";
-const PERSPECTIVE_OTHER_LABEL = "Other…";
-const PERSPECTIVE_OTHER_PLACEHOLDER = "Role as the document names it";
-const NOT_COMPARED_LABEL = "Not compared";
+/**
+ * Whether the run waits for the checklist to be confirmed.
+ *
+ * Off by default and stated as the exception it is: a reviewer who wants the
+ * findings does not want a form between them and the run, and the one who does
+ * want to read the checklist first says so once per document.
+ */
+const StartModeToggle = ({
+  mode,
+  onChange,
+}: {
+  mode: ReviewStartMode;
+  onChange: (mode: ReviewStartMode) => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <label className="text-muted-foreground flex min-h-11 cursor-pointer items-center gap-2 text-xs">
+      <Switch
+        checked={mode === REVIEW_START_MODE.confirmFirst}
+        className="shrink-0"
+        onCheckedChange={(checked) =>
+          onChange(
+            checked
+              ? REVIEW_START_MODE.confirmFirst
+              : REVIEW_START_MODE.immediate,
+          )
+        }
+      />
+      {t("inspector.review.reviewPositionsFirst")}
+    </label>
+  );
+};
+
+/** The picker's own shape while the document's sides are being read: the
+ *  section label and one row of chips, so nothing moves when they land. */
+const PerspectivePickerSkeleton = () => {
+  const t = useTranslations();
+  return (
+    <section
+      aria-busy="true"
+      aria-label={t("inspector.review.perspective.title")}
+      className="space-y-2"
+    >
+      <h3 className={SECTION_LABEL_CLASS}>
+        {t("inspector.review.perspective.title")}
+      </h3>
+      <div className="flex flex-wrap gap-1">
+        <Skeleton className="h-8 w-24 rounded-full" />
+        <Skeleton className="h-8 w-28 rounded-full" />
+        <Skeleton className="h-8 w-20 rounded-full" />
+      </div>
+    </section>
+  );
+};
+
 const PERSPECTIVE_CHIP_CLASS =
   "min-h-8 rounded-full border px-3 text-xs transition-colors duration-150";
 const PERSPECTIVE_CHIP_CHECKED_CLASS =
@@ -1308,6 +1421,7 @@ const PerspectivePicker = ({
   value,
   onSelect,
 }: PerspectivePickerProps) => {
+  const t = useTranslations();
   const listed =
     value.type === "party" &&
     parties.some((party) =>
@@ -1324,7 +1438,7 @@ const PerspectivePicker = ({
   }[] = [
     {
       key: "neutral",
-      label: PERSPECTIVE_NEUTRAL_LABEL,
+      label: t("inspector.review.perspective.neutral"),
       perspective: NEUTRAL_PERSPECTIVE,
     },
     ...parties.map((party, index) => ({
@@ -1335,9 +1449,11 @@ const PerspectivePicker = ({
   ];
   return (
     <section className="space-y-2">
-      <h3 className={SECTION_LABEL_CLASS}>{PERSPECTIVE_SECTION_LABEL}</h3>
+      <h3 className={SECTION_LABEL_CLASS}>
+        {t("inspector.review.perspective.title")}
+      </h3>
       <div
-        aria-label={PERSPECTIVE_SECTION_LABEL}
+        aria-label={t("inspector.review.perspective.title")}
         className="flex flex-wrap gap-1"
         role="radiogroup"
       >
@@ -1381,12 +1497,12 @@ const PerspectivePicker = ({
           role="radio"
           type="button"
         >
-          {PERSPECTIVE_OTHER_LABEL}
+          {t("inspector.review.perspective.other")}
         </button>
       </div>
       {other && (
         <Input
-          aria-label={PERSPECTIVE_OTHER_PLACEHOLDER}
+          aria-label={t("inspector.review.perspective.otherPlaceholder")}
           autoFocus
           className="h-8 text-xs"
           onChange={(event) => {
@@ -1394,7 +1510,7 @@ const PerspectivePicker = ({
             setOtherRole(input.rawRole);
             onSelect(input.perspective);
           }}
-          placeholder={PERSPECTIVE_OTHER_PLACEHOLDER}
+          placeholder={t("inspector.review.perspective.otherPlaceholder")}
           value={otherRole}
         />
       )}
@@ -1413,7 +1529,7 @@ const NotComparedDisclosure = ({
 }: {
   skipped: readonly ReviewSkippedTerm[];
 }) => {
-  const format = useFormatter();
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   if (skipped.length === 0) {
     return null;
@@ -1426,7 +1542,7 @@ const NotComparedDisclosure = ({
         onClick={() => setOpen((current) => !current)}
         type="button"
       >
-        {NOT_COMPARED_LABEL}: {format.number(skipped.length)}
+        {t("inspector.review.notComparedCount", { count: skipped.length })}
       </button>
       {open && (
         <ul className="mt-1 space-y-0.5">
@@ -1630,7 +1746,10 @@ const ReferenceFilePicker = ({
       return;
     }
     if (reference.fileFieldId === target.fileFieldId) {
-      stellaToast.add({ type: "error", title: TARGET_AS_REFERENCE_LABEL });
+      stellaToast.add({
+        type: "error",
+        title: t("inspector.review.targetAsReference"),
+      });
       return;
     }
     onChange([...references, reference]);
@@ -1771,13 +1890,10 @@ const POSITION_STAGGER_CAP = 8;
 
 type PositionConfirmStepProps = {
   positions: readonly Position[];
-  parties: readonly ReviewParty[];
-  perspective: ReviewPerspective;
   referenceNames: ReferenceNameLookup;
   skipped: readonly ReviewSkippedTerm[];
   error: string | null;
   onChange: (positions: Position[]) => void;
-  onPerspectiveChange: (perspective: ReviewPerspective) => void;
   onConfirm: () => void;
   onBack: () => void;
 };
@@ -1791,13 +1907,10 @@ type PositionConfirmStepProps = {
  */
 const PositionConfirmStep = ({
   positions,
-  parties,
-  perspective,
   referenceNames,
   skipped,
   error,
   onChange,
-  onPerspectiveChange,
   onConfirm,
   onBack,
 }: PositionConfirmStepProps) => {
@@ -1833,11 +1946,6 @@ const PositionConfirmStep = ({
           </p>
         )}
         <div className="mx-1 mb-3">
-          <PerspectivePicker
-            onSelect={onPerspectiveChange}
-            parties={parties}
-            value={perspective}
-          />
           <NotComparedDisclosure skipped={skipped} />
         </div>
         <ul className="space-y-1.5">
@@ -1887,6 +1995,81 @@ const PositionConfirmStep = ({
   );
 };
 
+/**
+ * The checklist as it is written.
+ *
+ * A reference proposal takes minutes; read as one answer it is a spinner, then
+ * twenty positions at once. Streamed, the reviewer reads the list while the
+ * model is still working, and by the time the run starts they already know
+ * what it is measuring. The cards are the confirm step's own cards, read-only:
+ * a position the model has not finished proposing is not one to edit, and the
+ * list is about to be handed to the run.
+ */
+const ProposalStreamView = ({
+  proposal,
+  referenceNames,
+}: {
+  proposal: ReviewProposal;
+  referenceNames: ReferenceNameLookup;
+}) => {
+  const t = useTranslations();
+  const streaming = proposal.status === "streaming";
+  return (
+    <div className="bg-background flex h-full flex-col">
+      <div className="flex min-h-11 shrink-0 items-center gap-2 border-b px-4">
+        <span className="text-muted-foreground truncate text-xs tabular-nums">
+          {streaming
+            ? t("inspector.review.proposing", {
+                count: proposal.positions.length,
+              })
+            : t("knowledge.playbooks.starters.positionCount", {
+                count: proposal.positions.length,
+              })}
+        </span>
+        {!streaming && proposal.skipped.length > 0 && (
+          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+            {SUMMARY_SEPARATOR}
+            {t("inspector.review.notComparedCount", {
+              count: proposal.skipped.length,
+            })}
+          </span>
+        )}
+        {streaming && (
+          <Loader
+            className="ms-auto"
+            label={t("inspector.review.reviewing")}
+            size="sm"
+          />
+        )}
+      </div>
+      <div className="flex-1 overflow-y-auto px-2 py-2">
+        <ul className="space-y-1.5">
+          {proposal.positions.map((position, index) => (
+            <li
+              className="animate-rise"
+              key={position.sourceId}
+              style={{
+                animationDelay: `${String(
+                  Math.min(index, POSITION_STAGGER_CAP) * POSITION_STAGGER_MS,
+                )}ms`,
+              }}
+            >
+              <PositionQuickRow
+                index={index}
+                position={position}
+                referenceNames={referenceNames}
+              />
+            </li>
+          ))}
+        </ul>
+        <div className="mx-1">
+          <NotComparedDisclosure skipped={proposal.skipped} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // -- Reviewing --
 
 // Proposing positions is one server call with no progress channel, so this
@@ -1902,25 +2085,6 @@ const ReviewingState = ({ sourceName }: { sourceName: string }) => {
     />
   );
 };
-
-// TODO(i18n): English until the review surface is localized as a whole.
-type ReviewProgressPositionsLabelArgs = { completed: string; total: string };
-const reviewProgressPositionsLabel = ({
-  completed,
-  total,
-}: ReviewProgressPositionsLabelArgs): string =>
-  `${completed} of ${total} positions`;
-
-/** The same count with the elapsed clock behind it, for the one line a
- *  streaming results header carries. */
-const reviewProgressSentence = ({
-  completed,
-  total,
-  elapsed,
-}: ReviewProgressPositionsLabelArgs & { elapsed: string | null }): string =>
-  elapsed === null
-    ? reviewProgressPositionsLabel({ completed, total })
-    : `${reviewProgressPositionsLabel({ completed, total })}${SUMMARY_SEPARATOR}${elapsed}`;
 
 // mm:ss: a run answers in minutes at most, so hours would only pad the label.
 const formatElapsedMinutesSeconds = (ms: number): string => {
@@ -1970,19 +2134,15 @@ const ReviewProgressState = ({
   startedAt,
 }: ReviewProgressStateProps) => {
   const t = useTranslations();
-  const format = useFormatter();
   const elapsedMs = useElapsedClock(startedAt);
 
   const detail = [
     sourceName,
-    reviewProgressPositionsLabel({
-      completed: format.number(completed),
-      total: format.number(total),
-    }),
+    t("inspector.review.progressPositions", { completed, total }),
     elapsedMs === null ? null : formatElapsedMinutesSeconds(elapsedMs),
   ]
     .filter((part): part is string => part !== null && part.length > 0)
-    .join(" · ");
+    .join(SUMMARY_SEPARATOR);
 
   return (
     <LoaderState
@@ -2108,49 +2268,30 @@ const ErrorState = ({
 
 // -- Results --
 
-// TODO(i18n): English until the review surface is localized as a whole.
-const SHOW_IN_DOCUMENT_LABEL = "Show in document";
-const NOTE_ADDED_TITLE = "Note added for the counterparty";
-const ADD_NOTE_LABEL = "Add note for counterparty";
-const ADD_NOTE_PLACEHOLDER = "What the counterparty should see";
-const ADD_NOTE_SUBMIT_LABEL = "Add note";
-const NO_CHANGE_LABEL = "No change needed";
-const SAVE_AS_PLAYBOOK_LABEL = "Save as playbook";
-const SAVED_AS_PLAYBOOK_TITLE = "Saved as a playbook";
-const SAVE_AS_PLAYBOOK_FAILED = "Could not save this review as a playbook";
-const OPEN_PLAYBOOKS_LABEL = "Open playbooks";
-const COVERAGE_FILTER_LABEL = "Coverage";
-const DEVIATIONS_FILTER_LABEL = "Deviations";
-const TARGET_COLUMN_LABEL = "This document";
-const STANDARD_COLUMN_LABEL = "Standard";
-const SUGGESTION_ACCEPTED_LABEL = "Accepted";
-const SUGGESTION_REJECTED_LABEL = "Rejected";
-const SUGGESTION_SKIPPED_LABEL = "No longer matches the document";
-const SUGGESTION_STAGED_LABEL = "Staged as a tracked change in the document";
-const READ_ONLY_RUN_LABEL = "Decided on this run";
-/** Why accepting is unavailable: the change is applied to the open document,
- *  and there is none mounted to apply it to. */
-const NO_EDITOR_TOOLTIP = "Open the document to accept changes";
-
-type ReviewResultsSummaryArgs = {
-  flagged: string;
-  total: string;
-  decided: string;
-};
-/** The header's one quiet line in place of a risk-summary card: what the run
- *  found, and how much of it a reviewer has already answered. */
-const reviewResultsSummarySentence = ({
-  flagged,
-  total,
-  decided,
-}: ReviewResultsSummaryArgs): string =>
-  `${flagged} of ${total} positions flagged · ${decided} decided`;
-
 /** A run still executing: what it has answered so far, and since when. */
 type ReviewRunProgress = {
   completed: number;
   total: number;
   startedAt: string | null;
+};
+
+/**
+ * The two phrases a basis sentence cannot read out of the run: where the
+ * positions came from when no playbook is named, and the side the run was
+ * judged for. One hook so the header and every history row word them the
+ * same way.
+ */
+const useRunBasisLabels = () => {
+  const t = useTranslations();
+  return (role: string | null) => ({
+    proposedFromReferencesLabel: t(
+      "inspector.review.summary.proposedFromReferences",
+    ),
+    sideLabel:
+      role === null
+        ? t("inspector.review.summary.noSide")
+        : t("inspector.review.summary.forParty", { role }),
+  });
 };
 
 type ResultsViewProps = {
@@ -2246,6 +2387,8 @@ const ResultsView = ({
   onScrollToBlock,
 }: ResultsViewProps) => {
   const t = useTranslations();
+  const { findingLabel } = useReviewLabels();
+  const runBasisLabels = useRunBasisLabels();
   const results = buildReviewResultItems({
     positions: basis.positions,
     findings,
@@ -2276,7 +2419,7 @@ const ResultsView = ({
     if (marginMode) {
       const { anchored, unanchored } = buildMarginNotes({
         results,
-        perspective: basis.perspective,
+        findingLabel: (finding) => findingLabel(finding, basis.perspective),
         insufficientEvidenceLabel: t("inspector.review.insufficientEvidence"),
       });
       return (
@@ -2341,7 +2484,11 @@ const ResultsView = ({
                   references: basis.references,
                   playbookName: basis.playbookName,
                   playbookProposed: basis.provenance === "ephemeral",
-                  perspective: basis.perspective,
+                  ...runBasisLabels(
+                    basis.perspective.type === "party"
+                      ? basis.perspective.role
+                      : null,
+                  ),
                 })}
               </BidiText>
             </p>
@@ -2366,7 +2513,7 @@ const ResultsView = ({
                 size="xs"
                 variant="outline"
               >
-                {SAVE_AS_PLAYBOOK_LABEL}
+                {t("inspector.review.saveAsPlaybook")}
               </Button>
             )}
             <ReviewExportMenu
@@ -2413,18 +2560,19 @@ type MarginNoteSplit = {
 
 const buildMarginNotes = ({
   results,
-  perspective,
+  findingLabel,
   insufficientEvidenceLabel,
 }: {
   results: readonly ReviewResultItem[];
-  perspective: ReviewPerspective;
+  /** The finding's judgment in words, already bound to the run's side. */
+  findingLabel: (finding: ReviewFinding) => string;
   insufficientEvidenceLabel: string;
 }): MarginNoteSplit => {
   const notes = results.filter(isReviewDeviation).map((item) => ({
     id: item.id,
     blockId: item.finding.citations.at(0)?.blockId ?? null,
     title: item.title,
-    label: findingLabel(item.finding, perspective),
+    label: findingLabel(item.finding),
     caption: findingCaption(item.finding, insufficientEvidenceLabel),
     accent: isDealBreakingSeverity(item.finding.severity),
   }));
@@ -2438,14 +2586,6 @@ const buildMarginNotes = ({
   };
 };
 
-// TODO(i18n): English until the review surface is localized as a whole.
-const HISTORY_LABEL = "History";
-const BACK_TO_LATEST_LABEL = "Back to latest";
-const HISTORY_REFERENCES_LABEL = (count: string): string =>
-  `${count} references`;
-const HISTORY_DECIDED_LABEL = (decided: string, total: string): string =>
-  `${decided} of ${total} decided`;
-
 /** A run is identified by when it was taken, to the minute: a document can be
  *  reviewed twice in an afternoon. */
 const HISTORY_RUN_DATE_FORMAT = {
@@ -2457,13 +2597,16 @@ const HISTORY_RUN_DATE_FORMAT = {
 
 /** What each run status reads as in the history list. Total over the run
  *  lifecycle, so a status added on the server states its word here. */
-const RUN_STATUS_LABEL = {
-  queued: "Queued",
-  running: "Running",
-  completed: "Completed",
-  failed: "Failed",
-  cancelled: "Cancelled",
-} as const satisfies Record<DocumentReviewRunStatus, string>;
+// A review run has the same lifecycle as any other run the product executes,
+// so it reads out of the same words rather than a second set that would drift
+// from them one locale at a time.
+const RUN_STATUS_LABEL_KEYS = {
+  queued: "inspector.review.runStatus.queued",
+  running: "flows.status.running",
+  completed: "flows.status.completed",
+  failed: "flows.status.failed",
+  cancelled: "flows.status.cancelled",
+} as const satisfies Record<DocumentReviewRunStatus, TranslationKey>;
 
 /**
  * Every review this document has had, newest first, collapsed behind its own
@@ -2476,6 +2619,7 @@ const ReviewHistorySection = ({
 }: {
   history: ReviewRunHistoryView;
 }) => {
+  const t = useTranslations();
   const format = useFormatter();
   const [open, setOpen] = useState(false);
   const viewingHistory = history.mode === "history";
@@ -2505,7 +2649,7 @@ const ReviewHistorySection = ({
             flip={!open}
             icon={ChevronRightIcon}
           />
-          {HISTORY_LABEL} ({format.number(history.runs.length)})
+          {t("common.history")} ({format.number(history.runs.length)})
         </button>
         {viewingHistory && (
           <Button
@@ -2514,7 +2658,7 @@ const ReviewHistorySection = ({
             size="xs"
             variant="outline"
           >
-            {BACK_TO_LATEST_LABEL}
+            {t("inspector.review.history.backToLatest")}
           </Button>
         )}
       </div>
@@ -2544,16 +2688,20 @@ const ReviewHistoryRow = ({
   shown: boolean;
   onSelect: () => void;
 }) => {
+  const t = useTranslations();
   const format = useFormatter();
+  const runBasisLabels = useRunBasisLabels();
   const decisions = reviewDecisionProgress(run.decisionCounts);
   const basis = buildRunHistoryBasisSentence({
-    perspectiveRole: run.basis.perspectiveRole,
     playbookName: run.basis.playbookName,
     playbookProposed: run.basis.playbookProvenance === "ephemeral",
     references:
       run.basis.referenceCount === 0
         ? null
-        : HISTORY_REFERENCES_LABEL(format.number(run.basis.referenceCount)),
+        : t("inspector.review.history.references", {
+            count: run.basis.referenceCount,
+          }),
+    ...runBasisLabels(run.basis.perspectiveRole),
   });
 
   return (
@@ -2577,15 +2725,15 @@ const ReviewHistoryRow = ({
           {basis}
         </BidiText>
         <span className="text-muted-foreground shrink-0 text-xs">
-          {RUN_STATUS_LABEL[run.status]}
+          {t(RUN_STATUS_LABEL_KEYS[run.status])}
         </span>
       </span>
       {decisions.total > 0 && (
         <span className="text-muted-foreground text-xs tabular-nums">
-          {HISTORY_DECIDED_LABEL(
-            format.number(decisions.decided),
-            format.number(decisions.total),
-          )}
+          {t("inspector.review.history.decided", {
+            decided: decisions.decided,
+            total: decisions.total,
+          })}
         </span>
       )}
     </button>
@@ -2607,17 +2755,18 @@ const RunHeaderStatusLine = ({
   total,
   decided,
 }: RunHeaderStatusLineProps) => {
-  const format = useFormatter();
+  const t = useTranslations();
   const elapsedMs = useElapsedClock(progress?.startedAt ?? null);
   if (progress !== null) {
+    const positions = t("inspector.review.progressPositions", {
+      completed: progress.completed,
+      total: progress.total,
+    });
     return (
       <p className="text-muted-foreground text-xs tabular-nums">
-        {reviewProgressSentence({
-          completed: format.number(progress.completed),
-          elapsed:
-            elapsedMs === null ? null : formatElapsedMinutesSeconds(elapsedMs),
-          total: format.number(progress.total),
-        })}
+        {elapsedMs === null
+          ? positions
+          : `${positions}${SUMMARY_SEPARATOR}${formatElapsedMinutesSeconds(elapsedMs)}`}
       </p>
     );
   }
@@ -2626,11 +2775,7 @@ const RunHeaderStatusLine = ({
   }
   return (
     <p className="text-muted-foreground text-xs tabular-nums">
-      {reviewResultsSummarySentence({
-        decided: format.number(decided),
-        flagged: format.number(flagged),
-        total: format.number(total),
-      })}
+      {`${t("inspector.review.flaggedPositions", { flagged, total })}${SUMMARY_SEPARATOR}${t("inspector.review.decidedCount", { count: decided })}`}
     </p>
   );
 };
@@ -2644,23 +2789,22 @@ const PaneReviewIcon = ({ className }: { className?: string }) => (
   <DirectionalIcon className={cn(className)} icon={PanelLeftIcon} />
 );
 
-// TODO(i18n): English until the review surface is localized as a whole.
 /** How each arrangement introduces itself in the control. Total over the pane
  *  vocabulary, so a fourth arrangement has to state its glyph and its words
  *  rather than rendering as a blank segment. */
 const PANE_PRESENTATION = {
   document: {
     icon: PaneDocumentIcon,
-    label: "Panel: findings beside the document",
+    labelKey: "inspector.review.pane.document",
   },
-  review: { icon: PaneReviewIcon, label: "Main: findings in the wide pane" },
+  review: { icon: PaneReviewIcon, labelKey: "inspector.review.pane.review" },
   margin: {
     icon: StickyNoteIcon,
-    label: "Margin: findings beside their clauses",
+    labelKey: "inspector.review.pane.margin",
   },
 } as const satisfies Record<
   DocumentPane,
-  { icon: ComponentType<{ className?: string }>; label: string }
+  { icon: ComponentType<{ className?: string }>; labelKey: TranslationKey }
 >;
 
 /** The order the control offers them, narrowest column first. */
@@ -2673,12 +2817,6 @@ const PANE_ORDER = [
 type UnofferedPane = Exclude<DocumentPane, (typeof PANE_ORDER)[number]>;
 true satisfies UnofferedPane extends never ? true : never;
 
-const PANE_OPTIONS = PANE_ORDER.map((pane) => ({
-  value: pane,
-  icon: PANE_PRESENTATION[pane].icon,
-  label: PANE_PRESENTATION[pane].label,
-}));
-
 /**
  * Move the review between the panes. Two documents' worth of prose does not
  * fit an inspector column, so a reviewer reading passages side by side wants
@@ -2686,13 +2824,18 @@ const PANE_OPTIONS = PANE_ORDER.map((pane) => ({
  * reviewer reading the deal end to end wants the findings in the margin.
  */
 const PaneSwapToggle = ({ swap }: { swap: ReviewPaneSwap | null }) => {
+  const t = useTranslations();
   if (swap === null) {
     return null;
   }
   return (
     <SegmentedIconToggle
       onChange={swap.onToggle}
-      options={PANE_OPTIONS}
+      options={PANE_ORDER.map((pane) => ({
+        value: pane,
+        icon: PANE_PRESENTATION[pane].icon,
+        label: t(PANE_PRESENTATION[pane].labelKey),
+      }))}
       size="touch"
       value={swap.pane}
     />
@@ -2910,13 +3053,13 @@ const ReviewResultList = ({
           <FilterTab
             active={filter === "coverage"}
             count={orderedItems.length}
-            label={COVERAGE_FILTER_LABEL}
+            label={t("inspector.review.filterCoverage")}
             onSelect={() => setFilter("coverage")}
           />
           <FilterTab
             active={filter === "deviations"}
             count={deviations.length}
-            label={DEVIATIONS_FILTER_LABEL}
+            label={t("inspector.review.filterDeviations")}
             onSelect={() => setFilter("deviations")}
           />
         </div>
@@ -3112,7 +3255,7 @@ type ReviewResultCardProps = {
 /** The reference a finding's standard was quoted from, when every cited group
  *  names the same one. `null` when the finding cites no reference, or cites
  *  more than one — a mixed standard gets no more specific a label than
- *  `STANDARD_COLUMN_LABEL` on its own. */
+ *  "Standard" on its own. */
 const singleReferenceFieldId = (finding: ReviewFinding): string | null => {
   const groups = finding.referenceCitations ?? [];
   const fieldIds = new Set(groups.map((group) => group.fileFieldId));
@@ -3147,6 +3290,7 @@ const ReviewResultCard = ({
   onToggle,
 }: ReviewResultCardProps) => {
   const t = useTranslations();
+  const { findingHeaderLabel, impactLabel } = useReviewLabels();
   const detailId = `review-result-${item.id}`;
   const { finding } = item;
   const judgment = findingHeaderLabel(finding, perspective);
@@ -3169,7 +3313,7 @@ const ReviewResultCard = ({
   const standardLabel =
     singleReferenceName === undefined
       ? undefined
-      : `${STANDARD_COLUMN_LABEL} (${singleReferenceName})`;
+      : t("inspector.review.standardColumnFrom", { name: singleReferenceName });
 
   return (
     <li
@@ -3243,12 +3387,12 @@ const ReviewResultCard = ({
                   }
             }
             standard={{
-              label: STANDARD_COLUMN_LABEL,
+              label: t("inspector.review.standardColumn"),
               passages: standardPassages,
             }}
             standardLabel={standardLabel}
             target={{
-              label: TARGET_COLUMN_LABEL,
+              label: t("inspector.review.targetColumn"),
               passages: finding.citations,
             }}
           />
@@ -3272,6 +3416,7 @@ const ReviewResultCard = ({
             finding={finding}
             id={detailId}
             negotiation={negotiation}
+            purpose={positionPurpose(item.position)}
           />
           <ReviewCardActions
             decisionPending={decisionPending}
@@ -3290,9 +3435,19 @@ const ReviewResultCard = ({
                 html: buildFindingChatDraft({
                   item,
                   references,
-                  perspective,
-                  targetLabel: t("inspector.review.targetDocument"),
-                  referenceLabel: t("inspector.review.referenceDocument"),
+                  impactLabel: isDirectedImpact(finding.impact)
+                    ? impactLabel(finding.impact, perspective)
+                    : null,
+                  labels: {
+                    finding: t("inspector.review.chatDraft.finding"),
+                    impact: t("inspector.review.chatDraft.impact"),
+                    issue: t("inspector.review.chatDraft.issue"),
+                    question: t("inspector.review.chatDraft.question"),
+                    rationale: t("inspector.review.chatDraft.rationale"),
+                    recommendation: t("inspector.review.recommendation"),
+                    reference: t("inspector.review.referenceDocument"),
+                    target: t("inspector.review.targetDocument"),
+                  },
                 }),
               })
             }
@@ -3322,6 +3477,7 @@ const WhyDisclosure = ({
   finding,
   id,
   negotiation,
+  purpose,
 }: {
   /** The whole caption, of which the card showed the first sentence. */
   caption: string | null;
@@ -3329,7 +3485,11 @@ const WhyDisclosure = ({
   /** The card's detail id; the panel derives its own from it. */
   id: string;
   negotiation: Negotiation | undefined;
+  /** What the term is for, when the position states it. First inside the
+   *  disclosure: it is the ground the rest of the argument stands on. */
+  purpose: string | null;
 }) => {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const panelId = `${id}-why`;
   // The rationale behind a comparison caption is a second text the card never
@@ -3345,6 +3505,7 @@ const WhyDisclosure = ({
     finding.verdict !== null &&
     isNegotiableVerdict(finding.verdict);
   const hasWhy =
+    purpose !== null ||
     fullCaption !== null ||
     (rationale !== null && rationale.length > 0) ||
     finding.matchedRef !== undefined ||
@@ -3368,10 +3529,18 @@ const WhyDisclosure = ({
           flip={!open}
           icon={ChevronRightIcon}
         />
-        {WHY_LABEL}
+        {t("inspector.review.why")}
       </button>
       {open && (
         <div className="space-y-2" id={panelId}>
+          {purpose !== null && (
+            <p className="text-muted-foreground text-sm leading-6 text-pretty">
+              <span className="text-foreground-strong-muted font-medium">
+                {t("inspector.review.whyItMatters")}
+              </span>{" "}
+              <BidiText as="span">{purpose}</BidiText>
+            </p>
+          )}
           {fullCaption !== null && (
             <p className="text-muted-foreground text-sm leading-6 text-pretty">
               <BidiText as="span">{fullCaption}</BidiText>
@@ -3390,7 +3559,7 @@ const WhyDisclosure = ({
           {typeof finding.recommendation === "string" && (
             <p className="text-foreground text-sm leading-6 text-pretty">
               <span className="text-foreground-strong-muted font-medium">
-                {RECOMMENDATION_LABEL}
+                {t("inspector.review.recommendation")}
               </span>{" "}
               {finding.recommendation}
             </p>
@@ -3457,7 +3626,7 @@ const ReviewCardActions = ({
     >
       {readOnly ? (
         <span className="text-muted-foreground text-xs">
-          {READ_ONLY_RUN_LABEL}
+          {t("inspector.review.readOnlyRun")}
         </span>
       ) : (
         <FindingResolution
@@ -3479,7 +3648,7 @@ const ReviewCardActions = ({
             size="sm"
             variant="ghost"
           >
-            {SHOW_IN_DOCUMENT_LABEL}
+            {t("inspector.review.showInDocument")}
           </Button>
           <CounterpartyNotePopover
             disabled={!editorAvailable}
@@ -3497,7 +3666,7 @@ const ReviewCardActions = ({
         variant="ghost"
       >
         <MessageSquareIcon className="me-1 size-3.5" />
-        {ASK_IN_CHAT_LABEL}
+        {t("inspector.review.askInChat")}
       </Button>
     </section>
   );
@@ -3517,41 +3686,44 @@ const FindingFlagMenu = ({
 }: {
   flags: readonly ReviewFlag[];
   onSetFlags: (flags: readonly ReviewFlag[]) => void;
-}) => (
-  <Menu>
-    <MenuTrigger
-      render={
-        <Button
-          className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs"
-          size="sm"
-          variant="ghost"
-        />
-      }
-    >
-      {flags.length > 0 ? (
-        <ReviewFlagGlyphs
-          className="me-1 flex items-center gap-1"
-          flags={flags}
-        />
-      ) : (
-        <FlagIcon className="me-1 size-3.5" />
-      )}
-      {FLAG_FINDING_LABEL}
-    </MenuTrigger>
-    <MenuPopup className="min-w-44">
-      <ReviewFlagMenuItems
-        active={flags}
-        onToggle={(flag) =>
-          onSetFlags(
-            flags.includes(flag)
-              ? flags.filter((current) => current !== flag)
-              : [...flags, flag],
-          )
+}) => {
+  const t = useTranslations();
+  return (
+    <Menu>
+      <MenuTrigger
+        render={
+          <Button
+            className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs"
+            size="sm"
+            variant="ghost"
+          />
         }
-      />
-    </MenuPopup>
-  </Menu>
-);
+      >
+        {flags.length > 0 ? (
+          <ReviewFlagGlyphs
+            className="me-1 flex items-center gap-1"
+            flags={flags}
+          />
+        ) : (
+          <FlagIcon className="me-1 size-3.5" />
+        )}
+        {t("inspector.review.flag")}
+      </MenuTrigger>
+      <MenuPopup className="min-w-44">
+        <ReviewFlagMenuItems
+          active={flags}
+          onToggle={(flag) =>
+            onSetFlags(
+              flags.includes(flag)
+                ? flags.filter((current) => current !== flag)
+                : [...flags, flag],
+            )
+          }
+        />
+      </MenuPopup>
+    </Menu>
+  );
+};
 
 /**
  * Which resolution a finding offers, decided by what its fix became.
@@ -3577,6 +3749,7 @@ const FindingResolution = ({
   onRejectSuggestion: (suggestion: ReviewSuggestion) => void;
   onDecide: (decision: DocumentReviewDecision) => void;
 }) => {
+  const t = useTranslations();
   if (suggestion !== undefined) {
     return (
       <SuggestionButtons
@@ -3602,7 +3775,7 @@ const FindingResolution = ({
   // stands for; the reviewer opens the document and resolves it there.
   return (
     <span className="text-muted-foreground text-xs">
-      {SUGGESTION_STAGED_LABEL}
+      {t("inspector.review.suggestionStaged")}
     </span>
   );
 };
@@ -3650,7 +3823,7 @@ const FindingDecisionButtons = ({
         variant="ghost"
       >
         <XIcon className="me-1 size-3.5" />
-        {NO_CHANGE_LABEL}
+        {t("inspector.review.noChangeNeeded")}
       </Button>
     </>
   );
@@ -3676,19 +3849,19 @@ const SuggestionButtons = ({
       return (
         <span className="text-muted-foreground flex items-center gap-1 text-xs">
           <CheckIcon className="size-3" />
-          {SUGGESTION_ACCEPTED_LABEL}
+          {t("inspector.review.decisions.accepted")}
         </span>
       );
     case "rejected":
       return (
         <span className="text-muted-foreground text-xs">
-          {SUGGESTION_REJECTED_LABEL}
+          {t("chat.suggestionStatus.rejected")}
         </span>
       );
     case "skipped":
       return (
         <span className="text-muted-foreground text-xs">
-          {SUGGESTION_SKIPPED_LABEL}
+          {t("inspector.review.suggestionSkipped")}
         </span>
       );
     case "pending":
@@ -3700,7 +3873,9 @@ const SuggestionButtons = ({
             disabled={!editorAvailable || suggestion.status === "applying"}
             onClick={onAccept}
             size="sm"
-            {...(editorAvailable ? {} : { tooltip: NO_EDITOR_TOOLTIP })}
+            {...(editorAvailable
+              ? {}
+              : { tooltip: t("inspector.review.noEditor") })}
           >
             <CheckIcon className="me-1 size-3.5" />
             {t("common.accept")}
@@ -3735,6 +3910,7 @@ const CounterpartyNotePopover = ({
   disabled: boolean;
   onSubmit: (note: string) => void;
 }) => {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const trimmed = note.trim();
@@ -3752,17 +3928,17 @@ const CounterpartyNotePopover = ({
         }
       >
         <MessageSquareIcon className="me-1 size-3.5" />
-        {ADD_NOTE_LABEL}
+        {t("inspector.review.addNote")}
       </PopoverTrigger>
       <PopoverPopup align="start" className="w-72 p-3">
         <div className="space-y-2">
           <Textarea
-            aria-label={ADD_NOTE_LABEL}
+            aria-label={t("inspector.review.addNote")}
             autoFocus
             className="min-h-[72px] text-sm"
             maxLength={2000}
             onChange={(event) => setNote(event.target.value)}
-            placeholder={ADD_NOTE_PLACEHOLDER}
+            placeholder={t("inspector.review.addNotePlaceholder")}
             value={note}
           />
           <Button
@@ -3775,7 +3951,7 @@ const CounterpartyNotePopover = ({
             }}
             size="sm"
           >
-            {ADD_NOTE_SUBMIT_LABEL}
+            {t("inspector.review.addNoteSubmit")}
           </Button>
         </div>
       </PopoverPopup>
@@ -3921,6 +4097,16 @@ const standardPassagesFor = ({
   return [];
 };
 
+/** What the term is for, as the run pinned it. Only a graded position states
+ *  one: an extract position captures a value and takes no side. */
+const positionPurpose = (position: PinnedPosition | null): string | null => {
+  if (position?.mode !== "graded") {
+    return null;
+  }
+  const purpose = position.purpose?.trim() ?? "";
+  return purpose.length === 0 ? null : purpose;
+};
+
 const tieredIdeal = (position: PinnedPosition | null): string | null => {
   if (position?.mode !== "graded") {
     return null;
@@ -3962,10 +4148,6 @@ const findingCaption = (
 
 // -- Changes proposed in the chat --
 
-// TODO(i18n): English until the review surface is localized as a whole.
-const FROM_CHAT_LABEL = "From chat";
-const PENDING_COUNT_LABEL = (count: string): string => `${count} pending`;
-
 /** Severity as a word, so the meta slot reads without a legend. Total over the
  *  vocabulary: a new severity must say how it reads rather than render blank. */
 const SEVERITY_LABEL_KEY = {
@@ -3990,7 +4172,6 @@ const ReviewQueueControls = ({
   onAcceptAll: (items: readonly ReviewSuggestion[]) => Promise<void>;
 }) => {
   const t = useTranslations();
-  const format = useFormatter();
   const hideAccepted = useReviewStore((state) => state.hideAccepted);
   const setHideAccepted = useReviewStore((state) => state.setHideAccepted);
   const pending = suggestions.filter((item) => item.status === "pending");
@@ -4001,7 +4182,7 @@ const ReviewQueueControls = ({
   return (
     <div className="flex shrink-0 items-center justify-end gap-1">
       <span className="text-muted-foreground me-auto text-xs tabular-nums">
-        {PENDING_COUNT_LABEL(format.number(pending.length))}
+        {t("inspector.review.pendingCount", { count: pending.length })}
       </span>
       <Tooltip
         content={t("docxReview.hideAccepted")}
@@ -4067,6 +4248,7 @@ const ChatSuggestionsSection = ({
   onFocus,
   onScrollToBlock,
 }: ChatSuggestionsSectionProps) => {
+  const t = useTranslations();
   const format = useFormatter();
   const hideAccepted = useReviewStore((state) => state.hideAccepted);
   const focusedId = useReviewStore((state) =>
@@ -4097,7 +4279,7 @@ const ChatSuggestionsSection = ({
         <h3
           className={cn(REVIEW_SECTION_LABEL_CLASS, "flex items-center gap-2")}
         >
-          <span>{FROM_CHAT_LABEL}</span>
+          <span>{t("inspector.review.fromChat")}</span>
           <span className="text-foreground-ghost tabular-nums">
             {format.number(visible.length)}
           </span>
@@ -4216,7 +4398,7 @@ const ChatSuggestionCard = ({
             size="sm"
             variant="ghost"
           >
-            {SHOW_IN_DOCUMENT_LABEL}
+            {t("inspector.review.showInDocument")}
           </Button>
         </section>
       </div>

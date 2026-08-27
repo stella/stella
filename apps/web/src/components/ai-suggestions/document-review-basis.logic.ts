@@ -79,3 +79,38 @@ export const isReviewSetupRunnable = ({
   playbookId,
   references,
 }: ReviewSetup): boolean => playbookId !== null || references.length > 0;
+
+/**
+ * What happens when the proposal is complete: the run starts on it, or the
+ * reviewer reads the checklist first.
+ *
+ * Named modes rather than a flag. The question is "which way does this
+ * document start", and the answer is the kind of thing that grows a third
+ * value (start on the deviations only, start and hold the fixes) long before
+ * it stops being asked.
+ */
+export const REVIEW_START_MODE = {
+  /** The run starts as soon as the proposal finishes. The default: a reviewer
+   *  who wants the findings does not want a form first. */
+  immediate: "immediate",
+  /** The proposed positions are confirmed before the run starts. */
+  confirmFirst: "confirm-first",
+} as const;
+
+export type ReviewStartMode =
+  (typeof REVIEW_START_MODE)[keyof typeof REVIEW_START_MODE];
+
+const REVIEW_START_MODE_STORAGE_PREFIX = "document_review_start_mode_";
+
+/** Remembered per document: the choice belongs to this file, not to the
+ *  workspace — a reviewer confirms the checklist for the contract they do not
+ *  know and skips it for the template they wrote. */
+export const reviewStartModeStorageKey = (
+  entityId: string,
+  fileFieldId: string,
+): string => `${REVIEW_START_MODE_STORAGE_PREFIX}${entityId}:${fileFieldId}`;
+
+export const parseReviewStartMode = (raw: string | null): ReviewStartMode =>
+  raw === REVIEW_START_MODE.confirmFirst
+    ? REVIEW_START_MODE.confirmFirst
+    : REVIEW_START_MODE.immediate;

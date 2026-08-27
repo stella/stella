@@ -19,6 +19,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { CsvIcon, DocxIcon, XlsxIcon } from "@/components/document-icon";
 import { downloadTabOriginalFile } from "@/components/inspector/file-download-service";
+import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
@@ -51,25 +52,18 @@ type PendingExport =
   | { audience: typeof EXPORT_AUDIENCE.INTERNAL; format: ReviewExportFormat }
   | { audience: typeof EXPORT_AUDIENCE.COUNTERPARTY };
 
-// TODO(i18n): English until the review surface is localized as a whole.
-const EXPORT_LABEL = "Export";
-const EXPORTING_LABEL = "Exporting";
-const AUDIENCE_LABEL = {
-  internal: "Internal memo",
-  counterparty: "Send to counterparty",
-} as const satisfies Record<ExportAudience, string>;
-const INTERNAL_GROUP_HINT = "Findings, rationale and references";
-const COUNTERPARTY_GROUP_HINT = "The document with your tracked changes";
-const COUNTERPARTY_UNAVAILABLE = "Open the document to export it";
-const COUNTERPARTY_FAILED = "Could not export the document";
+const AUDIENCE_LABEL_KEYS = {
+  internal: "inspector.review.export.internal",
+  counterparty: "inspector.review.export.counterparty",
+} as const satisfies Record<ExportAudience, TranslationKey>;
 // The server names the file after the reviewed document; this only covers a
 // response without a `Content-Disposition` name.
 const FALLBACK_FILE_STEM = "review-issues";
-const FORMAT_LABEL = {
-  xlsx: "Excel (.xlsx)",
-  docx: "Word (.docx)",
-  csv: "CSV",
-} as const satisfies Record<ReviewExportFormat, string>;
+const FORMAT_LABEL_KEYS = {
+  xlsx: "inspector.review.export.xlsx",
+  docx: "inspector.review.export.docx",
+  csv: "inspector.review.export.csv",
+} as const satisfies Record<ReviewExportFormat, TranslationKey>;
 const FORMAT_ICON = {
   xlsx: XlsxIcon,
   docx: DocxIcon,
@@ -164,7 +158,7 @@ export const ReviewExportMenu = ({
       workspaceId,
       onError: (message) => {
         stellaToast.add({
-          title: COUNTERPARTY_FAILED,
+          title: t("inspector.review.export.counterpartyFailed"),
           description: message,
           type: "error",
         });
@@ -188,16 +182,16 @@ export const ReviewExportMenu = ({
         {pending === null ? (
           <DownloadIcon className="size-3.5" />
         ) : (
-          <Loader label={EXPORTING_LABEL} size="sm" />
+          <Loader label={t("inspector.review.export.exporting")} size="sm" />
         )}
-        {EXPORT_LABEL}
+        {t("clauses.export")}
       </MenuTrigger>
       <MenuPopup className="min-w-56">
         <MenuGroup>
           <MenuGroupLabel>
-            {AUDIENCE_LABEL.internal}
+            {t(AUDIENCE_LABEL_KEYS.internal)}
             <span className="text-muted-foreground block text-xs font-normal">
-              {INTERNAL_GROUP_HINT}
+              {t("inspector.review.export.internalHint")}
             </span>
           </MenuGroupLabel>
           {REVIEW_EXPORT_FORMATS.map((format) => {
@@ -215,7 +209,7 @@ export const ReviewExportMenu = ({
                 }}
               >
                 <Icon className="size-4 opacity-100" />
-                {FORMAT_LABEL[format]}
+                {t(FORMAT_LABEL_KEYS[format])}
               </MenuItem>
             );
           })}
@@ -223,11 +217,11 @@ export const ReviewExportMenu = ({
         <MenuSeparator />
         <MenuGroup>
           <MenuGroupLabel>
-            {AUDIENCE_LABEL.counterparty}
+            {t(AUDIENCE_LABEL_KEYS.counterparty)}
             <span className="text-muted-foreground block text-xs font-normal">
               {counterparty === null
-                ? COUNTERPARTY_UNAVAILABLE
-                : COUNTERPARTY_GROUP_HINT}
+                ? t("inspector.review.export.counterpartyUnavailable")
+                : t("inspector.review.export.counterpartyHint")}
             </span>
           </MenuGroupLabel>
           <MenuItem
@@ -243,7 +237,7 @@ export const ReviewExportMenu = ({
             }}
           >
             <SendIcon className="size-4 opacity-100" />
-            {AUDIENCE_LABEL.counterparty}
+            {t(AUDIENCE_LABEL_KEYS.counterparty)}
           </MenuItem>
         </MenuGroup>
       </MenuPopup>

@@ -2290,9 +2290,13 @@
     "review": {
       "actionNeeded": "Reikia veiksmų",
       "addComment": "Pridėti kaip komentarą",
+      "addNote": "Pridėti pastabą priešingai šaliai",
+      "addNotePlaceholder": "Ką turėtų matyti priešinga šalis",
+      "addNoteSubmit": "Pridėti pastabą",
       "addReference": "Pridėti {name} kaip referenciją",
       "addTopic": "Pridėti temą",
       "allDecided": "Visos čia esančios išvados nuspręstos.",
+      "askInChat": "Klausti pokalbyje",
       "assessment": {
         "additionalInTarget": "Papildomai tiksliniame dokumente",
         "aligned": "Suderinta",
@@ -2302,11 +2306,27 @@
         "notComparable": "Nepalyginama"
       },
       "basisCombined": "{count, plural, one {Patikra pagal {name} ir palyginimas su # referenciniu dokumentu} few {Patikra pagal {name} ir palyginimas su # referenciniais dokumentais} other {Patikra pagal {name} ir palyginimas su # referencinių dokumentų}}",
+      "basisDivider": "ir / arba",
       "basisPlaybook": "Patikra pagal {name}",
       "basisReferences": "{count, plural, one {Palyginimas su # referenciniu dokumentu} few {Palyginimas su # referenciniais dokumentais} other {Palyginimas su # referencinių dokumentų}}",
       "changeBasis": "Keisti peržiūros pagrindą",
+      "chatDraft": {
+        "finding": "Išvada:",
+        "impact": "Poveikis:",
+        "issue": "Tema:",
+        "question": "Kaip turėčiau performuluoti tikslinį dokumentą šiuo klausimu?",
+        "rationale": "Pagrindimas:"
+      },
+      "checks": "Tikrinama:",
       "commentFailed": "Nepavyko pridėti komentaro",
       "comparedWithReferences": "{count, plural, one {Palyginta su # referenciniu dokumentu} few {Palyginta su # referenciniais dokumentais} other {Palyginta su # referencinių dokumentų}}",
+      "dealStrip": {
+        "flagged": "{count, number} pažymėta",
+        "label": "Kur dokumente yra išvados",
+        "more": "+{count, number} daugiau",
+        "preamble": "Preambulė"
+      },
+      "decidedCount": "{count, number} nuspręsta",
       "decision": "Sprendimas",
       "decisionFailed": "Nepavyko įrašyti sprendimo",
       "decisions": {
@@ -2316,20 +2336,88 @@
       "description": "Pasirinkite parengtą peržiūros vadovą, referencinius dokumentus arba abu.",
       "dismiss": "Atmesti",
       "documentChanged": "Šis dokumentas pasikeitė po šios peržiūros.",
+      "export": {
+        "counterparty": "Siųsti priešingai šaliai",
+        "counterpartyFailed": "Nepavyko eksportuoti dokumento",
+        "counterpartyHint": "Dokumentas su jūsų sekamais pakeitimais",
+        "counterpartyUnavailable": "Atidarykite dokumentą, kad galėtumėte jį eksportuoti",
+        "csv": "CSV",
+        "docx": "Word dokumentas (.docx)",
+        "exporting": "Eksportuojama",
+        "internal": "Vidinis memorandumas",
+        "internalHint": "Išvados, pagrindimas ir referencijos",
+        "xlsx": "Excel skaičiuoklė (.xlsx)"
+      },
       "failed": "Nepavyko peržiūrėti dokumento",
+      "filterCoverage": "Aprėptis",
+      "filterDeviations": "Nukrypimai",
+      "flag": "Pažymėti",
+      "flaggedPositions": "{total, plural, one {Pažymėta {flagged, number} iš # pozicijos} few {Pažymėta {flagged, number} iš # pozicijų} many {Pažymėta {flagged, number} iš # pozicijų} other {Pažymėta {flagged, number} iš # pozicijų}}",
+      "fromChat": "Iš pokalbio",
       "fromThisMatter": "Iš šios bylos",
+      "history": {
+        "backToLatest": "Grįžti prie naujausios",
+        "decided": "{decided, number} iš {total, number} nuspręsta",
+        "references": "{count, plural, one {# referencija} few {# referencijos} many {# referencijos} other {# referencijų}}"
+      },
+      "impact": {
+        "favourable": "Palanki",
+        "neutral": "Neutral",
+        "notJudged": "Neįvertinta",
+        "unfavourable": "Nepalanki"
+      },
+      "impactForSide": {
+        "favourable": "Geriau ({role})",
+        "neutral": "Be poveikio ({role})",
+        "unfavourable": "Blogiau ({role})"
+      },
       "insertFailed": "Nepavyko įterpti siūlomos formuluotės",
       "insertSuggestion": "Įterpti siūlomą formuluotę",
       "insufficientEvidence": "Pateiktuose dokumentuose nepakanka duomenų šia tema.",
+      "marginNotes": {
+        "above": "{count, number} aukščiau",
+        "below": "{count, number} žemiau",
+        "documentNotRead": "Atidarykite dokumentą pagrindiniame skydelyje, kad išvados būtų prisegtos šalia jo.",
+        "label": "Išvados šalia sąlygų, apie kurias jos yra",
+        "unanchored": "Nesusieta su jokia sąlyga"
+      },
       "newTopic": "Nauja peržiūros tema",
+      "noChangeNeeded": "Pakeitimo nereikia",
+      "noEditor": "Atidarykite dokumentą, kad priimtumėte pakeitimus",
       "noMaterialDifferences": "Esminių skirtumų nerasta",
+      "noPassage": "Ištraukos nėra",
       "noPlaybooksMatch": "Atitinkančių peržiūros vadovų nerasta.",
       "noReferencesFound": "Atitinkančių DOCX dokumentų nerasta.",
+      "notCompared": "Nepalyginta",
+      "notComparedCount": "Nepalyginta: {count, number}",
+      "noteAdded": "Priešingai šaliai pridėta pastaba",
+      "openPlaybooks": "Atverti peržiūros vadovus",
+      "pane": {
+        "document": "Skydelis: išvados šalia dokumento",
+        "margin": "Paraštė: išvados šalia savo sąlygų",
+        "review": "Pagrindinis: išvados plačiajame skydelyje"
+      },
+      "passagesCount": "{count, plural, one {# ištrauka} few {# ištraukos} many {# ištraukos} other {# ištraukų}}",
+      "pendingCount": "{count, plural, one {# laukianti išvada} few {# laukiančios išvados} many {# laukiančios išvados} other {# laukiančių išvadų}}",
+      "perspective": {
+        "neutral": "Nenurodyta",
+        "other": "Kita…",
+        "otherPlaceholder": "Vaidmuo, kaip jis įvardytas dokumente",
+        "title": "Mes atstovaujame"
+      },
       "playbookDeleted": "Šio peržiūros vadovo nebėra; peržiūra išsaugoma kaip įrašas.",
       "playbookFindings": "Peržiūros vadovo išvados",
       "playbookOutdated": "Yra naujesnė patvirtinta šio peržiūros vadovo versija.",
       "playbookSection": "Peržiūros vadovas",
       "playbookTopic": "Paimta iš playbooko",
+      "presence": {
+        "absent": "Ne",
+        "present": "Taip"
+      },
+      "progressPositions": "{total, plural, one {{completed, number} iš # pozicijos} few {{completed, number} iš # pozicijų} many {{completed, number} iš # pozicijų} other {{completed, number} iš # pozicijų}}",
+      "proposing": "Siūlomos pozicijos… {count, number}",
+      "readOnlyRun": "Nuspręsta šioje peržiūroje",
+      "recommendation": "Rekomendacija:",
       "referenceDocument": "Referencinis dokumentas",
       "referenceFindings": "Referencijų palyginimas",
       "referenceLimitReached": "Pasiektas referencijų limitas",
@@ -2342,21 +2430,42 @@
       "reopen": "Atidaryti iš naujo",
       "results": "Peržiūros rezultatai",
       "reviewAgain": "Pradėti kitą peržiūrą",
+      "reviewPositionsFirst": "Pirmiausia peržiūrėti pozicijas",
       "reviewedAgainstCombined": "{count, plural, one {Patikrinta pagal {name} ir palyginta su # referenciniu dokumentu} few {Patikrinta pagal {name} ir palyginta su # referenciniais dokumentais} other {Patikrinta pagal {name} ir palyginta su # referencinių dokumentų}}",
       "reviewing": "Peržiūra vykdoma…",
       "reviewingHint": "Didelių dokumentų peržiūra gali užtrukti kelias minutes.",
       "run": "Pradėti peržiūrą",
+      "runStatus": {
+        "queued": "Eilėje"
+      },
+      "saveAsPlaybook": "Išsaugoti kaip peržiūros vadovą",
+      "saveAsPlaybookFailed": "Nepavyko išsaugoti šios peržiūros kaip peržiūros vadovo",
+      "savedAsPlaybook": "Išsaugota kaip peržiūros vadovas",
       "scoreTopics": "Peržiūrėti šias temas",
       "searchPlaybooks": "Ieškoti peržiūros vadovų",
+      "showInDocument": "Rodyti dokumente",
       "sizeConfirmStart": "Pradėti patikrą",
       "sizeConfirmTitle": "Didelės apimties patikra",
+      "standardColumn": "Standartas",
+      "standardColumnFrom": "Standartas ({name})",
+      "suggestionSkipped": "Nebeatitinka dokumento",
+      "suggestionStaged": "Įtraukta į dokumentą kaip sekamas pakeitimas",
+      "summary": {
+        "forParty": "{role} naudai",
+        "noSide": "Nėra pusės",
+        "proposedFromReferences": "Pozicijos, pasiūlytos iš referencijų"
+      },
+      "targetAsReference": "Peržiūrimas dokumentas negali būti pats sau referencinis dokumentas.",
+      "targetColumn": "Šis dokumentas",
       "targetDocument": "Tikslinis dokumentas",
       "title": "Dokumento peržiūra",
       "topicContext": "Papildomas kontekstas",
       "topicContextPlaceholder": "Į ką reikėtų atsižvelgti peržiūrint šią temą?",
       "topicName": "Temos pavadinimas",
       "topicsDescription": "Patvirtinkite siūlomas temas, pridėkite savo arba papildykite kontekstą prieš vertinimą.",
-      "topicsTitle": "Ką turėtų apimti ši peržiūra?"
+      "topicsTitle": "Ką turėtų apimti ši peržiūra?",
+      "why": "Kodėl",
+      "whyItMatters": "Kodėl tai svarbu:"
     },
     "showPane": "Rodyti polangį",
     "swapViews": "Sukeisti pagrindinį rodinį ir šoninį skydelį",
@@ -2494,6 +2603,7 @@
       "addOption": "Pridėti parinktį",
       "addPosition": "Pridėti poziciją",
       "addRule": "Taisyklė",
+      "adoptAsIdeal": "Priimti kaip idealią formuluotę",
       "advanced": "Keisti veikimą",
       "all": "Visi peržiūros vadovai",
       "approval": {
@@ -2527,10 +2637,12 @@
       "convertToExtractDescription": "Tai pašalins šios pozicijos pakopų sistemą ir vertinimą. Šio veiksmo atšaukti negalima.",
       "convertToExtractTitle": "Konvertuoti į tik ištraukimą?",
       "convertToGraded": "Pridėti vertinimo taisykles",
+      "convertToRules": "Konvertuoti į taisykles",
       "createPlaybook": "Naujas peržiūros vadovas",
       "created": "Peržiūros vadovas sukurtas",
       "customizeAnswer": "Keisti išgaunamą atsakymą",
       "customizeAnswerHint": "Redaguoti klausimą arba atsakymo formatą.",
+      "decisionLine": "{runs, plural, one {priimta {accepted, number} · atmesta {dismissed, number} · per # peržiūrą} few {priimta {accepted, number} · atmesta {dismissed, number} · per # peržiūras} many {priimta {accepted, number} · atmesta {dismissed, number} · per # peržiūras} other {priimta {accepted, number} · atmesta {dismissed, number} · per # peržiūras}}",
       "deleteFailed": "Nepavyko ištrinti peržiūros vadovo",
       "deletePlaybook": "Ištrinti peržiūros vadovą",
       "deletePosition": "Ištrinti poziciją",
@@ -2586,6 +2698,7 @@
         "title": "Derybos"
       },
       "noPositions": "Pozicijų dar nėra. Pridėkite pirmąją.",
+      "noSettledPosition": "Nusistovėjusios pozicijos nėra",
       "optionPlaceholder": "Parinkties reikšmė",
       "optionsLabel": "Parinktys",
       "outline": "Struktūra",
@@ -2594,6 +2707,7 @@
       "recent": "Neseniai naudoti",
       "recommended": "Rekomenduojami ruošiniai",
       "redLinePlaceholder": "Formuluotė, kuri niekada nėra priimtina",
+      "referenceStandard": "Iš referencijos",
       "removeCheck": "Pašalinti patikrą",
       "removeIdeal": "Pašalinti idealią formuluotę",
       "reorderPosition": "Pertvarkyti poziciją",
@@ -2639,6 +2753,12 @@
       },
       "switchToAuto": "Automatiškai sukurti klausimą ir formatą",
       "switchToManual": "Tinkinti klausimą ir atsakymo formatą",
+      "termKind": {
+        "enumeration": "Išvardijimas",
+        "language": "Language",
+        "parameter": "Parametras",
+        "presence": "Buvimas"
+      },
       "tier": {
         "acceptable": "Priimtina",
         "fallback": "Alternatyva",
@@ -2649,6 +2769,7 @@
       "updated": "Peržiūros vadovas atnaujintas",
       "updatedAt": "Atnaujinta {date}",
       "verdict": {
+        "additional": "Papildoma",
         "compliant": "Atitinka",
         "deviation": "Nukrypimas",
         "fallback": "Alternatyva",

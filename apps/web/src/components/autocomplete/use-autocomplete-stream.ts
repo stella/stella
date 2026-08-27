@@ -16,6 +16,7 @@ import {
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { readSSEEvents } from "@/lib/sse-events";
 
 import { requestAutocompleteStream } from "./use-autocomplete-stream.logic";
 
@@ -30,28 +31,6 @@ const DEFAULT_DEBOUNCE_MS = 1500;
 const DEFAULT_MIN_PREFIX_CHARS = 8;
 const MAX_PREFIX_CHARS = 8000;
 const MAX_SUFFIX_CHARS = 4000;
-
-type SSEEvent = { event: string; data: string };
-
-const parseSSE = (raw: string): SSEEvent[] => {
-  const events: SSEEvent[] = [];
-  for (const block of raw.split("\n\n")) {
-    if (block.length === 0) {
-      continue;
-    }
-    let event = "message";
-    const dataLines: string[] = [];
-    for (const line of block.split("\n")) {
-      if (line.startsWith("event:")) {
-        event = line.slice("event:".length).trim();
-      } else if (line.startsWith("data:")) {
-        dataLines.push(line.slice("data:".length).trim());
-      }
-    }
-    events.push({ event, data: dataLines.join("\n") });
-  }
-  return events;
-};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -96,45 +75,31 @@ const consumeAutocompleteStream = async (
   body: ReadableStream<Uint8Array>,
   cb: StreamCallbacks,
 ): Promise<void> => {
-  const decoder = new TextDecoder();
-  let buffer = "";
-  const reader = body.getReader();
-  try {
-    while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential stream read: each chunk must be decoded before the next
-      const chunk = await reader.read();
-      if (chunk.done) {
-        cb.onDone();
-        return;
+  let terminal = false;
+  await readSSEEvents(body, (event) => {
+    if (event.event === "token") {
+      const text = readStringField(event.data, "text");
+      if (text === null || text.length === 0) {
+        return true;
       }
-      buffer += decoder.decode(chunk.value, { stream: true });
-      const boundary = buffer.lastIndexOf("\n\n");
-      if (boundary === -1) {
-        continue;
-      }
-      const ready = buffer.slice(0, boundary + 2);
-      buffer = buffer.slice(boundary + 2);
-      for (const event of parseSSE(ready)) {
-        if (event.event === "token") {
-          const text = readStringField(event.data, "text");
-          if (text !== null && text.length > 0) {
-            const alive = cb.onToken(text);
-            if (!alive) {
-              return;
-            }
-          }
-        } else if (event.event === "error") {
-          cb.onError();
-          return;
-        } else if (event.event === "done") {
-          cb.onDone();
-          return;
-        }
-      }
+      return cb.onToken(text);
     }
-  } finally {
-    await reader.cancel().catch(() => undefined);
-    reader.releaseLock();
+    if (event.event === "error") {
+      terminal = true;
+      cb.onError();
+      return false;
+    }
+    if (event.event === "done") {
+      terminal = true;
+      cb.onDone();
+      return false;
+    }
+    return true;
+  });
+  // A body that ended without a terminal frame still finishes the suggestion:
+  // what streamed is what the model wrote.
+  if (!terminal) {
+    cb.onDone();
   }
 };
 

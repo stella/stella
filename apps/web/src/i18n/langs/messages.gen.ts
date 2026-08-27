@@ -2293,9 +2293,13 @@ type Messages = {
     "review": {
       "actionNeeded": "Action needed";
       "addComment": "Add as comment";
+      "addNote": "Add note for counterparty";
+      "addNotePlaceholder": "What the counterparty should see";
+      "addNoteSubmit": "Add note";
       "addReference": "Add {name} as a reference";
       "addTopic": "Add topic";
       "allDecided": "Every finding here has been decided.";
+      "askInChat": "Ask in chat";
       "assessment": {
         "additionalInTarget": "Additional in target";
         "aligned": "Consistent with references";
@@ -2305,11 +2309,27 @@ type Messages = {
         "notComparable": "Not comparable";
       };
       "basisCombined": "{count, plural, one {Reviews against {name} and compares with # reference document} other {Reviews against {name} and compares with # reference documents}}";
+      "basisDivider": "and / or";
       "basisPlaybook": "Reviews against {name}";
       "basisReferences": "{count, plural, one {Compares with # reference document} other {Compares with # reference documents}}";
       "changeBasis": "Change review basis";
+      "chatDraft": {
+        "finding": "Finding:";
+        "impact": "Impact:";
+        "issue": "Issue:";
+        "question": "How should I redraft the target on this point?";
+        "rationale": "Rationale:";
+      };
+      "checks": "Checks:";
       "commentFailed": "Couldn't add the comment";
       "comparedWithReferences": "{count, plural, one {Compared with # reference document} other {Compared with # reference documents}}";
+      "dealStrip": {
+        "flagged": "{count, number} flagged";
+        "label": "Where the findings sit in the document";
+        "more": "+{count, number} more";
+        "preamble": "Preamble";
+      };
+      "decidedCount": "{count, number} decided";
       "decision": "Decision";
       "decisionFailed": "Couldn't record your decision";
       "decisions": {
@@ -2319,20 +2339,88 @@ type Messages = {
       "description": "Choose an authored playbook, reference documents, or both.";
       "dismiss": "Dismiss";
       "documentChanged": "This document changed after this review.";
+      "export": {
+        "counterparty": "Send to counterparty";
+        "counterpartyFailed": "Could not export the document";
+        "counterpartyHint": "The document with your tracked changes";
+        "counterpartyUnavailable": "Open the document to export it";
+        "csv": "CSV";
+        "docx": "Word (.docx)";
+        "exporting": "Exporting";
+        "internal": "Internal memo";
+        "internalHint": "Findings, rationale and references";
+        "xlsx": "Excel (.xlsx)";
+      };
       "failed": "Document review failed";
+      "filterCoverage": "Coverage";
+      "filterDeviations": "Deviations";
+      "flag": "Flag";
+      "flaggedPositions": "{total, plural, one {{flagged, number} of # position flagged} other {{flagged, number} of # positions flagged}}";
+      "fromChat": "From chat";
       "fromThisMatter": "From this matter";
+      "history": {
+        "backToLatest": "Back to latest";
+        "decided": "{decided, number} of {total, number} decided";
+        "references": "{count, plural, one {# reference} other {# references}}";
+      };
+      "impact": {
+        "favourable": "Favourable";
+        "neutral": "No effect";
+        "notJudged": "Not judged";
+        "unfavourable": "Unfavourable";
+      };
+      "impactForSide": {
+        "favourable": "Better for {role}";
+        "neutral": "No effect for {role}";
+        "unfavourable": "Worse for {role}";
+      };
       "insertFailed": "Couldn't insert the suggested wording";
       "insertSuggestion": "Insert suggested wording";
       "insufficientEvidence": "The supplied documents do not provide enough evidence for this topic.";
+      "marginNotes": {
+        "above": "{count, number} above";
+        "below": "{count, number} below";
+        "documentNotRead": "Open the document in the main pane to pin the findings beside it.";
+        "label": "Findings beside the clauses they are about";
+        "unanchored": "Not tied to a clause";
+      };
       "newTopic": "New review topic";
+      "noChangeNeeded": "No change needed";
+      "noEditor": "Open the document to accept changes";
       "noMaterialDifferences": "No material differences found";
+      "noPassage": "No passage";
       "noPlaybooksMatch": "No matching playbooks.";
       "noReferencesFound": "No matching DOCX documents.";
+      "notCompared": "Not compared";
+      "notComparedCount": "Not compared: {count, number}";
+      "noteAdded": "Note added for the counterparty";
+      "openPlaybooks": "Open playbooks";
+      "pane": {
+        "document": "Panel: findings beside the document";
+        "margin": "Margin: findings beside their clauses";
+        "review": "Main: findings in the wide pane";
+      };
+      "passagesCount": "{count, plural, one {# passage} other {# passages}}";
+      "pendingCount": "{count, plural, one {# pending} other {# pending}}";
+      "perspective": {
+        "neutral": "Not specified";
+        "other": "Other…";
+        "otherPlaceholder": "Role as the document names it";
+        "title": "We act for";
+      };
       "playbookDeleted": "This playbook no longer exists; the review is kept as a record.";
       "playbookFindings": "Playbook findings";
       "playbookOutdated": "A newer approved version of this playbook exists.";
       "playbookSection": "Playbook";
       "playbookTopic": "Seeded from the playbook";
+      "presence": {
+        "absent": "No";
+        "present": "Yes";
+      };
+      "progressPositions": "{total, plural, one {{completed, number} of # position} other {{completed, number} of # positions}}";
+      "proposing": "Proposing positions… {count, number}";
+      "readOnlyRun": "Decided on this run";
+      "recommendation": "Recommendation:";
       "referenceDocument": "Reference document";
       "referenceFindings": "Reference comparison";
       "referenceLimitReached": "Reference limit reached";
@@ -2345,14 +2433,33 @@ type Messages = {
       "reopen": "Reopen";
       "results": "Review results";
       "reviewAgain": "Run another review";
+      "reviewPositionsFirst": "Review the positions first";
       "reviewedAgainstCombined": "{count, plural, one {Reviewed against {name} and # reference document} other {Reviewed against {name} and # reference documents}}";
       "reviewing": "Review in progress…";
       "reviewingHint": "This can take up to a couple of minutes for large documents.";
       "run": "Start review";
+      "runStatus": {
+        "queued": "Queued";
+      };
+      "saveAsPlaybook": "Save as playbook";
+      "saveAsPlaybookFailed": "Could not save this review as a playbook";
+      "savedAsPlaybook": "Saved as a playbook";
       "scoreTopics": "Review these topics";
       "searchPlaybooks": "Search playbooks";
+      "showInDocument": "Show in document";
       "sizeConfirmStart": "Start review";
       "sizeConfirmTitle": "Large review";
+      "standardColumn": "Standard";
+      "standardColumnFrom": "Standard ({name})";
+      "suggestionSkipped": "No longer matches the document";
+      "suggestionStaged": "Staged as a tracked change in the document";
+      "summary": {
+        "forParty": "for the {role}";
+        "noSide": "no side";
+        "proposedFromReferences": "positions proposed from the references";
+      };
+      "targetAsReference": "The reviewed document cannot be its own reference.";
+      "targetColumn": "This document";
       "targetDocument": "Target document";
       "title": "Review document";
       "topicContext": "Extra context";
@@ -2360,6 +2467,8 @@ type Messages = {
       "topicName": "Topic name";
       "topicsDescription": "Confirm the proposed topics, add your own, or give each topic more context before scoring.";
       "topicsTitle": "What should this review cover?";
+      "why": "Why";
+      "whyItMatters": "Why it matters:";
     };
     "showPane": "Show pane";
     "swapViews": "Swap main and side views";
@@ -2497,6 +2606,7 @@ type Messages = {
       "addOption": "Add option";
       "addPosition": "Add position";
       "addRule": "Rule";
+      "adoptAsIdeal": "Adopt as ideal language";
       "advanced": "Change how this works";
       "all": "All playbooks";
       "approval": {
@@ -2530,10 +2640,12 @@ type Messages = {
       "convertToExtractDescription": "This removes the tier ladder and grading for this position. This can't be undone.";
       "convertToExtractTitle": "Convert to extract only?";
       "convertToGraded": "Add grading rules";
+      "convertToRules": "Convert to rules";
       "createPlaybook": "New playbook";
       "created": "Playbook created";
       "customizeAnswer": "Change extracted answer";
       "customizeAnswerHint": "Edit the question or answer format.";
+      "decisionLine": "{runs, plural, one {accepted {accepted, number} · dismissed {dismissed, number} · across # review} other {accepted {accepted, number} · dismissed {dismissed, number} · across # reviews}}";
       "deleteFailed": "Failed to delete playbook";
       "deletePlaybook": "Delete playbook";
       "deletePosition": "Delete position";
@@ -2589,6 +2701,7 @@ type Messages = {
         "title": "Negotiation";
       };
       "noPositions": "No positions yet. Add the first one.";
+      "noSettledPosition": "No settled position";
       "optionPlaceholder": "Option value";
       "optionsLabel": "Options";
       "outline": "Outline";
@@ -2597,6 +2710,7 @@ type Messages = {
       "recent": "Recently used";
       "recommended": "Recommended starters";
       "redLinePlaceholder": "Wording that is never acceptable";
+      "referenceStandard": "From the reference";
       "removeCheck": "Remove check";
       "removeIdeal": "Remove ideal language";
       "reorderPosition": "Reorder position";
@@ -2642,6 +2756,12 @@ type Messages = {
       };
       "switchToAuto": "Generate question and format automatically";
       "switchToManual": "Customize question and answer format";
+      "termKind": {
+        "enumeration": "Enumeration";
+        "language": "Wording";
+        "parameter": "Parameter";
+        "presence": "Presence";
+      };
       "tier": {
         "acceptable": "Acceptable";
         "fallback": "Fallback";
@@ -2652,6 +2772,7 @@ type Messages = {
       "updated": "Playbook updated";
       "updatedAt": "Updated {date}";
       "verdict": {
+        "additional": "Additional";
         "compliant": "Compliant";
         "deviation": "Deviation";
         "fallback": "Fallback";

@@ -6,6 +6,9 @@ import {
   isReviewSetupRunnable,
   isSamePerspective,
   NEUTRAL_PERSPECTIVE,
+  parseReviewStartMode,
+  REVIEW_START_MODE,
+  reviewStartModeStorageKey,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 
 const reference = {
@@ -60,5 +63,31 @@ describe("review setup", () => {
       rawRole: "   ",
       perspective: NEUTRAL_PERSPECTIVE,
     });
+  });
+});
+
+describe("review start mode", () => {
+  test("reads an unanswered or unrecognised store as starting immediately", () => {
+    expect(parseReviewStartMode(null)).toBe(REVIEW_START_MODE.immediate);
+    expect(parseReviewStartMode("")).toBe(REVIEW_START_MODE.immediate);
+    expect(parseReviewStartMode("yes")).toBe(REVIEW_START_MODE.immediate);
+    expect(parseReviewStartMode(REVIEW_START_MODE.immediate)).toBe(
+      REVIEW_START_MODE.immediate,
+    );
+  });
+
+  test("reads a stored confirm-first answer back", () => {
+    expect(parseReviewStartMode(REVIEW_START_MODE.confirmFirst)).toBe(
+      REVIEW_START_MODE.confirmFirst,
+    );
+  });
+
+  test("keys the answer to one document, not to the matter", () => {
+    expect(reviewStartModeStorageKey("entity-1", "field-1")).not.toBe(
+      reviewStartModeStorageKey("entity-1", "field-2"),
+    );
+    expect(reviewStartModeStorageKey("entity-1", "field-1")).toBe(
+      reviewStartModeStorageKey("entity-1", "field-1"),
+    );
   });
 });

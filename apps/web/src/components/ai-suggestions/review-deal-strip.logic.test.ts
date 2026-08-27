@@ -30,6 +30,8 @@ const heading = (
   text,
 });
 
+const LABELS = { preamble: "Preamble", wholeDocument: "Document" };
+
 const finding = (
   id: string,
   blockId: string | null,
@@ -41,6 +43,7 @@ describe("dealStripSegmentLabel", () => {
     expect(
       dealStripSegmentLabel(
         heading("h1", "Definitions", { displayLabel: "4." }),
+        LABELS.wholeDocument,
       ),
     ).toBe("4. Definitions");
   });
@@ -49,18 +52,24 @@ describe("dealStripSegmentLabel", () => {
     expect(
       dealStripSegmentLabel(
         heading("h1", "Definitions", { displayLabel: "Heading2" }),
+        LABELS.wholeDocument,
       ),
     ).toBe("Definitions");
   });
 
   test("writes a hand-typed clause number once", () => {
-    expect(dealStripSegmentLabel(heading("h1", "4.2 Termination"))).toBe(
-      "4.2 Termination",
-    );
+    expect(
+      dealStripSegmentLabel(
+        heading("h1", "4.2 Termination"),
+        LABELS.wholeDocument,
+      ),
+    ).toBe("4.2 Termination");
   });
 
   test("falls back to the whole document when a heading has no text", () => {
-    expect(dealStripSegmentLabel(heading("h1", "   "))).toBe("Document");
+    expect(
+      dealStripSegmentLabel(heading("h1", "   "), LABELS.wholeDocument),
+    ).toBe("Document");
   });
 });
 
@@ -75,7 +84,11 @@ describe("buildDealStrip", () => {
       heading("h3", "Termination", { level: 2 }),
       body("b3"),
     ];
-    const { segments } = buildDealStrip({ blocks, findings: [] });
+    const { segments } = buildDealStrip({
+      blocks,
+      findings: [],
+      labels: LABELS,
+    });
     expect(segments.map((segment) => segment.label)).toEqual([
       "Preamble",
       "Term",
@@ -92,6 +105,7 @@ describe("buildDealStrip", () => {
     const { segments } = buildDealStrip({
       blocks: [body("b0"), body("b1")],
       findings: [],
+      labels: LABELS,
     });
     expect(segments).toHaveLength(1);
     expect(segments[0]?.label).toBe("Document");
@@ -103,6 +117,7 @@ describe("buildDealStrip", () => {
     const { segments } = buildDealStrip({
       blocks: [heading("h1", "Term"), body("b1")],
       findings: [],
+      labels: LABELS,
     });
     expect(segments.map((segment) => segment.label)).toEqual(["Term"]);
   });
@@ -117,6 +132,7 @@ describe("buildDealStrip", () => {
     const { segments, unplacedFindingIds } = buildDealStrip({
       blocks,
       findings: [finding("f1", "b1"), finding("f2", "b2", { accent: true })],
+      labels: LABELS,
     });
     expect(unplacedFindingIds).toEqual([]);
     expect(segments[0]?.marks.map((mark) => mark.findingId)).toEqual(["f1"]);
@@ -136,6 +152,7 @@ describe("buildDealStrip", () => {
     const { segments } = buildDealStrip({
       blocks,
       findings: [finding("f1", "b1"), finding("f2", "b2"), finding("f3", "b3")],
+      labels: LABELS,
     });
     expect(segments[0]?.density).toBe(1);
     expect(segments[1]?.density).toBe(0.5);
@@ -145,6 +162,7 @@ describe("buildDealStrip", () => {
     const { segments } = buildDealStrip({
       blocks: [heading("h1", "Term"), body("b1")],
       findings: [],
+      labels: LABELS,
     });
     expect(segments[0]?.density).toBe(0);
   });
@@ -157,6 +175,7 @@ describe("buildDealStrip", () => {
         finding("f2", "gone"),
         finding("f3", "b1"),
       ],
+      labels: LABELS,
     });
     expect(unplacedFindingIds).toEqual(["f1", "f2"]);
     expect(segments[0]?.marks.map((mark) => mark.findingId)).toEqual(["f3"]);
@@ -166,6 +185,7 @@ describe("buildDealStrip", () => {
     const { segments, unplacedFindingIds } = buildDealStrip({
       blocks: [],
       findings: [finding("f1", "b1")],
+      labels: LABELS,
     });
     expect(segments).toEqual([]);
     expect(unplacedFindingIds).toEqual(["f1"]);

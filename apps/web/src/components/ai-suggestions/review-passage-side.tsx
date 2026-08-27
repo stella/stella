@@ -11,6 +11,8 @@
 
 import { Fragment, useCallback, useState } from "react";
 
+import { useTranslations } from "use-intl";
+
 import { BidiText } from "@stll/ui/bidi-text";
 import { cn } from "@stll/ui/utils";
 
@@ -21,12 +23,6 @@ import {
   type MarkedSegment,
   type PassageInput,
 } from "@/components/ai-suggestions/review-key-terms";
-
-// TODO(i18n): English until the review surface is localized as a whole.
-const CITATION_ARIA_LABEL = "Show in document";
-const EMPTY_PASSAGE_LABEL = "No passage";
-const SHOW_MORE_LABEL = "Show more";
-const SHOW_LESS_LABEL = "Show less";
 
 /**
  * Three strengths of one mark, never two competing colours. A diff run is the
@@ -61,22 +57,48 @@ export const REVIEW_CLAUSE_LABEL_CLASS =
 const PASSAGE_PROSE_CLASS =
   "flex w-full items-baseline gap-2 text-start text-sm leading-6 text-pretty";
 
-/** Twelve lines at `text-sm`/`leading-6` (1.5rem a line). Both sides of a pair
- *  collapse to the same height, so their opening lines stay level however
- *  unevenly the two passages run on. */
-const COLLAPSED_HEIGHT_CLASS = "max-h-[18rem]";
+/**
+ * How much of a passage a collapsed column shows.
+ *
+ * `full` is the comparison's twelve lines: both sides of a pair collapse to
+ * the same height, so their opening lines stay level however unevenly the two
+ * passages run on. `compact` is the two-and-a-bit a position gets in a list of
+ * positions, where the quote is evidence for the issue rather than the thing
+ * being read.
+ */
+export const PASSAGE_COLLAPSE = {
+  full: "full",
+  compact: "compact",
+} as const;
+
+export type PassageCollapse =
+  (typeof PASSAGE_COLLAPSE)[keyof typeof PASSAGE_COLLAPSE];
+
+/** Lines at `text-sm`/`leading-6` (1.5rem a line). */
+const COLLAPSED_HEIGHT_CLASS = {
+  full: "max-h-[18rem]",
+  compact: "max-h-[3rem]",
+} as const satisfies Record<PassageCollapse, string>;
 
 export type ReviewPassageSideProps = {
   label: string;
   paragraphs: readonly MarkedParagraph[];
+  /** How tall the collapsed column is. Defaults to the comparison's height. */
+  collapse?: PassageCollapse | undefined;
+  /** What the expander reads as when there is more to show. Defaults to
+   *  "Show more"; a list of positions names the quantity instead. */
+  expandLabel?: string | undefined;
   onActivate?: ((blockId: string) => void) | undefined;
 };
 
 export const ReviewPassageSide = ({
   label,
   paragraphs,
+  collapse = PASSAGE_COLLAPSE.full,
+  expandLabel,
   onActivate,
 }: ReviewPassageSideProps) => {
+  const t = useTranslations();
   const [expanded, setExpanded] = useState(false);
   const { contentRef, overflows } = useCollapsedOverflow();
   const hangingLabels = paragraphs.some(
@@ -90,14 +112,14 @@ export const ReviewPassageSide = ({
       </p>
       {paragraphs.length === 0 ? (
         <p className="text-muted-foreground text-sm leading-6 italic">
-          {EMPTY_PASSAGE_LABEL}
+          {t("inspector.review.noPassage")}
         </p>
       ) : (
         <>
           <div
             className={cn(
               "space-y-2 overflow-hidden",
-              !expanded && COLLAPSED_HEIGHT_CLASS,
+              !expanded && COLLAPSED_HEIGHT_CLASS[collapse],
             )}
             ref={contentRef}
           >
@@ -118,7 +140,9 @@ export const ReviewPassageSide = ({
               }}
               type="button"
             >
-              {expanded ? SHOW_LESS_LABEL : SHOW_MORE_LABEL}
+              {expanded
+                ? t("common.showLess")
+                : (expandLabel ?? t("common.showMore"))}
             </button>
           )}
         </>
@@ -130,6 +154,8 @@ export const ReviewPassageSide = ({
 export type ReviewStandardPassagesProps = {
   label: string;
   passages: readonly PassageInput[];
+  collapse?: PassageCollapse | undefined;
+  expandLabel?: string | undefined;
   onActivate?: ((blockId: string) => void) | undefined;
 };
 
@@ -141,9 +167,13 @@ export type ReviewStandardPassagesProps = {
 export const ReviewStandardPassages = ({
   label,
   passages,
+  collapse,
+  expandLabel,
   onActivate,
 }: ReviewStandardPassagesProps) => (
   <ReviewPassageSide
+    collapse={collapse}
+    expandLabel={expandLabel}
     label={label}
     onActivate={onActivate}
     paragraphs={buildMarkedSide(passages)}
@@ -195,6 +225,7 @@ const PassageParagraph = ({
   hangingLabels,
   onActivate,
 }: PassageParagraphProps) => {
+  const t = useTranslations();
   const prose = (
     <BidiText as="span" className="min-w-0 flex-1">
       <MarkedText segments={paragraph.segments} />
@@ -217,7 +248,7 @@ const PassageParagraph = ({
 
   return (
     <button
-      aria-label={CITATION_ARIA_LABEL}
+      aria-label={t("inspector.review.showInDocument")}
       className={cn(
         PASSAGE_PROSE_CLASS,
         "hover:bg-muted/60 rounded-sm transition-colors duration-150",

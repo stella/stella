@@ -19,6 +19,7 @@ import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef, FolioAIBlock } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -27,15 +28,7 @@ import { cn } from "@stll/ui/utils";
 import { layoutMarginNotes } from "@/components/ai-suggestions/review-margin-notes.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useFormatter } from "@/i18n/formatting-context";
-
-// TODO(i18n): English until the review surface is localized as a whole.
-const MARGIN_NOTES_LABEL = "Findings beside the clauses they are about";
-const NOTES_ABOVE_LABEL = (count: string): string => `${count} above`;
-const NOTES_BELOW_LABEL = (count: string): string => `${count} below`;
-const UNANCHORED_GROUP_LABEL = "Not tied to a clause";
-const DOCUMENT_NOT_READ_LABEL =
-  "Open the document in the main pane to pin the findings beside it.";
+import type { TranslationKey } from "@/i18n/types";
 
 /** The least space between two notes, in px. Below this they read as one. */
 const NOTE_GAP = 10;
@@ -89,6 +82,7 @@ export const ReviewMarginNotes = ({
   onOpen,
   onScrollToBlock,
 }: ReviewMarginNotesProps) => {
+  const t = useTranslations();
   const columnRef = useRef<HTMLUListElement | null>(null);
   const [edges, setEdges] = useState<ColumnEdges>(NO_EDGES);
   const noteById = new Map(notes.map((note) => [note.id, note]));
@@ -253,7 +247,7 @@ export const ReviewMarginNotes = ({
   if (!columnMounted) {
     return (
       <p className="text-muted-foreground px-3 py-6 text-center text-xs text-pretty">
-        {DOCUMENT_NOT_READ_LABEL}
+        {t("inspector.review.marginNotes.documentNotRead")}
       </p>
     );
   }
@@ -262,7 +256,7 @@ export const ReviewMarginNotes = ({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="relative min-h-0 flex-1">
         <ul
-          aria-label={MARGIN_NOTES_LABEL}
+          aria-label={t("inspector.review.marginNotes.label")}
           className="absolute inset-0 overflow-hidden"
           ref={columnRef}
         >
@@ -294,7 +288,7 @@ export const ReviewMarginNotes = ({
       {unanchored.length > 0 && (
         <section className="max-h-48 shrink-0 overflow-y-auto border-t px-2 py-2">
           <h3 className="text-muted-foreground mb-1 px-1 text-[11px] font-medium tracking-wide uppercase">
-            {UNANCHORED_GROUP_LABEL}
+            {t("inspector.review.marginNotes.unanchored")}
           </h3>
           <ul className="space-y-1">
             {unanchored.map((note) => (
@@ -368,18 +362,22 @@ const MarginNoteBody = ({
  *  nearest of them. Total over the two edges so neither can be added without
  *  its own placement and glyph. */
 const EDGE_PILL = {
-  above: { icon: ChevronUpIcon, position: "top-1", label: NOTES_ABOVE_LABEL },
+  above: {
+    icon: ChevronUpIcon,
+    position: "top-1",
+    labelKey: "inspector.review.marginNotes.above",
+  },
   below: {
     icon: ChevronDownIcon,
     position: "bottom-1",
-    label: NOTES_BELOW_LABEL,
+    labelKey: "inspector.review.marginNotes.below",
   },
 } as const satisfies Record<
   "above" | "below",
   {
     icon: typeof ChevronUpIcon;
     position: string;
-    label: (count: string) => string;
+    labelKey: TranslationKey;
   }
 >;
 
@@ -392,12 +390,12 @@ const EdgePill = ({
   ids: readonly string[];
   onScrollTo: (findingId: string) => void;
 }) => {
-  const format = useFormatter();
+  const t = useTranslations();
   const nearest = ids.at(0);
   if (nearest === undefined) {
     return null;
   }
-  const { icon: Icon, position, label } = EDGE_PILL[direction];
+  const { icon: Icon, position, labelKey } = EDGE_PILL[direction];
 
   return (
     <div
@@ -414,7 +412,7 @@ const EdgePill = ({
         type="button"
       >
         <Icon className="size-3" />
-        {label(format.number(ids.length))}
+        {t(labelKey, { count: ids.length })}
       </button>
     </div>
   );

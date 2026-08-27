@@ -63,11 +63,15 @@ export type DealStrip = {
   unplacedFindingIds: string[];
 };
 
-// TODO(i18n): English until the review surface is localized as a whole.
-/** Everything before the first top-level clause: title, parties, recitals. */
-const PREAMBLE_SEGMENT_LABEL = "Preamble";
-/** A document folio found no headings in: one clause, the whole of it. */
-const UNSECTIONED_SEGMENT_LABEL = "Document";
+/** The two segment names the strip does not read out of the document, in the
+ *  reader's language. Passed in rather than looked up here so the strip stays
+ *  pure arithmetic over two lists. */
+export type DealStripLabels = {
+  /** Everything before the first top-level clause: title, parties, recitals. */
+  preamble: string;
+  /** A document folio found no headings in: one clause, the whole of it. */
+  wholeDocument: string;
+};
 
 /** Folio hands back the heading style id as `displayLabel` when a heading
  *  carries no list marker. `Heading2` is not a clause number. */
@@ -89,11 +93,14 @@ const clauseNumber = (block: DealStripBlock): string | null => {
  * What one clause reads as on hover: its number and its heading, with the
  * number written once even when the drafter typed it into the heading text.
  */
-export const dealStripSegmentLabel = (block: DealStripBlock): string => {
+export const dealStripSegmentLabel = (
+  block: DealStripBlock,
+  wholeDocumentLabel: string,
+): string => {
   const number = clauseNumber(block);
   const title = block.text.replace(LEADING_CLAUSE_NUMBER, "").trim();
   if (number === null) {
-    return title.length === 0 ? UNSECTIONED_SEGMENT_LABEL : title;
+    return title.length === 0 ? wholeDocumentLabel : title;
   }
   return title.length === 0 ? number : `${number} ${title}`;
 };
@@ -131,7 +138,10 @@ const topLevelHeadingStarts = (blocks: readonly DealStripBlock[]): number[] => {
   return starts;
 };
 
-const draftSegments = (blocks: readonly DealStripBlock[]): SegmentDraft[] => {
+const draftSegments = (
+  blocks: readonly DealStripBlock[],
+  labels: DealStripLabels,
+): SegmentDraft[] => {
   const starts = topLevelHeadingStarts(blocks);
   const drafts: SegmentDraft[] = [];
   const leadIn = starts.at(0) ?? blocks.length;
@@ -139,10 +149,7 @@ const draftSegments = (blocks: readonly DealStripBlock[]): SegmentDraft[] => {
     const first = blocks[0];
     drafts.push({
       key: first === undefined ? "lead-in" : first.id,
-      label:
-        starts.length === 0
-          ? UNSECTIONED_SEGMENT_LABEL
-          : PREAMBLE_SEGMENT_LABEL,
+      label: starts.length === 0 ? labels.wholeDocument : labels.preamble,
       startIndex: 0,
       endIndex: leadIn,
       marks: [],
@@ -155,7 +162,7 @@ const draftSegments = (blocks: readonly DealStripBlock[]): SegmentDraft[] => {
     }
     drafts.push({
       key: heading.id,
-      label: dealStripSegmentLabel(heading),
+      label: dealStripSegmentLabel(heading, labels.wholeDocument),
       startIndex,
       endIndex: starts[ordinal + 1] ?? blocks.length,
       marks: [],
@@ -167,11 +174,13 @@ const draftSegments = (blocks: readonly DealStripBlock[]): SegmentDraft[] => {
 type BuildDealStripArgs = {
   blocks: readonly DealStripBlock[];
   findings: readonly DealStripFinding[];
+  labels: DealStripLabels;
 };
 
 export const buildDealStrip = ({
   blocks,
   findings,
+  labels,
 }: BuildDealStripArgs): DealStrip => {
   const total = blocks.length;
   if (total === 0) {
@@ -182,7 +191,7 @@ export const buildDealStrip = ({
   }
 
   const indexById = new Map(blocks.map((block, index) => [block.id, index]));
-  const drafts = draftSegments(blocks);
+  const drafts = draftSegments(blocks, labels);
   const unplacedFindingIds: string[] = [];
 
   for (const finding of findings) {
