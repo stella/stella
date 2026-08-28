@@ -7,6 +7,7 @@
  */
 
 export * from "./components/accordion";
+export * from "./components/application-rail";
 export * from "./components/alert-dialog";
 export * from "./components/application-shell";
 export * from "./components/avatar";
