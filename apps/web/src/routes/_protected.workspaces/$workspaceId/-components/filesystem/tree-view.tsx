@@ -948,12 +948,11 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                         "tree-view.navigate-to-folder",
                       );
                     }}
-                    onRename={(entityId, newName) => {
-                      renameEntity.mutate({
-                        workspaceId,
-                        entityId,
-                        name: newName,
-                      });
+                    onRename={(entityId, name, { onError }) => {
+                      renameEntity.mutate(
+                        { workspaceId, entityId, name },
+                        { onError },
+                      );
                     }}
                     onClearSelection={clearSelection}
                     onSelect={handleSelect}
@@ -1150,7 +1149,11 @@ type FilesystemRowProps = {
   onToggleFolder: (folderId: string) => void;
   onNavigateToFolder: (folderId: string) => void;
   onStartEditing: (entityId: string | null) => void;
-  onRename: (entityId: string, newName: string) => void;
+  onRename: (
+    entityId: string,
+    name: string,
+    callbacks: { onError: () => void },
+  ) => void;
   onClearSelection: () => void;
   onSelect: (entityId: string, mods: { meta: boolean; shift: boolean }) => void;
   onSubfolderCreated: (entityId: string, parentId: string) => void;
@@ -1198,11 +1201,19 @@ const FilesystemRow = ({
   const contextAnchor =
     menuState.type === "context" ? menuState.anchor : undefined;
   const [editValue, setEditValue] = useState("");
+  const [optimisticRename, setOptimisticRename] = useState<{
+    previousName: string;
+    name: string;
+  } | null>(null);
   const isFolder = node.kind === "folder";
   const isEditing = editingEntityId === node.entityId;
   const isSelected = selectedIds.has(node.entityId);
   const expanded = isFolder && expandedIds.has(node.entityId);
-  const name = getEntityName(node);
+  const persistedName = getEntityName(node);
+  const name =
+    optimisticRename?.previousName === persistedName
+      ? optimisticRename.name
+      : persistedName;
   const formattedFolderSize = folderStatistics
     ? (() => {
         const size = getFileSizeDisplay(folderStatistics.totalSizeBytes);
@@ -1233,7 +1244,15 @@ const FilesystemRow = ({
     const trimmed = editValue.trim();
     const fullName = ext ? `${trimmed}${ext}` : trimmed;
     if (trimmed && fullName !== name) {
-      onRename(node.entityId, fullName);
+      const pendingRename = { previousName: name, name: fullName };
+      setOptimisticRename(pendingRename);
+      onRename(node.entityId, fullName, {
+        onError: () => {
+          setOptimisticRename((current) =>
+            current === pendingRename ? null : current,
+          );
+        },
+      });
     }
   };
 
@@ -1291,6 +1310,7 @@ const FilesystemRow = ({
   const getCurrentAncestorIds = useLatestCallback((id: string) =>
     getAncestorIds(id),
   );
+  const canDrag = useLatestCallback(() => !isEditing);
   const toggleCurrentFolder = useLatestCallback(() => {
     onToggleFolder(node.entityId);
   });
@@ -1332,6 +1352,7 @@ const FilesystemRow = ({
     const cleanup = combine(
       draggable({
         element: el,
+        canDrag,
         getInitialData: () => {
           const sel = getCurrentSelectedIds();
           const isMulti = sel.size > 1 && sel.has(node.entityId);
@@ -1454,6 +1475,7 @@ const FilesystemRow = ({
     isFolder,
     workspaceId,
     scheduleAutoExpand,
+    canDrag,
     getCurrentSelectedDragItems,
     getCurrentSelectedEntities,
     isExpanded,
@@ -1496,8 +1518,8 @@ const FilesystemRow = ({
     >
       {isEditing ? (
         <InlineEdit
-          className="min-w-0 flex-1"
-          inputClassName="min-w-0 flex-1"
+          className="max-w-full min-w-0"
+          inputClassName="min-w-48 [field-sizing:content]"
           onCancel={cancelEditing}
           onChange={setEditValue}
           onCommit={commitRename}
@@ -1655,6 +1677,59 @@ const FilesystemRow = ({
     </span>
   );
 
+  const contentControl = isEditing ? (
+    <div className={rowButtonCls} style={contentSpanStyle}>
+      {contentCells}
+    </div>
+  ) : (
+    <button
+      className={rowButtonCls}
+      onClick={(event) => {
+        if (!isFolder) {
+          onSelect(node.entityId, {
+            meta: event.metaKey || event.ctrlKey,
+            shift: event.shiftKey,
+          });
+          return;
+        }
+
+        // Shift extends a range like the file rows, taking priority
+        // over folder navigation/toggle.
+        if (event.shiftKey) {
+          onSelect(node.entityId, { meta: false, shift: true });
+          return;
+        }
+        const intent = getFolderClickIntent({
+          currentFolderId,
+          hasModifier: event.metaKey || event.ctrlKey,
+        });
+
+        if (intent.type === "toggle-selection") {
+          onSelect(node.entityId, { meta: true, shift: false });
+          return;
+        }
+
+        onClearSelection();
+        if (intent.type === "clear-and-navigate") {
+          onNavigateToFolder(node.entityId);
+        } else {
+          onToggleFolder(node.entityId);
+        }
+      }}
+      onDoubleClick={() => {
+        if (isFolder) {
+          onNavigateToFolder(node.entityId);
+          return;
+        }
+        openInInspector?.();
+      }}
+      style={contentSpanStyle}
+      type="button"
+    >
+      {contentCells}
+    </button>
+  );
+
   return (
     <>
       <div
@@ -1663,67 +1738,10 @@ const FilesystemRow = ({
         onContextMenu={containedEventHandler(handleContextMenu)}
         ref={rowRef}
       >
-        {isFolder ? (
-          <div
-            className={gridCls}
-            style={{ gridTemplateColumns: gridTemplate }}
-          >
-            <button
-              className={rowButtonCls}
-              onClick={(e) => {
-                // Shift extends a range like the file rows, taking priority
-                // over folder navigation/toggle.
-                if (e.shiftKey) {
-                  onSelect(node.entityId, { meta: false, shift: true });
-                  return;
-                }
-                const intent = getFolderClickIntent({
-                  currentFolderId,
-                  hasModifier: e.metaKey || e.ctrlKey,
-                });
-
-                if (intent.type === "toggle-selection") {
-                  onSelect(node.entityId, { meta: true, shift: false });
-                  return;
-                }
-
-                onClearSelection();
-                if (intent.type === "clear-and-navigate") {
-                  onNavigateToFolder(node.entityId);
-                } else {
-                  onToggleFolder(node.entityId);
-                }
-              }}
-              onDoubleClick={() => onNavigateToFolder(node.entityId)}
-              style={contentSpanStyle}
-              type="button"
-            >
-              {contentCells}
-            </button>
-            {rowActionsNode}
-          </div>
-        ) : (
-          <div
-            className={gridCls}
-            style={{ gridTemplateColumns: gridTemplate }}
-          >
-            <button
-              className={rowButtonCls}
-              onClick={(e) =>
-                onSelect(node.entityId, {
-                  meta: e.metaKey || e.ctrlKey,
-                  shift: e.shiftKey,
-                })
-              }
-              onDoubleClick={() => openInInspector?.()}
-              style={contentSpanStyle}
-              type="button"
-            >
-              {contentCells}
-            </button>
-            {rowActionsNode}
-          </div>
-        )}
+        <div className={gridCls} style={{ gridTemplateColumns: gridTemplate }}>
+          {contentControl}
+          {rowActionsNode}
+        </div>
       </div>
       {pendingDrop && (
         <VersionOrNewFileDialog
