@@ -79,6 +79,7 @@ import {
 import {
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
+  clipboardRailWindow,
   clipboardSourceTintIndex,
   filterClipboardItems,
   formatClipboardAge,
@@ -89,6 +90,12 @@ import {
   quickCopyIndex,
   shouldCopyFromClipboardInput,
 } from "./clipboard-logic";
+import {
+  markClipboardShellCommit,
+  markClipboardSnapshotApplied,
+  measureClipboardSnapshotRequest,
+  observeClipboardReopens,
+} from "./clipboard-startup-timing";
 import { CLIPBOARD_RETENTIONS, isClipboardSnapshot } from "./clipboard-types";
 import type {
   ClipboardCaptureStatus,
@@ -99,6 +106,7 @@ import type {
   ClipboardSnapshot,
   ClipboardSourceAppVisual,
 } from "./clipboard-types";
+import { useRailViewport } from "./use-rail-viewport";
 
 const CLIPBOARD_GROUP_COLORS = [
   "gray",
@@ -127,6 +135,11 @@ const RETENTION_LABEL_KEYS = {
   year: "retentionYear",
 } as const satisfies Record<ClipboardRetention, string>;
 const CLIPBOARD_CARD_SELECTOR = "[data-clipboard-id]";
+// Must match the card's `w-[246px]` and the rail's `gap-3`.
+const CLIPBOARD_CARD_WIDTH = 246;
+const CLIPBOARD_CARD_GAP = 12;
+const CLIPBOARD_CARD_STRIDE = CLIPBOARD_CARD_WIDTH + CLIPBOARD_CARD_GAP;
+const CLIPBOARD_RAIL_OVERSCAN = 3;
 const CLIPBOARD_GROUP_DROP_SELECTOR = "[data-clipboard-group-id]";
 const CLIPBOARD_NO_GROUP_DROP_ID = "__no_group__";
 const PRIMARY_MODIFIER_LABEL = navigator.userAgent.includes("Mac")
@@ -1062,11 +1075,22 @@ const ClipboardApp = () => {
     (snapshot.welcomeStatus === "pending" && !welcomeDismissed);
 
   useEffect(() => {
+    if (snapshot === EMPTY_SNAPSHOT) {
+      return;
+    }
+    markClipboardSnapshotApplied(snapshot);
+  }, [snapshot]);
+
+  useEffect(() => {
+    markClipboardShellCommit();
+    const stopObservingReopens = observeClipboardReopens();
     let disposed = false;
     const readSnapshot = () => {
       const requestId = snapshotRequestIdRef.current + 1;
       snapshotRequestIdRef.current = requestId;
-      void invoke<unknown>("clipboard_get_snapshot")
+      void measureClipboardSnapshotRequest(
+        invoke<unknown>("clipboard_get_snapshot"),
+      )
         .then((value) => {
           if (disposed || requestId !== snapshotRequestIdRef.current) {
             return undefined;
@@ -1116,6 +1140,7 @@ const ClipboardApp = () => {
         setError({ message: errorReadHistory, source: "read" });
       });
     return () => {
+      stopObservingReopens();
       disposed = true;
       stopListening?.();
     };
@@ -1141,6 +1166,18 @@ const ClipboardApp = () => {
   );
   const activeItem = filteredItems.at(activeIndex);
   const activeItemId = activeItem?.id;
+  const railViewport = useRailViewport(
+    timelineRailRef,
+    filteredItems.length > 0,
+  );
+  const railWindow = clipboardRailWindow({
+    activeIndex,
+    itemCount: filteredItems.length,
+    overscan: CLIPBOARD_RAIL_OVERSCAN,
+    scrollLeft: railViewport.scrollLeft,
+    stride: CLIPBOARD_CARD_STRIDE,
+    viewportWidth: railViewport.width,
+  });
 
   const requestHide = () => {
     void invoke("clipboard_hide").catch(() => {
@@ -1392,6 +1429,8 @@ const ClipboardApp = () => {
     activeGroupId,
     applySnapshotCommand,
     query,
+    railWindow.end,
+    railWindow.start,
     snapshot.groups,
     snapshot.items,
   ]);
@@ -1635,43 +1674,73 @@ const ClipboardApp = () => {
             ref={timelineRailRef}
             role="list"
           >
-            {filteredItems.map((item, index) => {
-              const group = item.groupId
-                ? (groupsById.get(item.groupId) ?? null)
-                : null;
-              return (
-                <ClipboardCard
-                  active={index === activeIndex}
-                  ageReferenceTime={ageReferenceTime}
-                  dragging={
-                    dragState.type === "dragging" &&
-                    dragState.itemId === item.id
-                  }
-                  groupColor={group?.color ?? null}
-                  groupName={group?.name ?? null}
-                  index={index}
-                  item={item}
-                  key={item.id}
-                  onOpenMenu={openContextMenu}
-                  onCopy={copyItem}
-                  onRename={(id, name) =>
-                    applySnapshotCommand("clipboard_set_item_name", {
-                      id,
-                      name,
-                    })
-                  }
-                  onSelect={setSelectedIndex}
-                  query={query}
-                  sourceVisual={
-                    item.sourceApp
-                      ? (sourceAppVisuals.get(
-                          item.sourceApp.identifier ?? item.sourceApp.name,
-                        ) ?? null)
-                      : null
-                  }
-                />
-              );
-            })}
+            {railWindow.start > 0 ? (
+              <div
+                aria-hidden="true"
+                className="shrink-0"
+                style={{
+                  width:
+                    railWindow.start * CLIPBOARD_CARD_STRIDE -
+                    CLIPBOARD_CARD_GAP,
+                }}
+              />
+            ) : null}
+            {filteredItems
+              // Index-based filtering keeps the callback shape the React
+              // Compiler can memoize; slicing and re-deriving the index here
+              // made it drop the component's manual memoization.
+              .map((item, index) => {
+                if (index < railWindow.start || index >= railWindow.end) {
+                  return null;
+                }
+                const group = item.groupId
+                  ? (groupsById.get(item.groupId) ?? null)
+                  : null;
+                return (
+                  <ClipboardCard
+                    active={index === activeIndex}
+                    ageReferenceTime={ageReferenceTime}
+                    dragging={
+                      dragState.type === "dragging" &&
+                      dragState.itemId === item.id
+                    }
+                    groupColor={group?.color ?? null}
+                    groupName={group?.name ?? null}
+                    index={index}
+                    item={item}
+                    key={item.id}
+                    onOpenMenu={openContextMenu}
+                    onCopy={copyItem}
+                    onRename={(id, name) =>
+                      applySnapshotCommand("clipboard_set_item_name", {
+                        id,
+                        name,
+                      })
+                    }
+                    onSelect={setSelectedIndex}
+                    query={query}
+                    sourceVisual={
+                      item.sourceApp
+                        ? (sourceAppVisuals.get(
+                            item.sourceApp.identifier ?? item.sourceApp.name,
+                          ) ?? null)
+                        : null
+                    }
+                  />
+                );
+              })}
+            {railWindow.end < filteredItems.length ? (
+              <div
+                aria-hidden="true"
+                className="shrink-0"
+                style={{
+                  width:
+                    (filteredItems.length - railWindow.end) *
+                      CLIPBOARD_CARD_STRIDE -
+                    CLIPBOARD_CARD_GAP,
+                }}
+              />
+            ) : null}
           </div>
         )}
       </main>

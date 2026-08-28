@@ -101,6 +101,56 @@ export const clipboardSourceTintIndex = (sourceIdentity: string | null) => {
   return hash % CLIPBOARD_SOURCE_TINT_COUNT;
 };
 
+type ClipboardRailWindowOptions = {
+  activeIndex: number;
+  itemCount: number;
+  overscan: number;
+  scrollLeft: number;
+  /** Card width plus the gap that follows it. */
+  stride: number;
+  /** 0 before the rail has been measured. */
+  viewportWidth: number;
+};
+
+/** Half-open index range `[start, end)` of cards to keep mounted. */
+export type ClipboardRailWindow = { end: number; start: number };
+
+const UNMEASURED_VISIBLE_CARDS = 8;
+
+/**
+ * Cards mounted for a horizontal rail: the ones intersecting the viewport
+ * plus `overscan` on each side. When the active card is outside the viewport
+ * (keyboard navigation, jump to end) the window centers on it instead, so the
+ * card exists in the DOM for focus and scroll-into-view.
+ */
+export const clipboardRailWindow = ({
+  activeIndex,
+  itemCount,
+  overscan,
+  scrollLeft,
+  stride,
+  viewportWidth,
+}: ClipboardRailWindowOptions): ClipboardRailWindow => {
+  if (itemCount === 0) {
+    return { end: 0, start: 0 };
+  }
+  const visible =
+    viewportWidth > 0
+      ? Math.ceil(viewportWidth / stride) + 1
+      : UNMEASURED_VISIBLE_CARDS;
+  let start = Math.floor(Math.max(0, scrollLeft) / stride);
+  let end = start + visible;
+  const active = Math.min(Math.max(0, activeIndex), itemCount - 1);
+  if (active < start || active >= end) {
+    start = active - Math.floor(visible / 2);
+    end = start + visible;
+  }
+  return {
+    end: Math.min(itemCount, end + overscan),
+    start: Math.max(0, start - overscan),
+  };
+};
+
 export const filterClipboardItems = (
   items: readonly ClipboardItem[],
   query: string,

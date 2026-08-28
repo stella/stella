@@ -37,6 +37,7 @@ macro_rules! with_stella_commands {
       clipboard_commands::clipboard_show => "clipboard_show",
       clipboard_commands::clipboard_open_stella => "clipboard_open_stella",
       desktop_telemetry::desktop_report_error => "desktop_report_error",
+      desktop_telemetry::desktop_report_timing => "desktop_report_timing",
     }
   };
 }

@@ -4,6 +4,7 @@ import {
   adjacentClipboardIndex,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
+  clipboardRailWindow,
   clipboardSourceTintIndex,
   filterClipboardItems,
   formatClipboardAge,
@@ -230,6 +231,73 @@ describe("clipboard input keyboard handling", () => {
         key: "Enter",
       }),
     ).toBe(false);
+  });
+});
+
+describe("clipboardRailWindow", () => {
+  const base = { overscan: 2, stride: 100, viewportWidth: 450 };
+
+  test("mounts only the cards intersecting the viewport plus overscan", () => {
+    expect(
+      clipboardRailWindow({
+        ...base,
+        activeIndex: 0,
+        itemCount: 500,
+        scrollLeft: 0,
+      }),
+    ).toEqual({ end: 8, start: 0 });
+    expect(
+      clipboardRailWindow({
+        ...base,
+        activeIndex: 250,
+        itemCount: 500,
+        scrollLeft: 25_000,
+      }),
+    ).toEqual({ end: 258, start: 248 });
+  });
+
+  test("keeps the active card mounted when it is outside the viewport", () => {
+    const window = clipboardRailWindow({
+      ...base,
+      activeIndex: 499,
+      itemCount: 500,
+      scrollLeft: 0,
+    });
+    expect(window.start).toBeLessThanOrEqual(499);
+    expect(window.end).toBe(500);
+    expect(window.end - window.start).toBeLessThan(20);
+  });
+
+  test("is bounded for every scroll position and active index", () => {
+    for (let scrollLeft = 0; scrollLeft <= 50_000; scrollLeft += 731) {
+      for (const activeIndex of [0, 1, 7, 8, 9, 250, 498, 499, 900]) {
+        const window = clipboardRailWindow({
+          ...base,
+          activeIndex,
+          itemCount: 500,
+          scrollLeft,
+        });
+        expect(window.start).toBeGreaterThanOrEqual(0);
+        expect(window.end).toBeLessThanOrEqual(500);
+        expect(window.end - window.start).toBeLessThanOrEqual(6 + 2 * 2);
+        const active = Math.min(activeIndex, 499);
+        expect(active).toBeGreaterThanOrEqual(window.start);
+        expect(active).toBeLessThan(window.end);
+      }
+    }
+  });
+
+  test("renders a default window before the rail is measured", () => {
+    expect(
+      clipboardRailWindow({
+        activeIndex: 0,
+        itemCount: 3,
+        overscan: 2,
+        scrollLeft: 0,
+        stride: 100,
+        viewportWidth: 0,
+      }),
+    ).toEqual({ end: 3, start: 0 });
   });
 });
 

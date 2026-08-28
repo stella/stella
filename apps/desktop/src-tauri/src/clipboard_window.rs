@@ -1,3 +1,7 @@
+use std::{
+  sync::Mutex,
+  time::{Duration, Instant},
+};
 use tauri::{
   AppHandle, LogicalPosition, LogicalSize, Manager, WebviewWindow,
   webview::PageLoadEvent,
@@ -5,8 +9,9 @@ use tauri::{
 };
 
 use crate::desktop_telemetry::{
-  DesktopErrorReport, DesktopTelemetry, DesktopTelemetryErrorCode,
-  DesktopTelemetryOperation, DesktopTelemetryWindow,
+  ClipboardOpenKind, DesktopErrorReport, DesktopTelemetry, DesktopTelemetryErrorCode,
+  DesktopTelemetryOperation, DesktopTelemetrySpan, DesktopTelemetryWindow,
+  DesktopTimingReport,
 };
 
 const CLIPBOARD_WINDOW_LABEL: &str = "clipboard";
@@ -14,6 +19,70 @@ const CLIPBOARD_EDITOR_WINDOW_LABEL: &str = "clipboard-editor";
 const CLIPBOARD_WINDOW_HEIGHT: f64 = 326.0;
 const CLIPBOARD_WINDOW_INSET: f64 = 18.0;
 const CLIPBOARD_WINDOW_RADIUS: f64 = 28.0;
+
+/// Timing anchor for the clipboard window's creation. Page load and frontend
+/// spans are measured against it, and the first snapshot read after creation
+/// claims its spans once so steady-state history reads stay unmeasured.
+#[derive(Default)]
+pub struct ClipboardStartupTrace(Mutex<Option<StartupTrace>>);
+
+struct StartupTrace {
+  started: Instant,
+  open_kind: ClipboardOpenKind,
+  snapshot_claimed: bool,
+}
+
+impl ClipboardStartupTrace {
+  fn begin(&self, started: Instant, open_kind: ClipboardOpenKind) {
+    if let Ok(mut trace) = self.0.lock() {
+      *trace = Some(StartupTrace {
+        started,
+        open_kind,
+        snapshot_claimed: false,
+      });
+    }
+  }
+
+  fn elapsed(&self) -> Option<(Duration, ClipboardOpenKind)> {
+    let trace = self.0.lock().ok()?;
+    let trace = trace.as_ref()?;
+    Some((trace.started.elapsed(), trace.open_kind))
+  }
+
+  pub fn open_kind(&self) -> Option<ClipboardOpenKind> {
+    self.0.lock().ok()?.as_ref().map(|trace| trace.open_kind)
+  }
+
+  /// Open kind for the first snapshot read after the window was created;
+  /// `None` for every later read.
+  pub fn claim_snapshot(&self) -> Option<ClipboardOpenKind> {
+    let mut trace = self.0.lock().ok()?;
+    let trace = trace.as_mut()?;
+    if trace.snapshot_claimed {
+      return None;
+    }
+    trace.snapshot_claimed = true;
+    Some(trace.open_kind)
+  }
+}
+
+fn capture_window_timing(
+  app: &AppHandle,
+  span: DesktopTelemetrySpan,
+  duration: Duration,
+  open_kind: ClipboardOpenKind,
+) {
+  if let Some(telemetry) = app.try_state::<DesktopTelemetry>() {
+    telemetry.capture_timing(DesktopTimingReport {
+      window: DesktopTelemetryWindow::Clipboard,
+      span,
+      duration,
+      open_kind: Some(open_kind),
+      item_count: None,
+      payload_bytes: None,
+    });
+  }
+}
 
 fn capture_window_error(
   app: &AppHandle,
@@ -139,6 +208,17 @@ fn position_window(app: &AppHandle, window: &WebviewWindow) {
 }
 
 pub fn show(app: &AppHandle) {
+  show_as(app, ClipboardOpenKind::FirstOpen);
+}
+
+pub fn show_on_launch(app: &AppHandle) {
+  show_as(app, ClipboardOpenKind::Launch);
+}
+
+/// `created_kind` labels the trace when the window has to be created; an
+/// existing window is always a reopen.
+fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
+  let requested = Instant::now();
   #[cfg(target_os = "macos")]
   let _ = app.show();
 
@@ -150,8 +230,19 @@ pub fn show(app: &AppHandle) {
         DesktopTelemetryOperation::ClipboardWindowOpen,
         DesktopTelemetryWindow::Clipboard,
       );
+      return;
     }
+    capture_window_timing(
+      app,
+      DesktopTelemetrySpan::ClipboardWindowShow,
+      requested.elapsed(),
+      ClipboardOpenKind::Reopen,
+    );
     return;
+  }
+
+  if let Some(trace) = app.try_state::<ClipboardStartupTrace>() {
+    trace.begin(requested, created_kind);
   }
 
   #[cfg(debug_assertions)]
@@ -188,18 +279,37 @@ pub fn show(app: &AppHandle) {
     if payload.event() != PageLoadEvent::Finished {
       return;
     }
-    position_window(window.app_handle(), &window);
+    let app = window.app_handle();
+    position_window(app, &window);
     if window.show().and_then(|()| window.set_focus()).is_err() {
       capture_window_error(
-        window.app_handle(),
+        app,
         DesktopTelemetryOperation::ClipboardWindowOpen,
         DesktopTelemetryWindow::Clipboard,
+      );
+      return;
+    }
+    if let Some((elapsed, open_kind)) = app
+      .try_state::<ClipboardStartupTrace>()
+      .and_then(|trace| trace.elapsed())
+    {
+      capture_window_timing(
+        app,
+        DesktopTelemetrySpan::ClipboardPageLoad,
+        elapsed,
+        open_kind,
       );
     }
   });
 
   match builder.build() {
     Ok(window) => {
+      capture_window_timing(
+        app,
+        DesktopTelemetrySpan::ClipboardWindowCreate,
+        requested.elapsed(),
+        created_kind,
+      );
       position_window(app, &window);
       let window_to_hide = window.clone();
       window.on_window_event(move |event| {

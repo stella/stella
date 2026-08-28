@@ -4,6 +4,7 @@ import contract from "../fixtures/desktop-telemetry-contract.json" with { type: 
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
+  DESKTOP_TELEMETRY_SPANS,
   DESKTOP_TELEMETRY_WINDOWS,
 } from "../src/telemetry/desktop-telemetry";
 
@@ -16,5 +17,6 @@ describe("desktop telemetry contract", () => {
     expect(contract.errorCodes).toEqual(
       Object.values(DESKTOP_TELEMETRY_ERROR_CODES),
     );
+    expect(contract.spans).toEqual(Object.values(DESKTOP_TELEMETRY_SPANS));
   });
 });

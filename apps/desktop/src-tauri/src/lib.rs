@@ -102,6 +102,7 @@ pub fn run() {
     .manage::<AppState>(Arc::clone(&manager))
     .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
     .manage::<ClipboardEditorState>(Arc::new(std::sync::Mutex::new(None)))
+    .manage(clipboard_window::ClipboardStartupTrace::default())
     .setup(move |app| {
       let handle = app.handle().clone();
       let initial_deep_links = app.deep_link().get_current()?;
@@ -166,7 +167,7 @@ pub fn run() {
       }
 
       if reveal_clipboard_on_launch {
-        clipboard_window::show(&handle);
+        clipboard_window::show_on_launch(&handle);
       }
 
       // Restore sessions and build the initial tray menu off the main thread.

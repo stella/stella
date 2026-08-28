@@ -10,6 +10,7 @@ use std::{
   collections::{HashMap, HashSet},
   io::Cursor,
   sync::{Arc, Mutex},
+  time::Instant,
 };
 use tauri::{AppHandle, Emitter};
 
@@ -19,7 +20,8 @@ use crate::{
   config::APP_DATA_DIR_NAME,
   desktop_telemetry::{
     DesktopErrorReport, DesktopTelemetry, DesktopTelemetryErrorCode,
-    DesktopTelemetryOperation, DesktopTelemetryWindow,
+    DesktopTelemetryOperation, DesktopTelemetrySpan, DesktopTelemetryWindow,
+    DesktopTimingReport,
   },
   keychain,
 };
@@ -42,6 +44,7 @@ use std::{
 use winsafe::{HPROCESS, HVERSIONINFO, HWND, co};
 
 const HISTORY_EVENT: &str = "clipboard-history-changed";
+const HISTORY_LOADING_ERROR: &str = "clipboard history is still loading";
 const INTERNAL_CLIPBOARD_FORMAT: &str = "legal.stella.desktop.clipboard";
 #[cfg(target_os = "windows")]
 const WINDOWS_CLIPBOARD_HISTORY_CONTROL_FORMAT: &str = "CanIncludeInClipboardHistory";
@@ -370,6 +373,13 @@ pub struct ClipboardSnapshot {
   pub welcome_status: ClipboardWelcomeStatus,
 }
 
+impl ClipboardSnapshot {
+  /// Content bytes crossing IPC for the items, before JSON framing.
+  pub fn history_bytes(&self) -> usize {
+    self.items.iter().map(ClipboardItem::byte_len).sum()
+  }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersistedClipboardState {
@@ -421,6 +431,91 @@ struct ClipboardManagerCheckpoint {
 
 pub type ClipboardAppState = Arc<Mutex<ClipboardManager>>;
 
+/// Durations of the blocking steps inside `load_persisted`; `None` when a step
+/// did not run.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ClipboardInitTimings {
+  pub keychain_read: Option<std::time::Duration>,
+  pub store_load: Option<std::time::Duration>,
+  pub loaded_items: Option<usize>,
+}
+
+/// Persistence resolved without holding the manager mutex.
+pub enum ClipboardLoad {
+  MemoryOnly,
+  DeletionOnly(std::path::PathBuf),
+  Encrypted {
+    store: ClipboardStore,
+    state: Option<PersistedClipboardState>,
+  },
+}
+
+/// Blocking keychain and encrypted-file work. Runs on the watcher thread
+/// before the manager is locked, so snapshot reads never queue behind it.
+pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
+  let mut timings = ClipboardInitTimings::default();
+  #[cfg(debug_assertions)]
+  if std::env::var_os(DEBUG_PERSISTENCE_ENV).is_none() {
+    tracing::info!(
+      "clipboard history is memory-only in debug builds; set \
+       STELLA_ENABLE_DEBUG_CLIPBOARD_PERSISTENCE=1 to test encrypted persistence"
+    );
+    return (ClipboardLoad::MemoryOnly, timings);
+  }
+
+  let Some(data_dir) = dirs::data_dir() else {
+    tracing::warn!(
+      "clipboard history is memory-only because no data directory is available"
+    );
+    return (ClipboardLoad::MemoryOnly, timings);
+  };
+  let store_path = data_dir
+    .join(APP_DATA_DIR_NAME)
+    .join("clipboard-history.json.enc");
+  let keychain_started = Instant::now();
+  let key = keychain::get_or_create_clipboard_key();
+  timings.keychain_read = Some(keychain_started.elapsed());
+  let key = match key {
+    Ok(key) => key,
+    Err(error) => {
+      tracing::warn!(error = %error, "clipboard history key is unavailable");
+      let load = if store_path.is_file() {
+        ClipboardLoad::DeletionOnly(store_path)
+      } else {
+        ClipboardLoad::MemoryOnly
+      };
+      return (load, timings);
+    }
+  };
+  let store = ClipboardStore::new(key, store_path.clone());
+  let load_started = Instant::now();
+  let loaded = store.load();
+  timings.store_load = Some(load_started.elapsed());
+  match loaded {
+    Ok(Some(mut state)) => {
+      timings.loaded_items = Some(state.items.len());
+      if prune_items(&mut state.items, state.retention, Utc::now())
+        && let Err(error) = store.persist(&state)
+      {
+        tracing::warn!(error = %error, "expired clipboard history could not be removed");
+        return (ClipboardLoad::DeletionOnly(store_path), timings);
+      }
+      (
+        ClipboardLoad::Encrypted {
+          store,
+          state: Some(state),
+        },
+        timings,
+      )
+    }
+    Ok(None) => (ClipboardLoad::Encrypted { store, state: None }, timings),
+    Err(error) => {
+      tracing::warn!(error = %error, "encrypted clipboard history is unavailable");
+      (ClipboardLoad::DeletionOnly(store_path), timings)
+    }
+  }
+}
+
 struct ClipboardCapture {
   copied_at: DateTime<Utc>,
   html: Option<String>,
@@ -443,62 +538,22 @@ impl ClipboardManager {
     }
   }
 
-  pub fn initialize(&mut self) {
-    #[cfg(debug_assertions)]
-    if std::env::var_os(DEBUG_PERSISTENCE_ENV).is_none() {
-      self.persistence = ClipboardPersistence::MemoryOnly;
-      tracing::info!(
-        "clipboard history is memory-only in debug builds; set \
-         STELLA_ENABLE_DEBUG_CLIPBOARD_PERSISTENCE=1 to test encrypted persistence"
-      );
-      return;
-    }
-
-    let Some(data_dir) = dirs::data_dir() else {
-      self.persistence = ClipboardPersistence::MemoryOnly;
-      tracing::warn!(
-        "clipboard history is memory-only because no data directory is available"
-      );
-      return;
-    };
-    let store_path = data_dir
-      .join(APP_DATA_DIR_NAME)
-      .join("clipboard-history.json.enc");
-    let key = match keychain::get_or_create_clipboard_key() {
-      Ok(key) => key,
-      Err(error) => {
-        self.persistence = if store_path.is_file() {
-          ClipboardPersistence::DeletionOnly(store_path)
-        } else {
-          ClipboardPersistence::MemoryOnly
-        };
-        tracing::warn!(error = %error, "clipboard history key is unavailable");
-        return;
-      }
-    };
-    let store = ClipboardStore::new(key, store_path.clone());
-    match store.load() {
-      Ok(Some(mut state)) => {
-        if prune_items(&mut state.items, state.retention, Utc::now())
-          && let Err(error) = store.persist(&state)
-        {
-          self.persistence = ClipboardPersistence::DeletionOnly(store_path);
-          tracing::warn!(error = %error, "expired clipboard history could not be removed");
-          return;
+  /// Applies a load resolved off the mutex. Mutations are rejected while the
+  /// manager is `Initializing`, so nothing in memory can be overwritten here.
+  pub fn install(&mut self, load: ClipboardLoad) {
+    self.persistence = match load {
+      ClipboardLoad::MemoryOnly => ClipboardPersistence::MemoryOnly,
+      ClipboardLoad::DeletionOnly(path) => ClipboardPersistence::DeletionOnly(path),
+      ClipboardLoad::Encrypted { store, state } => {
+        if let Some(state) = state {
+          self.capture_status = state.capture_status;
+          self.groups = state.groups;
+          self.items = state.items;
+          self.retention = state.retention;
         }
-        self.capture_status = state.capture_status;
-        self.groups = state.groups;
-        self.items = state.items;
-        self.retention = state.retention;
+        ClipboardPersistence::Encrypted(store)
       }
-      Ok(None) => {}
-      Err(error) => {
-        self.persistence = ClipboardPersistence::DeletionOnly(store_path);
-        tracing::warn!(error = %error, "encrypted clipboard history is unavailable");
-        return;
-      }
-    }
-    self.persistence = ClipboardPersistence::Encrypted(store);
+    };
   }
 
   pub fn snapshot(&self) -> ClipboardSnapshot {
@@ -829,8 +884,17 @@ impl ClipboardManager {
   }
 
   fn persist(&self) -> Result<(), String> {
-    let ClipboardPersistence::Encrypted(store) = &self.persistence else {
-      return Ok(());
+    let store = match &self.persistence {
+      // Rejecting the write makes `persist_or_restore` roll the mutation
+      // back, so `install` can never overwrite a change made before the
+      // persisted history arrived.
+      ClipboardPersistence::Initializing => {
+        return Err(HISTORY_LOADING_ERROR.to_string());
+      }
+      ClipboardPersistence::Encrypted(store) => store,
+      ClipboardPersistence::MemoryOnly | ClipboardPersistence::DeletionOnly(_) => {
+        return Ok(());
+      }
     };
     let state = PersistedClipboardState {
       capture_status: self.capture_status,
@@ -1307,13 +1371,45 @@ impl ClipboardHandler for HistoryClipboardHandler {
   }
 }
 
+fn report_init_timings(
+  telemetry: &DesktopTelemetry,
+  initialize: std::time::Duration,
+  timings: ClipboardInitTimings,
+) {
+  let spans = [
+    (DesktopTelemetrySpan::ClipboardInitialize, Some(initialize)),
+    (
+      DesktopTelemetrySpan::ClipboardKeychainRead,
+      timings.keychain_read,
+    ),
+    (DesktopTelemetrySpan::ClipboardStoreLoad, timings.store_load),
+  ];
+  for (span, duration) in spans {
+    let Some(duration) = duration else {
+      continue;
+    };
+    telemetry.capture_timing(DesktopTimingReport {
+      window: DesktopTelemetryWindow::Clipboard,
+      span,
+      duration,
+      open_kind: None,
+      item_count: timings.loaded_items,
+      payload_bytes: None,
+    });
+  }
+}
+
 pub fn initialize_and_watch(
   manager: ClipboardAppState,
   app: AppHandle,
   telemetry: DesktopTelemetry,
 ) {
+  let started = Instant::now();
+  let (load, timings) = load_persisted();
   if let Ok(mut manager) = manager.lock() {
-    manager.initialize();
+    manager.install(load);
+    drop(manager);
+    report_init_timings(&telemetry, started.elapsed(), timings);
   } else {
     tracing::error!("clipboard manager lock is poisoned during initialization");
     telemetry.capture(DesktopErrorReport {
@@ -1418,6 +1514,13 @@ pub fn write_item(item: &ClipboardItem, plain_text_only: bool) -> Result<(), Str
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  /// A manager past initialization; a fresh `new()` rejects mutations.
+  fn ready_manager() -> ClipboardManager {
+    let mut manager = ClipboardManager::new();
+    manager.install(ClipboardLoad::MemoryOnly);
+    manager
+  }
 
   fn text_item(copied_at: DateTime<Utc>, text: &str) -> ClipboardItem {
     ClipboardItem::Text {
@@ -1531,7 +1634,7 @@ mod tests {
   #[test]
   fn capture_deduplicates_and_moves_content_to_the_front() {
     let now = Utc::now();
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     manager.persistence = ClipboardPersistence::MemoryOnly;
 
     assert!(capture(&mut manager, "first", None, now));
@@ -1558,7 +1661,7 @@ mod tests {
         name: "Microsoft Word".to_string(),
       }),
     };
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     manager.items.push(original.clone());
 
     assert!(
@@ -1580,7 +1683,7 @@ mod tests {
   #[test]
   fn item_names_are_bounded_and_survive_recapture() {
     let now = Utc::now();
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     manager.persistence = ClipboardPersistence::MemoryOnly;
     assert!(capture(&mut manager, "Named content", None, now));
     let item_id = manager.items[0].id().to_string();
@@ -1608,7 +1711,7 @@ mod tests {
   #[test]
   fn renaming_reapplies_the_total_history_byte_limit() {
     let now = Utc::now();
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     manager.persistence = ClipboardPersistence::MemoryOnly;
     let target = text_item(now, "target");
     let target_id = target.id().to_string();
@@ -1650,7 +1753,7 @@ mod tests {
 
   #[test]
   fn duplicating_a_missing_item_does_not_change_history() {
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
 
     assert!(!manager.duplicate_item_at("missing", Utc::now()).unwrap());
     assert!(manager.items.is_empty());
@@ -1676,7 +1779,7 @@ mod tests {
   #[test]
   fn editing_reapplies_the_total_history_byte_limit() {
     let now = Utc::now();
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     manager.persistence = ClipboardPersistence::MemoryOnly;
     let large_text = "x".repeat(MAX_ITEM_TEXT_BYTES);
     for _ in 0..(MAX_HISTORY_BYTES / MAX_ITEM_TEXT_BYTES - 1) {
@@ -1713,7 +1816,7 @@ mod tests {
   fn persistence_failure_rolls_back_history_mutations() {
     let store_path = unique_store_path();
     std::fs::create_dir_all(&store_path).unwrap();
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     manager.persistence =
       ClipboardPersistence::Encrypted(ClipboardStore::new([7; 32], store_path.clone()));
     manager.items.push(text_item(Utc::now(), "must remain"));
@@ -1729,7 +1832,7 @@ mod tests {
   fn deletion_only_clear_removes_unreadable_encrypted_history() {
     let store_path = unique_store_path();
     std::fs::write(&store_path, b"encrypted history").unwrap();
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     manager.persistence = ClipboardPersistence::DeletionOnly(store_path.clone());
 
     manager.clear().unwrap();
@@ -1743,7 +1846,7 @@ mod tests {
 
   #[test]
   fn deletion_only_rejects_retention_changes() {
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     manager.persistence = ClipboardPersistence::DeletionOnly(unique_store_path());
 
     let result = manager.set_retention(ClipboardRetention::Week);
@@ -1768,7 +1871,7 @@ mod tests {
     };
     store.persist(&state).unwrap();
 
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     manager.items = state.items;
     manager.persistence = ClipboardPersistence::Encrypted(store);
 
@@ -1788,7 +1891,7 @@ mod tests {
   fn retention_choice_bounds_pruning_and_persists() {
     let store_path = unique_store_path();
     let now = Utc::now();
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     manager.items = vec![
       text_item(now - Duration::days(200), "old"),
       text_item(now - Duration::days(20), "recent"),
@@ -1844,7 +1947,7 @@ mod tests {
 
   #[test]
   fn paused_capture_does_not_record_content() {
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     manager
       .set_capture_status(ClipboardCaptureStatus::Paused)
       .unwrap();
@@ -1898,7 +2001,7 @@ mod tests {
 
   #[test]
   fn deleting_a_group_preserves_its_items() {
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     assert!(capture(&mut manager, "grouped", None, Utc::now()));
     let group_id = manager
       .create_group("Research", ClipboardGroupColor::Blue)
@@ -1917,7 +2020,7 @@ mod tests {
 
   #[test]
   fn group_count_and_names_are_bounded() {
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     for index in 0..MAX_GROUPS {
       manager
         .create_group(&format!("Group {index}"), ClipboardGroupColor::Gray)
@@ -1930,7 +2033,7 @@ mod tests {
         .is_err()
     );
 
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     assert!(
       manager
         .create_group(
@@ -1943,7 +2046,7 @@ mod tests {
 
   #[test]
   fn group_name_limit_counts_unicode_characters() {
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     let international_name = "界".repeat(MAX_GROUP_NAME_CHARACTERS);
 
     assert!(
@@ -1976,7 +2079,7 @@ mod tests {
   #[test]
   fn recopying_grouped_content_keeps_its_group() {
     let now = Utc::now();
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     assert!(capture(&mut manager, "grouped", None, now));
     let group_id = manager
       .create_group("Research", ClipboardGroupColor::Emerald)
@@ -1993,7 +2096,7 @@ mod tests {
 
   #[test]
   fn editing_formatted_text_produces_a_consistent_plain_text_item() {
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     assert!(capture(
       &mut manager,
       "old",
@@ -2009,7 +2112,7 @@ mod tests {
 
   #[test]
   fn editing_formatted_text_preserves_safe_formatting() {
-    let mut manager = ClipboardManager::new();
+    let mut manager = ready_manager();
     assert!(capture(&mut manager, "old", None, Utc::now()));
     let item_id = manager.items[0].id().to_string();
 
