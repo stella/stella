@@ -11,7 +11,7 @@ cannot reach into product code by accident. Lint enforces that boundary; the
 export map below is what "part of the design system" means.
 
 Peer dependencies: `react`, `react-dom`, `@base-ui/react`, `tailwindcss` (v4),
-`@dnd-kit/core`, and `@dnd-kit/sortable`.
+`@dnd-kit/core`, `@dnd-kit/sortable`, and `@tanstack/react-virtual`.
 
 ## Import
 
@@ -58,10 +58,11 @@ spellings land on the same module for as long as they both exist.
 
 ## Sortable boards
 
-`@stll/ui/kanban` provides input and accessibility primitives only; the caller
-keeps item identifiers, order changes, and persisted mutations. Wrap the board
-in `KanbanSortableBoard`, render sortable items through `useKanbanSortable`,
-and attach the returned bindings to `KanbanDragHandle`.
+`@stll/ui/kanban` provides board matrices, subgroup swimlanes, bounded virtual
+cells, and input/accessibility primitives. The caller keeps domain identifiers,
+card rendering, permissions, and persisted mutations. Wrap sortable boards in
+`KanbanSortableBoard`, render items through `useKanbanSortable`, and attach the
+returned bindings to `KanbanDragHandle`.
 
 ```tsx
 import {
@@ -99,6 +100,41 @@ auto-scroll options, and an `overlay` render function.
 `direction: "ltr" | "rtl"` for mouse and touch input. Keyboard calls use
 `input: "keyboard"` and require source and target indices, so every move has a
 logical edge without relying on ambiguous geometry.
+
+For Group/Sub-group boards, build one canonical matrix and render it with the
+installable layout and virtual cell:
+
+```tsx
+import {
+  KanbanSubgroupBoard,
+  KanbanVirtualCell,
+  buildKanbanBoardMatrix,
+} from "@stll/ui/kanban";
+
+const matrix = buildKanbanBoardMatrix({
+  group,
+  subgroup,
+  rows,
+  resolveGroupValue,
+  uncategorizedLabel: "No value",
+});
+
+<KanbanSubgroupBoard
+  matrix={matrix}
+  renderColumnHeader={({ column, count }) => (
+    <ColumnHeader column={column} count={count} />
+  )}
+  renderLaneIdentity={({ group: lane }) => <Lane group={lane} />}
+  renderCell={({ cell }) => (
+    <KanbanVirtualCell
+      getRowKey={(row) => row.id}
+      pagination={{ type: "none" }}
+      renderRow={(row) => <Card row={row} />}
+      rows={cell.rows}
+    />
+  )}
+/>;
+```
 
 ## Styles
 

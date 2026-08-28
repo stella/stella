@@ -3,4 +3,4 @@
 "@stll/workspace-ui": minor
 ---
 
-Add typed Group and Sub-group board matrix primitives, atomic drop intents, and persisted board-presentation adapters.
+Add typed Group and Sub-group board matrices, reusable swimlane and virtual-cell renderers, atomic drop intents, and persisted board-presentation adapters.

@@ -1,20 +1,22 @@
-import { type UIEvent, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-  ChevronDownIcon,
-  GripVerticalIcon,
-  PlusIcon,
-  Rows3Icon,
-} from "lucide-react";
+import { GripVerticalIcon, PlusIcon, Rows3Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { OptionColor } from "@stll/api/types";
 import { Button } from "@stll/ui/button";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { KanbanColumnHeader } from "@stll/ui/kanban";
-import type { KanbanBoardMatrix, KanbanGroup } from "@stll/ui/kanban";
+import {
+  KANBAN_VIRTUAL_CELL_PAGINATION,
+  KanbanColumnHeader,
+  KanbanSubgroupBoard as KanbanSubgroupLayout,
+  KanbanVirtualCell,
+} from "@stll/ui/kanban";
+import type {
+  KanbanBoardCell,
+  KanbanBoardMatrix,
+  KanbanGroup,
+} from "@stll/ui/kanban";
+import type { OptionColor } from "@stll/ui/option-color";
 import { cn } from "@stll/ui/utils";
 
 import { UserIdentity } from "@/components/user-avatar";
@@ -31,14 +33,9 @@ import {
   useKanbanEntityDropTarget,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets";
 
-const KANBAN_CELL_WIDTH = "w-[300px]";
-const KANBAN_CARD_ESTIMATE_PX = 128;
-const KANBAN_CARD_OVERSCAN = 8;
-const KANBAN_LOAD_MORE_THRESHOLD_PX = 200;
-
 type KanbanSubgroupBoardProps = {
   cardFields: string[];
-  canDropCards: boolean;
+  canMoveCards: boolean;
   hasMore: boolean;
   isLoadingMore: boolean;
   isTaskCreationPending: boolean;
@@ -69,10 +66,10 @@ type KanbanSubgroupBoardProps = {
   workspaceId: string;
 };
 
-/** A Notion-style swimlane board backed by one canonical placement matrix. */
+/** Stella adapters around the reusable @stll/ui subgroup board. */
 export const KanbanSubgroupBoard = ({
   cardFields,
-  canDropCards,
+  canMoveCards,
   canCreateTaskInLane,
   hasMore,
   isLoadingMore,
@@ -92,139 +89,11 @@ export const KanbanSubgroupBoard = ({
 }: KanbanSubgroupBoardProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const [collapsedLaneValues, setCollapsedLaneValues] = useState(
-    () => new Set<string | null>(),
-  );
-  const [expandedEmptyLaneValues, setExpandedEmptyLaneValues] = useState(
-    () => new Set<string | null>(),
-  );
-
-  const toggleLane = (value: string | null, isEmpty: boolean) => {
-    if (isEmpty) {
-      setExpandedEmptyLaneValues((current) => {
-        const next = new Set(current);
-        if (next.has(value)) {
-          next.delete(value);
-        } else {
-          next.add(value);
-        }
-        return next;
-      });
-      return;
-    }
-    setCollapsedLaneValues((current) => {
-      const next = new Set(current);
-      if (next.has(value)) {
-        next.delete(value);
-      } else {
-        next.add(value);
-      }
-      return next;
-    });
-  };
 
   return (
-    <div className="h-full overflow-auto px-4 pb-4">
-      <div className="min-w-max">
-        <div className="bg-background sticky top-0 z-20 flex gap-3 pt-4 pb-3">
-          {matrix.columns.map((column) => (
-            <ColumnHeading
-              column={column}
-              count={matrix.cells
-                .filter((cell) => cell.coordinate.column.value === column.value)
-                .reduce((sum, cell) => sum + cell.rows.length, 0)}
-              key={column.value ?? "__uncategorized__"}
-              onChangeColor={onChangeColumnColor}
-              onHide={onHideColumn}
-              onRename={onRenameColumn}
-              onReorder={onReorderColumn}
-            />
-          ))}
-        </div>
-
-        {matrix.lanes.map((lane) => {
-          if (lane.type === "none") {
-            return null;
-          }
-          const value = lane.group.value;
-          const laneCells = matrix.cells.filter(
-            (cell) =>
-              cell.coordinate.lane.type === "group" &&
-              cell.coordinate.lane.group.value === value,
-          );
-          const count = laneCells.reduce(
-            (sum, cell) => sum + cell.rows.length,
-            0,
-          );
-          const isEmpty = count === 0;
-          const collapsed = isEmpty
-            ? !expandedEmptyLaneValues.has(value)
-            : collapsedLaneValues.has(value);
-
-          return (
-            <section
-              className="border-border/60 border-b py-2 first:pt-0 last:border-b-0"
-              key={value ?? "__uncategorized__"}
-            >
-              <div className="bg-background/95 sticky start-0 z-10 flex min-h-11 items-center backdrop-blur-sm">
-                <button
-                  aria-expanded={!collapsed}
-                  className="hover:bg-muted/60 flex min-h-11 items-center gap-2 rounded-lg px-2 text-start transition-[background-color]"
-                  onClick={() => toggleLane(value, isEmpty)}
-                  type="button"
-                >
-                  <DirectionalIcon
-                    className={cn(
-                      "text-muted-foreground size-4 shrink-0 transition-transform",
-                      collapsed && "-rotate-90",
-                    )}
-                    flip={collapsed}
-                    icon={ChevronDownIcon}
-                  />
-                  <SubgroupIdentity group={lane.group} />
-                  {lane.group.image === undefined && (
-                    <span className="max-w-80 truncate text-sm font-medium">
-                      {lane.group.label}
-                    </span>
-                  )}
-                  <span className="text-muted-foreground text-xs tabular-nums">
-                    {format.number(count)}
-                  </span>
-                </button>
-              </div>
-
-              {!collapsed && (
-                <div className="flex gap-3 pb-1">
-                  {laneCells.map((cell) => (
-                    <KanbanSubgroupCell
-                      canCreateTask={
-                        cell.coordinate.column.value !== null &&
-                        canCreateTaskInLane(value)
-                      }
-                      canDropCards={canDropCards}
-                      cardFields={cardFields}
-                      cell={cell}
-                      hasMore={hasMore}
-                      isLoadingMore={isLoadingMore}
-                      isTaskCreationPending={isTaskCreationPending}
-                      key={cell.coordinate.column.value ?? "__uncategorized__"}
-                      laneValue={value}
-                      loadedEntityCount={loadedEntityCount}
-                      onCreateTask={onCreateTask}
-                      onDropCard={onDropCard}
-                      onLoadMore={onLoadMore}
-                      onRenameEntity={onRenameEntity}
-                      properties={properties}
-                      workspaceId={workspaceId}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
-          );
-        })}
-
-        {hasMore && (
+    <KanbanSubgroupLayout
+      footer={
+        hasMore ? (
           <div className="flex justify-center py-2">
             <Button
               disabled={isLoadingMore}
@@ -234,17 +103,52 @@ export const KanbanSubgroupBoard = ({
               {isLoadingMore ? t("common.loading") : t("common.loadMore")}
             </Button>
           </div>
-        )}
-      </div>
-    </div>
+        ) : null
+      }
+      formatCount={(count) => format.number(count)}
+      matrix={matrix}
+      renderCell={({ cell, laneValue }) => (
+        <WorkspaceKanbanSubgroupCell
+          canCreateTask={
+            cell.coordinate.column.value !== null &&
+            canCreateTaskInLane(laneValue)
+          }
+          canMoveCards={canMoveCards}
+          cardFields={cardFields}
+          cell={cell}
+          hasMore={hasMore}
+          isLoadingMore={isLoadingMore}
+          isTaskCreationPending={isTaskCreationPending}
+          laneValue={laneValue}
+          loadedEntityCount={loadedEntityCount}
+          onCreateTask={onCreateTask}
+          onDropCard={onDropCard}
+          onLoadMore={onLoadMore}
+          onRenameEntity={onRenameEntity}
+          properties={properties}
+          workspaceId={workspaceId}
+        />
+      )}
+      renderColumnHeader={({ column, count }) => (
+        <WorkspaceKanbanColumnHeading
+          column={column}
+          count={count}
+          onChangeColor={onChangeColumnColor}
+          onHide={onHideColumn}
+          onRename={onRenameColumn}
+          onReorder={onReorderColumn}
+        />
+      )}
+      renderLaneIdentity={({ group }) => <SubgroupIdentity group={group} />}
+    />
   );
 };
 
-type KanbanSubgroupCellProps = {
+type WorkspaceKanbanSubgroupCellProps = {
   canCreateTask: boolean;
-  canDropCards: boolean;
+  canMoveCards: boolean;
   cardFields: string[];
-  cell: KanbanBoardMatrix<WorkspaceEntity>["cells"][number];
+  cell: KanbanBoardCell<WorkspaceEntity>;
   hasMore: boolean;
   isLoadingMore: boolean;
   isTaskCreationPending: boolean;
@@ -262,9 +166,9 @@ type KanbanSubgroupCellProps = {
   workspaceId: string;
 };
 
-const KanbanSubgroupCell = ({
+const WorkspaceKanbanSubgroupCell = ({
   canCreateTask,
-  canDropCards,
+  canMoveCards,
   cardFields,
   cell,
   hasMore,
@@ -278,21 +182,12 @@ const KanbanSubgroupCell = ({
   onRenameEntity,
   properties,
   workspaceId,
-}: KanbanSubgroupCellProps) => {
+}: WorkspaceKanbanSubgroupCellProps) => {
   const cellRef = useRef<HTMLDivElement>(null);
-  const requestedAtEntityCountRef = useRef<number | null>(null);
   const columnValue = cell.coordinate.column.value;
-  const cardVirtualizer = useVirtualizer({
-    count: cell.rows.length,
-    estimateSize: () => KANBAN_CARD_ESTIMATE_PX,
-    getItemKey: (index) => cell.rows.at(index)?.entityId ?? index,
-    getScrollElement: () => cellRef.current,
-    overscan: KANBAN_CARD_OVERSCAN,
-  });
-  const virtualCards = cardVirtualizer.getVirtualItems();
   const isDragOver = useKanbanEntityDropTarget({
     elementRef: cellRef,
-    enabled: canDropCards,
+    enabled: canMoveCards,
     name: `${cell.coordinate.column.label}, ${cell.coordinate.lane.type === "group" ? cell.coordinate.lane.group.label : ""}`,
     onDrop: (entityId) => {
       if (columnValue !== null) {
@@ -301,80 +196,49 @@ const KanbanSubgroupCell = ({
     },
   });
 
-  const handleScroll = ({ currentTarget }: UIEvent<HTMLDivElement>) => {
-    if (!hasMore || isLoadingMore) {
-      return;
-    }
-    const remaining =
-      currentTarget.scrollHeight -
-      currentTarget.scrollTop -
-      currentTarget.clientHeight;
-    if (remaining > KANBAN_LOAD_MORE_THRESHOLD_PX) {
-      return;
-    }
-    if (requestedAtEntityCountRef.current === loadedEntityCount) {
-      return;
-    }
-    requestedAtEntityCountRef.current = loadedEntityCount;
-    onLoadMore();
-  };
-
   return (
-    <div
-      className={cn(
-        KANBAN_CELL_WIDTH,
-        "bg-muted/20 max-h-[min(60vh,40rem)] min-h-20 shrink-0 overflow-y-auto overscroll-y-contain rounded-xl p-2 transition-[background-color,outline-color]",
-        isDragOver && "bg-primary/5 ring-primary/50 ring-2",
-      )}
-      onScroll={handleScroll}
-      ref={cellRef}
-      style={
+    <KanbanVirtualCell
+      active={isDragOver}
+      backgroundColor={
         cell.coordinate.column.colorBg
-          ? {
-              backgroundColor: `color-mix(in srgb, ${cell.coordinate.column.colorBg} 26%, transparent)`,
-            }
+          ? `color-mix(in srgb, ${cell.coordinate.column.colorBg} 26%, transparent)`
           : undefined
       }
-    >
-      <div
-        className="relative"
-        style={{ height: cardVirtualizer.getTotalSize() }}
-      >
-        {virtualCards.map((virtualCard) => {
-          const entity = cell.rows.at(virtualCard.index);
-          if (!entity) {
-            return null;
-          }
-
-          return (
-            <div
-              className="absolute inset-x-0 top-0 pb-2"
-              data-index={virtualCard.index}
-              key={entity.entityId}
-              ref={cardVirtualizer.measureElement}
-              style={{ transform: `translateY(${virtualCard.start}px)` }}
-            >
-              <KanbanCard
-                cardFields={cardFields}
-                draggable={canDropCards}
-                entity={entity}
-                onRename={onRenameEntity}
-                properties={properties}
-                workspaceId={workspaceId}
-              />
-            </div>
-          );
-        })}
-      </div>
-      {columnValue !== null && canCreateTask && (
-        <CreateTaskButton
-          columnValue={columnValue}
-          disabled={isTaskCreationPending}
-          laneValue={laneValue}
-          onCreate={onCreateTask}
+      containerRef={cellRef}
+      footer={
+        columnValue !== null && canCreateTask ? (
+          <CreateTaskButton
+            columnValue={columnValue}
+            disabled={isTaskCreationPending}
+            laneValue={laneValue}
+            onCreate={onCreateTask}
+          />
+        ) : null
+      }
+      getRowKey={(entity) => entity.entityId}
+      pagination={
+        hasMore
+          ? {
+              type: KANBAN_VIRTUAL_CELL_PAGINATION.CURSOR,
+              hasMore,
+              loading: isLoadingMore,
+              pageKey: loadedEntityCount,
+              onRequestMore: onLoadMore,
+            }
+          : { type: KANBAN_VIRTUAL_CELL_PAGINATION.NONE }
+      }
+      renderRow={(entity) => (
+        <KanbanCard
+          cardFields={cardFields}
+          draggable={canMoveCards}
+          entity={entity}
+          onRename={onRenameEntity}
+          properties={properties}
+          workspaceId={workspaceId}
         />
       )}
-    </div>
+      rows={cell.rows}
+    />
   );
 };
 
@@ -406,7 +270,7 @@ const CreateTaskButton = ({
   );
 };
 
-type ColumnHeadingProps = {
+type WorkspaceKanbanColumnHeadingProps = {
   column: KanbanGroup;
   count: number;
   onChangeColor?:
@@ -421,14 +285,14 @@ type ColumnHeadingProps = {
   ) => void;
 };
 
-const ColumnHeading = ({
+const WorkspaceKanbanColumnHeading = ({
   column,
   count,
   onChangeColor,
   onHide,
   onRename,
   onReorder,
-}: ColumnHeadingProps) => {
+}: WorkspaceKanbanColumnHeadingProps) => {
   const format = useFormatter();
   const headingRef = useRef<HTMLDivElement>(null);
   const dragHandleRef = useRef<HTMLDivElement>(null);
@@ -456,8 +320,7 @@ const ColumnHeading = ({
   return (
     <div
       className={cn(
-        KANBAN_CELL_WIDTH,
-        "group/column relative shrink-0 rounded-lg transition-opacity",
+        "group/column relative w-full rounded-lg transition-opacity",
         !column.colorBg && "bg-muted/50",
         isDragging && "opacity-40",
       )}
@@ -509,12 +372,12 @@ const ColumnHeading = ({
           <KanbanColumnSwatch
             color={column.color}
             onSelect={(color) => {
-              if (column.value !== null) {
-                onChangeColor?.(column.value, color);
+              if (columnValue !== null) {
+                onChangeColor?.(columnValue, color);
               }
             }}
             optionColor={column.optionColor}
-            showPicker={column.value !== null && onChangeColor !== undefined}
+            showPicker={columnValue !== null && onChangeColor !== undefined}
           />
         }
         title={
@@ -558,16 +421,19 @@ const SubgroupIdentity = ({ group }: { group: KanbanGroup }) => {
   }
   if (group.color) {
     return (
-      <span
-        className="size-5 shrink-0 rounded-md"
-        style={{ backgroundColor: group.colorBg }}
-      >
+      <span className="flex max-w-80 items-center gap-2">
         <span
-          className="m-1.5 block size-2 rounded-full"
+          className="size-2.5 shrink-0 rounded-full"
           style={{ backgroundColor: group.color }}
         />
+        <span className="truncate text-sm font-medium">{group.label}</span>
       </span>
     );
   }
-  return <Rows3Icon className="text-muted-foreground size-4 shrink-0" />;
+  return (
+    <span className="flex max-w-80 items-center gap-2">
+      <Rows3Icon className="text-muted-foreground size-4 shrink-0" />
+      <span className="truncate text-sm font-medium">{group.label}</span>
+    </span>
+  );
 };

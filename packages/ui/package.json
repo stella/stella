@@ -191,6 +191,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@playwright/test": "^1.62.0",
     "@stll/typescript-config": "workspace:*",
+    "@tanstack/react-virtual": "^3.14.10",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "bun-types": "catalog:",
@@ -206,6 +207,7 @@
     "@base-ui/react": "^1.7.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
+    "@tanstack/react-virtual": "^3.14.10",
     "react": ">=19",
     "react-dom": ">=19",
     "tailwindcss": "^4.3.0"

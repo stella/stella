@@ -177,6 +177,11 @@ const personGroupValue = (content: {
     ? `unlinked-person:${content.name}`
     : `workspace-user:${content.userId}`;
 
+const authorGroupValue = ({
+  createdByUserId,
+}: WorkspaceEntity): string | null =>
+  createdByUserId === null ? null : `workspace-user:${createdByUserId}`;
+
 /** Person and author lanes come from the loaded rows rather than a fixed
  * schema option list. Each identity keeps its real avatar with the lane. */
 export const resolveWorkspaceKanbanDynamicSubgroup = (
@@ -190,11 +195,12 @@ export const resolveWorkspaceKanbanDynamicSubgroup = (
     subgroup.group.id === getInternalPropertyId("created-by")
   ) {
     for (const row of rows) {
-      if (row.createdBy === null) {
+      const value = authorGroupValue(row);
+      if (value === null || row.createdBy === null) {
         continue;
       }
-      optionsByValue.set(row.createdBy, {
-        value: row.createdBy,
+      optionsByValue.set(value, {
+        value,
         label: row.createdBy,
         image: row.createdByImage,
       });
@@ -255,8 +261,24 @@ export const resolveWorkspaceKanbanGroupValue = (
     case "_kind":
       return entity.kind;
     case "_created-by":
-      return entity.createdBy;
+      return authorGroupValue(entity);
     default:
       return null;
   }
 };
+
+type CanMoveCardToSubgroupLaneOptions = {
+  subgroup: WorkspaceKanbanGrouping;
+  entity: WorkspaceEntity;
+  targetLaneValue: string | null;
+};
+
+/** Writable property lanes may change; read-only lanes accept primary-axis
+ * moves only when the card stays in its current lane. */
+export const canMoveCardToSubgroupLane = ({
+  subgroup,
+  entity,
+  targetLaneValue,
+}: CanMoveCardToSubgroupLaneOptions): boolean =>
+  subgroup.type === "property" ||
+  resolveWorkspaceKanbanGroupValue(subgroup, entity) === targetLaneValue;

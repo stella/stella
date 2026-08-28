@@ -11,6 +11,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 
 import {
+  canMoveCardToSubgroupLane,
   resolveWorkspaceKanbanDynamicSubgroup,
   resolveWorkspaceKanbanGrouping,
   resolveWorkspaceKanbanGroupValue,
@@ -28,6 +29,7 @@ const entity = (
   parentId: null,
   createdAt: "2026-01-01T00:00:00.000Z",
   createdBy: null,
+  createdByUserId: null,
   createdByImage: null,
   createdByDeletedAt: null,
   updatedAt: null,
@@ -236,6 +238,33 @@ describe("kanban column lists", () => {
 });
 
 describe("kanban subgroup placement", () => {
+  test("read-only subgroup lanes allow primary moves only within the lane", () => {
+    const row = entity("task-1", "task");
+    row.createdBy = "Anna Nováková";
+    row.createdByUserId = "user-1";
+    const definition = resolveWorkspaceKanbanSubgroup(
+      getInternalPropertyId("created-by"),
+      getInternalPropertyId("status"),
+      schemaFor(),
+    );
+    const subgroup = resolveWorkspaceKanbanDynamicSubgroup(definition, [row]);
+
+    expect(
+      canMoveCardToSubgroupLane({
+        subgroup,
+        entity: row,
+        targetLaneValue: "workspace-user:user-1",
+      }),
+    ).toBe(true);
+    expect(
+      canMoveCardToSubgroupLane({
+        subgroup,
+        entity: row,
+        targetLaneValue: "workspace-user:user-2",
+      }),
+    ).toBe(false);
+  });
+
   test("the same property cannot control both axes", () => {
     const property = singleSelectProperty("assignee");
     const schema = schemaFor([property]);
@@ -311,6 +340,7 @@ describe("kanban subgroup placement", () => {
   test("author lanes use the creator avatar instead of a decorative dot", () => {
     const row = entity("task-1", "task");
     row.createdBy = "Anna Nováková";
+    row.createdByUserId = "user-1";
     row.createdByImage = "https://example.test/anna.jpg";
     const definition = resolveWorkspaceKanbanSubgroup(
       getInternalPropertyId("created-by"),
@@ -321,10 +351,38 @@ describe("kanban subgroup placement", () => {
 
     expect(resolveKanbanGroupOptions(subgroup)).toEqual([
       {
-        value: "Anna Nováková",
+        value: "workspace-user:user-1",
         label: "Anna Nováková",
         image: "https://example.test/anna.jpg",
       },
     ]);
+  });
+
+  test("author lanes keep users with the same display name separate", () => {
+    const first = entity("task-1", "task");
+    first.createdBy = "Anna Nováková";
+    first.createdByUserId = "user-1";
+    const second = entity("task-2", "task");
+    second.createdBy = "Anna Nováková";
+    second.createdByUserId = "user-2";
+    const definition = resolveWorkspaceKanbanSubgroup(
+      getInternalPropertyId("created-by"),
+      getInternalPropertyId("status"),
+      schemaFor(),
+    );
+    const subgroup = resolveWorkspaceKanbanDynamicSubgroup(definition, [
+      first,
+      second,
+    ]);
+
+    expect(
+      resolveKanbanGroupOptions(subgroup).map(({ value }) => value),
+    ).toEqual(["workspace-user:user-1", "workspace-user:user-2"]);
+    expect(resolveWorkspaceKanbanGroupValue(subgroup, first)).toBe(
+      "workspace-user:user-1",
+    );
+    expect(resolveWorkspaceKanbanGroupValue(subgroup, second)).toBe(
+      "workspace-user:user-2",
+    );
   });
 });

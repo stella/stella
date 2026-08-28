@@ -140,6 +140,50 @@ type UpsertFieldVars = {
   content: UpsertFieldContent;
 };
 
+type UpdateKanbanPlacementVars = {
+  workspaceId: string;
+  entityId: string;
+  status?: string | undefined;
+  fields: {
+    propertyId: string;
+    content: UpsertFieldContent;
+  }[];
+};
+
+export const useUpdateKanbanPlacement = () => {
+  const analytics = useAnalytics();
+  const t = useTranslations();
+
+  return useMutation({
+    mutationFn: async ({
+      workspaceId,
+      entityId,
+      status,
+      fields,
+    }: UpdateKanbanPlacementVars) => {
+      const response = await api
+        .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        ["kanban-placement"].patch({
+          entityId: toSafeId<"entity">(entityId),
+          ...(status !== undefined && { status }),
+          fields: fields.map(({ propertyId, content }) => ({
+            propertyId: toSafeId<"property">(propertyId),
+            content,
+          })),
+        });
+
+      return unwrapEden(response);
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+      stellaToast.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+    },
+  });
+};
+
 export const useUpsertField = () => {
   const analytics = useAnalytics();
   const t = useTranslations();

@@ -99,6 +99,7 @@ export type QueryEntityResult = {
   parentId: string | null;
   createdAt: string;
   createdBy: string | null;
+  createdByUserId: string | null;
   createdByImage: string | null;
   createdByDeletedAt: string | null;
   version: number;
@@ -795,11 +796,13 @@ const queryEntitiesGenerator = async function* ({
           createdByName: sql<
             string | null
           >`coalesce(nullif(trim(${user.name}), ''), ${user.email})`,
+          createdByUserId: user.id,
           createdByImage: user.image,
           createdByDeletedAt: user.deletedAt,
           lastEditedByName: sql<
             string | null
           >`coalesce(nullif(trim(${lastEditor.name}), ''), ${lastEditor.email})`,
+          lastEditedByUserId: lastEditor.id,
           lastEditedByImage: lastEditor.image,
           lastEditedByDeletedAt: lastEditor.deletedAt,
           status: entities.status,
@@ -1047,6 +1050,8 @@ const queryEntitiesGenerator = async function* ({
       parentId: entity.parentId,
       createdAt: entity.createdAt.toISOString(),
       createdBy: entity.lastEditedByName ?? entity.createdByName ?? null,
+      createdByUserId:
+        entity.lastEditedByUserId ?? entity.createdByUserId ?? null,
       createdByImage: entity.lastEditedByImage ?? entity.createdByImage ?? null,
       createdByDeletedAt:
         entity.lastEditedByDeletedAt?.toISOString() ??

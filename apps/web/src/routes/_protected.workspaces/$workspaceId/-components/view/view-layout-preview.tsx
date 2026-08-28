@@ -351,6 +351,7 @@ const mockTask = ({
   parentId: null,
   createdAt: PREVIEW_CREATED_AT,
   createdBy: null,
+  createdByUserId: null,
   createdByImage: null,
   createdByDeletedAt: null,
   updatedAt: null,

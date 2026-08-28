@@ -46,6 +46,7 @@ import { COLUMN_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import {
   useCreateEntities,
   useRenameEntity,
+  useUpdateKanbanPlacement,
   useUpsertField,
 } from "@/lib/workspaces/mutations/entities";
 import { useUpdateProperty } from "@/lib/workspaces/mutations/properties";
@@ -67,6 +68,7 @@ import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import type { KanbanCalculations } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import { KanbanSubgroupBoard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board";
 import {
+  canMoveCardToSubgroupLane,
   isKanbanSubgroupProperty,
   resolveWorkspaceKanbanDynamicSubgroup,
   resolveWorkspaceKanbanGrouping,
@@ -96,6 +98,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const analytics = useAnalytics();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const upsertField = useUpsertField();
+  const updateKanbanPlacement = useUpdateKanbanPlacement();
   const renameEntity = useRenameEntity();
   const updateProperty = useUpdateProperty();
   const createEntities = useCreateEntities();
@@ -688,18 +691,38 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     columnValue: string,
     laneValue: string | null,
   ) => {
-    if (isStatusGrouping) {
-      await updateTaskStatus.mutateAsync({
-        taskId: entityId,
-        status: columnValue,
-      });
-    } else {
-      if (isBuiltInGrouping || isReadOnlyVerdictGrouping) {
+    if (subgroup.type !== "property") {
+      const sourceEntity = subgroupEntities.find(
+        (entity) => entity.entityId === entityId,
+      );
+      if (!sourceEntity) {
+        return panic("Dragged Kanban entity is not loaded");
+      }
+      if (
+        !canMoveCardToSubgroupLane({
+          subgroup,
+          entity: sourceEntity,
+          targetLaneValue: laneValue,
+        })
+      ) {
         stellaToast.add({
           title: t("workspaces.kanban.readOnlyGrouping"),
           type: "info",
         });
         return;
+      }
+    }
+
+    if (subgroup.type !== "property") {
+      if (isStatusGrouping) {
+        await updateTaskStatus.mutateAsync({
+          taskId: entityId,
+          status: columnValue,
+        });
+        return;
+      }
+      if (isBuiltInGrouping || isReadOnlyVerdictGrouping) {
+        return panic("Read-only Kanban primary grouping accepted a drag");
       }
       await upsertField.mutateAsync({
         workspaceId,
@@ -711,20 +734,51 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           value: columnValue,
         },
       });
+      await queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(workspaceId),
+      });
+      return;
     }
 
-    const content = subgroupFieldContent(laneValue);
-    if (subgroup.type === "property" && content !== null) {
-      await upsertField.mutateAsync({
-        workspaceId,
-        propertyId: subgroup.property.id,
-        entityId,
-        content,
-      });
+    const subgroupContent = subgroupFieldContent(laneValue);
+    if (subgroupContent === null) {
+      return panic("Writable Kanban subgroup has no field content");
     }
-    await queryClient.invalidateQueries({
-      queryKey: entitiesKeys.all(workspaceId),
+    await updateKanbanPlacement.mutateAsync({
+      workspaceId,
+      entityId,
+      ...(isStatusGrouping && { status: columnValue }),
+      fields: [
+        ...(!isStatusGrouping
+          ? [
+              {
+                propertyId: groupByPropertyId,
+                content: {
+                  version: 1 as const,
+                  type: "single-select" as const,
+                  value: columnValue,
+                },
+              },
+            ]
+          : []),
+        {
+          propertyId: subgroup.property.id,
+          content: subgroupContent,
+        },
+      ],
     });
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(workspaceId),
+      }),
+      ...(isStatusGrouping
+        ? [
+            queryClient.invalidateQueries({
+              queryKey: taskKeys.detail(workspaceId, entityId),
+            }),
+          ]
+        : []),
+    ]);
   };
 
   const handleReorderColumn = (
@@ -837,10 +891,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         isTaskCreationPending={isTaskCreationPending}
         loadedEntityCount={subgroupEntities.length}
         matrix={visibleSubgroupMatrix}
-        canDropCards={
-          subgroup.type === "property" ||
-          (subgroup.type === "built-in" &&
-            subgroup.group.id === getInternalPropertyId("kind"))
+        canMoveCards={
+          isStatusGrouping ||
+          (grouping.type === "property" && !isReadOnlyVerdictGrouping)
         }
         onChangeColumnColor={
           handleChangeColor
