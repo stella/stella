@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { formatBetterAuthScriptFailure } from "@/api/scripts/better-auth-script-failure";
 
-const parse = (line: string) => JSON.parse(line) as Record<string, unknown>;
+const parse = (line: string): unknown => JSON.parse(line);
 
 describe("formatBetterAuthScriptFailure", () => {
   test("emits the message alongside the code", () => {
@@ -30,11 +30,13 @@ describe("formatBetterAuthScriptFailure", () => {
           code: "database-query-failed",
           message: "query failed",
         }),
-      )["cause"],
-    ).toEqual({
-      errno: "42501",
-      message: "permission denied for table account",
-      name: "PostgresError",
+      ),
+    ).toMatchObject({
+      cause: {
+        errno: "42501",
+        message: "permission denied for table account",
+        name: "PostgresError",
+      },
     });
   });
 
@@ -42,16 +44,21 @@ describe("formatBetterAuthScriptFailure", () => {
     const cause = new Error(
       `duplicate key value violates unique constraint "account_pkey" Key (id)=(secret-row) ${"x".repeat(1000)}`,
     );
-    const described = parse(
-      formatBetterAuthScriptFailure({
-        cause,
-        code: "database-query-failed",
-        message: "query failed",
-      }),
-    )["cause"] as { message: string };
-    expect(described.message).not.toContain("secret-row");
-    expect(described.message).toContain("Key (redacted)");
-    expect(described.message.length).toBeLessThanOrEqual(500);
+    expect(
+      parse(
+        formatBetterAuthScriptFailure({
+          cause,
+          code: "database-query-failed",
+          message: "query failed",
+        }),
+      ),
+    ).toMatchObject({
+      cause: {
+        message: expect.stringMatching(
+          /^(?!.*secret-row)(?=.*Key \(redacted\)).{0,500}$/u,
+        ),
+      },
+    });
   });
 
   test("describes a non-Error cause by type only", () => {
@@ -62,7 +69,7 @@ describe("formatBetterAuthScriptFailure", () => {
           code: "unexpected-failure",
           message: "boom",
         }),
-      )["cause"],
-    ).toEqual({ message: "", name: "string" });
+      ),
+    ).toMatchObject({ cause: { message: "", name: "string" } });
   });
 });
