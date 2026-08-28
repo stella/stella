@@ -30,7 +30,7 @@ describe("ApplicationShell", () => {
     expect(markup).toContain("flex min-h-svh w-full");
     expect(markup).toContain('data-slot="application-shell-main"');
     expect(markup).toContain(
-      "bg-background relative flex w-full flex-1 flex-col overflow-hidden",
+      "bg-background relative flex w-full min-w-0 flex-1 flex-col overflow-hidden",
     );
     expect(markup).toContain("md:peer-data-[variant=inset]:rounded-xl");
   });
