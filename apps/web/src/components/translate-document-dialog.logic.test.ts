@@ -6,6 +6,7 @@ import {
   canStartDocumentTranslation,
   commentPolicyStateForSource,
   documentTranslationRunFailureKey,
+  openDocumentTranslationOutput,
   resolvedDocumentTranslationSource,
 } from "./translate-document-dialog.logic";
 
@@ -137,5 +138,43 @@ describe("document translation comment policy ownership", () => {
         fieldId,
       }),
     ).toEqual({ type: "unchecked" });
+  });
+});
+
+describe("document translation output handoff", () => {
+  test("closes the dialog and prepares the destination before navigation", async () => {
+    const events: string[] = [];
+
+    await openDocumentTranslationOutput({
+      closeDialog: () => {
+        events.push("closed");
+      },
+      prepareDestination: async () => {
+        events.push("prepared");
+      },
+      navigate: async () => {
+        events.push("navigated");
+      },
+    });
+
+    expect(events).toEqual(["closed", "prepared", "navigated"]);
+  });
+
+  test("does not navigate when the destination cannot be prepared", async () => {
+    let navigated = false;
+
+    expect(
+      openDocumentTranslationOutput({
+        closeDialog: () => undefined,
+        prepareDestination: async () => {
+          throw new Error("destination unavailable");
+        },
+        navigate: async () => {
+          navigated = true;
+        },
+      }),
+    ).rejects.toThrow("destination unavailable");
+
+    expect(navigated).toBeFalse();
   });
 });

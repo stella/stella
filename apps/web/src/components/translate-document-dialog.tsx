@@ -10,7 +10,7 @@ import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { LanguagesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -39,6 +39,7 @@ import {
 } from "@/components/document-language-picker";
 import {
   documentTranslationPreparationOptions,
+  invalidateDocumentTranslationOutputQueries,
   documentTranslationRunOptions,
   isDocumentTranslationRunActive,
   type DocumentTranslationRun,
@@ -47,6 +48,7 @@ import {
   canStartDocumentTranslation,
   commentPolicyStateForSource,
   documentTranslationRunFailureKey,
+  openDocumentTranslationOutput,
   resolvedDocumentTranslationSource,
   type DocumentTranslationCommentPolicy,
   type DocumentTranslationCommentPolicyState,
@@ -62,8 +64,9 @@ import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
-import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { entityOptions } from "@/lib/workspaces/queries/entities";
 
 type TranslationChoice = "bilingual:ai" | "translated:ai" | "translated:deepl";
 
@@ -227,18 +230,40 @@ export const TranslateDocumentDialog = (
     enabled: runId !== null,
   });
 
-  const openOutput = useLatestCallback((run: DocumentTranslationRun) => {
-    if (!run.outputEntityId || !run.outputFieldId) {
+  const openOutput = useLatestCallback(async (run: DocumentTranslationRun) => {
+    const { outputEntityId, outputFieldId } = run;
+    if (!outputEntityId || !outputFieldId) {
       return;
     }
-    detached(
-      navigate({
-        to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId, viewId },
-        search: { entity: run.outputEntityId, field: run.outputFieldId },
-      }),
-      "translate-document-dialog.navigate",
+
+    const result = await Result.tryPromise(
+      async () =>
+        await openDocumentTranslationOutput({
+          closeDialog: () => setDialogOpen(false),
+          prepareDestination: async () =>
+            await ensureRouteQueryData(
+              queryClient,
+              entityOptions(workspaceId, outputEntityId),
+            ),
+          navigate: async () =>
+            await navigate({
+              to: "/workspaces/$workspaceId/$viewId/document",
+              params: { workspaceId, viewId },
+              search: { entity: outputEntityId, field: outputFieldId },
+            }),
+        }),
     );
+    if (!Result.isError(result)) {
+      return;
+    }
+
+    analytics.captureError(result.error);
+    stellaToast.add({
+      title: t("translate.error.title"),
+      description: userErrorFromThrown(result.error, t("errors.actionFailed")),
+      type: "error",
+    });
+    setDialogOpen(true);
   });
 
   useExternalSyncEffect(() => {
@@ -284,15 +309,15 @@ export const TranslateDocumentDialog = (
           ? {
               action: {
                 label: t("common.open"),
-                onClick: () => openOutput(run),
+                onClick: () => {
+                  detached(openOutput(run), "translate-document-dialog.open");
+                },
               },
             }
           : {}),
       });
       detached(
-        queryClient.invalidateQueries({
-          queryKey: entitiesKeys.all(workspaceId),
-        }),
+        invalidateDocumentTranslationOutputQueries(queryClient, workspaceId),
         "translate-document-dialog.invalidate-entities",
       );
       return;
@@ -474,7 +499,11 @@ export const TranslateDocumentDialog = (
                 })}
               </p>
               {run.status === "completed" && run.outputEntityId ? (
-                <Button onClick={() => openOutput(run)}>
+                <Button
+                  onClick={() => {
+                    detached(openOutput(run), "translate-document-dialog.open");
+                  }}
+                >
                   {t("common.open")}
                 </Button>
               ) : null}

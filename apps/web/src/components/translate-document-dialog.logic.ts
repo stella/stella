@@ -126,3 +126,20 @@ export const canStartDocumentTranslation = ({
   (!requiresCommentPolicy || hasCommentPolicy) &&
   !sameLanguage &&
   !isRunning;
+
+type OpenDocumentTranslationOutputOptions = {
+  closeDialog: () => void;
+  navigate: () => Promise<unknown>;
+  prepareDestination: () => Promise<unknown>;
+};
+
+/** Keep route pending UI out from behind the completion dialog. */
+export const openDocumentTranslationOutput = async ({
+  closeDialog,
+  navigate,
+  prepareDestination,
+}: OpenDocumentTranslationOutputOptions) => {
+  closeDialog();
+  await prepareDestination();
+  await navigate();
+};
