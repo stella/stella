@@ -948,10 +948,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                         "tree-view.navigate-to-folder",
                       );
                     }}
-                    onRename={(entityId, name, { onError }) => {
+                    onRename={(entityId, name, { onError, onSuccess }) => {
                       renameEntity.mutate(
                         { workspaceId, entityId, name },
-                        { onError },
+                        { onError, onSuccess },
                       );
                     }}
                     onClearSelection={clearSelection}
@@ -1152,7 +1152,7 @@ type FilesystemRowProps = {
   onRename: (
     entityId: string,
     name: string,
-    callbacks: { onError: () => void },
+    callbacks: { onError: () => void; onSuccess: () => void },
   ) => void;
   onClearSelection: () => void;
   onSelect: (entityId: string, mods: { meta: boolean; shift: boolean }) => void;
@@ -1246,12 +1246,14 @@ const FilesystemRow = ({
     if (trimmed && fullName !== name) {
       const pendingRename = { previousName: name, name: fullName };
       setOptimisticRename(pendingRename);
+      const clearPendingRename = () => {
+        setOptimisticRename((current) =>
+          current === pendingRename ? null : current,
+        );
+      };
       onRename(node.entityId, fullName, {
-        onError: () => {
-          setOptimisticRename((current) =>
-            current === pendingRename ? null : current,
-          );
-        },
+        onError: clearPendingRename,
+        onSuccess: clearPendingRename,
       });
     }
   };
@@ -1598,6 +1600,9 @@ const FilesystemRow = ({
   );
 
   const openInInspector = (() => {
+    if (optimisticRename !== null) {
+      return undefined;
+    }
     if (isBulkSelected) {
       const entities = getSelectedEntities(selectedIds);
       const navigables: Omit<FileTab, "type">[] = [];
