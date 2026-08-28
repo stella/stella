@@ -4,7 +4,7 @@ import { cn } from "@stll/ui/utils";
 
 /**
  * Teaches the clipboard manager without prose: snippets A, B and C are
- * copied (copy key pressed) from three unrelated documents, the history
+ * copied (copy key pressed) from three unrelated apps, the history
  * shortcut is pressed, and the same marked snippets reappear in a
  * searchable history.
  */
@@ -106,22 +106,31 @@ export const ClipboardWorkflowPreview = ({
 const SNIPPETS = [
   {
     label: "A",
+    sourceApp: "chrome",
     sourceWidths: ["w-full", "w-2/3"],
     historyWidth: "w-1/2",
   },
   {
     label: "B",
+    sourceApp: "word",
     sourceWidths: ["w-3/4", "w-full"],
     historyWidth: "w-2/3",
   },
   {
     label: "C",
+    sourceApp: "outlook",
     sourceWidths: ["w-full", "w-1/2"],
     historyWidth: "w-2/5",
   },
 ] as const;
 
 type Snippet = (typeof SNIPPETS)[number];
+
+const SOURCE_APP_ICON_PATHS = {
+  chrome: "/branding/apps/google-chrome.svg",
+  outlook: "/branding/apps/microsoft-outlook.svg",
+  word: "/branding/apps/microsoft-word.svg",
+} as const satisfies Record<Snippet["sourceApp"], string>;
 
 const HISTORY = SNIPPETS.toReversed();
 
@@ -197,12 +206,14 @@ const SourceWindow = ({
     className="cwp-rise bg-background border-border/50 min-w-0 rounded-lg border p-2 shadow-xs"
     style={delay(T.source + index * T.sourceStagger)}
   >
-    <div className="mb-2 flex items-center gap-1">
-      <span className="bg-muted-foreground/25 size-1.5 rounded-full" />
-      <span className="bg-muted-foreground/25 size-1.5 rounded-full" />
-      <span className="bg-muted-foreground/15 ms-1 h-1 w-1/3 rounded-full" />
+    <div className="mb-2 flex min-w-0 items-center gap-1">
+      <img
+        alt=""
+        className="size-3 shrink-0 object-contain"
+        src={SOURCE_APP_ICON_PATHS[snippet.sourceApp]}
+      />
       <kbd
-        className="cwp-press bg-muted text-muted-foreground ms-auto rounded-[3px] px-1 py-px font-mono text-[9px] leading-none"
+        className="cwp-press bg-muted text-muted-foreground ms-auto shrink-0 rounded-[3px] px-1 py-px font-mono text-[9px] leading-none"
         dir="ltr"
         style={delay(T.select + index * T.selectStagger)}
       >

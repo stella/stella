@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Google Chrome logo; source: https://commons.wikimedia.org/wiki/File:Google_Chrome_icon_(February_2022).svg -->
+  <defs>
+    <linearGradient id="a" x1="3.2173" y1="15" x2="44.7812" y2="15" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#d93025" />
+      <stop offset="1" stop-color="#ea4335" />
+    </linearGradient>
+    <linearGradient id="b" x1="20.7219" y1="47.6791" x2="41.5039" y2="11.6837" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fcc934" />
+      <stop offset="1" stop-color="#fbbc04" />
+    </linearGradient>
+    <linearGradient id="c" x1="26.5981" y1="46.5015" x2="5.8161" y2="10.506" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1e8e3e" />
+      <stop offset="1" stop-color="#34a853" />
+    </linearGradient>
+  </defs>
+  <circle cx="24" cy="23.9947" r="12" fill="#fff" />
+  <path d="M24 12h20.781A23.994 23.994 0 0 0 3.217 12.003L13.608 30l.009-.002A11.985 11.985 0 0 1 24 12Z" fill="url(#a)" />
+  <circle cx="24" cy="24" r="9.5" fill="#1a73e8" />
+  <path d="M34.391 30.003 24.001 48A23.994 23.994 0 0 0 44.78 12.003H23.999l-.003.01a11.985 11.985 0 0 1 10.395 17.99Z" fill="url(#b)" />
+  <path d="M13.609 30.003 3.218 12.006A23.994 23.994 0 0 0 24.003 48l10.39-17.997-.007-.007a11.985 11.985 0 0 1-20.777.007Z" fill="url(#c)" />
+</svg>
