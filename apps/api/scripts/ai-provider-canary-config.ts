@@ -49,13 +49,14 @@ export const NULL_WIDENING_CANARY_PROVIDERS = new Set(
   ),
 );
 
-// JSON Schema patterns have no regex flag channel. OpenAI strict Structured
-// Outputs supports `pattern`; `a^` cannot match any string. Used to make the
-// "omit or send this impossible value" duality deterministic: no real string
-// can validly satisfy the optional field, only omission (or, for
-// null-widening providers, the synthetic null their strict mode forces).
-// eslint-disable-next-line require-unicode-regexp
-export const NEVER_MATCH_PATTERN = /a^/;
+// The optional string fields in canary tool schemas must accept no real
+// string, so that "omit or send the synthetic null" is the only valid choice
+// for the model. An unsatisfiable regex (`a^`) expressed that until OpenAI's
+// strict-mode grammar compiler started dead-ending on it: the request ends
+// `incomplete` with zero output tokens before any tool call. `maxLength: 0`
+// says the same thing in a form every constrained decoder handles; a
+// hallucinated empty string still trips the probes' unexpected-argument check.
+export const IMPOSSIBLE_STRING_MAX_LENGTH = 0;
 
 export const CANARY_TIERS = ["daily", "weekly"] as const;
 export type CanaryTier = (typeof CANARY_TIERS)[number];
@@ -131,13 +132,10 @@ export const modelRoleMaxOutputTokens = (role: ModelRole) =>
 export const structuredOutputModelRoleMaxOutputTokens = (role: ModelRole) =>
   role === "reasoning" ? 20_000 : modelRoleMaxOutputTokens(role);
 
-// Tool-execution probes pay for a model's thinking tokens out of the same
-// output budget as the tool call. The chat role's ceiling is sized for a short
-// reply, so reasoning-capable chat models exhaust it and end the stream
-// `incomplete` before emitting a call. Give these probes reasoning headroom,
-// but stay under the smallest output ceiling of any offered model (Amazon Nova
-// v1: 5,120), because the weekly rotation runs the same probe on every model
-// and providers reject a ceiling above the model's limit before the call.
+// Tool-execution probes may spend thinking tokens before the call, so they
+// get more headroom than a short-reply role, while staying under the smallest
+// output ceiling of any offered model (Amazon Nova v1: 5,120) because the
+// weekly rotation runs the same probe on every model.
 export const TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS = 4096;
 
 export const isCanaryProvider = (value: string): value is CanaryProvider =>

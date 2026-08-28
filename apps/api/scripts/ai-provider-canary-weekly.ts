@@ -8,7 +8,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 // pattern the daily round-trip probe uses to make the omission-vs-null
 // duality deterministic (see ai-provider-canary.ts, #1194/#1196).
 import {
-  NEVER_MATCH_PATTERN,
+  IMPOSSIBLE_STRING_MAX_LENGTH,
   NULL_WIDENING_CANARY_PROVIDERS,
 } from "./ai-provider-canary-config";
 import type {
@@ -115,7 +115,7 @@ export const createWeeklyToolShapeDefinition = (
       const nestedOptionalInputSchema = v.strictObject({
         details: v.strictObject({
           optionalNote: v.optional(
-            v.pipe(v.string(), v.regex(NEVER_MATCH_PATTERN)),
+            v.pipe(v.string(), v.maxLength(IMPOSSIBLE_STRING_MAX_LENGTH)),
           ),
           value: v.literal("stella-weekly"),
         }),
@@ -172,7 +172,7 @@ export const createWeeklyToolShapeDefinition = (
           v.strictObject({
             id: v.literal("item-1"),
             optionalLabel: v.optional(
-              v.pipe(v.string(), v.regex(NEVER_MATCH_PATTERN)),
+              v.pipe(v.string(), v.maxLength(IMPOSSIBLE_STRING_MAX_LENGTH)),
             ),
           }),
         ),
