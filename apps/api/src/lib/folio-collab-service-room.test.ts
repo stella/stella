@@ -17,6 +17,7 @@ const query = {
 };
 
 void mock.module("@/api/db/root", () => ({
+  rlsDb: {},
   rootDb: {
     select: () => query,
     transaction: async (
