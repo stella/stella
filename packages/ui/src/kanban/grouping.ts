@@ -38,9 +38,9 @@ export type KanbanGroup = {
  * built-in grouping is a data declaration rather than a branch this module has
  * to know about.
  */
-export type KanbanBuiltInGroup<TRow> = {
+export type KanbanBuiltInGroup<TRow, TGroupId extends string = string> = {
   /** Reserved group id, distinct from any property id. */
-  id: string;
+  id: TGroupId;
   /** Ordered columns, without the uncategorized bucket. */
   options: readonly KanbanGroupOption[];
   /**
@@ -57,42 +57,51 @@ export type KanbanBuiltInGroup<TRow> = {
  * which keeps the decision — and the property model it depends on — with the
  * caller.
  */
-export type KanbanSchema<TRow, TProperty> = {
-  builtInGroups: readonly KanbanBuiltInGroup<TRow>[];
+export type KanbanSchema<TRow, TProperty, TGroupId extends string = string> = {
+  builtInGroups: readonly KanbanBuiltInGroup<TRow, TGroupId>[];
   properties: readonly TProperty[];
-  getPropertyId: (property: TProperty) => string;
+  getPropertyId: (property: TProperty) => TGroupId;
   getPropertyOptions: (
     property: TProperty,
   ) => readonly KanbanGroupOption[] | null;
 };
 
-export type KanbanGrouping<TRow, TProperty> =
+export type KanbanGrouping<TRow, TProperty, TGroupId extends string = string> =
   | { type: "none" }
   | {
       type: "built-in";
-      propertyId: string;
-      group: KanbanBuiltInGroup<TRow>;
+      propertyId: TGroupId;
+      group: KanbanBuiltInGroup<TRow, TGroupId>;
     }
   | {
       type: "property";
-      propertyId: string;
+      propertyId: TGroupId;
       property: TProperty;
       options: readonly KanbanGroupOption[];
     };
 
-export type ResolveKanbanGroupingParams<TRow, TProperty> = {
+export type ResolveKanbanGroupingParams<
+  TRow,
+  TProperty,
+  TGroupId extends string = string,
+> = {
   /** The group-by id the view carries; empty means no grouping. */
-  groupBy: string;
-  schema: KanbanSchema<TRow, TProperty>;
+  groupBy: TGroupId | "";
+  schema: KanbanSchema<TRow, TProperty, TGroupId>;
 };
 
 /** Resolve a stored group-by id against a schema. */
-export const resolveKanbanGrouping = <TRow, TProperty>({
+export const resolveKanbanGrouping = <
+  TRow,
+  TProperty,
+  TGroupId extends string = string,
+>({
   groupBy,
   schema,
-}: ResolveKanbanGroupingParams<TRow, TProperty>): KanbanGrouping<
+}: ResolveKanbanGroupingParams<TRow, TProperty, TGroupId>): KanbanGrouping<
   TRow,
-  TProperty
+  TProperty,
+  TGroupId
 > => {
   if (groupBy === "") {
     return { type: "none" };
@@ -118,9 +127,13 @@ export const resolveKanbanGrouping = <TRow, TProperty>({
   };
 };
 
-export const getKanbanGroupingPropertyId = <TRow, TProperty>(
-  grouping: KanbanGrouping<TRow, TProperty>,
-): string | null => {
+export const getKanbanGroupingPropertyId = <
+  TRow,
+  TProperty,
+  TGroupId extends string = string,
+>(
+  grouping: KanbanGrouping<TRow, TProperty, TGroupId>,
+): TGroupId | null => {
   switch (grouping.type) {
     case "none":
       return null;
@@ -140,8 +153,12 @@ export const getKanbanGroupingPropertyId = <TRow, TProperty>(
  * be drawn; a property grouping always draws, even when the property has no
  * options yet, because rows still land in the uncategorized bucket.
  */
-export const isKanbanGroupingRenderable = <TRow, TProperty>(
-  grouping: KanbanGrouping<TRow, TProperty>,
+export const isKanbanGroupingRenderable = <
+  TRow,
+  TProperty,
+  TGroupId extends string = string,
+>(
+  grouping: KanbanGrouping<TRow, TProperty, TGroupId>,
 ): boolean => {
   switch (grouping.type) {
     case "none":
@@ -158,9 +175,13 @@ export const isKanbanGroupingRenderable = <TRow, TProperty>(
 };
 
 /** The rows a grouping can place on the board, in their incoming order. */
-export const selectKanbanRows = <TRow, TProperty>(
+export const selectKanbanRows = <
+  TRow,
+  TProperty,
+  TGroupId extends string = string,
+>(
   rows: readonly TRow[],
-  grouping: KanbanGrouping<TRow, TProperty>,
+  grouping: KanbanGrouping<TRow, TProperty, TGroupId>,
 ): TRow[] => {
   switch (grouping.type) {
     case "none":
@@ -179,8 +200,12 @@ export const selectKanbanRows = <TRow, TProperty>(
 };
 
 /** The static column options for a grouping, excluding uncategorized. */
-export const resolveKanbanGroupOptions = <TRow, TProperty>(
-  grouping: KanbanGrouping<TRow, TProperty>,
+export const resolveKanbanGroupOptions = <
+  TRow,
+  TProperty,
+  TGroupId extends string = string,
+>(
+  grouping: KanbanGrouping<TRow, TProperty, TGroupId>,
 ): readonly KanbanGroupOption[] => {
   switch (grouping.type) {
     case "none":

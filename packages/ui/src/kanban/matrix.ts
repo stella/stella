@@ -45,20 +45,28 @@ export type KanbanBoardMatrix<TRow> = {
   rows: TRow[];
 };
 
-export type ResolveKanbanGroupValueParams<TRow, TProperty> = {
-  grouping: KanbanGrouping<TRow, TProperty>;
+export type ResolveKanbanGroupValueParams<
+  TRow,
+  TProperty,
+  TGroupId extends string = string,
+> = {
+  grouping: KanbanGrouping<TRow, TProperty, TGroupId>;
   row: TRow;
 };
 
-export type BuildKanbanBoardMatrixParams<TRow, TProperty> = {
+export type BuildKanbanBoardMatrixParams<
+  TRow,
+  TProperty,
+  TGroupId extends string = string,
+> = {
   /** The vertical board columns. This must be a renderable grouping. */
-  group: KanbanGrouping<TRow, TProperty>;
+  group: KanbanGrouping<TRow, TProperty, TGroupId>;
   /** Optional horizontal swimlanes. `none` makes this a one-lane board. */
-  subgroup: KanbanGrouping<TRow, TProperty>;
+  subgroup: KanbanGrouping<TRow, TProperty, TGroupId>;
   rows: readonly TRow[];
   uncategorizedLabel: string;
   resolveGroupValue: (
-    params: ResolveKanbanGroupValueParams<TRow, TProperty>,
+    params: ResolveKanbanGroupValueParams<TRow, TProperty, TGroupId>,
   ) => string | null;
 };
 
@@ -104,8 +112,8 @@ const normalizeGroupValue = (
   value: string | null,
 ): string | null => (groupContainsValue(groups, value) ? value : null);
 
-const getRenderableGroups = <TRow, TProperty>(
-  grouping: KanbanGrouping<TRow, TProperty>,
+const getRenderableGroups = <TRow, TProperty, TGroupId extends string>(
+  grouping: KanbanGrouping<TRow, TProperty, TGroupId>,
   uncategorizedLabel: string,
 ): KanbanGroup[] => {
   if (!isKanbanGroupingRenderable(grouping)) {
@@ -117,8 +125,8 @@ const getRenderableGroups = <TRow, TProperty>(
   );
 };
 
-const makeLanes = <TRow, TProperty>(
-  subgroup: KanbanGrouping<TRow, TProperty>,
+const makeLanes = <TRow, TProperty, TGroupId extends string>(
+  subgroup: KanbanGrouping<TRow, TProperty, TGroupId>,
   uncategorizedLabel: string,
 ): KanbanBoardLane[] => {
   if (subgroup.type === "none") {
@@ -136,13 +144,21 @@ const makeLanes = <TRow, TProperty>(
  * A subgroup never filters the primary board scope. A row outside a subgroup's
  * declared values goes to its explicit No value lane, rather than disappearing.
  */
-export const buildKanbanBoardMatrix = <TRow, TProperty>({
+export const buildKanbanBoardMatrix = <
+  TRow,
+  TProperty,
+  TGroupId extends string = string,
+>({
   group,
   subgroup,
   rows,
   uncategorizedLabel,
   resolveGroupValue,
-}: BuildKanbanBoardMatrixParams<TRow, TProperty>): KanbanBoardMatrix<TRow> => {
+}: BuildKanbanBoardMatrixParams<
+  TRow,
+  TProperty,
+  TGroupId
+>): KanbanBoardMatrix<TRow> => {
   if (!isKanbanGroupingRenderable(group)) {
     return { cells: [], columns: [], lanes: [], rows: [] };
   }
@@ -212,23 +228,28 @@ export const buildKanbanBoardMatrix = <TRow, TProperty>({
   return { cells, columns, lanes, rows: scopedRows };
 };
 
-export type KanbanDropAxisChange = {
-  groupBy: string;
+export type KanbanDropAxisChange<TGroupId extends string = string> = {
+  groupBy: TGroupId;
   value: string | null;
 };
 
 /** A complete, atomic move request for a domain mutation adapter. */
-export type KanbanDropIntent<TCardId> = {
+export type KanbanDropIntent<TCardId, TGroupId extends string = string> = {
   cardId: TCardId;
-  changes: readonly KanbanDropAxisChange[];
+  changes: readonly KanbanDropAxisChange<TGroupId>[];
   type: "move";
 };
 
-export type CreateKanbanDropIntentParams<TRow, TProperty, TCardId> = {
+export type CreateKanbanDropIntentParams<
+  TRow,
+  TProperty,
+  TCardId,
+  TGroupId extends string = string,
+> = {
   cardId: TCardId;
-  group: KanbanGrouping<TRow, TProperty>;
+  group: KanbanGrouping<TRow, TProperty, TGroupId>;
   source: KanbanBoardCoordinate;
-  subgroup: KanbanGrouping<TRow, TProperty>;
+  subgroup: KanbanGrouping<TRow, TProperty, TGroupId>;
   target: KanbanBoardCoordinate;
 };
 
@@ -237,7 +258,12 @@ export type CreateKanbanDropIntentParams<TRow, TProperty, TCardId> = {
  * Diagonal drops carry both changes together; an adapter must commit this
  * intent atomically or reject it as a whole.
  */
-export const createKanbanDropIntent = <TRow, TProperty, TCardId>({
+export const createKanbanDropIntent = <
+  TRow,
+  TProperty,
+  TCardId,
+  TGroupId extends string = string,
+>({
   cardId,
   group,
   source,
@@ -246,15 +272,16 @@ export const createKanbanDropIntent = <TRow, TProperty, TCardId>({
 }: CreateKanbanDropIntentParams<
   TRow,
   TProperty,
-  TCardId
->): KanbanDropIntent<TCardId> | null => {
+  TCardId,
+  TGroupId
+>): KanbanDropIntent<TCardId, TGroupId> | null => {
   const groupBy = getKanbanGroupingPropertyId(group);
   const subgroupBy = getKanbanGroupingPropertyId(subgroup);
   if (groupBy === null || (subgroupBy !== null && subgroupBy === groupBy)) {
     return null;
   }
 
-  const changes: KanbanDropAxisChange[] = [];
+  const changes: KanbanDropAxisChange<TGroupId>[] = [];
   if (source.column.value !== target.column.value) {
     changes.push({ groupBy, value: target.column.value });
   }

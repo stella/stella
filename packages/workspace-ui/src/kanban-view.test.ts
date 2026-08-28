@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildKanbanBoardMatrix } from "@stll/ui/kanban";
+import {
+  buildKanbanBoardMatrix,
+  getKanbanGroupingPropertyId,
+} from "@stll/ui/kanban";
 
 import {
   createWorkspaceKanbanSchema,
@@ -14,8 +17,9 @@ import type {
 } from "./kanban-view";
 
 type Row = { id: string; owner: string | null; status: string | null };
+type GroupId = "_status" | "owner";
 
-const properties: WorkspaceKanbanProperty[] = [
+const properties: WorkspaceKanbanProperty<GroupId>[] = [
   {
     content: {
       options: [
@@ -43,7 +47,7 @@ const schema = createWorkspaceKanbanSchema({
   properties,
 });
 
-const state: KanbanSavedViewState = {
+const state: KanbanSavedViewState<GroupId> = {
   group: {
     emptyGroups: "hide",
     groupBy: "_status",
@@ -75,6 +79,7 @@ describe("workspace kanban view adapter", () => {
 
   test("keeps group and subgroup independently persisted and presents ordered, collapsed lanes", () => {
     const view = resolveWorkspaceKanbanView({ schema, state });
+    const groupBy: GroupId | null = getKanbanGroupingPropertyId(view.group);
     const matrix = buildKanbanBoardMatrix({
       group: view.group,
       resolveGroupValue: ({
@@ -103,6 +108,7 @@ describe("workspace kanban view adapter", () => {
     });
     const presentation = presentKanbanBoard({ matrix, state });
 
+    expect(groupBy).toBe("_status");
     expect(presentation.columns.map((column) => column.value)).toEqual([
       "open",
     ]);
