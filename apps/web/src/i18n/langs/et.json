@@ -4554,6 +4554,8 @@
       "runStarted": "Playbooki käivitamine ({count, plural, one {# veerg} other {# veergu}})"
     },
     "possibleDuplicates": "Võimalikud duplikaadid",
+    "previewItems": "Kuva {count, plural, one {# elemendi} other {# elemendi}} eelvaade",
+    "previewItemsDescription": "See avab korraga {count, plural, one {# vahekaardi} other {# vahekaarti}}.",
     "properties": {
       "addCondition": "Lisa tingimus",
       "addInputProperty": "Lisage vähemalt üks sisestusomadus, kasutades \"@\"",

@@ -4554,6 +4554,8 @@
       "runStarted": "Tiek palaists pārbaudes ceļvedis ({count, plural, zero {# kolonnu} one {# kolonna} other {# kolonnas}})"
     },
     "possibleDuplicates": "Iespējamie dublikāti",
+    "previewItems": "Priekšskatīt {count, plural, zero {# vienību} one {# vienību} other {# vienības}}",
+    "previewItemsDescription": "Vienlaikus tiks atvērta {count, plural, zero {# cilņu} one {# cilne} other {# cilnes}}.",
     "properties": {
       "addCondition": "Pievienot nosacījumu",
       "addInputProperty": "Pievienojiet vismaz vienu ievades rekvizītu, izmantojot \"@\"",

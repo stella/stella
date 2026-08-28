@@ -4554,6 +4554,8 @@
       "runStarted": "Vykdomas peržiūros vadovas ({count, plural, one {# stulpelis} few {# stulpeliai} many {# stulpelio} other {# stulpelių}})"
     },
     "possibleDuplicates": "Galimi dublikatai",
+    "previewItems": "Peržiūrėti {count, plural, one {# elementą} few {# elementus} other {# elementų}}",
+    "previewItemsDescription": "Vienu metu bus atidaryta {count, plural, one {# kortelė} few {# kortelės} other {# kortelių}}.",
     "properties": {
       "addCondition": "Pridėti sąlygą",
       "addInputProperty": "Pridėkite bent vieną įvesties savybę naudodami \"@\"",

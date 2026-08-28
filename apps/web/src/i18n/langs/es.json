@@ -4554,6 +4554,8 @@
       "runStarted": "Ejecutando playbook ({count, plural, one {# columna} other {# columnas}})"
     },
     "possibleDuplicates": "Posibles duplicados",
+    "previewItems": "Vista previa de {count, plural, one {# elemento} other {# elementos}}",
+    "previewItemsDescription": "Se abrirán {count, plural, one {# pestaña} other {# pestañas}} a la vez.",
     "properties": {
       "addCondition": "Añadir condición",
       "addInputProperty": "Añada al menos una propiedad de entrada usando \"@\"",

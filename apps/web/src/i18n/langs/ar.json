@@ -4554,6 +4554,8 @@
       "runStarted": "جارٍ تشغيل دليل المراجعة ({count, plural, zero {لا أعمدة} one {عمود واحد} two {عمودان} few {# أعمدة} many {# عمودًا} other {# عمود}})"
     },
     "possibleDuplicates": "نسخ مكررة محتملة",
+    "previewItems": "معاينة {count, plural, zero {لا عناصر} one {عنصر واحد} two {عنصرين} few {# عناصر} many {# عنصرًا} other {# عنصر}}",
+    "previewItemsDescription": "سيؤدي هذا إلى فتح {count, plural, zero {لا علامات تبويب} one {علامة تبويب واحدة} two {علامتي تبويب} few {# علامات تبويب} many {# علامة تبويب} other {# علامة تبويب}} دفعة واحدة.",
     "properties": {
       "addCondition": "إضافة شرط",
       "addInputProperty": "أضف خاصية إدخال واحدة على الأقل باستخدام «@»",

@@ -4554,6 +4554,8 @@
       "runStarted": "Playbook futtatása ({count, plural, one {# oszlop} other {# oszlop}})"
     },
     "possibleDuplicates": "Lehetséges duplikátumok",
+    "previewItems": "{count, plural, one {# elem} other {# elem}} előnézete",
+    "previewItemsDescription": "Ez egyszerre {count, plural, one {# lapot} other {# lapot}} nyit meg.",
     "properties": {
       "addCondition": "Feltétel hozzáadása",
       "addInputProperty": "Adjon hozzá legalább egy bemeneti tulajdonságot a \"@\" használatával",

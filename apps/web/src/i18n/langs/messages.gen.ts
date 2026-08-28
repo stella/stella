@@ -4557,6 +4557,8 @@ type Messages = {
       "runStarted": "Running playbook ({count, plural, one {# column} other {# columns}})";
     };
     "possibleDuplicates": "Possible duplicates";
+    "previewItems": "Preview {count, plural, one {# item} other {# items}}";
+    "previewItemsDescription": "This opens {count, plural, one {# tab} other {# tabs}} at once.";
     "properties": {
       "addCondition": "Add condition";
       "addInputProperty": "Add at least one input property using \"@\"";

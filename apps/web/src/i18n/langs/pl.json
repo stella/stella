@@ -4554,6 +4554,8 @@
       "runStarted": "Uruchamianie playbooka ({count, plural, one {# kolumna} few {# kolumny} many {# kolumn} other {# kolumny}})"
     },
     "possibleDuplicates": "Możliwe duplikaty",
+    "previewItems": "Podgląd {count, plural, one {# elementu} few {# elementów} many {# elementów} other {# elementów}}",
+    "previewItemsDescription": "Spowoduje to otwarcie {count, plural, one {# karty} few {# kart} many {# kart} other {# kart}} naraz.",
     "properties": {
       "addCondition": "Dodaj warunek",
       "addInputProperty": "Dodaj co najmniej jedną właściwość wejściową za pomocą \"@\"",

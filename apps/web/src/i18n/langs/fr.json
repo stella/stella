@@ -4554,6 +4554,8 @@
       "runStarted": "Exécution du playbook ({count, plural, one {# colonne} other {# colonnes}})"
     },
     "possibleDuplicates": "Doublons possibles",
+    "previewItems": "Aperçu de {count, plural, one {# élément} other {# éléments}}",
+    "previewItemsDescription": "Cela ouvre {count, plural, one {# onglet} other {# onglets}} en même temps.",
     "properties": {
       "addCondition": "Ajouter une condition",
       "addInputProperty": "Ajoutez au moins une propriété d'entrée avec « @ »",

@@ -55,7 +55,9 @@ import { cn } from "@stll/ui/utils";
 
 import { buildEntityMentionOption } from "@/components/chat-mention-helpers";
 import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
-import { openInspectorSelection } from "@/components/inspector/inspector-actions";
+import type { OpenTabsArgs } from "@/components/inspector/inspector-store-types";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { planInspectorOpen } from "@/components/inspector/open-entities.logic";
 import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { CopyToMatterDialog } from "@/components/workspaces/copy-to-matter-dialog";
@@ -369,11 +371,9 @@ export const RowActions = ({
 
   // Preview opens every selected entity the inspector can render and
   // focuses the row the menu was opened on.
-  const resolvedOnOpen = openInspectorSelection({
-    entities: bulkTargets,
-    anchor: entity,
-    workspaceId,
-  });
+  const preview = toPreviewMenuProps(
+    planInspectorOpen({ entities: bulkTargets, anchor: entity, workspaceId }),
+  );
 
   const hasPdfConversion =
     file !== null && file.pdfFileId !== null && file.mimeType !== PDF_MIME_TYPE;
@@ -875,9 +875,10 @@ export const RowActions = ({
           canUploadVersion={canUploadVersion}
           isBulk={isBulk}
           isCellContext={isCellContext}
-          onOpen={resolvedOnOpen}
+          onOpen={preview.onOpen}
           onRename={onRename}
           onUploadVersion={handleUploadVersionSelect}
+          previewCount={preview.previewCount}
           uploadVersionPending={uploadVersion.isPending}
         />
         <RowOcrMenuActions
@@ -983,6 +984,23 @@ export const RowActions = ({
   );
 };
 
+type PreviewMenuProps = {
+  onOpen: (() => void) | undefined;
+  previewCount: number;
+};
+
+/** No plan hides the Preview item; otherwise it opens the plan's tabs. */
+const toPreviewMenuProps = (plan: OpenTabsArgs | null): PreviewMenuProps =>
+  plan === null
+    ? { onOpen: undefined, previewCount: 0 }
+    : {
+        onOpen: () => useInspectorTabsStore.getState().openTabs(plan),
+        previewCount: plan.targets.length,
+      };
+
+/** Above this many tabs a bulk Preview asks first, like bulk delete does. */
+const BULK_PREVIEW_CONFIRM_THRESHOLD = 10;
+
 const RowOpenMenuActions = ({
   canUploadVersion,
   isBulk,
@@ -990,6 +1008,7 @@ const RowOpenMenuActions = ({
   onOpen,
   onRename,
   onUploadVersion,
+  previewCount,
   uploadVersionPending,
 }: {
   canUploadVersion: boolean;
@@ -998,17 +1017,48 @@ const RowOpenMenuActions = ({
   onOpen: (() => void) | undefined;
   onRename: (() => void) | undefined;
   onUploadVersion: () => void;
+  /** Tabs Preview will open; drives the label and the confirm threshold. */
+  previewCount: number;
   uploadVersionPending: boolean;
 }) => {
   const t = useTranslations();
+  const previewLabel = isBulk
+    ? t("workspaces.previewItems", { count: previewCount })
+    : t("common.preview");
   return (
     <>
-      {onOpen !== undefined && (
-        <MenuItem onClick={onOpen}>
-          <EyeIcon />
-          {t("common.preview")}
-        </MenuItem>
-      )}
+      {onOpen !== undefined &&
+        (isBulk && previewCount > BULK_PREVIEW_CONFIRM_THRESHOLD ? (
+          <AlertDialog>
+            <AlertDialogTrigger render={<MenuItem closeOnClick={false} />}>
+              <EyeIcon />
+              {previewLabel}
+            </AlertDialogTrigger>
+            <AlertDialogPopup>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{previewLabel}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t("workspaces.previewItemsDescription", {
+                    count: previewCount,
+                  })}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogClose render={<Button variant="ghost" />}>
+                  {t("common.cancel")}
+                </AlertDialogClose>
+                <AlertDialogClose render={<Button onClick={onOpen} />}>
+                  {t("common.open")}
+                </AlertDialogClose>
+              </AlertDialogFooter>
+            </AlertDialogPopup>
+          </AlertDialog>
+        ) : (
+          <MenuItem onClick={onOpen}>
+            <EyeIcon />
+            {previewLabel}
+          </MenuItem>
+        ))}
       {!isBulk && onRename !== undefined && (
         <MenuItem onClick={onRename}>
           <PencilIcon />

@@ -4554,6 +4554,8 @@
       "runStarted": "Spúšťanie playbooku ({count, plural, one {# stĺpec} few {# stĺpce} other {# stĺpcov}})"
     },
     "possibleDuplicates": "Možné duplicity",
+    "previewItems": "Zobraziť náhľad {count, plural, one {# položky} few {# položiek} other {# položiek}}",
+    "previewItemsDescription": "Naraz sa otvorí {count, plural, one {# karta} few {# karty} other {# kariet}}.",
     "properties": {
       "addCondition": "Pridať podmienku",
       "addInputProperty": "Pridajte aspoň jednu vstupnú vlastnosť pomocou \"@\"",
