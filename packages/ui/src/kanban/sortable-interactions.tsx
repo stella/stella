@@ -4,6 +4,7 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 
 import {
+  closestCorners,
   DndContext,
   DragOverlay,
   KeyboardSensor,
@@ -38,6 +39,13 @@ import { cn } from "../lib/utils";
 import { isActiveTouchChange } from "./touch-identity";
 
 export const KANBAN_MOUSE_ACTIVATION_DISTANCE = 8;
+
+/**
+ * The closest corners stay stable while a card crosses adjacent board cells.
+ * Rectangle intersection instead tends to hold a card in its source list
+ * until most of the preview has left that list.
+ */
+export const KANBAN_BOARD_COLLISION_DETECTION = closestCorners;
 
 export const KANBAN_TOUCH_ACTIVATION_CONSTRAINT = {
   delay: 150,
@@ -227,7 +235,9 @@ export const KanbanSortableBoard = ({
     <DndContext
       {...(autoScroll === undefined ? {} : { autoScroll })}
       {...(accessibility === undefined ? {} : { accessibility })}
-      {...(collisionDetection === undefined ? {} : { collisionDetection })}
+      collisionDetection={
+        collisionDetection ?? KANBAN_BOARD_COLLISION_DETECTION
+      }
       onDragCancel={handleDragCancel}
       onDragEnd={handleDragEnd}
       onDragStart={handleDragStart}

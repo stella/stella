@@ -6,6 +6,13 @@ import {
   useRef,
 } from "react";
 
+import type { UniqueIdentifier } from "@dnd-kit/core";
+import {
+  SortableContext,
+  type SortableContextProps,
+  type SortingStrategy,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { cn } from "../lib/utils";
@@ -29,11 +36,26 @@ export type KanbanVirtualCellPagination =
       onRequestMore: () => void;
     };
 
+/**
+ * Makes a virtual cell the canonical sortable context for its rendered rows.
+ *
+ * `getRowKey` remains responsible for React and virtualizer identity. A
+ * separate sortable identifier avoids narrowing an existing React key contract
+ * merely to support dnd-kit consumers.
+ */
+export type KanbanVirtualCellSortableContext<TRow> = {
+  getRowId: (row: TRow) => UniqueIdentifier;
+  disabled?: SortableContextProps["disabled"] | undefined;
+  id?: UniqueIdentifier | undefined;
+  strategy?: SortingStrategy | undefined;
+};
+
 export type KanbanVirtualCellProps<TRow> = {
   rows: readonly TRow[];
   getRowKey: (row: TRow) => Key;
   renderRow: (row: TRow) => ReactNode;
   pagination: KanbanVirtualCellPagination;
+  sortable?: KanbanVirtualCellSortableContext<TRow> | undefined;
   containerRef?: RefObject<HTMLDivElement | null> | undefined;
   active?: boolean | undefined;
   backgroundColor?: string | undefined;
@@ -50,6 +72,7 @@ export const KanbanVirtualCell = <TRow,>({
   getRowKey,
   renderRow,
   pagination,
+  sortable,
   containerRef,
   active = false,
   backgroundColor,
@@ -95,7 +118,7 @@ export const KanbanVirtualCell = <TRow,>({
     pagination.onRequestMore();
   };
 
-  return (
+  const content = (
     <div
       className={cn(
         "bg-muted/20 max-h-[min(60vh,40rem)] min-h-20 overflow-y-auto overscroll-y-contain rounded-xl p-2 transition-[background-color,outline-color]",
@@ -127,5 +150,22 @@ export const KanbanVirtualCell = <TRow,>({
       </div>
       {footer}
     </div>
+  );
+
+  if (sortable === undefined) {
+    return content;
+  }
+
+  return (
+    <SortableContext
+      {...(sortable.disabled === undefined
+        ? {}
+        : { disabled: sortable.disabled })}
+      {...(sortable.id === undefined ? {} : { id: sortable.id })}
+      items={rows.map(sortable.getRowId)}
+      strategy={sortable.strategy ?? verticalListSortingStrategy}
+    >
+      {content}
+    </SortableContext>
   );
 };

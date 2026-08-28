@@ -24,6 +24,7 @@ export type {
 } from "./sortable-interactions";
 export {
   KANBAN_MOUSE_ACTIVATION_DISTANCE,
+  KANBAN_BOARD_COLLISION_DETECTION,
   KANBAN_TOUCH_ACTIVATION_CONSTRAINT,
   KanbanDragHandle,
   KanbanSortableBoard,
@@ -92,6 +93,7 @@ export { KanbanSubgroupBoard } from "./subgroup-board";
 export type {
   KanbanVirtualCellPagination,
   KanbanVirtualCellProps,
+  KanbanVirtualCellSortableContext,
 } from "./virtual-cell";
 export {
   KANBAN_VIRTUAL_CELL_PAGINATION,

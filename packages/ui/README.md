@@ -179,6 +179,21 @@ const matrix = buildKanbanBoardMatrix({
 />;
 ```
 
+When rows inside a virtual cell are sortable, give the cell its sortable
+identity directly. It owns the matching `SortableContext`, so the card stays a
+plain `useKanbanSortable` consumer and the virtualizer remains the only
+vertical scroll container.
+
+```tsx
+<KanbanVirtualCell
+  getRowKey={(row) => row.id}
+  pagination={{ type: "none" }}
+  renderRow={(row) => <Card row={row} />}
+  rows={cell.rows}
+  sortable={{ getRowId: (row) => row.id }}
+/>
+```
+
 ## Styles
 
 No compiled CSS ships. The components carry Tailwind class names, so the

@@ -101,7 +101,7 @@ const scrollWithTouch = async (
 test("preserves native board and list scrolling", async ({ page }) => {
   const handle = await openFixture(page);
   const board = page.locator("[data-board]");
-  const list = page.locator("[data-list]");
+  const list = page.locator(".kanban-test-list").first();
 
   await expect(board).toHaveCSS("touch-action", "auto");
   await expect(list).toHaveCSS("touch-action", "auto");
@@ -298,4 +298,46 @@ test("starts keyboard dragging from the handle", async ({ page }) => {
   await page.keyboard.press("Space");
 
   await expect(page.locator("[data-overlay]")).toHaveText("first");
+});
+
+test("drops a touch drag into an adjacent virtual cell", async ({ page }) => {
+  const handle = await openFixture(page);
+  const target = page.getByRole("button", { name: "Move second" });
+  const sourceCoordinates = await getTouchCoordinates(handle);
+  const targetCoordinates = await getTouchCoordinates(target);
+  const nativeTouch = await enableNativeTouch(page);
+
+  await dispatchNativeTouch(nativeTouch, "touchStart", [sourceCoordinates]);
+  await expect(page.locator("[data-overlay]")).toHaveText("first");
+  await dispatchNativeTouch(nativeTouch, "touchMove", [targetCoordinates]);
+  await endNativeTouch(nativeTouch);
+
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["droppedOn"] ?? "",
+        ),
+    )
+    .toBe("second");
+});
+
+test("drops a keyboard drag into an adjacent virtual cell", async ({
+  page,
+}) => {
+  const handle = await openFixture(page);
+
+  await handle.focus();
+  await page.keyboard.press("Space");
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Space");
+
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["droppedOn"] ?? "",
+        ),
+    )
+    .toBe("second");
 });
