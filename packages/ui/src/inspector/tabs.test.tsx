@@ -8,6 +8,7 @@ import {
   InspectorTabList,
   InspectorTabPanel,
   InspectorTabs,
+  resolveInspectorTabOrientation,
 } from "./tabs";
 
 const classesOf = (markup: string, slot: string) => {
@@ -17,6 +18,11 @@ const classesOf = (markup: string, slot: string) => {
 };
 
 describe("inspector tabs", () => {
+  test("matches keyboard orientation to the responsive rail", () => {
+    expect(resolveInspectorTabOrientation(767)).toBe("horizontal");
+    expect(resolveInspectorTabOrientation(768)).toBe("vertical");
+  });
+
   test("shares the inspector's fixed-height rail rhythm", () => {
     const markup = renderToStaticMarkup(
       <InspectorTabs defaultValue="overview">
@@ -32,6 +38,9 @@ describe("inspector tabs", () => {
     );
     expect(classesOf(markup, "inspector-tab")).toContain(TOOLBAR_ROW_HEIGHT);
     expect(classesOf(markup, "inspector-tab-list")).toContain("md:w-12");
+    expect(classesOf(markup, "inspector-tab-list")).toEqual(
+      expect.arrayContaining(["overflow-x-auto", "md:overflow-y-auto"]),
+    );
   });
 
   test("keeps one scroll owner beside the desktop rail", () => {

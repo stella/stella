@@ -1,7 +1,13 @@
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 
+import { useViewportWidth } from "../hooks/use-viewport-width";
 import { cn } from "../lib/utils";
 import { TOOLBAR_ROW_HEIGHT } from "./layout-tokens";
+
+const inspectorRailBreakpointPx = 768;
+
+export const resolveInspectorTabOrientation = (viewportWidth: number) =>
+  viewportWidth >= inspectorRailBreakpointPx ? "vertical" : "horizontal";
 
 /**
  * A tabbed inspector keeps its content beside the same fixed-width rail as a
@@ -11,16 +17,21 @@ import { TOOLBAR_ROW_HEIGHT } from "./layout-tokens";
 export const InspectorTabs = ({
   className,
   ...props
-}: TabsPrimitive.Root.Props) => (
-  <TabsPrimitive.Root
-    className={cn(
-      "grid h-full min-h-0 w-full grid-cols-1 grid-rows-[3rem_3rem_minmax(0,1fr)] overflow-hidden md:grid-cols-[3rem_minmax(0,1fr)] md:grid-rows-[3rem_minmax(0,1fr)]",
-      className,
-    )}
-    data-slot="inspector-tabs"
-    {...props}
-  />
-);
+}: Omit<TabsPrimitive.Root.Props, "orientation">) => {
+  const viewportWidth = useViewportWidth();
+
+  return (
+    <TabsPrimitive.Root
+      className={cn(
+        "grid h-full min-h-0 w-full grid-cols-1 grid-rows-[3rem_3rem_minmax(0,1fr)] overflow-hidden md:grid-cols-[3rem_minmax(0,1fr)] md:grid-rows-[3rem_minmax(0,1fr)]",
+        className,
+      )}
+      data-slot="inspector-tabs"
+      {...props}
+      orientation={resolveInspectorTabOrientation(viewportWidth)}
+    />
+  );
+};
 
 export const InspectorTabList = ({
   className,
@@ -28,7 +39,7 @@ export const InspectorTabList = ({
 }: TabsPrimitive.List.Props) => (
   <TabsPrimitive.List
     className={cn(
-      "bg-sidebar col-start-1 row-start-2 flex min-w-0 shrink-0 border-b md:row-span-2 md:row-start-1 md:h-full md:flex-col md:border-s md:border-e md:border-b-0",
+      "bg-sidebar col-start-1 row-start-2 flex min-w-0 shrink-0 overflow-x-auto overflow-y-hidden border-b md:row-span-2 md:row-start-1 md:h-full md:flex-col md:overflow-x-hidden md:overflow-y-auto md:border-s md:border-e md:border-b-0",
       TOOLBAR_ROW_HEIGHT,
       "md:w-12",
       className,
