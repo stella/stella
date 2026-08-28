@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { current, type Draft } from "immer";
 import { v7 as uuidv7 } from "uuid";
 
@@ -9,6 +10,7 @@ import type {
   InspectorTabsStore,
   MatterTabId,
   SkillResourceTabId,
+  TaskTab,
 } from "@/components/inspector/inspector-store-types";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import { normalizeOptionalArray } from "@/lib/arrays";
@@ -130,6 +132,24 @@ const upsertFileTab = (
   }
 };
 
+const upsertTaskTab = (state: Draft<InspectorTabsStore>, tab: TaskTab) => {
+  const existing = state.tabs.find((candidate) => candidate.id === tab.id);
+  if (!existing) {
+    state.tabs.push(tab);
+    return;
+  }
+  if (existing.type !== "task") {
+    return;
+  }
+  if (tab.label) {
+    existing.label = tab.label;
+  }
+  if (tab.isNew) {
+    existing.isNew = true;
+  }
+  existing.workspaceId = tab.workspaceId;
+};
+
 export const createInspectorTabsSlice = (
   set: InspectorTabsSet,
 ): InspectorTabsStore => ({
@@ -164,29 +184,50 @@ export const createInspectorTabsSlice = (
 
   openTask: ({ taskId, workspaceId, label = "", isNew = false }) =>
     set((state) => {
-      const existing = state.tabs.find((tab) => tab.id === taskId);
-      if (!existing) {
-        state.tabs.push({
-          type: "task",
-          id: taskId,
-          creationStatus: "ready",
-          label,
-          isNew,
-          workspaceId,
-        });
-      } else if (existing.type === "task") {
-        if (label) {
-          existing.label = label;
-        }
-        if (isNew) {
-          existing.isNew = true;
-        }
-        existing.workspaceId = workspaceId;
-      }
+      upsertTaskTab(state, {
+        type: "task",
+        id: taskId,
+        creationStatus: "ready",
+        label,
+        isNew,
+        workspaceId,
+      });
       state.activeId = taskId;
       state.activationSeq += 1;
       state.minimized = false;
     }),
+
+  // One user action, one activation: opening a selection must leave focus on
+  // the tab the caller names, not on whichever target happened to come last.
+  openTabs: ({ targets, activeId }) => {
+    if (targets.length === 0) {
+      return;
+    }
+    if (!targets.some((target) => target.id === activeId)) {
+      panic("openTabs was given an activeId outside its targets");
+    }
+    set((state) => {
+      for (const target of targets) {
+        switch (target.type) {
+          case "pdf":
+            upsertFileTab(state, target, {
+              renderIdPolicy: FILE_TAB_RENDER_ID_POLICY.whenIdChanges,
+            });
+            dropSupersededFileSuggestion(state, target);
+            break;
+          case "task":
+            upsertTaskTab(state, target);
+            break;
+          default:
+            target satisfies never;
+            panic("Unhandled inspector open target");
+        }
+      }
+      state.activeId = activeId;
+      state.activationSeq += 1;
+      state.minimized = false;
+    });
+  },
 
   openPendingTask: ({ workspaceId, label = "" }) => {
     const pendingTaskId = `pending-task:${uuidv7()}`;
