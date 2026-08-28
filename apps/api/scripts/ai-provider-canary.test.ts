@@ -107,7 +107,7 @@ describe("AI provider canary tool contract", () => {
       ].jsonSchema.input({ target: "draft-07" }),
     ).toMatchObject({
       properties: {
-        optionalNote: { pattern: "a^", type: "string" },
+        optionalNote: { maxLength: 0, type: "string" },
       },
       required: ["count", "value"],
     });

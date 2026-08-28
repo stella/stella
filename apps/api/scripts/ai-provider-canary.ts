@@ -31,7 +31,7 @@ import {
   CANARY_PROVIDERS,
   modelRoleMaxOutputTokens,
   structuredOutputModelRoleMaxOutputTokens,
-  NEVER_MATCH_PATTERN,
+  IMPOSSIBLE_STRING_MAX_LENGTH,
   NULL_WIDENING_CANARY_PROVIDERS,
   TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
   weeklyCanaryRotation,
@@ -691,7 +691,9 @@ export const toolRoundTripInputSchema = v.strictObject({
   // optional string with null. The provider is asked for that synthetic null;
   // the adapter must remove it before the server validates and executes the
   // tool because null is deliberately invalid in this application schema.
-  optionalNote: v.optional(v.pipe(v.string(), v.regex(NEVER_MATCH_PATTERN))),
+  optionalNote: v.optional(
+    v.pipe(v.string(), v.maxLength(IMPOSSIBLE_STRING_MAX_LENGTH)),
+  ),
   value: v.literal(TOOL_ROUND_TRIP_VALUE),
 });
 
