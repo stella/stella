@@ -28,6 +28,7 @@ const proposePositions = createSafeHandler(
     body,
     session,
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
     user,
   }) {
@@ -35,6 +36,7 @@ const proposePositions = createSafeHandler(
     const prepared = yield* yield* prepareReferenceProposal({
       body,
       orgAIConfig,
+      orgAIConfigStatus,
       organizationId,
       safeDb,
       userId: user.id,

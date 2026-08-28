@@ -105,7 +105,7 @@ const normalizePositions = (
   }: { seededPositions?: readonly Position[]; positionsMax?: number } = {},
 ): Position[] =>
   normalizeProposal({
-    output: { parties: [], positions: proposedPositions, skipped: [] },
+    output: { parties: [], positions: [...proposedPositions], skipped: [] },
     seededPositions,
     sources: [source],
     positionsMax,
@@ -148,7 +148,7 @@ describe("proposedPositionsSchema", () => {
 describe("parties", () => {
   const parties = (input: readonly { role: string; name: string | null }[]) =>
     normalizeProposal({
-      output: { parties: input, positions: [], skipped: [] },
+      output: { parties: [...input], positions: [], skipped: [] },
       seededPositions: [],
       sources: [source],
       positionsMax: 10,
@@ -401,7 +401,7 @@ describe("deal-specific values", () => {
 describe("skipped", () => {
   const skips = (input: readonly { subject: string; reason: string }[]) =>
     normalizeProposal({
-      output: { parties: [], positions: [], skipped: input },
+      output: { parties: [], positions: [], skipped: [...input] },
       seededPositions: [],
       sources: [source],
       positionsMax: 10,

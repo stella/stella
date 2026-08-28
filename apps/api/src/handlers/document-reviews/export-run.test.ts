@@ -205,7 +205,15 @@ describe("document review run export", () => {
                       id: RUN_ID,
                       targetName: "Draft agreement.docx",
                       basis: {
-                        type: "references",
+                        playbook: {
+                          definitionId: null,
+                          versionId: null,
+                          provenance: "ephemeral",
+                          definitionSnapshot: {
+                            name: "Positions confirmed for this review",
+                            positions: { version: 3, items: [] },
+                          },
+                        },
                         references: [
                           {
                             workspaceId: REFERENCE_WORKSPACE_ID,
@@ -237,24 +245,26 @@ describe("document review run export", () => {
               orderBy: () => ({
                 limit: async () => [
                   {
-                    topicTitle: "Liability cap",
+                    positionTitle: "Liability cap",
                     decision: "open",
                     payload: {
-                      checkKind: "reference",
                       finding: {
-                        findingId: "finding-1",
-                        topicId: "topic-1",
+                        positionId: "11111111-1111-4111-8111-1111111111aa",
                         issue: "Liability cap",
-                        assessment: "different",
+                        severity: "medium",
+                        standardSource: "reference",
+                        verdict: "deviation",
+                        delta: { kind: "language" },
+                        extracted: null,
                         consensus: "single",
+                        rationale: "Different cap.",
                         explanation: {
                           type: "comparison",
                           text: "Different cap.",
                         },
                         recommendation: null,
                         impact: "unknown",
-                        severity: "medium",
-                        targetCitations: [
+                        citations: [
                           { blockId: "target-1", text: "Draft wording." },
                         ],
                         referenceCitations: [

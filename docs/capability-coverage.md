@@ -296,18 +296,6 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `reports.list-templates` | read   | stella:read          | —       | generic invoke → `stella capability reports list-templates` |
 | `reports.read-export`    | write  | stella:matters_write | —       | generic invoke → `stella capability reports read-export`    |
 
-## signals
-
-| Capability                   | Access | Scope                | Feature | Reachable via                                                   |
-| ---------------------------- | ------ | -------------------- | ------- | --------------------------------------------------------------- |
-| `signals.acceptances.create` | write  | stella:matters_write | —       | generic invoke → `stella capability signals acceptances-create` |
-| `signals.assignments.create` | write  | stella:matters_write | —       | generic invoke → `stella capability signals assignments-create` |
-| `signals.dismissals.create`  | write  | stella:matters_write | —       | generic invoke → `stella capability signals dismissals-create`  |
-| `signals.get`                | read   | stella:read          | —       | generic invoke → `stella capability signals get`                |
-| `signals.list`               | read   | stella:read          | —       | generic invoke → `stella capability signals list`               |
-| `signals.requests.create`    | write  | stella:matters_write | —       | generic invoke → `stella capability signals requests-create`    |
-| `signals.snoozes.create`     | write  | stella:matters_write | —       | generic invoke → `stella capability signals snoozes-create`     |
-
 ## skills
 
 | Capability                              | Access             | Scope         | Feature | Reachable via                                                                                                                                                                                                                        |
@@ -537,19 +525,19 @@ mechanics, and similar), not gaps in coverage.
 | chat_thread_ui         | 2     |
 | compound_consent       | 1     |
 | deploy_mechanics       | 1     |
-| document_processing    | 24    |
+| document_processing    | 25    |
 | health_infra           | 1     |
 | hosted_billing         | 6     |
 | mcp_transport          | 11    |
-| native_tool_ui         | 8     |
+| native_tool_ui         | 4     |
 | provider_secret        | 20    |
 | public_indexing        | 3     |
 | reader_annotations     | 4     |
 | realtime_stream        | 3     |
 | search_ui              | 5     |
 | session_token_exchange | 13    |
-| ui_navigation_state    | 9     |
+| ui_navigation_state    | 8     |
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 154
+Total: 151

@@ -9,13 +9,13 @@
  *
  * The pinned basis records which matter each reference field came from, so the
  * reader's own membership decides, per reference, whether its passages are
- * returned. Scoping happens on the payload, which is the single place both the
- * API response and the issues-table export read reference text from.
+ * returned. Scoping happens on the payload, which is the single place the API
+ * response, the history list and the issues-table export read reference text
+ * from.
  */
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
-import { basisReferences } from "@/api/lib/document-review/run-contract";
 import type {
   DocumentReviewFindingPayload,
   DocumentReviewRunBasis,
@@ -36,7 +36,7 @@ type CreateReferenceScopeArgs = {
 export const basisReferenceWorkspaceIds = (
   basis: DocumentReviewRunBasis,
 ): SafeId<"workspace">[] => [
-  ...new Set(basisReferences(basis).map((reference) => reference.workspaceId)),
+  ...new Set(basis.references.map((reference) => reference.workspaceId)),
 ];
 
 export const createReferenceScope = ({
@@ -44,31 +44,23 @@ export const createReferenceScope = ({
   accessibleWorkspaceIds,
 }: CreateReferenceScopeArgs): ReferenceScope => {
   const readableFieldIds = new Set(
-    basisReferences(basis)
+    basis.references
       .filter((reference) => accessibleWorkspaceIds.has(reference.workspaceId))
       .map((reference) => reference.fileFieldId),
   );
   return (payload) => {
-    switch (payload.checkKind) {
-      case "playbook":
-        return payload;
-      case "reference": {
-        const readable = payload.finding.referenceCitations.filter((group) =>
-          readableFieldIds.has(group.fileFieldId),
-        );
-        return readable.length === payload.finding.referenceCitations.length
-          ? payload
-          : {
-              checkKind: "reference",
-              finding: {
-                ...payload.finding,
-                referenceCitations: readable,
-              },
-            };
-      }
-      default:
-        return payload satisfies never;
+    // A position graded against an authored standard cites no reference
+    // document, so there is nothing here to scope.
+    const referenceCitations = payload.finding.referenceCitations;
+    if (referenceCitations === undefined) {
+      return payload;
     }
+    const readable = referenceCitations.filter((group) =>
+      readableFieldIds.has(group.fileFieldId),
+    );
+    return readable.length === referenceCitations.length
+      ? payload
+      : { finding: { ...payload.finding, referenceCitations: readable } };
   };
 };
 

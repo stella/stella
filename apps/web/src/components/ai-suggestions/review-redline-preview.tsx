@@ -1,9 +1,9 @@
 /**
  * Redline preview for a single suggestion. Renders the proposed change inline
- * as a mini-diff: the deleted text gets a destructive-toned strikethrough, the
- * inserted text an accent-toned underline, and the surrounding block context
- * (when we have it) sits in a muted, smaller weight so the reviewer can see
- * WHERE in the block the edit lands without leaving the panel. The document is
+ * as a mini-diff, through the shared track-changes rendering: deleted text as
+ * `<del>`, inserted text as `<ins>`, and the surrounding block context (when
+ * we have it) sits in a muted, smaller weight so the reviewer can see WHERE
+ * in the block the edit lands without leaving the panel. The document is
  * never touched — this is purely a panel-side rendering.
  */
 
@@ -12,11 +12,28 @@ import type { CSSProperties } from "react";
 import { ArrowRightIcon } from "lucide-react";
 
 import { diffWordSegments } from "@stll/folio-react";
-import type { FolioAIBlockPreviewRun } from "@stll/folio-react";
+import type {
+  FolioAIBlockPreviewRun,
+  WordDiffSegment,
+} from "@stll/folio-react";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import type { ReviewDiffSegmentType } from "@stll/ui/review-diff-text";
+import {
+  ReviewDiffDeletion,
+  ReviewDiffInsertion,
+  ReviewDiffText,
+} from "@stll/ui/review-diff-text";
 import { cn } from "@stll/ui/utils";
 
 import type { ReviewSuggestionPreview } from "@/components/ai-suggestions/review-store";
+
+/** folio's word diff names its sides `del`/`ins`; the shared diff renderer
+ *  spells them out. Total, so a new folio segment kind cannot render blank. */
+const REVIEW_DIFF_SEGMENT_TYPE = {
+  equal: "equal",
+  del: "delete",
+  ins: "insert",
+} as const satisfies Record<WordDiffSegment["type"], ReviewDiffSegmentType>;
 
 type RedlinePreviewProps = {
   preview: ReviewSuggestionPreview;
@@ -41,9 +58,6 @@ export const RedlinePreview = ({
   );
   const muted = "text-foreground-strong-muted";
   const contextCls = "text-foreground";
-  const insCls = "bg-success/15 text-success px-1 py-0.5 rounded-sm";
-  const delCls =
-    "bg-destructive/10 text-destructive line-through decoration-destructive/70 px-1 py-0.5 rounded-sm";
 
   const arrow = (
     <DirectionalIcon
@@ -77,23 +91,19 @@ export const RedlinePreview = ({
     if (!hasShared) {
       return (
         <>
-          <span className={delCls}>{before}</span>
+          <ReviewDiffDeletion>{before}</ReviewDiffDeletion>
           {arrow}
-          <span className={insCls}>{after}</span>
+          <ReviewDiffInsertion>{after}</ReviewDiffInsertion>
         </>
       );
     }
-    return withStableKeys(segments, (seg) => `${seg.type}-${seg.text}`).map(
-      ({ item: seg, key }) => {
-        if (seg.type === "equal") {
-          return <span key={key}>{seg.text}</span>;
-        }
-        return (
-          <span className={cn(seg.type === "del" ? delCls : insCls)} key={key}>
-            {seg.text}
-          </span>
-        );
-      },
+    return (
+      <ReviewDiffText
+        segments={segments.map((seg) => ({
+          text: seg.text,
+          type: REVIEW_DIFF_SEGMENT_TYPE[seg.type],
+        }))}
+      />
     );
   };
 
@@ -110,16 +120,17 @@ export const RedlinePreview = ({
               ),
               contextCls,
             )}
-            {renderFormattedRuns(
-              slicePreviewRuns(
-                preview.sourceRuns,
-                preview.matchStart,
-                preview.matchEnd,
-              ),
-              delCls,
-            )}
+            <ReviewDiffDeletion>
+              {renderFormattedRuns(
+                slicePreviewRuns(
+                  preview.sourceRuns,
+                  preview.matchStart,
+                  preview.matchEnd,
+                ),
+              )}
+            </ReviewDiffDeletion>
             {arrow}
-            <span className={insCls}>{preview.after}</span>
+            <ReviewDiffInsertion>{preview.after}</ReviewDiffInsertion>
             {renderFormattedRuns(
               slicePreviewRuns(
                 preview.sourceRuns,
@@ -146,9 +157,11 @@ export const RedlinePreview = ({
       if (preview.sourceRuns !== undefined) {
         return (
           <p aria-label={srSummary} className={baseCls} role="group">
-            {renderFormattedRuns(preview.sourceRuns, delCls)}
+            <ReviewDiffDeletion>
+              {renderFormattedRuns(preview.sourceRuns)}
+            </ReviewDiffDeletion>
             {arrow}
-            <span className={insCls}>{preview.after}</span>
+            <ReviewDiffInsertion>{preview.after}</ReviewDiffInsertion>
           </p>
         );
       }
@@ -161,13 +174,15 @@ export const RedlinePreview = ({
       if (preview.sourceRuns !== undefined) {
         return (
           <p aria-label={srSummary} className={baseCls} role="group">
-            {renderFormattedRuns(preview.sourceRuns, delCls)}
+            <ReviewDiffDeletion>
+              {renderFormattedRuns(preview.sourceRuns)}
+            </ReviewDiffDeletion>
           </p>
         );
       }
       return (
         <p aria-label={srSummary} className={baseCls} role="group">
-          <span className={delCls}>{preview.before}</span>
+          <ReviewDiffDeletion>{preview.before}</ReviewDiffDeletion>
         </p>
       );
     case "insertBeforeBlock":
@@ -184,7 +199,7 @@ export const RedlinePreview = ({
                 {arrow}
               </>
             )}
-          <span className={insCls}>{preview.after}</span>
+          <ReviewDiffInsertion>{preview.after}</ReviewDiffInsertion>
         </p>
       );
     case "commentOnBlock":
@@ -223,7 +238,7 @@ export const RedlinePreview = ({
                 {arrow}
               </>
             )}
-          <span className={insCls}>{partyList}</span>
+          <ReviewDiffInsertion>{partyList}</ReviewDiffInsertion>
         </p>
       );
     }
@@ -322,18 +337,4 @@ const cssFontFamily = (fontFamily: string | undefined): string | undefined => {
   }
 
   return `${first}, sans-serif`;
-};
-
-// Word-diff segments carry no id of their own (recomputed fresh from
-// `before`/`after` on every render), so keys derive from type + text plus an
-// occurrence counter so the same word appearing twice stays unique without
-// leaning on the array index.
-const withStableKeys = <T,>(items: readonly T[], base: (item: T) => string) => {
-  const counts = new Map<string, number>();
-  return items.map((item) => {
-    const b = base(item);
-    const n = counts.get(b) ?? 0;
-    counts.set(b, n + 1);
-    return { item, key: `${b}-${n}` };
-  });
 };

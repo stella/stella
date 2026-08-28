@@ -49,6 +49,7 @@ const proposePositionsStream = createSafeHandler(
   async function* ({
     body,
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
     request,
     safeDb,
@@ -60,6 +61,7 @@ const proposePositionsStream = createSafeHandler(
     const prepared = yield* yield* prepareReferenceProposal({
       body,
       orgAIConfig,
+      orgAIConfigStatus,
       organizationId,
       safeDb,
       userId: user.id,

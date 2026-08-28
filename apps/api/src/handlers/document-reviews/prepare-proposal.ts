@@ -17,6 +17,7 @@ import type { ReferenceSource } from "@/api/handlers/document-reviews/reference-
 import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-selection";
 import type { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -37,6 +38,7 @@ export type PreparedProposal = {
 export type PrepareProposalArgs = {
   body: ProposalBody;
   orgAIConfig: OrgAIConfig | null;
+  orgAIConfigStatus: OrgAIConfigStatus;
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   userId: SafeId<"user">;
@@ -46,6 +48,7 @@ export type PrepareProposalArgs = {
 export const prepareReferenceProposal = async function* ({
   body,
   orgAIConfig,
+  orgAIConfigStatus,
   organizationId,
   safeDb,
   userId,
@@ -64,6 +67,7 @@ export const prepareReferenceProposal = async function* ({
     );
   }
   yield* requireTanStackAIAvailableForRole({
+    configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
     role: "pdf",
   });

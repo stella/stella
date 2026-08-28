@@ -122,8 +122,8 @@ const exportDocumentReviewRun = createSafeHandler(
     );
     const rows = buildIssuesTableRows({
       basis: run.basis,
-      findings: findings.map(({ topicTitle, payload, decision }) => ({
-        topicTitle,
+      findings: findings.map(({ positionTitle, payload, decision }) => ({
+        positionTitle,
         payload: scopeReference(payload),
         decision,
       })),

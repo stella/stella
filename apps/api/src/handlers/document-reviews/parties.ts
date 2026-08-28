@@ -53,6 +53,7 @@ const reviewParties = createSafeHandler(
     body,
     session,
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
     user,
   }) {
@@ -110,6 +111,7 @@ const reviewParties = createSafeHandler(
     }
 
     yield* requireTanStackAIAvailableForRole({
+      configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "pdf",
     });

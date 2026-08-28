@@ -10,6 +10,7 @@ import {
 import type {
   DocumentReviewFindingPayload,
   DocumentReviewRunBasis,
+  PinnedPlaybook,
 } from "@/api/lib/document-review/run-contract";
 
 const OWN_WORKSPACE_ID = toSafeId<"workspace">(
@@ -39,8 +40,18 @@ const pinnedReference = (
   name,
 });
 
+const EPHEMERAL_PLAYBOOK: PinnedPlaybook = {
+  definitionId: null,
+  versionId: null,
+  provenance: "ephemeral",
+  definitionSnapshot: {
+    name: "Positions confirmed for this review",
+    positions: { version: 3, items: [] },
+  },
+};
+
 const BASIS: DocumentReviewRunBasis = {
-  type: "references",
+  playbook: EPHEMERAL_PLAYBOOK,
   perspective: NEUTRAL_PERSPECTIVE,
   references: [
     pinnedReference(OWN_WORKSPACE_ID, OWN_FIELD_ID, "Own precedent"),
@@ -49,18 +60,20 @@ const BASIS: DocumentReviewRunBasis = {
 };
 
 const PAYLOAD: DocumentReviewFindingPayload = {
-  checkKind: "reference",
   finding: {
-    findingId: "finding-1",
-    topicId: "topic-1",
+    positionId: "position-1",
     issue: "Liability cap",
-    assessment: "different",
+    severity: "high",
+    standardSource: "reference",
+    verdict: "deviation",
+    delta: { kind: "language" },
+    extracted: null,
     consensus: "single",
+    rationale: "Different cap.",
     explanation: { type: "comparison", text: "Different cap." },
     recommendation: null,
     impact: "unfavourable",
-    severity: "high",
-    targetCitations: [{ blockId: "target-1", text: "Draft wording." }],
+    citations: [{ blockId: "target-1", text: "Draft wording." }],
     referenceCitations: [
       {
         fileFieldId: OWN_FIELD_ID,
@@ -97,19 +110,13 @@ describe("document review reference access", () => {
       accessibleWorkspaceIds: new Set([OWN_WORKSPACE_ID]),
     });
     const scoped = scope(PAYLOAD);
-    expect(scoped.checkKind).toBe("reference");
-    if (scoped.checkKind !== "reference") {
-      return;
-    }
     expect(scoped.finding.referenceCitations).toEqual([
       {
         fileFieldId: OWN_FIELD_ID,
         citations: [{ blockId: "own-1", text: "Own precedent wording." }],
       },
     ]);
-    expect(scoped.finding.targetCitations).toEqual(
-      PAYLOAD.finding.targetCitations,
-    );
+    expect(scoped.finding.citations).toEqual(PAYLOAD.finding.citations);
   });
 
   test("leaves the precedent position empty when no reference is readable", () => {
@@ -121,7 +128,7 @@ describe("document review reference access", () => {
       basis: BASIS,
       findings: [
         {
-          topicTitle: "Liability cap",
+          positionTitle: "Liability cap",
           payload: scope(PAYLOAD),
           decision: "open",
         },
@@ -132,16 +139,17 @@ describe("document review reference access", () => {
     expect(rows[0]?.draftPosition).toBe("Draft wording.");
   });
 
-  test("passes a playbook payload through unchanged", () => {
-    const playbookPayload: DocumentReviewFindingPayload = {
-      checkKind: "playbook",
+  test("passes a finding with no reference citations through unchanged", () => {
+    const tieredPayload: DocumentReviewFindingPayload = {
       finding: {
         positionId: "position-1",
         issue: "Liability cap",
         severity: "medium",
+        standardSource: "tiers",
         verdict: "deviation",
-        rationale: "Below the fallback.",
+        delta: { kind: "language" },
         extracted: null,
+        rationale: "Below the fallback.",
         citations: [],
         fix: null,
       },
@@ -150,6 +158,6 @@ describe("document review reference access", () => {
       basis: BASIS,
       accessibleWorkspaceIds: new Set<string>(),
     });
-    expect(scope(playbookPayload)).toBe(playbookPayload);
+    expect(scope(tieredPayload)).toBe(tieredPayload);
   });
 });

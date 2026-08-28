@@ -21,6 +21,12 @@ import {
   MenuRadioItem,
   MenuTrigger,
 } from "@stll/ui/menu";
+import type { ReviewSeverityLevel } from "@stll/ui/review-severity-dot";
+import {
+  ReviewSeverityDot,
+  reviewSeverityTone,
+} from "@stll/ui/review-severity-dot";
+import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -61,30 +67,32 @@ const SEVERITY_LABEL_KEYS = {
   low: "knowledge.playbooks.severity.low",
 } as const satisfies Record<PositionSeverity, TranslationKey>;
 
-// Static per-key so the hardcoded-colour lint treats each as a token reference.
-const SEVERITY_CHIP_CLASS = {
-  blocker: "bg-destructive/12 text-destructive",
-  high: "bg-warning/15 text-warning-foreground",
-  medium: "bg-primary/12 text-primary",
-  low: "bg-muted text-muted-foreground",
-} as const satisfies Record<PositionSeverity, string>;
+/** The playbook's severity vocabulary on the product's shared review scale.
+ *  `blocker` has no direct counterpart on the shared scale and carries the
+ *  same weight as a `critical` finding. */
+const POSITION_SEVERITY_LEVEL = {
+  blocker: "critical",
+  high: "high",
+  medium: "medium",
+  low: "low",
+} as const satisfies Record<PositionSeverity, ReviewSeverityLevel>;
 
 const isSeverity = (value: string): value is PositionSeverity =>
   SEVERITIES.some((severity) => severity === value);
-
-const SEVERITY_CHIP_SHAPE_CLASS =
-  "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold";
 
 /** How much a position matters, as a word, where it cannot be changed: the
  *  same chip the editors offer, minus the menu. */
 export const SeverityWord = ({ severity }: { severity: PositionSeverity }) => {
   const t = useTranslations();
+  const level = POSITION_SEVERITY_LEVEL[severity];
   return (
-    <span
-      className={cn(SEVERITY_CHIP_SHAPE_CLASS, SEVERITY_CHIP_CLASS[severity])}
+    <ReviewStatusBadge
+      icon={<ReviewSeverityDot level={level} />}
+      tone={reviewSeverityTone(level)}
+      variant="solid"
     >
       {t(SEVERITY_LABEL_KEYS[severity])}
-    </span>
+    </ReviewStatusBadge>
   );
 };
 
@@ -96,17 +104,20 @@ export const SeverityChip = ({
   onChange: (severity: PositionSeverity) => void;
 }) => {
   const t = useTranslations();
+  const level = POSITION_SEVERITY_LEVEL[severity];
   return (
     <Menu>
       <MenuTrigger
         aria-label={t("knowledge.playbooks.severityLabel")}
-        className={cn(
-          "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
-          SEVERITY_CHIP_SHAPE_CLASS,
-          SEVERITY_CHIP_CLASS[severity],
-        )}
+        className="focus-visible:ring-ring rounded-full focus-visible:ring-2 focus-visible:outline-none"
       >
-        {t(SEVERITY_LABEL_KEYS[severity])}
+        <ReviewStatusBadge
+          icon={<ReviewSeverityDot level={level} />}
+          tone={reviewSeverityTone(level)}
+          variant="solid"
+        >
+          {t(SEVERITY_LABEL_KEYS[severity])}
+        </ReviewStatusBadge>
       </MenuTrigger>
       <MenuPopup>
         <MenuRadioGroup

@@ -18,10 +18,15 @@ import { and, eq, isNotNull } from "drizzle-orm";
 import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
 
 import type { Transaction } from "@/api/db/root";
-import { docxSuggestions, documentReviewFindings } from "@/api/db/schema";
+import {
+  docxSuggestions,
+  documentReviewFindings,
+  documentReviewRuns,
+} from "@/api/db/schema";
 import type { DocxSuggestionSeverity } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { basisReferenceWorkspaceIds } from "@/api/lib/document-review/reference-access";
 import {
   DOCUMENT_REVIEW_DECISION,
   DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX,
@@ -103,6 +108,32 @@ export const stageReviewFixSuggestions = async ({
   entityId,
   runId,
 }: StageReviewFixSuggestionsArgs): Promise<number> => {
+  // A review-origin suggestion restates the reviewed document plus the run's
+  // pinned references, which may live in other matters. Those are its data
+  // scope, so the row records them the way a chat-origin suggestion records
+  // its thread's: reading the run through this transaction is what narrows
+  // them to what the writer is itself authorized for. The run's own matter is
+  // `workspace_id` and is excluded, exactly as the column's insert check
+  // expects.
+  const runs = await tx
+    .select({ basis: documentReviewRuns.basis })
+    .from(documentReviewRuns)
+    .where(
+      and(
+        eq(documentReviewRuns.id, runId),
+        eq(documentReviewRuns.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+  const run = runs.at(0);
+  if (run === undefined) {
+    // Finalization holds the run row in this same transaction.
+    return panic("Staging review fixes for a run that does not exist");
+  }
+  const sourceDataWorkspaceIds = basisReferenceWorkspaceIds(run.basis).filter(
+    (referenceWorkspaceId) => referenceWorkspaceId !== workspaceId,
+  );
+
   const findings = await tx
     .select({
       id: documentReviewFindings.id,
@@ -151,6 +182,7 @@ export const stageReviewFixSuggestions = async ({
     entityId,
     originThreadId: null,
     originReviewFindingId: item.findingId,
+    sourceDataWorkspaceIds,
     opPayload:
       validated[index] ??
       panic("Folio operation validation returned fewer operations than staged"),
