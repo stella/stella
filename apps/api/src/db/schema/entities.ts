@@ -559,6 +559,12 @@ export type FolioCollabTokenPermissions = {
   canEdit: boolean;
 };
 
+const LEGACY_FOLIO_COLLAB_SESSION_STATUSES = [
+  "open",
+  "finalized",
+  "cancelled",
+] as const;
+
 export const desktopEditSessions = p.pgTable(
   "desktop_edit_sessions",
   {
@@ -724,6 +730,127 @@ export const desktopEditHandoffs = p.pgTable(
 
 const FOLIO_COLLAB_ROOM_SEED_STATE_SQL_VALUES = sql.raw(
   FOLIO_COLLAB_ROOM_SEED_STATES.map((state) => `'${state}'`).join(", "),
+);
+
+/**
+ * Physical schema retained for migration-first rollout compatibility. New code
+ * must use rooms; remove these declarations with the follow-up table-drop
+ * migration after old API replicas can no longer run or be rolled back.
+ */
+export const legacyFolioCollabSessions = p.pgTable(
+  "folio_collab_sessions",
+  {
+    id: pUuid<"folioCollabSession">().primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    entityId: safeUuid<"entity">("entity_id").notNull(),
+    propertyId: safeUuid<"property">("property_id").notNull(),
+    baseVersionId: safeUuid<"entityVersion">("base_version_id")
+      .notNull()
+      .references(() => entityVersions.id, { onDelete: "cascade" }),
+    finalizedVersionId: safeUuid<"entityVersion">("finalized_version_id"),
+    createdBy: p
+      .text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    status: p
+      .text("status", { enum: LEGACY_FOLIO_COLLAB_SESSION_STATUSES })
+      .notNull()
+      .default("open"),
+    fileName: p.varchar("file_name", { length: 256 }).notNull(),
+    yjsSnapshotFileId: safeUuid<"userFile">("yjs_snapshot_file_id").notNull(),
+    yjsSnapshotSizeBytes: p.integer("yjs_snapshot_size_bytes"),
+    yjsSnapshotUpdatedAt: timestamptz("yjs_snapshot_updated_at"),
+    docxCheckpointFileId: safeUuid<"userFile">(
+      "docx_checkpoint_file_id",
+    ).notNull(),
+    docxCheckpointSha256Hex: p.varchar("docx_checkpoint_sha256_hex", {
+      length: 64,
+    }),
+    docxCheckpointSizeBytes: p.integer("docx_checkpoint_size_bytes"),
+    docxCheckpointScanWarnings: jsonb("docx_checkpoint_scan_warnings").$type<
+      string[] | null
+    >(),
+    docxCheckpointUpdatedAt: timestamptz("docx_checkpoint_updated_at"),
+    seedClaimedBy: p.text("seed_claimed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    seedClaimedAt: timestamptz("seed_claimed_at"),
+    seededAt: timestamptz("seeded_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    closedAt: timestamptz("closed_at"),
+  },
+  (table) => [
+    p.index("folio_collab_sessions_workspace_id_idx").on(table.workspaceId),
+    p.index("folio_collab_sessions_entity_id_idx").on(table.entityId),
+    p.index("folio_collab_sessions_property_id_idx").on(table.propertyId),
+    p
+      .index("folio_collab_sessions_base_version_id_idx")
+      .on(table.baseVersionId),
+    p
+      .foreignKey({
+        columns: [table.finalizedVersionId],
+        foreignColumns: [entityVersions.id],
+        name: "folio_collab_sessions_finalized_version_fk",
+      })
+      .onDelete("set null"),
+    p
+      .uniqueIndex("folio_collab_sessions_open_uidx")
+      .on(table.workspaceId, table.entityId, table.propertyId)
+      .where(sql`${table.status} = 'open'`),
+    p
+      .foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.propertyId, table.workspaceId],
+        foreignColumns: [properties.id, properties.workspaceId],
+      })
+      .onDelete("cascade"),
+    ...wsPolicies(),
+  ],
+);
+
+export const legacyFolioCollabSessionTokens = p.pgTable(
+  "folio_collab_session_tokens",
+  {
+    id: pUuid<"folioCollabSessionToken">().primaryKey(),
+    sessionId: safeUuid<"folioCollabSession">("session_id")
+      .notNull()
+      .references(() => legacyFolioCollabSessions.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    tokenHash: p.varchar("token_hash", { length: 64 }).notNull(),
+    permissions: jsonb("permissions")
+      .$type<FolioCollabTokenPermissions>()
+      .notNull(),
+    expiresAt: timestamptz("expires_at").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("folio_collab_session_tokens_workspace_id_idx")
+      .on(table.workspaceId),
+    p.index("folio_collab_session_tokens_session_id_idx").on(table.sessionId),
+    p.index("folio_collab_session_tokens_expires_at_idx").on(table.expiresAt),
+    p
+      .uniqueIndex("folio_collab_session_tokens_token_hash_uidx")
+      .on(table.tokenHash),
+    ...wsPolicies(),
+  ],
 );
 
 export const folioCollabRooms = p.pgTable(
