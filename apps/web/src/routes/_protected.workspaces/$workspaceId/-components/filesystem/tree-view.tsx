@@ -15,7 +15,7 @@ import {
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDownIcon, ArrowUpIcon, EyeOffIcon, FileIcon } from "lucide-react";
@@ -304,6 +304,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const moveEntity = useMoveEntity();
   const renameEntity = useRenameEntity();
+  const queryClient = useQueryClient();
   const updateView = useUpdateView(workspaceId);
   const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
   const [breadcrumbEditValue, setBreadcrumbEditValue] = useState("");
@@ -348,16 +349,15 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   // Defers the key so useSuspenseQuery keeps showing stale data instead of
   // triggering the suspense boundary when filters or sorts change.
+  const filesystemQueryInput = useDeferredValue({
+    workspaceId,
+    filters,
+    sorts,
+    fieldMode: "visible",
+    fieldIds,
+  } satisfies Parameters<typeof filesystemEntitiesOptions>[0]);
   const { data: entityData } = useSuspenseQuery(
-    filesystemEntitiesOptions(
-      useDeferredValue({
-        workspaceId,
-        filters,
-        sorts,
-        fieldMode: "visible",
-        fieldIds,
-      }),
-    ),
+    filesystemEntitiesOptions(filesystemQueryInput),
   );
   const data = entityData.entities;
   // Parent links of ancestor folders the API backfills when a filter/search
@@ -951,7 +951,29 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                     onRename={(entityId, name, { onError, onSuccess }) => {
                       renameEntity.mutate(
                         { workspaceId, entityId, name },
-                        { onError, onSuccess },
+                        {
+                          onError,
+                          onSuccess: () => {
+                            queryClient.setQueryData(
+                              filesystemEntitiesOptions(filesystemQueryInput)
+                                .queryKey,
+                              (current) => {
+                                if (!current) {
+                                  return current;
+                                }
+                                return {
+                                  ...current,
+                                  entities: current.entities.map((entity) =>
+                                    entity.entityId === entityId
+                                      ? { ...entity, name }
+                                      : entity,
+                                  ),
+                                };
+                              },
+                            );
+                            onSuccess();
+                          },
+                        },
                       );
                     }}
                     onClearSelection={clearSelection}
@@ -1235,6 +1257,9 @@ const FilesystemRow = ({
   const baseName = extIndex > 0 ? name.slice(0, extIndex) : name;
 
   const startEditing = () => {
+    if (optimisticRename !== null) {
+      return;
+    }
     setEditValue(baseName);
     onStartEditing(node.entityId);
   };
