@@ -162,10 +162,13 @@ describe("document translation output handoff", () => {
 
   test("does not navigate when the destination cannot be prepared", async () => {
     let navigated = false;
+    let closed = false;
 
     expect(
       openDocumentTranslationOutput({
-        closeDialog: () => undefined,
+        closeDialog: () => {
+          closed = true;
+        },
         prepareDestination: async () => {
           throw new Error("destination unavailable");
         },
@@ -176,5 +179,6 @@ describe("document translation output handoff", () => {
     ).rejects.toThrow("destination unavailable");
 
     expect(navigated).toBeFalse();
+    expect(closed).toBeFalse();
   });
 });

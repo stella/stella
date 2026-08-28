@@ -146,7 +146,7 @@ export const invalidateDocumentTranslationOutputQueries = async (
   sourceEntityId: string,
 ) => {
   const sourceKey = entitiesKeys.detail(workspaceId, sourceEntityId);
-  return await queryClient.invalidateQueries({
+  await queryClient.invalidateQueries({
     queryKey: entitiesKeys.all(workspaceId),
     refetchType: "active",
     predicate: (query) =>
