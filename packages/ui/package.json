@@ -31,6 +31,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./accordion": "./src/components/accordion.tsx",
+    "./application-rail": "./src/components/application-rail.tsx",
     "./alert-dialog": "./src/components/alert-dialog.tsx",
     "./application-shell": "./src/components/application-shell.tsx",
     "./avatar": "./src/components/avatar.tsx",
@@ -102,6 +103,7 @@
     "./kanban": "./src/kanban/index.ts",
     "./theme.css": "./src/styles/theme.css",
     "./components/accordion": "./src/components/accordion.tsx",
+    "./components/application-rail": "./src/components/application-rail.tsx",
     "./components/alert-dialog": "./src/components/alert-dialog.tsx",
     "./components/application-shell": "./src/components/application-shell.tsx",
     "./components/avatar": "./src/components/avatar.tsx",
