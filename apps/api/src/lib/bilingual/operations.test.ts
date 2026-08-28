@@ -129,6 +129,35 @@ const addExtendedInlineControls = async (
   return await zip.generateAsync({ type: "arraybuffer" });
 };
 
+const addParagraphPropertyTabStop = async (
+  buffer: ArrayBuffer,
+  paraId: string,
+): Promise<ArrayBuffer> => {
+  const zip = await JSZip.loadAsync(buffer);
+  const xml = await zip.file("word/document.xml")?.async("string");
+  if (!xml) {
+    throw new Error("fixture has no document part");
+  }
+  const doc = slimdom.parseXmlDocument(xml);
+  const candidateParagraph = [...doc.getElementsByTagNameNS(W_NS, "p")].find(
+    (candidate) => candidate.getAttributeNS(W14_NS, "paraId") === paraId,
+  );
+  const paragraphProperties = candidateParagraph
+    ? [...candidateParagraph.getElementsByTagNameNS(W_NS, "pPr")].at(0)
+    : undefined;
+  if (!paragraphProperties) {
+    throw new Error(`fixture paragraph ${paraId} has no properties`);
+  }
+  const tabs = doc.createElementNS(W_NS, "w:tabs");
+  const tab = doc.createElementNS(W_NS, "w:tab");
+  tab.setAttributeNS(W_NS, "w:val", "left");
+  tab.setAttributeNS(W_NS, "w:pos", "720");
+  tabs.append(tab);
+  paragraphProperties.append(tabs);
+  zip.file("word/document.xml", slimdom.serializeToWellFormedString(doc));
+  return await zip.generateAsync({ type: "arraybuffer" });
+};
+
 /** A clause, a heading, a signature label, and a signature table. */
 const buildBilingual = async () => {
   const doc = createEmptyDocument({
@@ -494,6 +523,38 @@ describe("buildOperations applied to a bilingual document", () => {
     );
     expect(rejection).toBeInstanceOf(BilingualFormattingError);
     expect(rejection).toHaveProperty("reason", "invalid-spans");
+  });
+
+  test("does not project paragraph tab stops as inline controls", async () => {
+    const doc = createEmptyDocument({
+      preset: createStellaStyleDocumentPreset(),
+    });
+    doc.package.document.content = [mixedFormattingParagraph("Clause")];
+    const bilingual = await createBilingualDocx(await createDocx(doc), {
+      targetStyleSuffix: "en",
+    });
+    const { units } = flattenBilingualRows(
+      await readBilingualDocx(bilingual.buffer),
+    );
+    const unit = units.at(0);
+    if (!unit) {
+      throw new Error("fixture has no bilingual row");
+    }
+    const buffer = await addParagraphPropertyTabStop(
+      bilingual.buffer,
+      unit.rowId,
+    );
+    const formatted = (await extractFormattedBilingualUnits(buffer, units)).at(
+      0,
+    );
+    if (!formatted) {
+      throw new Error("fixture has no formatted row");
+    }
+    expect(
+      formatted.inline.filter(
+        (token) => token.type === "control" && token.kind === "tab",
+      ),
+    ).toHaveLength(1);
   });
 
   test("only builds operations for rows present in Folio's editable snapshot", async () => {

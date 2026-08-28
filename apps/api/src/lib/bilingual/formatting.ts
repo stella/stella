@@ -126,6 +126,9 @@ const projectParagraph = (
       return;
     }
     if (isElement(node)) {
+      if (isWordElement(node, "pPr") || isWordElement(node, "rPr")) {
+        return;
+      }
       if (isWordElement(node, "delText")) {
         return;
       }
