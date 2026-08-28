@@ -5,16 +5,8 @@ on:
   workflow_dispatch:
   workflow_run:
     workflows:
-      - Nightly Full Test
       - Nightly Full Typecheck
-      - AI provider canary
-      - MCP canary
-      - Agent sandbox canary
-      - Desktop release canary
       - Model Catalog Upstream Check
-      # Not scheduled, but unattended: a failure here silently stalls
-      # continuous deploy to staging with nobody watching the run.
-      - Deploy main to staging
     types: [completed]
 
 permissions: {}
