@@ -383,8 +383,41 @@ describe("deriveBetterAuthMicrosoftIdentityMap", () => {
     }
   });
 
-  test("rejects a token whose lifetime exceeds a day", async () => {
-    const fixture = await createTokenFixture({ lifetimeSeconds: 25 * 60 * 60 });
+  test.each([
+    ["a day-long lifetime", { lifetimeSeconds: 24 * 60 * 60 }],
+    [
+      "a non-RFC object id",
+      { objectId: "00000000-0000-0000-1a2b-3c4d5e6f7a8b" },
+    ],
+  ])(
+    "rejects a work or school token with %s",
+    async (_name, fixtureOverrides) => {
+      const fixture = await createTokenFixture(fixtureOverrides);
+      const result = await deriveBetterAuthMicrosoftIdentityMap({
+        clientId: CLIENT_ID,
+        getSigningKey: retiredSigningKey,
+        now: NOW,
+        sources: [
+          {
+            accountRowId: "account-row",
+            idToken: fixture.token,
+            legacyAccountId: "legacy-pairwise-subject",
+          },
+        ],
+        tenantId: "common",
+      });
+
+      expect(result.status).toBe("error");
+    },
+  );
+
+  test("rejects a personal-account token whose lifetime exceeds a day", async () => {
+    const consumerTenant = "9188040d-6c67-4c5b-b112-36a304b66dad";
+    const fixture = await createTokenFixture({
+      issuer: `https://login.microsoftonline.com/${consumerTenant}/v2.0`,
+      lifetimeSeconds: 25 * 60 * 60,
+      tenant: consumerTenant,
+    });
     const result = await deriveBetterAuthMicrosoftIdentityMap({
       clientId: CLIENT_ID,
       getSigningKey: fixture.getSigningKey,

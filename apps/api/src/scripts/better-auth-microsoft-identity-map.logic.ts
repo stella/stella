@@ -8,8 +8,9 @@ import type { BetterAuthTrustedIdentityMap } from "@/api/scripts/better-auth-mig
 const MICROSOFT_AUTHORITY = "https://login.microsoftonline.com";
 const MICROSOFT_ID_TOKEN_ALGORITHM = "RS256";
 // Work and school tokens live about an hour; personal-account tokens are
-// issued for a full day. Bound at the longer documented lifetime.
-const MICROSOFT_ID_TOKEN_MAX_LIFETIME_SECONDS = 24 * 60 * 60;
+// issued for a full day. Each class is bounded by its own documented lifetime.
+const MICROSOFT_ID_TOKEN_MAX_LIFETIME_SECONDS = 2 * 60 * 60;
+const MICROSOFT_CONSUMER_ID_TOKEN_MAX_LIFETIME_SECONDS = 24 * 60 * 60;
 const MICROSOFT_ID_TOKEN_CLOCK_TOLERANCE_SECONDS = 60;
 const MICROSOFT_TENANT = {
   COMMON: "common",
@@ -174,8 +175,20 @@ const verifySource = async ({
     header.kid.length === 0 ||
     typeof tokenTenant !== "string" ||
     !UUID_PATTERN.test(tokenTenant) ||
+    !isAllowedTokenTenant(tenantId, tokenTenant)
+  ) {
+    return invalidSourceState();
+  }
+  // Personal accounts carry a zero-prefixed object id and a day-long token;
+  // work and school tenants keep the RFC 4122 shape and the short lifetime.
+  const isConsumerToken = tokenTenant === MICROSOFT_CONSUMER_TENANT_ID;
+  const objectIdPattern = isConsumerToken ? OBJECT_ID_PATTERN : UUID_PATTERN;
+  const maxLifetimeSeconds = isConsumerToken
+    ? MICROSOFT_CONSUMER_ID_TOKEN_MAX_LIFETIME_SECONDS
+    : MICROSOFT_ID_TOKEN_MAX_LIFETIME_SECONDS;
+  if (
     typeof objectId !== "string" ||
-    !OBJECT_ID_PATTERN.test(objectId) ||
+    !objectIdPattern.test(objectId) ||
     typeof issuedAt !== "number" ||
     typeof notBefore !== "number" ||
     typeof expiresAt !== "number" ||
@@ -184,8 +197,7 @@ const verifySource = async ({
         MICROSOFT_ID_TOKEN_CLOCK_TOLERANCE_SECONDS ||
     notBefore < issuedAt - MICROSOFT_ID_TOKEN_CLOCK_TOLERANCE_SECONDS ||
     expiresAt <= notBefore ||
-    expiresAt - issuedAt > MICROSOFT_ID_TOKEN_MAX_LIFETIME_SECONDS ||
-    !isAllowedTokenTenant(tenantId, tokenTenant)
+    expiresAt - issuedAt > maxLifetimeSeconds
   ) {
     return invalidSourceState();
   }
@@ -215,7 +227,7 @@ const verifySource = async ({
         clockTolerance: MICROSOFT_ID_TOKEN_CLOCK_TOLERANCE_SECONDS,
         currentDate: verificationTime,
         issuer,
-        maxTokenAge: `${MICROSOFT_ID_TOKEN_MAX_LIFETIME_SECONDS}s`,
+        maxTokenAge: `${maxLifetimeSeconds}s`,
         requiredClaims: ["iss", "aud", "sub", "tid", "oid", "iat", "exp"],
       }),
     catch: (cause) => cause,
