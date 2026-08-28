@@ -175,6 +175,17 @@ const RETRYABLE_PROVIDER_CODES = new Set([
   "timeout_error",
 ]);
 
+// A truncated or blocked response reaches the canary as a RUN_ERROR whose code
+// is `incomplete` and whose message is the provider's own reason (the OpenAI
+// adapter relays `incomplete_details.reason` verbatim). The code alone cannot
+// separate an exhausted output budget from a filtered response, which are
+// opposite findings: one is a probe budget to raise, the other is not. Keep the
+// reason, allowlisted like every other value this canary prints.
+const SAFE_INCOMPLETE_REASONS = new Set([
+  "content_filter",
+  "max_output_tokens",
+]);
+
 const RETRYABLE_TRANSPORT_CODES = new Set([
   "EAI_AGAIN",
   "ECONNABORTED",
@@ -282,6 +293,29 @@ const rawProviderCode = (error: unknown, depth = 0): string | null => {
 
 const safeProviderCode = (code: string | null): string | null =>
   code !== null && SAFE_PROVIDER_CODES.has(code) ? code : null;
+
+// Matched whole, never substring: an unrecognized message is provider prose and
+// stays out of the log.
+const safeIncompleteReason = (error: unknown, depth = 0): string | null => {
+  if (!isRecord(error)) {
+    return null;
+  }
+
+  const message = error["message"];
+  if (typeof message === "string" && SAFE_INCOMPLETE_REASONS.has(message)) {
+    return message;
+  }
+
+  if (depth < 3) {
+    for (const key of PROVIDER_ERROR_NESTED_KEYS) {
+      const nestedReason = safeIncompleteReason(error[key], depth + 1);
+      if (nestedReason !== null) {
+        return nestedReason;
+      }
+    }
+  }
+  return null;
+};
 
 const providerStatus = (error: unknown, depth = 0): number | null => {
   if (!isRecord(error)) {
@@ -465,6 +499,7 @@ const canaryEventFailure = (event: unknown): CanaryFailure => {
 export class CanaryProviderRunError extends TypeError {
   readonly code: string | null;
   readonly failure: CanaryFailure;
+  readonly incompleteReason: string | null;
   readonly retryCode: string | null;
   readonly retryable: boolean | null;
   readonly stage: CanaryRunStage;
@@ -478,6 +513,7 @@ export class CanaryProviderRunError extends TypeError {
     this.retryable = explicitRetryability(event);
     this.code = safeProviderCode(this.retryCode);
     this.failure = canaryEventFailure(event);
+    this.incompleteReason = safeIncompleteReason(event);
     this.stage = stage;
     this.status = providerStatus(event);
     this.terminalCode = terminalProviderCode(event);
@@ -1297,9 +1333,14 @@ export const errorSummary = (error: unknown, signal: AbortSignal): string => {
       return `provider HTTP ${error.status}`;
     }
     const stage = error.stage.replaceAll("-", " ");
-    return error.code === null
-      ? `provider stream error ${stage}`
-      : `provider stream error ${stage} (${error.code})`;
+    if (error.code === null) {
+      return `provider stream error ${stage}`;
+    }
+    const detail =
+      error.incompleteReason === null
+        ? error.code
+        : `${error.code}: ${error.incompleteReason}`;
+    return `provider stream error ${stage} (${detail})`;
   }
 
   if (
