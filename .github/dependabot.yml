@@ -141,8 +141,6 @@ updates:
       tanstack:
         patterns:
           - "@tanstack/*"
-        exclude-patterns:
-          - "@tanstack/react-query*"
       astro:
         patterns:
           - "astro"
