@@ -277,7 +277,7 @@ const run = async (args: readonly string[]) => {
       [customFetch]: microsoftJwksFetch,
     },
   );
-  const identityMap = await deriveBetterAuthMicrosoftIdentityMap({
+  const derivation = await deriveBetterAuthMicrosoftIdentityMap({
     clientId,
     getSigningKey: jwks,
     now: new Date(),
@@ -285,10 +285,17 @@ const run = async (args: readonly string[]) => {
     tenantId,
   });
   await client.end();
-  if (Result.isError(identityMap)) {
-    return identityMap;
+  if (Result.isError(derivation)) {
+    return derivation;
   }
-  return await persistIdentityMap(parsed.value.outputPath, identityMap.value);
+  const persisted = await persistIdentityMap(
+    parsed.value.outputPath,
+    derivation.value.identityMap,
+  );
+  if (Result.isError(persisted)) {
+    return persisted;
+  }
+  return Result.ok(derivation.value.verification);
 };
 
 if (import.meta.main) {
@@ -303,7 +310,11 @@ if (import.meta.main) {
         return undefined;
       }
       process.stdout.write(
-        `${JSON.stringify({ check: "microsoft-identity-map", status: "passed" })}\n`,
+        `${JSON.stringify({
+          check: "microsoft-identity-map",
+          status: "passed",
+          verification: result.value,
+        })}\n`,
       );
       process.exitCode = EXIT_CODE.SUCCESS;
       return undefined;
