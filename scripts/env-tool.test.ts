@@ -77,6 +77,17 @@ describe("generated environment examples", () => {
     ).toBe(true);
   });
 
+  test("classifies collaboration credentials as secrets", () => {
+    for (const name of [
+      "STELLA_COLLAB_REDIS_URL",
+      "STELLA_COLLAB_SERVICE_TOKEN",
+    ]) {
+      expect(ENV_CATALOG.find((entry) => entry.name === name)?.exposure).toBe(
+        ENV_EXPOSURE.secret,
+      );
+    }
+  });
+
   test("derives requirements without executing schema transforms", () => {
     let transformExecuted = false;
     const schema = v.pipe(

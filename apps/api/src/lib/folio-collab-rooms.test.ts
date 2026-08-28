@@ -87,6 +87,8 @@ const entityId = toSafeId<"entity">("entity_1");
 const propertyId = toSafeId<"property">("property_1");
 const organizationId = toSafeId<"organization">("org_1");
 const workspaceId = toSafeId<"workspace">("ws_1");
+const firstUserId = toSafeId<"user">("user_1");
+const secondUserId = toSafeId<"user">("user_2");
 const yjsSnapshotFileId = toSafeId<"userFile">("file_yjs");
 const docxCheckpointFileId = toSafeId<"userFile">("file_docx");
 
@@ -256,10 +258,10 @@ describe("folio collaboration room snapshot generation", () => {
     expect(
       decideFolioCollabSnapshotStore({
         actualGeneration: 4,
+        authority: { type: "participant", userId: firstUserId },
         expectedGeneration: 3,
         seedClaimedBy: "user_1",
         seedState: "claimed",
-        userId: "user_1",
       }),
     ).toEqual({ status: "generation-conflict", actualGeneration: 4 });
   });
@@ -268,10 +270,10 @@ describe("folio collaboration room snapshot generation", () => {
     expect(
       decideFolioCollabSnapshotStore({
         actualGeneration: 4,
+        authority: { type: "participant", userId: secondUserId },
         expectedGeneration: 4,
         seedClaimedBy: "user_1",
         seedState: "claimed",
-        userId: "user_2",
       }),
     ).toEqual({ status: "seed-owner-conflict" });
   });
@@ -288,6 +290,7 @@ describe("folio collaboration room snapshot generation", () => {
 
     expect(
       storeFolioCollabSnapshot({
+        authority: { type: "participant", userId: firstUserId },
         expectedGeneration: 3,
         snapshotBytes: new TextEncoder().encode("snapshot"),
         value: authorized.value,
@@ -295,6 +298,18 @@ describe("folio collaboration room snapshot generation", () => {
     ).rejects.toThrow("snapshot transaction failed");
     expect(writtenStorageKeys).toHaveLength(1);
     expect(deletedStorageKeys).toEqual(writtenStorageKeys);
+  });
+
+  test("accepts a generation-fenced store from the collaboration service", () => {
+    expect(
+      decideFolioCollabSnapshotStore({
+        actualGeneration: 4,
+        authority: { type: "collab-service" },
+        expectedGeneration: 4,
+        seedClaimedBy: "user_1",
+        seedState: "claimed",
+      }),
+    ).toEqual({ status: "accepted" });
   });
 });
 

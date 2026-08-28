@@ -126,6 +126,11 @@ export const envApiServerSchema = {
    */
   OPERATOR_METRICS_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
   /**
+   * Deployment-owned bearer credential for collaboration snapshot transport.
+   * Unset disables the service-only load/store routes.
+   */
+  STELLA_COLLAB_SERVICE_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
+  /**
    * SHA-256 digest of a deployment-owned decoy machine API key. The
    * plaintext decoy belongs only in a honey resource; presenting it to any
    * API route emits a structured security event and stops the request before

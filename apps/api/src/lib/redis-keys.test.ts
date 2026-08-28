@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  FOLIO_COLLAB_REDIS_SCOPE,
+  toFolioCollabRoomName,
+} from "@stll/api-contract/folio-collab";
+import { toSafeId } from "@stll/api-contract/safe-id";
+
+import {
   COORDINATION_KEY_EXPIRY,
   coordinationExpireArguments,
   coordinationKey,
@@ -34,6 +40,24 @@ const buildFor = (scope: CoordinationScope, slot: string, suffix?: string) =>
     : coordinationKey({ scope, slot, suffix });
 
 describe("coordination key layout", () => {
+  test("Hocuspocus room channels and locks use the room UUID hashtag", () => {
+    const roomId = toSafeId<"folioCollabRoom">(
+      "01993f60-b9d0-7000-8000-000000000001",
+    );
+    const roomName = toFolioCollabRoomName(roomId);
+
+    expect(`${FOLIO_COLLAB_REDIS_SCOPE}:${roomName}`).toBe(
+      coordinationKey({ scope: FOLIO_COLLAB_REDIS_SCOPE, slot: roomId }),
+    );
+    expect(`${FOLIO_COLLAB_REDIS_SCOPE}:${roomName}:lock`).toBe(
+      coordinationKey({
+        scope: FOLIO_COLLAB_REDIS_SCOPE,
+        slot: roomId,
+        suffix: "lock",
+      }),
+    );
+  });
+
   test("every declared scope builds a scope-prefixed, single-hashtag key", () => {
     // The guard above must not have dropped a scope on the way in.
     expect(SCOPES).toHaveLength(Object.keys(COORDINATION_KEY_EXPIRY).length);

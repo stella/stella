@@ -90,8 +90,8 @@ const REVIEWED_UNGUARDED: Record<string, string[]> = {
   // per-IP rate limiting and content dedup inside receivePublicFeedback,
   // not identity.
   "feedback/routes.ts": ["POST /feedback"],
-  // Folio collaboration room lifecycle: authenticated via the room's own
-  // collab token, minted and checked inside each handler.
+  // Folio collaboration room lifecycle: authorize/refresh/heartbeat use the
+  // room token; snapshot transport uses a deployment service bearer.
   "folio-collab/routes.ts": [
     "POST /authorize",
     "POST /refresh-token",

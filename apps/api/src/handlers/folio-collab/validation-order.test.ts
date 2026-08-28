@@ -3,8 +3,8 @@ import Elysia from "elysia";
 
 import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
 
-// The folio-collab room endpoints authorize themselves from a
-// caller-supplied credential pair (roomId + token). Their route schemas
+// The folio-collab room endpoints authorize themselves from either a
+// caller-supplied room credential or a deployment service credential. Their route schemas
 // are deliberately permissive, so framework validation can never answer a
 // probe before the handler's own credential check: a request with malformed
 // credentials must be byte-identical to one with unknown credentials (404),
@@ -25,57 +25,81 @@ const jsonRequest = (path: string, body: unknown): Request =>
     body: JSON.stringify(body),
   });
 
-const expectAuthShapedNotFound = async (request: Request) => {
+const expectAuthShapedNotFound = async (
+  request: Request,
+  expectedBody = NOT_FOUND_BODY,
+) => {
   const response = await app.handle(request);
   expect(response.status).toBe(404);
   // The handler's own auth failure, not an Elysia validation error
   // (which would carry `type: "validation"` and the schema summary).
-  expect(await response.json()).toEqual(NOT_FOUND_BODY);
+  expect(await response.json()).toEqual(expectedBody);
 };
 
-const bodyCredentialPaths = [
-  "/folio-collab-rooms/authorize",
-  "/folio-collab-rooms/refresh-token",
-  "/folio-collab-rooms/heartbeat",
-  "/folio-collab-rooms/snapshot/load",
-  "/folio-collab-rooms/snapshot/store",
+const credentialPaths = [
+  {
+    expectedBody: NOT_FOUND_BODY,
+    path: "/folio-collab-rooms/authorize",
+  },
+  {
+    expectedBody: NOT_FOUND_BODY,
+    path: "/folio-collab-rooms/refresh-token",
+  },
+  {
+    expectedBody: NOT_FOUND_BODY,
+    path: "/folio-collab-rooms/heartbeat",
+  },
+  {
+    expectedBody: { message: "Not available" },
+    path: "/folio-collab-rooms/snapshot/load",
+  },
+  {
+    expectedBody: { message: "Not available" },
+    path: "/folio-collab-rooms/snapshot/store",
+  },
 ];
 
 describe("folio-collab probes with malformed bodies never see validation errors", () => {
-  test.each(bodyCredentialPaths)(
+  test.each(credentialPaths)(
     "POST %s: malformed credential bodies answer 404, not 422",
-    async (path) => {
+    async ({ expectedBody, path }) => {
       // No body at all.
       await expectAuthShapedNotFound(
         new Request(`http://localhost${path}`, { method: "POST" }),
+        expectedBody,
       );
       // Empty object: credentials absent.
-      await expectAuthShapedNotFound(jsonRequest(path, {}));
+      await expectAuthShapedNotFound(jsonRequest(path, {}), expectedBody);
       // Token of the wrong length.
       await expectAuthShapedNotFound(
         jsonRequest(path, { roomId: VALID_UUID, token: "short" }),
+        expectedBody,
       );
       // Session id that is not even a UUID.
       await expectAuthShapedNotFound(
         jsonRequest(path, { roomId: "garbage", token: WELL_FORMED_TOKEN }),
+        expectedBody,
       );
       // Non-string JSON values must reach the handler too; otherwise the
       // permissive route schema itself leaks a 422 before authorization.
       await expectAuthShapedNotFound(
         jsonRequest(path, { roomId: [], token: 0 }),
+        expectedBody,
       );
       await expectAuthShapedNotFound(
         jsonRequest(path, { roomId: true, token: {} }),
+        expectedBody,
       );
       // Non-object JSON roots must also reach the handler. An object-only
       // route schema would reject these before credential authorization.
-      await expectAuthShapedNotFound(jsonRequest(path, null));
-      await expectAuthShapedNotFound(jsonRequest(path, []));
-      await expectAuthShapedNotFound(jsonRequest(path, 0));
-      await expectAuthShapedNotFound(jsonRequest(path, "probe"));
+      await expectAuthShapedNotFound(jsonRequest(path, null), expectedBody);
+      await expectAuthShapedNotFound(jsonRequest(path, []), expectedBody);
+      await expectAuthShapedNotFound(jsonRequest(path, 0), expectedBody);
+      await expectAuthShapedNotFound(jsonRequest(path, "probe"), expectedBody);
       // Unknown extra keys alongside malformed credentials.
       await expectAuthShapedNotFound(
         jsonRequest(path, { token: "x", probe: "1", admin: "true" }),
+        expectedBody,
       );
       // Unparseable JSON.
       await expectAuthShapedNotFound(
@@ -84,6 +108,7 @@ describe("folio-collab probes with malformed bodies never see validation errors"
           headers: { "content-type": "application/json" },
           body: "{not json",
         }),
+        expectedBody,
       );
       // Non-JSON content type.
       await expectAuthShapedNotFound(
@@ -92,6 +117,7 @@ describe("folio-collab probes with malformed bodies never see validation errors"
           headers: { "content-type": "text/plain" },
           body: "garbage",
         }),
+        expectedBody,
       );
     },
   );

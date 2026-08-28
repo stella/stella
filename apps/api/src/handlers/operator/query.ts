@@ -2,13 +2,13 @@ import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { and, asc, gte } from "drizzle-orm";
 import type { Static } from "elysia";
-import { timingSafeEqual } from "node:crypto";
 
 import { DAY_IN_MS } from "@stll/time";
 
 // eslint-disable-next-line security-guards/no-unscoped-user-query -- operator observability is deliberately instance-wide: the endpoint is token-gated at the deployment level and lists registrations across the whole instance, so there is no organization to scope by.
 import { user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
+import { authorizeConfiguredBearer } from "@/api/lib/configured-bearer-access";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
@@ -50,8 +50,6 @@ export type ReadRegistrationsQuery = Static<
   typeof readRegistrationsQuerySchema
 >;
 
-const BEARER_PREFIX = "Bearer ";
-
 type AuthorizeOperatorAccessOptions = {
   /** The deployment's configured token; undefined when the feature is off. */
   configuredToken: string | undefined;
@@ -73,27 +71,8 @@ export type OperatorAccess =
 export const authorizeOperatorAccess = ({
   configuredToken,
   authorizationHeader,
-}: AuthorizeOperatorAccessOptions): OperatorAccess => {
-  if (!configuredToken) {
-    return { status: "disabled" };
-  }
-  if (
-    authorizationHeader === null ||
-    !authorizationHeader.startsWith(BEARER_PREFIX)
-  ) {
-    return { status: "unauthorized" };
-  }
-  const presented = authorizationHeader.slice(BEARER_PREFIX.length);
-  const configuredDigest = new Bun.CryptoHasher("sha256")
-    .update(configuredToken)
-    .digest();
-  const presentedDigest = new Bun.CryptoHasher("sha256")
-    .update(presented)
-    .digest();
-  return timingSafeEqual(configuredDigest, presentedDigest)
-    ? { status: "authorized" }
-    : { status: "unauthorized" };
-};
+}: AuthorizeOperatorAccessOptions): OperatorAccess =>
+  authorizeConfiguredBearer({ authorizationHeader, configuredToken });
 
 /**
  * Replicates every 400 the read path rejects on before any query runs

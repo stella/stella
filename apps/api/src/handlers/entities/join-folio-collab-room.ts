@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { toFolioCollabRoomName } from "@stll/api-contract/folio-collab";
 import { roles } from "@stll/permissions";
 
 import { member } from "@/api/db/auth-schema";
@@ -480,7 +481,7 @@ export const joinFolioCollabRoomHandler = async function* ({
     fileName: joined.fileName,
     generation: joined.generation,
     roomId: joined.roomId,
-    roomName: joined.roomId,
+    roomName: toFolioCollabRoomName(joined.roomId),
     seedDownloadUrl,
     shouldSeed: joined.shouldSeed,
     token: joined.token,

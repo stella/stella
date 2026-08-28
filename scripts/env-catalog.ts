@@ -162,6 +162,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "SMTP_PORT",
   "STELLA_API_PORT",
   "STELLA_API_URL",
+  "STELLA_COLLAB_MODE",
   "STELLA_COLLAB_PORT",
   "STELLA_COMMIT_SHA",
   "STELLA_OCR_PDF_FONT_PATH",
@@ -211,7 +212,10 @@ const EXAMPLE_VALUES: Record<string, string> = {
   SMTP_PORT: "1025",
   SMTP_USERNAME: "",
   STELLA_API_URL: "http://localhost:3001",
+  STELLA_COLLAB_MODE: "single-process",
   STELLA_COLLAB_PORT: "3002",
+  STELLA_COLLAB_REDIS_URL: "redis://localhost:6379",
+  STELLA_COLLAB_SERVICE_TOKEN: "local-collab-service-token-at-least-32-chars",
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE: "direct",
   STELLA_TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
   TRANSACTIONAL_EMAIL_FROM: "noreply@example.com",
@@ -379,7 +383,13 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "SMTP username. Set together with SMTP_PASSWORD, or leave both empty for an unauthenticated relay.",
   STELLA_API_URL:
     "API origin used by collaboration to validate room tokens and persist Yjs snapshots.",
+  STELLA_COLLAB_MODE:
+    'Collaboration topology: "redis" for cross-replica broadcast or "single-process" for local development only.',
   STELLA_COLLAB_PORT: "Port for the Hocuspocus collaboration server.",
+  STELLA_COLLAB_REDIS_URL:
+    "Redis URL used for cross-replica Yjs and awareness broadcast. Treated as secret because it may contain credentials.",
+  STELLA_COLLAB_SERVICE_TOKEN:
+    "Bearer credential used by the collaboration service for snapshot load and store requests.",
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
   STELLA_TRUSTED_PROXY_CIDRS:
@@ -787,6 +797,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "REPO",
   "SMOKE_API_URL",
   "SMOKE_TEST",
+  "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
+  "STELLA_COLLAB_TEST_REDIS_URL",
   "STELLA_DESKTOP_RELEASE_API_PATH",
   "STELLA_DESKTOP_RELEASE_EXPECTED_TAG",
   "STELLA_DEV_INSTANCE",

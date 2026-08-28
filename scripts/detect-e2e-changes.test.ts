@@ -221,6 +221,28 @@ describe("detect-e2e-changes", () => {
     expect(workflow).not.toContain("needs.ci-changes");
   });
 
+  test("runs Redis collaboration checks for every owning boundary", () => {
+    const plan = workflowJob("ci-plan");
+    const collabRedis = workflowJob("collab-redis");
+
+    for (const collaborationPath of [
+      "apps/collab/*",
+      "apps/api/src/handlers/folio-collab/*",
+      "apps/api/src/handlers/entities/join-folio-collab-room.ts",
+      "apps/api/src/lib/folio-collab-*",
+      "packages/api-contract/src/folio-collab*",
+    ]) {
+      expect(plan).toContain(collaborationPath);
+    }
+    expect(collabRedis).toContain(
+      "needs.ci-plan.outputs.collab_redis_required",
+    );
+    expect(collabRedis).toContain(
+      "bun --filter @stll/collab test src/server.test.ts",
+    );
+    expect(workflowJob("ci-result")).toContain("collab-redis");
+  });
+
   test("keeps production, Vite canary, and landing work parallel", () => {
     const production = workflowJob("e2e-production-shard");
     expect(production).toContain(
