@@ -1,9 +1,8 @@
 import type {
-  EnsureQueryDataOptions,
-  FetchInfiniteQueryOptions,
-  FetchQueryOptions,
   InfiniteData,
+  InfiniteQueryExecuteOptions,
   QueryClient,
+  QueryExecuteOptions,
   QueryKey,
 } from "@tanstack/react-query";
 import { Result, TaggedError } from "better-result";
@@ -96,13 +95,19 @@ export const ensureCriticalQueryData = async <
   TQueryKey extends QueryKey = QueryKey,
 >(
   queryClient: QueryClient,
-  options: EnsureQueryDataOptions<TQueryFnData, TError, TData, TQueryKey>,
+  options: QueryExecuteOptions<
+    TQueryFnData,
+    TError,
+    TData,
+    TQueryFnData,
+    TQueryKey
+  >,
   config: EnsureCriticalQueryDataConfig = {},
 ): Promise<TData> =>
   await withCriticalQueryTimeout(
     queryClient,
     options.queryKey,
-    async () => await queryClient.ensureQueryData(options),
+    async () => await queryClient.query({ ...options, staleTime: "static" }),
     config,
   );
 
@@ -113,11 +118,17 @@ export const prefetchNonCriticalQuery = async <
   TQueryKey extends QueryKey = QueryKey,
 >(
   queryClient: QueryClient,
-  options: FetchQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
+  options: QueryExecuteOptions<
+    TQueryFnData,
+    TError,
+    TData,
+    TQueryFnData,
+    TQueryKey
+  >,
   onError: (error: unknown) => void,
 ) => {
   const result = await Result.tryPromise({
-    try: async () => await queryClient.fetchQuery(options),
+    try: async () => await queryClient.query(options),
     catch: (cause) => cause,
   });
   if (Result.isError(result)) {
@@ -128,12 +139,12 @@ export const prefetchNonCriticalQuery = async <
 export const prefetchNonCriticalInfiniteQuery = async <
   TQueryFnData,
   TError = Error,
-  TData = TQueryFnData,
+  TData = InfiniteData<TQueryFnData>,
   TQueryKey extends QueryKey = QueryKey,
   TPageParam = unknown,
 >(
   queryClient: QueryClient,
-  options: FetchInfiniteQueryOptions<
+  options: InfiniteQueryExecuteOptions<
     TQueryFnData,
     TError,
     TData,
@@ -143,7 +154,7 @@ export const prefetchNonCriticalInfiniteQuery = async <
   onError: (error: unknown) => void,
 ) => {
   const result = await Result.tryPromise({
-    try: async () => await queryClient.fetchInfiniteQuery(options),
+    try: async () => await queryClient.infiniteQuery(options),
     catch: (cause) => cause,
   });
   if (Result.isError(result)) {
@@ -174,13 +185,19 @@ export const ensureRouteQueryData = async <
   TQueryKey extends QueryKey = QueryKey,
 >(
   queryClient: QueryClient,
-  options: EnsureQueryDataOptions<TQueryFnData, TError, TData, TQueryKey>,
+  options: QueryExecuteOptions<
+    TQueryFnData,
+    TError,
+    TData,
+    TQueryFnData,
+    TQueryKey
+  >,
   config: EnsureCriticalQueryDataConfig = {},
 ): Promise<TData> =>
   await withCriticalQueryTimeout(
     queryClient,
     options.queryKey,
-    async () => await queryClient.fetchQuery(routeQueryOptions(options)),
+    async () => await queryClient.query(routeQueryOptions(options)),
     config,
   );
 
@@ -191,8 +208,14 @@ export const fetchRouteQuery = async <
   TQueryKey extends QueryKey = QueryKey,
 >(
   queryClient: QueryClient,
-  options: FetchQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
-): Promise<TData> => await queryClient.fetchQuery(routeQueryOptions(options));
+  options: QueryExecuteOptions<
+    TQueryFnData,
+    TError,
+    TData,
+    TQueryFnData,
+    TQueryKey
+  >,
+): Promise<TData> => await queryClient.query(routeQueryOptions(options));
 
 export const prefetchRouteQuery = async <
   TQueryFnData,
@@ -201,7 +224,13 @@ export const prefetchRouteQuery = async <
   TQueryKey extends QueryKey = QueryKey,
 >(
   queryClient: QueryClient,
-  options: FetchQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
+  options: QueryExecuteOptions<
+    TQueryFnData,
+    TError,
+    TData,
+    TQueryFnData,
+    TQueryKey
+  >,
   onError: (error: unknown) => void,
 ) => {
   await prefetchNonCriticalQuery(
@@ -211,15 +240,20 @@ export const prefetchRouteQuery = async <
   );
 };
 
+type InfiniteQueryExecutionResult<TQueryFnData, TData, TPageParam> =
+  TData[] extends InfiniteData<TQueryFnData>[]
+    ? InfiniteData<TQueryFnData, TPageParam>
+    : TData;
+
 export const ensureRouteInfiniteQueryData = async <
   TQueryFnData,
   TError = Error,
-  TData = TQueryFnData,
+  TData = InfiniteData<TQueryFnData>,
   TQueryKey extends QueryKey = QueryKey,
   TPageParam = unknown,
 >(
   queryClient: QueryClient,
-  options: FetchInfiniteQueryOptions<
+  options: InfiniteQueryExecuteOptions<
     TQueryFnData,
     TError,
     TData,
@@ -227,11 +261,10 @@ export const ensureRouteInfiniteQueryData = async <
     TPageParam
   >,
   config: EnsureCriticalQueryDataConfig = {},
-): Promise<InfiniteData<TData, TPageParam>> =>
+): Promise<InfiniteQueryExecutionResult<TQueryFnData, TData, TPageParam>> =>
   await withCriticalQueryTimeout(
     queryClient,
     options.queryKey,
-    async () =>
-      await queryClient.fetchInfiniteQuery(routeQueryOptions(options)),
+    async () => await queryClient.infiniteQuery(routeQueryOptions(options)),
     config,
   );

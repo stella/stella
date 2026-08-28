@@ -678,9 +678,10 @@ export const useChatEditor = ({
         return [];
       }
 
-      const views = await queryClient.ensureQueryData(
-        viewsOptions(workspace.resource.id),
-      );
+      const views = await queryClient.query({
+        ...viewsOptions(workspace.resource.id),
+        staleTime: "static",
+      });
       const activeView =
         views.find((view) => view.id === workspace.sourceViewId) ?? null;
 
@@ -700,7 +701,7 @@ export const useChatEditor = ({
       if (pendingWorkspaceEntitySearchRef.current) {
         pendingWorkspaceEntitySearchRef.current.queryKey = options.queryKey;
       }
-      const data = await queryClient.fetchQuery(options);
+      const data = await queryClient.query(options);
       const sourceWorkspaceId =
         threadRef.scope === "workspace" &&
         threadRef.workspaceId === workspace.resource.id
@@ -759,9 +760,10 @@ export const useChatEditor = ({
         return [];
       }
 
-      const views = await queryClient.ensureQueryData(
-        viewsOptions(workspace.resource.id),
-      );
+      const views = await queryClient.query({
+        ...viewsOptions(workspace.resource.id),
+        staleTime: "static",
+      });
       const activeView =
         views.find((view) => view.id === workspace.sourceViewId) ?? null;
 

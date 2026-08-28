@@ -17,7 +17,7 @@ export const downloadReportExport = async ({
   queryClient,
   workspaceId,
 }: DownloadReportExportOptions) => {
-  const detail = await queryClient.fetchQuery(
+  const detail = await queryClient.query(
     reportExportDetailOptions({ exportId, workspaceId }),
   );
   if (detail.status !== "completed" || detail.downloadUrl === null) {

@@ -532,7 +532,7 @@ describe("invalidateChatThreadLists", () => {
     const unsubscribe = activeObserver.subscribe(() => undefined);
 
     await activeObserver.refetch();
-    await queryClient.fetchQuery({
+    await queryClient.query({
       queryKey: inactiveSearchKey,
       queryFn: async () => {
         inactiveFetches += 1;

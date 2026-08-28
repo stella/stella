@@ -135,7 +135,7 @@ function RouteComponent() {
     // dedicated enabled-only mutation (see the PR follow-ups) would remove the
     // full-body replay entirely; this closes the stale-cache window.
     const detail = await queryClient
-      .fetchQuery({
+      .query({
         ...flowDetailOptions(organizationId, flow.id),
         staleTime: 0,
       })

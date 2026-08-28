@@ -18,7 +18,7 @@ export const resolveReportExportDestinationQuery = async ({
   queryClient,
   workspaceId,
 }: ResolveReportExportDestinationQueryOptions) => {
-  const detail = await queryClient.fetchQuery(
+  const detail = await queryClient.query(
     reportExportDetailOptions({ exportId, workspaceId }),
   );
   if (detail.status !== "completed") {

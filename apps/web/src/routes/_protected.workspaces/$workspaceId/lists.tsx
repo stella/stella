@@ -792,7 +792,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
           onOpenDocument={(entityId, pdfPage) => {
             detached(
               (async () => {
-                const sourceEntity = await queryClient.fetchQuery(
+                const sourceEntity = await queryClient.query(
                   entityOptions(workspaceId, entityId),
                 );
                 const sourceFile = sourceEntity.fields.find(

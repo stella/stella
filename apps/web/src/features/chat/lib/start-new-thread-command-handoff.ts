@@ -31,13 +31,14 @@ export const startNewThreadCommandHandoff = async ({
 }: StartNewThreadCommandHandoffArgs): Promise<void> => {
   const [message, data] = await Promise.all([
     buildChatRequestMessage({ files, html }),
-    queryClient.ensureQueryData(
-      chatThreadOptions({
+    queryClient.query({
+      ...chatThreadOptions({
         activeOrganizationId,
         context,
         key: threadRef,
       }),
-    ),
+      staleTime: "static",
+    }),
   ]);
   const chat = acquireChatRuntime({
     activeOrganizationId,

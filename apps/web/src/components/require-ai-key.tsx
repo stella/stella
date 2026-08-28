@@ -78,7 +78,7 @@ export const AIAvailabilityProvider = ({ children }: PropsWithChildren) => {
 
   const ensureAIAvailable = useCallback(async () => {
     const availability = await queryClient
-      .fetchQuery(availabilityOptions)
+      .query(availabilityOptions)
       .catch((error: unknown) => {
         getAnalytics().captureError(error);
         // Callers read `false` as "do not proceed" and stop there, so without
