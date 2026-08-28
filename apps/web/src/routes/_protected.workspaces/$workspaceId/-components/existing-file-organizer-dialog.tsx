@@ -532,7 +532,7 @@ export const ExistingFileOrganizerDialog = ({
     try {
       const { locale: requestLocale, userInstructions: trimmedInstructions } =
         getSuggestionRequestContext();
-      const data = await queryClient.fetchQuery({
+      const data = await queryClient.query({
         queryKey: [
           ...entitiesKeys.all(workspaceId),
           "organize-suggestions",

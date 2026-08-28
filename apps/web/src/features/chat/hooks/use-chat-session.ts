@@ -1105,9 +1105,7 @@ export const useChatSession = ({
             message: "Generated document source could not be compiled",
           });
         }
-        const properties = await queryClient.fetchQuery(
-          propertiesOptions(matterId),
-        );
+        const properties = await queryClient.query(propertiesOptions(matterId));
         const fileProperty = properties.find(
           (property) => property.content.type === "file",
         );
@@ -1229,7 +1227,7 @@ export const useChatSession = ({
       // off as a fire-and-forget; failures are silent because the
       // editor will retry the same query on mount.
       detached(
-        queryClient.prefetchQuery(
+        queryClient.query(
           fileOptions({
             workspaceId: matterId,
             fieldId: output.fieldId,

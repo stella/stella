@@ -14,19 +14,19 @@ import {
 import type { WorkflowTargetCountQueryClient } from "./use-start-workflow.logic";
 
 type WorkflowTargetCountOptions = Parameters<
-  WorkflowTargetCountQueryClient["fetchQuery"]
+  WorkflowTargetCountQueryClient["query"]
 >[0];
 
 const createWorkflowTargetCountClient = (count: number) => {
-  const fetchQueryCalls: WorkflowTargetCountOptions[] = [];
+  const queryCalls: WorkflowTargetCountOptions[] = [];
   const queryClient: WorkflowTargetCountQueryClient = {
-    fetchQuery: async (options) => {
-      fetchQueryCalls.push(options);
+    query: async (options) => {
+      queryCalls.push(options);
       return count;
     },
   };
 
-  return { fetchQueryCalls, queryClient };
+  return { queryCalls, queryClient };
 };
 
 describe("workflow start decision", () => {
@@ -80,7 +80,7 @@ describe("workflow start decision", () => {
   });
 
   test("loads the backend target count for scoped entity ids", async () => {
-    const { fetchQueryCalls, queryClient } = createWorkflowTargetCountClient(1);
+    const { queryCalls, queryClient } = createWorkflowTargetCountClient(1);
     const options = workflowTargetCountOptions({
       entityIds: ["entity-folder", "entity-document"],
       workspaceId: "workspace-a",
@@ -93,14 +93,11 @@ describe("workflow start decision", () => {
     });
 
     expect(count).toBe(1);
-    expect(fetchQueryCalls.map((call) => call.queryKey)).toEqual([
-      options.queryKey,
-    ]);
+    expect(queryCalls.map((call) => call.queryKey)).toEqual([options.queryKey]);
   });
 
   test("loads the full-workspace target count when scoped entity ids are empty", async () => {
-    const { fetchQueryCalls, queryClient } =
-      createWorkflowTargetCountClient(128);
+    const { queryCalls, queryClient } = createWorkflowTargetCountClient(128);
     const options = workflowTargetCountOptions({
       entityIds: [],
       workspaceId: "workspace-a",
@@ -113,15 +110,13 @@ describe("workflow start decision", () => {
     });
 
     expect(count).toBe(128);
-    expect(fetchQueryCalls.map((call) => call.queryKey)).toEqual([
-      options.queryKey,
-    ]);
+    expect(queryCalls.map((call) => call.queryKey)).toEqual([options.queryKey]);
   });
 
   test("propagates target count load failures", async () => {
     const expectedError = new Error("target count failed");
     const queryClient: WorkflowTargetCountQueryClient = {
-      fetchQuery: async () => {
+      query: async () => {
         throw expectedError;
       },
     };

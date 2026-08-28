@@ -878,7 +878,7 @@ export const SearchDialog = ({
         });
         return;
       }
-      const fileFieldId = await queryClient.fetchQuery(
+      const fileFieldId = await queryClient.query(
         recentFilePreviewFieldOptions({
           entityId: file.entityId,
           fileFieldId: file.fileFieldId,
@@ -917,7 +917,7 @@ export const SearchDialog = ({
         const { fileFieldId } = await resolveEntityDocumentRoute({
           hit,
           resolveCurrentFileFieldId: async () =>
-            await queryClient.fetchQuery(
+            await queryClient.query(
               recentFilePreviewFieldOptions({
                 entityId: hit.entityId,
                 fileFieldId: hit.fileFieldId,
@@ -1046,7 +1046,7 @@ export const SearchDialog = ({
         const { fileFieldId, route } = await resolveEntityDocumentRoute({
           hit,
           resolveCurrentFileFieldId: async () =>
-            await queryClient.fetchQuery(
+            await queryClient.query(
               recentFilePreviewFieldOptions({
                 entityId: hit.entityId,
                 fileFieldId: hit.fileFieldId,

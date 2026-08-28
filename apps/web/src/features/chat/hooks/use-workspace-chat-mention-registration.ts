@@ -74,7 +74,7 @@ export const useWorkspaceChatMentionRegistration = (
       if (pendingSearchRef.current) {
         pendingSearchRef.current.queryKey = options.queryKey;
       }
-      const data = await queryClient.fetchQuery(options);
+      const data = await queryClient.query(options);
 
       return toEntityMentionOptions({ data, workspaceId });
     },

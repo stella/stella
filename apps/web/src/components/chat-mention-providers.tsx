@@ -43,7 +43,10 @@ const loadFirstViewIdsByWorkspaceId = async ({
     workspaces.map(async (workspace) => {
       const viewsResult = await Result.tryPromise(
         async () =>
-          await queryClient.ensureQueryData(viewsOptions(workspace.id)),
+          await queryClient.query({
+            ...viewsOptions(workspace.id),
+            staleTime: "static",
+          }),
       );
 
       if (Result.isError(viewsResult)) {

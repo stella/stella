@@ -15,7 +15,7 @@ export type WorkflowStartDecision = { type: "start" } | { type: "cancel" };
 export const LARGE_WORKFLOW_ENTITY_PROMPT_THRESHOLD = 50;
 
 export type WorkflowTargetCountQueryClient = {
-  fetchQuery: (
+  query: (
     options: ReturnType<typeof workflowTargetCountOptions>,
   ) => Promise<number>;
 };
@@ -59,7 +59,7 @@ export const estimateWorkflowTargetCount = async ({
 }: EstimateWorkflowTargetCountArgs): Promise<number> => {
   const entityIds = args?.entityIds === undefined ? [] : [...args.entityIds];
 
-  return await queryClient.fetchQuery(
+  return await queryClient.query(
     workflowTargetCountOptions({
       entityIds,
       workspaceId,

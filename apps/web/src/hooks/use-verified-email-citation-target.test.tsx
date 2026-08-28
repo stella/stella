@@ -44,7 +44,7 @@ describe("useVerifiedEmailCitationTarget", () => {
     });
     const fetchResult = await Result.tryPromise({
       try: async () =>
-        await queryClient.fetchQuery({
+        await queryClient.query({
           ...options,
           queryFn: async () => {
             throw new Error("preview unavailable");

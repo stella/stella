@@ -430,13 +430,14 @@ function ChatIndex() {
     };
     const [message, threadData] = await Promise.all([
       buildChatRequestMessage(draft),
-      queryClient.ensureQueryData(
-        chatThreadOptions({
+      queryClient.query({
+        ...chatThreadOptions({
           activeOrganizationId,
           key: threadRef,
           context: chatThreadContext,
         }),
-      ),
+        staleTime: "static",
+      }),
     ]);
     const chat = acquireChatRuntime({
       activeOrganizationId,

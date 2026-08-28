@@ -54,7 +54,7 @@ export const useStartWorkflow = (workspaceId: string) => {
   return async (args?: StartWorkflowArgs) => {
     try {
       const availability =
-        aiAvailability ?? (await queryClient.fetchQuery(aiAvailabilityQuery));
+        aiAvailability ?? (await queryClient.query(aiAvailabilityQuery));
       if (!availability.available) {
         return WORKFLOW_START_AI_UNAVAILABLE;
       }
