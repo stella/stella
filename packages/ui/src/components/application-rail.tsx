@@ -1,12 +1,10 @@
 import type * as React from "react";
 
-import {
-  SIDE_RAIL_ICON_BUTTON_SIZE,
-  TOOLBAR_ROW_HEIGHT,
-} from "../inspector/layout-tokens";
+import { TOOLBAR_ROW_HEIGHT } from "../inspector/layout-tokens";
 import { cn } from "../lib/utils";
 
 export const APPLICATION_RAIL_WIDTH = "w-12" as const;
+export const APPLICATION_RAIL_BUTTON_SIZE = "size-11" as const;
 export const APPLICATION_RAIL_ICON_SIZE = "size-4" as const;
 
 /**
@@ -36,7 +34,7 @@ export const ApplicationRailHeader = ({
 }: React.ComponentProps<"div">) => (
   <div
     className={cn(
-      "flex shrink-0 items-center justify-center border-b p-2",
+      "flex shrink-0 items-center justify-center border-b p-0.5",
       TOOLBAR_ROW_HEIGHT,
       className,
     )}
@@ -64,7 +62,7 @@ export const ApplicationRailMenu = ({
   ...props
 }: React.ComponentProps<"div">) => (
   <div
-    className={cn("flex flex-col gap-1 p-2", className)}
+    className={cn("flex flex-col gap-0.5 p-0.5", className)}
     data-slot="application-rail-menu"
     {...props}
   />
@@ -76,8 +74,8 @@ export const ApplicationRailButton = ({
 }: React.ComponentProps<"button">) => (
   <button
     className={cn(
-      "text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground flex shrink-0 items-center justify-center rounded-md p-2 outline-hidden transition-colors focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50",
-      SIDE_RAIL_ICON_BUTTON_SIZE,
+      "text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground flex shrink-0 items-center justify-center rounded-md outline-hidden transition-colors focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50",
+      APPLICATION_RAIL_BUTTON_SIZE,
       className,
     )}
     data-slot="application-rail-button"
@@ -103,7 +101,7 @@ export const ApplicationRailFooter = ({
   ...props
 }: React.ComponentProps<"div">) => (
   <div
-    className={cn("mt-auto flex shrink-0 flex-col gap-2 p-2", className)}
+    className={cn("mt-auto flex shrink-0 flex-col gap-0.5 p-0.5", className)}
     data-slot="application-rail-footer"
     {...props}
   />

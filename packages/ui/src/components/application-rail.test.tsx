@@ -7,6 +7,7 @@ import {
   ApplicationRailButton,
   ApplicationRailContent,
   ApplicationRailFooter,
+  APPLICATION_RAIL_BUTTON_SIZE,
   ApplicationRailHeader,
   ApplicationRailMenu,
   ApplicationRailSeparator,
@@ -47,17 +48,22 @@ describe("application rail", () => {
       expect.arrayContaining([APPLICATION_RAIL_WIDTH, "border-e", "md:flex"]),
     );
     expect(classesOf(markup, "application-rail-header")).toEqual(
-      expect.arrayContaining(["h-12", "border-b"]),
+      expect.arrayContaining(["h-12", "border-b", "p-0.5"]),
     );
     expect(classesOf(markup, "application-rail-menu")).toEqual(
-      expect.arrayContaining(["gap-1", "p-2"]),
+      expect.arrayContaining(["gap-0.5", "p-0.5"]),
     );
     expect(classesOf(markup, "application-rail-button")).toEqual(
-      expect.arrayContaining(["size-8", "rounded-md", "focus-visible:ring-2"]),
+      expect.arrayContaining([
+        APPLICATION_RAIL_BUTTON_SIZE,
+        "rounded-md",
+        "focus-visible:ring-2",
+      ]),
     );
     expect(APPLICATION_RAIL_ICON_SIZE).toBe("size-4");
+    expect(APPLICATION_RAIL_BUTTON_SIZE).toBe("size-11");
     expect(classesOf(markup, "application-rail-footer")).toEqual(
-      expect.arrayContaining(["mt-auto", "p-2"]),
+      expect.arrayContaining(["mt-auto", "p-0.5"]),
     );
   });
 });
