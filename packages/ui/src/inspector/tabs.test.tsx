@@ -57,4 +57,22 @@ describe("inspector tabs", () => {
       expect.arrayContaining(["overflow-y-auto", "md:col-start-2"]),
     );
   });
+
+  test("hides a scrolling rail's scrollbar without reducing tab hit areas", () => {
+    const markup = renderToStaticMarkup(
+      <InspectorTabs defaultValue="overview">
+        <InspectorTabList>
+          <InspectorTab value="overview">Overview</InspectorTab>
+        </InspectorTabList>
+        <InspectorTabPanel value="overview">Content</InspectorTabPanel>
+      </InspectorTabs>,
+    );
+
+    expect(classesOf(markup, "inspector-tab-list")).toEqual(
+      expect.arrayContaining([
+        "scrollbar-none",
+        "[&amp;::-webkit-scrollbar]:hidden",
+      ]),
+    );
+  });
 });

@@ -1,3 +1,5 @@
+"use client";
+
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 
 import { useViewportWidth } from "../hooks/use-viewport-width";
@@ -39,7 +41,7 @@ export const InspectorTabList = ({
 }: TabsPrimitive.List.Props) => (
   <TabsPrimitive.List
     className={cn(
-      "bg-sidebar col-start-1 row-start-2 flex min-w-0 shrink-0 overflow-x-auto overflow-y-hidden border-b md:row-span-2 md:row-start-1 md:h-full md:flex-col md:overflow-x-hidden md:overflow-y-auto md:border-s md:border-e md:border-b-0",
+      "bg-sidebar col-start-1 row-start-2 flex min-w-0 shrink-0 scrollbar-none overflow-x-auto overflow-y-hidden overscroll-x-contain border-b md:row-span-2 md:row-start-1 md:h-full md:flex-col md:overflow-x-hidden md:overflow-y-auto md:overscroll-y-contain md:border-s md:border-e md:border-b-0 [&::-webkit-scrollbar]:hidden",
       TOOLBAR_ROW_HEIGHT,
       "md:w-12",
       className,
