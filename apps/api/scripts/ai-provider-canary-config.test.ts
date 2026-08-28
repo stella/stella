@@ -35,10 +35,16 @@ describe("AI provider canary role budgets", () => {
 
   test("budgets tool-execution probes above every short-reply role", () => {
     for (const role of MODEL_ROLES) {
-      expect(TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS).toBeGreaterThanOrEqual(
+      if (role === "reasoning") {
+        continue;
+      }
+      expect(TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS).toBeGreaterThan(
         modelRoleMaxOutputTokens(role),
       );
     }
+    // Amazon Nova v1 accepts at most 5,120 output tokens and takes part in
+    // the weekly rotation; a larger ceiling is rejected before the tool call.
+    expect(TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(5120);
   });
 });
 
