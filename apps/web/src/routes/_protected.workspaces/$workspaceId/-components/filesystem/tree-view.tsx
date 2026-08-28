@@ -91,7 +91,10 @@ import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-comp
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { calculateFolderStatistics } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/folder-statistics.logic";
 import type { FolderStatistics } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/folder-statistics.logic";
-import { getFolderClickIntent } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view-selection.logic";
+import {
+  getFolderClickIntent,
+  orderSelectedIds,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view-selection.logic";
 import { flattenFilesystemRows } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-virtualization";
 import {
   AuthorCell,
@@ -422,20 +425,6 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     [entityMap],
   );
 
-  const getSelectedEntities = useCallback(
-    (ids: Set<string>): WorkspaceEntity[] => {
-      const entities: WorkspaceEntity[] = [];
-      for (const id of ids) {
-        const entity = treeNodeMap.get(id);
-        if (entity) {
-          entities.push(entity);
-        }
-      }
-      return entities;
-    },
-    [treeNodeMap],
-  );
-
   // Drill-down navigation (persisted in URL search params)
   const currentFolderId = useSearch({
     from: "/_protected/workspaces/$workspaceId/$viewId",
@@ -617,6 +606,20 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const orderedEntityIds = useMemo(
     () => flattenedRows.map((row) => row.node.entityId),
     [flattenedRows],
+  );
+
+  const getSelectedEntities = useCallback(
+    (ids: Set<string>): WorkspaceEntity[] => {
+      const entities: WorkspaceEntity[] = [];
+      for (const id of orderSelectedIds(ids, orderedEntityIds)) {
+        const entity = treeNodeMap.get(id);
+        if (entity) {
+          entities.push(entity);
+        }
+      }
+      return entities;
+    },
+    [treeNodeMap, orderedEntityIds],
   );
 
   // meta = cmd/ctrl (toggle a single row); shift = extend a contiguous range
@@ -1625,14 +1628,16 @@ const FilesystemRow = ({
 
   // Double-click opens the whole selection, focusing the node clicked. The
   // context menu takes the same path through RowActions' `selectedEntities`.
-  const openInInspector =
-    optimisticRename === null
-      ? openInspectorSelection({
-          entities: isBulkSelected ? getSelectedEntities(selectedIds) : [node],
-          anchor: node,
-          workspaceId,
-        })
-      : undefined;
+  const openInInspector = () => {
+    if (optimisticRename !== null) {
+      return;
+    }
+    openInspectorSelection({
+      entities: getBulkSelectedEntities() ?? [node],
+      anchor: node,
+      workspaceId,
+    })?.();
+  };
 
   const rowActionsNode = (
     <span className="flex justify-end">
@@ -1669,10 +1674,14 @@ const FilesystemRow = ({
       className={rowButtonCls}
       onClick={(event) => {
         if (!isFolder) {
-          onSelect(node.entityId, {
-            meta: event.metaKey || event.ctrlKey,
-            shift: event.shiftKey,
-          });
+          const meta = event.metaKey || event.ctrlKey;
+          // A plain click on a member of a multi-row selection keeps
+          // it, mirroring right-click, so the `click` before `dblclick`
+          // cannot collapse the selection the double-click opens.
+          if (isBulkSelected && !meta && !event.shiftKey) {
+            return;
+          }
+          onSelect(node.entityId, { meta, shift: event.shiftKey });
           return;
         }
 
@@ -1704,7 +1713,7 @@ const FilesystemRow = ({
           onNavigateToFolder(node.entityId);
           return;
         }
-        openInInspector?.();
+        openInInspector();
       }}
       style={contentSpanStyle}
       type="button"

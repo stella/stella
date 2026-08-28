@@ -9,6 +9,7 @@ import type {
   InspectorTabsSet,
   InspectorTabsStore,
   MatterTabId,
+  OpenTabsArgs,
   SkillResourceTabId,
   TaskTab,
 } from "@/components/inspector/inspector-store-types";
@@ -76,11 +77,14 @@ const normalizeFileTabFacet = (tab: Draft<FileTab>): void => {
   }
 };
 
+/** Focus-neutral: the caller owns `activeId`. Returns the id the matching
+ *  tab had before this upsert, or null when a tab was inserted, so callers
+ *  that follow focus across an id replacement can do so. */
 const upsertFileTab = (
   state: Draft<InspectorTabsStore>,
   tab: Omit<FileTab, "type">,
   { renderIdPolicy }: UpsertFileTabOptions,
-) => {
+): string | null => {
   const matchIndex = state.tabs.findIndex(
     (candidate) =>
       candidate.type === "pdf" &&
@@ -88,13 +92,12 @@ const upsertFileTab = (
   );
   if (matchIndex === -1) {
     state.tabs.push({ type: "pdf", renderId: uuidv7(), ...tab });
-    state.activeId = tab.id;
-    return;
+    return null;
   }
 
   const existing = state.tabs[matchIndex];
   if (existing?.type !== "pdf") {
-    return;
+    return null;
   }
 
   const previousId = existing.id;
@@ -127,17 +130,17 @@ const upsertFileTab = (
         (candidate.entityId === tab.entityId || candidate.id === tab.id)
       ),
   );
-  if (state.activeId === previousId) {
-    state.activeId = tab.id;
-  }
+  return previousId;
 };
 
-/** Mirror of `upsertFileTab` for task tabs. Leaves `activeId` alone so the
- *  caller owns focus, and keeps an existing tab's `creationStatus`. */
+/** Mirror of `upsertFileTab` for task tabs: focus-neutral, and keeps an
+ *  existing tab's `creationStatus`. */
 const upsertTaskTab = (state: Draft<InspectorTabsStore>, tab: TaskTab) => {
   const existing = state.tabs.find((candidate) => candidate.id === tab.id);
   if (!existing) {
-    state.tabs.push(tab);
+    // Copy so the store never aliases (and immer never freezes) the
+    // caller's object.
+    state.tabs.push({ ...tab });
     return;
   }
   if (existing.type !== "task") {
@@ -152,6 +155,39 @@ const upsertTaskTab = (state: Draft<InspectorTabsStore>, tab: TaskTab) => {
   existing.workspaceId = tab.workspaceId;
 };
 
+// One user action, one activation: opening a selection must leave focus on
+// the tab the caller names, not on whichever target happened to come last.
+// `openFile` and `openTask` are the single-target form of the same call.
+const openTabs = (
+  set: InspectorTabsSet,
+  { targets, activeId }: OpenTabsArgs,
+) => {
+  if (!targets.some((target) => target.id === activeId)) {
+    panic("openTabs was given an activeId outside its targets");
+  }
+  set((state) => {
+    for (const target of targets) {
+      switch (target.type) {
+        case "pdf":
+          upsertFileTab(state, target, {
+            renderIdPolicy: FILE_TAB_RENDER_ID_POLICY.whenIdChanges,
+          });
+          dropSupersededFileSuggestion(state, target);
+          break;
+        case "task":
+          upsertTaskTab(state, target);
+          break;
+        default:
+          target satisfies never;
+          panic("Unhandled inspector open target");
+      }
+    }
+    state.activeId = activeId;
+    state.activationSeq += 1;
+    state.minimized = false;
+  });
+};
+
 export const createInspectorTabsSlice = (
   set: InspectorTabsSet,
 ): InspectorTabsStore => ({
@@ -164,72 +200,42 @@ export const createInspectorTabsSlice = (
   reviveSuggestion: null,
 
   openFile: (tab) =>
-    set((state) => {
-      upsertFileTab(state, tab, {
-        renderIdPolicy: FILE_TAB_RENDER_ID_POLICY.whenIdChanges,
-      });
-      state.activeId = tab.id;
-      state.activationSeq += 1;
-      state.minimized = false;
-      dropSupersededFileSuggestion(state, tab);
+    openTabs(set, {
+      targets: [{ type: "pdf", ...tab }],
+      activeId: tab.id,
     }),
 
   openFileForEntity: (tab) =>
     set((state) => {
-      upsertFileTab(state, tab, {
+      const previousId = upsertFileTab(state, tab, {
         renderIdPolicy: FILE_TAB_RENDER_ID_POLICY.always,
       });
+      // Focus follows only a fresh tab or the tab that was already focused;
+      // an entity-driven refresh must not steal focus from another tab.
+      if (previousId === null || state.activeId === previousId) {
+        state.activeId = tab.id;
+      }
       state.activationSeq += 1;
       state.minimized = false;
       dropSupersededFileSuggestion(state, tab);
     }),
 
   openTask: ({ taskId, workspaceId, label = "", isNew = false }) =>
-    set((state) => {
-      upsertTaskTab(state, {
-        type: "task",
-        id: taskId,
-        creationStatus: "ready",
-        label,
-        isNew,
-        workspaceId,
-      });
-      state.activeId = taskId;
-      state.activationSeq += 1;
-      state.minimized = false;
+    openTabs(set, {
+      targets: [
+        {
+          type: "task",
+          id: taskId,
+          creationStatus: "ready",
+          label,
+          isNew,
+          workspaceId,
+        },
+      ],
+      activeId: taskId,
     }),
 
-  // One user action, one activation: opening a selection must leave focus on
-  // the tab the caller names, not on whichever target happened to come last.
-  openTabs: ({ targets, activeId }) => {
-    if (targets.length === 0) {
-      return;
-    }
-    if (!targets.some((target) => target.id === activeId)) {
-      panic("openTabs was given an activeId outside its targets");
-    }
-    set((state) => {
-      for (const target of targets) {
-        switch (target.type) {
-          case "pdf":
-            upsertFileTab(state, target, {
-              renderIdPolicy: FILE_TAB_RENDER_ID_POLICY.whenIdChanges,
-            });
-            dropSupersededFileSuggestion(state, target);
-            break;
-          case "task":
-            upsertTaskTab(state, target);
-            break;
-          default:
-            target satisfies never;
-            panic("Unhandled inspector open target");
-        }
-      }
-      state.activeId = activeId;
-      state.activationSeq += 1;
-      state.minimized = false;
-    });
-  },
+  openTabs: (args) => openTabs(set, args),
 
   openPendingTask: ({ workspaceId, label = "" }) => {
     const pendingTaskId = `pending-task:${uuidv7()}`;

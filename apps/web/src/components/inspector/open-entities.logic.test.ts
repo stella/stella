@@ -1,12 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import type { InspectorOpenTarget } from "@/components/inspector/inspector-store-types";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
 
-import {
-  planInspectorOpen,
-  toInspectorOpenTargets,
-} from "./open-entities.logic";
+import { planInspectorOpen } from "./open-entities.logic";
 
 const WORKSPACE_ID = "workspace-1";
 
@@ -99,9 +97,21 @@ const pdfEntity = (entityId: string) =>
     }),
   );
 
+/** The targets a selection opens; every entity is its own anchor here
+ *  because these tests are about which tabs open, not which one focuses. */
+const targetsOf = (
+  entities: readonly WorkspaceEntity[],
+  workspaceId: string,
+): readonly InspectorOpenTarget[] =>
+  planInspectorOpen({
+    entities,
+    anchor: entities[0] ?? entity("none", "document", {}),
+    workspaceId,
+  })?.targets ?? [];
+
 describe("projecting a selection onto inspector tabs", () => {
   test("keeps the caller's order so the tab strip matches the selection", () => {
-    const targets = toInspectorOpenTargets(
+    const targets = targetsOf(
       [pdfEntity("b"), pdfEntity("a"), pdfEntity("c")],
       WORKSPACE_ID,
     );
@@ -125,13 +135,56 @@ describe("projecting a selection onto inspector tabs", () => {
     );
 
     // The fixture must actually be unrenderable, or the assertion is vacuous.
-    expect(toInspectorOpenTargets([unrenderable], WORKSPACE_ID)).toEqual([]);
+    expect(targetsOf([unrenderable], WORKSPACE_ID)).toEqual([]);
     expect(
-      toInspectorOpenTargets(
+      targetsOf(
         [entity("folder", "folder"), unrenderable, pdfEntity("doc")],
         WORKSPACE_ID,
       ).map((target) => target.id),
     ).toEqual(["field-doc"]);
+  });
+
+  test("opens the first displayable file, not the first file", () => {
+    const zipPropertyId = toSafeId<"property">("property-zip");
+    const pdfPropertyId = toSafeId<"property">("property-pdf");
+    const mixed = entity("mixed", "document", {
+      [zipPropertyId]: {
+        id: toSafeId<"field">("field-zip"),
+        propertyId: zipPropertyId,
+        entityId: toSafeId<"entity">("mixed"),
+        content: {
+          type: "file",
+          version: 1,
+          id: "file-zip",
+          fileName: "archive.zip",
+          mimeType: "application/zip",
+          sizeBytes: 1,
+          encrypted: false,
+          sha256Hex: "a".repeat(64),
+          pdfFileId: null,
+        },
+      },
+      [pdfPropertyId]: {
+        id: toSafeId<"field">("field-pdf"),
+        propertyId: pdfPropertyId,
+        entityId: toSafeId<"entity">("mixed"),
+        content: {
+          type: "file",
+          version: 1,
+          id: "file-pdf",
+          fileName: "brief.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 1,
+          encrypted: false,
+          sha256Hex: "b".repeat(64),
+          pdfFileId: null,
+        },
+      },
+    });
+
+    expect(targetsOf([mixed], WORKSPACE_ID).map((target) => target.id)).toEqual(
+      ["field-pdf"],
+    );
   });
 
   test("opens a converted file on its PDF derivative", () => {
@@ -146,7 +199,7 @@ describe("projecting a selection onto inspector tabs", () => {
       }),
     );
 
-    expect(toInspectorOpenTargets([converted], WORKSPACE_ID)).toEqual([
+    expect(targetsOf([converted], WORKSPACE_ID)).toEqual([
       {
         type: "pdf",
         id: "field-docx",
@@ -162,9 +215,7 @@ describe("projecting a selection onto inspector tabs", () => {
   });
 
   test("maps a task to a ready task tab", () => {
-    expect(
-      toInspectorOpenTargets([entity("t1", "task")], WORKSPACE_ID),
-    ).toEqual([
+    expect(targetsOf([entity("t1", "task")], WORKSPACE_ID)).toEqual([
       {
         type: "task",
         id: "t1",

@@ -264,19 +264,6 @@ describe("openTabs", () => {
     ]);
   });
 
-  test("leaves the inspector untouched when nothing can be opened", () => {
-    useInspectorTabsStore.setState({ minimized: true });
-
-    useInspectorTabsStore.getState().openTabs({ targets: [], activeId: "" });
-
-    expect(useInspectorTabsStore.getState()).toMatchObject({
-      activeId: null,
-      activationSeq: 0,
-      minimized: true,
-      tabs: [],
-    });
-  });
-
   test("rejects a focus target that is not being opened", () => {
     expect(() =>
       useInspectorTabsStore.getState().openTabs({
