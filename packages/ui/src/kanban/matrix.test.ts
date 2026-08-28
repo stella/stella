@@ -1,17 +1,19 @@
 import { describe, expect, test } from "bun:test";
 
-import type { KanbanSchema } from "./grouping";
+import type { KanbanGrouping, KanbanSchema } from "./grouping";
 import { resolveKanbanGrouping } from "./grouping";
 import {
   buildKanbanBoardMatrix,
   createKanbanDropIntent,
   orderKanbanCellsByColumns,
 } from "./matrix";
+import type { ResolveKanbanGroupValueParams } from "./matrix";
 
 type Row = { id: string; owner: string | null; status: string | null };
-type Property = { id: string };
+type Property = { id: "owner" };
+type GroupId = "_empty" | "_status" | "owner";
 
-const schema: KanbanSchema<Row, Property> = {
+const schema: KanbanSchema<Row, Property, GroupId> = {
   builtInGroups: [
     {
       id: "_status",
@@ -22,13 +24,10 @@ const schema: KanbanSchema<Row, Property> = {
     },
   ],
   getPropertyId: (property) => property.id,
-  getPropertyOptions: (property) =>
-    property.id === "owner"
-      ? [
-          { label: "Ada", value: "ada" },
-          { label: "Lin", value: "lin" },
-        ]
-      : null,
+  getPropertyOptions: () => [
+    { label: "Ada", value: "ada" },
+    { label: "Lin", value: "lin" },
+  ],
   properties: [{ id: "owner" }],
 };
 
@@ -38,9 +37,12 @@ const nonRenderableBuiltIn = {
   type: "built-in" as const,
   propertyId: "_empty",
   group: { id: "_empty", options: [] },
-};
+} as const satisfies KanbanGrouping<Row, Property, GroupId>;
 
-const valueFor = ({ grouping, row }: { grouping: typeof group; row: Row }) => {
+const valueFor = ({
+  grouping,
+  row,
+}: ResolveKanbanGroupValueParams<Row, Property, GroupId>) => {
   switch (grouping.type) {
     case "built-in":
       return grouping.propertyId === "_status" ? row.status : null;
@@ -169,15 +171,18 @@ describe("kanban board matrix", () => {
     if (source === undefined || target === undefined) {
       throw new Error("fixture matrix must contain both cells");
     }
-    expect(
-      createKanbanDropIntent({
-        cardId: "one",
-        group,
-        source: source.coordinate,
-        subgroup,
-        target: target.coordinate,
-      }),
-    ).toEqual({
+    const intent = createKanbanDropIntent({
+      cardId: "one",
+      group,
+      source: source.coordinate,
+      subgroup,
+      target: target.coordinate,
+    });
+    const firstChange = intent?.changes.at(0);
+    const axis: GroupId | undefined = firstChange?.groupBy;
+
+    expect(axis).toBe("_status");
+    expect(intent).toEqual({
       cardId: "one",
       changes: [
         { groupBy: "_status", value: "done" },

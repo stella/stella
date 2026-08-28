@@ -28,39 +28,47 @@ export type KanbanSavedGroupReference =
   | { type: "option"; value: string }
   | { type: "uncategorized" };
 
-export type KanbanSavedAxisState = {
+export type KanbanSavedAxisState<TGroupId extends string = string> = {
   emptyGroups: KanbanEmptyGroupVisibility;
-  groupBy: string;
+  groupBy: TGroupId;
   hiddenGroups: readonly KanbanSavedGroupReference[];
   orderedGroups: readonly KanbanSavedGroupReference[];
 };
 
-export type KanbanSavedSubgroupState = KanbanSavedAxisState & {
-  collapsedGroups: readonly KanbanSavedGroupReference[];
-};
+export type KanbanSavedSubgroupState<TGroupId extends string = string> =
+  KanbanSavedAxisState<TGroupId> & {
+    collapsedGroups: readonly KanbanSavedGroupReference[];
+  };
 
 /**
  * View state is deliberately separate from the board's domain data. It may
  * change visibility, order, and collapse, but cannot change a card's cell.
  */
-export type KanbanSavedViewState = {
-  group: KanbanSavedAxisState;
-  subgroup: KanbanSavedSubgroupState | null;
+export type KanbanSavedViewState<TGroupId extends string = string> = {
+  group: KanbanSavedAxisState<TGroupId>;
+  subgroup: KanbanSavedSubgroupState<TGroupId> | null;
   version: 1;
 };
 
-export type WorkspaceKanbanProperty = GenericProperty & {
-  id: string;
-  name: string;
-};
+export type WorkspaceKanbanProperty<TGroupId extends string = string> =
+  GenericProperty & {
+    id: TGroupId;
+    name: string;
+  };
 
 export type CreateWorkspaceKanbanSchemaParams<
   TRow,
+  TBuiltInGroupId extends string,
   TProperty extends WorkspaceKanbanProperty,
 > = {
-  builtInGroups: readonly KanbanBuiltInGroup<TRow>[];
+  builtInGroups: readonly KanbanBuiltInGroup<TRow, TBuiltInGroupId>[];
   properties: readonly TProperty[];
 };
+
+type WorkspaceKanbanSchemaGroupId<
+  TBuiltInGroupId extends string,
+  TProperty extends WorkspaceKanbanProperty,
+> = TBuiltInGroupId | TProperty["id"];
 
 /**
  * Turns the authoritative workspace property model into board declarations.
@@ -68,13 +76,19 @@ export type CreateWorkspaceKanbanSchemaParams<
  */
 export const createWorkspaceKanbanSchema = <
   TRow,
+  TBuiltInGroupId extends string,
   TProperty extends WorkspaceKanbanProperty,
 >({
   builtInGroups,
   properties,
-}: CreateWorkspaceKanbanSchemaParams<TRow, TProperty>): KanbanSchema<
+}: CreateWorkspaceKanbanSchemaParams<
   TRow,
+  TBuiltInGroupId,
   TProperty
+>): KanbanSchema<
+  TRow,
+  TProperty,
+  WorkspaceKanbanSchemaGroupId<TBuiltInGroupId, TProperty>
 > => ({
   builtInGroups,
   getPropertyId: (property) => property.id,
@@ -91,28 +105,30 @@ export const createWorkspaceKanbanSchema = <
   properties,
 });
 
-export type WorkspaceKanbanGroupingChoice = {
-  id: string;
+export type WorkspaceKanbanGroupingChoice<TGroupId extends string = string> = {
+  id: TGroupId;
   label: string;
   type: "built-in" | "property";
 };
 
-export type WorkspaceKanbanBuiltInGroupLabel<TRow> = (
-  group: KanbanBuiltInGroup<TRow>,
-) => string;
+export type WorkspaceKanbanBuiltInGroupLabel<
+  TRow,
+  TGroupId extends string = string,
+> = (group: KanbanBuiltInGroup<TRow, TGroupId>) => string;
 
 /** Property-aware data for a Group or Sub-group picker. */
 export const getWorkspaceKanbanGroupingChoices = <
   TRow,
-  TProperty extends WorkspaceKanbanProperty,
+  TProperty extends WorkspaceKanbanProperty<TGroupId>,
+  TGroupId extends string = string,
 >({
   getBuiltInGroupLabel,
   schema,
 }: {
-  getBuiltInGroupLabel: WorkspaceKanbanBuiltInGroupLabel<TRow>;
-  schema: KanbanSchema<TRow, TProperty>;
-}): WorkspaceKanbanGroupingChoice[] => {
-  const choices: WorkspaceKanbanGroupingChoice[] = [];
+  getBuiltInGroupLabel: WorkspaceKanbanBuiltInGroupLabel<TRow, TGroupId>;
+  schema: KanbanSchema<TRow, TProperty, TGroupId>;
+}): WorkspaceKanbanGroupingChoice<TGroupId>[] => {
+  const choices: WorkspaceKanbanGroupingChoice<TGroupId>[] = [];
   for (const group of schema.builtInGroups) {
     choices.push({
       id: group.id,
@@ -137,38 +153,52 @@ export type WorkspaceKanbanGroupingPickerLabels = {
 
 export type WorkspaceKanbanGroupingPickerProps<
   TRow,
-  TProperty extends WorkspaceKanbanProperty,
+  TProperty extends WorkspaceKanbanProperty<TGroupId>,
+  TGroupId extends string = string,
 > = {
   allowNone: boolean;
-  excludedGroupBy?: string | undefined;
-  getBuiltInGroupLabel: WorkspaceKanbanBuiltInGroupLabel<TRow>;
+  excludedGroupBy?: TGroupId | undefined;
+  getBuiltInGroupLabel: WorkspaceKanbanBuiltInGroupLabel<TRow, TGroupId>;
   labels: WorkspaceKanbanGroupingPickerLabels;
-  onValueChange: (groupBy: string) => void;
-  schema: KanbanSchema<TRow, TProperty>;
-  value: string;
+  onValueChange: (groupBy: TGroupId | "") => void;
+  schema: KanbanSchema<TRow, TProperty, TGroupId>;
+  value: TGroupId | "";
 };
 
-export type ResolveWorkspaceKanbanViewParams<TRow, TProperty> = {
-  schema: KanbanSchema<TRow, TProperty>;
-  state: KanbanSavedViewState;
+export type ResolveWorkspaceKanbanViewParams<
+  TRow,
+  TProperty,
+  TGroupId extends string = string,
+> = {
+  schema: KanbanSchema<TRow, TProperty, TGroupId>;
+  state: KanbanSavedViewState<TGroupId>;
 };
 
-export type ResolvedWorkspaceKanbanView<TRow, TProperty> = {
-  group: KanbanGrouping<TRow, TProperty>;
-  subgroup: KanbanGrouping<TRow, TProperty>;
+export type ResolvedWorkspaceKanbanView<
+  TRow,
+  TProperty,
+  TGroupId extends string = string,
+> = {
+  group: KanbanGrouping<TRow, TProperty, TGroupId>;
+  subgroup: KanbanGrouping<TRow, TProperty, TGroupId>;
 };
 
 /**
  * A property cannot control both axes. Rejecting that configuration here means
  * a later diagonal drag never has two contradictory assignments for one field.
  */
-export const resolveWorkspaceKanbanView = <TRow, TProperty>({
+export const resolveWorkspaceKanbanView = <
+  TRow,
+  TProperty,
+  TGroupId extends string = string,
+>({
   schema,
   state,
 }: ResolveWorkspaceKanbanViewParams<
   TRow,
-  TProperty
->): ResolvedWorkspaceKanbanView<TRow, TProperty> => {
+  TProperty,
+  TGroupId
+>): ResolvedWorkspaceKanbanView<TRow, TProperty, TGroupId> => {
   const group = resolveKanbanGrouping({ groupBy: state.group.groupBy, schema });
   const subgroup =
     state.subgroup === null || state.subgroup.groupBy === state.group.groupBy
