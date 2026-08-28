@@ -36,10 +36,34 @@ describe("inspector tabs", () => {
     expect(classesOf(markup, "inspector-tab-list")).toContain(
       TOOLBAR_ROW_HEIGHT,
     );
-    expect(classesOf(markup, "inspector-tab")).toContain(TOOLBAR_ROW_HEIGHT);
+    expect(classesOf(markup, "inspector-tab")).toEqual(
+      expect.arrayContaining([
+        "size-12",
+        "shrink-0",
+        "focus-visible:ring-inset",
+      ]),
+    );
     expect(classesOf(markup, "inspector-tab-list")).toContain("md:w-12");
     expect(classesOf(markup, "inspector-tab-list")).toEqual(
       expect.arrayContaining(["overflow-x-auto", "md:overflow-y-auto"]),
+    );
+  });
+
+  test("preserves Base UI's state-aware className contract", () => {
+    const markup = renderToStaticMarkup(
+      <InspectorTabs
+        className={({ orientation }) => `orientation-${orientation}`}
+        defaultValue="overview"
+      >
+        <InspectorTabList>
+          <InspectorTab value="overview">Overview</InspectorTab>
+        </InspectorTabList>
+        <InspectorTabPanel value="overview">Content</InspectorTabPanel>
+      </InspectorTabs>,
+    );
+
+    expect(classesOf(markup, "inspector-tabs")).toContain(
+      "orientation-horizontal",
     );
   });
 
