@@ -323,9 +323,9 @@ describe("MODEL_TEMPERATURE_POLICIES", () => {
     expect(shouldEmitTemperature("gemini-3.6-flash")).toBe(false);
     expect(shouldEmitTemperature("google/gemini-3.6-flash")).toBe(false);
     expect(shouldEmitTemperature("gemini-3.5-flash-lite")).toBe(false);
-    // GPT-5 family and the newest Claude models reject sampling overrides.
-    expect(shouldEmitTemperature("gpt-5.4")).toBe(false);
-    expect(shouldEmitTemperature("openai/gpt-5.4-mini")).toBe(false);
+    // Newest GPT-5 and Claude models reject sampling overrides.
+    expect(shouldEmitTemperature("gpt-5.6")).toBe(false);
+    expect(shouldEmitTemperature("openai/gpt-5.5")).toBe(false);
     expect(shouldEmitTemperature("claude-fable-5")).toBe(false);
     // Unknown ids: no positive evidence, no parameter.
     expect(shouldEmitTemperature("o3-mini")).toBe(false);

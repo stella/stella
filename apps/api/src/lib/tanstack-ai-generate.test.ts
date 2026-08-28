@@ -315,7 +315,7 @@ describe("TanStack AI structured output generation", () => {
     const model = {
       adapter: {},
       keySource: "instance",
-      modelId: "gpt-5.4-mini",
+      modelId: "gpt-5.5",
       modelOptions: {},
       provider: "openai",
     } as ResolvedTanStackTextModel;
@@ -338,7 +338,7 @@ describe("TanStack AI structured output generation", () => {
         "106a444562569784437b331c30f0edcfa70367d5e744cdba050d7234d6ee197c",
       service_tier: "default",
     });
-    // gpt-5.4-mini rejects sampling overrides; the caller temperature
+    // gpt-5.5 rejects sampling overrides; the caller temperature
     // is suppressed by the capability gate.
     expect(options).not.toHaveProperty("temperature");
     expect(options).not.toHaveProperty("prompt_cache_retention");
