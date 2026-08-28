@@ -18,18 +18,28 @@ import {
 } from "./ai-provider-canary-config";
 
 describe("AI provider canary role budgets", () => {
+  const model = "model";
+
   test("keeps structured probes within the provider timeout envelope", () => {
     for (const role of MODEL_ROLES) {
       expect(
-        structuredOutputModelRoleMaxOutputTokens(role),
-      ).toBeLessThanOrEqual(modelRoleMaxOutputTokens(role));
+        structuredOutputModelRoleMaxOutputTokens({ modelId: model, role }),
+      ).toBeLessThanOrEqual(modelRoleMaxOutputTokens({ modelId: model, role }));
     }
 
-    expect(structuredOutputModelRoleMaxOutputTokens("reasoning")).toBeLessThan(
-      21_000,
-    );
-    expect(modelRoleMaxOutputTokens("reasoning")).toBeGreaterThan(
-      structuredOutputModelRoleMaxOutputTokens("reasoning"),
+    expect(
+      structuredOutputModelRoleMaxOutputTokens({
+        modelId: model,
+        role: "reasoning",
+      }),
+    ).toBeLessThan(21_000);
+    expect(
+      modelRoleMaxOutputTokens({ modelId: model, role: "reasoning" }),
+    ).toBeGreaterThan(
+      structuredOutputModelRoleMaxOutputTokens({
+        modelId: model,
+        role: "reasoning",
+      }),
     );
   });
 
@@ -39,12 +49,27 @@ describe("AI provider canary role budgets", () => {
         continue;
       }
       expect(TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS).toBeGreaterThan(
-        modelRoleMaxOutputTokens(role),
+        modelRoleMaxOutputTokens({ modelId: model, role }),
       );
     }
-    // Amazon Nova v1 accepts at most 5,120 output tokens and takes part in
+    // Amazon Nova v1 accepts at most 10,000 output tokens and takes part in
     // the weekly rotation; a larger ceiling is rejected before the tool call.
-    expect(TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(5120);
+    expect(TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(10_000);
+  });
+
+  test("clamps role budgets to a model's output limit", () => {
+    const nova = "us.amazon.nova-lite-v1:0";
+    for (const role of MODEL_ROLES) {
+      expect(
+        modelRoleMaxOutputTokens({ modelId: nova, role }),
+      ).toBeLessThanOrEqual(10_000);
+      expect(
+        structuredOutputModelRoleMaxOutputTokens({ modelId: nova, role }),
+      ).toBeLessThanOrEqual(10_000);
+    }
+    expect(
+      modelRoleMaxOutputTokens({ modelId: model, role: "reasoning" }),
+    ).toBeGreaterThan(10_000);
   });
 });
 

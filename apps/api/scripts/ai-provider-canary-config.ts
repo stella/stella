@@ -123,19 +123,49 @@ const MODEL_ROLE_MAX_OUTPUT_TOKENS = {
   pdf: 512,
 } as const satisfies Record<ModelRole, number>;
 
-export const modelRoleMaxOutputTokens = (role: ModelRole) =>
-  MODEL_ROLE_MAX_OUTPUT_TOKENS[role];
+// Providers reject a request whose ceiling exceeds the model's output limit
+// before generating anything (Bedrock: "The maximum tokens you requested
+// exceeds the model limit of 10000"). The weekly rotation runs every role
+// probe on every offered model, so role budgets are clamped to the limits
+// known to be below them; a model absent here takes the role budget as is.
+const MODEL_MAX_OUTPUT_TOKENS: ReadonlyMap<string, number> = new Map([
+  ["us.amazon.nova-pro-v1:0", 10_000],
+  ["us.amazon.nova-lite-v1:0", 10_000],
+  ["us.amazon.nova-micro-v1:0", 10_000],
+]);
+
+const clampToModelOutputLimit = (modelId: string, budget: number) => {
+  const limit = MODEL_MAX_OUTPUT_TOKENS.get(modelId);
+  return limit === undefined ? budget : Math.min(budget, limit);
+};
+
+type RoleBudgetOptions = {
+  modelId: string;
+  role: ModelRole;
+};
+
+export const modelRoleMaxOutputTokens = ({
+  modelId,
+  role,
+}: RoleBudgetOptions) =>
+  clampToModelOutputLimit(modelId, MODEL_ROLE_MAX_OUTPUT_TOKENS[role]);
 
 // Anthropic's SDK rejects non-streaming structured-output requests whose
 // ceiling can exceed its ten-minute window. Keep the reasoning probe below
 // the adapter's documented ~21K clamp while leaving streaming probes intact.
-export const structuredOutputModelRoleMaxOutputTokens = (role: ModelRole) =>
-  role === "reasoning" ? 20_000 : modelRoleMaxOutputTokens(role);
+export const structuredOutputModelRoleMaxOutputTokens = ({
+  modelId,
+  role,
+}: RoleBudgetOptions) =>
+  clampToModelOutputLimit(
+    modelId,
+    role === "reasoning" ? 20_000 : MODEL_ROLE_MAX_OUTPUT_TOKENS[role],
+  );
 
 // Tool-execution probes may spend thinking tokens before the call, so they
-// get more headroom than a short-reply role, while staying under the smallest
-// output ceiling of any offered model (Amazon Nova v1: 5,120) because the
-// weekly rotation runs the same probe on every model.
+// get more headroom than a short-reply role, while staying under every
+// per-model output limit above because the weekly rotation runs the same
+// probe on every model.
 export const TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS = 4096;
 
 export const isCanaryProvider = (value: string): value is CanaryProvider =>
