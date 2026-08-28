@@ -42,6 +42,7 @@ import type {
   BetterAuthExpectedOAuthResource,
   BetterAuthTrustedIdentityMap,
 } from "@/api/scripts/better-auth-migration-audit.logic";
+import { formatBetterAuthScriptFailure } from "@/api/scripts/better-auth-script-failure";
 
 const EXIT_CODE = {
   CONFIGURATION_OR_QUERY_FAILURE: 2,
@@ -307,9 +308,7 @@ if (import.meta.main) {
   run(Bun.argv.slice(2))
     .then((result) => {
       if (Result.isError(result)) {
-        process.stderr.write(
-          `${JSON.stringify({ code: result.error.code, status: "error" })}\n`,
-        );
+        process.stderr.write(formatBetterAuthScriptFailure(result.error));
         process.exitCode =
           result.error instanceof BetterAuthBackfillCommandError &&
           result.error.code === "preflight-mismatch"
@@ -323,9 +322,13 @@ if (import.meta.main) {
       process.exitCode = EXIT_CODE.SUCCESS;
       return undefined;
     })
-    .catch(() => {
+    .catch((error: unknown) => {
       process.stderr.write(
-        `${JSON.stringify({ code: "backfill-execution-failed", status: "error" })}\n`,
+        formatBetterAuthScriptFailure({
+          cause: error,
+          code: "backfill-execution-failed",
+          message: "Backfill failed unexpectedly",
+        }),
       );
       process.exitCode = EXIT_CODE.CONFIGURATION_OR_QUERY_FAILURE;
       return undefined;

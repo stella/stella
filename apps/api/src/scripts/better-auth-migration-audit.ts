@@ -34,6 +34,7 @@ import type {
   BetterAuthAuditMode,
   BetterAuthTrustedIdentityMap,
 } from "@/api/scripts/better-auth-migration-audit.logic";
+import { formatBetterAuthScriptFailure } from "@/api/scripts/better-auth-script-failure";
 
 const EXIT_CODE = {
   CONFIGURATION_OR_QUERY_FAILURE: 2,
@@ -376,18 +377,20 @@ if (import.meta.main) {
   run(Bun.argv.slice(2))
     .then((result) => {
       if (Result.isError(result)) {
-        process.stderr.write(
-          `${JSON.stringify({ code: result.error.code, status: "error" })}\n`,
-        );
+        process.stderr.write(formatBetterAuthScriptFailure(result.error));
         process.exitCode = EXIT_CODE.CONFIGURATION_OR_QUERY_FAILURE;
         return undefined;
       }
       process.exitCode = result.value;
       return undefined;
     })
-    .catch(() => {
+    .catch((error: unknown) => {
       process.stderr.write(
-        `${JSON.stringify({ code: "audit-execution-failed", status: "error" })}\n`,
+        formatBetterAuthScriptFailure({
+          cause: error,
+          code: "audit-execution-failed",
+          message: "Migration audit failed unexpectedly",
+        }),
       );
       process.exitCode = EXIT_CODE.CONFIGURATION_OR_QUERY_FAILURE;
       return undefined;
