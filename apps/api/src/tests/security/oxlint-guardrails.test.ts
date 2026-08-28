@@ -292,7 +292,7 @@ describe("custom oxlint guardrails", () => {
     expect(pluginSource).toContain("useQueryClient().getQueryData");
     expect(pluginSource).toContain("abandoned pending renders");
     expect(reactQuerySource).toContain("ensureRouteInfiniteQueryData");
-    expect(reactQuerySource).toContain("fetchInfiniteQuery");
+    expect(reactQuerySource).toContain("queryClient.infiniteQuery(");
 
     expect(configSource).toContain(
       "./.oxlint-plugins/no-raw-route-query-client.ts",
