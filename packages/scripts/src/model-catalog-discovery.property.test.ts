@@ -201,16 +201,16 @@ describe("model catalog discovery invariants", () => {
   });
 
   test("keeps the canonical OpenAI Sol model represented by its alias", () => {
-    const openAiGpt56Family = [
-      {
-        provider: "openai",
-        modelId: "gpt-5.6-sol",
-        releaseDate: "2026-07-21",
-        status: null,
-        toolCall: true,
-        structuredOutput: true,
-        outputModalities: ["text"],
-      },
+    const solModel = {
+      provider: "openai",
+      modelId: "gpt-5.6-sol",
+      releaseDate: "2026-07-21",
+      status: null,
+      toolCall: true,
+      structuredOutput: true,
+      outputModalities: ["text"],
+    } satisfies UpstreamDiscoveryModel;
+    const terraAndLunaModels = [
       {
         provider: "openai",
         modelId: "gpt-5.6-luna",
@@ -230,7 +230,7 @@ describe("model catalog discovery invariants", () => {
         outputModalities: ["text"],
       },
     ] satisfies UpstreamDiscoveryModel[];
-    const [solModel, ...terraAndLunaModels] = openAiGpt56Family;
+    const openAiGpt56Family = [solModel, ...terraAndLunaModels];
 
     expect(
       findUnreviewedModels({
