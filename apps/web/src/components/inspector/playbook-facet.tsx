@@ -116,6 +116,7 @@ import {
   usePlaybookReviewStore,
 } from "@/components/ai-suggestions/playbook-review-store";
 import type {
+  DocumentReviewSession,
   ReviewProposal,
   StartReviewResult,
 } from "@/components/ai-suggestions/playbook-review-store";
@@ -231,57 +232,13 @@ export const PlaybookFacet = ({
   const author = getWordEditAuthorName(user);
   const navigate = useNavigate();
 
-  // The matter view a document opens in. The facet renders in shared chrome,
-  // so it may be mounted on a route that has none.
-  const viewMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId",
-    shouldThrow: false,
+  const viewId = useMatterViewId();
+  const { documentInMainPane, paneSwap } = useDocumentPaneRouting({
+    entityId,
+    fileFieldId,
+    viewId,
+    workspaceId,
   });
-  const viewId = viewMatch?.params.viewId ?? ALL_VIEW_ID;
-
-  // Which pane this document is reading in. Only the route's own document can
-  // swap panes: another tab's facet has no main pane of its own to move into.
-  const documentMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId/document",
-    shouldThrow: false,
-  });
-  const documentSearch = documentMatch?.search;
-  const routeSearch =
-    documentSearch?.entity === entityId && documentSearch.field === fileFieldId
-      ? documentSearch
-      : null;
-  const currentPane = routeSearch?.pane ?? DOCUMENT_PANE.document;
-  // Where the document itself is being read right now. When the route is
-  // showing it in the main pane, this panel must not reach for the preview:
-  // the document is already on screen and the switch would only take the
-  // review away.
-  const documentInMainPane =
-    routeSearch !== null && currentPane !== DOCUMENT_PANE.review;
-  const paneSwap: ReviewPaneSwap | null =
-    routeSearch === null
-      ? null
-      : {
-          pane: currentPane,
-          onToggle: (pane) => {
-            // The panes trade places in one gesture: the inspector shows the
-            // document exactly when the main pane does not.
-            useInspectorTabsStore
-              .getState()
-              .setFileFacet(fileFieldId, PANE_INSPECTOR_FACET[pane]);
-            detached(
-              navigate({
-                to: "/workspaces/$workspaceId/$viewId/document",
-                params: { workspaceId, viewId },
-                search: (prev) => ({
-                  ...prev,
-                  // The default arrangement is the absence of the param.
-                  pane: pane === DOCUMENT_PANE.document ? undefined : pane,
-                }),
-              }),
-              "playbook-facet.swap-pane",
-            );
-          },
-        };
 
   const registration = useActiveDocxStore(
     useShallow(
@@ -362,49 +319,19 @@ export const PlaybookFacet = ({
   );
   const currentEntityVersionId = versions?.currentVersionId ?? null;
 
-  const { data: playbooksData } = useQuery(
-    playbooksOptions(user.activeOrganizationId, PLAYBOOK_PICKER_LIMIT),
-  );
-  const playbooks =
-    playbooksData && "items" in playbooksData ? playbooksData.items : [];
+  const playbooks = usePlaybookPickerItems(user.activeOrganizationId);
 
-  // A facet with no session (a fresh open, or a reload mid-review) has decided
-  // nothing yet: the server's newest runs for this document are what it shows.
-  // A reviewer who went back to the launcher dismissed that restore, and the
-  // dismissal has to outlive the run.
-  const sessionRunId = session === undefined ? null : session.runId;
-  const restoreAllowed =
-    session === undefined ||
-    (session.runId === null && session.restore === "allowed");
-  // Read unconditionally: the same answer decides what to restore and fills
-  // the History section, which a facet already tracking a run still shows.
-  const { data: runHistory, isPending: runHistoryPending } = useQuery(
-    documentReviewRunsOptions({ workspaceId, entityId, fileFieldId }),
-  );
-  const runs = runHistory?.items ?? EMPTY_RUNS;
-  const restoredRun =
-    runHistory === undefined
-      ? null
-      : restoredRunId(resolveReviewRunRestore(runs));
-  const trackedRunId =
-    sessionRunId === null && restoreAllowed ? restoredRun : sessionRunId;
-  // An earlier run opened from the history is a record: it is shown in place
-  // of the tracked one and answers nothing.
-  const selection = session?.selection ?? TRACKED_RUN_SELECTION;
-  const historyRunId =
-    selection.type === "history" &&
-    runs.some((run) => run.id === selection.runId)
-      ? selection.runId
-      : null;
-  const shownRunId = historyRunId ?? trackedRunId;
+  const {
+    historyPending,
+    historyRunId,
+    restoreAllowed,
+    runs,
+    sessionRunId,
+    shownRunId,
+  } = useShownReviewRun({ entityId, fileFieldId, session, workspaceId });
 
   const editorAvailable = registration !== undefined;
-  const pendingPlaybookId = session?.setup?.playbookId ?? null;
-  const pendingPlaybookName =
-    pendingPlaybookId === null
-      ? ""
-      : (playbooks.find((playbook) => playbook.id === pendingPlaybookId)
-          ?.name ?? "");
+  const pendingPlaybookName = pendingPlaybookNameFor(session, playbooks);
 
   const reportStartFailure = (result: StartReviewResult) => {
     if (result.ok) {
@@ -621,7 +548,7 @@ export const PlaybookFacet = ({
       return (
         <ProposalStreamView
           proposal={session.proposal}
-          referenceNames={referenceNameLookup(session.setup?.references ?? [])}
+          referenceNames={referenceNameLookup(session.setup)}
         />
       );
     }
@@ -637,28 +564,20 @@ export const PlaybookFacet = ({
         onConfirm={() => {
           detached(
             (async () => {
-              const result = await confirmPositions(
-                workspaceId,
-                entityId,
-                fileFieldId,
-                t("common.unexpectedError"),
+              reportStartFailure(
+                await confirmPositions(
+                  workspaceId,
+                  entityId,
+                  fileFieldId,
+                  t("common.unexpectedError"),
+                ),
               );
-              if (!result.ok) {
-                if (result.error) {
-                  analytics.captureError(toAPIError(result.error));
-                }
-                stellaToast.add({
-                  type: "error",
-                  title: t("inspector.review.failed"),
-                  description: result.message,
-                });
-              }
             })(),
             "playbook-facet.confirm-positions",
           );
         }}
         positions={session.positions}
-        referenceNames={referenceNameLookup(session.setup?.references ?? [])}
+        referenceNames={referenceNameLookup(session.setup)}
         skipped={session.skipped}
       />
     );
@@ -684,7 +603,7 @@ export const PlaybookFacet = ({
   // Deciding between a restored run and the launcher needs the history answer
   // first; showing the launcher meanwhile would flash a review the document
   // has already had.
-  if (restoreAllowed && sessionRunId === null && runHistoryPending) {
+  if (restoreAllowed && sessionRunId === null && historyPending) {
     return <ReviewLauncherSkeleton />;
   }
 
@@ -699,17 +618,7 @@ export const PlaybookFacet = ({
       onConfirm={() => {
         detached(
           (async () => {
-            const result = await confirmRunSize(entityId, fileFieldId);
-            if (!result.ok) {
-              if (result.error) {
-                analytics.captureError(toAPIError(result.error));
-              }
-              stellaToast.add({
-                type: "error",
-                title: t("inspector.review.failed"),
-                description: result.message,
-              });
-            }
+            reportStartFailure(await confirmRunSize(entityId, fileFieldId));
           })(),
           "playbook-facet.confirm-run-size",
         );
@@ -801,6 +710,21 @@ export const PlaybookFacet = ({
 const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
 const EMPTY_VERSIONS: readonly EntityVersion[] = [];
 const EMPTY_RUNS: readonly DocumentReviewRunSummary[] = [];
+/** The sides are absent while the detection query is pending or has failed —
+ *  which is not the same as a document with no parties, but reads the same
+ *  here: the picker offers what it was given. */
+const EMPTY_PARTIES: readonly ReviewParty[] = [];
+/** A finding graded against an authored standard has no reference document
+ *  behind it to quote, so the groups are absent rather than empty. */
+const EMPTY_REFERENCE_CITATIONS: NonNullable<
+  ReviewFinding["referenceCitations"]
+> = [];
+
+/** The passages a finding's own standard was quoted from. */
+const referenceCitationGroups = (
+  finding: ReviewFinding,
+): NonNullable<ReviewFinding["referenceCitations"]> =>
+  finding.referenceCitations ?? EMPTY_REFERENCE_CITATIONS;
 
 /** The matter view a document from another matter opens in: all of it. */
 const ALL_VIEW_ID = "all";
@@ -817,14 +741,197 @@ const PANE_INSPECTOR_FACET = {
   margin: "playbook",
 } as const satisfies Record<DocumentPane, FileFacet>;
 
-const referenceNameLookup = (
-  references: readonly ReferenceFile[],
+/** The name to label each reference's passages by, keyed by the field it was
+ *  picked from. */
+const referenceNamesByField = (
+  references: readonly Pick<ReferenceFile, "fileFieldId" | "name">[],
 ): ReferenceNameLookup =>
   new Map(
     references.map((reference) => [reference.fileFieldId, reference.name]),
   );
 
+/** The names for the references a session picked. A session with no setup yet
+ *  has picked none. */
+const referenceNameLookup = (setup: ReviewSetup | null): ReferenceNameLookup =>
+  referenceNamesByField(setup === null ? [] : setup.references);
+
+/** The matter view a document opens in. The facet renders in shared chrome,
+ *  so it may be mounted on a route that has none. */
+const useMatterViewId = (): string => {
+  const viewMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/$viewId",
+    shouldThrow: false,
+  });
+  return viewMatch?.params.viewId ?? ALL_VIEW_ID;
+};
+
+type DocumentPaneRoutingArgs = {
+  entityId: string;
+  fileFieldId: string;
+  viewId: string;
+  workspaceId: string;
+};
+
+type DocumentPaneRouting = {
+  /**
+   * Where the document itself is being read right now. When the route is
+   * showing it in the main pane, this panel must not reach for the preview:
+   * the document is already on screen and the switch would only take the
+   * review away.
+   */
+  documentInMainPane: boolean;
+  /** The pane the document reads in, and the gesture that moves it, when the
+   *  facet is looking at the route's own document. `null` otherwise. */
+  paneSwap: ReviewPaneSwap | null;
+};
+
+/**
+ * Which pane this document is reading in. Only the route's own document can
+ * swap panes: another tab's facet has no main pane of its own to move into.
+ */
+const useDocumentPaneRouting = ({
+  entityId,
+  fileFieldId,
+  viewId,
+  workspaceId,
+}: DocumentPaneRoutingArgs): DocumentPaneRouting => {
+  const navigate = useNavigate();
+  const documentMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/$viewId/document",
+    shouldThrow: false,
+  });
+  const documentSearch = documentMatch?.search;
+  const routeSearch =
+    documentSearch?.entity === entityId && documentSearch.field === fileFieldId
+      ? documentSearch
+      : null;
+  const currentPane = routeSearch?.pane ?? DOCUMENT_PANE.document;
+  const documentInMainPane =
+    routeSearch !== null && currentPane !== DOCUMENT_PANE.review;
+  if (routeSearch === null) {
+    return { documentInMainPane, paneSwap: null };
+  }
+  return {
+    documentInMainPane,
+    paneSwap: {
+      pane: currentPane,
+      onToggle: (pane) => {
+        // The panes trade places in one gesture: the inspector shows the
+        // document exactly when the main pane does not.
+        useInspectorTabsStore
+          .getState()
+          .setFileFacet(fileFieldId, PANE_INSPECTOR_FACET[pane]);
+        detached(
+          navigate({
+            to: "/workspaces/$workspaceId/$viewId/document",
+            params: { workspaceId, viewId },
+            search: (prev) => ({
+              ...prev,
+              // The default arrangement is the absence of the param.
+              pane: pane === DOCUMENT_PANE.document ? undefined : pane,
+            }),
+          }),
+          "playbook-facet.swap-pane",
+        );
+      },
+    },
+  };
+};
+
+/** The organization's playbooks, as the launcher's picker lists them. */
+const usePlaybookPickerItems = (organizationId: string) => {
+  const { data } = useQuery(
+    playbooksOptions(organizationId, PLAYBOOK_PICKER_LIMIT),
+  );
+  return data && "items" in data ? data.items : [];
+};
+
+/** The playbook a starting run was launched with, named from the picker's
+ *  list; empty while the session has picked none. */
+const pendingPlaybookNameFor = (
+  session: DocumentReviewSession | undefined,
+  playbooks: readonly LauncherPlaybook[],
+): string => {
+  const pendingPlaybookId = session?.setup?.playbookId ?? null;
+  if (pendingPlaybookId === null) {
+    return "";
+  }
+  return (
+    playbooks.find((playbook) => playbook.id === pendingPlaybookId)?.name ?? ""
+  );
+};
+
 // -- Durable run --
+
+type ShownReviewRunArgs = {
+  entityId: string;
+  fileFieldId: string;
+  session: DocumentReviewSession | undefined;
+  workspaceId: string;
+};
+
+type ShownReviewRun = {
+  /** Every run the document's list endpoint returned. */
+  runs: readonly DocumentReviewRunSummary[];
+  /** Whether that list is still being read for the first time. */
+  historyPending: boolean;
+  /** Whether the facet may still adopt the document's latest server run. */
+  restoreAllowed: boolean;
+  /** The run this session started, or `null` while it started none. */
+  sessionRunId: string | null;
+  /** The earlier run opened from the history, or `null` while none is. */
+  historyRunId: string | null;
+  /** The run on screen: the history's record, else the tracked one. */
+  shownRunId: string | null;
+};
+
+/**
+ * Which of the document's runs the facet shows.
+ *
+ * A facet with no session (a fresh open, or a reload mid-review) has decided
+ * nothing yet: the server's newest runs for this document are what it shows.
+ * A reviewer who went back to the launcher dismissed that restore, and the
+ * dismissal has to outlive the run.
+ */
+const useShownReviewRun = ({
+  entityId,
+  fileFieldId,
+  session,
+  workspaceId,
+}: ShownReviewRunArgs): ShownReviewRun => {
+  const sessionRunId = session === undefined ? null : session.runId;
+  const restoreAllowed =
+    session === undefined ||
+    (session.runId === null && session.restore === "allowed");
+  // Read unconditionally: the same answer decides what to restore and fills
+  // the History section, which a facet already tracking a run still shows.
+  const { data: runHistory, isPending: historyPending } = useQuery(
+    documentReviewRunsOptions({ workspaceId, entityId, fileFieldId }),
+  );
+  const runs = runHistory?.items ?? EMPTY_RUNS;
+  const restoredRun =
+    runHistory === undefined
+      ? null
+      : restoredRunId(resolveReviewRunRestore(runs));
+  const trackedRunId =
+    sessionRunId === null && restoreAllowed ? restoredRun : sessionRunId;
+  // An earlier run opened from the history is a record: it is shown in place
+  // of the tracked one and answers nothing.
+  const selection = session?.selection ?? TRACKED_RUN_SELECTION;
+  const historyRunId =
+    selection.type === "history" &&
+    runs.some((run) => run.id === selection.runId)
+      ? selection.runId
+      : null;
+  return {
+    historyPending,
+    historyRunId,
+    restoreAllowed,
+    runs,
+    sessionRunId,
+    shownRunId: historyRunId ?? trackedRunId,
+  };
+};
 
 /**
  * The document's review history as the facet reads it: every run the list
@@ -1173,7 +1280,7 @@ const buildFindingChatDraft = ({
   )) {
     parts.push(paragraph(`${labels.target}:`, `"${citation.text.trim()}"`));
   }
-  for (const group of finding.referenceCitations ?? []) {
+  for (const group of referenceCitationGroups(finding)) {
     const name =
       references.find(
         (candidate) => candidate.fileFieldId === group.fileFieldId,
@@ -1285,7 +1392,7 @@ const Launcher = ({
         ) : (
           <PerspectivePicker
             onSelect={onPerspectiveChange}
-            parties={partiesAnswer?.parties ?? []}
+            parties={partiesAnswer?.parties ?? EMPTY_PARTIES}
             value={perspective}
           />
         )}
@@ -1532,6 +1639,7 @@ const PerspectivePicker = ({
 const SKIP_REASON_LABEL_KEYS = {
   "deal-specific-value": "inspector.review.skipReason.dealSpecificValue",
   structural: "inspector.review.skipReason.structural",
+  "lower-weight": "inspector.review.skipReason.lowerWeight",
 } as const satisfies Record<
   Exclude<ReviewSkippedTerm["reason"]["kind"], "other">,
   TranslationKey
@@ -3283,7 +3391,7 @@ type ReviewResultCardProps = {
  *  more than one — a mixed standard gets no more specific a label than
  *  "Standard" on its own. */
 const singleReferenceFieldId = (finding: ReviewFinding): string | null => {
-  const groups = finding.referenceCitations ?? [];
+  const groups = referenceCitationGroups(finding);
   const fieldIds = new Set(groups.map((group) => group.fileFieldId));
   const [first] = groups;
   return fieldIds.size === 1 && first !== undefined ? first.fileFieldId : null;
@@ -3327,7 +3435,7 @@ const ReviewResultCard = ({
     t("inspector.review.insufficientEvidence"),
   );
   const referenceFieldIdByBlockId = new Map(
-    (finding.referenceCitations ?? []).flatMap((group) =>
+    referenceCitationGroups(finding).flatMap((group) =>
       group.citations.map((citation) => [citation.blockId, group.fileFieldId]),
     ),
   );
@@ -3342,7 +3450,7 @@ const ReviewResultCard = ({
   const singleReferenceName =
     singleReferenceId === null
       ? undefined
-      : referenceNameLookup(references).get(singleReferenceId);
+      : referenceNamesByField(references).get(singleReferenceId);
   const standardLabel =
     singleReferenceName === undefined
       ? undefined
@@ -4114,7 +4222,7 @@ const standardPassagesFor = ({
   finding,
   position,
 }: ReviewResultItem): readonly DeltaCitation[] => {
-  const referenced = (finding.referenceCitations ?? []).flatMap(
+  const referenced = referenceCitationGroups(finding).flatMap(
     (group) => group.citations,
   );
   if (referenced.length > 0) {

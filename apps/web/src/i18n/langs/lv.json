@@ -2466,6 +2466,7 @@
       "sizeConfirmTitle": "Apjomīga pārbaude",
       "skipReason": {
         "dealSpecificValue": "Konkrētam darījumam raksturīga vērtība",
+        "lowerWeight": "Mazāks komerciālais svars",
         "structural": "Strukturāla atšķirība"
       },
       "standardColumn": "Standarts",

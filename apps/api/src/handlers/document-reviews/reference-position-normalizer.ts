@@ -14,7 +14,9 @@
  *   - `blocker` is reserved for a stated quantity;
  *   - a `parameter` whose passages state nothing but a calendar date or a
  *     blank is not a comparable term at all, and is reported as skipped
- *     rather than proposed.
+ *     rather than proposed;
+ *   - a pass proposes at most `REVIEW_PROPOSAL_CAP` positions, and everything
+ *     comparable past that is reported as skipped rather than dropped.
  */
 
 import * as v from "valibot";
@@ -61,6 +63,23 @@ export const DEAL_SPECIFIC_VALUE_SKIP_REASON = "deal-specific value";
  *  two documents are built, not something either of them states. */
 export const STRUCTURAL_SKIP_REASON = "structural";
 
+/** Why a comparable term still did not make the checklist: heavier terms
+ *  filled the cap first. Nothing is wrong with it; there was no room. */
+export const LOWER_WEIGHT_SKIP_REASON = "lower weight";
+
+/**
+ * How many positions one proposal pass may add.
+ *
+ * A checklist is read and confirmed by a person before it grades anything, and
+ * past roughly this many terms nobody triages it — they accept the list whole,
+ * which is the same as not reviewing it. So the pass spends the budget on the
+ * terms that carry the deal's money and exposure and reports the rest as
+ * skipped, which is a shorter list a reviewer can actually act on. Seeded
+ * positions do not count against it: a reviewer who brought a playbook is
+ * asking what the reference adds to it.
+ */
+export const REVIEW_PROPOSAL_CAP = 25;
+
 /**
  * The reason phrases the prompt itself hands the model, read back as codes.
  *
@@ -72,6 +91,7 @@ export const STRUCTURAL_SKIP_REASON = "structural";
 const CODED_SKIP_REASONS: Record<string, ReviewSkipReason> = {
   [DEAL_SPECIFIC_VALUE_SKIP_REASON]: { kind: "deal-specific-value" },
   [STRUCTURAL_SKIP_REASON]: { kind: "structural" },
+  [LOWER_WEIGHT_SKIP_REASON]: { kind: "lower-weight" },
 };
 
 export const codeSkipReason = (text: string): ReviewSkipReason =>
@@ -269,8 +289,9 @@ export type ReviewProposalEvent =
 export type ProposalNormalizer = {
   /** The target's sides. Accepted once; later calls report nothing. */
   parties: (proposed: readonly ProposedParty[]) => ReviewProposalEvent[];
-  /** One proposed term: a position, a skip (a deal-specific value), or
-   *  nothing (unquotable, repeated, or past the cap). */
+  /** One proposed term: a position, a skip (a deal-specific value, or a
+   *  comparable term past the proposal cap), or nothing (unquotable or
+   *  already proposed). */
   position: (proposed: ProposedPosition) => ReviewProposalEvent[];
   /** One term the model itself declined to compare. */
   skipped: (proposed: ProposedSkippedTerm) => ReviewProposalEvent[];
@@ -279,6 +300,10 @@ export type ProposalNormalizer = {
 export type ProposalNormalizerArgs = {
   seededPositions: readonly Position[];
   sources: readonly ReferenceSource[];
+  /** The hard bound on what a run can carry, seeded positions included: the
+   *  wire schema's own limit, restated so a list this module builds can never
+   *  fail the request that carries it. `REVIEW_PROPOSAL_CAP` is what actually
+   *  ends a normal pass, well under this. */
   positionsMax: number;
   /** The stable id a position keeps for the rest of its life: findings,
    *  decisions and any playbook saved out of the run are keyed by it. Supplied
@@ -300,9 +325,13 @@ export const createProposalNormalizer = ({
   const seenSubjects = new Set<string>();
   const counts = {
     parties: 0,
-    // Seeded positions occupy the cap: the reviewer keeps what they had.
-    positions: seededPositions.length,
-    emittedPositions: 0,
+    /** Seeded plus proposed: everything the run will carry, held under the
+     *  hard wire bound. */
+    total: seededPositions.length,
+    /** What this pass added, and the only count the proposal cap reads: the
+     *  reviewer keeps the playbook they brought and still gets a full pass of
+     *  new terms against it. */
+    proposed: 0,
     skipped: 0,
   };
 
@@ -342,7 +371,9 @@ export const createProposalNormalizer = ({
     },
 
     position: (proposed) => {
-      if (counts.positions >= positionsMax) {
+      // The wire bound, not the review judgment: past it the request that
+      // carries the list would be refused, so there is nothing to report.
+      if (counts.total >= positionsMax) {
         return [];
       }
       const issue = proposed.issue.trim();
@@ -368,11 +399,19 @@ export const createProposalNormalizer = ({
         return skip(issue, { kind: "deal-specific-value" });
       }
 
+      // The cap, enforced here rather than trusted to the prompt: a model that
+      // keeps writing past it produces a checklist nobody triages. The term is
+      // comparable, so it is reported as skipped and the reviewer sees the
+      // size of what a longer list would have added.
+      if (counts.proposed >= REVIEW_PROPOSAL_CAP) {
+        return skip(issue, { kind: "lower-weight" });
+      }
+
       const purpose = proposed.purpose.trim();
       const guidance = proposed.guidance.trim();
-      counts.positions += 1;
-      const emitted = counts.emittedPositions;
-      counts.emittedPositions += 1;
+      counts.total += 1;
+      const emitted = counts.proposed;
+      counts.proposed += 1;
       return [
         {
           type: "position",

@@ -2466,6 +2466,7 @@
       "sizeConfirmTitle": "Nagy terjedelmű ellenőrzés",
       "skipReason": {
         "dealSpecificValue": "Ügyletspecifikus érték",
+        "lowerWeight": "Kisebb üzleti súly",
         "structural": "Szerkezeti eltérés"
       },
       "standardColumn": "Etalon",

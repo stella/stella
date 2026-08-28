@@ -161,15 +161,7 @@
     "count": 0,
     "files": {}
   },
-  "no-direct-buffer-cleanup-intent-delete-suppressions": {
-    "count": 0,
-    "files": {}
-  },
   "no-direct-ingestion-checkpoint-write-suppressions": {
-    "count": 0,
-    "files": {}
-  },
-  "require-buffer-cleanup-intent-status-suppressions": {
     "count": 0,
     "files": {}
   },
@@ -248,10 +240,6 @@
     "count": 0,
     "files": {}
   },
-  "no-internal-module-mock-suppressions": {
-    "count": 0,
-    "files": {}
-  },
   "lint-suppression-directives": {
     "count": 743,
     "files": {
@@ -317,7 +305,6 @@
       "apps/api/src/handlers/contacts/import-validate.ts": 1,
       "apps/api/src/handlers/contacts/update.ts": 1,
       "apps/api/src/handlers/entities/copy-utils.ts": 2,
-      "apps/api/src/handlers/entities/delete-version.ts": 1,
       "apps/api/src/handlers/entities/zip-archive.ts": 1,
       "apps/api/src/handlers/external-preview/preview.ts": 2,
       "apps/api/src/handlers/fields/mark-column-flag.ts": 1,
@@ -367,7 +354,7 @@
       "apps/api/src/lib/document-processing-handoff.ts": 1,
       "apps/api/src/lib/document-processing-queue.ts": 1,
       "apps/api/src/lib/document-reference.ts": 2,
-      "apps/api/src/lib/document-review/review-grade.ts": 1,
+      "apps/api/src/lib/document-review/review-grade.ts": 3,
       "apps/api/src/lib/docx-stamp.ts": 2,
       "apps/api/src/lib/docx/adapt-ai-fields.ts": 1,
       "apps/api/src/lib/docx/discover-clause-slots.ts": 1,
@@ -461,8 +448,7 @@
       "apps/web/src/components/ai-config-providers-editor.tsx": 2,
       "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 1,
       "apps/web/src/components/ai-suggestions/host.tsx": 1,
-      "apps/web/src/components/ai-suggestions/review-panel.impl.tsx": 1,
-      "apps/web/src/components/autocomplete/use-autocomplete-stream.ts": 1,
+      "apps/web/src/components/ai-suggestions/review-redline-preview.tsx": 1,
       "apps/web/src/components/chat-editor-provider.tsx": 7,
       "apps/web/src/components/chat-mention-list.tsx": 2,
       "apps/web/src/components/chat/chat-anon-decorations-extension.ts": 1,
@@ -474,6 +460,7 @@
       "apps/web/src/components/docx/docx-browser-editor.tsx": 5,
       "apps/web/src/components/docx/docx-edit-mode.logic.ts": 3,
       "apps/web/src/components/docx/use-docx-block-scroll.ts": 1,
+      "apps/web/src/components/docx/use-folio-collaboration-session.ts": 1,
       "apps/web/src/components/inspector/anonymization-facet.tsx": 1,
       "apps/web/src/components/inspector/external-reference-panel.tsx": 8,
       "apps/web/src/components/inspector/inspector-broadcast.ts": 1,
@@ -512,6 +499,7 @@
       "apps/web/src/lib/pdf/pdfjs-loader.ts": 1,
       "apps/web/src/lib/pdf/uint8array-to-hex-polyfill.logic.ts": 2,
       "apps/web/src/lib/slot.tsx": 1,
+      "apps/web/src/lib/sse-events.ts": 1,
       "apps/web/src/lib/workspaces/queries/docx-suggestions.ts": 1,
       "apps/web/src/lib/workspaces/queries/entities.ts": 3,
       "apps/web/src/lib/workspaces/queries/legal-lists.ts": 1,
@@ -626,9 +614,9 @@
     "files": {}
   },
   "capability-domain-action-verbs": {
-    "count": 163,
+    "count": 164,
     "files": {
-      "apps/api/scripts/lib/capability-catalog.ts": 163
+      "apps/api/scripts/lib/capability-catalog.ts": 164
     }
   },
   "cli-shadowed-namespaces": {
@@ -640,10 +628,6 @@
     "files": {}
   },
   "workspace-only-rls-on-org-tables": {
-    "count": 0,
-    "files": {}
-  },
-  "internal-module-mock-ledger-entries": {
     "count": 0,
     "files": {}
   }

@@ -113,22 +113,8 @@ export const tallyReviewFlags = (
  * text is one click away under "Why", so a missed split costs a caption a line,
  * never a reader a sentence.
  */
-const NON_TERMINAL_ABBREVIATIONS = new Set([
-  "e.g",
-  "i.e",
-  "cf",
-  "vs",
-  "no",
-  "nos",
-  "art",
-  "arts",
-  "cl",
-  "para",
-  "paras",
-  "sec",
-  "secs",
-  "approx",
-]);
+const NON_TERMINAL_ABBREVIATION =
+  /^(?:e\.g|i\.e|cf|vs|nos?|arts?|cl|paras?|secs?|approx)$/iu;
 
 const SENTENCE_END = /[.!?]["'”’)\]]?(?=\s|$)/gu;
 
@@ -151,7 +137,7 @@ export const firstSentence = (text: string): string => {
     if (preceding.length <= 1) {
       continue;
     }
-    if (NON_TERMINAL_ABBREVIATIONS.has(preceding.toLowerCase())) {
+    if (NON_TERMINAL_ABBREVIATION.test(preceding)) {
       continue;
     }
     // A decimal ("Net 30.5 days"), not a full stop.

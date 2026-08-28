@@ -2466,6 +2466,7 @@
       "sizeConfirmTitle": "Revisão extensa",
       "skipReason": {
         "dealSpecificValue": "Valor específico da operação",
+        "lowerWeight": "Menor peso comercial",
         "structural": "Diferença estrutural"
       },
       "standardColumn": "O padrão",

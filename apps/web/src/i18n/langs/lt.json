@@ -2466,6 +2466,7 @@
       "sizeConfirmTitle": "Didelės apimties patikra",
       "skipReason": {
         "dealSpecificValue": "Konkretaus sandorio reikšmė",
+        "lowerWeight": "Mažesnis komercinis svoris",
         "structural": "Struktūrinis skirtumas"
       },
       "standardColumn": "Standartas",

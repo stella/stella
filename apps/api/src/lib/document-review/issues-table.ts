@@ -16,6 +16,7 @@ import {
 } from "@stll/folio-core/server";
 import type { TableCellSpec } from "@stll/folio-core/server";
 
+import { arrayOrEmpty } from "@/api/lib/array";
 import { perspectivePartyPhrase } from "@/api/lib/document-review/contract";
 import type {
   ReferenceImpact,
@@ -165,7 +166,7 @@ const precedentPosition = ({
   switch (finding.standardSource) {
     case "reference": {
       const passages: string[] = [];
-      for (const group of finding.referenceCitations ?? []) {
+      for (const group of arrayOrEmpty(finding.referenceCitations)) {
         const name = referenceNameByFieldId.get(group.fileFieldId);
         const prefix =
           labelReferences && name !== undefined ? `[${name}] ` : "";

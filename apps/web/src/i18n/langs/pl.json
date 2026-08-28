@@ -2466,6 +2466,7 @@
       "sizeConfirmTitle": "Obszerna weryfikacja",
       "skipReason": {
         "dealSpecificValue": "Wartość właściwa dla transakcji",
+        "lowerWeight": "Mniejsza waga handlowa",
         "structural": "Różnica strukturalna"
       },
       "standardColumn": "Wzorzec",

@@ -2469,6 +2469,7 @@ type Messages = {
       "sizeConfirmTitle": "Large review";
       "skipReason": {
         "dealSpecificValue": "Deal-specific value";
+        "lowerWeight": "Lower commercial weight";
         "structural": "Structural difference";
       };
       "standardColumn": "Standard";

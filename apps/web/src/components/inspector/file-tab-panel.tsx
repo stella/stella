@@ -171,10 +171,11 @@ const pulseChatInputForReview = (facet: Facet, entityId: string): void => {
     return;
   }
   const store = useReviewStore.getState();
-  const hasChatProposal = (store.sessions[entityId] ?? []).some(
+  // No entry at all means the chat has proposed nothing for this document.
+  const hasChatProposal = store.sessions[entityId]?.some(
     (item) => item.origin === REVIEW_SUGGESTION_ORIGIN.chat,
   );
-  if (hasChatProposal) {
+  if (hasChatProposal === true) {
     store.pulseChatInput(entityId);
   }
 };

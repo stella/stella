@@ -107,6 +107,7 @@ const partySchema = v.object({
 const skipReasonSchema = v.variant("kind", [
   v.object({ kind: v.literal("deal-specific-value") }),
   v.object({ kind: v.literal("structural") }),
+  v.object({ kind: v.literal("lower-weight") }),
   v.object({ kind: v.literal("other"), text: v.string() }),
 ]);
 

@@ -21,7 +21,7 @@ export type ReviewParty = { role: string; name: string | null };
 export type ReviewSkippedTerm = { subject: string; reason: ReviewSkipReason };
 
 /**
- * Why a subject was not compared. The two the engine decides itself are codes
+ * Why a subject was not compared. The ones the engine decides itself are codes
  * this app renders in the reader's language; `other` carries the model's own
  * words, which follow the document rather than the interface. Mirrors the
  * API's `ReviewSkipReason` — the run read is typed against the API, so a drift
@@ -30,6 +30,7 @@ export type ReviewSkippedTerm = { subject: string; reason: ReviewSkipReason };
 export type ReviewSkipReason =
   | { kind: "deal-specific-value" }
   | { kind: "structural" }
+  | { kind: "lower-weight" }
   | { kind: "other"; text: string };
 
 /**

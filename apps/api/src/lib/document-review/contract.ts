@@ -48,14 +48,19 @@ export type ReviewSkippedTerm = { subject: string; reason: ReviewSkipReason };
 /**
  * Why a subject was read and not compared.
  *
- * Coded, not prose: the two reasons the prompt itself hands the model are
- * decided here and rendered in the reader's language, so a Czech reviewer is
- * not told "deal-specific value" in English. `other` carries the model's own
- * words, which follow the document rather than the interface.
+ * Coded, not prose: the reasons the prompt itself hands the model are decided
+ * here and rendered in the reader's language, so a Czech reviewer is not told
+ * "deal-specific value" in English. `other` carries the model's own words,
+ * which follow the document rather than the interface.
+ *
+ * `lower-weight` is the reason the checklist's own size produces: the term is
+ * comparable and was simply outweighed by the ones that fit under the
+ * proposal cap.
  */
 export type ReviewSkipReason =
   | { kind: "deal-specific-value" }
   | { kind: "structural" }
+  | { kind: "lower-weight" }
   | { kind: "other"; text: string };
 
 export const REVIEW_SKIP_SUBJECT_MAX_LENGTH = 256;

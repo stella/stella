@@ -2466,6 +2466,7 @@
       "sizeConfirmTitle": "Mahukas kontroll",
       "skipReason": {
         "dealSpecificValue": "Tehingupõhine väärtus",
+        "lowerWeight": "Väiksem äriline kaal",
         "structural": "Struktuurne erinevus"
       },
       "standardColumn": "Standardtekst",

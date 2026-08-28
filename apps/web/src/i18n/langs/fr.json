@@ -2466,6 +2466,7 @@
       "sizeConfirmTitle": "Révision volumineuse",
       "skipReason": {
         "dealSpecificValue": "Valeur propre à l'opération",
+        "lowerWeight": "Poids commercial moindre",
         "structural": "Différence structurelle"
       },
       "standardColumn": "Le standard",

@@ -16,9 +16,11 @@ import {
   createPartialProposalReader,
   createProposalNormalizer,
   DEAL_SPECIFIC_VALUE_SKIP_REASON,
+  LOWER_WEIGHT_SKIP_REASON,
   normalizeProposal,
   proposedPositionSchema,
   proposedPositionsSchema,
+  REVIEW_PROPOSAL_CAP,
   statesComparableValue,
   STRUCTURAL_SKIP_REASON,
 } from "@/api/handlers/document-reviews/reference-position-normalizer";
@@ -299,7 +301,9 @@ describe("positions", () => {
     ).toEqual([...POSITION_TERM_KINDS]);
   });
 
-  test("stops at the position cap", () => {
+  // The wire bound, which the seeded positions do count against: past it the
+  // request carrying the list would be refused outright.
+  test("stops at the hard wire bound", () => {
     const positions = normalizePositions(
       [
         proposed({ issue: "First" }),
@@ -313,6 +317,51 @@ describe("positions", () => {
       "Governing law",
       "First",
     ]);
+  });
+
+  // The cap is what a reviewer can read and confirm by hand. A model that
+  // keeps writing past it does not get a longer checklist: the remainder is
+  // reported as skipped, so the size of what was left out stays visible
+  // without the list growing.
+  test("reports comparable terms past the proposal cap as skipped", () => {
+    const { positions, skipped } = normalizeProposal({
+      output: {
+        parties: [],
+        positions: Array.from({ length: REVIEW_PROPOSAL_CAP + 2 }, (_, index) =>
+          proposed({ issue: `Term ${String(index)}` }),
+        ),
+        skipped: [],
+      },
+      seededPositions: [],
+      sources: [source],
+      positionsMax: 200,
+      newSourceId: sequentialIds(),
+    });
+
+    expect(positions).toHaveLength(REVIEW_PROPOSAL_CAP);
+    expect(skipped).toEqual([
+      {
+        subject: `Term ${String(REVIEW_PROPOSAL_CAP)}`,
+        reason: { kind: "lower-weight" },
+      },
+      {
+        subject: `Term ${String(REVIEW_PROPOSAL_CAP + 1)}`,
+        reason: { kind: "lower-weight" },
+      },
+    ]);
+  });
+
+  // A reviewer who brought a playbook is asking what the reference adds to
+  // it, and must not get a shorter answer than one who brought nothing.
+  test("spends the whole proposal cap alongside seeded positions", () => {
+    const positions = normalizePositions(
+      Array.from({ length: REVIEW_PROPOSAL_CAP }, (_, index) =>
+        proposed({ issue: `Term ${String(index)}` }),
+      ),
+      { seededPositions: [seeded], positionsMax: 200 },
+    );
+
+    expect(positions).toHaveLength(REVIEW_PROPOSAL_CAP + 1);
   });
 });
 
@@ -433,12 +482,20 @@ describe("skipped", () => {
         { subject: "Long-stop date", reason: DEAL_SPECIFIC_VALUE_SKIP_REASON },
         { subject: "Annex list", reason: ` ${STRUCTURAL_SKIP_REASON} ` },
         { subject: "Notary", reason: "Structural" },
+        {
+          subject: "Interest on late payment",
+          reason: LOWER_WEIGHT_SKIP_REASON,
+        },
         { subject: "Escrow agent", reason: "Only in the precedent." },
       ]),
     ).toEqual([
       { subject: "Long-stop date", reason: { kind: "deal-specific-value" } },
       { subject: "Annex list", reason: { kind: "structural" } },
       { subject: "Notary", reason: { kind: "structural" } },
+      {
+        subject: "Interest on late payment",
+        reason: { kind: "lower-weight" },
+      },
       {
         subject: "Escrow agent",
         reason: { kind: "other", text: "Only in the precedent." },

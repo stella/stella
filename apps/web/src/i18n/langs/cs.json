@@ -2466,6 +2466,7 @@
       "sizeConfirmTitle": "Rozsáhlá kontrola",
       "skipReason": {
         "dealSpecificValue": "Hodnota specifická pro transakci",
+        "lowerWeight": "Nižší komerční váha",
         "structural": "Strukturální rozdíl"
       },
       "standardColumn": "Standard",

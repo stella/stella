@@ -98,6 +98,7 @@ export const reviewSkippedTermSchema = t.Object({
   reason: t.Union([
     t.Object({ kind: t.Literal("deal-specific-value") }),
     t.Object({ kind: t.Literal("structural") }),
+    t.Object({ kind: t.Literal("lower-weight") }),
     t.Object({
       kind: t.Literal("other"),
       text: t.String({

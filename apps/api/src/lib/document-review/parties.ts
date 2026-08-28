@@ -39,8 +39,8 @@ const TIMEOUT_MS = 60_000;
 
 // Bumped whenever `SYSTEM_PROMPT` or `proposedPartySchema` changes shape, so
 // a row cached under an earlier prompt is recomputed instead of read as
-// today's answer. Stored alongside the cached row (see `handlers/document-
-// reviews/parties.ts`).
+// today's answer. Stored alongside the cached row
+// (see `handlers/document-reviews/parties.ts`).
 export const REVIEW_PARTIES_PROMPT_VERSION = 1;
 
 // No transforms here: the schema is handed to the provider as JSON Schema,

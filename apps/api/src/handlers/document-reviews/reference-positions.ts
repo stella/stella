@@ -7,6 +7,11 @@
  * ("the warranty framework") is not a position at all — it is several, and it
  * is what produces whole-block rewrites downstream.
  *
+ * A pass proposes at most `REVIEW_PROPOSAL_CAP` of them, spent heaviest first:
+ * a reviewer confirms this list by hand, and past that length it stops being
+ * read. Comparable terms the cap left out are reported as skipped, so the
+ * shorter list is a stated choice rather than a silent truncation.
+ *
  * Every proposed passage is verified against the parsed blocks before it is
  * returned: a position may only quote text the reference actually contains,
  * because that quoted text is what the run — and any playbook saved out of it
@@ -29,8 +34,10 @@ import {
   createPartialProposalReader,
   createProposalNormalizer,
   DEAL_SPECIFIC_VALUE_SKIP_REASON,
+  LOWER_WEIGHT_SKIP_REASON,
   normalizeProposal,
   proposedPositionsSchema,
+  REVIEW_PROPOSAL_CAP,
   STRUCTURAL_SKIP_REASON,
 } from "@/api/handlers/document-reviews/reference-position-normalizer";
 import type {
@@ -101,7 +108,11 @@ Do not judge the target, score it, or propose wording. Do not repeat a position 
 
 parties lists the target's sides only: role is the defined term the target uses (Purchaser, Seller, Landlord, Licensee), name is the legal name when the target states it, otherwise null. Omit guarantors, agents and notaries unless they are principal parties.
 
-Output parties first, then positions ordered by severity — every blocker and high before any medium or low — then skipped. Finish each position completely before starting the next.`;
+Order positions by commercial weight, heaviest first: money and liability terms (the caps, the baskets, the de minimis, the indemnities), then the time bars, then whether a protection is present at all, then standards of wording. Within one of those tiers, the more severe first.
+
+Propose at most ${String(REVIEW_PROPOSAL_CAP)} positions and stop there, even where the reference states more. A reviewer reads and confirms this list before it grades anything, and a longer one is accepted whole rather than read. Where the reference states further comparable terms that are simply lighter than the ones you proposed, put each in skipped with the reason exactly "${LOWER_WEIGHT_SKIP_REASON}", so the reviewer sees what a longer checklist would have added.
+
+Output parties first, then positions in that order, then skipped. Finish each position completely before starting the next.`;
 
 /** The side the review takes, stated where the model reads it: after the
  *  documents (the cached region) and before the checklist it is asked for. */

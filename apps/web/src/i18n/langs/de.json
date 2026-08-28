@@ -2466,6 +2466,7 @@
       "sizeConfirmTitle": "Umfangreiche Prüfung",
       "skipReason": {
         "dealSpecificValue": "Transaktionsspezifischer Wert",
+        "lowerWeight": "Geringeres wirtschaftliches Gewicht",
         "structural": "Struktureller Unterschied"
       },
       "standardColumn": "Der Standard",

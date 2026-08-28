@@ -2466,6 +2466,7 @@
       "sizeConfirmTitle": "مراجعة كبيرة",
       "skipReason": {
         "dealSpecificValue": "قيمة خاصة بهذه الصفقة",
+        "lowerWeight": "أهمية تجارية أقل",
         "structural": "اختلاف هيكلي"
       },
       "standardColumn": "المعيار",
