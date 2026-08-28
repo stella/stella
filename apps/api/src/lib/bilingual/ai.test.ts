@@ -23,7 +23,14 @@ const generateObjectMock = mock(async ({ prompt }: GenerateOptions) => {
 });
 
 void mock.module("@/api/lib/tanstack-ai-generate", () => ({
+  abortControllerFromSignal: mock(),
   generateTanStackObjectForRole: generateObjectMock,
+  generateTanStackTextForRole: mock(),
+  mergeGenerationOptions: mock(),
+  resolveTanStackTextModel: mock(),
+  streamTanStackObjectForRole: mock(),
+  streamTanStackTextForRole: mock(),
+  systemPromptsPatch: mock(),
 }));
 
 void mock.module("@/api/lib/analytics/tanstack-ai", () => ({
