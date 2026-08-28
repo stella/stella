@@ -233,6 +233,7 @@ export const BYOK_MODEL_OPTIONS = {
   ],
   openai: [
     "gpt-5.6",
+    "gpt-5.6-terra",
     "gpt-5.6-luna",
     "gpt-5.5",
     "gpt-5.4",
@@ -361,7 +362,10 @@ export const MODEL_DISPLAY_METADATA = {
     displayName: "Claude Haiku 4.5",
     iconProvider: "anthropic",
   },
-  "gpt-5.6": { displayName: "GPT-5.6", iconProvider: "openai" },
+  // `gpt-5.6` is OpenAI's alias for the Sol model. Keep the API alias as the
+  // canonical ID while exposing the family member's product name in pickers.
+  "gpt-5.6": { displayName: "GPT-5.6 Sol", iconProvider: "openai" },
+  "gpt-5.6-terra": { displayName: "GPT-5.6 Terra", iconProvider: "openai" },
   "gpt-5.6-luna": { displayName: "GPT-5.6 Luna", iconProvider: "openai" },
   "gpt-5.5": { displayName: "GPT-5.5", iconProvider: "openai" },
   "gpt-5.4": { displayName: "GPT-5.4", iconProvider: "openai" },

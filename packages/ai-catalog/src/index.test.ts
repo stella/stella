@@ -11,13 +11,16 @@ import {
   CONTEXT_WINDOW_TOKENS,
   DEFAULT_CONTEXT_WINDOW_TOKENS,
   getContextWindowTokens,
+  getModelDisplayMetadata,
   getModelRate,
   getModelReasoningEfforts,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
   DEFAULT_MODELS,
+  MODEL_DEFAULT_REASONING_EFFORTS,
   MODEL_RATES,
   MODEL_REASONING_EFFORTS,
+  MODEL_TEMPERATURE_POLICIES,
   MODEL_ROLES,
   REASONING_EFFORTS,
   resolveReasoningEffort,
@@ -30,6 +33,60 @@ const FLOATING_GOOGLE_MODEL_POINTERS = [
   "gemini-flash-latest",
   "gemini-flash-lite-latest",
 ] as const;
+
+const DIRECT_GPT_56_MODEL_IDS = [
+  "gpt-5.6",
+  "gpt-5.6-terra",
+  "gpt-5.6-luna",
+] as const;
+
+const DIRECT_GPT_56_DISPLAY_NAMES = {
+  "gpt-5.6": "GPT-5.6 Sol",
+  "gpt-5.6-terra": "GPT-5.6 Terra",
+  "gpt-5.6-luna": "GPT-5.6 Luna",
+} as const satisfies Record<(typeof DIRECT_GPT_56_MODEL_IDS)[number], string>;
+
+describe("direct OpenAI GPT-5.6 family", () => {
+  test("exposes every tier with complete catalog metadata", () => {
+    expect(
+      BYOK_MODEL_OPTIONS.openai.filter((modelId) =>
+        modelId.startsWith("gpt-5.6"),
+      ),
+    ).toEqual([...DIRECT_GPT_56_MODEL_IDS]);
+
+    for (const modelId of DIRECT_GPT_56_MODEL_IDS) {
+      const displayName = DIRECT_GPT_56_DISPLAY_NAMES[modelId];
+      expect(getModelDisplayMetadata(modelId)).toEqual({
+        displayName,
+        iconProvider: "openai",
+      });
+      expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.openai).toContain(modelId);
+      expect(MODEL_REASONING_EFFORTS[modelId]).toEqual([
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+      ]);
+      expect(MODEL_DEFAULT_REASONING_EFFORTS[modelId]).toBeNull();
+      expect(MODEL_TEMPERATURE_POLICIES[modelId]).toBe("omit");
+      expect(getModelRate(modelId)).toBeDefined();
+      expect(getContextWindowTokens(modelId)).toBe(922_000);
+    }
+
+    // OpenAI documents gpt-5.6 as an alias for Sol; both forms must resolve
+    // to the same executable metadata while the picker shows the product name.
+    expect(getModelDisplayMetadata("gpt-5.6-sol")).toEqual({
+      displayName: "GPT-5.6 Sol",
+      iconProvider: "openai",
+    });
+    expect(getModelRate("gpt-5.6-sol")).toBe(getModelRate("gpt-5.6"));
+    expect(getContextWindowTokens("gpt-5.6-sol")).toBe(
+      getContextWindowTokens("gpt-5.6"),
+    );
+  });
+});
 
 describe("BYOK provider role support", () => {
   test("does not route PDF flows through Mistral document-unsupported models", () => {
