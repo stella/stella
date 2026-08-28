@@ -1,20 +1,11 @@
 "use client";
 
+import * as React from "react";
+
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 
-import { useViewportWidth } from "../hooks/use-viewport-width";
 import { cn } from "../lib/utils";
 import { TOOLBAR_ROW_HEIGHT } from "./layout-tokens";
-
-const inspectorRailBreakpointPx = 768;
-
-export const resolveInspectorTabOrientation = (viewportWidth: number) =>
-  viewportWidth >= inspectorRailBreakpointPx ? "vertical" : "horizontal";
-
-const resolveClassName = <State,>(
-  value: string | ((state: State) => string | undefined) | undefined,
-  state: State,
-) => (typeof value === "function" ? value(state) : value);
 
 /**
  * A tabbed inspector keeps its content beside the same fixed-width rail as a
@@ -25,7 +16,7 @@ export const InspectorTabs = ({
   className,
   ...props
 }: Omit<TabsPrimitive.Root.Props, "orientation">) => {
-  const viewportWidth = useViewportWidth();
+  const isRailLayout = useInspectorRailLayout();
 
   return (
     <TabsPrimitive.Root
@@ -37,10 +28,38 @@ export const InspectorTabs = ({
       }
       data-slot="inspector-tabs"
       {...props}
-      orientation={resolveInspectorTabOrientation(viewportWidth)}
+      orientation={resolveInspectorTabOrientation(isRailLayout)}
     />
   );
 };
+
+export const INSPECTOR_RAIL_MEDIA_QUERY = "(min-width: 48rem)" as const;
+
+export const resolveInspectorTabOrientation = (isRailLayout: boolean) =>
+  isRailLayout ? "vertical" : "horizontal";
+
+const subscribeToInspectorRailLayout = (onChange: () => void) => {
+  const mediaQueryList = window.matchMedia(INSPECTOR_RAIL_MEDIA_QUERY);
+  mediaQueryList.addEventListener("change", onChange);
+  return () => mediaQueryList.removeEventListener("change", onChange);
+};
+
+const getInspectorRailLayoutSnapshot = () =>
+  window.matchMedia(INSPECTOR_RAIL_MEDIA_QUERY).matches;
+
+const getServerInspectorRailLayoutSnapshot = () => false;
+
+const useInspectorRailLayout = () =>
+  React.useSyncExternalStore(
+    subscribeToInspectorRailLayout,
+    getInspectorRailLayoutSnapshot,
+    getServerInspectorRailLayoutSnapshot,
+  );
+
+const resolveClassName = <State,>(
+  value: string | ((state: State) => string | undefined) | undefined,
+  state: State,
+) => (typeof value === "function" ? value(state) : value);
 
 export const InspectorTabList = ({
   className,

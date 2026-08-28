@@ -8,6 +8,7 @@ import {
   InspectorTabList,
   InspectorTabPanel,
   InspectorTabs,
+  INSPECTOR_RAIL_MEDIA_QUERY,
   resolveInspectorTabOrientation,
 } from "./tabs";
 
@@ -19,8 +20,9 @@ const classesOf = (markup: string, slot: string) => {
 
 describe("inspector tabs", () => {
   test("matches keyboard orientation to the responsive rail", () => {
-    expect(resolveInspectorTabOrientation(767)).toBe("horizontal");
-    expect(resolveInspectorTabOrientation(768)).toBe("vertical");
+    expect(INSPECTOR_RAIL_MEDIA_QUERY).toBe("(min-width: 48rem)");
+    expect(resolveInspectorTabOrientation(false)).toBe("horizontal");
+    expect(resolveInspectorTabOrientation(true)).toBe("vertical");
   });
 
   test("shares the inspector's fixed-height rail rhythm", () => {
