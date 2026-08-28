@@ -1337,7 +1337,6 @@ const FilesystemRow = ({
   const getCurrentAncestorIds = useLatestCallback((id: string) =>
     getAncestorIds(id),
   );
-  const canDrag = useLatestCallback(() => !isEditing);
   const toggleCurrentFolder = useLatestCallback(() => {
     onToggleFolder(node.entityId);
   });
@@ -1377,73 +1376,76 @@ const FilesystemRow = ({
       return undefined;
     }
     const cleanup = combine(
-      draggable({
-        element: el,
-        canDrag,
-        getInitialData: () => {
-          const sel = getCurrentSelectedIds();
-          const isMulti = sel.size > 1 && sel.has(node.entityId);
-          // When the dragged item is part of a multi-selection,
-          // include all selected entity IDs in the drag data.
-          const entityIds = isMulti ? [...sel] : [node.entityId];
-          // Include metadata for each entity so drop targets
-          // (e.g. the chat panel) can create mentions for all.
-          const entities = isMulti
-            ? getCurrentSelectedEntities(sel).map((e) => ({
-                entityId: e.entityId,
-                name: getEntityName(e),
-                kind: e.kind,
-                mimeType: getFirstFile(e)?.mimeType ?? null,
-                parentId: e.parentId ?? null,
-                ancestorIds: getCurrentAncestorIds(e.entityId),
-              }))
-            : [
-                {
-                  entityId: node.entityId,
-                  name,
-                  kind: node.kind,
-                  mimeType: file?.mimeType ?? null,
-                  parentId: node.parentId ?? null,
-                  ancestorIds: getCurrentAncestorIds(node.entityId),
-                },
-              ];
-          return withDragAnnouncementData(
-            {
-              type: ENTITY_DRAG_TYPE,
-              entityId: node.entityId,
-              entityIds,
-              entities,
-              parentId: node.parentId ?? null,
-              name,
-              kind: node.kind,
-              mimeType: file?.mimeType ?? null,
-            },
-            isMulti
-              ? t("common.dragAndDrop.selectedItems", {
-                  count: entityIds.length,
-                })
-              : name,
-            entityIds.length,
-          );
-        },
-        onGenerateDragPreview: ({ nativeSetDragImage }) => {
-          setCustomNativeDragPreview({
-            nativeSetDragImage,
-            render: ({ container }) => {
-              const sel = getCurrentSelectedIds();
-              if (sel.size > 1 && sel.has(node.entityId)) {
-                const items = getCurrentSelectedDragItems(sel);
-                return renderMultiDragPreview(container, items);
-              }
-              return renderDragPreview(container, {
-                name,
-                kind: node.kind,
-                mimeType: file?.mimeType ?? null,
-              });
-            },
-          });
-        },
-      }),
+      ...(!isEditing
+        ? [
+            draggable({
+              element: el,
+              getInitialData: () => {
+                const sel = getCurrentSelectedIds();
+                const isMulti = sel.size > 1 && sel.has(node.entityId);
+                // When the dragged item is part of a multi-selection,
+                // include all selected entity IDs in the drag data.
+                const entityIds = isMulti ? [...sel] : [node.entityId];
+                // Include metadata for each entity so drop targets
+                // (e.g. the chat panel) can create mentions for all.
+                const entities = isMulti
+                  ? getCurrentSelectedEntities(sel).map((e) => ({
+                      entityId: e.entityId,
+                      name: getEntityName(e),
+                      kind: e.kind,
+                      mimeType: getFirstFile(e)?.mimeType ?? null,
+                      parentId: e.parentId ?? null,
+                      ancestorIds: getCurrentAncestorIds(e.entityId),
+                    }))
+                  : [
+                      {
+                        entityId: node.entityId,
+                        name,
+                        kind: node.kind,
+                        mimeType: file?.mimeType ?? null,
+                        parentId: node.parentId ?? null,
+                        ancestorIds: getCurrentAncestorIds(node.entityId),
+                      },
+                    ];
+                return withDragAnnouncementData(
+                  {
+                    type: ENTITY_DRAG_TYPE,
+                    entityId: node.entityId,
+                    entityIds,
+                    entities,
+                    parentId: node.parentId ?? null,
+                    name,
+                    kind: node.kind,
+                    mimeType: file?.mimeType ?? null,
+                  },
+                  isMulti
+                    ? t("common.dragAndDrop.selectedItems", {
+                        count: entityIds.length,
+                      })
+                    : name,
+                  entityIds.length,
+                );
+              },
+              onGenerateDragPreview: ({ nativeSetDragImage }) => {
+                setCustomNativeDragPreview({
+                  nativeSetDragImage,
+                  render: ({ container }) => {
+                    const sel = getCurrentSelectedIds();
+                    if (sel.size > 1 && sel.has(node.entityId)) {
+                      const items = getCurrentSelectedDragItems(sel);
+                      return renderMultiDragPreview(container, items);
+                    }
+                    return renderDragPreview(container, {
+                      name,
+                      kind: node.kind,
+                      mimeType: file?.mimeType ?? null,
+                    });
+                  },
+                });
+              },
+            }),
+          ]
+        : []),
       // Only folders are drop targets.
       ...(isFolder
         ? [
@@ -1500,9 +1502,9 @@ const FilesystemRow = ({
     name,
     file?.mimeType,
     isFolder,
+    isEditing,
     workspaceId,
     scheduleAutoExpand,
-    canDrag,
     getCurrentSelectedDragItems,
     getCurrentSelectedEntities,
     isExpanded,
