@@ -175,6 +175,57 @@ describe("AI provider canary error summaries", () => {
     ).toBe("provider stream error before tool call");
   });
 
+  // The OpenAI adapter reports a truncated or blocked response as this event
+  // shape, putting `incomplete_details.reason` in both message positions.
+  test("names the reason an incomplete stream carries", () => {
+    const signal = new AbortController().signal;
+
+    expect(
+      errorSummary(
+        new CanaryProviderRunError(
+          {
+            code: "incomplete",
+            message: "max_output_tokens",
+            error: { code: "incomplete", message: "max_output_tokens" },
+          },
+          "before-tool-call",
+        ),
+        signal,
+      ),
+    ).toBe(
+      "provider stream error before tool call (incomplete: max_output_tokens)",
+    );
+
+    expect(
+      errorSummary(
+        new CanaryProviderRunError(
+          { error: { code: "incomplete", message: "content_filter" } },
+          "before-tool-call",
+        ),
+        signal,
+      ),
+    ).toBe(
+      "provider stream error before tool call (incomplete: content_filter)",
+    );
+  });
+
+  test("keeps an unrecognized incomplete message out of the summary", () => {
+    const signal = new AbortController().signal;
+
+    expect(
+      errorSummary(
+        new CanaryProviderRunError(
+          {
+            code: "incomplete",
+            message: "Response ended incomplete: client matter name",
+          },
+          "before-tool-call",
+        ),
+        signal,
+      ),
+    ).toBe("provider stream error before tool call (incomplete)");
+  });
+
   test("prefers a numeric provider status without exposing the event", () => {
     const signal = new AbortController().signal;
     const error = new CanaryProviderRunError(
