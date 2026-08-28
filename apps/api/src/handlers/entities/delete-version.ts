@@ -10,6 +10,7 @@ import {
   entities,
   entityVersions,
   folioCollabRooms,
+  legacyFolioCollabSessions,
   searchDocuments,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -80,9 +81,9 @@ export const deleteEntityVersionHandler = async function* ({
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
       // Lock every edit owner anchored to this version first, establishing the
-      // edit-state -> entity order. Desktop sessions can be cancelled below;
-      // durable collaboration rooms must instead block the tombstone so their
-      // shared working state never loses its declared base.
+      // edit-state -> entity order. Desktop and rollout-only legacy sessions
+      // can be cancelled below; durable collaboration rooms must instead block
+      // the tombstone so their shared working state never loses its base.
       await tx
         .select({ id: desktopEditSessions.id })
         .from(desktopEditSessions)
@@ -91,6 +92,17 @@ export const deleteEntityVersionHandler = async function* ({
             eq(desktopEditSessions.baseVersionId, params.versionId),
             eq(desktopEditSessions.workspaceId, workspaceId),
             eq(desktopEditSessions.status, "open"),
+          ),
+        )
+        .for("update");
+      await tx
+        .select({ id: legacyFolioCollabSessions.id })
+        .from(legacyFolioCollabSessions)
+        .where(
+          and(
+            eq(legacyFolioCollabSessions.baseVersionId, params.versionId),
+            eq(legacyFolioCollabSessions.workspaceId, workspaceId),
+            eq(legacyFolioCollabSessions.status, "open"),
           ),
         )
         .for("update");
@@ -277,9 +289,10 @@ export const deleteEntityVersionHandler = async function* ({
           ),
         );
 
-      // Withdraw desktop sessions in the same transaction so none can resume
-      // from the tombstoned version. Durable collaboration rooms were rejected
-      // above because they have no participant-owned close transition.
+      // Withdraw desktop and rollout-only legacy sessions in the same
+      // transaction so none can resume from the tombstoned version. Durable
+      // collaboration rooms were rejected above because they have no
+      // participant-owned close transition.
       const cancelledSessions = await tx
         .update(desktopEditSessions)
         .set({ status: "cancelled", closedAt: new Date() })
@@ -291,6 +304,17 @@ export const deleteEntityVersionHandler = async function* ({
           ),
         )
         .returning({ id: desktopEditSessions.id });
+      const cancelledLegacyCollabSessions = await tx
+        .update(legacyFolioCollabSessions)
+        .set({ status: "cancelled", closedAt: new Date() })
+        .where(
+          and(
+            eq(legacyFolioCollabSessions.baseVersionId, params.versionId),
+            eq(legacyFolioCollabSessions.workspaceId, workspaceId),
+            eq(legacyFolioCollabSessions.status, "open"),
+          ),
+        )
+        .returning({ id: legacyFolioCollabSessions.id });
       const events: AuditEvent[] = [
         {
           action: AUDIT_ACTION.DELETE,
@@ -327,6 +351,18 @@ export const deleteEntityVersionHandler = async function* ({
           resourceId: session.id,
           changes: { status: { old: "open", new: "cancelled" } },
           metadata: { reason: "base_version_tombstoned" },
+        });
+      }
+      for (const session of cancelledLegacyCollabSessions) {
+        events.push({
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,
+          resourceId: session.id,
+          changes: { status: { old: "open", new: "cancelled" } },
+          metadata: {
+            reason: "base_version_tombstoned",
+            transport: "legacy_session",
+          },
         });
       }
       await recordAuditEvent(tx, events);
