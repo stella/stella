@@ -66,11 +66,13 @@ test.describe("filesystem rename", () => {
     });
     await page.getByRole("tab", { exact: true, name: "Files" }).click();
 
-    const originalRow = page.getByRole("button", {
-      name: LONG_BASE_NAME,
+    const originalName = page.getByTitle(`${LONG_BASE_NAME}.docx`, {
+      exact: true,
     });
-    await expect(originalRow).toBeVisible({ timeout: 30_000 });
-    await originalRow.click({ button: "right" });
+    await expect(originalName).toBeVisible({ timeout: 30_000 });
+    await originalName.locator("xpath=ancestor::button[1]").click({
+      button: "right",
+    });
     await page.getByRole("menuitem", { exact: true, name: "Rename" }).click();
 
     const input = page.getByRole("textbox");
@@ -118,13 +120,13 @@ test.describe("filesystem rename", () => {
     );
     await input.press("Enter");
 
-    const renamedRow = page.getByRole("button", {
-      name: renamedBase,
+    const renamedName = page.getByTitle(`${renamedBase}.docx`, {
+      exact: true,
     });
-    await expect(renamedRow).toBeVisible({ timeout: 1000 });
+    await expect(renamedName).toBeVisible({ timeout: 1000 });
 
     renameRequest.resolve(undefined);
     expect((await renameResponse).status()).toBe(200);
-    await expect(renamedRow).toBeVisible();
+    await expect(renamedName).toBeVisible();
   });
 });
