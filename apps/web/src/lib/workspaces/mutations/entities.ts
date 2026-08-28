@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import type { UpsertFieldContent } from "@stll/api/types";
 import { stellaToast } from "@stll/ui/toast";
 
 import { closeInspectorTabsForEntities } from "@/components/inspector/inspector-tabs-store";
-import type { EditableFieldContent } from "@/components/workspaces/edit-field-dialog";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -137,7 +137,7 @@ type UpsertFieldVars = {
   workspaceId: string;
   propertyId: string;
   entityId: string;
-  content: EditableFieldContent;
+  content: UpsertFieldContent;
 };
 
 export const useUpsertField = () => {

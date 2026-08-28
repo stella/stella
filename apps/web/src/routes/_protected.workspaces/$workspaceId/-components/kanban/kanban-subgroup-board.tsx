@@ -434,9 +434,10 @@ const ColumnHeading = ({
   const dragHandleRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(column.label);
-  const canEdit = column.value !== null;
+  const columnValue = column.value;
+  const canEdit = columnValue !== null;
   const { closestEdge, isDragging } = useKanbanColumnDrag({
-    columnValue: column.value,
+    columnValue,
     dragHandleRef,
     elementRef: headingRef,
     name: column.label,
@@ -447,8 +448,8 @@ const ColumnHeading = ({
   const commitRename = () => {
     setEditing(false);
     const value = editValue.trim();
-    if (column.value !== null && value && value !== column.label) {
-      onRename?.(column.value, value);
+    if (columnValue !== null && value && value !== column.label) {
+      onRename?.(columnValue, value);
     }
   };
 
@@ -482,12 +483,12 @@ const ColumnHeading = ({
           <KanbanColumnActions
             entityCount={count}
             onChangeColor={
-              column.value !== null && onChangeColor
-                ? (color) => onChangeColor(column.value, color)
+              columnValue !== null && onChangeColor
+                ? (color) => onChangeColor(columnValue, color)
                 : undefined
             }
             onHideColumn={
-              column.value !== null ? () => onHide(column.value) : undefined
+              columnValue !== null ? () => onHide(columnValue) : undefined
             }
             optionColor={column.optionColor}
             title={column.label}

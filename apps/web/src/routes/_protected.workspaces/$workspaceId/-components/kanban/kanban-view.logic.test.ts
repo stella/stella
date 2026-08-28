@@ -254,6 +254,7 @@ describe("kanban subgroup placement", () => {
     const property = singleSelectProperty("assignee");
     const row = entity("task-1", "task");
     row.fields[property.id] = {
+      entityId: row.entityId,
       id: toSafeId<"field">("field-1"),
       propertyId: property.id,
       content: {
@@ -277,6 +278,7 @@ describe("kanban subgroup placement", () => {
     const property = personProperty("assignee");
     const row = entity("task-1", "task");
     row.fields[property.id] = {
+      entityId: row.entityId,
       id: toSafeId<"field">("field-1"),
       propertyId: property.id,
       content: {
