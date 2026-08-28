@@ -30,6 +30,12 @@ export {
 } from "./chrome";
 export { InspectorDock } from "./dock";
 export {
+  InspectorTab,
+  InspectorTabList,
+  InspectorTabPanel,
+  InspectorTabs,
+} from "./tabs";
+export {
   PROPERTY_ROW_GRID,
   SIDE_RAIL_CONTAINER_CLASS,
   SIDE_RAIL_ICON_BUTTON_SIZE,
