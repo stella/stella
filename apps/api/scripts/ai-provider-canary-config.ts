@@ -126,17 +126,30 @@ const MODEL_ROLE_MAX_OUTPUT_TOKENS = {
 // Providers reject a request whose ceiling exceeds the model's output limit
 // before generating anything (Bedrock: "The maximum tokens you requested
 // exceeds the model limit of 10000"). The weekly rotation runs every role
-// probe on every offered model, so role budgets are clamped to the limits
-// known to be below them; a model absent here takes the role budget as is.
-const MODEL_MAX_OUTPUT_TOKENS: ReadonlyMap<string, number> = new Map([
-  ["us.amazon.nova-pro-v1:0", 10_000],
-  ["us.amazon.nova-lite-v1:0", 10_000],
-  ["us.amazon.nova-micro-v1:0", 10_000],
-]);
+// probe on every offered Bedrock model, so the map is total over that
+// catalog: adding a model forces a decision here, `null` meaning its limit
+// is above every role budget and the budget is sent as is.
+type BedrockModelId = (typeof BYOK_MODEL_OPTIONS)["bedrock"][number];
+const MODEL_MAX_OUTPUT_TOKENS = {
+  "us.anthropic.claude-sonnet-4-5-20250929-v1:0": null,
+  "us.anthropic.claude-haiku-4-5-20251001-v1:0": null,
+  "us.amazon.nova-pro-v1:0": 10_000,
+  "us.amazon.nova-lite-v1:0": 10_000,
+  "us.amazon.nova-micro-v1:0": 10_000,
+  "openai.gpt-oss-120b-1:0": null,
+  "openai.gpt-oss-20b-1:0": null,
+  "us.deepseek.r1-v1:0": null,
+} as const satisfies Record<BedrockModelId, number | null>;
+
+const isBedrockModelId = (modelId: string): modelId is BedrockModelId =>
+  Object.hasOwn(MODEL_MAX_OUTPUT_TOKENS, modelId);
 
 const clampToModelOutputLimit = (modelId: string, budget: number) => {
-  const limit = MODEL_MAX_OUTPUT_TOKENS.get(modelId);
-  return limit === undefined ? budget : Math.min(budget, limit);
+  if (!isBedrockModelId(modelId)) {
+    return budget;
+  }
+  const limit = MODEL_MAX_OUTPUT_TOKENS[modelId];
+  return limit === null ? budget : Math.min(budget, limit);
 };
 
 type RoleBudgetOptions = {
