@@ -1,5 +1,11 @@
 # @stll/workspace-model
 
+## 0.2.0
+
+### Minor Changes
+
+- [#2559](https://github.com/stella/stella/pull/2559) [`3987cd1`](https://github.com/stella/stella/commit/3987cd1a03300035e261b2bd6a4c9804789adc52) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the Kanban sub-group property in the published workspace view model.
+
 ## 0.1.0
 
 ### Minor Changes
