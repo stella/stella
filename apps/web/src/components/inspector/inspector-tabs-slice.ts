@@ -132,6 +132,8 @@ const upsertFileTab = (
   }
 };
 
+/** Mirror of `upsertFileTab` for task tabs. Leaves `activeId` alone so the
+ *  caller owns focus, and keeps an existing tab's `creationStatus`. */
 const upsertTaskTab = (state: Draft<InspectorTabsStore>, tab: TaskTab) => {
   const existing = state.tabs.find((candidate) => candidate.id === tab.id);
   if (!existing) {
