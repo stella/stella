@@ -4351,7 +4351,6 @@
     },
     "justification": "Justification :",
     "kanban": {
-      "collapsedSubgroup": "{count} éléments masqués",
       "deleteAll": "Tout supprimer",
       "deleteAllConfirm": "Supprimer les {count} éléments de « {column} » ?",
       "hideColumn": "Masquer la colonne",

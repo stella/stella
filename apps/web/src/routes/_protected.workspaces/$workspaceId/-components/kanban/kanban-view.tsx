@@ -104,7 +104,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const handleCreate = async ({
     kind,
     taskStatus,
-  }: CreateFromKanbanOptions) => {
+  }: CreateFromKanbanOptions): Promise<string | null> => {
     if (kind === "task") {
       const body = taskStatus
         ? {
@@ -127,7 +127,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           title: t("errors.actionFailed"),
           type: "error",
         });
-        return;
+        return null;
       }
 
       stellaToast.add({
@@ -137,7 +137,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       useInspectorTabsStore
         .getState()
         .openTask({ taskId: entityId, workspaceId, isNew: true });
-      return;
+      return entityId;
     }
 
     createEntities.mutate(
@@ -162,6 +162,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         },
       },
     );
+    return null;
   };
 
   const { hiddenProperties } = view.layout;
@@ -244,7 +245,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   );
 
   const { filters, sorts } = view.layout;
-  const hasRenderableSubgroup = isKanbanGroupingRenderable(subgroup);
+  const hasRenderableSubgroup =
+    isKanbanGroupingRenderable(subgroup) &&
+    (subgroup.type !== "property" ||
+      subgroup.property.content.type === "single-select");
   const subgroupQuery = useInfiniteQuery({
     ...entitiesWindowOptions({
       workspaceId,
@@ -558,13 +562,58 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     renameEntity.mutate({ workspaceId, entityId, name: newName });
   };
 
+  const canCreateTaskInLane = (laneValue: string | null) => {
+    if (!isStatusGrouping) {
+      return false;
+    }
+    if (subgroup.type === "property") {
+      return true;
+    }
+    return (
+      subgroup.type === "built-in" &&
+      subgroup.group.id === getInternalPropertyId("kind") &&
+      laneValue === "task"
+    );
+  };
+
+  const handleCreateTaskInCell = async (
+    status: string,
+    laneValue: string | null,
+  ) => {
+    const entityId = await handleCreate({ kind: "task", taskStatus: status });
+    if (!entityId || subgroup.type !== "property" || laneValue === null) {
+      return;
+    }
+
+    await upsertField.mutateAsync({
+      workspaceId,
+      propertyId: subgroup.property.id,
+      entityId,
+      content: {
+        version: 1,
+        type: "single-select",
+        value: laneValue,
+      },
+    });
+    await queryClient.invalidateQueries({
+      queryKey: entitiesKeys.all(workspaceId),
+    });
+  };
+
   if (subgroupMatrix !== null) {
     return (
       <KanbanSubgroupBoard
+        canCreateTaskInLane={canCreateTaskInLane}
         cardFields={cardFields}
         hasMore={subgroupQuery.hasNextPage}
         isLoadingMore={subgroupQuery.isFetchingNextPage}
         matrix={subgroupMatrix}
+        onCreateTask={(status, laneValue) => {
+          detached(
+            handleCreateTaskInCell(status, laneValue),
+            "kanban-view.create-task-in-cell",
+          );
+        }}
         onLoadMore={() => {
           if (subgroupQuery.hasNextPage && !subgroupQuery.isFetchingNextPage) {
             detached(

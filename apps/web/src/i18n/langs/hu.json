@@ -4351,7 +4351,6 @@
     },
     "justification": "Indoklás:",
     "kanban": {
-      "collapsedSubgroup": "{count} elem elrejtve",
       "deleteAll": "Összes törlése",
       "deleteAllConfirm": "Törli az összes {count} elemet a(z) „{column}” oszlopban?",
       "hideColumn": "Oszlop elrejtése",

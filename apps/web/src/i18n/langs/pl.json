@@ -4351,7 +4351,6 @@
     },
     "justification": "Uzasadnienie:",
     "kanban": {
-      "collapsedSubgroup": "Ukryte elementy: {count}",
       "deleteAll": "Usuń wszystkie",
       "deleteAllConfirm": "Usunąć wszystkie {count} elementy z kolumny „{column}”?",
       "hideColumn": "Ukryj kolumnę",

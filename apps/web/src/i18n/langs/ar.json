@@ -4351,7 +4351,6 @@
     },
     "justification": "المبرر:",
     "kanban": {
-      "collapsedSubgroup": "{count} عناصر مخفية",
       "deleteAll": "حذف الكل",
       "deleteAllConfirm": "هل تريد حذف جميع العناصر البالغ عددها {count} في «{column}»؟",
       "hideColumn": "إخفاء العمود",

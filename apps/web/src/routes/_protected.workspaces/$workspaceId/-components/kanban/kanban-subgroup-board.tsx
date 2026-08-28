@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { ChevronDownIcon, Rows3Icon } from "lucide-react";
+import { ChevronDownIcon, PlusIcon, Rows3Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -12,7 +12,6 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
 
-const SUBGROUP_LABEL_WIDTH = "w-44";
 const KANBAN_CELL_WIDTH = "w-[300px]";
 
 type KanbanSubgroupBoardProps = {
@@ -20,6 +19,8 @@ type KanbanSubgroupBoardProps = {
   hasMore: boolean;
   isLoadingMore: boolean;
   matrix: KanbanBoardMatrix<WorkspaceEntity>;
+  canCreateTaskInLane: (laneValue: string | null) => boolean;
+  onCreateTask: (columnValue: string, laneValue: string | null) => void;
   onLoadMore: () => void;
   onRenameEntity: (entityId: string, newName: string) => void;
   properties: WorkspaceProperty[];
@@ -29,19 +30,38 @@ type KanbanSubgroupBoardProps = {
 /** A Notion-style swimlane board backed by one canonical placement matrix. */
 export const KanbanSubgroupBoard = ({
   cardFields,
+  canCreateTaskInLane,
   hasMore,
   isLoadingMore,
   matrix,
   onLoadMore,
+  onCreateTask,
   onRenameEntity,
   properties,
   workspaceId,
 }: KanbanSubgroupBoardProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const [collapsedLaneValues, setCollapsedLaneValues] = useState(new Set());
+  const [collapsedLaneValues, setCollapsedLaneValues] = useState(
+    () => new Set<string | null>(),
+  );
+  const [expandedEmptyLaneValues, setExpandedEmptyLaneValues] = useState(
+    () => new Set<string | null>(),
+  );
 
-  const toggleLane = (value: string | null) => {
+  const toggleLane = (value: string | null, isEmpty: boolean) => {
+    if (isEmpty) {
+      setExpandedEmptyLaneValues((current) => {
+        const next = new Set(current);
+        if (next.has(value)) {
+          next.delete(value);
+        } else {
+          next.add(value);
+        }
+        return next;
+      });
+      return;
+    }
     setCollapsedLaneValues((current) => {
       const next = new Set(current);
       if (next.has(value)) {
@@ -55,9 +75,8 @@ export const KanbanSubgroupBoard = ({
 
   return (
     <div className="h-full overflow-auto p-4">
-      <div className="min-w-max space-y-3">
-        <div className="bg-background sticky top-0 z-20 flex gap-3 pb-2">
-          <div className={cn(SUBGROUP_LABEL_WIDTH, "shrink-0")} />
+      <div className="min-w-max">
+        <div className="bg-background sticky top-0 z-20 flex gap-3 pb-3">
           {matrix.columns.map((column) => (
             <ColumnHeading
               column={column}
@@ -83,58 +102,69 @@ export const KanbanSubgroupBoard = ({
             (sum, cell) => sum + cell.rows.length,
             0,
           );
-          const collapsed = collapsedLaneValues.has(value);
+          const isEmpty = count === 0;
+          const collapsed = isEmpty
+            ? !expandedEmptyLaneValues.has(value)
+            : collapsedLaneValues.has(value);
 
           return (
             <section
-              className="border-border/70 overflow-hidden rounded-xl border"
+              className="border-border/60 border-b py-2 first:pt-0 last:border-b-0"
               key={value ?? "__uncategorized__"}
             >
-              <div className="flex gap-3">
-                <div
-                  className={cn(
-                    SUBGROUP_LABEL_WIDTH,
-                    "bg-muted/30 sticky start-0 z-10 shrink-0 border-e p-2",
-                  )}
+              <div className="bg-background/95 sticky start-0 z-10 flex min-h-11 items-center backdrop-blur-sm">
+                <button
+                  aria-expanded={!collapsed}
+                  className="hover:bg-muted/60 flex min-h-11 items-center gap-2 rounded-lg px-2 text-start transition-[background-color]"
+                  onClick={() => toggleLane(value, isEmpty)}
+                  type="button"
                 >
-                  <button
-                    aria-expanded={!collapsed}
-                    className="hover:bg-muted flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-start"
-                    onClick={() => toggleLane(value)}
-                    type="button"
-                  >
-                    <DirectionalIcon
-                      className={cn(
-                        "text-muted-foreground size-4 shrink-0 transition-transform",
-                        collapsed && "-rotate-90",
-                      )}
-                      icon={ChevronDownIcon}
-                    />
-                    {lane.group.color ? (
+                  <DirectionalIcon
+                    className={cn(
+                      "text-muted-foreground size-4 shrink-0 transition-transform",
+                      collapsed && "-rotate-90",
+                    )}
+                    flip={collapsed}
+                    icon={ChevronDownIcon}
+                  />
+                  {lane.group.color ? (
+                    <span
+                      className="size-5 shrink-0 rounded-md"
+                      style={{ backgroundColor: lane.group.colorBg }}
+                    >
                       <span
-                        className="size-2.5 shrink-0 rounded-full"
+                        className="m-1.5 block size-2 rounded-full"
                         style={{ backgroundColor: lane.group.color }}
                       />
-                    ) : (
-                      <Rows3Icon className="text-muted-foreground size-4 shrink-0" />
-                    )}
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                      {lane.group.label}
                     </span>
-                    <span className="text-muted-foreground text-xs tabular-nums">
-                      {format.number(count)}
-                    </span>
-                  </button>
-                </div>
+                  ) : (
+                    <Rows3Icon className="text-muted-foreground size-4 shrink-0" />
+                  )}
+                  <span className="max-w-80 truncate text-sm font-medium">
+                    {lane.group.label}
+                  </span>
+                  <span className="text-muted-foreground text-xs tabular-nums">
+                    {format.number(count)}
+                  </span>
+                </button>
+              </div>
 
-                {!collapsed &&
-                  laneCells.map((cell) => (
+              {!collapsed && (
+                <div className="flex gap-3 pb-1">
+                  {laneCells.map((cell) => (
                     <div
                       className={cn(
                         KANBAN_CELL_WIDTH,
-                        "bg-muted/15 min-h-28 shrink-0 space-y-2 p-2",
+                        "bg-muted/20 min-h-20 shrink-0 space-y-2 rounded-xl p-2",
                       )}
                       key={cell.coordinate.column.value ?? "__uncategorized__"}
+                      style={
+                        cell.coordinate.column.colorBg
+                          ? {
+                              backgroundColor: `color-mix(in srgb, ${cell.coordinate.column.colorBg} 26%, transparent)`,
+                            }
+                          : undefined
+                      }
                     >
                       {cell.rows.map((entity) => (
                         <KanbanCard
@@ -147,17 +177,19 @@ export const KanbanSubgroupBoard = ({
                           workspaceId={workspaceId}
                         />
                       ))}
+                      {cell.rows.length === 0 &&
+                        cell.coordinate.column.value !== null &&
+                        canCreateTaskInLane(value) && (
+                          <CreateTaskButton
+                            columnValue={cell.coordinate.column.value}
+                            laneValue={value}
+                            onCreate={onCreateTask}
+                          />
+                        )}
                     </div>
                   ))}
-
-                {collapsed && (
-                  <div className="text-muted-foreground flex min-h-14 flex-1 items-center px-3 text-xs">
-                    {t("workspaces.kanban.collapsedSubgroup", {
-                      count: String(count),
-                    })}
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
             </section>
           );
         })}
@@ -178,6 +210,31 @@ export const KanbanSubgroupBoard = ({
   );
 };
 
+type CreateTaskButtonProps = {
+  columnValue: string;
+  laneValue: string | null;
+  onCreate: (columnValue: string, laneValue: string | null) => void;
+};
+
+const CreateTaskButton = ({
+  columnValue,
+  laneValue,
+  onCreate,
+}: CreateTaskButtonProps) => {
+  const t = useTranslations();
+
+  return (
+    <Button
+      className="text-muted-foreground hover:text-foreground min-h-11 w-full justify-start gap-1.5"
+      onClick={() => onCreate(columnValue, laneValue)}
+      variant="ghost"
+    >
+      <PlusIcon className="size-3.5" />
+      {t("tasks.newTask")}
+    </Button>
+  );
+};
+
 type ColumnHeadingProps = {
   column: KanbanGroup;
   count: number;
@@ -190,19 +247,26 @@ const ColumnHeading = ({ column, count }: ColumnHeadingProps) => {
     <div
       className={cn(
         KANBAN_CELL_WIDTH,
-        "bg-background flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-3",
+        "bg-muted/25 flex min-h-14 shrink-0 items-center gap-2 rounded-xl px-3",
       )}
+      style={
+        column.colorBg
+          ? {
+              backgroundColor: `color-mix(in srgb, ${column.colorBg} 42%, transparent)`,
+            }
+          : undefined
+      }
     >
-      {column.color && (
-        <span
-          className="size-2.5 shrink-0 rounded-full"
-          style={{ backgroundColor: column.color }}
-        />
-      )}
-      <span className="min-w-0 flex-1 truncate text-sm font-medium">
-        {column.label}
+      <span className="bg-background/55 flex min-w-0 items-center gap-2 rounded-md px-2 py-1 shadow-xs">
+        {column.color && (
+          <span
+            className="size-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: column.color }}
+          />
+        )}
+        <span className="truncate text-sm font-medium">{column.label}</span>
       </span>
-      <span className="text-muted-foreground text-xs tabular-nums">
+      <span className="text-muted-foreground ms-auto text-xs tabular-nums">
         {format.number(count)}
       </span>
     </div>

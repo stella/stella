@@ -4354,7 +4354,6 @@ type Messages = {
     };
     "justification": "Justification:";
     "kanban": {
-      "collapsedSubgroup": "{count} items hidden";
       "deleteAll": "Delete all";
       "deleteAllConfirm": "Delete all {count} items in \"{column}\"?";
       "hideColumn": "Hide column";

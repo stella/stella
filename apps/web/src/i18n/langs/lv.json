@@ -4351,7 +4351,6 @@
     },
     "justification": "Pamatojums:",
     "kanban": {
-      "collapsedSubgroup": "Paslēpti vienumi: {count}",
       "deleteAll": "Dzēst visus",
       "deleteAllConfirm": "Dzēst visus {count} vienumus kolonnā \"{column}\"?",
       "hideColumn": "Paslēpt kolonnu",

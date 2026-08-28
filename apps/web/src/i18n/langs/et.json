@@ -4351,7 +4351,6 @@
     },
     "justification": "Põhjendus:",
     "kanban": {
-      "collapsedSubgroup": "{count} üksust peidetud",
       "deleteAll": "Kustuta kõik",
       "deleteAllConfirm": "Kustutada kõik {count} elementi veerus „{column}\"?",
       "hideColumn": "Peida veerg",

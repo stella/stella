@@ -4351,7 +4351,6 @@
     },
     "justification": "Begründung:",
     "kanban": {
-      "collapsedSubgroup": "{count} Elemente ausgeblendet",
       "deleteAll": "Alle löschen",
       "deleteAllConfirm": "Alle {count} Einträge in „{column}“ löschen?",
       "hideColumn": "Spalte ausblenden",

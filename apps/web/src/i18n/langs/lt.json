@@ -4351,7 +4351,6 @@
     },
     "justification": "Pagrindimas:",
     "kanban": {
-      "collapsedSubgroup": "Paslėpta elementų: {count}",
       "deleteAll": "Ištrinti visus",
       "deleteAllConfirm": "Ištrinti visus {count} elementus stulpelyje \"{column}\"?",
       "hideColumn": "Slėpti stulpelį",

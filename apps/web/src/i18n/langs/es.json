@@ -4351,7 +4351,6 @@
     },
     "justification": "Justificación:",
     "kanban": {
-      "collapsedSubgroup": "{count} elementos ocultos",
       "deleteAll": "Eliminar todo",
       "deleteAllConfirm": "¿Eliminar los {count} elementos de \"{column}\"?",
       "hideColumn": "Ocultar columna",

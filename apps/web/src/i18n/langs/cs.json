@@ -4351,7 +4351,6 @@
     },
     "justification": "Odůvodnění:",
     "kanban": {
-      "collapsedSubgroup": "Skryté položky: {count}",
       "deleteAll": "Smazat vše",
       "deleteAllConfirm": "Smazat všechny {count} položky ve sloupci „{column}“?",
       "hideColumn": "Skrýt sloupec",
