@@ -32,7 +32,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { translateBatch } from "@/api/lib/bilingual/ai";
 import type {
-  BilingualAIContext,
+  BilingualAIDocumentContext,
   TranslationContextRow,
 } from "@/api/lib/bilingual/ai";
 import {
@@ -357,13 +357,15 @@ const executeRun = async (
     return "ai_unavailable";
   }
 
-  const context: BilingualAIContext = {
+  const rows = await loadRows(actor);
+  const context: BilingualAIDocumentContext = {
     organizationId: actor.organizationId,
     workspaceId: actor.workspaceId,
     orgAIConfig: config.value.orgAIConfig,
     promptCachingEnabled: config.value.promptCachingEnabled,
     abortSignal: AbortSignal.timeout(RUN_TIMEOUT_MS),
     scopeKey: run.entityVersionId,
+    sourceDocument: rows,
     usageMetering: {
       actionType: "doc_review",
       organizationId: actor.organizationId,
@@ -374,7 +376,6 @@ const executeRun = async (
     },
   };
 
-  const rows = await loadRows(actor);
   const languages = { sourceLang: run.sourceLang, targetLang: run.targetLang };
   const translated = new Map<string, string>(
     rows.flatMap((row) =>

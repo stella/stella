@@ -57,6 +57,7 @@ import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { translateDocument, translateTextBatches } from "@/api/lib/deepl/deepl";
 import { translateTaggedSegments } from "@/api/lib/document-translation/ai";
+import { runBilingualTranslationBatches } from "@/api/lib/document-translation/bilingual-batch-runner";
 import {
   commentTaggedText,
   unwrapCommentTranslation,
@@ -854,6 +855,10 @@ const translateBilingualWithAI = async (
   if (Result.isError(formatted)) {
     return Result.err("unsupported_format");
   }
+  const documentContext = {
+    ...context,
+    sourceDocument: formatted.value,
+  };
   const languages = {
     sourceLang: run.sourceLang,
     targetLang: run.targetLang,
@@ -862,12 +867,12 @@ const translateBilingualWithAI = async (
   const prepared = await Result.tryPromise({
     try: async () => {
       const [rows, glossary] = await Promise.all([
-        decideDispositions(formatted.value, languages, context),
+        decideDispositions(formatted.value, languages, documentContext),
         proposeGlossary(
           detectGlossaryCandidates(texts),
           texts,
           languages,
-          context,
+          documentContext,
         ),
       ]);
       return { rows, glossary };
@@ -919,13 +924,9 @@ const translateBilingualWithAI = async (
   const formattedByRowId = new Map(
     formatted.value.map((unit) => [unit.rowId, unit]),
   );
-  const translateNextBatch = async (
-    index: number,
+  const translateBatch = async (
+    batch: readonly StoredRow[],
   ): Promise<Result<void, DocumentTranslationRunErrorCode>> => {
-    if (index >= pending.length) {
-      return Result.ok();
-    }
-    const batch = pending.slice(index, index + BILINGUAL_LIMITS.batchSize);
     const first = batch.at(0);
     if (!first) {
       return Result.ok();
@@ -958,7 +959,7 @@ const translateBilingualWithAI = async (
             glossary: prepared.value.glossary,
           },
           languages,
-          context,
+          documentContext,
         ),
       catch: (cause) => cause,
     });
@@ -977,9 +978,12 @@ const translateBilingualWithAI = async (
       updates.push({ unitKey: row.rowId, targetText });
     }
     await updateTranslatedUnits(actor, updates);
-    return await translateNextBatch(index + BILINGUAL_LIMITS.batchSize);
+    return Result.ok();
   };
-  const translation = await translateNextBatch(0);
+  const translation = await runBilingualTranslationBatches({
+    items: pending,
+    translate: translateBatch,
+  });
   if (Result.isError(translation)) {
     return translation;
   }

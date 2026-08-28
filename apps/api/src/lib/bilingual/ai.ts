@@ -2,6 +2,8 @@
 // manifest (never the DOCX), addresses rows by ordinal, and is validated
 // against the known ordinals before anything is trusted.
 
+import type { ModelMessage, TextPart } from "@tanstack/ai";
+import type { AnthropicTextMetadata } from "@tanstack/ai-anthropic";
 import { TaggedError } from "better-result";
 import * as v from "valibot";
 
@@ -30,6 +32,7 @@ import type {
   DispositionedUnit,
 } from "@/api/lib/bilingual/rows";
 import type { SafeId } from "@/api/lib/branded-types";
+import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 const DISPOSITION_ROLE = "fast" as const;
@@ -42,6 +45,8 @@ const GLOSSARY_SAMPLE_CHARS = 24_000;
 const FORMATTED_INLINE_TOKENS_MAX = 2048;
 const FORMATTED_ROWS_SERIALIZED_CHARS_MAX = 200_000;
 const FORMATTED_OUTPUT_ATTEMPTS = 2;
+export const SOURCE_DOCUMENT_CACHE_CHARS_MAX = 64_000;
+const SOURCE_DOCUMENT_TRUNCATED = "\n[Cached input prefix truncated]";
 
 class BilingualAIContractError extends TaggedError("BilingualAIContractError")<{
   message: string;
@@ -56,6 +61,11 @@ export type BilingualAIContext = {
   abortSignal: AbortSignal;
   /** Stable key for prompt-cache scoping, typically the entity version id. */
   scopeKey: string;
+};
+
+export type BilingualAIDocumentContext = BilingualAIContext & {
+  /** Source rows from which the stable cached prefix is derived. */
+  sourceDocument: readonly BilingualUnit[];
 };
 
 type Languages = { sourceLang: string; targetLang: string };
@@ -82,6 +92,63 @@ const callSignal = (context: BilingualAIContext): AbortSignal =>
 
 const preview = (text: string): string =>
   text.length > PREVIEW_CHARS ? `${text.slice(0, PREVIEW_CHARS)}…` : text;
+
+const serializeSourceDocument = (units: readonly BilingualUnit[]): string => {
+  const lines: string[] = [];
+  let chars = 0;
+  for (const unit of units) {
+    const place = unit.inTable ? "table" : unit.kind;
+    const separator = lines.length === 0 ? "" : "\n";
+    const line = `${separator}#${unit.ordinal} [${place}] ${unit.sourceText}`;
+    const available =
+      SOURCE_DOCUMENT_CACHE_CHARS_MAX -
+      SOURCE_DOCUMENT_TRUNCATED.length -
+      chars;
+    if (line.length > available) {
+      lines.push(line.slice(0, Math.max(0, available)));
+      lines.push(SOURCE_DOCUMENT_TRUNCATED);
+      return lines.join("");
+    }
+    lines.push(line);
+    chars += line.length;
+  }
+  return lines.join("");
+};
+
+/**
+ * Put a stable input-document region before anything that changes per request.
+ * Normal documents fit in full; the prefix is bounded because provider prompt
+ * caches do not remove cached tokens from the model's context-window limit.
+ * The boundary is explicit for Anthropic; OpenAI uses the same prefix plus the
+ * stable scope key to route repeated translation batches to one cache shard.
+ */
+export const buildBilingualDocumentRequest = (
+  context: BilingualAIDocumentContext,
+  role: ModelRole,
+  request: string,
+): { caching: ReturnType<typeof resolveCaching>; messages: ModelMessage[] } => {
+  const caching = resolveCaching({
+    promptCachingEnabled: context.promptCachingEnabled,
+    role,
+    scopeKey: context.scopeKey,
+  });
+  const source: TextPart<AnthropicTextMetadata> = {
+    type: "text",
+    content: `Input document:\n${serializeSourceDocument(context.sourceDocument)}`,
+  };
+  return {
+    caching,
+    messages: [
+      {
+        role: "user",
+        content: [
+          markTanStackCacheBreakpoint(source, { decision: caching }),
+          { type: "text", content: request },
+        ],
+      },
+    ],
+  };
+};
 
 // ----------------------------------------------------------------------------
 // Dispositions
@@ -124,7 +191,7 @@ const formatDispositionRows = (
 export const decideDispositions = async (
   units: readonly BilingualUnit[],
   languages: Languages,
-  context: BilingualAIContext,
+  context: BilingualAIDocumentContext,
 ): Promise<DispositionedUnit[]> => {
   const decided = new Map<number, BilingualRowDisposition>();
   for (const unit of units) {
@@ -154,21 +221,22 @@ export const decideDispositions = async (
       }
       const slice = units.slice(start, start + chunk);
       if (!slice.every((unit) => decided.has(unit.ordinal))) {
+        const request = buildBilingualDocumentRequest(
+          context,
+          DISPOSITION_ROLE,
+          `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\n${formatDispositionRows(slice, decided)}`,
+        );
         const output = await generateTanStackObjectForRole({
           role: DISPOSITION_ROLE,
           orgAIConfig: context.orgAIConfig,
           organizationId: context.organizationId,
           analytics,
-          caching: resolveCaching({
-            promptCachingEnabled: context.promptCachingEnabled,
-            role: DISPOSITION_ROLE,
-            scopeKey: context.scopeKey,
-          }),
+          caching: request.caching,
           serviceTier: SERVICE_TIER,
           tenantWorkspaceIds: [context.workspaceId],
           system: DISPOSITION_SYSTEM,
           systemPromptOrigin: "embeds-untrusted",
-          prompt: `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\n${formatDispositionRows(slice, decided)}`,
+          messages: request.messages,
           abortSignal: callSignal(context),
           outputSchema: dispositionSchema,
         });
@@ -251,7 +319,7 @@ export const proposeGlossary = async (
   candidates: readonly string[],
   texts: readonly string[],
   languages: Languages,
-  context: BilingualAIContext,
+  context: BilingualAIDocumentContext,
 ): Promise<BilingualGlossaryEntry[]> => {
   const analytics = analyticsFor(context, "bilingual.glossary", GLOSSARY_ROLE);
   let sample = "";
@@ -261,21 +329,22 @@ export const proposeGlossary = async (
     }
     sample += `${text}\n`;
   }
+  const request = buildBilingualDocumentRequest(
+    context,
+    GLOSSARY_ROLE,
+    `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\nDefined terms found:\n${candidates.map((term) => `- ${term}`).join("\n") || "(none)"}\n\nDocument sample:\n${sample}`,
+  );
   const output = await generateTanStackObjectForRole({
     role: GLOSSARY_ROLE,
     orgAIConfig: context.orgAIConfig,
     organizationId: context.organizationId,
     analytics,
-    caching: resolveCaching({
-      promptCachingEnabled: context.promptCachingEnabled,
-      role: GLOSSARY_ROLE,
-      scopeKey: context.scopeKey,
-    }),
+    caching: request.caching,
     serviceTier: SERVICE_TIER,
     tenantWorkspaceIds: [context.workspaceId],
     system: GLOSSARY_SYSTEM,
     systemPromptOrigin: "embeds-untrusted",
-    prompt: `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\nDefined terms found:\n${candidates.map((term) => `- ${term}`).join("\n") || "(none)"}\n\nDocument sample:\n${sample}`,
+    messages: request.messages,
     abortSignal: callSignal(context),
     outputSchema: glossarySchema,
   });
@@ -357,7 +426,7 @@ export type TranslateBatchInput = {
 export const translateBatch = async (
   { batch, preceding, glossary }: TranslateBatchInput,
   languages: Languages,
-  context: BilingualAIContext,
+  context: BilingualAIDocumentContext,
 ): Promise<Map<number, string>> => {
   const analytics = analyticsFor(
     context,
@@ -378,21 +447,22 @@ export const translateBatch = async (
     .map((unit) => `#${unit.ordinal}: ${unit.sourceText}`)
     .join("\n");
 
+  const request = buildBilingualDocumentRequest(
+    context,
+    TRANSLATION_ROLE,
+    `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\nGlossary:\n${glossaryLines || "(none)"}\n\nPreceding rows (context only):\n${contextLines || "(start of document)"}\n\nRows to translate:\n${rowLines}`,
+  );
   const output = await generateTanStackObjectForRole({
     role: TRANSLATION_ROLE,
     orgAIConfig: context.orgAIConfig,
     organizationId: context.organizationId,
     analytics,
-    caching: resolveCaching({
-      promptCachingEnabled: context.promptCachingEnabled,
-      role: TRANSLATION_ROLE,
-      scopeKey: context.scopeKey,
-    }),
+    caching: request.caching,
     serviceTier: SERVICE_TIER,
     tenantWorkspaceIds: [context.workspaceId],
     system: TRANSLATION_SYSTEM,
     systemPromptOrigin: "embeds-untrusted",
-    prompt: `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\nGlossary:\n${glossaryLines || "(none)"}\n\nPreceding rows (context only):\n${contextLines || "(start of document)"}\n\nRows to translate:\n${rowLines}`,
+    messages: request.messages,
     abortSignal: callSignal(context),
     outputSchema: translationSchema,
   });
@@ -492,7 +562,7 @@ const collectFormattedTranslations = (
 export const translateFormattedBatch = async (
   { batch, preceding, glossary }: TranslateFormattedBatchInput,
   languages: Languages,
-  context: BilingualAIContext,
+  context: BilingualAIDocumentContext,
 ): Promise<Map<number, BilingualFormattedTranslation>> => {
   const analytics = analyticsFor(
     context,
@@ -519,21 +589,22 @@ export const translateFormattedBatch = async (
       attempt === 1
         ? ""
         : "\n\nContract repair: return every listed row with exactly the provided text span ids, once and in order.";
+    const request = buildBilingualDocumentRequest(
+      context,
+      TRANSLATION_ROLE,
+      `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\nGlossary:\n${glossaryLines || "(none)"}\n\nPreceding rows (context only):\n${contextLines || "(start of document)"}\n\nFormatted rows to translate:\n${rowLines}${repairInstruction}`,
+    );
     const output = await generateTanStackObjectForRole({
       role: TRANSLATION_ROLE,
       orgAIConfig: context.orgAIConfig,
       organizationId: context.organizationId,
       analytics,
-      caching: resolveCaching({
-        promptCachingEnabled: context.promptCachingEnabled,
-        role: TRANSLATION_ROLE,
-        scopeKey: context.scopeKey,
-      }),
+      caching: request.caching,
       serviceTier: SERVICE_TIER,
       tenantWorkspaceIds: [context.workspaceId],
       system: FORMATTED_TRANSLATION_SYSTEM,
       systemPromptOrigin: "embeds-untrusted",
-      prompt: `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\nGlossary:\n${glossaryLines || "(none)"}\n\nPreceding rows (context only):\n${contextLines || "(start of document)"}\n\nFormatted rows to translate:\n${rowLines}${repairInstruction}`,
+      messages: request.messages,
       abortSignal: callSignal(context),
       outputSchema: formattedTranslationSchema,
     });
