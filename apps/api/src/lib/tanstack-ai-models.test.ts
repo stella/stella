@@ -919,13 +919,13 @@ describe("tanStackModelOptionsForRole", () => {
   });
 
   test("omits sampling for OpenAI reasoning models in non-reasoning roles", () => {
-    // gpt-5.x reject any temperature but the default (a 400); a
-    // catalogued effort ladder marks such a model, so no role may emit
-    // `temperature` for it.
+    // Models whose catalogued temperature policy is "omit" reject any
+    // temperature but the default (a 400), so no role may emit
+    // `temperature` for them.
     const options = tanStackModelOptionsForRole({
       role: "chat",
       provider: "openai",
-      modelId: "gpt-5.4",
+      modelId: "gpt-5.5",
       organizationId: null,
     });
 
