@@ -1,5 +1,11 @@
 # @stll/anonymize-chat
 
+## 0.1.2
+
+### Patch Changes
+
+- [#2539](https://github.com/stella/stella/pull/2539) [`9d34a6e`](https://github.com/stella/stella/commit/9d34a6e56cb1a68a38feee175a7540b877e5b4f1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Align chat name-corpus locale hints with the anonymization runtime's supported language contract, including regional Portuguese normalization and all-language fallback for unsupported locales.
+
 ## 0.1.1
 
 ### Patch Changes

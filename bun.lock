@@ -459,7 +459,7 @@
     },
     "packages/anonymize-chat": {
       "name": "@stll/anonymize-chat",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "dependencies": {
         "@stll/anonymize-wasm": "catalog:",
         "better-result": "catalog:",
@@ -814,7 +814,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "dependencies": {
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -865,7 +865,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",

@@ -1,5 +1,17 @@
 # @stll/ui
 
+## 0.8.0
+
+### Minor Changes
+
+- [#2551](https://github.com/stella/stella/pull/2551) [`7c0d6fb`](https://github.com/stella/stella/commit/7c0d6fb9003b917202449450bdfd7362d4089bfb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add reusable inspector tabs and compact application rails that share stella's dock sizing, scroll ownership, and sidebar control rhythm.
+
+- [#2528](https://github.com/stella/stella/pull/2528) [`9c2cc2d`](https://github.com/stella/stella/commit/9c2cc2daff89dda2cc2508e2c1dca6bde834dc57) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export a shared ordered control-size contract and use it consistently across text inputs, textareas, selects, comboboxes, and command inputs.
+
+### Patch Changes
+
+- [#2538](https://github.com/stella/stella/pull/2538) [`a4062b2`](https://github.com/stella/stella/commit/a4062b260031fe8fda587ea7e8bf2e2841349523) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow application shell content to shrink within its flex layout.
+
 ## 0.7.0
 
 ### Minor Changes
