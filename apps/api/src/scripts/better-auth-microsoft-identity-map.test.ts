@@ -433,6 +433,9 @@ describe("deriveBetterAuthMicrosoftIdentityMap", () => {
     });
 
     expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.error.code).toBe("invalid-source-state");
+    }
   });
 
   test("rejects a token whose signature fails against a published key", async () => {
