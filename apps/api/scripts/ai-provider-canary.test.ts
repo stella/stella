@@ -863,4 +863,15 @@ describe("AI provider canary provider rejections", () => {
     expect(isRetryableCanaryError(limit, signal)).toBe(false);
     expect(isRetryableCanaryError(access, signal)).toBe(false);
   });
+
+  test("keeps the reason on a streamed run error from a tool probe", () => {
+    const streamed = new CanaryProviderRunError(
+      { error: limit, message: limit.message },
+      "before-tool-call",
+    );
+    expect(errorSummary(streamed, signal)).toBe(
+      "provider rejected request (output ceiling above model limit)",
+    );
+    expect(isRetryableCanaryError(streamed, signal)).toBe(false);
+  });
 });

@@ -505,6 +505,9 @@ export const providerRejectionReason = (
   error: unknown,
   depth = 0,
 ): ProviderRejectionReason | null => {
+  if (error instanceof CanaryProviderRunError) {
+    return error.rejectionReason;
+  }
   const direct = providerRejectionSignature(error);
   if (direct !== null) {
     return direct;
@@ -553,6 +556,7 @@ export class CanaryProviderRunError extends TypeError {
   readonly code: string | null;
   readonly failure: CanaryFailure;
   readonly incompleteReason: string | null;
+  readonly rejectionReason: ProviderRejectionReason | null;
   readonly retryCode: string | null;
   readonly retryable: boolean | null;
   readonly stage: CanaryRunStage;
@@ -567,6 +571,7 @@ export class CanaryProviderRunError extends TypeError {
     this.code = safeProviderCode(this.retryCode);
     this.failure = canaryEventFailure(event);
     this.incompleteReason = safeIncompleteReason(event);
+    this.rejectionReason = providerRejectionReason(event);
     this.stage = stage;
     this.status = providerStatus(event);
     this.terminalCode = terminalProviderCode(event);
