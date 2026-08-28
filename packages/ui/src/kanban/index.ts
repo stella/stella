@@ -16,21 +16,27 @@ export type { KanbanColumnHeaderProps } from "./column-header";
 export { KanbanColumnHeader } from "./column-header";
 export type {
   KanbanDragHandleProps,
+  KanbanDragCancelEvent,
+  KanbanDragEndEvent,
+  KanbanDragStartEvent,
   KanbanSortableBindings,
   KanbanSortableBoardProps,
   KanbanSortableColumnsProps,
   KanbanSortableListProps,
   UseKanbanSortableOptions,
+  UseKanbanDropTargetOptions,
 } from "./sortable-interactions";
 export {
   KANBAN_MOUSE_ACTIVATION_DISTANCE,
   KANBAN_BOARD_COLLISION_DETECTION,
+  KANBAN_DRAG_OVERLAY_Z_INDEX,
   KANBAN_TOUCH_ACTIVATION_CONSTRAINT,
   KanbanDragHandle,
   KanbanSortableBoard,
   KanbanSortableColumns,
   KanbanSortableList,
   useKanbanSortable,
+  useKanbanDropTarget,
   useKanbanSortableSensors,
 } from "./sortable-interactions";
 export type { KanbanDirection, KanbanHorizontalEdge } from "./sortable-edge";

@@ -10,6 +10,7 @@ import {
   KeyboardSensor,
   MouseSensor,
   TouchSensor,
+  useDroppable,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
@@ -47,10 +48,17 @@ export const KANBAN_MOUSE_ACTIVATION_DISTANCE = 8;
  */
 export const KANBAN_BOARD_COLLISION_DETECTION = closestCorners;
 
+/** Above sticky board chrome, below app-level floating surfaces. */
+export const KANBAN_DRAG_OVERLAY_Z_INDEX = 75;
+
 export const KANBAN_TOUCH_ACTIVATION_CONSTRAINT = {
   delay: 150,
   tolerance: 8,
 } as const;
+
+export type KanbanDragCancelEvent = DragCancelEvent;
+export type KanbanDragEndEvent = DragEndEvent;
+export type KanbanDragStartEvent = DragStartEvent;
 
 type TouchSensorProps = SensorProps<TouchSensorOptions>;
 
@@ -176,7 +184,7 @@ const getTouchDocument = (event: Event): Document => {
 
 export type KanbanSortableBoardProps = {
   children: React.ReactNode;
-  onDragEnd: (event: DragEndEvent) => void;
+  onDragEnd: (event: KanbanDragEndEvent) => void;
   collisionDetection?: CollisionDetection | undefined;
   keyboardCoordinates?: KeyboardCoordinateGetter | undefined;
   autoScroll?: boolean | AutoScrollOptions | undefined;
@@ -184,13 +192,40 @@ export type KanbanSortableBoardProps = {
   sensors?: DndContextProps["sensors"] | undefined;
   /** Overrides dnd-kit's screen-reader announcements when supplied. */
   accessibility?: DndContextProps["accessibility"] | undefined;
-  onDragStart?: ((event: DragStartEvent) => void) | undefined;
-  onDragCancel?: ((event: DragCancelEvent) => void) | undefined;
+  onDragStart?: ((event: KanbanDragStartEvent) => void) | undefined;
+  onDragCancel?: ((event: KanbanDragCancelEvent) => void) | undefined;
   /** Rendered in document.body while an item is active. */
   overlay?:
     | ((activeId: UniqueIdentifier | null) => React.ReactNode)
     | undefined;
   overlayProps?: Omit<DragOverlayProps, "children"> | undefined;
+};
+
+export type UseKanbanDropTargetOptions = {
+  disabled?: boolean | undefined;
+  id: UniqueIdentifier;
+};
+
+/**
+ * Register a board-level drop target such as an empty cell or terminal lane.
+ *
+ * Board consumers should not need to couple their presentation code to the
+ * underlying drag-and-drop library just to receive an item from a sortable
+ * context.
+ */
+export const useKanbanDropTarget = ({
+  disabled,
+  id,
+}: UseKanbanDropTargetOptions) => {
+  const dropTarget = useDroppable({
+    ...(disabled === undefined ? {} : { disabled }),
+    id,
+  });
+
+  return {
+    isOver: dropTarget.isOver,
+    setNodeRef: dropTarget.setNodeRef,
+  };
 };
 
 /**
@@ -246,7 +281,12 @@ export const KanbanSortableBoard = ({
       {children}
       {overlay && typeof document !== "undefined"
         ? createPortal(
-            <DragOverlay {...overlayProps}>{overlay(activeId)}</DragOverlay>,
+            <DragOverlay
+              {...overlayProps}
+              zIndex={overlayProps?.zIndex ?? KANBAN_DRAG_OVERLAY_Z_INDEX}
+            >
+              {overlay(activeId)}
+            </DragOverlay>,
             document.body,
           )
         : null}

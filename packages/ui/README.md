@@ -194,6 +194,9 @@ vertical scroll container.
 />
 ```
 
+Use `useKanbanDropTarget` for an empty cell or terminal board destination.
+This keeps board presentation code independent of the underlying drag library.
+
 ## Styles
 
 No compiled CSS ships. The components carry Tailwind class names, so the

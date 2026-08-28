@@ -46,7 +46,7 @@ export type KanbanVirtualCellPagination =
 export type KanbanVirtualCellSortableContext<TRow> = {
   getRowId: (row: TRow) => UniqueIdentifier;
   disabled?: SortableContextProps["disabled"] | undefined;
-  id?: UniqueIdentifier | undefined;
+  id?: SortableContextProps["id"] | undefined;
   strategy?: SortingStrategy | undefined;
 };
 

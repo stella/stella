@@ -17,11 +17,7 @@ const fixtureStyles = `
   [data-sortable-item] { block-size: 96px; }
 `;
 
-const firstColumnRows = [
-  { id: "first" },
-  { id: "third" },
-  { id: "fourth" },
-];
+const firstColumnRows = [{ id: "first" }, { id: "third" }, { id: "fourth" }];
 
 const secondColumnRows = [{ id: "second" }];
 
@@ -35,11 +31,7 @@ const SortableItem = ({ id }: { id: string }) => {
   );
 };
 
-const SortableVirtualCell = ({
-  rows,
-}: {
-  rows: readonly { id: string }[];
-}) => (
+const SortableVirtualCell = ({ rows }: { rows: readonly { id: string }[] }) => (
   <KanbanVirtualCell
     className="kanban-test-list"
     getRowKey={({ id }) => id}
