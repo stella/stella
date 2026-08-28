@@ -177,8 +177,7 @@ export const KanbanSubgroupBoard = ({
                           workspaceId={workspaceId}
                         />
                       ))}
-                      {cell.rows.length === 0 &&
-                        cell.coordinate.column.value !== null &&
+                      {cell.coordinate.column.value !== null &&
                         canCreateTaskInLane(value) && (
                           <CreateTaskButton
                             columnValue={cell.coordinate.column.value}
