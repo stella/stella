@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.9.1
+
+### Patch Changes
+
+- [#2561](https://github.com/stella/stella/pull/2561) [`12c66de`](https://github.com/stella/stella/commit/12c66de9a101424ff6b93f8fc8359ebcc5f18e33) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Preserve a board's group identifier union through grouping, saved-view, picker, and atomic drop-intent APIs.
+
 ## 0.9.0
 
 ### Minor Changes
