@@ -303,6 +303,10 @@ export const CAPABILITY_DISPATCH = {
   "expenses.update": {
     load: async () => await import("@/api/handlers/expenses/update"),
   },
+  "fields.kanban-placement.update": {
+    load: async () =>
+      await import("@/api/handlers/fields/kanban-placement/update"),
+  },
   "fields.mark-column-flag": {
     load: async () => await import("@/api/handlers/fields/mark-column-flag"),
   },
