@@ -942,7 +942,10 @@ const runModelRoleProbe = async ({
   const output = await generateTanStackTextForRole({
     abortSignal: signal,
     caching: NO_CACHING,
-    maxOutputTokens: modelRoleMaxOutputTokens(role),
+    maxOutputTokens: modelRoleMaxOutputTokens({
+      modelId: selection.modelId,
+      role,
+    }),
     ...(role === "pdf"
       ? { messages: createPdfCanaryMessages() }
       : { prompt: SYNTHETIC_PROMPT }),
@@ -956,14 +959,17 @@ const runModelRoleProbe = async ({
 };
 
 const runStructuredOutputModelRoleProbe = async ({
-  context: { config },
+  context: { config, provider },
   role,
   signal,
 }: RunModelRoleProbeOptions): Promise<void> => {
   await generateTanStackObjectForRole({
     abortSignal: signal,
     caching: NO_CACHING,
-    maxOutputTokens: structuredOutputModelRoleMaxOutputTokens(role),
+    maxOutputTokens: structuredOutputModelRoleMaxOutputTokens({
+      modelId: DEFAULT_MODELS[provider][role],
+      role,
+    }),
     organizationId: null,
     orgAIConfig: config,
     outputSchema: nestedStructuredOutputSchema,
@@ -997,7 +1003,10 @@ const runWeeklyModelRoleProbe = async ({
   const output = await generateTanStackTextForRole({
     abortSignal: signal,
     caching: NO_CACHING,
-    maxOutputTokens: modelRoleMaxOutputTokens(role),
+    maxOutputTokens: modelRoleMaxOutputTokens({
+      modelId: rotation.modelId,
+      role,
+    }),
     ...(role === "pdf"
       ? { messages: createPdfCanaryMessages() }
       : { prompt: SYNTHETIC_PROMPT }),
@@ -1011,14 +1020,17 @@ const runWeeklyModelRoleProbe = async ({
 };
 
 const runWeeklyStructuredOutputModelRoleProbe = async ({
-  context: { rotatedConfig },
+  context: { rotatedConfig, rotation },
   role,
   signal,
 }: RunWeeklyModelRoleProbeOptions): Promise<void> => {
   await generateTanStackObjectForRole({
     abortSignal: signal,
     caching: NO_CACHING,
-    maxOutputTokens: structuredOutputModelRoleMaxOutputTokens(role),
+    maxOutputTokens: structuredOutputModelRoleMaxOutputTokens({
+      modelId: rotation.modelId,
+      role,
+    }),
     organizationId: null,
     orgAIConfig: rotatedConfig,
     outputSchema: nestedStructuredOutputSchema,

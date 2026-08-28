@@ -123,19 +123,62 @@ const MODEL_ROLE_MAX_OUTPUT_TOKENS = {
   pdf: 512,
 } as const satisfies Record<ModelRole, number>;
 
-export const modelRoleMaxOutputTokens = (role: ModelRole) =>
-  MODEL_ROLE_MAX_OUTPUT_TOKENS[role];
+// Providers reject a request whose ceiling exceeds the model's output limit
+// before generating anything (Bedrock: "The maximum tokens you requested
+// exceeds the model limit of 10000"). The weekly rotation runs every role
+// probe on every offered Bedrock model, so the map is total over that
+// catalog: adding a model forces a decision here, `null` meaning its limit
+// is above every role budget and the budget is sent as is.
+type BedrockModelId = (typeof BYOK_MODEL_OPTIONS)["bedrock"][number];
+const MODEL_MAX_OUTPUT_TOKENS = {
+  "us.anthropic.claude-sonnet-4-5-20250929-v1:0": null,
+  "us.anthropic.claude-haiku-4-5-20251001-v1:0": null,
+  "us.amazon.nova-pro-v1:0": 10_000,
+  "us.amazon.nova-lite-v1:0": 10_000,
+  "us.amazon.nova-micro-v1:0": 10_000,
+  "openai.gpt-oss-120b-1:0": null,
+  "openai.gpt-oss-20b-1:0": null,
+  "us.deepseek.r1-v1:0": null,
+} as const satisfies Record<BedrockModelId, number | null>;
+
+const isBedrockModelId = (modelId: string): modelId is BedrockModelId =>
+  Object.hasOwn(MODEL_MAX_OUTPUT_TOKENS, modelId);
+
+const clampToModelOutputLimit = (modelId: string, budget: number) => {
+  if (!isBedrockModelId(modelId)) {
+    return budget;
+  }
+  const limit = MODEL_MAX_OUTPUT_TOKENS[modelId];
+  return limit === null ? budget : Math.min(budget, limit);
+};
+
+type RoleBudgetOptions = {
+  modelId: string;
+  role: ModelRole;
+};
+
+export const modelRoleMaxOutputTokens = ({
+  modelId,
+  role,
+}: RoleBudgetOptions) =>
+  clampToModelOutputLimit(modelId, MODEL_ROLE_MAX_OUTPUT_TOKENS[role]);
 
 // Anthropic's SDK rejects non-streaming structured-output requests whose
 // ceiling can exceed its ten-minute window. Keep the reasoning probe below
 // the adapter's documented ~21K clamp while leaving streaming probes intact.
-export const structuredOutputModelRoleMaxOutputTokens = (role: ModelRole) =>
-  role === "reasoning" ? 20_000 : modelRoleMaxOutputTokens(role);
+export const structuredOutputModelRoleMaxOutputTokens = ({
+  modelId,
+  role,
+}: RoleBudgetOptions) =>
+  clampToModelOutputLimit(
+    modelId,
+    role === "reasoning" ? 20_000 : MODEL_ROLE_MAX_OUTPUT_TOKENS[role],
+  );
 
 // Tool-execution probes may spend thinking tokens before the call, so they
-// get more headroom than a short-reply role, while staying under the smallest
-// output ceiling of any offered model (Amazon Nova v1: 5,120) because the
-// weekly rotation runs the same probe on every model.
+// get more headroom than a short-reply role, while staying under every
+// per-model output limit above because the weekly rotation runs the same
+// probe on every model.
 export const TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS = 4096;
 
 export const isCanaryProvider = (value: string): value is CanaryProvider =>
