@@ -35,12 +35,8 @@ export const REVIEWED_MODEL_EXCLUSIONS = {
     "2026-08-22: floating alias pointer; do not offer or assign fixed-model metadata",
   "mistral:zai-glm-5-2":
     "2026-08-28: third-party GLM model relayed through the Mistral platform; not a Mistral first-party model",
-  "openai:gpt-5.6-luna":
-    "2026-07-23: specialized GPT-5.6 tier; offer the portable gpt-5.6 ID",
   "openai:gpt-5.6-sol":
-    "2026-07-23: specialized GPT-5.6 tier; offer the portable gpt-5.6 ID",
-  "openai:gpt-5.6-terra":
-    "2026-07-23: specialized GPT-5.6 tier; offer the portable gpt-5.6 ID",
+    "2026-08-28: OpenAI's gpt-5.6 alias routes to Sol; offer the alias as the canonical picker ID",
 } as const satisfies Partial<Record<DiscoveryModelKey, DatedReviewReason>>;
 
 export type FindUnreviewedModelsOptions = {

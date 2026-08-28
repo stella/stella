@@ -199,4 +199,51 @@ describe("model catalog discovery invariants", () => {
       }),
     ).toEqual([googleFlashLiteAlias]);
   });
+
+  test("keeps the canonical OpenAI Sol model represented by its alias", () => {
+    const solModel = {
+      provider: "openai",
+      modelId: "gpt-5.6-sol",
+      releaseDate: "2026-07-21",
+      status: null,
+      toolCall: true,
+      structuredOutput: true,
+      outputModalities: ["text"],
+    } satisfies UpstreamDiscoveryModel;
+    const terraAndLunaModels = [
+      {
+        provider: "openai",
+        modelId: "gpt-5.6-luna",
+        releaseDate: "2026-07-21",
+        status: null,
+        toolCall: true,
+        structuredOutput: true,
+        outputModalities: ["text"],
+      },
+      {
+        provider: "openai",
+        modelId: "gpt-5.6-terra",
+        releaseDate: "2026-07-21",
+        status: null,
+        toolCall: true,
+        structuredOutput: true,
+        outputModalities: ["text"],
+      },
+    ] satisfies UpstreamDiscoveryModel[];
+    const openAiGpt56Family = [solModel, ...terraAndLunaModels];
+
+    expect(
+      findUnreviewedModels({
+        upstream: openAiGpt56Family,
+        offered: EMPTY_OFFERED,
+      }),
+    ).toEqual(terraAndLunaModels);
+    expect(
+      findUnreviewedModels({
+        upstream: [solModel],
+        offered: EMPTY_OFFERED,
+        reviewedExclusions: {},
+      }),
+    ).toEqual([solModel]);
+  });
 });
