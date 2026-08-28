@@ -8,12 +8,12 @@ import {
   upsertFieldContentSchema,
   upsertFieldHandler,
 } from "@/api/handlers/fields/upsert-by-id";
-import { updateTaskHandler } from "@/api/handlers/tasks/update";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 
 const fieldAssignmentSchema = t.Object({
   propertyId: tSafeId("property"),
@@ -78,17 +78,18 @@ const updateKanbanPlacement = createSafeHandler(
         }
 
         const fieldResults = await Promise.all(
-          body.fields.map((field) =>
-            Result.gen(() =>
-              upsertFieldHandler({
-                safeDb: txSafeDb,
-                workspaceId,
-                userId: user.id,
-                recordAuditEvent,
-                body: { entityId: body.entityId, ...field },
-                flushSearchRepairs: false,
-              }),
-            ),
+          body.fields.map(
+            async (field) =>
+              await Result.gen(() =>
+                upsertFieldHandler({
+                  safeDb: txSafeDb,
+                  workspaceId,
+                  userId: user.id,
+                  recordAuditEvent,
+                  body: { entityId: body.entityId, ...field },
+                  flushSearchRepairs: false,
+                }),
+              ),
           ),
         );
         const fieldError = fieldResults.find(Result.isError);

@@ -889,6 +889,7 @@ type GroupByControlProps = {
   allowMultiSelectGrouping?: boolean;
   allowPersonGrouping?: boolean;
   allowCreatedByGrouping?: boolean;
+  ariaLabel?: string | undefined;
   excludedPropertyId?: string | undefined;
   label?: string | undefined;
   showLabel?: boolean | undefined;
@@ -902,6 +903,7 @@ const GroupByControl = ({
   allowMultiSelectGrouping = false,
   allowPersonGrouping = false,
   allowCreatedByGrouping = false,
+  ariaLabel,
   excludedPropertyId,
   label,
   showLabel = true,
@@ -972,6 +974,7 @@ const GroupByControl = ({
         value={resolvedId}
       >
         <SelectTrigger
+          aria-label={ariaLabel ?? label ?? t("workspaces.views.groupBy")}
           className="h-7 min-h-0 w-28 text-xs sm:h-6 sm:w-auto sm:min-w-24"
           size="sm"
         >
@@ -1079,6 +1082,7 @@ const KanbanGroupingSettings = ({
               {t("workspaces.views.group")}
             </span>
             <GroupByControl
+              ariaLabel={t("workspaces.views.group")}
               groupByPropertyId={resolvedGroupBy}
               onChange={(nextGroupBy) =>
                 onChange(
@@ -1101,6 +1105,7 @@ const KanbanGroupingSettings = ({
               allowNone
               allowCreatedByGrouping
               allowPersonGrouping
+              ariaLabel={t("workspaces.views.subgroup")}
               excludedPropertyId={resolvedGroupBy}
               groupByPropertyId={subgroupByPropertyId}
               onChange={(nextSubgroupBy) =>

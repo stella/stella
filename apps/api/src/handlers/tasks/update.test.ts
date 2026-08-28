@@ -10,10 +10,9 @@ import {
   workObligations,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
-
-import { updateTaskHandler } from "./update";
 
 const TASK_FEATURES_ENABLED = {
   governedWorkflow: true,

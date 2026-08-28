@@ -193,6 +193,7 @@ export const KanbanColumn = ({
     dragHandleRef,
     elementRef: columnRef,
     name: title,
+    onDrop: onReorderColumn,
     reorderEnabled: isDraggable,
   });
 
