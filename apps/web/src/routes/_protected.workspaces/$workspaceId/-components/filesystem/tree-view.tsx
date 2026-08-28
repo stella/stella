@@ -47,8 +47,7 @@ import {
 import type { DragPreviewData } from "@/components/drag-preview";
 import { FileTreeNameCell } from "@/components/file-tree/file-tree";
 import { InlineEdit } from "@/components/inline-edit";
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import type { FileTab } from "@/components/inspector/inspector-tabs-store";
+import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import Tooltip from "@/components/tooltip";
 import { resolveAncestorIds } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
@@ -69,7 +68,6 @@ import { detached } from "@/lib/detached";
 import { getFileSizeDisplay } from "@/lib/file-size";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
-import { isFileDisplayable } from "@/lib/types";
 import type {
   WorkspaceEntity,
   WorkspaceProperty,
@@ -1249,7 +1247,6 @@ const FilesystemRow = ({
     : null;
 
   const file = isFolder ? null : getFirstFile(node);
-  const navigable = file !== null && isFileDisplayable(file);
 
   // Preserve file extension during rename
   const extIndex = isFolder ? -1 : name.lastIndexOf(".");
@@ -1626,61 +1623,16 @@ const FilesystemRow = ({
     </>
   );
 
-  const openInInspector = (() => {
-    if (optimisticRename !== null) {
-      return undefined;
-    }
-    if (isBulkSelected) {
-      const entities = getSelectedEntities(selectedIds);
-      const navigables: Omit<FileTab, "type">[] = [];
-      for (const entity of entities) {
-        const candidateFile = getFirstFile(entity);
-        if (!candidateFile || !isFileDisplayable(candidateFile)) {
-          continue;
-        }
-
-        navigables.push({
-          id: candidateFile.fieldId,
-          entityId: entity.entityId,
-          label: getEntityName(entity),
-          fileName: candidateFile.fileName,
-          mimeType: candidateFile.mimeType,
-          pdfFileId: candidateFile.pdfFileId,
-          propertyId: candidateFile.propertyId,
+  // Double-click opens the whole selection, focusing the node clicked. The
+  // context menu takes the same path through RowActions' `selectedEntities`.
+  const openInInspector =
+    optimisticRename === null
+      ? openInspectorSelection({
+          entities: isBulkSelected ? getSelectedEntities(selectedIds) : [node],
+          anchor: node,
           workspaceId,
-        });
-      }
-      if (navigables.length === 0) {
-        return undefined;
-      }
-      return () => {
-        const store = useInspectorTabsStore.getState();
-        for (const tab of navigables) {
-          store.openFile(tab);
-        }
-      };
-    }
-    if (node.kind === "task") {
-      return () =>
-        useInspectorTabsStore
-          .getState()
-          .openTask({ taskId: node.entityId, workspaceId, label: name });
-    }
-    if (navigable) {
-      return () =>
-        useInspectorTabsStore.getState().openFile({
-          id: file.fieldId,
-          entityId: file.entityId,
-          label: name,
-          fileName: file.fileName,
-          mimeType: file.mimeType,
-          pdfFileId: file.pdfFileId,
-          propertyId: file.propertyId,
-          workspaceId,
-        });
-    }
-    return undefined;
-  })();
+        })
+      : undefined;
 
   const rowActionsNode = (
     <span className="flex justify-end">
@@ -1688,7 +1640,6 @@ const FilesystemRow = ({
         anchor={contextAnchor}
         entity={node}
         getAncestorIds={getAncestorIds}
-        onOpen={openInInspector}
         onOpenChange={(o) => {
           if (!o) {
             setMenuState({ type: "closed" });

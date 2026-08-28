@@ -55,7 +55,7 @@ import { cn } from "@stll/ui/utils";
 
 import { buildEntityMentionOption } from "@/components/chat-mention-helpers";
 import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { CopyToMatterDialog } from "@/components/workspaces/copy-to-matter-dialog";
@@ -102,7 +102,6 @@ import type {
   WorkspaceCellMetadata,
   WorkspaceEntity,
 } from "@/lib/types";
-import { isFileDisplayable } from "@/lib/types";
 import { downloadFile } from "@/lib/utils";
 import {
   useCreateEntities,
@@ -370,35 +369,13 @@ export const RowActions = ({
       }
     : undefined;
 
-  // Derive a default open handler when the caller doesn't
-  // provide one. Tasks open in the inspector; displayable
-  // files open in the PDF peek viewer.
-  const resolvedOnOpen =
-    onOpen ??
-    (() => {
-      if (entity.kind === "task") {
-        return () =>
-          useInspectorTabsStore.getState().openTask({
-            taskId: entity.entityId,
-            workspaceId,
-            label: name,
-          });
-      }
-      if (file && isFileDisplayable(file)) {
-        return () =>
-          useInspectorTabsStore.getState().openFile({
-            id: file.fieldId,
-            entityId: file.entityId,
-            label: name,
-            fileName: file.fileName,
-            mimeType: file.mimeType,
-            pdfFileId: file.pdfFileId,
-            propertyId: file.propertyId,
-            workspaceId,
-          });
-      }
-      return undefined;
-    })();
+  const resolvedOnOpen = resolvePreviewHandler({
+    anchor: entity,
+    entities: bulkTargets,
+    isBulk,
+    onOpen,
+    workspaceId,
+  });
 
   const hasPdfConversion =
     file !== null && file.pdfFileId !== null && file.mimeType !== PDF_MIME_TYPE;
@@ -1006,6 +983,30 @@ export const RowActions = ({
       )}
     </Menu>
   );
+};
+
+type ResolvePreviewHandlerArgs = {
+  anchor: WorkspaceEntity;
+  entities: readonly WorkspaceEntity[];
+  isBulk: boolean;
+  onOpen: (() => void) | undefined;
+  workspaceId: string;
+};
+
+/** Preview opens every selected entity the inspector can render and focuses
+ *  the row the menu was opened on. `onOpen` overrides a single-entity menu
+ *  only; a bulk selection always opens as a whole. */
+const resolvePreviewHandler = ({
+  anchor,
+  entities,
+  isBulk,
+  onOpen,
+  workspaceId,
+}: ResolvePreviewHandlerArgs): (() => void) | undefined => {
+  if (!isBulk && onOpen) {
+    return onOpen;
+  }
+  return openInspectorSelection({ entities, anchor, workspaceId });
 };
 
 const RowOpenMenuActions = ({
