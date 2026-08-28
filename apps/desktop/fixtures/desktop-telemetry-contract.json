@@ -31,5 +31,12 @@
     "unhandledError",
     "unhandledRejection",
     "windowLabelMismatch"
+  ],
+  "spans": [
+    "clipboardFirstPaint",
+    "clipboardHistoryReady",
+    "clipboardReopenPaint",
+    "clipboardShellCommit",
+    "clipboardSnapshotRequest"
   ]
 }

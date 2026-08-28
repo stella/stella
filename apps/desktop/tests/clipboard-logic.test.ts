@@ -4,6 +4,7 @@ import {
   adjacentClipboardIndex,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
+  clipboardRailWindow,
   clipboardSourceTintIndex,
   filterClipboardItems,
   formatClipboardAge,
@@ -230,6 +231,96 @@ describe("clipboard input keyboard handling", () => {
         key: "Enter",
       }),
     ).toBe(false);
+  });
+});
+
+describe("clipboardRailWindow", () => {
+  const base = { overscan: 2, stride: 100, viewportWidth: 450 };
+
+  test("mounts only the cards intersecting the viewport plus overscan", () => {
+    expect(
+      clipboardRailWindow({
+        ...base,
+        activeIndex: 0,
+        itemCount: 500,
+        scrollLeft: 0,
+      }),
+    ).toEqual({ end: 8, start: 0 });
+    expect(
+      clipboardRailWindow({
+        ...base,
+        activeIndex: 250,
+        itemCount: 500,
+        scrollLeft: 25_000,
+      }),
+    ).toEqual({ end: 258, start: 248 });
+  });
+
+  test("keeps the active card mounted when it is outside the viewport", () => {
+    const window = clipboardRailWindow({
+      ...base,
+      activeIndex: 499,
+      itemCount: 500,
+      scrollLeft: 0,
+    });
+    // The viewport is at the head while the selection is at the tail, so the
+    // window spans both; the point is that neither is left unmounted.
+    expect(window.start).toBe(0);
+    expect(window.end).toBe(500);
+  });
+
+  test("always mounts the viewport and the active card", () => {
+    // The viewport range must stay mounted for every scroll offset, otherwise
+    // pointer scrolling reveals an unmounted (blank) region of the rail.
+    for (let scrollLeft = 0; scrollLeft <= 50_000; scrollLeft += 731) {
+      for (const activeIndex of [0, 1, 7, 8, 9, 250, 498, 499, 900]) {
+        const window = clipboardRailWindow({
+          ...base,
+          activeIndex,
+          itemCount: 500,
+          scrollLeft,
+        });
+        expect(window.start).toBeGreaterThanOrEqual(0);
+        expect(window.end).toBeLessThanOrEqual(500);
+
+        const firstVisible = Math.floor(scrollLeft / base.stride);
+        const lastVisible = Math.min(
+          499,
+          firstVisible + Math.ceil(base.viewportWidth / base.stride),
+        );
+        expect(window.start).toBeLessThanOrEqual(firstVisible);
+        expect(window.end).toBeGreaterThan(lastVisible);
+
+        const active = Math.min(activeIndex, 499);
+        expect(active).toBeGreaterThanOrEqual(window.start);
+        expect(active).toBeLessThan(window.end);
+      }
+    }
+  });
+
+  test("stays bounded to the viewport when the selection is in view", () => {
+    // Pointer scroll keeps the hovered card selected, so the common case keeps
+    // a small window even in a large history.
+    const window = clipboardRailWindow({
+      ...base,
+      activeIndex: 251,
+      itemCount: 500,
+      scrollLeft: 25_000,
+    });
+    expect(window.end - window.start).toBeLessThanOrEqual(6 + 2 * 2);
+  });
+
+  test("renders a default window before the rail is measured", () => {
+    expect(
+      clipboardRailWindow({
+        activeIndex: 0,
+        itemCount: 3,
+        overscan: 2,
+        scrollLeft: 0,
+        stride: 100,
+        viewportWidth: 0,
+      }),
+    ).toEqual({ end: 3, start: 0 });
   });
 });
 

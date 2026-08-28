@@ -36,17 +36,52 @@ export const DESKTOP_TELEMETRY_ERROR_CODES = {
   windowLabelMismatch: "windowLabelMismatch",
 } as const;
 
+/**
+ * Startup spans the frontend measures. The native side owns the full list and
+ * attaches the open kind; only a duration crosses IPC.
+ */
+export const DESKTOP_TELEMETRY_SPANS = {
+  clipboardFirstPaint: "clipboardFirstPaint",
+  clipboardHistoryReady: "clipboardHistoryReady",
+  clipboardReopenPaint: "clipboardReopenPaint",
+  clipboardShellCommit: "clipboardShellCommit",
+  clipboardSnapshotRequest: "clipboardSnapshotRequest",
+} as const;
+
 type DesktopTelemetryWindow =
   (typeof DESKTOP_TELEMETRY_WINDOWS)[keyof typeof DESKTOP_TELEMETRY_WINDOWS];
 type DesktopTelemetryOperation =
   (typeof DESKTOP_TELEMETRY_OPERATIONS)[keyof typeof DESKTOP_TELEMETRY_OPERATIONS];
 type DesktopTelemetryErrorCode =
   (typeof DESKTOP_TELEMETRY_ERROR_CODES)[keyof typeof DESKTOP_TELEMETRY_ERROR_CODES];
+export type DesktopTelemetrySpan =
+  (typeof DESKTOP_TELEMETRY_SPANS)[keyof typeof DESKTOP_TELEMETRY_SPANS];
 
 export type DesktopErrorReport = {
   code: DesktopTelemetryErrorCode;
   operation: DesktopTelemetryOperation;
   window: DesktopTelemetryWindow;
+};
+
+export type DesktopTimingReport = {
+  durationMs: number;
+  span: DesktopTelemetrySpan;
+  window: DesktopTelemetryWindow;
+};
+
+export const reportDesktopTiming = ({
+  durationMs,
+  span,
+  window,
+}: DesktopTimingReport) => {
+  // The native command accepts a deny-unknown-fields record with an integer
+  // duration. Never attach clipboard data or search text.
+  const report = {
+    durationMs: Math.max(0, Math.round(durationMs)),
+    span,
+    window,
+  };
+  void invoke("desktop_report_timing", { report }).catch(() => undefined);
 };
 
 const reported = new Set<string>();

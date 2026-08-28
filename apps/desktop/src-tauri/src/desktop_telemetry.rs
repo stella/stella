@@ -9,6 +9,8 @@ use std::{
 use tauri::State;
 use tokio::sync::mpsc;
 
+use crate::clipboard_window::ClipboardStartupTrace;
+
 const ANALYTICS_CAPTURE_PATH: &str = "capture/";
 const DEFAULT_ANALYTICS_HOST: &str = "https://eu.i.posthog.com/";
 const ANALYTICS_KEY_PREFIX: &str = "phc_";
@@ -135,10 +137,116 @@ pub struct DesktopErrorReport {
   pub code: DesktopTelemetryErrorCode,
 }
 
+/// Startup phases measured on the clipboard path. Spans carry durations and
+/// counts only: never clipboard content, source-app identities, or search text.
+// The `Clipboard` prefix is the wire namespace shared with the frontend
+// contract and mirrors `DesktopTelemetryOperation`; other windows will add
+// unprefixed spans, so the shared prefix is intentional, not redundant.
+#[allow(clippy::enum_variant_names)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DesktopTelemetrySpan {
+  /// Keychain read or key creation inside clipboard initialization.
+  ClipboardKeychainRead,
+  /// Encrypted history file read, decryption, and parsing.
+  ClipboardStoreLoad,
+  /// Whole initialization: the blocking load off the mutex plus install.
+  ClipboardInitialize,
+  /// Show request until the WebView window builder returned.
+  ClipboardWindowCreate,
+  /// Show request until the page finished loading and the window was shown.
+  ClipboardPageLoad,
+  /// Show request until an existing window was shown and focused.
+  ClipboardWindowShow,
+  /// Navigation start until the React shell committed.
+  ClipboardShellCommit,
+  /// Time the first snapshot command waited for the manager mutex.
+  ClipboardSnapshotLockWait,
+  /// Time the first snapshot command spent pruning and cloning history.
+  ClipboardSnapshotBuild,
+  /// Frontend round trip of the first snapshot request.
+  ClipboardSnapshotRequest,
+  /// Navigation start until the first frame after a snapshot was applied.
+  ClipboardFirstPaint,
+  /// Navigation start until a snapshot with settled persistence was applied.
+  ClipboardHistoryReady,
+  /// Window focus after a reopen until the next painted frame.
+  ClipboardReopenPaint,
+}
+
+impl DesktopTelemetrySpan {
+  fn as_str(self) -> &'static str {
+    match self {
+      Self::ClipboardKeychainRead => "clipboardKeychainRead",
+      Self::ClipboardStoreLoad => "clipboardStoreLoad",
+      Self::ClipboardInitialize => "clipboardInitialize",
+      Self::ClipboardWindowCreate => "clipboardWindowCreate",
+      Self::ClipboardPageLoad => "clipboardPageLoad",
+      Self::ClipboardWindowShow => "clipboardWindowShow",
+      Self::ClipboardShellCommit => "clipboardShellCommit",
+      Self::ClipboardSnapshotLockWait => "clipboardSnapshotLockWait",
+      Self::ClipboardSnapshotBuild => "clipboardSnapshotBuild",
+      Self::ClipboardSnapshotRequest => "clipboardSnapshotRequest",
+      Self::ClipboardFirstPaint => "clipboardFirstPaint",
+      Self::ClipboardHistoryReady => "clipboardHistoryReady",
+      Self::ClipboardReopenPaint => "clipboardReopenPaint",
+    }
+  }
+}
+
+/// How the clipboard window came to be shown. Each kind has its own startup
+/// profile and is analyzed separately.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ClipboardOpenKind {
+  /// Revealed while the process started.
+  Launch,
+  /// Window created on demand by an already running process.
+  FirstOpen,
+  /// Existing hidden window shown again.
+  Reopen,
+}
+
+impl ClipboardOpenKind {
+  fn as_str(self) -> &'static str {
+    match self {
+      Self::Launch => "launch",
+      Self::FirstOpen => "firstOpen",
+      Self::Reopen => "reopen",
+    }
+  }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DesktopTimingReport {
+  pub window: DesktopTelemetryWindow,
+  pub span: DesktopTelemetrySpan,
+  pub duration: Duration,
+  pub open_kind: Option<ClipboardOpenKind>,
+  pub item_count: Option<usize>,
+  pub payload_bytes: Option<usize>,
+}
+
+/// Timing the frontend may submit. Only the duration crosses the IPC boundary;
+/// the native side attaches the open kind from its own startup trace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct DesktopFrontendTimingReport {
+  pub window: DesktopTelemetryWindow,
+  pub span: DesktopTelemetrySpan,
+  pub duration_ms: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum DesktopTelemetryEvent {
+  Error(DesktopErrorReport),
+  Timing(DesktopTimingReport),
+}
+
 #[derive(Clone)]
 pub struct DesktopTelemetry {
   reported: Arc<Mutex<HashSet<DesktopErrorReport>>>,
-  sender: Option<mpsc::Sender<DesktopErrorReport>>,
+  sender: Option<mpsc::Sender<DesktopTelemetryEvent>>,
 }
 
 struct AnalyticsSinkConfig {
@@ -179,10 +287,27 @@ impl DesktopTelemetry {
       code = ?report.code,
       "desktop operation failed"
     );
+    self.enqueue(DesktopTelemetryEvent::Error(report));
+  }
+
+  pub fn capture_timing(&self, report: DesktopTimingReport) {
+    tracing::info!(
+      window = ?report.window,
+      span = ?report.span,
+      duration_ms = report.duration.as_millis(),
+      open_kind = ?report.open_kind,
+      item_count = report.item_count,
+      payload_bytes = report.payload_bytes,
+      "desktop timing"
+    );
+    self.enqueue(DesktopTelemetryEvent::Timing(report));
+  }
+
+  fn enqueue(&self, event: DesktopTelemetryEvent) {
     let Some(sender) = &self.sender else {
       return;
     };
-    if sender.try_send(report).is_err() {
+    if sender.try_send(event).is_err() {
       tracing::warn!("desktop telemetry queue is unavailable");
     }
   }
@@ -259,18 +384,51 @@ fn analytics_error_payload(
   })
 }
 
+fn analytics_timing_payload(
+  config: &AnalyticsSinkConfig,
+  report: DesktopTimingReport,
+) -> Value {
+  json!({
+    "api_key": config.key,
+    "event": "desktop_timing",
+    "properties": {
+      "$process_person_profile": false,
+      "app_commit": option_env!("STELLA_COMMIT_SHA"),
+      "app_version": env!("CARGO_PKG_VERSION"),
+      "desktop_window": report.window.as_str(),
+      "distinct_id": config.process_id,
+      "duration_ms": u64::try_from(report.duration.as_millis()).unwrap_or(u64::MAX),
+      "item_count": report.item_count,
+      "open_kind": report.open_kind.map(ClipboardOpenKind::as_str),
+      "payload_bytes": report.payload_bytes,
+      "service_name": "stella-desktop",
+      "span": report.span.as_str(),
+    }
+  })
+}
+
+fn analytics_payload(
+  config: &AnalyticsSinkConfig,
+  event: DesktopTelemetryEvent,
+) -> Value {
+  match event {
+    DesktopTelemetryEvent::Error(report) => analytics_error_payload(config, report),
+    DesktopTelemetryEvent::Timing(report) => analytics_timing_payload(config, report),
+  }
+}
+
 async fn run_observability_worker(
   config: AnalyticsSinkConfig,
-  mut receiver: mpsc::Receiver<DesktopErrorReport>,
+  mut receiver: mpsc::Receiver<DesktopTelemetryEvent>,
 ) {
   let Ok(client) = Client::builder().timeout(REQUEST_TIMEOUT).build() else {
     tracing::warn!("desktop telemetry client could not start");
     return;
   };
-  while let Some(report) = receiver.recv().await {
+  while let Some(event) = receiver.recv().await {
     let status = client
       .post(config.endpoint.clone())
-      .json(&analytics_error_payload(&config, report))
+      .json(&analytics_payload(&config, event))
       .send()
       .await
       .map(|response| response.status());
@@ -293,6 +451,38 @@ pub fn desktop_report_error(
   telemetry.capture(report);
 }
 
+#[tauri::command]
+pub fn desktop_report_timing(
+  report: DesktopFrontendTimingReport,
+  telemetry: State<'_, DesktopTelemetry>,
+  startup: State<'_, ClipboardStartupTrace>,
+) {
+  // The startup trace holds the kind the window was created with, so it only
+  // labels the initial-open spans. A reopen paint is a reopen by definition;
+  // reading the trace would misattribute it to launch or first open.
+  let open_kind = match (report.window, report.span) {
+    (DesktopTelemetryWindow::Clipboard, DesktopTelemetrySpan::ClipboardReopenPaint) => {
+      Some(ClipboardOpenKind::Reopen)
+    }
+    (DesktopTelemetryWindow::Clipboard, _) => startup.open_kind(),
+    (
+      DesktopTelemetryWindow::Main
+      | DesktopTelemetryWindow::ClipboardEditor
+      | DesktopTelemetryWindow::TakeoverDialog
+      | DesktopTelemetryWindow::SelfHostConnectDialog,
+      _,
+    ) => None,
+  };
+  telemetry.capture_timing(DesktopTimingReport {
+    window: report.window,
+    span: report.span,
+    duration: Duration::from_millis(report.duration_ms),
+    open_kind,
+    item_count: None,
+    payload_bytes: None,
+  });
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -303,6 +493,7 @@ mod tests {
     windows: Vec<DesktopTelemetryWindow>,
     operations: Vec<DesktopTelemetryOperation>,
     error_codes: Vec<DesktopTelemetryErrorCode>,
+    spans: Vec<DesktopTelemetrySpan>,
   }
 
   fn config() -> AnalyticsSinkConfig {
@@ -383,6 +574,61 @@ mod tests {
         serde_json::to_value(error_code).unwrap(),
         json!(error_code.as_str())
       );
+    }
+    for span in contract.spans {
+      assert_eq!(serde_json::to_value(span).unwrap(), json!(span.as_str()));
+    }
+  }
+
+  #[test]
+  fn frontend_timing_report_rejects_content_fields() {
+    let value = json!({
+      "window": "clipboard",
+      "span": "clipboardFirstPaint",
+      "durationMs": 12,
+      "plainText": "must never be accepted",
+    });
+
+    assert!(serde_json::from_value::<DesktopFrontendTimingReport>(value).is_err());
+  }
+
+  #[test]
+  fn timing_payload_contains_only_allowlisted_diagnostics() {
+    let payload = analytics_timing_payload(
+      &config(),
+      DesktopTimingReport {
+        window: DesktopTelemetryWindow::Clipboard,
+        span: DesktopTelemetrySpan::ClipboardSnapshotBuild,
+        duration: Duration::from_millis(7),
+        open_kind: Some(ClipboardOpenKind::FirstOpen),
+        item_count: Some(3),
+        payload_bytes: Some(4096),
+      },
+    );
+    let properties = payload["properties"].as_object().unwrap();
+
+    assert_eq!(payload["event"], "desktop_timing");
+    assert_eq!(properties["span"], "clipboardSnapshotBuild");
+    assert_eq!(properties["duration_ms"], 7);
+    assert_eq!(properties["open_kind"], "firstOpen");
+    assert_eq!(properties["item_count"], 3);
+    assert_eq!(properties["payload_bytes"], 4096);
+    assert_eq!(properties["$process_person_profile"], false);
+    let allowed = [
+      "$process_person_profile",
+      "app_commit",
+      "app_version",
+      "desktop_window",
+      "distinct_id",
+      "duration_ms",
+      "item_count",
+      "open_kind",
+      "payload_bytes",
+      "service_name",
+      "span",
+    ];
+    for key in properties.keys() {
+      assert!(allowed.contains(&key.as_str()), "unexpected property {key}");
     }
   }
 }

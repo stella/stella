@@ -1,5 +1,8 @@
 use serde::Serialize;
-use std::sync::{Arc, Mutex};
+use std::{
+  sync::{Arc, Mutex},
+  time::Instant,
+};
 use tauri::{AppHandle, Emitter, State, WebviewWindow};
 
 use crate::{
@@ -7,7 +10,10 @@ use crate::{
     ClipboardAppState, ClipboardCaptureStatus, ClipboardGroup, ClipboardGroupColor,
     ClipboardItem, ClipboardRetention, ClipboardSnapshot, write_item,
   },
-  clipboard_window,
+  clipboard_window::{self, ClipboardStartupTrace},
+  desktop_telemetry::{
+    DesktopTelemetry, DesktopTelemetrySpan, DesktopTelemetryWindow, DesktopTimingReport,
+  },
 };
 
 const HISTORY_EVENT: &str = "clipboard-history-changed";
@@ -31,10 +37,36 @@ fn lock_error() -> String {
 #[tauri::command]
 pub fn clipboard_get_snapshot(
   state: State<'_, ClipboardAppState>,
+  telemetry: State<'_, DesktopTelemetry>,
+  startup: State<'_, ClipboardStartupTrace>,
 ) -> Result<ClipboardSnapshot, String> {
+  let lock_requested = Instant::now();
   let mut manager = state.lock().map_err(|_| lock_error())?;
+  let lock_wait = lock_requested.elapsed();
+  let build_started = Instant::now();
   manager.prune_expired(chrono::Utc::now())?;
-  Ok(manager.snapshot())
+  let snapshot = manager.snapshot();
+  let build = build_started.elapsed();
+  drop(manager);
+
+  if let Some(open_kind) = startup.claim_snapshot() {
+    let item_count = Some(snapshot.items.len());
+    let payload_bytes = Some(snapshot.history_bytes());
+    for (span, duration) in [
+      (DesktopTelemetrySpan::ClipboardSnapshotLockWait, lock_wait),
+      (DesktopTelemetrySpan::ClipboardSnapshotBuild, build),
+    ] {
+      telemetry.capture_timing(DesktopTimingReport {
+        window: DesktopTelemetryWindow::Clipboard,
+        span,
+        duration,
+        open_kind: Some(open_kind),
+        item_count,
+        payload_bytes,
+      });
+    }
+  }
+  Ok(snapshot)
 }
 
 #[tauri::command]
