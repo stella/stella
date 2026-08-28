@@ -835,6 +835,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         hasMore={subgroupQuery.hasNextPage}
         isLoadingMore={subgroupQuery.isFetchingNextPage}
         isTaskCreationPending={isTaskCreationPending}
+        loadedEntityCount={subgroupEntities.length}
         matrix={visibleSubgroupMatrix}
         canDropCards={
           subgroup.type === "property" ||

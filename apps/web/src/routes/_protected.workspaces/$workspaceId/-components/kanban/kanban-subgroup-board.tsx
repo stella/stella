@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { type UIEvent, useRef, useState } from "react";
 
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronDownIcon,
   GripVerticalIcon,
@@ -31,6 +32,9 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets";
 
 const KANBAN_CELL_WIDTH = "w-[300px]";
+const KANBAN_CARD_ESTIMATE_PX = 128;
+const KANBAN_CARD_OVERSCAN = 8;
+const KANBAN_LOAD_MORE_THRESHOLD_PX = 200;
 
 type KanbanSubgroupBoardProps = {
   cardFields: string[];
@@ -38,6 +42,7 @@ type KanbanSubgroupBoardProps = {
   hasMore: boolean;
   isLoadingMore: boolean;
   isTaskCreationPending: boolean;
+  loadedEntityCount: number;
   matrix: KanbanBoardMatrix<WorkspaceEntity>;
   canCreateTaskInLane: (laneValue: string | null) => boolean;
   onChangeColumnColor?:
@@ -72,6 +77,7 @@ export const KanbanSubgroupBoard = ({
   hasMore,
   isLoadingMore,
   isTaskCreationPending,
+  loadedEntityCount,
   matrix,
   onChangeColumnColor,
   onLoadMore,
@@ -198,11 +204,15 @@ export const KanbanSubgroupBoard = ({
                       canDropCards={canDropCards}
                       cardFields={cardFields}
                       cell={cell}
+                      hasMore={hasMore}
+                      isLoadingMore={isLoadingMore}
                       isTaskCreationPending={isTaskCreationPending}
                       key={cell.coordinate.column.value ?? "__uncategorized__"}
                       laneValue={value}
+                      loadedEntityCount={loadedEntityCount}
                       onCreateTask={onCreateTask}
                       onDropCard={onDropCard}
+                      onLoadMore={onLoadMore}
                       onRenameEntity={onRenameEntity}
                       properties={properties}
                       workspaceId={workspaceId}
@@ -235,14 +245,18 @@ type KanbanSubgroupCellProps = {
   canDropCards: boolean;
   cardFields: string[];
   cell: KanbanBoardMatrix<WorkspaceEntity>["cells"][number];
+  hasMore: boolean;
+  isLoadingMore: boolean;
   isTaskCreationPending: boolean;
   laneValue: string | null;
+  loadedEntityCount: number;
   onCreateTask: (columnValue: string, laneValue: string | null) => void;
   onDropCard: (
     entityId: string,
     columnValue: string,
     laneValue: string | null,
   ) => void;
+  onLoadMore: () => void;
   onRenameEntity: (entityId: string, newName: string) => void;
   properties: WorkspaceProperty[];
   workspaceId: string;
@@ -253,16 +267,29 @@ const KanbanSubgroupCell = ({
   canDropCards,
   cardFields,
   cell,
+  hasMore,
+  isLoadingMore,
   isTaskCreationPending,
   laneValue,
+  loadedEntityCount,
   onCreateTask,
   onDropCard,
+  onLoadMore,
   onRenameEntity,
   properties,
   workspaceId,
 }: KanbanSubgroupCellProps) => {
   const cellRef = useRef<HTMLDivElement>(null);
+  const requestedAtEntityCountRef = useRef<number | null>(null);
   const columnValue = cell.coordinate.column.value;
+  const cardVirtualizer = useVirtualizer({
+    count: cell.rows.length,
+    estimateSize: () => KANBAN_CARD_ESTIMATE_PX,
+    getItemKey: (index) => cell.rows.at(index)?.entityId ?? index,
+    getScrollElement: () => cellRef.current,
+    overscan: KANBAN_CARD_OVERSCAN,
+  });
+  const virtualCards = cardVirtualizer.getVirtualItems();
   const isDragOver = useKanbanEntityDropTarget({
     elementRef: cellRef,
     enabled: canDropCards,
@@ -274,13 +301,32 @@ const KanbanSubgroupCell = ({
     },
   });
 
+  const handleScroll = ({ currentTarget }: UIEvent<HTMLDivElement>) => {
+    if (!hasMore || isLoadingMore) {
+      return;
+    }
+    const remaining =
+      currentTarget.scrollHeight -
+      currentTarget.scrollTop -
+      currentTarget.clientHeight;
+    if (remaining > KANBAN_LOAD_MORE_THRESHOLD_PX) {
+      return;
+    }
+    if (requestedAtEntityCountRef.current === loadedEntityCount) {
+      return;
+    }
+    requestedAtEntityCountRef.current = loadedEntityCount;
+    onLoadMore();
+  };
+
   return (
     <div
       className={cn(
         KANBAN_CELL_WIDTH,
-        "bg-muted/20 min-h-20 shrink-0 space-y-2 rounded-xl p-2 transition-[background-color,outline-color]",
+        "bg-muted/20 max-h-[min(60vh,40rem)] min-h-20 shrink-0 overflow-y-auto overscroll-y-contain rounded-xl p-2 transition-[background-color,outline-color]",
         isDragOver && "bg-primary/5 ring-primary/50 ring-2",
       )}
+      onScroll={handleScroll}
       ref={cellRef}
       style={
         cell.coordinate.column.colorBg
@@ -290,17 +336,36 @@ const KanbanSubgroupCell = ({
           : undefined
       }
     >
-      {cell.rows.map((entity) => (
-        <KanbanCard
-          cardFields={cardFields}
-          draggable={canDropCards}
-          entity={entity}
-          key={entity.entityId}
-          onRename={onRenameEntity}
-          properties={properties}
-          workspaceId={workspaceId}
-        />
-      ))}
+      <div
+        className="relative"
+        style={{ height: cardVirtualizer.getTotalSize() }}
+      >
+        {virtualCards.map((virtualCard) => {
+          const entity = cell.rows.at(virtualCard.index);
+          if (!entity) {
+            return null;
+          }
+
+          return (
+            <div
+              className="absolute inset-x-0 top-0 pb-2"
+              data-index={virtualCard.index}
+              key={entity.entityId}
+              ref={cardVirtualizer.measureElement}
+              style={{ transform: `translateY(${virtualCard.start}px)` }}
+            >
+              <KanbanCard
+                cardFields={cardFields}
+                draggable={canDropCards}
+                entity={entity}
+                onRename={onRenameEntity}
+                properties={properties}
+                workspaceId={workspaceId}
+              />
+            </div>
+          );
+        })}
+      </div>
       {columnValue !== null && canCreateTask && (
         <CreateTaskButton
           columnValue={columnValue}
