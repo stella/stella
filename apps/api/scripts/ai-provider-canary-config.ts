@@ -131,6 +131,15 @@ export const modelRoleMaxOutputTokens = (role: ModelRole) =>
 export const structuredOutputModelRoleMaxOutputTokens = (role: ModelRole) =>
   role === "reasoning" ? 20_000 : modelRoleMaxOutputTokens(role);
 
+// Tool-execution probes pay for a model's thinking tokens out of the same
+// output budget as the tool call. The chat role's ceiling is sized for a short
+// reply, so reasoning-capable chat models exhaust it and end the stream
+// `incomplete` before emitting a call. Give these probes reasoning headroom,
+// but stay under the smallest output ceiling of any offered model (Amazon Nova
+// v1: 5,120), because the weekly rotation runs the same probe on every model
+// and providers reject a ceiling above the model's limit before the call.
+export const TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS = 4096;
+
 export const isCanaryProvider = (value: string): value is CanaryProvider =>
   CANARY_PROVIDERS.some((provider) => provider === value);
 

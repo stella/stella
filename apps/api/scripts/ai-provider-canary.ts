@@ -33,6 +33,7 @@ import {
   structuredOutputModelRoleMaxOutputTokens,
   NEVER_MATCH_PATTERN,
   NULL_WIDENING_CANARY_PROVIDERS,
+  TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
   weeklyCanaryRotation,
 } from "./ai-provider-canary-config";
 import type {
@@ -800,7 +801,6 @@ const capabilityProbes = [
     run: async (context, signal) => {
       const output = await runToolProbe({
         context,
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
         prompt: TOOL_SCHEMA_PROMPT,
         role: CAPABILITY_ROLE,
         signal,
@@ -816,7 +816,6 @@ const capabilityProbes = [
     run: async (context, signal) => {
       const output = await runToolProbe({
         context,
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
         prompt: TOOL_SCHEMA_PROMPT,
         role: CAPABILITY_ROLE,
         signal,
@@ -1015,7 +1014,6 @@ const runToolCallRoundTripProbe = async ({
 
   await runToolProbe({
     context,
-    maxOutputTokens: modelRoleMaxOutputTokens(TOOL_CALL_ROLE),
     prompt: toolRoundTripPromptForProvider(context.provider),
     role: TOOL_CALL_ROLE,
     signal,
@@ -1090,7 +1088,6 @@ const runWeeklyToolShapeProbe = async ({
   );
   await runToolProbe({
     context: { config: context.rotatedConfig, provider: context.provider },
-    maxOutputTokens: modelRoleMaxOutputTokens(TOOL_CALL_ROLE),
     prompt,
     role: TOOL_CALL_ROLE,
     signal,
@@ -1102,16 +1099,17 @@ const runWeeklyToolShapeProbe = async ({
 
 type RunToolProbeOptions = {
   context: CanaryContext;
-  maxOutputTokens: number;
   prompt: string;
   role: ModelRole;
   signal: AbortSignal;
   tool: AnyClientTool | AnyServerTool;
 };
 
+// Every tool-execution probe gets the reasoning budget here, not at the call
+// site, so a caller cannot hand a reasoning-capable model a short-reply budget
+// and turn a truncated stream into a false provider failure.
 const runToolProbe = async ({
   context: { config, provider },
-  maxOutputTokens,
   prompt,
   role,
   signal,
@@ -1139,7 +1137,7 @@ const runToolProbe = async ({
     modelOptions: mergeGenerationOptions({
       caching: NO_CACHING,
       model,
-      maxOutputTokens,
+      maxOutputTokens: TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
       serviceTier: "standard",
       temperature: 0,
     }),
