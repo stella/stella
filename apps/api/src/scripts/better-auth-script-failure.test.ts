@@ -18,46 +18,53 @@ describe("formatBetterAuthScriptFailure", () => {
     });
   });
 
-  test("describes an Error cause with its SQLSTATE", () => {
-    const cause = Object.assign(
+  test("walks the cause chain and keeps only names, codes, and SQLSTATE", () => {
+    const postgres = Object.assign(
       new Error("permission denied for table account"),
-      { errno: "42501", name: "PostgresError" },
-    );
-    expect(
-      parse(
-        formatBetterAuthScriptFailure({
-          cause,
-          code: "database-query-failed",
-          message: "query failed",
-        }),
-      ),
-    ).toMatchObject({
-      cause: {
+      {
+        code: "ERR_POSTGRES_SERVER_ERROR",
         errno: "42501",
-        message: "permission denied for table account",
         name: "PostgresError",
+      },
+    );
+    const wrapper = Object.assign(
+      new Error(
+        'Failed query: select * from "account" where "id" > $1 params: secret-account-id',
+        { cause: postgres },
+      ),
+      { name: "DrizzleQueryError" },
+    );
+    const line = formatBetterAuthScriptFailure({
+      cause: wrapper,
+      code: "database-query-failed",
+      message: "query failed",
+    });
+    expect(line).not.toContain("secret-account-id");
+    expect(line).not.toContain("permission denied");
+    expect(parse(line)).toMatchObject({
+      cause: {
+        code: "ERR_POSTGRES_SERVER_ERROR",
+        names: ["DrizzleQueryError", "PostgresError"],
+        sqlState: "42501",
       },
     });
   });
 
-  test("scrubs row values and bounds the cause message", () => {
-    const cause = new Error(
-      `duplicate key value violates unique constraint "account_pkey" Key (id)=(secret-row) ${"x".repeat(1000)}`,
-    );
+  test("ignores codes outside the fixed vocabulary", () => {
+    const cause = Object.assign(new Error("boom"), { code: "id_token=leak" });
     expect(
       parse(
         formatBetterAuthScriptFailure({
           cause,
-          code: "database-query-failed",
-          message: "query failed",
+          code: "unexpected-failure",
+          message: "boom",
         }),
       ),
-    ).toMatchObject({
-      cause: {
-        message: expect.stringMatching(
-          /^(?!.*secret-row)(?=.*Key \(redacted\)).{0,500}$/u,
-        ),
-      },
+    ).toEqual({
+      cause: { names: ["Error"] },
+      code: "unexpected-failure",
+      message: "boom",
+      status: "error",
     });
   });
 
@@ -70,6 +77,24 @@ describe("formatBetterAuthScriptFailure", () => {
           message: "boom",
         }),
       ),
-    ).toMatchObject({ cause: { message: "", name: "string" } });
+    ).toMatchObject({ cause: { names: ["string"] } });
+  });
+
+  test("bounds the cause-chain walk", () => {
+    let cause: Error = new Error("innermost");
+    for (let depth = 0; depth < 10; depth += 1) {
+      cause = new Error("wrapper", { cause });
+    }
+    expect(
+      parse(
+        formatBetterAuthScriptFailure({
+          cause,
+          code: "unexpected-failure",
+          message: "boom",
+        }),
+      ),
+    ).toMatchObject({
+      cause: { names: Array.from({ length: 5 }, () => "Error") },
+    });
   });
 });
