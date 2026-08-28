@@ -3,8 +3,8 @@ import Elysia from "elysia";
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import markColumnFlag from "@/api/handlers/fields/mark-column-flag";
+import updateKanbanPlacement from "@/api/handlers/fields/kanban-placement/update";
 import updateCellMetadata from "@/api/handlers/fields/update-cell-metadata";
-import updateKanbanPlacement from "@/api/handlers/fields/update-kanban-placement";
 import upsertField from "@/api/handlers/fields/upsert-by-id";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import {
