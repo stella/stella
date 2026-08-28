@@ -705,7 +705,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         (entity) => entity.entityId === entityId,
       );
       if (!sourceEntity) {
-        return panic("Dragged Kanban entity is not loaded");
+        panic("Dragged Kanban entity is not loaded");
       }
       if (
         !canMoveCardToSubgroupLane({
@@ -731,7 +731,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         return;
       }
       if (isBuiltInGrouping || isReadOnlyVerdictGrouping) {
-        return panic("Read-only Kanban primary grouping accepted a drag");
+        panic("Read-only Kanban primary grouping accepted a drag");
       }
       await upsertField.mutateAsync({
         workspaceId,
@@ -751,7 +751,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
     const subgroupContent = subgroupFieldContent(laneValue);
     if (subgroupContent === null) {
-      return panic("Writable Kanban subgroup has no field content");
+      panic("Writable Kanban subgroup has no field content");
     }
     await updateKanbanPlacement.mutateAsync({
       workspaceId,
