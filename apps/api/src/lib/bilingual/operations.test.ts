@@ -110,6 +110,25 @@ const paragraphSignature = async (
 const wordElementCount = (xml: string, localName: string): number =>
   [...xml.matchAll(new RegExp(`<w:${localName}(?:\\s|/|>)`, "gu"))].length;
 
+const addExtendedInlineControls = async (
+  buffer: ArrayBuffer,
+): Promise<ArrayBuffer> => {
+  const zip = await JSZip.loadAsync(buffer);
+  const xml = await zip.file("word/document.xml")?.async("string");
+  if (!xml) {
+    throw new Error("fixture has no document part");
+  }
+  const marker = /(<w:t\b[^>]*> italic<\/w:t>)/gu;
+  if (!marker.test(xml)) {
+    throw new Error("fixture has no italic text marker");
+  }
+  zip.file(
+    "word/document.xml",
+    xml.replaceAll(marker, "$1<w:cr/><w:noBreakHyphen/><w:softHyphen/>"),
+  );
+  return await zip.generateAsync({ type: "arraybuffer" });
+};
+
 /** A clause, a heading, a signature label, and a signature table. */
 const buildBilingual = async () => {
   const doc = createEmptyDocument({
@@ -259,9 +278,10 @@ describe("buildOperations applied to a bilingual document", () => {
         ],
       },
     ];
-    const { buffer } = await createBilingualDocx(await createDocx(doc), {
+    const bilingual = await createBilingualDocx(await createDocx(doc), {
       targetStyleSuffix: "en",
     });
+    const buffer = await addExtendedInlineControls(bilingual.buffer);
     const { units } = flattenBilingualRows(await readBilingualDocx(buffer));
     const clause = units.at(0);
     const signature = units.at(1);
@@ -330,6 +350,13 @@ describe("buildOperations applied to a bilingual document", () => {
       rows,
       richTranslations,
     );
+    const formattedTargetSignature = await paragraphSignature(
+      formattedBuffer,
+      clause.rowId,
+    );
+    for (const localName of ["cr", "noBreakHyphen", "softHyphen"]) {
+      expect(wordElementCount(formattedTargetSignature, localName)).toBe(1);
+    }
     const applied = await applyFolioAIEditsToBuffer(
       formattedBuffer,
       buildFormattingPreservingOperations(
@@ -361,6 +388,10 @@ describe("buildOperations applied to a bilingual document", () => {
     expect(targetClauseSignature).toContain("<w:highlight");
     expect(targetClauseSignature).toContain("<w:tab");
     expect(targetClauseSignature).toContain("<w:br");
+    // Folio canonicalizes carriage returns to breaks and hyphen controls to
+    // their OOXML text equivalents during the later structural edit pass.
+    expect(wordElementCount(targetClauseSignature, "br")).toBe(2);
+    expect(targetClauseSignature).toContain("‑­");
     expect(targetClauseSignature).toContain("<w:sym");
     expect(targetClauseSignature).toContain("<w:fldChar");
     expect(wordElementCount(targetClauseSignature, "tab")).toBe(1);
@@ -385,11 +416,17 @@ describe("buildOperations applied to a bilingual document", () => {
         wordElementCount(inlineSignature, localName),
       ).toBeGreaterThanOrEqual(2);
     }
-    for (const localName of ["tab", "br", "sym", "fldChar"]) {
+    for (const localName of ["tab", "sym", "fldChar"]) {
       expect(wordElementCount(inlineSignature, localName)).toBe(
         wordElementCount(sourceInlineSignature, localName) * 2,
       );
     }
+    expect(wordElementCount(inlineSignature, "br")).toBe(
+      (wordElementCount(sourceInlineSignature, "br") +
+        wordElementCount(sourceInlineSignature, "cr")) *
+        2,
+    );
+    expect(inlineSignature.match(/‑­/gu)).toHaveLength(2);
     const tableInlineSignature = await paragraphSignature(
       applied.buffer,
       tableLabel.rowId,
@@ -399,11 +436,17 @@ describe("buildOperations applied to a bilingual document", () => {
         wordElementCount(tableInlineSignature, localName),
       ).toBeGreaterThanOrEqual(2);
     }
-    for (const localName of ["tab", "br", "sym", "fldChar"]) {
+    for (const localName of ["tab", "sym", "fldChar"]) {
       expect(wordElementCount(tableInlineSignature, localName)).toBe(
         wordElementCount(sourceTableSignature, localName) * 2,
       );
     }
+    expect(wordElementCount(tableInlineSignature, "br")).toBe(
+      (wordElementCount(sourceTableSignature, "br") +
+        wordElementCount(sourceTableSignature, "cr")) *
+        2,
+    );
+    expect(tableInlineSignature.match(/‑­/gu)).toHaveLength(2);
   });
 
   test("rejects a reordered formatted translation span contract", async () => {
@@ -432,6 +475,7 @@ describe("buildOperations applied to a bilingual document", () => {
       status: "translated",
       targetText: "translated",
     };
+    const reversedSpans = formatted.spans.toReversed();
     const rejection = await applyFormattedBilingualTranslations(
       buffer,
       [row],
@@ -439,8 +483,8 @@ describe("buildOperations applied to a bilingual document", () => {
         [
           row.rowId,
           {
-            text: "translated",
-            spans: formatted.spans.toReversed(),
+            text: reversedSpans.map((span) => span.text).join(""),
+            spans: reversedSpans,
           },
         ],
       ]),

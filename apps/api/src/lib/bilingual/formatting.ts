@@ -18,7 +18,15 @@ export type BilingualTextSpan = Readonly<{
 
 export type BilingualInlineControl = Readonly<{
   type: "control";
-  kind: "break" | "field" | "fieldInstruction" | "symbol" | "tab";
+  kind:
+    | "break"
+    | "carriageReturn"
+    | "field"
+    | "fieldInstruction"
+    | "noBreakHyphen"
+    | "softHyphen"
+    | "symbol"
+    | "tab";
 }>;
 
 export type BilingualInlineToken =
@@ -80,6 +88,8 @@ const controlKind = (
   switch (element.localName) {
     case "br":
       return "break";
+    case "cr":
+      return "carriageReturn";
     case "fldChar":
       return "field";
     case "instrText":
@@ -89,6 +99,10 @@ const controlKind = (
     case "ptab":
     case "tab":
       return "tab";
+    case "noBreakHyphen":
+      return "noBreakHyphen";
+    case "softHyphen":
+      return "softHyphen";
     default:
       return null;
   }
