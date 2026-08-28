@@ -33,6 +33,7 @@ import {
   structuredOutputModelRoleMaxOutputTokens,
   NEVER_MATCH_PATTERN,
   NULL_WIDENING_CANARY_PROVIDERS,
+  TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
   weeklyCanaryRotation,
 } from "./ai-provider-canary-config";
 import type {
@@ -1015,7 +1016,7 @@ const runToolCallRoundTripProbe = async ({
 
   await runToolProbe({
     context,
-    maxOutputTokens: modelRoleMaxOutputTokens(TOOL_CALL_ROLE),
+    maxOutputTokens: TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
     prompt: toolRoundTripPromptForProvider(context.provider),
     role: TOOL_CALL_ROLE,
     signal,
@@ -1090,7 +1091,7 @@ const runWeeklyToolShapeProbe = async ({
   );
   await runToolProbe({
     context: { config: context.rotatedConfig, provider: context.provider },
-    maxOutputTokens: modelRoleMaxOutputTokens(TOOL_CALL_ROLE),
+    maxOutputTokens: TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
     prompt,
     role: TOOL_CALL_ROLE,
     signal,

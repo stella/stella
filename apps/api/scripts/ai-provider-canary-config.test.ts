@@ -12,6 +12,7 @@ import {
   missingCanaryProviders,
   modelRoleMaxOutputTokens,
   structuredOutputModelRoleMaxOutputTokens,
+  TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
   WEEKLY_TOOL_SHAPES,
   weeklyCanaryRotation,
 } from "./ai-provider-canary-config";
@@ -30,6 +31,14 @@ describe("AI provider canary role budgets", () => {
     expect(modelRoleMaxOutputTokens("reasoning")).toBeGreaterThan(
       structuredOutputModelRoleMaxOutputTokens("reasoning"),
     );
+  });
+
+  test("budgets tool-execution probes above every short-reply role", () => {
+    for (const role of MODEL_ROLES) {
+      expect(TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS).toBeGreaterThanOrEqual(
+        modelRoleMaxOutputTokens(role),
+      );
+    }
   });
 });
 
