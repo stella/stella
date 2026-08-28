@@ -5,7 +5,12 @@ on:
   workflow_dispatch:
   workflow_run:
     workflows:
+      - Nightly Full Test
       - Nightly Full Typecheck
+      - AI provider canary
+      - MCP canary
+      - Agent sandbox canary
+      - Desktop release canary
       - Model Catalog Upstream Check
     types: [completed]
 
