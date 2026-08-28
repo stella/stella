@@ -4,35 +4,17 @@ import { type RedisOptions, RedisClient, sleep } from "bun";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { RedisClientClosedError } from "@/api/lib/errors/tagged-errors";
-import { connectionErrorFields, safeErrorCode } from "@/api/lib/errors/utils";
+import { connectionErrorFields } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { redisConnectionOptions } from "@/api/lib/redis-options";
 
-// Bun's experimental BullMQ Redis adapter intermittently fails to parse a reply
-// on a worker's idle blocking poll, surfacing an opaque
-// `ERR_REDIS_INVALID_RESPONSE` ("Failed to read data") roughly every few
-// seconds. It is self-recovering — the worker keeps draining jobs — so callers
-// must not treat it as a real outage. A persistent Redis outage manifests as
-// different codes / reconnection failures, which stay unclassified here.
-const RECOVERABLE_REDIS_POLL_ERROR_CODE = "ERR_REDIS_INVALID_RESPONSE";
-
-export const isRecoverableRedisPollError = (error: unknown): boolean =>
-  error instanceof Error &&
-  safeErrorCode(error) === RECOVERABLE_REDIS_POLL_ERROR_CODE;
-
-// Bun's RedisClient auto-reconnects a dropped socket, but a command issued
-// against the dead connection — the first touch after an idle window, or a
-// command in flight when the drop happens — rejects with
-// ERR_REDIS_CONNECTION_CLOSED instead of waiting for the reconnect. For a
-// periodic loop whose next tick retries anyway, that rejection is an
-// expected operational transient, not a defect; a persistent outage keeps
-// failing and stays visible through the loop's own error logging and the
-// worker/broadcast error paths.
-const TRANSIENT_REDIS_CONNECTION_ERROR_CODE = "ERR_REDIS_CONNECTION_CLOSED";
-
-export const isTransientRedisConnectionError = (error: unknown): boolean =>
-  error instanceof Error &&
-  safeErrorCode(error) === TRANSIENT_REDIS_CONNECTION_ERROR_CODE;
+// Re-exported so existing consumers keep one import site for "is this Valkey
+// failure expected?" while the predicates themselves stay importable without
+// this module's connection machinery.
+export {
+  isRecoverableRedisPollError,
+  isTransientRedisConnectionError,
+} from "@/api/lib/redis-error-classification";
 
 class ConfiguredRedisClient extends RedisClient implements BunRedisRawClient {
   readonly #connectHandlers = new Set<() => void>();

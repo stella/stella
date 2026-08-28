@@ -15,7 +15,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
-import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import { errorTag } from "@/api/lib/errors/utils";
 import { decidePdfDerivativeAction } from "@/api/lib/file-derivative-decision";
 import {
   allocateFileObject,
@@ -32,6 +32,7 @@ import {
 } from "@/api/lib/files/image-derivative";
 import { createFileKey } from "@/api/lib/files/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -278,9 +279,10 @@ export const initFileDerivativeWorker = () => {
     });
   });
 
-  worker.on("error", (error) => {
-    logger.error("file_derivative.worker_error", connectionErrorFields(error));
-  });
+  worker.on(
+    "error",
+    createQueueWorkerErrorLogger("file_derivative.worker_error"),
+  );
 
   logger.info("file_derivative.worker_started", {
     concurrency: String(WORKER_CONCURRENCY),

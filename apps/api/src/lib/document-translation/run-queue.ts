@@ -86,11 +86,12 @@ import {
 } from "@/api/lib/document-translation/segments";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
-import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import { errorTag } from "@/api/lib/errors/utils";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { createFileKey } from "@/api/lib/files/utils";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
+import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
@@ -1313,12 +1314,10 @@ export const initDocumentTranslationRunWorker = () => {
     }
     captureError(error, { runId: job?.data.runId ?? "" });
   });
-  worker.on("error", (error) => {
-    logger.error(
-      "document_translation.worker_error",
-      connectionErrorFields(error),
-    );
-  });
+  worker.on(
+    "error",
+    createQueueWorkerErrorLogger("document_translation.worker_error"),
+  );
 
   const closeReconcile = startNonOverlappingInterval({
     intervalMs: ORPHAN_RECONCILE_INTERVAL_MS,

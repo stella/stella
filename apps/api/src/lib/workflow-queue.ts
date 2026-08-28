@@ -36,6 +36,7 @@ import {
 import { extractionRunStore } from "@/api/lib/extraction-runs/root-store";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
+import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import {
   createBullMqConnection,
   isRecoverableRedisPollError,
@@ -1103,6 +1104,10 @@ const createWorkflowWorker = ({
   // the tally so a rising real problem is still visible.
   let redisPollBlipsSinceWarn = 0;
   let redisPollLastWarnAtMs = 0;
+  const logWorkerError = createQueueWorkerErrorLogger("workflow.worker_error", {
+    queueClass,
+    queueName,
+  });
   worker.on("error", (error) => {
     if (isRecoverableRedisPollError(error)) {
       redisPollBlipsSinceWarn += 1;
@@ -1120,11 +1125,7 @@ const createWorkflowWorker = ({
       redisPollBlipsSinceWarn = 0;
       return;
     }
-    logger.error("workflow.worker_error", {
-      ...connectionErrorFields(error),
-      queueClass,
-      queueName,
-    });
+    logWorkerError(error);
   });
   logger.info("workflow.worker_started", {
     concurrency: String(concurrency),

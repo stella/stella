@@ -16,6 +16,7 @@ import {
   type FlowStepJobData,
 } from "@/api/lib/flows/flow-run-queue";
 import { logger } from "@/api/lib/observability/logger";
+import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 
 // The BullMQ worker side of the flow-run engine. It lives in its own module so
@@ -105,9 +106,7 @@ export const initFlowRunWorker = (): Worker<FlowStepJobData> => {
     });
   });
 
-  worker.on("error", (error) => {
-    logger.error("flow.worker_error", errorSystemFields(error));
-  });
+  worker.on("error", createQueueWorkerErrorLogger("flow.worker_error"));
 
   logger.info("flow.worker_started", {
     concurrency: String(FLOW_STEP_JOB_CONCURRENCY),

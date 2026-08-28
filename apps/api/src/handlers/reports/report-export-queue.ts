@@ -46,10 +46,11 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
-import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import { errorTag } from "@/api/lib/errors/utils";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
+import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { listPendingReportExportNotifications } from "@/api/lib/report-export-notification-recovery";
 import { recoverStuckReportExports } from "@/api/lib/report-export-recovery";
@@ -191,9 +192,10 @@ export const initReportExportWorker = () => {
     });
   });
 
-  worker.on("error", (error) => {
-    logger.error("report_export.worker_error", connectionErrorFields(error));
-  });
+  worker.on(
+    "error",
+    createQueueWorkerErrorLogger("report_export.worker_error"),
+  );
 
   const runNotificationReconcile = async (): Promise<void> => {
     const { actors, suppressed } = await listPendingReportExportNotifications();

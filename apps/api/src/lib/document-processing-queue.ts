@@ -80,11 +80,7 @@ import {
 import type { CurrentDocumentSource } from "@/api/lib/document-processing-queue-policy";
 import { startDocumentOcrWorkerReadiness } from "@/api/lib/document-processing-readiness";
 import { createReconciliationProgress } from "@/api/lib/document-processing-reconciliation-progress";
-import {
-  connectionErrorFields,
-  errorSystemFields,
-  errorTag,
-} from "@/api/lib/errors/utils";
+import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { createFileKey, createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -92,6 +88,7 @@ import {
   recognizePdfTextLocally,
 } from "@/api/lib/ocr-local/recognize-local";
 import { createOcrSearchablePdf } from "@/api/lib/ocr-searchable-pdf";
+import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import {
   createBullMqConnection,
   createLazyRedisClient,
@@ -2627,12 +2624,10 @@ export const initDocumentProcessingWorker = () => {
     "document-processing.publish-readiness",
   );
 
-  worker.on("error", (error) => {
-    logger.error(
-      "document_processing.worker_error",
-      connectionErrorFields(error),
-    );
-  });
+  worker.on(
+    "error",
+    createQueueWorkerErrorLogger("document_processing.worker_error"),
+  );
 
   let reconciling = false;
   const reconcile = () => {
