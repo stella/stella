@@ -79,6 +79,13 @@ describe("classifyAIError", () => {
     expect(classifyAIError(error)).toBe("model_unavailable");
   });
 
+  test("stops at a cyclic cause chain", () => {
+    const error: Record<string, unknown> = {};
+    error["cause"] = error;
+
+    expect(classifyAIError(error)).toBe("unknown");
+  });
+
   test("still maps other status codes to their existing kinds", () => {
     expect(classifyAIError(apiCallError(429))).toBe("quota_exhausted");
     expect(classifyAIError(apiCallError(402))).toBe("provider_billing");

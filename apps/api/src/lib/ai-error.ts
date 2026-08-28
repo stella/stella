@@ -102,7 +102,17 @@ const providerStatusCodeFromCauseChain = (error: unknown): number | null => {
   return null;
 };
 
-export const classifyAIError = (error: unknown): AIErrorKind => {
+const classifyAIErrorInternal = (
+  error: unknown,
+  seen: Set<object>,
+): AIErrorKind => {
+  if (isRecord(error)) {
+    if (seen.has(error)) {
+      return "unknown";
+    }
+    seen.add(error);
+  }
+
   if (ChatLoopDetectedError.is(error)) {
     return "loop_detected";
   }
@@ -113,7 +123,7 @@ export const classifyAIError = (error: unknown): AIErrorKind => {
   // recognised provider cause so a permanent provider response does not look
   // like a transient transport outage.
   if (HandlerError.is(error) && error.cause !== undefined) {
-    const causeKind = classifyAIError(error.cause);
+    const causeKind = classifyAIErrorInternal(error.cause, seen);
     if (causeKind !== "unknown") {
       return causeKind;
     }
@@ -147,10 +157,13 @@ export const classifyAIError = (error: unknown): AIErrorKind => {
   // mapped HTTP status / UX copy.
   const cause = errorCause(error);
   if (cause !== undefined) {
-    return classifyAIError(cause);
+    return classifyAIErrorInternal(cause, seen);
   }
   return "unknown";
 };
+
+export const classifyAIError = (error: unknown): AIErrorKind =>
+  classifyAIErrorInternal(error, new Set<object>());
 
 /**
  * The provider HTTP status a failure carries, as fingerprint fields.
