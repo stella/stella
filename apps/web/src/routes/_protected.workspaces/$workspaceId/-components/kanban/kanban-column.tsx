@@ -476,7 +476,8 @@ export const KanbanColumn = ({
           // Drawn whenever the view has something to show or something to
           // choose: a saved total is visible to a reader who cannot change it.
           calculations &&
-          (calculations.selections.length > 0 || calculations.onChange) ? (
+          (calculations.selections.length > 0 ||
+            (calculations.onChange && calculations.properties.length > 0)) ? (
             <ColumnCalculations
               calculations={calculations}
               entities={entities}
@@ -757,7 +758,7 @@ export const ColumnCalculations = ({
           )}
         />
       ))}
-      {onChange && (
+      {onChange && properties.length > 0 && (
         <span className="opacity-0 transition-opacity group-hover/column:opacity-100 focus-within:opacity-100">
           <CalculationPicker
             labels={labels}

@@ -886,6 +886,8 @@ type GroupByControlProps = {
   // Multi-select grouping is valid for the table (a row can appear in several
   // sections) but not the kanban board (a card belongs to one column).
   allowMultiSelectGrouping?: boolean;
+  allowPersonGrouping?: boolean;
+  allowCreatedByGrouping?: boolean;
   excludedPropertyId?: string | undefined;
   label?: string | undefined;
   showLabel?: boolean | undefined;
@@ -897,6 +899,8 @@ const GroupByControl = ({
   onChange,
   allowNone = false,
   allowMultiSelectGrouping = false,
+  allowPersonGrouping = false,
+  allowCreatedByGrouping = false,
   excludedPropertyId,
   label,
   showLabel = true,
@@ -909,7 +913,8 @@ const GroupByControl = ({
       property.id !== excludedPropertyId &&
       (allowMultiSelectGrouping
         ? isGroupableProperty(property)
-        : property.content.type === "single-select"),
+        : property.content.type === "single-select" ||
+          (allowPersonGrouping && property.content.type === "person")),
   );
 
   // Grouping by "Document Type" is the primary action — it drives per-type
@@ -998,6 +1003,12 @@ const GroupByControl = ({
               {t("common.kind")}
             </SelectItem>
           )}
+          {allowCreatedByGrouping &&
+            excludedPropertyId !== getInternalPropertyId("created-by") && (
+              <SelectItem value={getInternalPropertyId("created-by")}>
+                {t("common.author")}
+              </SelectItem>
+            )}
           {basicProps.map((prop) => (
             <SelectItem key={prop.id} value={prop.id}>
               {prop.name}
@@ -1080,6 +1091,8 @@ const KanbanGroupingSettings = ({
             </span>
             <GroupByControl
               allowNone
+              allowCreatedByGrouping
+              allowPersonGrouping
               excludedPropertyId={resolvedGroupBy}
               groupByPropertyId={subgroupByPropertyId}
               onChange={(nextSubgroupBy) =>

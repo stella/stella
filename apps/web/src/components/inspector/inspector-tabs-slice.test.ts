@@ -9,6 +9,7 @@ import { closeTabsForDeletedEntities } from "@/components/inspector/inspector-ta
 const makeTaskTab = (id: string): TaskTab => ({
   type: "task",
   id,
+  creationStatus: "ready",
   label: id,
   isNew: false,
   workspaceId: "workspace-1",

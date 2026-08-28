@@ -182,4 +182,20 @@ describe("getKanbanGroups", () => {
       null,
     ]);
   });
+
+  test("preserves identity images on rendered groups", () => {
+    const groups = getKanbanGroups(
+      [
+        {
+          value: "user-1",
+          label: "Anna Nováková",
+          image: "https://example.test/anna.jpg",
+        },
+      ],
+      "None",
+    );
+
+    expect(groups.at(0)?.image).toBe("https://example.test/anna.jpg");
+    expect(groups.at(-1)?.image).toBeUndefined();
+  });
 });

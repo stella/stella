@@ -97,4 +97,14 @@ describe("column calculations", () => {
     expect(html).toContain("15");
     expect(html).toContain(messages.workspaces.calculations.choose);
   });
+
+  test("an editable view with no calculable properties has no empty picker", () => {
+    const html = render({
+      selections: [],
+      properties: [],
+      onChange: () => undefined,
+    });
+
+    expect(html).not.toContain(messages.workspaces.calculations.choose);
+  });
 });

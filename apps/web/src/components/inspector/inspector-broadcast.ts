@@ -223,6 +223,8 @@ const isInspectorTaskTab = (value: Record<string, unknown>, label: unknown) => {
   const status = value["status"];
   return (
     typeof label === "string" &&
+    (value["creationStatus"] === "pending" ||
+      value["creationStatus"] === "ready") &&
     typeof value["isNew"] === "boolean" &&
     (status === undefined || status === null || isTaskStatus(status))
   );

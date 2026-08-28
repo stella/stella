@@ -169,6 +169,7 @@ export const createInspectorTabsSlice = (
         state.tabs.push({
           type: "task",
           id: taskId,
+          creationStatus: "ready",
           label,
           isNew,
           workspaceId,
@@ -185,6 +186,46 @@ export const createInspectorTabsSlice = (
       state.activeId = taskId;
       state.activationSeq += 1;
       state.minimized = false;
+    }),
+
+  openPendingTask: ({ workspaceId, label = "" }) => {
+    const pendingTaskId = `pending-task:${uuidv7()}`;
+    set((state) => {
+      state.tabs.push({
+        type: "task",
+        id: pendingTaskId,
+        creationStatus: "pending",
+        label,
+        isNew: true,
+        workspaceId,
+      });
+      state.activeId = pendingTaskId;
+      state.activationSeq += 1;
+      state.minimized = false;
+    });
+    return pendingTaskId;
+  },
+
+  resolvePendingTask: ({ pendingTaskId, taskId }) =>
+    set((state) => {
+      const pendingTab = state.tabs.find(
+        (tab) => tab.type === "task" && tab.id === pendingTaskId,
+      );
+      if (
+        pendingTab?.type !== "task" ||
+        pendingTab.creationStatus !== "pending"
+      ) {
+        return;
+      }
+
+      state.tabs = state.tabs.filter(
+        (tab) => tab.id === pendingTaskId || tab.id !== taskId,
+      );
+      pendingTab.id = taskId;
+      pendingTab.creationStatus = "ready";
+      if (state.activeId === pendingTaskId) {
+        state.activeId = taskId;
+      }
     }),
 
   openExternal: ({

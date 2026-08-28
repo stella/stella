@@ -132,6 +132,61 @@ const freezeDateNow = (updatedAt: number) => {
   Date.now = () => updatedAt;
 };
 
+describe("optimistic task creation", () => {
+  test("opens a pending task immediately and resolves it in place", () => {
+    useInspectorTabsStore.setState({ minimized: true });
+
+    const pendingTaskId = useInspectorTabsStore
+      .getState()
+      .openPendingTask({ workspaceId: "workspace-1", label: "New task" });
+
+    expect(useInspectorTabsStore.getState()).toMatchObject({
+      activeId: pendingTaskId,
+      minimized: false,
+      tabs: [
+        {
+          type: "task",
+          id: pendingTaskId,
+          creationStatus: "pending",
+          isNew: true,
+          workspaceId: "workspace-1",
+        },
+      ],
+    });
+
+    useInspectorTabsStore
+      .getState()
+      .resolvePendingTask({ pendingTaskId, taskId: "task-1" });
+
+    expect(useInspectorTabsStore.getState()).toMatchObject({
+      activeId: "task-1",
+      tabs: [
+        {
+          type: "task",
+          id: "task-1",
+          creationStatus: "ready",
+          isNew: true,
+          workspaceId: "workspace-1",
+        },
+      ],
+    });
+  });
+
+  test("does not reopen a pending task the user closed", () => {
+    const pendingTaskId = useInspectorTabsStore
+      .getState()
+      .openPendingTask({ workspaceId: "workspace-1" });
+    useInspectorTabsStore.getState().closeTab(pendingTaskId);
+
+    useInspectorTabsStore
+      .getState()
+      .resolvePendingTask({ pendingTaskId, taskId: "task-1" });
+
+    expect(useInspectorTabsStore.getState().tabs).toEqual([]);
+    expect(useInspectorTabsStore.getState().activeId).toBeNull();
+  });
+});
+
 describe("openChat", () => {
   test("creates a workspace-scoped tab when workspaceId is provided", () => {
     const threadId = toChatThreadId("thread-A");

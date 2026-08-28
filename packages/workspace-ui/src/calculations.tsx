@@ -68,6 +68,10 @@ export const CalculationPicker = ({
   onChange,
   children,
 }: CalculationPickerProps) => {
+  if (properties.length === 0) {
+    return null;
+  }
+
   const select = (propertyId: string, kind: CalculationKind | null) => {
     onChange(applyCalculationSelection({ selections, propertyId, kind }));
   };
@@ -81,9 +85,6 @@ export const CalculationPicker = ({
         {children ?? <SigmaIcon />}
       </MenuTrigger>
       <MenuPopup>
-        {properties.length === 0 && (
-          <MenuItem disabled>{labels.noProperties}</MenuItem>
-        )}
         {properties.map((property) => {
           const selected = selections.find(
             (selection) => selection.propertyId === property.id,
@@ -136,28 +137,34 @@ export const CalculationKindPicker = ({
   value,
   onChange,
   children,
-}: CalculationKindPickerProps) => (
-  <Menu>
-    <MenuTrigger
-      aria-label={labels.choose}
-      render={<Button size="icon-xs" variant="ghost" />}
-    >
-      {children ?? <SigmaIcon />}
-    </MenuTrigger>
-    <MenuPopup>
-      <MenuItem onClick={() => onChange(null)}>
-        {value === null ? <CheckIcon /> : <span />}
-        {labels.none}
-      </MenuItem>
-      {kinds.map((kind) => (
-        <MenuItem key={kind} onClick={() => onChange(kind)}>
-          {value === kind ? <CheckIcon /> : <span />}
-          {labels.kinds[kind]}
+}: CalculationKindPickerProps) => {
+  if (kinds.length === 0) {
+    return null;
+  }
+
+  return (
+    <Menu>
+      <MenuTrigger
+        aria-label={labels.choose}
+        render={<Button size="icon-xs" variant="ghost" />}
+      >
+        {children ?? <SigmaIcon />}
+      </MenuTrigger>
+      <MenuPopup>
+        <MenuItem onClick={() => onChange(null)}>
+          {value === null ? <CheckIcon /> : <span />}
+          {labels.none}
         </MenuItem>
-      ))}
-    </MenuPopup>
-  </Menu>
-);
+        {kinds.map((kind) => (
+          <MenuItem key={kind} onClick={() => onChange(kind)}>
+            {value === kind ? <CheckIcon /> : <span />}
+            {labels.kinds[kind]}
+          </MenuItem>
+        ))}
+      </MenuPopup>
+    </Menu>
+  );
+};
 
 export type CalculationSummaryProps = {
   calculation: FormattedCalculation;

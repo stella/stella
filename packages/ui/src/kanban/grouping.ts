@@ -15,6 +15,7 @@ import type { OptionColor } from "../lib/option-color";
 export type KanbanGroupOption = {
   value: string;
   label: string;
+  image?: string | null | undefined;
   color?: string | undefined;
   colorBg?: string | undefined;
   optionColor?: OptionColor | undefined;
@@ -24,6 +25,7 @@ export type KanbanGroupOption = {
 export type KanbanGroup = {
   value: string | null;
   label: string;
+  image?: string | null | undefined;
   color?: string | undefined;
   colorBg?: string | undefined;
   optionColor?: OptionColor | undefined;
@@ -202,6 +204,7 @@ export const getKanbanGroups = (
   const result: KanbanGroup[] = options.map((option) => ({
     value: option.value,
     label: option.label,
+    image: option.image,
     color: option.color,
     colorBg: option.colorBg,
     optionColor: option.optionColor,

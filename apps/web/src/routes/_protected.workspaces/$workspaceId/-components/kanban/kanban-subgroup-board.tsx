@@ -5,9 +5,11 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { KanbanColumnHeader } from "@stll/ui/kanban";
 import type { KanbanBoardMatrix, KanbanGroup } from "@stll/ui/kanban";
 import { cn } from "@stll/ui/utils";
 
+import { UserIdentity } from "@/components/user-avatar";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
@@ -18,6 +20,7 @@ type KanbanSubgroupBoardProps = {
   cardFields: string[];
   hasMore: boolean;
   isLoadingMore: boolean;
+  isTaskCreationPending: boolean;
   matrix: KanbanBoardMatrix<WorkspaceEntity>;
   canCreateTaskInLane: (laneValue: string | null) => boolean;
   onCreateTask: (columnValue: string, laneValue: string | null) => void;
@@ -33,6 +36,7 @@ export const KanbanSubgroupBoard = ({
   canCreateTaskInLane,
   hasMore,
   isLoadingMore,
+  isTaskCreationPending,
   matrix,
   onLoadMore,
   onCreateTask,
@@ -74,9 +78,9 @@ export const KanbanSubgroupBoard = ({
   };
 
   return (
-    <div className="h-full overflow-auto p-4">
+    <div className="h-full overflow-auto px-4 pb-4">
       <div className="min-w-max">
-        <div className="bg-background sticky top-0 z-20 flex gap-3 pb-3">
+        <div className="bg-background sticky top-0 z-20 flex gap-3 pt-4 pb-3">
           {matrix.columns.map((column) => (
             <ColumnHeading
               column={column}
@@ -127,7 +131,16 @@ export const KanbanSubgroupBoard = ({
                     flip={collapsed}
                     icon={ChevronDownIcon}
                   />
-                  {lane.group.color ? (
+                  {lane.group.image !== undefined ? (
+                    <UserIdentity
+                      as="span"
+                      avatarClassName="size-5 shrink-0 text-[0.5rem]"
+                      className="max-w-80 gap-2"
+                      image={lane.group.image}
+                      name={lane.group.label}
+                      nameClassName="text-sm font-medium"
+                    />
+                  ) : lane.group.color ? (
                     <span
                       className="size-5 shrink-0 rounded-md"
                       style={{ backgroundColor: lane.group.colorBg }}
@@ -140,9 +153,11 @@ export const KanbanSubgroupBoard = ({
                   ) : (
                     <Rows3Icon className="text-muted-foreground size-4 shrink-0" />
                   )}
-                  <span className="max-w-80 truncate text-sm font-medium">
-                    {lane.group.label}
-                  </span>
+                  {lane.group.image === undefined && (
+                    <span className="max-w-80 truncate text-sm font-medium">
+                      {lane.group.label}
+                    </span>
+                  )}
                   <span className="text-muted-foreground text-xs tabular-nums">
                     {format.number(count)}
                   </span>
@@ -181,6 +196,7 @@ export const KanbanSubgroupBoard = ({
                         canCreateTaskInLane(value) && (
                           <CreateTaskButton
                             columnValue={cell.coordinate.column.value}
+                            disabled={isTaskCreationPending}
                             laneValue={value}
                             onCreate={onCreateTask}
                           />
@@ -211,12 +227,14 @@ export const KanbanSubgroupBoard = ({
 
 type CreateTaskButtonProps = {
   columnValue: string;
+  disabled: boolean;
   laneValue: string | null;
   onCreate: (columnValue: string, laneValue: string | null) => void;
 };
 
 const CreateTaskButton = ({
   columnValue,
+  disabled,
   laneValue,
   onCreate,
 }: CreateTaskButtonProps) => {
@@ -225,6 +243,7 @@ const CreateTaskButton = ({
   return (
     <Button
       className="text-muted-foreground hover:text-foreground min-h-11 w-full justify-start gap-1.5"
+      disabled={disabled}
       onClick={() => onCreate(columnValue, laneValue)}
       variant="ghost"
     >
@@ -244,30 +263,29 @@ const ColumnHeading = ({ column, count }: ColumnHeadingProps) => {
 
   return (
     <div
-      className={cn(
-        KANBAN_CELL_WIDTH,
-        "bg-muted/25 flex min-h-14 shrink-0 items-center gap-2 rounded-xl px-3",
-      )}
+      className={cn(KANBAN_CELL_WIDTH, "bg-muted/50 shrink-0 rounded-lg")}
       style={
         column.colorBg
           ? {
-              backgroundColor: `color-mix(in srgb, ${column.colorBg} 42%, transparent)`,
+              backgroundColor: `color-mix(in srgb, ${column.colorBg} 50%, transparent)`,
             }
           : undefined
       }
     >
-      <span className="bg-background/55 flex min-w-0 items-center gap-2 rounded-md px-2 py-1 shadow-xs">
-        {column.color && (
-          <span
-            className="size-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: column.color }}
-          />
-        )}
-        <span className="truncate text-sm font-medium">{column.label}</span>
-      </span>
-      <span className="text-muted-foreground ms-auto text-xs tabular-nums">
-        {format.number(count)}
-      </span>
+      <KanbanColumnHeader
+        meta={format.number(count)}
+        swatch={
+          column.color ? (
+            <span
+              className="size-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: column.color }}
+            />
+          ) : null
+        }
+        title={
+          <span className="truncate text-sm font-medium">{column.label}</span>
+        }
+      />
     </div>
   );
 };

@@ -11,6 +11,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 
 import {
+  resolveWorkspaceKanbanDynamicSubgroup,
   resolveWorkspaceKanbanGrouping,
   resolveWorkspaceKanbanGroupValue,
   resolveWorkspaceKanbanSubgroup,
@@ -73,6 +74,16 @@ const singleSelectProperty = (id: string): WorkspaceProperty => ({
     options: [],
     fallback: null,
   },
+  tool: { version: 1, type: "manual-input" },
+});
+
+const personProperty = (id: string): WorkspaceProperty => ({
+  id: toSafeId<"property">(id),
+  name: id,
+  createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  workspaceId: toSafeId<"workspace">("workspace-1"),
+  status: "fresh",
+  content: { version: 1, type: "person" },
   tool: { version: 1, type: "manual-input" },
 });
 
@@ -260,5 +271,58 @@ describe("kanban subgroup placement", () => {
     expect(resolveWorkspaceKanbanGroupValue(subgroup, row)).toBe(
       "Anna Nováková",
     );
+  });
+
+  test("person lanes preserve member identity and avatar", () => {
+    const property = personProperty("assignee");
+    const row = entity("task-1", "task");
+    row.fields[property.id] = {
+      id: toSafeId<"field">("field-1"),
+      propertyId: property.id,
+      content: {
+        version: 1,
+        type: "person",
+        userId: "user-1",
+        name: "Anna Nováková",
+        image: "https://example.test/anna.jpg",
+      },
+    };
+    const definition = resolveWorkspaceKanbanSubgroup(
+      property.id,
+      getInternalPropertyId("status"),
+      schemaFor([property]),
+    );
+    const subgroup = resolveWorkspaceKanbanDynamicSubgroup(definition, [row]);
+
+    expect(resolveKanbanGroupOptions(subgroup)).toEqual([
+      {
+        value: "workspace-user:user-1",
+        label: "Anna Nováková",
+        image: "https://example.test/anna.jpg",
+      },
+    ]);
+    expect(resolveWorkspaceKanbanGroupValue(subgroup, row)).toBe(
+      "workspace-user:user-1",
+    );
+  });
+
+  test("author lanes use the creator avatar instead of a decorative dot", () => {
+    const row = entity("task-1", "task");
+    row.createdBy = "Anna Nováková";
+    row.createdByImage = "https://example.test/anna.jpg";
+    const definition = resolveWorkspaceKanbanSubgroup(
+      getInternalPropertyId("created-by"),
+      getInternalPropertyId("status"),
+      schemaFor(),
+    );
+    const subgroup = resolveWorkspaceKanbanDynamicSubgroup(definition, [row]);
+
+    expect(resolveKanbanGroupOptions(subgroup)).toEqual([
+      {
+        value: "Anna Nováková",
+        label: "Anna Nováková",
+        image: "https://example.test/anna.jpg",
+      },
+    ]);
   });
 });

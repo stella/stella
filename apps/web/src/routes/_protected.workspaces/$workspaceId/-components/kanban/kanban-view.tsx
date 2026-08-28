@@ -11,6 +11,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
+import { panic, Result } from "better-result";
 import { KanbanIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -66,6 +67,8 @@ import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import type { KanbanCalculations } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import { KanbanSubgroupBoard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board";
 import {
+  isKanbanSubgroupProperty,
+  resolveWorkspaceKanbanDynamicSubgroup,
   resolveWorkspaceKanbanGrouping,
   resolveWorkspaceKanbanGroupValue,
   resolveWorkspaceKanbanSubgroup,
@@ -100,12 +103,24 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const queryClient = useQueryClient();
   const [hiddenGroups, setHiddenGroups] = useState(new Set());
   const [localColumnOrder, setLocalColumnOrder] = useState<string[]>([]);
+  const [isTaskCreationPending, setIsTaskCreationPending] = useState(false);
+  const taskCreationPendingRef = useRef(false);
 
   const handleCreate = async ({
     kind,
     taskStatus,
   }: CreateFromKanbanOptions): Promise<string | null> => {
     if (kind === "task") {
+      if (taskCreationPendingRef.current) {
+        return null;
+      }
+      taskCreationPendingRef.current = true;
+      setIsTaskCreationPending(true);
+      const inspector = useInspectorTabsStore.getState();
+      const pendingTaskId = inspector.openPendingTask({
+        workspaceId,
+        label: t("tasks.newTask"),
+      });
       const body = taskStatus
         ? {
             queryKey: entitiesKeys.all(workspaceId),
@@ -117,12 +132,30 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
             name: t("tasks.untitled"),
           };
 
-      const { data: taskData, error: taskError } = await api
-        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put(body);
+      const createResult = await Result.tryPromise(() =>
+        api
+          .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .put(body),
+      );
+
+      taskCreationPendingRef.current = false;
+      setIsTaskCreationPending(false);
+
+      if (Result.isError(createResult)) {
+        inspector.closeTab(pendingTaskId);
+        analytics.captureError(createResult.error);
+        stellaToast.add({
+          title: t("errors.actionFailed"),
+          type: "error",
+        });
+        return null;
+      }
+
+      const { data: taskData, error: taskError } = createResult.value;
 
       const entityId = taskData?.entityId;
       if (taskError || !entityId) {
+        inspector.closeTab(pendingTaskId);
         stellaToast.add({
           title: t("errors.actionFailed"),
           type: "error",
@@ -134,9 +167,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         title: t("success.taskCreated"),
         type: "success",
       });
-      useInspectorTabsStore
-        .getState()
-        .openTask({ taskId: entityId, workspaceId, isNew: true });
+      inspector.resolvePendingTask({ pendingTaskId, taskId: entityId });
       return entityId;
     }
 
@@ -191,7 +222,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     [configuredGroupBy, schema],
   );
   const groupByPropertyId = getKanbanGroupingPropertyId(grouping);
-  const subgroup = useMemo(
+  const subgroupDefinition = useMemo(
     () =>
       resolveWorkspaceKanbanSubgroup(
         configuredSubgroupBy,
@@ -200,7 +231,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       ),
     [configuredSubgroupBy, groupByPropertyId, schema],
   );
-  const subgroupByPropertyId = getKanbanGroupingPropertyId(subgroup);
+  const subgroupByPropertyId = getKanbanGroupingPropertyId(subgroupDefinition);
   const isStatusGrouping =
     grouping.type === "built-in" &&
     grouping.group.id === getInternalPropertyId("status");
@@ -208,7 +239,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const groupByProperty =
     grouping.type === "property" ? grouping.property : null;
   const subgroupByProperty =
-    subgroup.type === "property" ? subgroup.property : null;
+    subgroupDefinition.type === "property" ? subgroupDefinition.property : null;
   // Verdict tiers are system-computed; card moves and uploads into a verdict
   // column must not overwrite the graded value.
   const isReadOnlyVerdictGrouping =
@@ -228,6 +259,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const cardFields = allFieldIds.filter(
     (id) =>
       id !== groupByPropertyId &&
+      id !== subgroupByPropertyId &&
       id !== getInternalPropertyId("kind") &&
       !hiddenProperties.includes(id),
   );
@@ -245,10 +277,12 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   );
 
   const { filters, sorts } = view.layout;
-  const hasRenderableSubgroup =
-    isKanbanGroupingRenderable(subgroup) &&
-    (subgroup.type !== "property" ||
-      subgroup.property.content.type === "single-select");
+  const hasSupportedSubgroup =
+    subgroupDefinition.type === "property"
+      ? isKanbanSubgroupProperty(subgroupDefinition.property)
+      : subgroupDefinition.type === "built-in" &&
+        (isKanbanGroupingRenderable(subgroupDefinition) ||
+          subgroupDefinition.group.id === getInternalPropertyId("created-by"));
   const subgroupQuery = useInfiniteQuery({
     ...entitiesWindowOptions({
       workspaceId,
@@ -259,7 +293,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       fieldIds,
     }),
     enabled:
-      hasRenderableSubgroup &&
+      hasSupportedSubgroup &&
       isKanbanGroupingRenderable(grouping) &&
       subgroupByPropertyId !== null,
   });
@@ -270,9 +304,18 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         : [],
     [subgroupQuery.data],
   );
+  const subgroup = useMemo(
+    () =>
+      resolveWorkspaceKanbanDynamicSubgroup(
+        subgroupDefinition,
+        subgroupEntities,
+      ),
+    [subgroupDefinition, subgroupEntities],
+  );
   const subgroupMatrix = useMemo(() => {
     if (
-      !hasRenderableSubgroup ||
+      !hasSupportedSubgroup ||
+      !isKanbanGroupingRenderable(subgroup) ||
       !isKanbanGroupingRenderable(grouping) ||
       subgroupByPropertyId === null
     ) {
@@ -288,7 +331,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     });
   }, [
     grouping,
-    hasRenderableSubgroup,
+    hasSupportedSubgroup,
     subgroup,
     subgroupByPropertyId,
     subgroupEntities,
@@ -585,15 +628,40 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       return;
     }
 
+    const content = (() => {
+      if (subgroup.property.content.type === "single-select") {
+        return {
+          version: 1 as const,
+          type: "single-select" as const,
+          value: laneValue,
+        };
+      }
+      if (subgroup.property.content.type === "person") {
+        const sourceEntity = subgroupEntities.find(
+          (row) =>
+            resolveWorkspaceKanbanGroupValue(subgroup, row) === laneValue,
+        );
+        const sourceContent =
+          sourceEntity?.fields[subgroup.property.id]?.content;
+        if (sourceContent?.type !== "person") {
+          return panic("Kanban person lane has no source identity");
+        }
+        return {
+          version: 1 as const,
+          type: "person" as const,
+          userId: sourceContent.userId,
+          name: sourceContent.name,
+          image: sourceContent.image,
+        };
+      }
+      return panic("Kanban subgroup property is not writable");
+    })();
+
     await upsertField.mutateAsync({
       workspaceId,
       propertyId: subgroup.property.id,
       entityId,
-      content: {
-        version: 1,
-        type: "single-select",
-        value: laneValue,
-      },
+      content,
     });
     await queryClient.invalidateQueries({
       queryKey: entitiesKeys.all(workspaceId),
@@ -607,6 +675,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         cardFields={cardFields}
         hasMore={subgroupQuery.hasNextPage}
         isLoadingMore={subgroupQuery.isFetchingNextPage}
+        isTaskCreationPending={isTaskCreationPending}
         matrix={subgroupMatrix}
         onCreateTask={(status, laneValue) => {
           detached(
