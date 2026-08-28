@@ -19,7 +19,6 @@ import { addAssigneeHandler } from "@/api/handlers/tasks/assignees-add";
 import { removeAssigneeHandler } from "@/api/handlers/tasks/assignees-remove";
 import { createEntityLinkHandler } from "@/api/handlers/tasks/entity-links-create";
 import { deleteEntityLinkHandler } from "@/api/handlers/tasks/entity-links-delete";
-import { updateTaskHandler } from "@/api/handlers/tasks/update";
 import { archiveWorkspaceHandler } from "@/api/handlers/workspaces/archive";
 import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
 import { deleteWorkspaceHandler } from "@/api/handlers/workspaces/delete";
@@ -65,6 +64,7 @@ import {
   brandPersistedWorkspaceContactId,
 } from "@/api/lib/safe-id-boundaries";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
+import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import { includes } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";

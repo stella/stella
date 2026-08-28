@@ -99,6 +99,7 @@ export type QueryEntityResult = {
   parentId: string | null;
   createdAt: string;
   createdBy: string | null;
+  createdByUserId: string | null;
   createdByImage: string | null;
   createdByDeletedAt: string | null;
   version: number;
@@ -732,7 +733,6 @@ const queryEntitiesGenerator = async function* ({
   // Phase 2: Fetch entity metadata and the requested field payloads.
   const idFilter = inArray(entities.id, pageIds);
 
-  const lastEditor = alias(user, "last_editor");
   const sessionEditor = alias(user, "session_editor");
   const fieldPredicates = [
     eq(fields.entityVersionId, entities.currentVersionId),
@@ -772,12 +772,6 @@ const queryEntitiesGenerator = async function* ({
         currentOrganizationId,
         "created_by_members",
       );
-      const lastEditorMembers = organizationMemberIdsSubquery(
-        tx,
-        currentOrganizationId,
-        "last_editor_members",
-      );
-
       return tx
         .select({
           id: entities.id,
@@ -795,13 +789,9 @@ const queryEntitiesGenerator = async function* ({
           createdByName: sql<
             string | null
           >`coalesce(nullif(trim(${user.name}), ''), ${user.email})`,
+          createdByUserId: user.id,
           createdByImage: user.image,
           createdByDeletedAt: user.deletedAt,
-          lastEditedByName: sql<
-            string | null
-          >`coalesce(nullif(trim(${lastEditor.name}), ''), ${lastEditor.email})`,
-          lastEditedByImage: lastEditor.image,
-          lastEditedByDeletedAt: lastEditor.deletedAt,
           status: entities.status,
           priority: entities.priority,
           listItemType: entities.listItemType,
@@ -838,20 +828,6 @@ const queryEntitiesGenerator = async function* ({
           or(
             eq(createdByMembers.userId, user.id),
             and(eq(entities.createdBy, user.id), isNotNull(user.deletedAt)),
-          ),
-        )
-        .leftJoin(
-          lastEditorMembers,
-          eq(entities.lastEditedBy, lastEditorMembers.userId),
-        )
-        .leftJoin(
-          lastEditor,
-          or(
-            eq(lastEditorMembers.userId, lastEditor.id),
-            and(
-              eq(entities.lastEditedBy, lastEditor.id),
-              isNotNull(lastEditor.deletedAt),
-            ),
           ),
         )
         .where(idFilter);
@@ -1046,12 +1022,10 @@ const queryEntitiesGenerator = async function* ({
       name: entity.name,
       parentId: entity.parentId,
       createdAt: entity.createdAt.toISOString(),
-      createdBy: entity.lastEditedByName ?? entity.createdByName ?? null,
-      createdByImage: entity.lastEditedByImage ?? entity.createdByImage ?? null,
-      createdByDeletedAt:
-        entity.lastEditedByDeletedAt?.toISOString() ??
-        entity.createdByDeletedAt?.toISOString() ??
-        null,
+      createdBy: entity.createdByName ?? null,
+      createdByUserId: entity.createdByUserId ?? null,
+      createdByImage: entity.createdByImage ?? null,
+      createdByDeletedAt: entity.createdByDeletedAt?.toISOString() ?? null,
       version: versionCountMap.get(entity.id) ?? 0,
       updatedAt: entity.updatedAt?.toISOString() ?? null,
       status: entity.status,

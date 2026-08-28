@@ -154,11 +154,12 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 ## fields
 
-| Capability                    | Access | Scope                  | Feature | Reachable via                                                    |
-| ----------------------------- | ------ | ---------------------- | ------- | ---------------------------------------------------------------- |
-| `fields.mark-column-flag`     | write  | stella:matters_write   | —       | generic invoke → `stella capability fields mark-column-flag`     |
-| `fields.update-cell-metadata` | write  | stella:matters_write   | —       | generic invoke → `stella capability fields update-cell-metadata` |
-| `fields.upsert-by-id`         | write  | stella:documents_write | —       | curated tool `set_field_value`                                   |
+| Capability                       | Access | Scope                  | Feature | Reachable via                                                       |
+| -------------------------------- | ------ | ---------------------- | ------- | ------------------------------------------------------------------- |
+| `fields.kanban-placement.update` | write  | stella:matters_write   | —       | generic invoke → `stella capability fields kanban-placement-update` |
+| `fields.mark-column-flag`        | write  | stella:matters_write   | —       | generic invoke → `stella capability fields mark-column-flag`        |
+| `fields.update-cell-metadata`    | write  | stella:matters_write   | —       | generic invoke → `stella capability fields update-cell-metadata`    |
+| `fields.upsert-by-id`            | write  | stella:documents_write | —       | curated tool `set_field_value`                                      |
 
 ## flows
 

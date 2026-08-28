@@ -56,6 +56,7 @@ import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-
 type KanbanCardProps = {
   entity: WorkspaceEntity;
   workspaceId: string;
+  draggable?: boolean | undefined;
   cardFields?: string[] | undefined;
   properties?: WorkspaceProperty[] | undefined;
   onRename?: ((entityId: string, newName: string) => void) | undefined;
@@ -64,6 +65,7 @@ type KanbanCardProps = {
 export const KanbanCard = ({
   entity,
   workspaceId,
+  draggable = true,
   cardFields,
   properties,
   onRename,
@@ -89,7 +91,7 @@ export const KanbanCard = ({
 
   useExternalSyncEffect(() => {
     const el = dragRef.current;
-    if (!el) {
+    if (!el || !draggable) {
       return undefined;
     }
     return registerKanbanCardDrag({
@@ -116,7 +118,14 @@ export const KanbanCard = ({
           name,
         ),
     });
-  }, [entity.entityId, name, entity.kind, file?.mimeType, entity.parentId]);
+  }, [
+    draggable,
+    entity.entityId,
+    name,
+    entity.kind,
+    file?.mimeType,
+    entity.parentId,
+  ]);
 
   const startEditing = () => {
     rename.startEditing(getKanbanCardRenameInitialValue(entity, name));

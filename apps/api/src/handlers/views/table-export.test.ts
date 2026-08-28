@@ -119,6 +119,7 @@ const entity = (
   parentId: null,
   createdAt: "2026-01-01T00:00:00.000Z",
   createdBy: "Alice",
+  createdByUserId: "user-1",
   createdByImage: null,
   createdByDeletedAt: null,
   version: 3,

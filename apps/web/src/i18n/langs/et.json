@@ -4741,6 +4741,7 @@
       "filter": "Filtreeri",
       "filterByPlaceholder": "Filtreeri välja järgi…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filtrit}}",
+      "group": "Rühm",
       "groupBy": "Rühmita:",
       "groupItemCount": "{count, plural, one {# üksus} other {# üksust}}",
       "hideColumn": "Peida veerg",
@@ -4779,6 +4780,7 @@
       },
       "saveAsTemplate": "Salvesta eelseadena…",
       "selectProperty": "Valige omadus",
+      "subgroup": "Alamrühm",
       "switcherLabel": "Salvestatud vaated",
       "templates": {
         "created": "Eelseade salvestatud",
@@ -4803,7 +4805,8 @@
         "startDate": "Alguskuupäev",
         "week": "Nädal"
       },
-      "useTemplate": "Kasuta eelseadet…"
+      "useTemplate": "Kasuta eelseadet…",
+      "viewSettings": "Vaate seaded"
     },
     "workflow": {
       "allManualInputsDescription": "Töövoo käivitamiseks lisage vähemalt üks tehisintellekti omadus",

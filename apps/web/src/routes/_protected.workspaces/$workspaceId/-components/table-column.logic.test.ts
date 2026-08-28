@@ -23,6 +23,7 @@ const entity = (
   parentId: null,
   createdAt: "2026-06-12T00:00:00.000Z",
   createdBy: null,
+  createdByUserId: null,
   createdByImage: null,
   createdByDeletedAt: null,
   updatedAt: null,

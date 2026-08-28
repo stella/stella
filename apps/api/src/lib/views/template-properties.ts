@@ -1002,8 +1002,13 @@ const collectLayoutPropertyIds = (layout: ViewLayout): Set<string> => {
     }
   }
 
-  if (layout.type === "kanban" && layout.groupByPropertyId) {
-    add(layout.groupByPropertyId);
+  if (layout.type === "kanban") {
+    if (layout.groupByPropertyId) {
+      add(layout.groupByPropertyId);
+    }
+    if (layout.subgroupByPropertyId) {
+      add(layout.subgroupByPropertyId);
+    }
   }
 
   if (layout.type === "calendar") {
@@ -1051,8 +1056,13 @@ const remapLayoutPropertyIds = (
     }
   }
 
-  if (layout.type === "kanban" && layout.groupByPropertyId) {
-    layout.groupByPropertyId = remap(layout.groupByPropertyId);
+  if (layout.type === "kanban") {
+    if (layout.groupByPropertyId) {
+      layout.groupByPropertyId = remap(layout.groupByPropertyId);
+    }
+    if (layout.subgroupByPropertyId) {
+      layout.subgroupByPropertyId = remap(layout.subgroupByPropertyId);
+    }
   }
 
   if (layout.type === "calendar") {

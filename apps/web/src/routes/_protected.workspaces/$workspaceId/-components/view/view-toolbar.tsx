@@ -7,6 +7,7 @@ import { Result } from "better-result";
 import {
   AlignJustifyIcon,
   CalendarIcon,
+  Columns3Icon,
   ClockIcon,
   DownloadIcon,
   EyeIcon,
@@ -14,6 +15,7 @@ import {
   Loader2Icon,
   PlayIcon,
   Rows3Icon,
+  Settings2Icon,
   SparklesIcon,
   UserIcon,
   WandSparklesIcon,
@@ -34,6 +36,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import {
   Select,
@@ -158,12 +161,13 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
       {view.layout.type === "kanban" && (
         <>
           <span className="bg-border mx-1 h-4 w-px" />
-          <GroupByControl
+          <KanbanGroupingSettings
             groupByPropertyId={view.layout.groupByPropertyId}
-            onChange={(groupByPropertyId) =>
-              handleUpdate({ groupByPropertyId })
+            onChange={(groupByPropertyId, subgroupByPropertyId) =>
+              handleUpdate({ groupByPropertyId, subgroupByPropertyId })
             }
             properties={properties}
+            subgroupByPropertyId={view.layout.subgroupByPropertyId}
           />
         </>
       )}
@@ -235,6 +239,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
           <GroupByControl
             allowMultiSelectGrouping
             allowNone
+            excludedPropertyId={getInternalPropertyId("status")}
             groupByPropertyId={view.layout.groupByPropertyId}
             onChange={(groupByPropertyId) =>
               handleUpdate(
@@ -882,6 +887,12 @@ type GroupByControlProps = {
   // Multi-select grouping is valid for the table (a row can appear in several
   // sections) but not the kanban board (a card belongs to one column).
   allowMultiSelectGrouping?: boolean;
+  allowPersonGrouping?: boolean;
+  allowCreatedByGrouping?: boolean;
+  ariaLabel?: string | undefined;
+  excludedPropertyId?: string | undefined;
+  label?: string | undefined;
+  showLabel?: boolean | undefined;
 };
 
 const GroupByControl = ({
@@ -890,14 +901,23 @@ const GroupByControl = ({
   onChange,
   allowNone = false,
   allowMultiSelectGrouping = false,
+  allowPersonGrouping = false,
+  allowCreatedByGrouping = false,
+  ariaLabel,
+  excludedPropertyId,
+  label,
+  showLabel = true,
 }: GroupByControlProps) => {
   const t = useTranslations();
   // The table groups by single- or multi-select (the counts query unnests
   // multi-select arrays); the kanban board stays single-select only.
-  const eligible = properties.filter((property) =>
-    allowMultiSelectGrouping
-      ? isGroupableProperty(property)
-      : property.content.type === "single-select",
+  const eligible = properties.filter(
+    (property) =>
+      property.id !== excludedPropertyId &&
+      (allowMultiSelectGrouping
+        ? isGroupableProperty(property)
+        : property.content.type === "single-select" ||
+          (allowPersonGrouping && property.content.type === "person")),
   );
 
   // Grouping by "Document Type" is the primary action — it drives per-type
@@ -925,6 +945,9 @@ const GroupByControl = ({
     if (resolvedId === getInternalPropertyId("kind")) {
       return t("common.kind");
     }
+    if (resolvedId === getInternalPropertyId("status")) {
+      return t("tasks.status");
+    }
     if (resolvedId === getInternalPropertyId("created-by")) {
       return t("common.author");
     }
@@ -936,9 +959,11 @@ const GroupByControl = ({
 
   return (
     <span className="flex shrink-0 items-center gap-1 text-xs whitespace-nowrap">
-      <span className="text-muted-foreground hidden shrink-0 sm:inline">
-        {t("workspaces.views.groupBy")}
-      </span>
+      {showLabel && (
+        <span className="text-muted-foreground hidden shrink-0 sm:inline">
+          {label ?? t("workspaces.views.groupBy")}
+        </span>
+      )}
       <Select
         onValueChange={(v) => {
           if (v === null) {
@@ -949,6 +974,7 @@ const GroupByControl = ({
         value={resolvedId}
       >
         <SelectTrigger
+          aria-label={ariaLabel ?? label ?? t("workspaces.views.groupBy")}
           className="h-7 min-h-0 w-28 text-xs sm:h-6 sm:w-auto sm:min-w-24"
           size="sm"
         >
@@ -971,9 +997,22 @@ const GroupByControl = ({
               {t("common.none")}
             </SelectItem>
           )}
-          <SelectItem value={getInternalPropertyId("kind")}>
-            {t("common.kind")}
-          </SelectItem>
+          {excludedPropertyId !== getInternalPropertyId("status") && (
+            <SelectItem value={getInternalPropertyId("status")}>
+              {t("tasks.status")}
+            </SelectItem>
+          )}
+          {excludedPropertyId !== getInternalPropertyId("kind") && (
+            <SelectItem value={getInternalPropertyId("kind")}>
+              {t("common.kind")}
+            </SelectItem>
+          )}
+          {allowCreatedByGrouping &&
+            excludedPropertyId !== getInternalPropertyId("created-by") && (
+              <SelectItem value={getInternalPropertyId("created-by")}>
+                {t("common.author")}
+              </SelectItem>
+            )}
           {basicProps.map((prop) => (
             <SelectItem key={prop.id} value={prop.id}>
               {prop.name}
@@ -992,6 +1031,93 @@ const GroupByControl = ({
         </SelectPopup>
       </Select>
     </span>
+  );
+};
+
+type KanbanGroupingSettingsProps = {
+  groupByPropertyId: string | undefined;
+  subgroupByPropertyId: string | undefined;
+  onChange: (
+    groupByPropertyId: string,
+    subgroupByPropertyId: string | undefined,
+  ) => void;
+  properties: WorkspaceProperty[];
+};
+
+const KanbanGroupingSettings = ({
+  groupByPropertyId,
+  subgroupByPropertyId,
+  onChange,
+  properties,
+}: KanbanGroupingSettingsProps) => {
+  const t = useTranslations();
+  const resolvedGroupBy = resolveKanbanGroupBy(
+    groupByPropertyId ?? "",
+    properties,
+  );
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            aria-label={t("workspaces.views.viewSettings")}
+            size="xs"
+            type="button"
+            variant="outline"
+          />
+        }
+      >
+        <Settings2Icon className="size-3.5" />
+        <span className="hidden sm:inline">{t("common.settings")}</span>
+      </PopoverTrigger>
+      <PopoverPopup align="end" className="w-80 p-2" side="bottom">
+        <div className="px-2 py-1.5 text-sm font-medium">
+          {t("workspaces.views.viewSettings")}
+        </div>
+        <div className="space-y-1">
+          <div className="hover:bg-muted/60 flex min-h-11 items-center gap-3 rounded-lg px-2">
+            <Columns3Icon className="text-muted-foreground size-4 shrink-0" />
+            <span className="min-w-0 flex-1 text-sm">
+              {t("workspaces.views.group")}
+            </span>
+            <GroupByControl
+              ariaLabel={t("workspaces.views.group")}
+              groupByPropertyId={resolvedGroupBy}
+              onChange={(nextGroupBy) =>
+                onChange(
+                  nextGroupBy,
+                  nextGroupBy === subgroupByPropertyId
+                    ? undefined
+                    : subgroupByPropertyId,
+                )
+              }
+              properties={properties}
+              showLabel={false}
+            />
+          </div>
+          <div className="hover:bg-muted/60 flex min-h-11 items-center gap-3 rounded-lg px-2">
+            <Rows3Icon className="text-muted-foreground size-4 shrink-0" />
+            <span className="min-w-0 flex-1 text-sm">
+              {t("workspaces.views.subgroup")}
+            </span>
+            <GroupByControl
+              allowNone
+              allowCreatedByGrouping
+              allowPersonGrouping
+              ariaLabel={t("workspaces.views.subgroup")}
+              excludedPropertyId={resolvedGroupBy}
+              groupByPropertyId={subgroupByPropertyId}
+              onChange={(nextSubgroupBy) =>
+                onChange(resolvedGroupBy, nextSubgroupBy || undefined)
+              }
+              properties={properties}
+              showLabel={false}
+            />
+          </div>
+        </div>
+      </PopoverPopup>
+    </Popover>
   );
 };
 

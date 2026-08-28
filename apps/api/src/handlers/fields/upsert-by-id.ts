@@ -22,6 +22,98 @@ import {
   flushEntitySearchRepairs,
 } from "@/api/lib/search/projection-repair-queue";
 
+export const upsertFieldContentSchema = t.Union(
+  [
+    t.Object({
+      version: t.Literal(1),
+      type: t.Literal("text", {
+        description: "Value type; must match the property's value type",
+      }),
+      value: t.String(),
+    }),
+    t.Object({
+      version: t.Literal(1),
+      type: t.Literal("single-select", {
+        description: "Value type; must match the property's value type",
+      }),
+      value: t.Nullable(t.String()),
+    }),
+    t.Object({
+      version: t.Literal(1),
+      type: t.Literal("multi-select", {
+        description: "Value type; must match the property's value type",
+      }),
+      value: t.Array(t.String({ minLength: 1 })),
+    }),
+    t.Object({
+      version: t.Literal(1),
+      type: t.Literal("date", {
+        description: "Value type; must match the property's value type",
+      }),
+      value: t.Nullable(t.String({ format: "date" })),
+    }),
+    t.Object({
+      version: t.Literal(1),
+      type: t.Literal("int", {
+        description: "Value type; must match the property's value type",
+      }),
+      value: t.Integer(),
+      currency: t.Nullable(
+        t.String({
+          minLength: 3,
+          maxLength: 3,
+          pattern: "^[A-Za-z]{3}$",
+          description:
+            "For int values only: 3-letter ISO currency code, or null",
+        }),
+      ),
+    }),
+    t.Object({
+      version: t.Literal(1),
+      type: t.Literal("money", {
+        description: "Value type; must match the property's value type",
+      }),
+      amountCents: t.Integer({
+        description: "Amount in the currency's minor units",
+      }),
+      currency: t.String({
+        minLength: 3,
+        maxLength: 3,
+        pattern: "^[A-Za-z]{3}$",
+        description: "3-letter ISO currency code",
+      }),
+    }),
+    t.Object({
+      version: t.Literal(1),
+      type: t.Literal("person", {
+        description: "Empty person sentinel that clears the property value",
+      }),
+      userId: t.Null(),
+      name: t.Literal(""),
+      image: t.Null(),
+    }),
+    t.Object({
+      version: t.Literal(1),
+      type: t.Literal("person", {
+        description: "Value type; must match the property's value type",
+      }),
+      userId: t.Nullable(tUserId),
+      name: t.String({ minLength: 1, maxLength: 256 }),
+      image: t.Nullable(t.String({ maxLength: 2048 })),
+    }),
+    t.Object({
+      version: t.Literal(1),
+      type: t.Literal("clip"),
+      url: t.String({ maxLength: 2048 }),
+      snippet: t.Optional(t.String({ maxLength: 10_000 })),
+      citation: t.Optional(t.String({ maxLength: 1000 })),
+      jurisdiction: t.Optional(t.String({ maxLength: 128 })),
+      sourceType: t.Optional(t.String({ maxLength: 64 })),
+    }),
+  ],
+  { description: "The value to set; 'type' must match the property." },
+);
+
 const config = {
   description:
     "Set a document's value for a property (a cell in the matter's table). " +
@@ -42,88 +134,7 @@ const config = {
     entityId: tSafeId("entity", {
       description: "Document entity ID whose cell to set",
     }),
-    content: t.Union(
-      [
-        t.Object({
-          version: t.Literal(1),
-          type: t.Literal("text", {
-            description: "Value type; must match the property's value type",
-          }),
-          value: t.String(),
-        }),
-        t.Object({
-          version: t.Literal(1),
-          type: t.Literal("single-select", {
-            description: "Value type; must match the property's value type",
-          }),
-          value: t.Nullable(t.String()),
-        }),
-        t.Object({
-          version: t.Literal(1),
-          type: t.Literal("multi-select", {
-            description: "Value type; must match the property's value type",
-          }),
-          value: t.Array(t.String({ minLength: 1 })),
-        }),
-        t.Object({
-          version: t.Literal(1),
-          type: t.Literal("date", {
-            description: "Value type; must match the property's value type",
-          }),
-          value: t.Nullable(t.String({ format: "date" })),
-        }),
-        t.Object({
-          version: t.Literal(1),
-          type: t.Literal("int", {
-            description: "Value type; must match the property's value type",
-          }),
-          value: t.Integer(),
-          currency: t.Nullable(
-            t.String({
-              minLength: 3,
-              maxLength: 3,
-              pattern: "^[A-Za-z]{3}$",
-              description:
-                "For int values only: 3-letter ISO currency code, or null",
-            }),
-          ),
-        }),
-        t.Object({
-          version: t.Literal(1),
-          type: t.Literal("money", {
-            description: "Value type; must match the property's value type",
-          }),
-          amountCents: t.Integer({
-            description: "Amount in the currency's minor units",
-          }),
-          currency: t.String({
-            minLength: 3,
-            maxLength: 3,
-            pattern: "^[A-Za-z]{3}$",
-            description: "3-letter ISO currency code",
-          }),
-        }),
-        t.Object({
-          version: t.Literal(1),
-          type: t.Literal("person", {
-            description: "Value type; must match the property's value type",
-          }),
-          userId: t.Nullable(tUserId),
-          name: t.String({ minLength: 1, maxLength: 256 }),
-          image: t.Nullable(t.String({ maxLength: 2048 })),
-        }),
-        t.Object({
-          version: t.Literal(1),
-          type: t.Literal("clip"),
-          url: t.String({ maxLength: 2048 }),
-          snippet: t.Optional(t.String({ maxLength: 10_000 })),
-          citation: t.Optional(t.String({ maxLength: 1000 })),
-          jurisdiction: t.Optional(t.String({ maxLength: 128 })),
-          sourceType: t.Optional(t.String({ maxLength: 64 })),
-        }),
-      ],
-      { description: "The value to set; 'type' must match the property." },
-    ),
+    content: upsertFieldContentSchema,
   }),
 } satisfies HandlerConfig;
 
@@ -207,6 +218,7 @@ type UpsertFieldHandlerProps = {
   body: UpsertFieldBody;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
+  flushSearchRepairs?: boolean;
 };
 
 export const upsertFieldHandler = async function* ({
@@ -215,6 +227,7 @@ export const upsertFieldHandler = async function* ({
   body,
   userId,
   recordAuditEvent,
+  flushSearchRepairs = true,
 }: UpsertFieldHandlerProps) {
   const user = { id: userId };
   const property = yield* Result.await(
@@ -396,7 +409,9 @@ export const upsertFieldHandler = async function* ({
     );
   }
 
-  reindex();
+  if (flushSearchRepairs) {
+    reindex();
+  }
   return Result.ok({});
 };
 

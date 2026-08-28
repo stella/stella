@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import type { UpsertFieldContent } from "@stll/api/types";
 import { stellaToast } from "@stll/ui/toast";
 
 import { closeInspectorTabsForEntities } from "@/components/inspector/inspector-tabs-store";
-import type { EditableFieldContent } from "@/components/workspaces/edit-field-dialog";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
@@ -137,7 +137,51 @@ type UpsertFieldVars = {
   workspaceId: string;
   propertyId: string;
   entityId: string;
-  content: EditableFieldContent;
+  content: UpsertFieldContent;
+};
+
+type UpdateKanbanPlacementVars = {
+  workspaceId: string;
+  entityId: string;
+  status?: string | undefined;
+  fields: {
+    propertyId: string;
+    content: UpsertFieldContent;
+  }[];
+};
+
+export const useUpdateKanbanPlacement = () => {
+  const analytics = useAnalytics();
+  const t = useTranslations();
+
+  return useMutation({
+    mutationFn: async ({
+      workspaceId,
+      entityId,
+      status,
+      fields,
+    }: UpdateKanbanPlacementVars) => {
+      const response = await api
+        .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        ["kanban-placement"].patch({
+          entityId: toSafeId<"entity">(entityId),
+          ...(status !== undefined && { status }),
+          fields: fields.map(({ propertyId, content }) => ({
+            propertyId: toSafeId<"property">(propertyId),
+            content,
+          })),
+        });
+
+      return unwrapEden(response);
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+      stellaToast.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+    },
+  });
 };
 
 export const useUpsertField = () => {

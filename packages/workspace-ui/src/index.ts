@@ -87,6 +87,31 @@ export type {
   WorkspaceFieldContent,
 } from "./types";
 export { FIELD_CONTENT_TYPES } from "./types";
+export {
+  createWorkspaceKanbanSchema,
+  getWorkspaceKanbanGroupingChoices,
+  KANBAN_EMPTY_GROUP_VISIBILITIES,
+  presentKanbanBoard,
+  resolveWorkspaceKanbanView,
+} from "./kanban-view";
+export type {
+  CreateWorkspaceKanbanSchemaParams,
+  KanbanBoardPresentation,
+  KanbanEmptyGroupVisibility,
+  KanbanPresentedLane,
+  KanbanSavedAxisState,
+  KanbanSavedGroupReference,
+  KanbanSavedSubgroupState,
+  KanbanSavedViewState,
+  ResolvedWorkspaceKanbanView,
+  ResolveWorkspaceKanbanViewParams,
+  WorkspaceKanbanBuiltInGroupLabel,
+  WorkspaceKanbanGroupingChoice,
+  WorkspaceKanbanGroupingPickerLabels,
+  WorkspaceKanbanGroupingPickerProps,
+  WorkspaceKanbanProperty,
+} from "./kanban-view";
+export { WorkspaceKanbanGroupingPicker } from "./kanban-grouping-picker";
 export { WorkspaceViewSwitcher } from "./view-switcher";
 export type {
   WorkspaceViewSwitcherEditing,

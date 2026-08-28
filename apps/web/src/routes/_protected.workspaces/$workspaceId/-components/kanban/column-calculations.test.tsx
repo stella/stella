@@ -22,6 +22,7 @@ const entity = (value: number): WorkspaceEntity => {
     parentId: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     createdBy: null,
+    createdByUserId: null,
     createdByImage: null,
     createdByDeletedAt: null,
     updatedAt: null,
@@ -96,5 +97,15 @@ describe("column calculations", () => {
 
     expect(html).toContain("15");
     expect(html).toContain(messages.workspaces.calculations.choose);
+  });
+
+  test("an editable view with no calculable properties has no empty picker", () => {
+    const html = render({
+      selections: [],
+      properties: [],
+      onChange: () => undefined,
+    });
+
+    expect(html).not.toContain(messages.workspaces.calculations.choose);
   });
 });

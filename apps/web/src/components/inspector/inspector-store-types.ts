@@ -40,6 +40,7 @@ export type FileTab = {
 export type TaskTab = {
   type: "task";
   id: string;
+  creationStatus: "pending" | "ready";
   label: string;
   isNew: boolean;
   status?: TaskStatus | null;
@@ -205,6 +206,8 @@ export type InspectorTabsActions = {
     label?: string;
     isNew?: boolean;
   }) => void;
+  openPendingTask: (args: { workspaceId: string; label?: string }) => string;
+  resolvePendingTask: (args: { pendingTaskId: string; taskId: string }) => void;
   openExternal: (args: {
     url: string;
     workspaceId: string | null;

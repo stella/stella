@@ -215,6 +215,7 @@ export type WorkspaceEntity = {
   parentId: EntityId | null;
   createdAt: string;
   createdBy: string | null;
+  createdByUserId: string | null;
   createdByImage: string | null;
   createdByDeletedAt: string | null;
   updatedAt: string | null;

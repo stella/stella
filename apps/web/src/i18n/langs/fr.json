@@ -4741,6 +4741,7 @@
       "filter": "Filtrer",
       "filterByPlaceholder": "Filtrer par…",
       "filtersWithCount": "{count, plural, one {# filtre} other {# filtres}}",
+      "group": "Groupe",
       "groupBy": "Regrouper par :",
       "groupItemCount": "{count, plural, one {# élément} other {# éléments}}",
       "hideColumn": "Masquer la colonne",
@@ -4779,6 +4780,7 @@
       },
       "saveAsTemplate": "Enregistrer comme préréglage…",
       "selectProperty": "Sélectionner une propriété",
+      "subgroup": "Sous-groupe",
       "switcherLabel": "Vues enregistrées",
       "templates": {
         "created": "Préréglage enregistré",
@@ -4803,7 +4805,8 @@
         "startDate": "Date de début",
         "week": "Semaine"
       },
-      "useTemplate": "Utiliser le préréglage…"
+      "useTemplate": "Utiliser le préréglage…",
+      "viewSettings": "Paramètres de la vue"
     },
     "workflow": {
       "allManualInputsDescription": "Veuillez ajouter au moins une propriété IA pour démarrer le flux de travail",

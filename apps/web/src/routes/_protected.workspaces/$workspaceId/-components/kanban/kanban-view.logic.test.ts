@@ -11,7 +11,11 @@ import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 
 import {
+  canMoveCardToSubgroupLane,
+  resolveWorkspaceKanbanDynamicSubgroup,
   resolveWorkspaceKanbanGrouping,
+  resolveWorkspaceKanbanGroupValue,
+  resolveWorkspaceKanbanSubgroup,
   workspaceKanbanSchema,
 } from "./kanban-view.logic";
 
@@ -25,6 +29,7 @@ const entity = (
   parentId: null,
   createdAt: "2026-01-01T00:00:00.000Z",
   createdBy: null,
+  createdByUserId: null,
   createdByImage: null,
   createdByDeletedAt: null,
   updatedAt: null,
@@ -71,6 +76,16 @@ const singleSelectProperty = (id: string): WorkspaceProperty => ({
     options: [],
     fallback: null,
   },
+  tool: { version: 1, type: "manual-input" },
+});
+
+const personProperty = (id: string): WorkspaceProperty => ({
+  id: toSafeId<"property">(id),
+  name: id,
+  createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  workspaceId: toSafeId<"workspace">("workspace-1"),
+  status: "fresh",
+  content: { version: 1, type: "person" },
   tool: { version: 1, type: "manual-input" },
 });
 
@@ -218,6 +233,156 @@ describe("kanban column lists", () => {
         ["draft", "gray"],
         ["review", "amber"],
       ],
+    );
+  });
+});
+
+describe("kanban subgroup placement", () => {
+  test("read-only subgroup lanes allow primary moves only within the lane", () => {
+    const row = entity("task-1", "task");
+    row.createdBy = "Anna Nováková";
+    row.createdByUserId = "user-1";
+    const definition = resolveWorkspaceKanbanSubgroup(
+      getInternalPropertyId("created-by"),
+      getInternalPropertyId("status"),
+      schemaFor(),
+    );
+    const subgroup = resolveWorkspaceKanbanDynamicSubgroup(definition, [row]);
+
+    expect(
+      canMoveCardToSubgroupLane({
+        subgroup,
+        entity: row,
+        targetLaneValue: "workspace-user:user-1",
+      }),
+    ).toBe(true);
+    expect(
+      canMoveCardToSubgroupLane({
+        subgroup,
+        entity: row,
+        targetLaneValue: "workspace-user:user-2",
+      }),
+    ).toBe(false);
+  });
+
+  test("the same property cannot control both axes", () => {
+    const property = singleSelectProperty("assignee");
+    const schema = schemaFor([property]);
+    const group = resolveWorkspaceKanbanGrouping(property.id, schema);
+    const subgroup = resolveWorkspaceKanbanSubgroup(
+      property.id,
+      property.id,
+      schema,
+    );
+
+    expect(group.type).toBe("property");
+    expect(subgroup.type).toBe("none");
+  });
+
+  test("a single-select field places a task in its colleague lane", () => {
+    const property = singleSelectProperty("assignee");
+    const row = entity("task-1", "task");
+    row.fields[property.id] = {
+      entityId: row.entityId,
+      id: toSafeId<"field">("field-1"),
+      propertyId: property.id,
+      content: {
+        version: 1,
+        type: "single-select",
+        value: "Anna Nováková",
+      },
+    };
+    const subgroup = resolveWorkspaceKanbanSubgroup(
+      property.id,
+      getInternalPropertyId("status"),
+      schemaFor([property]),
+    );
+
+    expect(resolveWorkspaceKanbanGroupValue(subgroup, row)).toBe(
+      "Anna Nováková",
+    );
+  });
+
+  test("person lanes preserve member identity and avatar", () => {
+    const property = personProperty("assignee");
+    const row = entity("task-1", "task");
+    row.fields[property.id] = {
+      entityId: row.entityId,
+      id: toSafeId<"field">("field-1"),
+      propertyId: property.id,
+      content: {
+        version: 1,
+        type: "person",
+        userId: "user-1",
+        name: "Anna Nováková",
+        image: "https://example.test/anna.jpg",
+      },
+    };
+    const definition = resolveWorkspaceKanbanSubgroup(
+      property.id,
+      getInternalPropertyId("status"),
+      schemaFor([property]),
+    );
+    const subgroup = resolveWorkspaceKanbanDynamicSubgroup(definition, [row]);
+
+    expect(resolveKanbanGroupOptions(subgroup)).toEqual([
+      {
+        value: "workspace-user:user-1",
+        label: "Anna Nováková",
+        image: "https://example.test/anna.jpg",
+      },
+    ]);
+    expect(resolveWorkspaceKanbanGroupValue(subgroup, row)).toBe(
+      "workspace-user:user-1",
+    );
+  });
+
+  test("author lanes use the creator avatar instead of a decorative dot", () => {
+    const row = entity("task-1", "task");
+    row.createdBy = "Anna Nováková";
+    row.createdByUserId = "user-1";
+    row.createdByImage = "https://example.test/anna.jpg";
+    const definition = resolveWorkspaceKanbanSubgroup(
+      getInternalPropertyId("created-by"),
+      getInternalPropertyId("status"),
+      schemaFor(),
+    );
+    const subgroup = resolveWorkspaceKanbanDynamicSubgroup(definition, [row]);
+
+    expect(resolveKanbanGroupOptions(subgroup)).toEqual([
+      {
+        value: "workspace-user:user-1",
+        label: "Anna Nováková",
+        image: "https://example.test/anna.jpg",
+      },
+    ]);
+  });
+
+  test("author lanes keep users with the same display name separate", () => {
+    const first = entity("task-1", "task");
+    first.createdBy = "Anna Nováková";
+    first.createdByUserId = "user-1";
+    const second = entity("task-2", "task");
+    second.createdBy = "Anna Nováková";
+    second.createdByUserId = "user-2";
+    const definition = resolveWorkspaceKanbanSubgroup(
+      getInternalPropertyId("created-by"),
+      getInternalPropertyId("status"),
+      schemaFor(),
+    );
+    const subgroup = resolveWorkspaceKanbanDynamicSubgroup(definition, [
+      first,
+      second,
+    ]);
+
+    expect(
+      resolveKanbanGroupOptions(subgroup).map(({ value }) => value),
+    ).toEqual(["workspace-user:user-1", "workspace-user:user-2"]);
+    expect(resolveWorkspaceKanbanGroupValue(subgroup, first)).toBe(
+      "workspace-user:user-1",
+    );
+    expect(resolveWorkspaceKanbanGroupValue(subgroup, second)).toBe(
+      "workspace-user:user-2",
     );
   });
 });

@@ -4741,6 +4741,7 @@
       "filter": "Filtruj",
       "filterByPlaceholder": "Filtruj według…",
       "filtersWithCount": "{count, plural, one {# filtr} few {# filtry} many {# filtrów} other {# filtra}}",
+      "group": "Grupa",
       "groupBy": "Grupuj według:",
       "groupItemCount": "{count, plural, one {# element} few {# elementy} many {# elementów} other {# elementu}}",
       "hideColumn": "Ukryj kolumnę",
@@ -4779,6 +4780,7 @@
       },
       "saveAsTemplate": "Zapisz jako ustawienie wstępne…",
       "selectProperty": "Wybierz właściwość",
+      "subgroup": "Podgrupa",
       "switcherLabel": "Zapisane widoki",
       "templates": {
         "created": "Ustawienie wstępne zapisane",
@@ -4803,7 +4805,8 @@
         "startDate": "Data rozpoczęcia",
         "week": "Tydzień"
       },
-      "useTemplate": "Użyj ustawienia wstępnego…"
+      "useTemplate": "Użyj ustawienia wstępnego…",
+      "viewSettings": "Ustawienia widoku"
     },
     "workflow": {
       "allManualInputsDescription": "Dodaj co najmniej jedną właściwość AI, aby uruchomić proces",

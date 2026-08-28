@@ -91,6 +91,7 @@ const createEntity = (overrides: Partial<EntityInput>): EntityInput => ({
   parentId: null,
   createdAt: "2026-01-01T00:00:00.000Z",
   createdBy: null,
+  createdByUserId: null,
   createdByImage: null,
   createdByDeletedAt: null,
   updatedAt: null,

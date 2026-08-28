@@ -4741,6 +4741,7 @@
       "filter": "Filtrēt",
       "filterByPlaceholder": "Filtrēt pēc…",
       "filtersWithCount": "{count, plural, zero {nav filtru} one {# filtrs} other {# filtri}}",
+      "group": "Grupa",
       "groupBy": "Grupēt pēc:",
       "groupItemCount": "{count, plural, zero {# vienumu} one {# vienums} other {# vienumi}}",
       "hideColumn": "Paslēpt kolonnu",
@@ -4779,6 +4780,7 @@
       },
       "saveAsTemplate": "Saglabāt kā iepriekšiestatījumu…",
       "selectProperty": "Izvēlieties rekvizītu",
+      "subgroup": "Apakšgrupa",
       "switcherLabel": "Saglabātie skati",
       "templates": {
         "created": "Iepriekšiestatījums saglabāts",
@@ -4803,7 +4805,8 @@
         "startDate": "Sākuma datums",
         "week": "Nedēļa"
       },
-      "useTemplate": "Lietot iepriekšiestatījumu…"
+      "useTemplate": "Lietot iepriekšiestatījumu…",
+      "viewSettings": "Skata iestatījumi"
     },
     "workflow": {
       "allManualInputsDescription": "Lai palaistu darbplūsmu, pievienojiet vismaz vienu AI rekvizītu",

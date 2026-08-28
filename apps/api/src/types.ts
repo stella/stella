@@ -52,6 +52,7 @@ export type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 export type { LegalListSourceLocator } from "@/api/lib/lists/types";
 export type { Page } from "@/api/lib/pagination";
 export type { SavedSearchCriteria } from "@/api/lib/saved-searches";
+export type { UpsertFieldContent } from "@/api/handlers/fields/upsert-by-id";
 
 export type PropertyTable = typeof properties.$inferSelect;
 export type PropertyContent = SchemaValidators.PropertyContent;

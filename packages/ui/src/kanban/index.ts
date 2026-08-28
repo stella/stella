@@ -63,3 +63,37 @@ export {
   resolveKanbanGrouping,
   selectKanbanRows,
 } from "./grouping";
+export type {
+  BuildKanbanBoardMatrixParams,
+  CreateKanbanDropIntentParams,
+  KanbanBoardAxis,
+  KanbanBoardCell,
+  KanbanBoardCoordinate,
+  KanbanBoardLane,
+  KanbanBoardMatrix,
+  KanbanDropAxisChange,
+  KanbanDropIntent,
+  OrderKanbanCellsByColumnsParams,
+  ResolveKanbanGroupValueParams,
+} from "./matrix";
+export {
+  buildKanbanBoardMatrix,
+  createKanbanDropIntent,
+  KANBAN_BOARD_AXES,
+  orderKanbanCellsByColumns,
+} from "./matrix";
+export type {
+  KanbanSubgroupBoardProps,
+  KanbanSubgroupCellContext,
+  KanbanSubgroupColumnHeaderContext,
+  KanbanSubgroupLaneIdentityContext,
+} from "./subgroup-board";
+export { KanbanSubgroupBoard } from "./subgroup-board";
+export type {
+  KanbanVirtualCellPagination,
+  KanbanVirtualCellProps,
+} from "./virtual-cell";
+export {
+  KANBAN_VIRTUAL_CELL_PAGINATION,
+  KanbanVirtualCell,
+} from "./virtual-cell";

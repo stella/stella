@@ -102,6 +102,10 @@ const TaskDetailPanelContent = ({
     const found = s.tabs.find((tab) => tab.id === taskId);
     return found?.type === "task" && found.isNew;
   });
+  const creationStatus = useInspectorTabsStore((s) => {
+    const found = s.tabs.find((tab) => tab.id === taskId);
+    return found?.type === "task" ? found.creationStatus : "ready";
+  });
   const clearNewFlag = useInspectorTabsStore((s) => s.clearTaskNewFlag);
   const handleBack = () => setMinimized(true);
   const handleClose = () => closeTab(taskId);
@@ -116,7 +120,10 @@ const TaskDetailPanelContent = ({
     data: task,
     error: taskError,
     isLoading,
-  } = useQuery(taskDetailOptions(workspaceId, taskId));
+  } = useQuery({
+    ...taskDetailOptions(workspaceId, taskId),
+    enabled: creationStatus === "ready",
+  });
 
   useExternalSyncEffect(() => {
     if (APIError.is(taskError) && taskError.status === 404) {
@@ -380,7 +387,7 @@ const TaskDetailPanelContent = ({
     }
   }, [taskId, resolvedStatus]);
 
-  if (isLoading) {
+  if (creationStatus === "pending" || isLoading) {
     return (
       <div className="bg-background flex h-full min-w-0 flex-1 flex-col">
         <div

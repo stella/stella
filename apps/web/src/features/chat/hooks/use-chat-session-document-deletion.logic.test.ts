@@ -40,6 +40,7 @@ const tabs = [
     workspaceId: "workspace-tab",
   },
   {
+    creationStatus: "ready",
     id: "task-1",
     isNew: false,
     label: "Review contract",

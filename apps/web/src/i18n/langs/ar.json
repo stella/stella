@@ -4741,6 +4741,7 @@
       "filter": "تصفية",
       "filterByPlaceholder": "التصفية حسب…",
       "filtersWithCount": "{count, plural, zero {لا عوامل تصفية} one {عامل تصفية واحد} two {عاملا تصفية} few {# عوامل تصفية} many {# عامل تصفية} other {# عامل تصفية}}",
+      "group": "المجموعة",
       "groupBy": "التجميع حسب:",
       "groupItemCount": "{count, plural, zero {لا عناصر} one {عنصر واحد} two {عنصران} few {# عناصر} many {# عنصرًا} other {# عنصر}}",
       "hideColumn": "إخفاء العمود",
@@ -4779,6 +4780,7 @@
       },
       "saveAsTemplate": "الحفظ كإعداد مسبق…",
       "selectProperty": "اختر الخاصية",
+      "subgroup": "المجموعة الفرعية",
       "switcherLabel": "طرق العرض المحفوظة",
       "templates": {
         "created": "تم حفظ الإعداد المسبق",
@@ -4803,7 +4805,8 @@
         "startDate": "تاريخ البدء",
         "week": "الأسبوع"
       },
-      "useTemplate": "استخدام الإعداد المسبق…"
+      "useTemplate": "استخدام الإعداد المسبق…",
+      "viewSettings": "إعدادات العرض"
     },
     "workflow": {
       "allManualInputsDescription": "يُرجى إضافة خاصية واحدة على الأقل تعمل بالذكاء الاصطناعي لبدء سير العمل",

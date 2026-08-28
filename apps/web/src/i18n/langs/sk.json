@@ -4741,6 +4741,7 @@
       "filter": "Filtrovať",
       "filterByPlaceholder": "Filtrovať podľa…",
       "filtersWithCount": "{count, plural, one {# filter} few {# filtre} other {# filtrov}}",
+      "group": "Skupina",
       "groupBy": "Zoskupiť podľa:",
       "groupItemCount": "{count, plural, one {# položka} few {# položky} other {# položiek}}",
       "hideColumn": "Skryť stĺpec",
@@ -4779,6 +4780,7 @@
       },
       "saveAsTemplate": "Uložiť ako predvoľbu…",
       "selectProperty": "Vybrať vlastnosť",
+      "subgroup": "Podskupina",
       "switcherLabel": "Uložené zobrazenia",
       "templates": {
         "created": "Predvoľba uložená",
@@ -4803,7 +4805,8 @@
         "startDate": "Dátum začiatku",
         "week": "Týždeň"
       },
-      "useTemplate": "Použiť predvoľbu…"
+      "useTemplate": "Použiť predvoľbu…",
+      "viewSettings": "Nastavenia zobrazenia"
     },
     "workflow": {
       "allManualInputsDescription": "Na spustenie pracovného postupu pridajte aspoň jednu AI vlastnosť",

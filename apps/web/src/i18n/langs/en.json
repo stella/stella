@@ -4741,6 +4741,7 @@
       "filter": "Filter",
       "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
+      "group": "Group",
       "groupBy": "Group by:",
       "groupItemCount": "{count, plural, one {# item} other {# items}}",
       "hideColumn": "Hide column",
@@ -4779,6 +4780,7 @@
       },
       "saveAsTemplate": "Save as preset…",
       "selectProperty": "Select property",
+      "subgroup": "Sub-group",
       "switcherLabel": "Saved views",
       "templates": {
         "created": "Preset saved",
@@ -4803,7 +4805,8 @@
         "startDate": "Start date",
         "week": "Week"
       },
-      "useTemplate": "Use preset…"
+      "useTemplate": "Use preset…",
+      "viewSettings": "View settings"
     },
     "workflow": {
       "allManualInputsDescription": "Please add at least one AI property to start the workflow",

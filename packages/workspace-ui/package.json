@@ -36,6 +36,8 @@
     "./conditions": "./src/conditions/index.ts",
     "./field-value": "./src/field-value.tsx",
     "./field-value-logic": "./src/field-value-logic.ts",
+    "./kanban-grouping-picker": "./src/kanban-grouping-picker.tsx",
+    "./kanban-view": "./src/kanban-view.ts",
     "./property-icon": "./src/property-icon.tsx",
     "./sorts": "./src/sorts.tsx",
     "./table-skeleton-rows": "./src/table-skeleton-rows.tsx",

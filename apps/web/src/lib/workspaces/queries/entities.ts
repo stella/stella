@@ -97,6 +97,7 @@ const toWorkspaceEntity = (entity: RawWorkspaceEntity): WorkspaceEntity => {
       entity.parentId === null ? null : toSafeId<"entity">(entity.parentId),
     createdAt: entity.createdAt,
     createdBy: entity.createdBy,
+    createdByUserId: entity.createdByUserId,
     createdByImage: entity.createdByImage,
     createdByDeletedAt: entity.createdByDeletedAt,
     updatedAt: entity.updatedAt,

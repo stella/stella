@@ -9,10 +9,10 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { desktopEditSessions } from "@/api/db/schema";
+import { desktopEditSessions, entities } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -207,5 +207,42 @@ describe("entity active edit indicators", () => {
     const activeEditor = await readActiveEditor();
 
     expect(activeEditor).toBeNull();
+  });
+});
+
+describe("entity creator projection", () => {
+  test("keeps the creator ID when the entity has a different last editor", async () => {
+    await testDb
+      .update(entities)
+      .set({ createdBy: ids.userA1, lastEditedBy: ids.userA2 })
+      .where(eq(entities.id, ids.entityA1));
+
+    try {
+      const result = await queryEntities({
+        safeDb,
+        workspaceId: ids.wsA1,
+        currentUserId: ids.userA1,
+        currentOrganizationId: ids.orgA,
+        filters: [],
+        sorts: [],
+        limit: 10,
+        fieldMode: "visible",
+        fieldIds: [],
+      });
+      if (Result.isError(result)) {
+        throw result.error;
+      }
+
+      const entity = result.value.entities.find(
+        (candidate) => candidate.entityId === ids.entityA1,
+      );
+      expect(entity?.createdBy).toBe("User A1");
+      expect(entity?.createdByUserId).toBe(ids.userA1);
+    } finally {
+      await testDb
+        .update(entities)
+        .set({ createdBy: null, lastEditedBy: null })
+        .where(eq(entities.id, ids.entityA1));
+    }
   });
 });
