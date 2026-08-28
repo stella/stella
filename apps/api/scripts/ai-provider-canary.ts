@@ -801,7 +801,6 @@ const capabilityProbes = [
     run: async (context, signal) => {
       const output = await runToolProbe({
         context,
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
         prompt: TOOL_SCHEMA_PROMPT,
         role: CAPABILITY_ROLE,
         signal,
@@ -817,7 +816,6 @@ const capabilityProbes = [
     run: async (context, signal) => {
       const output = await runToolProbe({
         context,
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
         prompt: TOOL_SCHEMA_PROMPT,
         role: CAPABILITY_ROLE,
         signal,
