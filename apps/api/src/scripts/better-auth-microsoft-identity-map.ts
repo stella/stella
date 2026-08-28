@@ -31,6 +31,7 @@ import {
 } from "@/api/scripts/better-auth-microsoft-identity-map.logic";
 import type { BetterAuthMicrosoftIdentitySource } from "@/api/scripts/better-auth-microsoft-identity-map.logic";
 import type { BetterAuthTrustedIdentityMap } from "@/api/scripts/better-auth-migration-audit.logic";
+import { formatBetterAuthScriptFailure } from "@/api/scripts/better-auth-script-failure";
 
 const EXIT_CODE = {
   CONFIGURATION_OR_QUERY_FAILURE: 2,
@@ -294,9 +295,7 @@ if (import.meta.main) {
   run(Bun.argv.slice(2))
     .then((result) => {
       if (result.status === "error") {
-        process.stderr.write(
-          `${JSON.stringify({ code: result.error.code, status: "error" })}\n`,
-        );
+        process.stderr.write(formatBetterAuthScriptFailure(result.error));
         process.exitCode =
           result.error instanceof BetterAuthMicrosoftIdentityMapError
             ? EXIT_CODE.INVARIANT_FAILURE
@@ -309,9 +308,13 @@ if (import.meta.main) {
       process.exitCode = EXIT_CODE.SUCCESS;
       return undefined;
     })
-    .catch(() => {
+    .catch((error: unknown) => {
       process.stderr.write(
-        `${JSON.stringify({ code: "unexpected-failure", status: "error" })}\n`,
+        formatBetterAuthScriptFailure({
+          cause: error,
+          code: "unexpected-failure",
+          message: "Microsoft identity derivation failed unexpectedly",
+        }),
       );
       process.exitCode = EXIT_CODE.CONFIGURATION_OR_QUERY_FAILURE;
     });
