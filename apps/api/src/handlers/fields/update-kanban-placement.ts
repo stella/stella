@@ -77,20 +77,23 @@ const updateKanbanPlacement = createSafeHandler(
           }
         }
 
-        for (const field of body.fields) {
-          const fieldResult = await Result.gen(() =>
-            upsertFieldHandler({
-              safeDb: txSafeDb,
-              workspaceId,
-              userId: user.id,
-              recordAuditEvent,
-              body: { entityId: body.entityId, ...field },
-              flushSearchRepairs: false,
-            }),
-          );
-          if (Result.isError(fieldResult)) {
-            throw fieldResult.error;
-          }
+        const fieldResults = await Promise.all(
+          body.fields.map((field) =>
+            Result.gen(() =>
+              upsertFieldHandler({
+                safeDb: txSafeDb,
+                workspaceId,
+                userId: user.id,
+                recordAuditEvent,
+                body: { entityId: body.entityId, ...field },
+                flushSearchRepairs: false,
+              }),
+            ),
+          ),
+        );
+        const fieldError = fieldResults.find(Result.isError);
+        if (fieldError) {
+          throw fieldError.error;
         }
       }),
     );
