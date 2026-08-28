@@ -132,7 +132,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
             name: t("tasks.untitled"),
           };
 
-      const createResult = await Result.tryPromise(() =>
+      const createResult = await Result.tryPromise(async () =>
         api
           .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .put(body),
@@ -619,6 +619,45 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     );
   };
 
+  const subgroupFieldContent = (laneValue: string | null) => {
+    if (subgroup.type !== "property") {
+      return null;
+    }
+    if (subgroup.property.content.type === "single-select") {
+      return {
+        version: 1 as const,
+        type: "single-select" as const,
+        value: laneValue,
+      };
+    }
+    if (subgroup.property.content.type === "person") {
+      if (laneValue === null) {
+        return {
+          version: 1 as const,
+          type: "person" as const,
+          userId: null,
+          name: "",
+          image: null,
+        };
+      }
+      const sourceEntity = subgroupEntities.find(
+        (row) => resolveWorkspaceKanbanGroupValue(subgroup, row) === laneValue,
+      );
+      const sourceContent = sourceEntity?.fields[subgroup.property.id]?.content;
+      if (sourceContent?.type !== "person") {
+        return panic("Kanban person lane has no source identity");
+      }
+      return {
+        version: 1 as const,
+        type: "person" as const,
+        userId: sourceContent.userId,
+        name: sourceContent.name,
+        image: sourceContent.image,
+      };
+    }
+    return panic("Kanban subgroup property is not writable");
+  };
+
   const handleCreateTaskInCell = async (
     status: string,
     laneValue: string | null,
@@ -628,34 +667,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       return;
     }
 
-    const content = (() => {
-      if (subgroup.property.content.type === "single-select") {
-        return {
-          version: 1 as const,
-          type: "single-select" as const,
-          value: laneValue,
-        };
-      }
-      if (subgroup.property.content.type === "person") {
-        const sourceEntity = subgroupEntities.find(
-          (row) =>
-            resolveWorkspaceKanbanGroupValue(subgroup, row) === laneValue,
-        );
-        const sourceContent =
-          sourceEntity?.fields[subgroup.property.id]?.content;
-        if (sourceContent?.type !== "person") {
-          return panic("Kanban person lane has no source identity");
-        }
-        return {
-          version: 1 as const,
-          type: "person" as const,
-          userId: sourceContent.userId,
-          name: sourceContent.name,
-          image: sourceContent.image,
-        };
-      }
-      return panic("Kanban subgroup property is not writable");
-    })();
+    const content = subgroupFieldContent(laneValue);
+    if (content === null) {
+      return;
+    }
 
     await upsertField.mutateAsync({
       workspaceId,
@@ -668,35 +683,49 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     });
   };
 
-  if (subgroupMatrix !== null) {
-    return (
-      <KanbanSubgroupBoard
-        canCreateTaskInLane={canCreateTaskInLane}
-        cardFields={cardFields}
-        hasMore={subgroupQuery.hasNextPage}
-        isLoadingMore={subgroupQuery.isFetchingNextPage}
-        isTaskCreationPending={isTaskCreationPending}
-        matrix={subgroupMatrix}
-        onCreateTask={(status, laneValue) => {
-          detached(
-            handleCreateTaskInCell(status, laneValue),
-            "kanban-view.create-task-in-cell",
-          );
-        }}
-        onLoadMore={() => {
-          if (subgroupQuery.hasNextPage && !subgroupQuery.isFetchingNextPage) {
-            detached(
-              subgroupQuery.fetchNextPage(),
-              "kanban-view.fetch-subgroups-next-page",
-            );
-          }
-        }}
-        onRenameEntity={handleRenameEntity}
-        properties={properties}
-        workspaceId={workspaceId}
-      />
-    );
-  }
+  const handleDropCardInCell = async (
+    entityId: string,
+    columnValue: string,
+    laneValue: string | null,
+  ) => {
+    if (isStatusGrouping) {
+      await updateTaskStatus.mutateAsync({
+        taskId: entityId,
+        status: columnValue,
+      });
+    } else {
+      if (isBuiltInGrouping || isReadOnlyVerdictGrouping) {
+        stellaToast.add({
+          title: t("workspaces.kanban.readOnlyGrouping"),
+          type: "info",
+        });
+        return;
+      }
+      await upsertField.mutateAsync({
+        workspaceId,
+        propertyId: groupByPropertyId,
+        entityId,
+        content: {
+          version: 1,
+          type: "single-select",
+          value: columnValue,
+        },
+      });
+    }
+
+    const content = subgroupFieldContent(laneValue);
+    if (subgroup.type === "property" && content !== null) {
+      await upsertField.mutateAsync({
+        workspaceId,
+        propertyId: subgroup.property.id,
+        entityId,
+        content,
+      });
+    }
+    await queryClient.invalidateQueries({
+      queryKey: entitiesKeys.all(workspaceId),
+    });
+  };
 
   const handleReorderColumn = (
     sourceValue: string,
@@ -739,46 +768,118 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       return;
     }
 
-    // For status/built-in: reorder locally
-    setLocalColumnOrder((prev) => {
-      const current = prev.length > 0 ? prev : groups.map((g) => g.value ?? "");
-      const srcIdx = current.indexOf(sourceValue);
-      const tgtIdx = current.indexOf(targetValue);
-      if (srcIdx === -1 || tgtIdx === -1) {
-        return prev;
+    setLocalColumnOrder((previous) => {
+      const current =
+        previous.length > 0
+          ? previous
+          : groups.map((group) => group.value ?? "");
+      const sourceIndex = current.indexOf(sourceValue);
+      const targetIndex = current.indexOf(targetValue);
+      if (sourceIndex === -1 || targetIndex === -1) {
+        return previous;
       }
       const next = [...current];
-      const insertBeforeTarget = edge === "left";
-      const rawDestIdx = insertBeforeTarget ? tgtIdx : tgtIdx + 1;
-      const destIdx = srcIdx < rawDestIdx ? rawDestIdx - 1 : rawDestIdx;
-      if (destIdx === srcIdx) {
-        return prev;
+      const rawDestinationIndex =
+        edge === "left" ? targetIndex : targetIndex + 1;
+      const destinationIndex =
+        sourceIndex < rawDestinationIndex
+          ? rawDestinationIndex - 1
+          : rawDestinationIndex;
+      if (destinationIndex === sourceIndex) {
+        return previous;
       }
-      const [moved] = next.splice(srcIdx, 1);
+      const [moved] = next.splice(sourceIndex, 1);
       if (!moved) {
-        return prev;
+        return previous;
       }
-      next.splice(destIdx, 0, moved);
+      next.splice(destinationIndex, 0, moved);
       return next;
     });
   };
 
   const filteredGroups = groups.filter(
-    (g) => g.value === null || !hiddenGroups.has(g.value),
+    (group) => group.value === null || !hiddenGroups.has(group.value),
   );
-
-  // Apply local column order if set
   const visibleGroups =
     localColumnOrder.length > 0
       ? localColumnOrder
-          .map((v) => filteredGroups.find((g) => g.value === v))
-          .filter((g): g is KanbanGroup => g !== undefined)
+          .map((value) => filteredGroups.find((group) => group.value === value))
+          .filter((group): group is KanbanGroup => group !== undefined)
           .concat(
             filteredGroups.filter(
-              (g) => g.value === null || !localColumnOrder.includes(g.value),
+              (group) =>
+                group.value === null || !localColumnOrder.includes(group.value),
             ),
           )
       : filteredGroups;
+
+  const visibleColumnValues = new Set(
+    visibleGroups.map((group) => group.value),
+  );
+  const visibleSubgroupMatrix =
+    subgroupMatrix === null
+      ? null
+      : {
+          ...subgroupMatrix,
+          columns: visibleGroups,
+          cells: subgroupMatrix.cells.filter((cell) =>
+            visibleColumnValues.has(cell.coordinate.column.value),
+          ),
+        };
+
+  if (visibleSubgroupMatrix !== null) {
+    return (
+      <KanbanSubgroupBoard
+        canCreateTaskInLane={canCreateTaskInLane}
+        cardFields={cardFields}
+        hasMore={subgroupQuery.hasNextPage}
+        isLoadingMore={subgroupQuery.isFetchingNextPage}
+        isTaskCreationPending={isTaskCreationPending}
+        matrix={visibleSubgroupMatrix}
+        canDropCards={
+          subgroup.type === "property" ||
+          (subgroup.type === "built-in" &&
+            subgroup.group.id === getInternalPropertyId("kind"))
+        }
+        onChangeColumnColor={
+          handleChangeColor
+            ? (columnValue, color) => handleChangeColor(columnValue, color)
+            : undefined
+        }
+        onCreateTask={(status, laneValue) => {
+          detached(
+            handleCreateTaskInCell(status, laneValue),
+            "kanban-view.create-task-in-cell",
+          );
+        }}
+        onDropCard={(entityId, columnValue, laneValue) => {
+          detached(
+            handleDropCardInCell(entityId, columnValue, laneValue),
+            "kanban-view.drop-card-in-cell",
+          );
+        }}
+        onHideColumn={handleHideColumn}
+        onLoadMore={() => {
+          if (subgroupQuery.hasNextPage && !subgroupQuery.isFetchingNextPage) {
+            detached(
+              subgroupQuery.fetchNextPage(),
+              "kanban-view.fetch-subgroups-next-page",
+            );
+          }
+        }}
+        onRenameColumn={
+          handleRenameColumn
+            ? (columnValue, newValue) =>
+                handleRenameColumn(columnValue, newValue)
+            : undefined
+        }
+        onRenameEntity={handleRenameEntity}
+        onReorderColumn={handleReorderColumn}
+        properties={properties}
+        workspaceId={workspaceId}
+      />
+    );
+  }
 
   return (
     <KanbanBoard onReorderColumn={handleReorderColumn}>

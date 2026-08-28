@@ -1,8 +1,15 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
-import { ChevronDownIcon, PlusIcon, Rows3Icon } from "lucide-react";
+import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import {
+  ChevronDownIcon,
+  GripVerticalIcon,
+  PlusIcon,
+  Rows3Icon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import type { OptionColor } from "@stll/api/types";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { KanbanColumnHeader } from "@stll/ui/kanban";
@@ -13,19 +20,46 @@ import { UserIdentity } from "@/components/user-avatar";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
+import {
+  KanbanColumnActions,
+  KanbanColumnSwatch,
+  KanbanColumnTitle,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
+import {
+  useKanbanColumnDrag,
+  useKanbanEntityDropTarget,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets";
 
 const KANBAN_CELL_WIDTH = "w-[300px]";
 
 type KanbanSubgroupBoardProps = {
   cardFields: string[];
+  canDropCards: boolean;
   hasMore: boolean;
   isLoadingMore: boolean;
   isTaskCreationPending: boolean;
   matrix: KanbanBoardMatrix<WorkspaceEntity>;
   canCreateTaskInLane: (laneValue: string | null) => boolean;
+  onChangeColumnColor?:
+    | ((columnValue: string, color: OptionColor) => void)
+    | undefined;
   onCreateTask: (columnValue: string, laneValue: string | null) => void;
+  onDropCard: (
+    entityId: string,
+    columnValue: string,
+    laneValue: string | null,
+  ) => void;
+  onHideColumn: (columnValue: string) => void;
   onLoadMore: () => void;
+  onRenameColumn?:
+    | ((columnValue: string, newValue: string) => void)
+    | undefined;
   onRenameEntity: (entityId: string, newName: string) => void;
+  onReorderColumn: (
+    sourceValue: string,
+    targetValue: string,
+    edge: Edge | null,
+  ) => void;
   properties: WorkspaceProperty[];
   workspaceId: string;
 };
@@ -33,14 +67,20 @@ type KanbanSubgroupBoardProps = {
 /** A Notion-style swimlane board backed by one canonical placement matrix. */
 export const KanbanSubgroupBoard = ({
   cardFields,
+  canDropCards,
   canCreateTaskInLane,
   hasMore,
   isLoadingMore,
   isTaskCreationPending,
   matrix,
+  onChangeColumnColor,
   onLoadMore,
   onCreateTask,
+  onDropCard,
+  onHideColumn,
+  onRenameColumn,
   onRenameEntity,
+  onReorderColumn,
   properties,
   workspaceId,
 }: KanbanSubgroupBoardProps) => {
@@ -88,6 +128,10 @@ export const KanbanSubgroupBoard = ({
                 .filter((cell) => cell.coordinate.column.value === column.value)
                 .reduce((sum, cell) => sum + cell.rows.length, 0)}
               key={column.value ?? "__uncategorized__"}
+              onChangeColor={onChangeColumnColor}
+              onHide={onHideColumn}
+              onRename={onRenameColumn}
+              onReorder={onReorderColumn}
             />
           ))}
         </div>
@@ -131,28 +175,7 @@ export const KanbanSubgroupBoard = ({
                     flip={collapsed}
                     icon={ChevronDownIcon}
                   />
-                  {lane.group.image !== undefined ? (
-                    <UserIdentity
-                      as="span"
-                      avatarClassName="size-5 shrink-0 text-[0.5rem]"
-                      className="max-w-80 gap-2"
-                      image={lane.group.image}
-                      name={lane.group.label}
-                      nameClassName="text-sm font-medium"
-                    />
-                  ) : lane.group.color ? (
-                    <span
-                      className="size-5 shrink-0 rounded-md"
-                      style={{ backgroundColor: lane.group.colorBg }}
-                    >
-                      <span
-                        className="m-1.5 block size-2 rounded-full"
-                        style={{ backgroundColor: lane.group.color }}
-                      />
-                    </span>
-                  ) : (
-                    <Rows3Icon className="text-muted-foreground size-4 shrink-0" />
-                  )}
+                  <SubgroupIdentity group={lane.group} />
                   {lane.group.image === undefined && (
                     <span className="max-w-80 truncate text-sm font-medium">
                       {lane.group.label}
@@ -167,41 +190,23 @@ export const KanbanSubgroupBoard = ({
               {!collapsed && (
                 <div className="flex gap-3 pb-1">
                   {laneCells.map((cell) => (
-                    <div
-                      className={cn(
-                        KANBAN_CELL_WIDTH,
-                        "bg-muted/20 min-h-20 shrink-0 space-y-2 rounded-xl p-2",
-                      )}
-                      key={cell.coordinate.column.value ?? "__uncategorized__"}
-                      style={
-                        cell.coordinate.column.colorBg
-                          ? {
-                              backgroundColor: `color-mix(in srgb, ${cell.coordinate.column.colorBg} 26%, transparent)`,
-                            }
-                          : undefined
+                    <KanbanSubgroupCell
+                      canCreateTask={
+                        cell.coordinate.column.value !== null &&
+                        canCreateTaskInLane(value)
                       }
-                    >
-                      {cell.rows.map((entity) => (
-                        <KanbanCard
-                          cardFields={cardFields}
-                          draggable={false}
-                          entity={entity}
-                          key={entity.entityId}
-                          onRename={onRenameEntity}
-                          properties={properties}
-                          workspaceId={workspaceId}
-                        />
-                      ))}
-                      {cell.coordinate.column.value !== null &&
-                        canCreateTaskInLane(value) && (
-                          <CreateTaskButton
-                            columnValue={cell.coordinate.column.value}
-                            disabled={isTaskCreationPending}
-                            laneValue={value}
-                            onCreate={onCreateTask}
-                          />
-                        )}
-                    </div>
+                      canDropCards={canDropCards}
+                      cardFields={cardFields}
+                      cell={cell}
+                      isTaskCreationPending={isTaskCreationPending}
+                      key={cell.coordinate.column.value ?? "__uncategorized__"}
+                      laneValue={value}
+                      onCreateTask={onCreateTask}
+                      onDropCard={onDropCard}
+                      onRenameEntity={onRenameEntity}
+                      properties={properties}
+                      workspaceId={workspaceId}
+                    />
                   ))}
                 </div>
               )}
@@ -221,6 +226,89 @@ export const KanbanSubgroupBoard = ({
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+type KanbanSubgroupCellProps = {
+  canCreateTask: boolean;
+  canDropCards: boolean;
+  cardFields: string[];
+  cell: KanbanBoardMatrix<WorkspaceEntity>["cells"][number];
+  isTaskCreationPending: boolean;
+  laneValue: string | null;
+  onCreateTask: (columnValue: string, laneValue: string | null) => void;
+  onDropCard: (
+    entityId: string,
+    columnValue: string,
+    laneValue: string | null,
+  ) => void;
+  onRenameEntity: (entityId: string, newName: string) => void;
+  properties: WorkspaceProperty[];
+  workspaceId: string;
+};
+
+const KanbanSubgroupCell = ({
+  canCreateTask,
+  canDropCards,
+  cardFields,
+  cell,
+  isTaskCreationPending,
+  laneValue,
+  onCreateTask,
+  onDropCard,
+  onRenameEntity,
+  properties,
+  workspaceId,
+}: KanbanSubgroupCellProps) => {
+  const cellRef = useRef<HTMLDivElement>(null);
+  const columnValue = cell.coordinate.column.value;
+  const isDragOver = useKanbanEntityDropTarget({
+    elementRef: cellRef,
+    enabled: canDropCards,
+    name: `${cell.coordinate.column.label}, ${cell.coordinate.lane.type === "group" ? cell.coordinate.lane.group.label : ""}`,
+    onDrop: (entityId) => {
+      if (columnValue !== null) {
+        onDropCard(entityId, columnValue, laneValue);
+      }
+    },
+  });
+
+  return (
+    <div
+      className={cn(
+        KANBAN_CELL_WIDTH,
+        "bg-muted/20 min-h-20 shrink-0 space-y-2 rounded-xl p-2 transition-[background-color,outline-color]",
+        isDragOver && "bg-primary/5 ring-primary/50 ring-2",
+      )}
+      ref={cellRef}
+      style={
+        cell.coordinate.column.colorBg
+          ? {
+              backgroundColor: `color-mix(in srgb, ${cell.coordinate.column.colorBg} 26%, transparent)`,
+            }
+          : undefined
+      }
+    >
+      {cell.rows.map((entity) => (
+        <KanbanCard
+          cardFields={cardFields}
+          draggable={canDropCards}
+          entity={entity}
+          key={entity.entityId}
+          onRename={onRenameEntity}
+          properties={properties}
+          workspaceId={workspaceId}
+        />
+      ))}
+      {columnValue !== null && canCreateTask && (
+        <CreateTaskButton
+          columnValue={columnValue}
+          disabled={isTaskCreationPending}
+          laneValue={laneValue}
+          onCreate={onCreateTask}
+        />
+      )}
     </div>
   );
 };
@@ -256,14 +344,58 @@ const CreateTaskButton = ({
 type ColumnHeadingProps = {
   column: KanbanGroup;
   count: number;
+  onChangeColor?:
+    | ((columnValue: string, color: OptionColor) => void)
+    | undefined;
+  onHide: (columnValue: string) => void;
+  onRename?: ((columnValue: string, newValue: string) => void) | undefined;
+  onReorder: (
+    sourceValue: string,
+    targetValue: string,
+    edge: Edge | null,
+  ) => void;
 };
 
-const ColumnHeading = ({ column, count }: ColumnHeadingProps) => {
+const ColumnHeading = ({
+  column,
+  count,
+  onChangeColor,
+  onHide,
+  onRename,
+  onReorder,
+}: ColumnHeadingProps) => {
   const format = useFormatter();
+  const headingRef = useRef<HTMLDivElement>(null);
+  const dragHandleRef = useRef<HTMLDivElement>(null);
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(column.label);
+  const canEdit = column.value !== null;
+  const { closestEdge, isDragging } = useKanbanColumnDrag({
+    columnValue: column.value,
+    dragHandleRef,
+    elementRef: headingRef,
+    name: column.label,
+    onDrop: onReorder,
+    reorderEnabled: canEdit,
+  });
+
+  const commitRename = () => {
+    setEditing(false);
+    const value = editValue.trim();
+    if (column.value !== null && value && value !== column.label) {
+      onRename?.(column.value, value);
+    }
+  };
 
   return (
     <div
-      className={cn(KANBAN_CELL_WIDTH, "bg-muted/50 shrink-0 rounded-lg")}
+      className={cn(
+        KANBAN_CELL_WIDTH,
+        "group/column relative shrink-0 rounded-lg transition-opacity",
+        !column.colorBg && "bg-muted/50",
+        isDragging && "opacity-40",
+      )}
+      ref={headingRef}
       style={
         column.colorBg
           ? {
@@ -272,20 +404,104 @@ const ColumnHeading = ({ column, count }: ColumnHeadingProps) => {
           : undefined
       }
     >
+      {closestEdge && !isDragging && (
+        <div
+          className={cn(
+            "bg-primary pointer-events-none absolute top-0 z-10 h-full w-0.5",
+            closestEdge === "left" ? "-start-[7px]" : "-end-[7px]",
+          )}
+        />
+      )}
       <KanbanColumnHeader
-        meta={format.number(count)}
-        swatch={
-          column.color ? (
-            <span
-              className="size-2.5 shrink-0 rounded-full"
-              style={{ backgroundColor: column.color }}
-            />
+        actions={
+          <KanbanColumnActions
+            entityCount={count}
+            onChangeColor={
+              column.value !== null && onChangeColor
+                ? (color) => onChangeColor(column.value, color)
+                : undefined
+            }
+            onHideColumn={
+              column.value !== null ? () => onHide(column.value) : undefined
+            }
+            optionColor={column.optionColor}
+            title={column.label}
+          />
+        }
+        dragHandle={
+          canEdit ? (
+            <div
+              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100"
+              ref={dragHandleRef}
+            >
+              <GripVerticalIcon className="size-3.5" />
+            </div>
           ) : null
         }
+        meta={format.number(count)}
+        swatch={
+          <KanbanColumnSwatch
+            color={column.color}
+            onSelect={(color) => {
+              if (column.value !== null) {
+                onChangeColor?.(column.value, color);
+              }
+            }}
+            optionColor={column.optionColor}
+            showPicker={column.value !== null && onChangeColor !== undefined}
+          />
+        }
         title={
-          <span className="truncate text-sm font-medium">{column.label}</span>
+          <KanbanColumnTitle
+            editValue={editValue}
+            editing={editing}
+            onCancel={() => {
+              setEditing(false);
+              setEditValue(column.label);
+            }}
+            onChange={setEditValue}
+            onCommit={commitRename}
+            onStartEditing={
+              canEdit && onRename
+                ? () => {
+                    setEditValue(column.label);
+                    setEditing(true);
+                  }
+                : undefined
+            }
+            title={column.label}
+          />
         }
       />
     </div>
   );
+};
+
+const SubgroupIdentity = ({ group }: { group: KanbanGroup }) => {
+  if (group.image !== undefined) {
+    return (
+      <UserIdentity
+        as="span"
+        avatarClassName="size-5 shrink-0 text-[0.5rem]"
+        className="max-w-80 gap-2"
+        image={group.image}
+        name={group.label}
+        nameClassName="text-sm font-medium"
+      />
+    );
+  }
+  if (group.color) {
+    return (
+      <span
+        className="size-5 shrink-0 rounded-md"
+        style={{ backgroundColor: group.colorBg }}
+      >
+        <span
+          className="m-1.5 block size-2 rounded-full"
+          style={{ backgroundColor: group.color }}
+        />
+      </span>
+    );
+  }
+  return <Rows3Icon className="text-muted-foreground size-4 shrink-0" />;
 };

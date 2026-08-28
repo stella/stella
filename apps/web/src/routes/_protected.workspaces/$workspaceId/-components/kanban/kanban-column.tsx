@@ -1,16 +1,7 @@
 import { useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 
-import {
-  attachClosestEdge,
-  extractClosestEdge,
-} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   EllipsisVerticalIcon,
@@ -55,14 +46,9 @@ import {
   ColumnCalculation,
 } from "@stll/workspace-ui/calculations";
 
-import {
-  withDragAnnouncementData,
-  withDropAnnouncementData,
-} from "@/components/drag-and-drop-live-region.logic";
 import { InlineEdit } from "@/components/inline-edit";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import { toSafeId } from "@/lib/safe-id";
 import type {
@@ -71,11 +57,11 @@ import type {
   WorkspaceProperty,
 } from "@/lib/types";
 import { toCalculationValue } from "@/lib/workspaces/calculations";
-import {
-  COLUMN_DRAG_TYPE,
-  ENTITY_DRAG_TYPE,
-} from "@/lib/workspaces/drag-constants";
 import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
+import {
+  useKanbanColumnDrag,
+  useKanbanEntityDropTarget,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets";
 import { useWorkspaceCalculationLabels } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workspace-calculation-labels";
 
 const KANBAN_CARD_ESTIMATE_PX = 128;
@@ -168,9 +154,6 @@ export const KanbanColumn = ({
     });
     setCtxOpen(true);
   };
-  const [isEntityDragOver, setIsEntityDragOver] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [closestColumnEdge, setClosestColumnEdge] = useState<Edge | null>(null);
   const cardVirtualizer = useVirtualizer({
     count: entities.length,
     estimateSize: () => KANBAN_CARD_ESTIMATE_PX,
@@ -200,8 +183,18 @@ export const KanbanColumn = ({
   }, [entities.length, hasMore, isLoadingMore, onLoadMore]);
 
   const isDraggable = columnValue !== null && onReorderColumn !== undefined;
-
-  const handleEntityDrop = useLatestCallback(onDrop);
+  const isEntityDragOver = useKanbanEntityDropTarget({
+    elementRef: scrollRef,
+    name: title,
+    onDrop,
+  });
+  const { closestEdge: closestColumnEdge, isDragging } = useKanbanColumnDrag({
+    columnValue,
+    dragHandleRef,
+    elementRef: columnRef,
+    name: title,
+    reorderEnabled: isDraggable,
+  });
 
   const { isDropTarget, isInnerActive } = useExternalFileDrop({
     externalRef: columnRef,
@@ -209,111 +202,6 @@ export const KanbanColumn = ({
     onDrop: (files) => onFileUpload?.(files),
   });
   const isFileDragOver = isDropTarget && !isInnerActive;
-
-  useExternalSyncEffect(() => {
-    const el = columnRef.current;
-    const handle = dragHandleRef.current;
-    if (!el) {
-      return undefined;
-    }
-
-    const cleanups = [
-      // Drop target for entity cards and column reorder
-      dropTargetForElements({
-        element: el,
-        canDrop: ({ source }) => {
-          if (source.data["type"] === ENTITY_DRAG_TYPE) {
-            return true;
-          }
-          return (
-            source.data["type"] === COLUMN_DRAG_TYPE &&
-            source.data["columnValue"] !== columnValue
-          );
-        },
-        getData: ({ input, element, source }) => {
-          const data = withDropAnnouncementData(
-            { columnValue },
-            {
-              type:
-                source.data["type"] === COLUMN_DRAG_TYPE
-                  ? "reorder"
-                  : "container",
-              name: title,
-            },
-          );
-          if (source.data["type"] === COLUMN_DRAG_TYPE) {
-            return attachClosestEdge(data, {
-              input,
-              element,
-              allowedEdges: ["left", "right"],
-            });
-          }
-          return data;
-        },
-        onDragEnter: ({ source, self }) => {
-          if (source.data["type"] === ENTITY_DRAG_TYPE) {
-            setIsEntityDragOver(true);
-          } else if (source.data["type"] === COLUMN_DRAG_TYPE) {
-            const sourceVal = source.data["columnValue"];
-            if (sourceVal !== columnValue) {
-              setClosestColumnEdge(extractClosestEdge(self.data));
-            }
-          }
-        },
-        onDrag: ({ source, self }) => {
-          if (source.data["type"] === COLUMN_DRAG_TYPE) {
-            const sourceVal = source.data["columnValue"];
-            if (sourceVal === columnValue) {
-              return;
-            }
-            const edge = extractClosestEdge(self.data);
-            setClosestColumnEdge((prev) => (prev === edge ? prev : edge));
-          }
-        },
-        onDragLeave: ({ source }) => {
-          if (source.data["type"] === ENTITY_DRAG_TYPE) {
-            setIsEntityDragOver(false);
-          } else if (source.data["type"] === COLUMN_DRAG_TYPE) {
-            setClosestColumnEdge(null);
-          }
-        },
-        onDrop: ({ source }) => {
-          setIsEntityDragOver(false);
-          setClosestColumnEdge(null);
-          // Column reorder is handled by the board-level
-          // monitor (forgiving: works even if dropped in gap).
-          if (source.data["type"] !== ENTITY_DRAG_TYPE) {
-            return;
-          }
-          const entityId = source.data["entityId"];
-          if (typeof entityId !== "string") {
-            return;
-          }
-          handleEntityDrop(entityId);
-        },
-      }),
-    ];
-
-    // Column draggable: entire column is the element,
-    // grip icon is the drag handle (Trello-style).
-    if (isDraggable && handle) {
-      cleanups.push(
-        draggable({
-          element: el,
-          dragHandle: handle,
-          getInitialData: () =>
-            withDragAnnouncementData(
-              { type: COLUMN_DRAG_TYPE, columnValue },
-              title,
-            ),
-          onDragStart: () => setIsDragging(true),
-          onDrop: () => setIsDragging(false),
-        }),
-      );
-    }
-
-    return combine(...cleanups);
-  }, [columnValue, title, isDraggable, handleEntityDrop]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -346,11 +234,8 @@ export const KanbanColumn = ({
   };
 
   const handleColorSelect = (value: string) => {
-    // SAFETY: DEFAULT_PRESETS values match OptionColor names
     onChangeColor?.(value);
   };
-
-  const hasColumnActions = onChangeColor ?? onHideColumn ?? onDeleteAll;
 
   return (
     <div
@@ -382,85 +267,14 @@ export const KanbanColumn = ({
       )}
       <KanbanColumnHeader
         actions={
-          hasColumnActions ? (
-            <Menu>
-              <MenuTrigger
-                aria-label={t("common.actions")}
-                render={<Button size="icon-xs" variant="ghost" />}
-              >
-                <EllipsisVerticalIcon />
-              </MenuTrigger>
-              <MenuPopup>
-                {onChangeColor && (
-                  <Popover modal>
-                    <PopoverTrigger render={<MenuItem closeOnClick={false} />}>
-                      <PaletteIcon />
-                      {t("common.changeColor")}
-                    </PopoverTrigger>
-                    <PopoverPopup
-                      className="*:data-[slot=popover-viewport]:p-1!"
-                      side="right"
-                    >
-                      <ColorPickerContent
-                        columns={9}
-                        defaultExpanded={false}
-                        moreLabel={t("common.showMore")}
-                        onSelect={handleColorSelect}
-                        presets={DEFAULT_PRESETS}
-                        value={optionColor}
-                      />
-                    </PopoverPopup>
-                  </Popover>
-                )}
-                {onHideColumn && (
-                  <MenuItem onClick={onHideColumn}>
-                    <EyeOffIcon />
-                    {t("workspaces.kanban.hideColumn")}
-                  </MenuItem>
-                )}
-                {onDeleteAll && entities.length > 0 && (
-                  <AlertDialog>
-                    <AlertDialogTrigger
-                      render={
-                        <MenuItem closeOnClick={false} variant="destructive" />
-                      }
-                    >
-                      <Trash2Icon />
-                      {t("workspaces.kanban.deleteAll")}
-                    </AlertDialogTrigger>
-                    <AlertDialogPopup>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          {t("workspaces.kanban.deleteAll")}
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {t("workspaces.kanban.deleteAllConfirm", {
-                            count: String(entities.length),
-                            column: title,
-                          })}
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogClose render={<Button variant="ghost" />}>
-                          {t("common.cancel")}
-                        </AlertDialogClose>
-                        <AlertDialogClose
-                          render={
-                            <Button
-                              onClick={onDeleteAll}
-                              variant="destructive"
-                            />
-                          }
-                        >
-                          {t("workspaces.kanban.deleteAll")}
-                        </AlertDialogClose>
-                      </AlertDialogFooter>
-                    </AlertDialogPopup>
-                  </AlertDialog>
-                )}
-              </MenuPopup>
-            </Menu>
-          ) : null
+          <KanbanColumnActions
+            entityCount={entities.length}
+            onChangeColor={onChangeColor}
+            onDeleteAll={onDeleteAll}
+            onHideColumn={onHideColumn}
+            optionColor={optionColor}
+            title={title}
+          />
         }
         dragHandle={
           isDraggable ? (
@@ -486,7 +300,7 @@ export const KanbanColumn = ({
         }
         meta={editing ? undefined : format.number(entities.length)}
         swatch={
-          <ColumnSwatch
+          <KanbanColumnSwatch
             color={color}
             onSelect={handleColorSelect}
             optionColor={optionColor}
@@ -494,7 +308,7 @@ export const KanbanColumn = ({
           />
         }
         title={
-          <ColumnTitle
+          <KanbanColumnTitle
             editValue={editValue}
             editing={editing}
             onCancel={cancelEditing}
@@ -611,6 +425,111 @@ export const KanbanColumn = ({
   );
 };
 
+type KanbanColumnActionsProps = {
+  entityCount: number;
+  title: string;
+  onChangeColor?: ((color: OptionColor) => void) | undefined;
+  onDeleteAll?: (() => void) | undefined;
+  onHideColumn?: (() => void) | undefined;
+  optionColor?: OptionColor | undefined;
+};
+
+/** The canonical column menu shared by flat and subgrouped boards. */
+export const KanbanColumnActions = ({
+  entityCount,
+  onChangeColor,
+  onDeleteAll,
+  onHideColumn,
+  optionColor,
+  title,
+}: KanbanColumnActionsProps) => {
+  const t = useTranslations();
+  const hasActions = onChangeColor ?? onHideColumn ?? onDeleteAll;
+  if (!hasActions) {
+    return null;
+  }
+
+  const handleColorSelect = (value: string) => {
+    // SAFETY: DEFAULT_PRESETS values match OptionColor names.
+    onChangeColor?.(value);
+  };
+
+  return (
+    <Menu>
+      <MenuTrigger
+        aria-label={t("common.actions")}
+        render={<Button size="icon-xs" variant="ghost" />}
+      >
+        <EllipsisVerticalIcon />
+      </MenuTrigger>
+      <MenuPopup>
+        {onChangeColor && (
+          <Popover modal>
+            <PopoverTrigger render={<MenuItem closeOnClick={false} />}>
+              <PaletteIcon />
+              {t("common.changeColor")}
+            </PopoverTrigger>
+            <PopoverPopup
+              className="*:data-[slot=popover-viewport]:p-1!"
+              side="right"
+            >
+              <ColorPickerContent
+                columns={9}
+                defaultExpanded={false}
+                moreLabel={t("common.showMore")}
+                onSelect={handleColorSelect}
+                presets={DEFAULT_PRESETS}
+                value={optionColor}
+              />
+            </PopoverPopup>
+          </Popover>
+        )}
+        {onHideColumn && (
+          <MenuItem onClick={onHideColumn}>
+            <EyeOffIcon />
+            {t("workspaces.kanban.hideColumn")}
+          </MenuItem>
+        )}
+        {onDeleteAll && entityCount > 0 && (
+          <AlertDialog>
+            <AlertDialogTrigger
+              render={<MenuItem closeOnClick={false} variant="destructive" />}
+            >
+              <Trash2Icon />
+              {t("workspaces.kanban.deleteAll")}
+            </AlertDialogTrigger>
+            <AlertDialogPopup>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {t("workspaces.kanban.deleteAll")}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t("workspaces.kanban.deleteAllConfirm", {
+                    count: String(entityCount),
+                    column: title,
+                  })}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogClose render={<Button variant="ghost" />}>
+                  {t("common.cancel")}
+                </AlertDialogClose>
+                <AlertDialogClose
+                  render={
+                    <Button onClick={onDeleteAll} variant="destructive" />
+                  }
+                >
+                  {t("workspaces.kanban.deleteAll")}
+                </AlertDialogClose>
+              </AlertDialogFooter>
+            </AlertDialogPopup>
+          </AlertDialog>
+        )}
+      </MenuPopup>
+    </Menu>
+  );
+};
+
 type ColumnTitleProps = {
   title: string;
   editing: boolean;
@@ -628,7 +547,7 @@ type ColumnTitleProps = {
  * is still a tab stop, and reaching it and pressing Enter would answer with
  * silence.
  */
-const ColumnTitle = ({
+export const KanbanColumnTitle = ({
   title,
   editing,
   editValue,
@@ -673,7 +592,7 @@ type ColumnSwatchProps = {
 };
 
 /** The column's colour dot, and the picker behind it when it is editable. */
-const ColumnSwatch = ({
+export const KanbanColumnSwatch = ({
   color,
   optionColor,
   showPicker,
