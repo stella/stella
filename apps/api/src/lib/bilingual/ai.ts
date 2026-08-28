@@ -2,6 +2,7 @@
 // manifest (never the DOCX), addresses rows by ordinal, and is validated
 // against the known ordinals before anything is trusted.
 
+import { TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type { ModelRole } from "@stll/ai-catalog";
@@ -19,6 +20,10 @@ import type {
   BilingualGlossaryEntry,
   BilingualRowDisposition,
 } from "@/api/lib/bilingual/contract";
+import type {
+  BilingualFormattedTranslation,
+  FormattedBilingualUnit,
+} from "@/api/lib/bilingual/formatting";
 import { defaultDisposition, ruleDisposition } from "@/api/lib/bilingual/rows";
 import type {
   BilingualUnit,
@@ -34,6 +39,13 @@ const SERVICE_TIER = "standard" as const;
 const CALL_TIMEOUT_MS = 90_000;
 const PREVIEW_CHARS = 240;
 const GLOSSARY_SAMPLE_CHARS = 24_000;
+const FORMATTED_INLINE_TOKENS_MAX = 2048;
+const FORMATTED_ROWS_SERIALIZED_CHARS_MAX = 200_000;
+const FORMATTED_OUTPUT_ATTEMPTS = 2;
+
+class BilingualAIContractError extends TaggedError("BilingualAIContractError")<{
+  message: string;
+}> {}
 
 export type BilingualAIContext = {
   organizationId: SafeId<"organization">;
@@ -324,6 +336,10 @@ const TRANSLATION_SYSTEM = `You translate rows of a legal document for a two-col
 - Keep numbers, dates, amounts, currency, article and section references, party names and defined-term capitalisation unchanged.
 - Do not add explanations, notes or the source text. Return one item per row number.`;
 
+const FORMATTED_TRANSLATION_SYSTEM = `${TRANSLATION_SYSTEM}
+- Each formatted row is an ordered JSON array. Translate only text token values. Control tokens represent tabs, breaks, hyphens, symbols, and fields; they are immutable and remain in place.
+- Return every text span exactly once, in its original order, with the same id. Keep text belonging to a styled source span in that span; an empty translated span is allowed when target-language word order requires it.`;
+
 export type TranslationContextRow = {
   sourceText: string;
   targetText: string | null;
@@ -388,6 +404,146 @@ export const translateBatch = async (
     if (known.has(item.n) && text !== "" && !result.has(item.n)) {
       result.set(item.n, text);
     }
+  }
+  return result;
+};
+
+const formattedTranslationSchema = v.object({
+  items: v.array(
+    v.object({
+      n: v.pipe(v.number(), v.integer(), v.minValue(1)),
+      spans: v.array(
+        v.object({
+          id: v.string(),
+          text: v.string(),
+        }),
+      ),
+    }),
+  ),
+});
+
+export type TranslateFormattedBatchInput = {
+  batch: readonly FormattedBilingualUnit[];
+  preceding: readonly TranslationContextRow[];
+  glossary: readonly BilingualGlossaryEntry[];
+};
+
+const hasExactSpanIds = (
+  unit: FormattedBilingualUnit,
+  spans: readonly { id: string }[],
+): boolean =>
+  spans.length === unit.spans.length &&
+  spans.every((span, index) => span.id === unit.spans.at(index)?.id);
+
+const serializeFormattedRows = (
+  batch: readonly FormattedBilingualUnit[],
+): string => {
+  const lines: string[] = [];
+  let serializedChars = 0;
+  for (const unit of batch) {
+    if (unit.inline.length > FORMATTED_INLINE_TOKENS_MAX) {
+      throw new BilingualAIContractError({
+        message: `Formatted bilingual row ${unit.rowId} exceeds the inline token limit`,
+      });
+    }
+    const serialized = JSON.stringify(unit.inline);
+    serializedChars += serialized.length;
+    if (serializedChars > FORMATTED_ROWS_SERIALIZED_CHARS_MAX) {
+      throw new BilingualAIContractError({
+        message: "Formatted bilingual batch exceeds the prompt size limit",
+      });
+    }
+    lines.push(`#${unit.ordinal}: ${serialized}`);
+  }
+  return lines.join("\n");
+};
+
+type FormattedTranslationOutput = v.InferOutput<
+  typeof formattedTranslationSchema
+>;
+
+const collectFormattedTranslations = (
+  batch: readonly FormattedBilingualUnit[],
+  output: FormattedTranslationOutput,
+  result: Map<number, BilingualFormattedTranslation>,
+): FormattedBilingualUnit[] => {
+  const byOrdinal = new Map(batch.map((unit) => [unit.ordinal, unit]));
+  for (const item of output.items) {
+    const unit = byOrdinal.get(item.n);
+    if (!unit || result.has(item.n) || !hasExactSpanIds(unit, item.spans)) {
+      continue;
+    }
+    const text = item.spans.map((span) => span.text).join("");
+    if (text.trim() === "") {
+      continue;
+    }
+    result.set(item.n, {
+      text,
+      spans: item.spans.map(({ id, text: spanText }) => ({
+        id,
+        text: spanText,
+      })),
+    });
+  }
+  return batch.filter((unit) => !result.has(unit.ordinal));
+};
+
+/** Translate a batch without flattening its styled DOCX runs to plain text. */
+export const translateFormattedBatch = async (
+  { batch, preceding, glossary }: TranslateFormattedBatchInput,
+  languages: Languages,
+  context: BilingualAIContext,
+): Promise<Map<number, BilingualFormattedTranslation>> => {
+  const analytics = analyticsFor(
+    context,
+    "bilingual.translate",
+    TRANSLATION_ROLE,
+  );
+  const glossaryLines = glossary
+    .filter((entry) => entry.target !== "")
+    .map((entry) => `- ${entry.source} -> ${entry.target}`)
+    .join("\n");
+  const contextLines = preceding
+    .map(
+      (row) =>
+        `  ${row.sourceText}${row.targetText ? `\n  => ${row.targetText}` : ""}`,
+    )
+    .join("\n");
+  const result = new Map<number, BilingualFormattedTranslation>();
+  const translateAttempt = async (
+    remaining: readonly FormattedBilingualUnit[],
+    attempt: number,
+  ): Promise<void> => {
+    const rowLines = serializeFormattedRows(remaining);
+    const repairInstruction =
+      attempt === 1
+        ? ""
+        : "\n\nContract repair: return every listed row with exactly the provided text span ids, once and in order.";
+    const output = await generateTanStackObjectForRole({
+      role: TRANSLATION_ROLE,
+      orgAIConfig: context.orgAIConfig,
+      organizationId: context.organizationId,
+      analytics,
+      caching: resolveCaching({
+        promptCachingEnabled: context.promptCachingEnabled,
+        role: TRANSLATION_ROLE,
+        scopeKey: context.scopeKey,
+      }),
+      serviceTier: SERVICE_TIER,
+      tenantWorkspaceIds: [context.workspaceId],
+      system: FORMATTED_TRANSLATION_SYSTEM,
+      systemPromptOrigin: "embeds-untrusted",
+      prompt: `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\nGlossary:\n${glossaryLines || "(none)"}\n\nPreceding rows (context only):\n${contextLines || "(start of document)"}\n\nFormatted rows to translate:\n${rowLines}${repairInstruction}`,
+      abortSignal: callSignal(context),
+      outputSchema: formattedTranslationSchema,
+    });
+    const rejected = collectFormattedTranslations(remaining, output, result);
+    if (attempt < FORMATTED_OUTPUT_ATTEMPTS && rejected.length > 0) {
+      await translateAttempt(rejected, attempt + 1);
+    }
+  };
+  if (batch.length > 0) {
+    await translateAttempt(batch, 1);
   }
   return result;
 };

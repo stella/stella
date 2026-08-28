@@ -100,3 +100,40 @@ export const buildOperations = (
   }
   return operations;
 };
+
+/**
+ * Structural edits used after formatted translations have already been
+ * written into cloned runs. Text edits are deliberately absent: a Folio
+ * `replaceBlock` accepts plain text and cannot retain mixed run formatting.
+ */
+export const buildFormattingPreservingOperations = (
+  rows: readonly StoredRow[],
+  translatedRowIds: ReadonlySet<string>,
+): FolioAIEditOperation[] => {
+  const operations: FolioAIEditOperation[] = [];
+  let sequence = 0;
+  const nextId = (): string => {
+    sequence += 1;
+    return `bilingual-structure-${sequence}`;
+  };
+  for (const row of rows) {
+    if (row.inTable || row.sourceParaId === null) {
+      continue;
+    }
+    const shouldMerge =
+      row.disposition === BILINGUAL_ROW_DISPOSITION.KEEP ||
+      (row.disposition === BILINGUAL_ROW_DISPOSITION.INLINE &&
+        translatedRowIds.has(row.rowId));
+    if (!shouldMerge) {
+      continue;
+    }
+    operations.push({
+      id: nextId(),
+      type: "mergeTableCells",
+      blockId: row.sourceParaId,
+      endBlockId: row.rowId,
+    });
+    operations.push({ id: nextId(), type: "deleteBlock", blockId: row.rowId });
+  }
+  return operations;
+};

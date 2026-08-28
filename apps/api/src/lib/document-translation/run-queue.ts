@@ -26,7 +26,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import {
   decideDispositions,
   proposeGlossary,
-  translateBatch,
+  translateFormattedBatch,
 } from "@/api/lib/bilingual/ai";
 import type {
   BilingualAIContext,
@@ -36,7 +36,15 @@ import {
   BILINGUAL_LIMITS,
   BILINGUAL_ROW_DISPOSITION,
 } from "@/api/lib/bilingual/contract";
-import { buildOperations } from "@/api/lib/bilingual/operations";
+import {
+  applyFormattedBilingualTranslations,
+  extractFormattedBilingualUnits,
+} from "@/api/lib/bilingual/formatting";
+import type {
+  BilingualFormattedTranslation,
+  FormattedBilingualUnit,
+} from "@/api/lib/bilingual/formatting";
+import { buildFormattingPreservingOperations } from "@/api/lib/bilingual/operations";
 import type { StoredRow } from "@/api/lib/bilingual/operations";
 import {
   detectGlossaryCandidates,
@@ -838,15 +846,23 @@ const translateBilingualWithAI = async (
   ) {
     return Result.err("unsupported_format");
   }
+  const formatted = await Result.tryPromise({
+    try: async () =>
+      await extractFormattedBilingualUnits(conversion.value.buffer, units),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(formatted)) {
+    return Result.err("unsupported_format");
+  }
   const languages = {
     sourceLang: run.sourceLang,
     targetLang: run.targetLang,
   };
-  const texts = units.map((unit) => unit.sourceText);
+  const texts = formatted.value.map((unit) => unit.sourceText);
   const prepared = await Result.tryPromise({
     try: async () => {
       const [rows, glossary] = await Promise.all([
-        decideDispositions(units, languages, context),
+        decideDispositions(formatted.value, languages, context),
         proposeGlossary(
           detectGlossaryCandidates(texts),
           texts,
@@ -896,6 +912,13 @@ const translateBilingualWithAI = async (
   await setTotal(actor, pending.length);
 
   const translated = new Map<string, string>();
+  const formattedTranslations = new Map<
+    string,
+    BilingualFormattedTranslation
+  >();
+  const formattedByRowId = new Map(
+    formatted.value.map((unit) => [unit.rowId, unit]),
+  );
   const translateNextBatch = async (
     index: number,
   ): Promise<Result<void, DocumentTranslationRunErrorCode>> => {
@@ -918,10 +941,22 @@ const translateBilingualWithAI = async (
         sourceText: row.sourceText,
         targetText: translated.get(row.rowId) ?? null,
       }));
+    const formattedBatch: FormattedBilingualUnit[] = [];
+    for (const row of batch) {
+      const formattedUnit = formattedByRowId.get(row.rowId);
+      if (!formattedUnit) {
+        return Result.err("translation_failed");
+      }
+      formattedBatch.push(formattedUnit);
+    }
     const result = await Result.tryPromise({
       try: async () =>
-        await translateBatch(
-          { batch, preceding, glossary: prepared.value.glossary },
+        await translateFormattedBatch(
+          {
+            batch: formattedBatch,
+            preceding,
+            glossary: prepared.value.glossary,
+          },
           languages,
           context,
         ),
@@ -932,11 +967,13 @@ const translateBilingualWithAI = async (
     }
     const updates: { unitKey: string; targetText: string }[] = [];
     for (const row of batch) {
-      const targetText = result.value.get(row.ordinal);
-      if (targetText === undefined) {
+      const formattedTranslation = result.value.get(row.ordinal);
+      if (formattedTranslation === undefined) {
         return Result.err("translation_failed");
       }
+      const targetText = formattedTranslation.text;
       translated.set(row.rowId, targetText);
+      formattedTranslations.set(row.rowId, formattedTranslation);
       updates.push({ unitKey: row.rowId, targetText });
     }
     await updateTranslatedUnits(actor, updates);
@@ -950,10 +987,26 @@ const translateBilingualWithAI = async (
   if (!(await transitionStage(actor, "translating", "assembling"))) {
     return Result.err("internal");
   }
-  const operations = buildOperations(rows, translated);
+  const formattedBuffer = await Result.tryPromise({
+    try: async () =>
+      await applyFormattedBilingualTranslations(
+        conversion.value.buffer,
+        rows,
+        formattedTranslations,
+      ),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(formattedBuffer)) {
+    captureError(formattedBuffer.error, { runId: actor.runId });
+    return Result.err("format_validation_failed");
+  }
+  const operations = buildFormattingPreservingOperations(
+    rows,
+    new Set(formattedTranslations.keys()),
+  );
   const applied = await Result.tryPromise({
     try: async () =>
-      await applyFolioAIEditsToBuffer(conversion.value.buffer, operations, {
+      await applyFolioAIEditsToBuffer(formattedBuffer.value, operations, {
         author: "Stella",
         mode: "direct",
       }),
