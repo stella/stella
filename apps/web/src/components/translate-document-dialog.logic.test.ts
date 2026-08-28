@@ -157,7 +157,7 @@ describe("document translation output handoff", () => {
       },
     });
 
-    expect(events).toEqual(["closed", "prepared", "navigated"]);
+    expect(events).toEqual(["prepared", "closed", "navigated"]);
   });
 
   test("does not navigate when the destination cannot be prepared", async () => {

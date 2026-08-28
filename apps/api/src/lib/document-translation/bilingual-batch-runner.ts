@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 
-/** Larger than the interactive flow's batch because formatted-output repair
- *  can retry individual rejected rows without replaying the accepted ones. */
-export const DOCUMENT_TRANSLATION_BATCH_SIZE = 16;
+/** Eight rows stay below the formatted prompt's 200k serialized-character cap
+ *  even at the per-row input limit, while keeping target context ordered. */
+export const DOCUMENT_TRANSLATION_BATCH_SIZE = 8;
 
 type RunBilingualTranslationBatchesOptions<TItem, TError> = {
   items: readonly TItem[];

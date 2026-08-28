@@ -139,7 +139,7 @@ export const openDocumentTranslationOutput = async ({
   navigate,
   prepareDestination,
 }: OpenDocumentTranslationOutputOptions) => {
-  closeDialog();
   await prepareDestination();
+  closeDialog();
   await navigate();
 };

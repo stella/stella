@@ -143,11 +143,17 @@ export const documentTranslationRunOptions = (ref: DocumentTranslationRunRef) =>
 export const invalidateDocumentTranslationOutputQueries = async (
   queryClient: QueryClient,
   workspaceId: string,
-) =>
-  await queryClient.invalidateQueries({
+  sourceEntityId: string,
+) => {
+  const sourceKey = entitiesKeys.detail(workspaceId, sourceEntityId);
+  return await queryClient.invalidateQueries({
     queryKey: entitiesKeys.all(workspaceId),
-    refetchType: "none",
+    refetchType: "active",
+    predicate: (query) =>
+      query.queryKey.length !== sourceKey.length ||
+      query.queryKey.some((part, index) => part !== sourceKey[index]),
   });
+};
 
 const runPollInterval = (
   status: DocumentTranslationRunStatus,

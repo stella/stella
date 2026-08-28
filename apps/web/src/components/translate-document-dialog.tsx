@@ -317,7 +317,11 @@ export const TranslateDocumentDialog = (
           : {}),
       });
       detached(
-        invalidateDocumentTranslationOutputQueries(queryClient, workspaceId),
+        invalidateDocumentTranslationOutputQueries(
+          queryClient,
+          workspaceId,
+          entityId,
+        ),
         "translate-document-dialog.invalidate-entities",
       );
       return;
@@ -332,6 +336,7 @@ export const TranslateDocumentDialog = (
     }
   }, [
     analytics,
+    entityId,
     openOutput,
     preparationQuery.error,
     runQuery.data,
