@@ -1,5 +1,12 @@
 import { classifyAIError } from "@/api/lib/ai-error";
+import { DeepLTimeoutError, DeepLUpstreamError } from "@/api/lib/deepl/errors";
 import type { DocumentTranslationRunErrorCode } from "@/api/lib/document-translation/contract";
+
+const isDeepLProviderUnavailable = (error: unknown): boolean =>
+  DeepLTimeoutError.is(error) ||
+  (DeepLUpstreamError.is(error) &&
+    error.httpStatus !== undefined &&
+    error.httpStatus >= 500);
 
 /**
  * Reduces an untrusted provider failure to the bounded, durable run contract.
@@ -9,6 +16,10 @@ import type { DocumentTranslationRunErrorCode } from "@/api/lib/document-transla
 export const documentTranslationProviderErrorCode = (
   error: unknown,
 ): DocumentTranslationRunErrorCode => {
+  if (isDeepLProviderUnavailable(error)) {
+    return "provider_unavailable";
+  }
+
   const kind = classifyAIError(error);
   switch (kind) {
     case "provider_unavailable":

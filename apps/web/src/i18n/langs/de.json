@@ -4043,7 +4043,7 @@
       "outputLabel": "Übersetzungsart",
       "progress": "Übersetzungsfortschritt",
       "progressCount": "{completed} von {total} abgeschlossen",
-      "providerUnavailable": "Der Übersetzungsanbieter oder das ausgewählte Modell ist wegen hoher Nachfrage vorübergehend nicht verfügbar. Versuchen Sie es in einigen Minuten erneut.",
+      "providerUnavailable": "Der Übersetzungsdienst ist nicht verfügbar. Versuchen Sie es später erneut oder wenden Sie sich an Ihre Administration.",
       "runFailed": "Die Übersetzung konnte nicht abgeschlossen werden.",
       "selectPlaceholder": "Sprache auswählen",
       "sourceDetected": "Automatisch erkannt. Sie können die Sprache ändern.",

@@ -1,34 +1,32 @@
 import type {
+  DocumentTranslationRunErrorCode,
   DocumentTranslationSourceLanguageCode,
   DocumentTranslationSourceLanguageDetection,
 } from "@stll/api-contract/document-translation";
 
 import type { TranslationKey } from "@/i18n/types";
 
+const DOCUMENT_TRANSLATION_RUN_FAILURE_KEYS = {
+  document_changed: "translate.dialog.runFailed",
+  document_unresolved: "translate.dialog.runFailed",
+  format_validation_failed: "translate.dialog.runFailed",
+  internal: "translate.dialog.runFailed",
+  provider_unavailable: "translate.dialog.providerUnavailable",
+  translation_failed: "translate.dialog.runFailed",
+  unsupported_format: "translate.dialog.runFailed",
+  unsupported_review_markup: "translate.dialog.runFailed",
+} as const satisfies Record<DocumentTranslationRunErrorCode, TranslationKey>;
+
 type DocumentTranslationRunFailureKey =
-  | "translate.dialog.providerUnavailable"
-  | "translate.dialog.runFailed";
+  (typeof DOCUMENT_TRANSLATION_RUN_FAILURE_KEYS)[DocumentTranslationRunErrorCode];
 
 /** Maps the persisted safe error code, never an upstream provider message. */
 export const documentTranslationRunFailureKey = (
-  errorCode: string | null,
-): TranslationKey & DocumentTranslationRunFailureKey => {
-  switch (errorCode) {
-    case "provider_unavailable":
-      return "translate.dialog.providerUnavailable";
-    case null:
-    case "document_changed":
-    case "document_unresolved":
-    case "format_validation_failed":
-    case "internal":
-    case "translation_failed":
-    case "unsupported_format":
-    case "unsupported_review_markup":
-      return "translate.dialog.runFailed";
-    default:
-      return "translate.dialog.runFailed";
-  }
-};
+  errorCode: DocumentTranslationRunErrorCode | null,
+): DocumentTranslationRunFailureKey =>
+  errorCode === null
+    ? "translate.dialog.runFailed"
+    : DOCUMENT_TRANSLATION_RUN_FAILURE_KEYS[errorCode];
 
 type CanStartDocumentTranslationOptions = {
   canUseDeepL: boolean;

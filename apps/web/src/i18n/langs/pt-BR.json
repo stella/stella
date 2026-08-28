@@ -4043,7 +4043,7 @@
       "outputLabel": "Tipo de tradução",
       "progress": "Progresso da tradução",
       "progressCount": "{completed} de {total} concluídos",
-      "providerUnavailable": "O provedor de tradução ou o modelo selecionado está temporariamente indisponível devido à alta demanda. Tente novamente em alguns minutos.",
+      "providerUnavailable": "O serviço de tradução não está disponível. Tente novamente mais tarde ou entre em contato com o administrador.",
       "runFailed": "Não foi possível concluir a tradução.",
       "selectPlaceholder": "Escolha um idioma",
       "sourceDetected": "Detectado automaticamente. Você pode alterar o idioma.",

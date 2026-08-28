@@ -137,6 +137,19 @@ export type DocumentTranslationSourceLanguageDetection =
     }
   | { type: "unknown" };
 
+export const DOCUMENT_TRANSLATION_RUN_ERROR_CODES = [
+  "document_unresolved",
+  "document_changed",
+  "unsupported_format",
+  "unsupported_review_markup",
+  "provider_unavailable",
+  "translation_failed",
+  "format_validation_failed",
+  "internal",
+] as const;
+export type DocumentTranslationRunErrorCode =
+  (typeof DOCUMENT_TRANSLATION_RUN_ERROR_CODES)[number];
+
 export const DOCUMENT_TRANSLATION_DEEPL_MIME_TYPES = [
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

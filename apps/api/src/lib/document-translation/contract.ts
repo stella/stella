@@ -1,5 +1,10 @@
 import type { ConstantMap } from "@/api/lib/constant-map";
 
+export {
+  DOCUMENT_TRANSLATION_RUN_ERROR_CODES,
+  type DocumentTranslationRunErrorCode,
+} from "@stll/api-contract/document-translation";
+
 export const DOCUMENT_TRANSLATION_OUTPUTS = [
   "translated",
   "bilingual",
@@ -52,19 +57,6 @@ export const DOCUMENT_TRANSLATION_RUN_ACTIVE_STATUSES = [
   "assembling",
   "validating",
 ] as const satisfies readonly DocumentTranslationRunStatus[];
-
-export const DOCUMENT_TRANSLATION_RUN_ERROR_CODES = [
-  "document_unresolved",
-  "document_changed",
-  "unsupported_format",
-  "unsupported_review_markup",
-  "provider_unavailable",
-  "translation_failed",
-  "format_validation_failed",
-  "internal",
-] as const;
-export type DocumentTranslationRunErrorCode =
-  (typeof DOCUMENT_TRANSLATION_RUN_ERROR_CODES)[number];
 
 export const DOCUMENT_TRANSLATION_UNIT_STATUSES = [
   "pending",

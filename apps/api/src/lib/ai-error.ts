@@ -109,6 +109,15 @@ export const classifyAIError = (error: unknown): AIErrorKind => {
   if (ChatEmptyCompletionError.is(error)) {
     return "empty_completion";
   }
+  // TanStack wraps provider RUN_ERROR events in a 502 HandlerError. Preserve a
+  // recognised provider cause so a permanent provider response does not look
+  // like a transient transport outage.
+  if (HandlerError.is(error) && error.cause !== undefined) {
+    const causeKind = classifyAIError(error.cause);
+    if (causeKind !== "unknown") {
+      return causeKind;
+    }
+  }
   if (isApiCallError(error)) {
     const statusCode = providerStatusCode(error);
     if (statusCode === 429) {

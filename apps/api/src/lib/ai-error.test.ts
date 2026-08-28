@@ -69,6 +69,16 @@ describe("classifyAIError", () => {
     expect(classifyAIError(error)).toBe("model_unavailable");
   });
 
+  test("prioritizes a provider cause over TanStack's transport wrapper", () => {
+    const error = new HandlerError({
+      cause: apiCallError(404),
+      message: "generation failed",
+      status: 502,
+    });
+
+    expect(classifyAIError(error)).toBe("model_unavailable");
+  });
+
   test("still maps other status codes to their existing kinds", () => {
     expect(classifyAIError(apiCallError(429))).toBe("quota_exhausted");
     expect(classifyAIError(apiCallError(402))).toBe("provider_billing");
