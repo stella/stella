@@ -37,26 +37,31 @@ const describeCause = (
   if (cause === undefined) {
     return undefined;
   }
-  const described: BetterAuthScriptFailureCause = { names: [] };
+  const names: string[] = [];
+  let code: string | undefined;
+  let sqlState: string | undefined;
   let current: unknown = cause;
   for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth += 1) {
     if (!(current instanceof Error)) {
-      described.names.push(typeof current);
+      names.push(typeof current);
       break;
     }
-    described.names.push(current.name);
-    described.code =
-      readToken(current, "code", FIXED_VOCABULARY_CODE) ?? described.code;
-    described.sqlState =
+    names.push(current.name);
+    code = readToken(current, "code", FIXED_VOCABULARY_CODE) ?? code;
+    sqlState =
       readToken(current, "errno", SQLSTATE) ??
       readToken(current, "code", SQLSTATE) ??
-      described.sqlState;
+      sqlState;
     if (current.cause === undefined) {
       break;
     }
     current = current.cause;
   }
-  return described;
+  return {
+    names,
+    ...(code === undefined ? {} : { code }),
+    ...(sqlState === undefined ? {} : { sqlState }),
+  };
 };
 
 export const formatBetterAuthScriptFailure = ({
