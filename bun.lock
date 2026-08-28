@@ -855,7 +855,7 @@
     },
     "packages/workspace-model": {
       "name": "@stll/workspace-model",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
