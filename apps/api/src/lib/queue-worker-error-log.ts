@@ -36,27 +36,57 @@ export const createQueueWorkerErrorLogger = (
 ): ((error: unknown) => void) => {
   let suppressedSinceLastLog = 0;
   let lastLoggedAtMs = 0;
+  let pendingFlush: ReturnType<typeof setTimeout> | null = null;
+  let lastSuppressedError: unknown = undefined;
+
+  const report = (error: unknown, nowMs: number): void => {
+    lastLoggedAtMs = nowMs;
+    const occurrences = suppressedSinceLastLog;
+    suppressedSinceLastLog = 0;
+    logger.error(event, {
+      ...connectionErrorFields(error),
+      ...fields,
+      // Reported as "since the last line" rather than a running total so two
+      // consecutive lines describe two disjoint intervals.
+      occurrencesSinceLastLog: String(occurrences),
+    });
+  };
+
   return (error: unknown): void => {
     if (!isSuppressibleRedisError(error)) {
       logger.error(event, { ...connectionErrorFields(error), ...fields });
       return;
     }
     suppressedSinceLastLog += 1;
+    lastSuppressedError = error;
     const nowMs = Date.now();
+    const sinceLastLog = nowMs - lastLoggedAtMs;
     // The first transient of an episode reports immediately: `lastLoggedAtMs`
     // starts at 0, so the interval has always elapsed. Without that the onset
     // of an outage would be invisible for a whole interval.
-    if (nowMs - lastLoggedAtMs < TRANSIENT_LOG_INTERVAL_MS) {
+    if (sinceLastLog >= TRANSIENT_LOG_INTERVAL_MS) {
+      if (pendingFlush !== null) {
+        clearTimeout(pendingFlush);
+        pendingFlush = null;
+      }
+      report(error, nowMs);
       return;
     }
-    lastLoggedAtMs = nowMs;
-    logger.error(event, {
-      ...connectionErrorFields(error),
-      ...fields,
-      // Reported as "since the last line" rather than a running total so two
-      // consecutive lines describe two disjoint intervals.
-      occurrencesSinceLastLog: String(suppressedSinceLastLog),
-    });
-    suppressedSinceLastLog = 0;
+    if (pendingFlush !== null) {
+      return;
+    }
+    // A disruption that stops inside the interval would otherwise strand every
+    // occurrence after the leading line, so a short outage of thousands would
+    // report "1" forever. The trailing flush is what makes the tally the
+    // signal rather than the first sample; it is unref'd so a pending count
+    // can never hold the process open at shutdown.
+    pendingFlush = setTimeout(() => {
+      pendingFlush = null;
+      if (suppressedSinceLastLog === 0) {
+        return;
+      }
+      report(lastSuppressedError, Date.now());
+    }, TRANSIENT_LOG_INTERVAL_MS - sinceLastLog);
+    pendingFlush.unref();
   };
 };

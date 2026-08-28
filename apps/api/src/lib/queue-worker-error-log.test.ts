@@ -87,6 +87,45 @@ describe("createQueueWorkerErrorLogger", () => {
     },
   );
 
+  test("flushes the tally when the disruption stops inside the interval", async () => {
+    const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
+
+    log(withCode(TRANSIENT));
+    expect(logged).toHaveLength(1);
+    expect(logged[0]?.attributes["occurrencesSinceLastLog"]).toBe("1");
+
+    // Land the burst just short of the boundary so the trailing flush is
+    // scheduled a few ms out and a real timer can run it inside the test.
+    setSystemTime(new Date(START.getTime() + 59_990));
+    for (let i = 0; i < 50_000; i += 1) {
+      log(withCode(TRANSIENT));
+    }
+
+    // Nothing more arrives: without the trailing flush these 50,000 would be
+    // stranded and the episode would read as a single occurrence.
+    expect(logged).toHaveLength(1);
+
+    await Bun.sleep(50);
+
+    expect(logged).toHaveLength(2);
+    expect(logged[1]?.attributes["occurrencesSinceLastLog"]).toBe("50000");
+  });
+
+  test("does not flush an interval that recorded nothing", async () => {
+    const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
+
+    log(withCode(TRANSIENT));
+    setSystemTime(new Date(START.getTime() + 59_990));
+    log(withCode(TRANSIENT));
+
+    await Bun.sleep(50);
+    expect(logged).toHaveLength(2);
+
+    // The flush already drained the count, so no further line is owed.
+    await Bun.sleep(50);
+    expect(logged).toHaveLength(2);
+  });
+
   test("keeps severity and the connection fields on a suppressed report", () => {
     const log = createQueueWorkerErrorLogger(
       "document_review_run.worker_error",
