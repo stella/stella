@@ -100,7 +100,7 @@ const staticStringValue = (
     if (!isAstNode(only) || !isAstNode(only.value)) {
       return null;
     }
-    const cooked = only.value["cooked"];
+    const { cooked } = only.value;
     return typeof cooked === "string" ? cooked : null;
   }
   return null;
@@ -161,7 +161,7 @@ export default eslintCompatPlugin({
               }
               const args = Array.isArray(node.arguments) ? node.arguments : [];
               const name = staticStringValue(args[0], constants);
-              if (name !== null && name.endsWith(SINK_EVENT_SUFFIX)) {
+              if (name?.endsWith(SINK_EVENT_SUFFIX) === true) {
                 context.report({
                   node,
                   messageId: "namedSinkOutsideHelper",
