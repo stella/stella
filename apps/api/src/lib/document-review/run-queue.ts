@@ -70,9 +70,10 @@ import type {
 import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
 import type { ReviewRunPlan } from "@/api/lib/document-review/run-plan";
-import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import { errorTag } from "@/api/lib/errors/utils";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
+import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
@@ -286,12 +287,12 @@ export const initDocumentReviewRunWorker = () => {
       });
     });
 
-    worker.on("error", (error) => {
-      logger.error("document_review_run.worker_error", {
-        ...connectionErrorFields(error),
+    worker.on(
+      "error",
+      createQueueWorkerErrorLogger("document_review_run.worker_error", {
         queueName,
-      });
-    });
+      }),
+    );
     return worker;
   };
 

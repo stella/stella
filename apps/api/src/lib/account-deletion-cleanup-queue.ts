@@ -13,13 +13,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import { detached } from "@/api/lib/detached";
-import {
-  connectionErrorFields,
-  errorSystemFields,
-  errorTag,
-} from "@/api/lib/errors/utils";
+import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { deleteS3Keys } from "@/api/lib/files/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 
 const QUEUE_NAME = "account-deletion-cleanup";
@@ -169,12 +166,10 @@ export const initAccountDeletionCleanupWorker = () => {
     });
   });
 
-  worker.on("error", (error) => {
-    logger.error(
-      "account_deletion_cleanup.worker_error",
-      connectionErrorFields(error),
-    );
-  });
+  worker.on(
+    "error",
+    createQueueWorkerErrorLogger("account_deletion_cleanup.worker_error"),
+  );
 
   const reconcile = () => {
     detached(

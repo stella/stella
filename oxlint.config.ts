@@ -823,6 +823,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-redis-client.ts",
+    "./.oxlint-plugins/queue-worker-error-sink.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
@@ -2641,6 +2642,20 @@ export default defineConfig({
         "no-crypto-random-uuid/no-crypto-random-uuid": "error",
         "no-native-s3-object-read/no-native-s3-object-read": "error",
         "no-native-s3-object-write/no-native-s3-object-write": "error",
+      },
+    },
+    {
+      // A queue worker's `error` event fires once per failed poll, so an
+      // unthrottled sink turns a Valkey disruption into an unbounded run of
+      // identical lines. `createQueueWorkerErrorLogger` bounds it, and the
+      // bound holds only while every handler goes through it: the call sites
+      // are plain callbacks, so nothing but a rule can enforce that.
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/queue-worker-error-sink.fixture.ts",
+      ],
+      rules: {
+        "queue-worker-error-sink/queue-worker-error-sink": "error",
       },
     },
     {

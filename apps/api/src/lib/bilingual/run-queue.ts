@@ -52,10 +52,11 @@ import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-docx-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
-import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import { errorTag } from "@/api/lib/errors/utils";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
+import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
@@ -166,9 +167,10 @@ export const initBilingualRunWorker = () => {
     });
   });
 
-  worker.on("error", (error) => {
-    logger.error("bilingual_run.worker_error", connectionErrorFields(error));
-  });
+  worker.on(
+    "error",
+    createQueueWorkerErrorLogger("bilingual_run.worker_error"),
+  );
 
   const closeReconcile = startNonOverlappingInterval({
     intervalMs: ORPHAN_RECONCILE_INTERVAL_MS,

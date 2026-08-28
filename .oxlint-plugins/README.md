@@ -79,6 +79,7 @@ runtime validation, or integration tests.
 - [`no-direct-ingestion-checkpoint-write`](./no-direct-ingestion-checkpoint-write.ts) (`no-direct-ingestion-checkpoint-write`): keeps checkpoint writes behind the replay-safe ingestion coordination helper.
 - [`no-inline-timestamp-cursor-sql`](./no-inline-timestamp-cursor-sql.ts) (`no-inline-timestamp-cursor-sql`): requires shared timestamp-and-ID cursor predicates instead of hand-written comparison SQL.
 - [`no-naive-timestamp-cast`](./no-naive-timestamp-cast.ts) (`no-naive-timestamp-cast`): rejects timestamp casts that discard or assume timezone semantics.
+- [`queue-worker-error-sink`](./queue-worker-error-sink.ts) (`queue-worker-error-sink`): keeps a queue worker's `error` event on the throttled sink, so a Valkey disruption cannot log one line per failed poll.
 - [`no-offset-pagination`](./no-offset-pagination.ts) (`no-offset-pagination`): prevents offset/skip pagination in scalable application query paths.
 - [`no-spread-input-in-query-key`](./no-spread-input-in-query-key.ts) (`no-spread-input-in-query-key`): prevents whole input objects from silently changing query-key identity as fields evolve.
 - [`no-truncated-timestamp-comparison`](./no-truncated-timestamp-comparison.ts) (`no-truncated-timestamp-comparison`): prevents cursor and ordering comparisons against timestamps truncated below stored precision.

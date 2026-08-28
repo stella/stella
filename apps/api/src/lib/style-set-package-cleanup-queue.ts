@@ -5,8 +5,9 @@ import { rootDb } from "@/api/db/root";
 import { styleSets } from "@/api/db/schema";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
-import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { getS3 } from "@/api/lib/s3";
 import { STYLE_SET_DOWNLOAD_TTL_SECONDS } from "@/api/lib/style-sets";
@@ -165,12 +166,10 @@ export const initStyleSetPackageCleanupWorker = () => {
       "job.available": Boolean(job),
     });
   });
-  worker.on("error", (error) => {
-    logger.error(
-      "style_set_package_cleanup.worker_error",
-      connectionErrorFields(error),
-    );
-  });
+  worker.on(
+    "error",
+    createQueueWorkerErrorLogger("style_set_package_cleanup.worker_error"),
+  );
 
   return worker;
 };
