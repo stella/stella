@@ -25,23 +25,27 @@ const createTokenFixture = async ({
   audience = CLIENT_ID,
   issuer = ISSUER,
   keyId = "fixture-key",
+  lifetimeSeconds = 3600,
   objectId = OBJECT_ID,
   subject = "legacy-pairwise-subject",
+  tenant = TENANT_ID,
 }: {
   audience?: string;
   issuer?: string;
   keyId?: string;
+  lifetimeSeconds?: number;
   objectId?: string;
   subject?: string;
+  tenant?: string;
 } = {}) => {
-  const token = await new SignJWT({ oid: objectId, tid: TENANT_ID })
+  const token = await new SignJWT({ oid: objectId, tid: tenant })
     .setProtectedHeader({ alg: "RS256", kid: keyId })
     .setIssuer(issuer)
     .setAudience(audience)
     .setSubject(subject)
     .setIssuedAt(ISSUED_AT)
     .setNotBefore(ISSUED_AT)
-    .setExpirationTime(ISSUED_AT + 3600)
+    .setExpirationTime(ISSUED_AT + lifetimeSeconds)
     .sign(SIGNING_KEY);
   const getSigningKey: JWTVerifyGetKey = async () => PUBLIC_JWK;
   return { getSigningKey, token };
@@ -342,6 +346,61 @@ describe("deriveBetterAuthMicrosoftIdentityMap", () => {
       expect(result.status).toBe("error");
     },
   );
+
+  test("accepts a personal-account token with a day-long lifetime and non-RFC oid", async () => {
+    const consumerTenant = "9188040d-6c67-4c5b-b112-36a304b66dad";
+    const consumerObjectId = "00000000-0000-0000-1a2b-3c4d5e6f7a8b";
+    const fixture = await createTokenFixture({
+      issuer: `https://login.microsoftonline.com/${consumerTenant}/v2.0`,
+      lifetimeSeconds: 24 * 60 * 60,
+      objectId: consumerObjectId,
+      tenant: consumerTenant,
+    });
+    const result = await deriveBetterAuthMicrosoftIdentityMap({
+      clientId: CLIENT_ID,
+      getSigningKey: retiredSigningKey,
+      now: NOW,
+      sources: [
+        {
+          accountRowId: "account-row",
+          idToken: fixture.token,
+          legacyAccountId: "legacy-pairwise-subject",
+        },
+      ],
+      tenantId: "common",
+    });
+
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value.identityMap.microsoftAccounts).toEqual([
+        {
+          accountId: consumerObjectId,
+          accountRowId: "account-row",
+          issuer: `https://login.microsoftonline.com/${consumerTenant}/v2.0`,
+          legacyAccountId: "legacy-pairwise-subject",
+        },
+      ]);
+    }
+  });
+
+  test("rejects a token whose lifetime exceeds a day", async () => {
+    const fixture = await createTokenFixture({ lifetimeSeconds: 25 * 60 * 60 });
+    const result = await deriveBetterAuthMicrosoftIdentityMap({
+      clientId: CLIENT_ID,
+      getSigningKey: fixture.getSigningKey,
+      now: NOW,
+      sources: [
+        {
+          accountRowId: "account-row",
+          idToken: fixture.token,
+          legacyAccountId: "legacy-pairwise-subject",
+        },
+      ],
+      tenantId: "common",
+    });
+
+    expect(result.status).toBe("error");
+  });
 
   test("rejects a token whose signature fails against a published key", async () => {
     const fixture = await createTokenFixture();

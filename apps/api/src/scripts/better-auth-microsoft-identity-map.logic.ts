@@ -7,7 +7,9 @@ import type { BetterAuthTrustedIdentityMap } from "@/api/scripts/better-auth-mig
 
 const MICROSOFT_AUTHORITY = "https://login.microsoftonline.com";
 const MICROSOFT_ID_TOKEN_ALGORITHM = "RS256";
-const MICROSOFT_ID_TOKEN_MAX_LIFETIME_SECONDS = 2 * 60 * 60;
+// Work and school tokens live about an hour; personal-account tokens are
+// issued for a full day. Bound at the longer documented lifetime.
+const MICROSOFT_ID_TOKEN_MAX_LIFETIME_SECONDS = 24 * 60 * 60;
 const MICROSOFT_ID_TOKEN_CLOCK_TOLERANCE_SECONDS = 60;
 const MICROSOFT_TENANT = {
   COMMON: "common",
@@ -27,6 +29,10 @@ const MICROSOFT_CONSUMER_TENANT_ID = [
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+// Directory object ids share the UUID layout but personal accounts carry a
+// zero-prefixed form that is not RFC 4122, so only the shape is checked.
+const OBJECT_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 export type BetterAuthMicrosoftIdentitySource = {
   accountRowId: string;
@@ -169,7 +175,7 @@ const verifySource = async ({
     typeof tokenTenant !== "string" ||
     !UUID_PATTERN.test(tokenTenant) ||
     typeof objectId !== "string" ||
-    !UUID_PATTERN.test(objectId) ||
+    !OBJECT_ID_PATTERN.test(objectId) ||
     typeof issuedAt !== "number" ||
     typeof notBefore !== "number" ||
     typeof expiresAt !== "number" ||
