@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.1.3
+
+### Patch Changes
+
+- [#2555](https://github.com/stella/stella/pull/2555) [`c25277d`](https://github.com/stella/stella/commit/c25277d7730f0e8e2723ee9637edf0981e85c192) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh generated temperature policies from upstream model metadata.
+
 ## 0.1.2
 
 ### Patch Changes

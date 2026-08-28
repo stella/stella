@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.9.0
+
+### Minor Changes
+
+- [#2533](https://github.com/stella/stella/pull/2533) [`e25afb5`](https://github.com/stella/stella/commit/e25afb5a513b7dc76d8ad692245af452685c4eff) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add typed Group and Sub-group board matrices, reusable swimlane and virtual-cell renderers, atomic drop intents, and persisted board-presentation adapters.
+
 ## 0.8.0
 
 ### Minor Changes
