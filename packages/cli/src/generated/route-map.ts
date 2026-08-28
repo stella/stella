@@ -14608,6 +14608,418 @@ export const generatedRouteMap: RouteNode = {
         fields: {
           kind: "route",
           children: {
+            "kanban-placement-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "fields",
+                  "kanban-placement-update",
+                ],
+                capabilityId: "fields.kanban-placement.update",
+                description:
+                  "Move one entity across writable Kanban axes in one transaction. The request may change a task status, up to two property values, or both.",
+                access: "write",
+                flags: [
+                  {
+                    flag: "--workspace",
+                    prop: "workspace",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-id",
+                    prop: "entityId",
+                    required: true,
+                    part: "body",
+                    partPath: "entityId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--status",
+                    prop: "status",
+                    required: false,
+                    part: "body",
+                    partPath: "status",
+                  },
+                ],
+                inputOnly: ["body.fields"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["entityId", "fields"],
+                      properties: {
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        status: {
+                          minLength: 1,
+                          maxLength: 32,
+                          type: "string",
+                        },
+                        fields: {
+                          maxItems: 2,
+                          type: "array",
+                          items: {
+                            type: "object",
+                            required: ["propertyId", "content"],
+                            properties: {
+                              propertyId: {
+                                minLength: 36,
+                                maxLength: 36,
+                                pattern:
+                                  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                type: "string",
+                              },
+                              content: {
+                                description:
+                                  "The value to set; 'type' must match the property.",
+                                anyOf: [
+                                  {
+                                    type: "object",
+                                    required: ["version", "type", "value"],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        description:
+                                          "Value type; must match the property's value type",
+                                        const: "text",
+                                        type: "string",
+                                      },
+                                      value: {
+                                        type: "string",
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: ["version", "type", "value"],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        description:
+                                          "Value type; must match the property's value type",
+                                        const: "single-select",
+                                        type: "string",
+                                      },
+                                      value: {
+                                        nullable: true,
+                                        anyOf: [
+                                          {
+                                            type: "string",
+                                          },
+                                          {
+                                            type: "null",
+                                          },
+                                        ],
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: ["version", "type", "value"],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        description:
+                                          "Value type; must match the property's value type",
+                                        const: "multi-select",
+                                        type: "string",
+                                      },
+                                      value: {
+                                        type: "array",
+                                        items: {
+                                          minLength: 1,
+                                          type: "string",
+                                        },
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: ["version", "type", "value"],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        description:
+                                          "Value type; must match the property's value type",
+                                        const: "date",
+                                        type: "string",
+                                      },
+                                      value: {
+                                        nullable: true,
+                                        anyOf: [
+                                          {
+                                            format: "date",
+                                            type: "string",
+                                          },
+                                          {
+                                            type: "null",
+                                          },
+                                        ],
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "version",
+                                      "type",
+                                      "value",
+                                      "currency",
+                                    ],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        description:
+                                          "Value type; must match the property's value type",
+                                        const: "int",
+                                        type: "string",
+                                      },
+                                      value: {
+                                        anyOf: [
+                                          {
+                                            format: "integer",
+                                            default: 0,
+                                            type: "string",
+                                          },
+                                          {
+                                            type: "integer",
+                                          },
+                                        ],
+                                      },
+                                      currency: {
+                                        nullable: true,
+                                        anyOf: [
+                                          {
+                                            minLength: 3,
+                                            maxLength: 3,
+                                            pattern: "^[A-Za-z]{3}$",
+                                            description:
+                                              "For int values only: 3-letter ISO currency code, or null",
+                                            type: "string",
+                                          },
+                                          {
+                                            type: "null",
+                                          },
+                                        ],
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "version",
+                                      "type",
+                                      "amountCents",
+                                      "currency",
+                                    ],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        description:
+                                          "Value type; must match the property's value type",
+                                        const: "money",
+                                        type: "string",
+                                      },
+                                      amountCents: {
+                                        description:
+                                          "Amount in the currency's minor units",
+                                        anyOf: [
+                                          {
+                                            format: "integer",
+                                            default: 0,
+                                            type: "string",
+                                          },
+                                          {
+                                            description:
+                                              "Amount in the currency's minor units",
+                                            type: "integer",
+                                          },
+                                        ],
+                                      },
+                                      currency: {
+                                        minLength: 3,
+                                        maxLength: 3,
+                                        pattern: "^[A-Za-z]{3}$",
+                                        description:
+                                          "3-letter ISO currency code",
+                                        type: "string",
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "version",
+                                      "type",
+                                      "userId",
+                                      "name",
+                                      "image",
+                                    ],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        description:
+                                          "Empty person sentinel that clears the property value",
+                                        const: "person",
+                                        type: "string",
+                                      },
+                                      userId: {
+                                        type: "null",
+                                      },
+                                      name: {
+                                        const: "",
+                                        type: "string",
+                                      },
+                                      image: {
+                                        type: "null",
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: [
+                                      "version",
+                                      "type",
+                                      "userId",
+                                      "name",
+                                      "image",
+                                    ],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        description:
+                                          "Value type; must match the property's value type",
+                                        const: "person",
+                                        type: "string",
+                                      },
+                                      userId: {
+                                        nullable: true,
+                                        anyOf: [
+                                          {
+                                            minLength: 1,
+                                            maxLength: 128,
+                                            type: "string",
+                                          },
+                                          {
+                                            type: "null",
+                                          },
+                                        ],
+                                      },
+                                      name: {
+                                        minLength: 1,
+                                        maxLength: 256,
+                                        type: "string",
+                                      },
+                                      image: {
+                                        nullable: true,
+                                        anyOf: [
+                                          {
+                                            maxLength: 2048,
+                                            type: "string",
+                                          },
+                                          {
+                                            type: "null",
+                                          },
+                                        ],
+                                      },
+                                    },
+                                  },
+                                  {
+                                    type: "object",
+                                    required: ["version", "type", "url"],
+                                    properties: {
+                                      version: {
+                                        const: 1,
+                                        type: "number",
+                                      },
+                                      type: {
+                                        const: "clip",
+                                        type: "string",
+                                      },
+                                      url: {
+                                        maxLength: 2048,
+                                        type: "string",
+                                      },
+                                      snippet: {
+                                        maxLength: 10000,
+                                        type: "string",
+                                      },
+                                      citation: {
+                                        maxLength: 1000,
+                                        type: "string",
+                                      },
+                                      jurisdiction: {
+                                        maxLength: 128,
+                                        type: "string",
+                                      },
+                                      sourceType: {
+                                        maxLength: 64,
+                                        type: "string",
+                                      },
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["workspaceId"],
+                    },
+                  },
+                },
+              },
+            },
             "mark-column-flag": {
               kind: "capability-leaf",
               spec: {
@@ -15597,6 +16009,38 @@ export const generatedRouteMap: RouteNode = {
                                   pattern: "^[A-Za-z]{3}$",
                                   description: "3-letter ISO currency code",
                                   type: "string",
+                                },
+                              },
+                            },
+                            {
+                              type: "object",
+                              required: [
+                                "version",
+                                "type",
+                                "userId",
+                                "name",
+                                "image",
+                              ],
+                              properties: {
+                                version: {
+                                  const: 1,
+                                  type: "number",
+                                },
+                                type: {
+                                  description:
+                                    "Empty person sentinel that clears the property value",
+                                  const: "person",
+                                  type: "string",
+                                },
+                                userId: {
+                                  type: "null",
+                                },
+                                name: {
+                                  const: "",
+                                  type: "string",
+                                },
+                                image: {
+                                  type: "null",
                                 },
                               },
                             },
@@ -36792,6 +37236,10 @@ export const generatedRouteMap: RouteNode = {
                                   minLength: 1,
                                   type: "string",
                                 },
+                                subgroupByPropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
                               },
                             },
                             {
@@ -37876,6 +38324,10 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_d21ba6521546",
                                 },
                                 groupByPropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                                subgroupByPropertyId: {
                                   minLength: 1,
                                   type: "string",
                                 },
@@ -39211,6 +39663,10 @@ export const generatedRouteMap: RouteNode = {
                                   $ref: "#/$defs/s_d21ba6521546",
                                 },
                                 groupByPropertyId: {
+                                  minLength: 1,
+                                  type: "string",
+                                },
+                                subgroupByPropertyId: {
                                   minLength: 1,
                                   type: "string",
                                 },
