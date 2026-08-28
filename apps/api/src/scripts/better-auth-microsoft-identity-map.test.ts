@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { errors, exportJWK, generateKeyPair, SignJWT } from "jose";
 import type { JWTVerifyGetKey } from "jose";
 
 import { parseBetterAuthMicrosoftIdentityMapArgs } from "@/api/scripts/better-auth-microsoft-identity-map";
@@ -67,15 +67,18 @@ describe("deriveBetterAuthMicrosoftIdentityMap", () => {
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
       expect(result.value).toEqual({
-        formatVersion: 1,
-        microsoftAccounts: [
-          {
-            accountId: OBJECT_ID,
-            accountRowId: "account-row",
-            issuer: ISSUER,
-            legacyAccountId: "legacy-pairwise-subject",
-          },
-        ],
+        identityMap: {
+          formatVersion: 1,
+          microsoftAccounts: [
+            {
+              accountId: OBJECT_ID,
+              accountRowId: "account-row",
+              issuer: ISSUER,
+              legacyAccountId: "legacy-pairwise-subject",
+            },
+          ],
+        },
+        verification: { signature: 1, "stored-claims": 0 },
       });
     }
   });
@@ -168,8 +171,8 @@ describe("deriveBetterAuthMicrosoftIdentityMap", () => {
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
       expect(result.value).toEqual({
-        formatVersion: 1,
-        microsoftAccounts: [],
+        identityMap: { formatVersion: 1, microsoftAccounts: [] },
+        verification: { signature: 0, "stored-claims": 0 },
       });
     }
   });
@@ -224,6 +227,143 @@ describe("deriveBetterAuthMicrosoftIdentityMap", () => {
     expect(result.status).toBe("error");
     if (result.status === "error") {
       expect(result.error).toBe(infrastructureError);
+    }
+  });
+
+  const retiredSigningKey = async () => {
+    throw new errors.JWKSNoMatchingKey();
+  };
+
+  test("derives the identity from stored claims when the signing key is retired", async () => {
+    const fixture = await createTokenFixture();
+    const result = await deriveBetterAuthMicrosoftIdentityMap({
+      clientId: CLIENT_ID,
+      getSigningKey: retiredSigningKey,
+      now: NOW,
+      sources: [
+        {
+          accountRowId: "account-row",
+          idToken: fixture.token,
+          legacyAccountId: "legacy-pairwise-subject",
+        },
+      ],
+      tenantId: "common",
+    });
+
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value).toEqual({
+        identityMap: {
+          formatVersion: 1,
+          microsoftAccounts: [
+            {
+              accountId: OBJECT_ID,
+              accountRowId: "account-row",
+              issuer: ISSUER,
+              legacyAccountId: "legacy-pairwise-subject",
+            },
+          ],
+        },
+        verification: { signature: 0, "stored-claims": 1 },
+      });
+    }
+  });
+
+  test("counts signature and stored-claims sources separately", async () => {
+    const live = await createTokenFixture({
+      keyId: "live-key",
+      subject: "legacy-one",
+    });
+    const retired = await createTokenFixture({
+      keyId: "retired-key",
+      objectId: "44444444-4444-4444-8444-444444444444",
+      subject: "legacy-two",
+    });
+    const result = await deriveBetterAuthMicrosoftIdentityMap({
+      clientId: CLIENT_ID,
+      getSigningKey: async (header) => {
+        if (header.kid === "live-key") {
+          return PUBLIC_JWK;
+        }
+        throw new errors.JWKSNoMatchingKey();
+      },
+      now: NOW,
+      sources: [
+        {
+          accountRowId: "account-one",
+          idToken: live.token,
+          legacyAccountId: "legacy-one",
+        },
+        {
+          accountRowId: "account-two",
+          idToken: retired.token,
+          legacyAccountId: "legacy-two",
+        },
+      ],
+      tenantId: TENANT_ID,
+    });
+
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.value.verification).toEqual({
+        signature: 1,
+        "stored-claims": 1,
+      });
+      expect(result.value.identityMap.microsoftAccounts).toHaveLength(2);
+    }
+  });
+
+  test.each([
+    ["wrong audience", { audience: "other-client" }, "legacy-pairwise-subject"],
+    [
+      "wrong issuer",
+      { issuer: "https://issuer.example/v2.0" },
+      "legacy-pairwise-subject",
+    ],
+    ["wrong subject", {}, "different-subject"],
+  ])(
+    "still rejects %s when the signing key is retired",
+    async (_name, fixtureOverrides, legacyAccountId) => {
+      const fixture = await createTokenFixture(fixtureOverrides);
+      const result = await deriveBetterAuthMicrosoftIdentityMap({
+        clientId: CLIENT_ID,
+        getSigningKey: retiredSigningKey,
+        now: NOW,
+        sources: [
+          {
+            accountRowId: "account-row",
+            idToken: fixture.token,
+            legacyAccountId,
+          },
+        ],
+        tenantId: "common",
+      });
+
+      expect(result.status).toBe("error");
+    },
+  );
+
+  test("rejects a token whose signature fails against a published key", async () => {
+    const fixture = await createTokenFixture();
+    const { publicKey: otherPublicKey } = await generateKeyPair("RS256");
+    const otherJwk = await exportJWK(otherPublicKey);
+    const result = await deriveBetterAuthMicrosoftIdentityMap({
+      clientId: CLIENT_ID,
+      getSigningKey: async () => otherJwk,
+      now: NOW,
+      sources: [
+        {
+          accountRowId: "account-row",
+          idToken: fixture.token,
+          legacyAccountId: "legacy-pairwise-subject",
+        },
+      ],
+      tenantId: "common",
+    });
+
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.error.code).toBe("token-verification-failed");
     }
   });
 });
