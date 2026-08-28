@@ -1129,6 +1129,11 @@ const ClipboardApp = () => {
           return undefined;
         }
         stopListening = unlisten;
+        // Re-read once the subscription exists: the off-mutex initialization
+        // may have installed history and emitted its one-shot change event
+        // between the first read and this listener, which would otherwise
+        // leave the window stuck on the empty initializing snapshot.
+        readSnapshot();
         return undefined;
       })
       .catch(() => {

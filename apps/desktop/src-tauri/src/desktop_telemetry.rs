@@ -457,12 +457,21 @@ pub fn desktop_report_timing(
   telemetry: State<'_, DesktopTelemetry>,
   startup: State<'_, ClipboardStartupTrace>,
 ) {
-  let open_kind = match report.window {
-    DesktopTelemetryWindow::Clipboard => startup.open_kind(),
-    DesktopTelemetryWindow::Main
-    | DesktopTelemetryWindow::ClipboardEditor
-    | DesktopTelemetryWindow::TakeoverDialog
-    | DesktopTelemetryWindow::SelfHostConnectDialog => None,
+  // The startup trace holds the kind the window was created with, so it only
+  // labels the initial-open spans. A reopen paint is a reopen by definition;
+  // reading the trace would misattribute it to launch or first open.
+  let open_kind = match (report.window, report.span) {
+    (DesktopTelemetryWindow::Clipboard, DesktopTelemetrySpan::ClipboardReopenPaint) => {
+      Some(ClipboardOpenKind::Reopen)
+    }
+    (DesktopTelemetryWindow::Clipboard, _) => startup.open_kind(),
+    (
+      DesktopTelemetryWindow::Main
+      | DesktopTelemetryWindow::ClipboardEditor
+      | DesktopTelemetryWindow::TakeoverDialog
+      | DesktopTelemetryWindow::SelfHostConnectDialog,
+      _,
+    ) => None,
   };
   telemetry.capture_timing(DesktopTimingReport {
     window: report.window,

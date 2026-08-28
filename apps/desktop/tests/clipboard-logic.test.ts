@@ -263,12 +263,15 @@ describe("clipboardRailWindow", () => {
       itemCount: 500,
       scrollLeft: 0,
     });
-    expect(window.start).toBeLessThanOrEqual(499);
+    // The viewport is at the head while the selection is at the tail, so the
+    // window spans both; the point is that neither is left unmounted.
+    expect(window.start).toBe(0);
     expect(window.end).toBe(500);
-    expect(window.end - window.start).toBeLessThan(20);
   });
 
-  test("is bounded for every scroll position and active index", () => {
+  test("always mounts the viewport and the active card", () => {
+    // The viewport range must stay mounted for every scroll offset, otherwise
+    // pointer scrolling reveals an unmounted (blank) region of the rail.
     for (let scrollLeft = 0; scrollLeft <= 50_000; scrollLeft += 731) {
       for (const activeIndex of [0, 1, 7, 8, 9, 250, 498, 499, 900]) {
         const window = clipboardRailWindow({
@@ -279,12 +282,32 @@ describe("clipboardRailWindow", () => {
         });
         expect(window.start).toBeGreaterThanOrEqual(0);
         expect(window.end).toBeLessThanOrEqual(500);
-        expect(window.end - window.start).toBeLessThanOrEqual(6 + 2 * 2);
+
+        const firstVisible = Math.floor(scrollLeft / base.stride);
+        const lastVisible = Math.min(
+          499,
+          firstVisible + Math.ceil(base.viewportWidth / base.stride),
+        );
+        expect(window.start).toBeLessThanOrEqual(firstVisible);
+        expect(window.end).toBeGreaterThan(lastVisible);
+
         const active = Math.min(activeIndex, 499);
         expect(active).toBeGreaterThanOrEqual(window.start);
         expect(active).toBeLessThan(window.end);
       }
     }
+  });
+
+  test("stays bounded to the viewport when the selection is in view", () => {
+    // Pointer scroll keeps the hovered card selected, so the common case keeps
+    // a small window even in a large history.
+    const window = clipboardRailWindow({
+      ...base,
+      activeIndex: 251,
+      itemCount: 500,
+      scrollLeft: 25_000,
+    });
+    expect(window.end - window.start).toBeLessThanOrEqual(6 + 2 * 2);
   });
 
   test("renders a default window before the rail is measured", () => {
