@@ -33,6 +33,7 @@ const schema: KanbanSchema<Row, Property> = {
 
 const group = resolveKanbanGrouping({ groupBy: "_status", schema });
 const subgroup = resolveKanbanGrouping({ groupBy: "owner", schema });
+const testLabel = (...values: readonly unknown[]) => values.join(":");
 const matrix = buildKanbanBoardMatrix({
   group,
   subgroup,
@@ -53,13 +54,20 @@ const renderBoard = (expandEmptyLanes = false) =>
         : {})}
       matrix={matrix}
       renderCell={({ cell, laneValue }) => (
-        <span>{`cell:${laneValue}:${cell.coordinate.column.value}:${cell.rows.length}`}</span>
+        <span>
+          {testLabel(
+            "cell",
+            laneValue,
+            cell.coordinate.column.value,
+            cell.rows.length,
+          )}
+        </span>
       )}
       renderColumnHeader={({ column, count }) => (
-        <span>{`column:${column.value}:${count}`}</span>
+        <span>{testLabel("column", column.value, count)}</span>
       )}
       renderLaneIdentity={({ group: lane, count }) => (
-        <span>{`lane:${lane.value}:${count}`}</span>
+        <span>{testLabel("lane", lane.value, count)}</span>
       )}
     />,
   );

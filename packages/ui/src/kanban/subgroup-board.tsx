@@ -65,26 +65,29 @@ export const KanbanSubgroupBoard = <TRow,>({
     () => new Set<string | null>(),
   );
   const { cellsByLaneValue, countByColumnValue } = useMemo(() => {
-    const cellsByLaneValue = new Map<string | null, KanbanBoardCell<TRow>[]>();
-    const countByColumnValue = new Map<string | null, number>();
+    const laneCells = new Map<string | null, KanbanBoardCell<TRow>[]>();
+    const columnCounts = new Map<string | null, number>();
     for (const cell of matrix.cells) {
-      countByColumnValue.set(
+      columnCounts.set(
         cell.coordinate.column.value,
-        (countByColumnValue.get(cell.coordinate.column.value) ?? 0) +
+        (columnCounts.get(cell.coordinate.column.value) ?? 0) +
           cell.rows.length,
       );
       if (cell.coordinate.lane.type === "none") {
         continue;
       }
       const laneValue = cell.coordinate.lane.group.value;
-      const laneCells = cellsByLaneValue.get(laneValue);
-      if (laneCells) {
-        laneCells.push(cell);
+      const currentLaneCells = laneCells.get(laneValue);
+      if (currentLaneCells) {
+        currentLaneCells.push(cell);
       } else {
-        cellsByLaneValue.set(laneValue, [cell]);
+        laneCells.set(laneValue, [cell]);
       }
     }
-    return { cellsByLaneValue, countByColumnValue };
+    return {
+      cellsByLaneValue: laneCells,
+      countByColumnValue: columnCounts,
+    };
   }, [matrix.cells]);
 
   const setLaneCollapsed = (

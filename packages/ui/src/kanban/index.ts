@@ -73,12 +73,14 @@ export type {
   KanbanBoardMatrix,
   KanbanDropAxisChange,
   KanbanDropIntent,
+  OrderKanbanCellsByColumnsParams,
   ResolveKanbanGroupValueParams,
 } from "./matrix";
 export {
   buildKanbanBoardMatrix,
   createKanbanDropIntent,
   KANBAN_BOARD_AXES,
+  orderKanbanCellsByColumns,
 } from "./matrix";
 export type {
   KanbanSubgroupBoardProps,

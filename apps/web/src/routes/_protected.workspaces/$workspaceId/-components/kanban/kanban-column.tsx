@@ -184,7 +184,7 @@ export const KanbanColumn = ({
 
   const isDraggable = columnValue !== null && onReorderColumn !== undefined;
   const isEntityDragOver = useKanbanEntityDropTarget({
-    elementRef: scrollRef,
+    elementRef: columnRef,
     name: title,
     onDrop,
   });

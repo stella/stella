@@ -23,6 +23,7 @@ import {
   getKanbanGroups,
   isKanbanGroupingRenderable,
   KANBAN_BOARD_AUTO_SCROLL_SOURCES,
+  orderKanbanCellsByColumns,
   registerKanbanBoardAutoScroll,
   resolveKanbanGroupOptions,
 } from "@stll/ui/kanban";
@@ -35,6 +36,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { ClientOperationError } from "@/lib/errors/client";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
 import {
@@ -158,6 +160,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
       const entityId = taskData?.entityId;
       if (taskError || !entityId) {
+        analytics.captureError(
+          taskError ??
+            new ClientOperationError({
+              action: "create-task",
+              message: "Task creation returned no entity ID",
+            }),
+        );
         inspector.closeTab(pendingTaskId);
         stellaToast.add({
           title: t("errors.actionFailed"),
@@ -867,18 +876,16 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           )
       : filteredGroups;
 
-  const visibleColumnValues = new Set(
-    visibleGroups.map((group) => group.value),
-  );
   const visibleSubgroupMatrix =
     subgroupMatrix === null
       ? null
       : {
           ...subgroupMatrix,
           columns: visibleGroups,
-          cells: subgroupMatrix.cells.filter((cell) =>
-            visibleColumnValues.has(cell.coordinate.column.value),
-          ),
+          cells: orderKanbanCellsByColumns({
+            cells: subgroupMatrix.cells,
+            columns: visibleGroups,
+          }),
         };
 
   if (visibleSubgroupMatrix !== null) {

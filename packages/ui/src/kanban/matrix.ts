@@ -65,6 +65,32 @@ export type BuildKanbanBoardMatrixParams<TRow, TProperty> = {
 const optionValueKey = (value: string | null): string =>
   value === null ? "null" : `string:${value.length}:${value}`;
 
+export type OrderKanbanCellsByColumnsParams<TRow> = {
+  cells: readonly KanbanBoardCell<TRow>[];
+  columns: readonly KanbanGroup[];
+};
+
+/** Apply the visible header order to any lane's cells. */
+export const orderKanbanCellsByColumns = <TRow>({
+  cells,
+  columns,
+}: OrderKanbanCellsByColumnsParams<TRow>): KanbanBoardCell<TRow>[] => {
+  const orderByValue = new Map(
+    columns.map((column, index) => [optionValueKey(column.value), index]),
+  );
+  const getColumnOrder = (cell: KanbanBoardCell<TRow>) => {
+    const order = orderByValue.get(
+      optionValueKey(cell.coordinate.column.value),
+    );
+    return order ?? panic("Visible Kanban cell has no column order");
+  };
+  return cells
+    .filter((cell) =>
+      orderByValue.has(optionValueKey(cell.coordinate.column.value)),
+    )
+    .toSorted((left, right) => getColumnOrder(left) - getColumnOrder(right));
+};
+
 const cellKey = ({ column, lane }: KanbanBoardCoordinate): string =>
   `${optionValueKey(column.value)}|${lane.type === "none" ? "none" : optionValueKey(lane.group.value)}`;
 
@@ -117,9 +143,15 @@ export const buildKanbanBoardMatrix = <TRow, TProperty>({
   uncategorizedLabel,
   resolveGroupValue,
 }: BuildKanbanBoardMatrixParams<TRow, TProperty>): KanbanBoardMatrix<TRow> => {
+  if (!isKanbanGroupingRenderable(group)) {
+    return { cells: [], columns: [], lanes: [], rows: [] };
+  }
   const columns = getRenderableGroups(group, uncategorizedLabel);
   const scopedRows = selectKanbanRows(rows, group);
-  const lanes = makeLanes(subgroup, uncategorizedLabel);
+  const hasRenderableSubgroup = isKanbanGroupingRenderable(subgroup);
+  const lanes = hasRenderableSubgroup
+    ? makeLanes(subgroup, uncategorizedLabel)
+    : [{ type: "none" as const }];
   const cells: KanbanBoardCell<TRow>[] = [];
   const cellsByKey = new Map<string, KanbanBoardCell<TRow>>();
 
@@ -137,26 +169,25 @@ export const buildKanbanBoardMatrix = <TRow, TProperty>({
       columns,
       resolveGroupValue({ grouping: group, row }),
     );
-    const lane =
-      subgroup.type === "none"
-        ? { type: "none" as const }
-        : {
-            group: {
-              value: normalizeGroupValue(
-                lanes
-                  .filter(
-                    (
-                      candidate,
-                    ): candidate is { group: KanbanGroup; type: "group" } =>
-                      candidate.type === "group",
-                  )
-                  .map((candidate) => candidate.group),
-                resolveGroupValue({ grouping: subgroup, row }),
-              ),
-              label: "",
-            },
-            type: "group" as const,
-          };
+    const lane = !hasRenderableSubgroup
+      ? { type: "none" as const }
+      : {
+          group: {
+            value: normalizeGroupValue(
+              lanes
+                .filter(
+                  (
+                    candidate,
+                  ): candidate is { group: KanbanGroup; type: "group" } =>
+                    candidate.type === "group",
+                )
+                .map((candidate) => candidate.group),
+              resolveGroupValue({ grouping: subgroup, row }),
+            ),
+            label: "",
+          },
+          type: "group" as const,
+        };
     const column = columns.find((candidate) => candidate.value === columnValue);
     const resolvedLane =
       lane.type === "none"

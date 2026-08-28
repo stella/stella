@@ -10,6 +10,7 @@ import {
   type FileTab,
   type InspectorTab,
   type InspectorTabsStore,
+  type TaskTab,
 } from "@/components/inspector/inspector-store-types";
 import {
   isGenericInspectorTab,
@@ -33,8 +34,12 @@ type InspectorTabsSyncMessage = {
   senderId: string;
   recipientId?: string | undefined;
   updatedAt: number;
-  tabs: InspectorTab[];
+  tabs: InspectorBroadcastTab[];
 };
+
+type InspectorBroadcastTab =
+  | InspectorTab
+  | (Omit<TaskTab, "creationStatus"> & { creationStatus?: undefined });
 
 type InspectorBroadcastMessage =
   | InspectorTabsRequestMessage
@@ -184,7 +189,7 @@ const isActiveSkillContext = (
   );
 };
 
-const isInspectorTab = (value: unknown): value is InspectorTab => {
+const isInspectorTab = (value: unknown): value is InspectorBroadcastTab => {
   if (!isRecord(value)) {
     return false;
   }
@@ -223,7 +228,8 @@ const isInspectorTaskTab = (value: Record<string, unknown>, label: unknown) => {
   const status = value["status"];
   return (
     typeof label === "string" &&
-    (value["creationStatus"] === "pending" ||
+    (value["creationStatus"] === undefined ||
+      value["creationStatus"] === "pending" ||
       value["creationStatus"] === "ready") &&
     typeof value["isNew"] === "boolean" &&
     (status === undefined || status === null || isTaskStatus(status))
@@ -353,6 +359,13 @@ const isInspectorBroadcastMessage = (
   );
 };
 
+const normalizeInspectorBroadcastTab = (
+  tab: InspectorBroadcastTab,
+): InspectorTab =>
+  tab.type === "task" && tab.creationStatus === undefined
+    ? { ...tab, creationStatus: "ready" }
+    : tab;
+
 const createInspectorBroadcastSession = (
   store: StoreApi<InspectorTabsStore>,
   scope: InspectorBroadcastScope,
@@ -430,7 +443,10 @@ const createInspectorBroadcastSession = (
     applyingRemote = true;
     try {
       lastTabsClock = messageClock;
-      applySharedInspectorTabs(store, message.tabs);
+      applySharedInspectorTabs(
+        store,
+        message.tabs.map(normalizeInspectorBroadcastTab),
+      );
     } finally {
       applyingRemote = false;
     }

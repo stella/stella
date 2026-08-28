@@ -126,7 +126,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
   };
 
   return (
-    <div className="flex min-w-0 shrink-0 [scrollbar-width:none] flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1 [-ms-overflow-style:none] md:ms-auto md:flex-wrap md:justify-end md:overflow-visible [&::-webkit-scrollbar]:hidden">
+    <div className="flex min-w-0 shrink-0 flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1 [-ms-overflow-style:none] [scrollbar-width:none] md:ms-auto md:flex-wrap md:justify-end md:overflow-visible [&::-webkit-scrollbar]:hidden">
       <ExtractionRunProgress workspaceId={workspaceId} />
 
       {view.layout.type === "filesystem" && folderState.hasFolders && (
@@ -239,6 +239,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
           <GroupByControl
             allowMultiSelectGrouping
             allowNone
+            excludedPropertyId={getInternalPropertyId("status")}
             groupByPropertyId={view.layout.groupByPropertyId}
             onChange={(groupByPropertyId) =>
               handleUpdate(
@@ -1055,7 +1056,14 @@ const KanbanGroupingSettings = ({
   return (
     <Popover>
       <PopoverTrigger
-        render={<Button size="xs" type="button" variant="outline" />}
+        render={
+          <Button
+            aria-label={t("workspaces.views.viewSettings")}
+            size="xs"
+            type="button"
+            variant="outline"
+          />
+        }
       >
         <Settings2Icon className="size-3.5" />
         <span className="hidden sm:inline">{t("common.settings")}</span>

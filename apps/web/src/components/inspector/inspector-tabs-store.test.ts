@@ -1012,6 +1012,41 @@ describe("Inspector tab broadcast", () => {
     expect(useInspectorTabsStore.getState().activeId).toBe("thread-1");
   });
 
+  test("normalizes task tabs from browser tabs created before creation status existed", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const peer = new FakeBroadcastChannel(
+      getInspectorTabsBroadcastChannelName(scope),
+    );
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    peer.emit({
+      type: "inspector-tabs:sync",
+      senderId: "peer-tab",
+      updatedAt: 1,
+      tabs: [
+        {
+          type: "task",
+          id: "task-1",
+          label: "Existing task",
+          isNew: false,
+          workspaceId: "workspace-1",
+        },
+      ],
+    });
+
+    expect(useInspectorTabsStore.getState().tabs).toEqual([
+      {
+        type: "task",
+        id: "task-1",
+        creationStatus: "ready",
+        label: "Existing task",
+        isNew: false,
+        workspaceId: "workspace-1",
+      },
+    ]);
+  });
+
   test("keeps local active tab when the shared tab set still contains it", () => {
     installFakeBroadcastChannel();
     const scope = { organizationId: "org-1", userId: "user-1" };

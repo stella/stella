@@ -48,7 +48,7 @@ export const WorkspaceKanbanGroupingPicker = <
       }}
       value={value}
     >
-      <SelectTrigger size="sm">
+      <SelectTrigger aria-label={labels.control} size="sm">
         <SelectValue placeholder={labels.placeholder}>{display}</SelectValue>
       </SelectTrigger>
       <SelectPopup>

@@ -65,7 +65,7 @@ describe("kanban board matrix invariants", () => {
         const placed = matrix.cells.flatMap((cell) => cell.rows);
 
         expect(placed).toHaveLength(rows.length);
-        expect(new Set(placed.map((row) => row.id))).toHaveLength(rows.length);
+        expect(new Set(placed.map((row) => row.id)).size).toBe(rows.length);
         for (const cell of matrix.cells) {
           let cursor = 0;
           for (const row of cell.rows) {

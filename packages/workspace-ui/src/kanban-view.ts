@@ -1,14 +1,17 @@
-import type {
-  KanbanBoardCell,
-  KanbanBoardLane,
-  KanbanBoardMatrix,
-  KanbanBuiltInGroup,
-  KanbanGroup,
-  KanbanGroupOption,
-  KanbanGrouping,
-  KanbanSchema,
+import { panic } from "better-result";
+
+import {
+  orderKanbanCellsByColumns,
+  resolveKanbanGrouping,
+  type KanbanBoardCell,
+  type KanbanBoardLane,
+  type KanbanBoardMatrix,
+  type KanbanBuiltInGroup,
+  type KanbanGroup,
+  type KanbanGroupOption,
+  type KanbanGrouping,
+  type KanbanSchema,
 } from "@stll/ui/kanban";
-import { resolveKanbanGrouping } from "@stll/ui/kanban";
 
 import type { GenericProperty } from "./types";
 
@@ -127,6 +130,7 @@ export const getWorkspaceKanbanGroupingChoices = <
 };
 
 export type WorkspaceKanbanGroupingPickerLabels = {
+  control: string;
   none: string;
   placeholder: string;
 };
@@ -292,16 +296,18 @@ export const presentKanbanBoard = <TRow>({
         lane.type === "group" &&
         subgroupState !== null &&
         refersToGroup(subgroupState.collapsedGroups, lane.group);
-      const cells = matrix.cells.filter(
-        (cell) =>
-          columns.some(
-            (column) => column.value === cell.coordinate.column.value,
-          ) &&
-          (lane.type === "none"
+      const cells = orderKanbanCellsByColumns({
+        cells: matrix.cells.filter((cell) =>
+          lane.type === "none"
             ? cell.coordinate.lane.type === "none"
             : cell.coordinate.lane.type === "group" &&
-              cell.coordinate.lane.group.value === lane.group.value),
-      );
+              cell.coordinate.lane.group.value === lane.group.value,
+        ),
+        columns,
+      });
+      if (cells.length !== columns.length) {
+        return panic("Kanban presentation lane is missing a declared cell");
+      }
       return { cells, collapsed, lane };
     });
   return { columns, lanes, matrix };
