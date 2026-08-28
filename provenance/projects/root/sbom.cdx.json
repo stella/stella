@@ -130,6 +130,9 @@
             "location": "apps/web/src/components/docx-preview-zoom.ts#2"
           },
           {
+            "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
           },
           {
@@ -275,9 +278,6 @@
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/track-changes-style.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
@@ -745,7 +745,7 @@
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#2"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-facet-bar.tsx#1"
@@ -770,6 +770,12 @@
           },
           {
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/proposal-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/skill-body-workspace.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
@@ -808,10 +814,10 @@
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#2"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-folio-editor.tsx#1"
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/markdown-icon.tsx#1"
@@ -919,7 +925,7 @@
             "location": "apps/web/src/components/search-dialog.tsx#1"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#2"
+            "location": "apps/web/src/components/search-dialog.tsx#9"
           },
           {
             "location": "apps/web/src/components/search-document-preview.tsx#1"
@@ -959,9 +965,6 @@
           },
           {
             "location": "apps/web/src/components/translate-document-dialog.tsx#9"
-          },
-          {
-            "location": "apps/web/src/components/user-avatar.tsx#1"
           },
           {
             "location": "apps/web/src/components/versions/version-list.tsx#12"
@@ -1148,6 +1151,9 @@
           },
           {
             "location": "apps/web/src/features/style-sets/style-set-preview.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-preview.tsx#2"
           },
           {
             "location": "apps/web/src/lib/analytics/analytics-provider.tsx#1"
@@ -1852,6 +1858,9 @@
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/application-shell.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/bidi-text.tsx#3"
           },
           {
@@ -1985,6 +1994,27 @@
           },
           {
             "location": "packages/ui/src/kanban/column-header.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/review/review-author-avatar.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-comment-card.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-decision-actions.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-diff-text.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-out-of-date-notice.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-status-badge.tsx#1"
           },
           {
             "location": "packages/workspace-ui/src/calculations.tsx#1"
@@ -2475,6 +2505,9 @@
             "location": "apps/web/src/components/drag-and-drop-live-region.tsx#7"
           },
           {
+            "location": "apps/web/src/components/matter-target-picker.tsx#6"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#6"
           },
           {
@@ -2503,6 +2536,9 @@
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#16"
+          },
+          {
+            "location": "apps/web/src/components/matter-target-picker.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#7"
@@ -2594,7 +2630,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1114.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1116.0",
       "description": "AWS SDK for JavaScript Cloudwatch Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2647,13 +2683,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-cloudwatch/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1114.0",
+      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1116.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1114.0"
+      "version": "3.1116.0"
     },
     {
       "authors": [
@@ -2661,7 +2697,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1114.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1116.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2717,13 +2753,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1114.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1116.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1114.0"
+      "version": "3.1116.0"
     },
     {
       "authors": [
@@ -2731,7 +2767,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1114.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1116.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2784,13 +2820,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1114.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1116.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1114.0"
+      "version": "3.1116.0"
     },
     {
       "authors": [
@@ -2798,7 +2834,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1114.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1116.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2851,13 +2887,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1114.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1116.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1114.0"
+      "version": "3.1116.0"
     },
     {
       "authors": [
@@ -2865,7 +2901,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1114.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1116.0",
       "evidence": {
         "identity": [
           {
@@ -2917,13 +2953,13 @@
           "value": "apps/api/node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1114.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1116.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1114.0"
+      "version": "3.1116.0"
     },
     {
       "authors": [
@@ -2993,6 +3029,9 @@
           },
           {
             "location": "apps/web/src/components/docx-preview-zoom.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#1"
           },
           {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
@@ -3140,9 +3179,6 @@
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/track-changes-style.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
@@ -3610,7 +3646,7 @@
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#2"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-facet-bar.tsx#1"
@@ -3635,6 +3671,12 @@
           },
           {
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/proposal-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/skill-body-workspace.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
@@ -3673,10 +3715,10 @@
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#2"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-folio-editor.tsx#1"
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/markdown-icon.tsx#1"
@@ -3784,7 +3826,7 @@
             "location": "apps/web/src/components/search-dialog.tsx#1"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#2"
+            "location": "apps/web/src/components/search-dialog.tsx#9"
           },
           {
             "location": "apps/web/src/components/search-document-preview.tsx#1"
@@ -3824,9 +3866,6 @@
           },
           {
             "location": "apps/web/src/components/translate-document-dialog.tsx#9"
-          },
-          {
-            "location": "apps/web/src/components/user-avatar.tsx#1"
           },
           {
             "location": "apps/web/src/components/versions/version-list.tsx#12"
@@ -4013,6 +4052,9 @@
           },
           {
             "location": "apps/web/src/features/style-sets/style-set-preview.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-preview.tsx#2"
           },
           {
             "location": "apps/web/src/lib/analytics/analytics-provider.tsx#1"
@@ -4717,6 +4759,9 @@
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/application-shell.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/bidi-text.tsx#3"
           },
           {
@@ -4850,6 +4895,27 @@
           },
           {
             "location": "packages/ui/src/kanban/column-header.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/review/review-author-avatar.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-comment-card.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-decision-actions.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-diff-text.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-out-of-date-notice.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-status-badge.tsx#1"
           },
           {
             "location": "packages/workspace-ui/src/calculations.tsx#1"
@@ -5044,6 +5110,135 @@
       "scope": "required",
       "type": "library",
       "version": "1.7.1"
+    },
+    {
+      "authors": [
+        {
+          "name": "Claudéric Demers"
+        }
+      ],
+      "bom-ref": "pkg:npm/@dnd-kit/core@6.3.1",
+      "description": "dnd kit – a lightweight React library for building performant and accessible drag and drop experiences",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@dnd-kit/core/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@dnd-kit/core/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/ui/src/kanban/sortable-edge.ts#1"
+          },
+          {
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#14"
+          },
+          {
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#27"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/clauderic/dnd-kit.git"
+        }
+      ],
+      "group": "@dnd-kit",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "core",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "packages/ui/node_modules/@dnd-kit/core/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@dnd-kit/core/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40dnd-kit/core@6.3.1",
+      "scope": "required",
+      "type": "library",
+      "version": "6.3.1"
+    },
+    {
+      "authors": [
+        {
+          "name": "Claudéric Demers"
+        }
+      ],
+      "bom-ref": "pkg:npm/@dnd-kit/sortable@10.0.0",
+      "description": "Official sortable preset and sensors for dnd kit",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@dnd-kit/sortable/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@dnd-kit/sortable/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#32"
+          },
+          {
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#33"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/clauderic/dnd-kit.git"
+        }
+      ],
+      "group": "@dnd-kit",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "sortable",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "packages/ui/node_modules/@dnd-kit/sortable/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@dnd-kit/sortable/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40dnd-kit/sortable@10.0.0",
+      "scope": "required",
+      "type": "library",
+      "version": "10.0.0"
     },
     {
       "authors": [
@@ -5275,6 +5470,9 @@
             "location": "apps/web/src/components/drag-preview.tsx#12"
           },
           {
+            "location": "packages/ui/src/kanban/fixtures/sortable-interactions.fixture.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/mainview/main.tsx#2"
           },
           {
@@ -5318,6 +5516,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/kanban/fixtures/sortable-interactions.fixture.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#4"
           }
         ]
       },
@@ -6050,6 +6254,127 @@
       "version": "2.0.0"
     },
     {
+      "bom-ref": "pkg:npm/@neftaly/editcontext-polyfill@0.1.1",
+      "description": "Polyfill for the EditContext API",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/web/node_modules/@neftaly/editcontext-polyfill/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/web/node_modules/@neftaly/editcontext-polyfill/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#19"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://neftaly.github.io/editcontext-polyfill/"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/neftaly/editcontext-polyfill.git"
+        }
+      ],
+      "group": "@neftaly",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "editcontext-polyfill",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@neftaly/editcontext-polyfill/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/web/node_modules/@neftaly/editcontext-polyfill/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40neftaly/editcontext-polyfill@0.1.1",
+      "scope": "required",
+      "type": "library",
+      "version": "0.1.1"
+    },
+    {
+      "authors": [
+        {
+          "name": "Amit Gupta (https://solothought.com)"
+        }
+      ],
+      "bom-ref": "pkg:npm/@nodable/entities@3.0.0",
+      "description": "Entity parser for XML, HTML, External entites with security and NCR control",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@nodable/entities/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@nodable/entities/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/markdown/ai-tool.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/markdown/chat-message.ts#2"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/nodable/val-parsers.git"
+        }
+      ],
+      "group": "@nodable",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "entities",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@nodable/entities/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40nodable/entities@3.0.0",
+      "scope": "required",
+      "tags": [
+        "security"
+      ],
+      "type": "library",
+      "version": "3.0.0"
+    },
+    {
       "authors": [
         {
           "name": "OpenTelemetry Authors"
@@ -6309,7 +6634,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/@posthog/react@1.10.3",
+      "bom-ref": "pkg:npm/@posthog/react@1.10.4",
       "description": "Provides components and hooks for React integrations of PostHog.",
       "evidence": {
         "identity": [
@@ -6371,6 +6696,9 @@
           },
           {
             "location": "apps/web/src/components/docx-preview-zoom.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#1"
           },
           {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
@@ -6518,9 +6846,6 @@
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/track-changes-style.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
@@ -6988,7 +7313,7 @@
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#2"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-facet-bar.tsx#1"
@@ -7013,6 +7338,12 @@
           },
           {
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/proposal-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/skill-body-workspace.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
@@ -7051,10 +7382,10 @@
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#2"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-folio-editor.tsx#1"
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/markdown-icon.tsx#1"
@@ -7162,7 +7493,7 @@
             "location": "apps/web/src/components/search-dialog.tsx#1"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#2"
+            "location": "apps/web/src/components/search-dialog.tsx#9"
           },
           {
             "location": "apps/web/src/components/search-document-preview.tsx#1"
@@ -7202,9 +7533,6 @@
           },
           {
             "location": "apps/web/src/components/translate-document-dialog.tsx#9"
-          },
-          {
-            "location": "apps/web/src/components/user-avatar.tsx#1"
           },
           {
             "location": "apps/web/src/components/versions/version-list.tsx#12"
@@ -7391,6 +7719,9 @@
           },
           {
             "location": "apps/web/src/features/style-sets/style-set-preview.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-preview.tsx#2"
           },
           {
             "location": "apps/web/src/lib/analytics/analytics-provider.tsx#1"
@@ -8095,6 +8426,9 @@
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/application-shell.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/bidi-text.tsx#3"
           },
           {
@@ -8230,6 +8564,27 @@
             "location": "packages/ui/src/kanban/column-header.tsx#1"
           },
           {
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/review/review-author-avatar.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-comment-card.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-decision-actions.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-diff-text.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-out-of-date-notice.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-status-badge.tsx#1"
+          },
+          {
             "location": "packages/workspace-ui/src/calculations.tsx#1"
           },
           {
@@ -8276,10 +8631,10 @@
           "value": "apps/web/node_modules/@posthog/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40posthog/react@1.10.3",
+      "purl": "pkg:npm/%40posthog/react@1.10.4",
       "scope": "required",
       "type": "library",
-      "version": "1.10.3"
+      "version": "1.10.4"
     },
     {
       "bom-ref": "pkg:npm/@react-email/components@1.0.12",
@@ -10282,7 +10637,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-devtools@0.10.11",
+      "bom-ref": "pkg:npm/@tanstack/react-devtools@0.10.12",
       "description": "TanStack Devtools is a set of tools for building advanced devtools for your React application.",
       "evidence": {
         "identity": [
@@ -10335,13 +10690,13 @@
           "value": "apps/web/node_modules/@tanstack/react-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-devtools@0.10.11",
+      "purl": "pkg:npm/%40tanstack/react-devtools@0.10.12",
       "scope": "required",
       "tags": [
         "tools"
       ],
       "type": "library",
-      "version": "0.10.11"
+      "version": "0.10.12"
     },
     {
       "authors": [
@@ -10677,6 +11032,9 @@
             "location": "apps/web/src/components/inspector/maximize-tab.ts#1"
           },
           {
+            "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#3"
+          },
+          {
             "location": "apps/web/src/components/templates/use-template-fill-schema.ts#1"
           },
           {
@@ -10798,6 +11156,9 @@
           },
           {
             "location": "apps/web/src/lib/anonymize/use-chat-anonymize.ts#3"
+          },
+          {
+            "location": "apps/web/src/lib/auth-capabilities.ts#1"
           },
           {
             "location": "apps/web/src/lib/auth-queries.ts#1"
@@ -11178,7 +11539,7 @@
             "location": "apps/web/src/components/inspector/file-facets.tsx#3"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#4"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#10"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-panel.tsx#11"
@@ -11190,13 +11551,19 @@
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#10"
           },
           {
+            "location": "apps/web/src/components/inspector/skill-history/proposal-review.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/skill-body-workspace.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#13"
           },
           {
             "location": "apps/web/src/components/matter-number-hint.tsx#1"
           },
           {
-            "location": "apps/web/src/components/matter-target-picker.tsx#3"
+            "location": "apps/web/src/components/matter-target-picker.tsx#8"
           },
           {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#7"
@@ -11235,7 +11602,7 @@
             "location": "apps/web/src/components/search-dialog-results.tsx#3"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#9"
+            "location": "apps/web/src/components/search-dialog.tsx#16"
           },
           {
             "location": "apps/web/src/components/sidebar-user-menu.tsx#1"
@@ -11350,6 +11717,9 @@
           },
           {
             "location": "apps/web/src/features/style-sets/style-set-picker-dialog.tsx#3"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-preview.tsx#4"
           },
           {
             "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#5"
@@ -12057,7 +12427,7 @@
             "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#26"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#5"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#11"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-panel.tsx#12"
@@ -12105,7 +12475,7 @@
             "location": "apps/web/src/components/route-components.tsx#5"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#10"
+            "location": "apps/web/src/components/search-dialog.tsx#17"
           },
           {
             "location": "apps/web/src/components/sidebar-user-menu.tsx#2"
@@ -12966,7 +13336,10 @@
             "location": "apps/web/src/components/bilingual-review-rows.tsx#9"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#11"
+            "location": "apps/web/src/components/search-dialog.tsx#18"
+          },
+          {
+            "location": "apps/web/src/components/search-dialog.tsx#19"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#20"
@@ -14031,6 +14404,9 @@
             "location": "apps/web/src/components/docx-preview-zoom.ts#2"
           },
           {
+            "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
           },
           {
@@ -14176,9 +14552,6 @@
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/track-changes-style.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
@@ -14646,7 +15019,7 @@
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#2"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-facet-bar.tsx#1"
@@ -14671,6 +15044,12 @@
           },
           {
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/proposal-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/skill-body-workspace.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
@@ -14709,10 +15088,10 @@
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#2"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-folio-editor.tsx#1"
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/markdown-icon.tsx#1"
@@ -14820,7 +15199,7 @@
             "location": "apps/web/src/components/search-dialog.tsx#1"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#2"
+            "location": "apps/web/src/components/search-dialog.tsx#9"
           },
           {
             "location": "apps/web/src/components/search-document-preview.tsx#1"
@@ -14860,9 +15239,6 @@
           },
           {
             "location": "apps/web/src/components/translate-document-dialog.tsx#9"
-          },
-          {
-            "location": "apps/web/src/components/user-avatar.tsx#1"
           },
           {
             "location": "apps/web/src/components/versions/version-list.tsx#12"
@@ -15049,6 +15425,9 @@
           },
           {
             "location": "apps/web/src/features/style-sets/style-set-preview.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-preview.tsx#2"
           },
           {
             "location": "apps/web/src/lib/analytics/analytics-provider.tsx#1"
@@ -15753,6 +16132,9 @@
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/application-shell.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/bidi-text.tsx#3"
           },
           {
@@ -15886,6 +16268,27 @@
           },
           {
             "location": "packages/ui/src/kanban/column-header.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/review/review-author-avatar.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-comment-card.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-decision-actions.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-diff-text.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-out-of-date-notice.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-status-badge.tsx#1"
           },
           {
             "location": "packages/workspace-ui/src/calculations.tsx#1"
@@ -16044,7 +16447,7 @@
             "location": "apps/api/src/lib/json-schema/json-schema-to-type.ts#1"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-schema.ts#6"
+            "location": "apps/api/src/lib/tanstack-ai-schema.ts#10"
           },
           {
             "location": "apps/api/src/mcp/valibot-tool-definition.ts#1"
@@ -16159,6 +16562,206 @@
       "scope": "required",
       "type": "library",
       "version": "2.4.28"
+    },
+    {
+      "authors": [
+        {
+          "name": "Microsoft Corporation"
+        }
+      ],
+      "bom-ref": "pkg:npm/@vscode/diff@0.0.2-0",
+      "description": "A high-performance diff algorithm implementation with WASM backend, ported from VS Code",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@vscode/diff/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@vscode/diff/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/docx/diff-paragraphs.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/text-diff.ts#12"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/clause-diff.ts#1"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/microsoft/vscode-packages/tree/main/vscode-diff"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/microsoft/vscode-packages.git"
+        }
+      ],
+      "group": "@vscode",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "diff",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@vscode/diff/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40vscode/diff@0.0.2-0",
+      "scope": "required",
+      "type": "library",
+      "version": "0.0.2-0"
+    },
+    {
+      "bom-ref": "pkg:npm/@vscode/markdown-editor@0.0.2-84",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/web/node_modules/@vscode/markdown-editor/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/web/node_modules/@vscode/markdown-editor/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#13"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#25"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#26"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#27"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#28"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/microsoft/vscode-packages/tree/main/vscode-team-tools/packages/markdown-editor"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/microsoft/vscode-packages.git"
+        }
+      ],
+      "group": "@vscode",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "markdown-editor",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@vscode/markdown-editor/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/web/node_modules/@vscode/markdown-editor/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40vscode/markdown-editor@0.0.2-84",
+      "scope": "required",
+      "type": "library",
+      "version": "0.0.2-84"
+    },
+    {
+      "authors": [
+        {
+          "name": "Microsoft"
+        }
+      ],
+      "bom-ref": "pkg:npm/@vscode/observables@0.1.1-0",
+      "description": "Observable utilities for VS Code",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/web/node_modules/@vscode/observables/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/web/node_modules/@vscode/observables/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#14"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/microsoft/vscode-packages/tree/main/vscode-observables/observables"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/microsoft/vscode-packages.git"
+        }
+      ],
+      "group": "@vscode",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "observables",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@vscode/observables/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/web/node_modules/@vscode/observables/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40vscode/observables@0.1.1-0",
+      "scope": "required",
+      "type": "library",
+      "version": "0.1.1-0"
     },
     {
       "authors": [
@@ -16815,6 +17418,9 @@
             "location": "apps/api/src/handlers/chat/send-message.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/send-message.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/stream-chat.ts#18"
           },
           {
@@ -17038,6 +17644,9 @@
           },
           {
             "location": "apps/api/src/handlers/document-translations/create-run.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/document-translations/prepare.ts#1"
           },
           {
             "location": "apps/api/src/handlers/document-translations/read-run.ts#1"
@@ -17748,6 +18357,21 @@
             "location": "apps/api/src/handlers/sharepoint/status.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/skills/comments/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/comments/delete.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/comments/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/comments/range.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/comments/update.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/skills/create.ts#1"
           },
           {
@@ -17778,6 +18402,27 @@
             "location": "apps/api/src/handlers/skills/list.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/skills/proposals/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/delete.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/from-comments/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/get.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/review.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/update.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/skills/resources/create.ts#1"
           },
           {
@@ -17794,6 +18439,12 @@
           },
           {
             "location": "apps/api/src/handlers/skills/resources/upload.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/revisions/get.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/revisions/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/skills/seed.ts#1"
@@ -17818,6 +18469,9 @@
           },
           {
             "location": "apps/api/src/handlers/style-sets/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/preview-from-editor.ts#1"
           },
           {
             "location": "apps/api/src/handlers/style-sets/read-editor.ts#1"
@@ -18294,9 +18948,6 @@
             "location": "apps/api/src/lib/api-handlers.ts#2"
           },
           {
-            "location": "apps/api/src/lib/audit-log.ts#1"
-          },
-          {
             "location": "apps/api/src/lib/auth.ts#20"
           },
           {
@@ -18450,6 +19101,9 @@
             "location": "apps/api/src/lib/document-translation/segments.ts#1"
           },
           {
+            "location": "apps/api/src/lib/docx/bounded-pattern.ts#21"
+          },
+          {
             "location": "apps/api/src/lib/docx/discover-template.ts#11"
           },
           {
@@ -18538,6 +19192,9 @@
           },
           {
             "location": "apps/api/src/lib/files/utils.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/xlsx-preprocess.ts#1"
           },
           {
             "location": "apps/api/src/lib/flows/flow-executor.ts#1"
@@ -18829,6 +19486,9 @@
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#16"
+          },
+          {
+            "location": "apps/api/src/lib/tanstack-ai-schema.ts#11"
           },
           {
             "location": "apps/api/src/lib/tasks/create-task-entity.ts#1"
@@ -19180,6 +19840,9 @@
           },
           {
             "location": "apps/web/src/features/statutes/provision-diff.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-queries.ts#2"
           },
           {
             "location": "apps/web/src/hooks/use-stick-to-bottom.ts#4"
@@ -19557,6 +20220,9 @@
             "location": "apps/web/src/components/conditions/formula-editor.tsx#3"
           },
           {
+            "location": "apps/web/src/components/document-language-picker.tsx#6"
+          },
+          {
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#4"
           },
           {
@@ -19578,7 +20244,10 @@
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#4"
           },
           {
-            "location": "apps/web/src/components/matter-target-picker.tsx#4"
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#15"
+          },
+          {
+            "location": "apps/web/src/components/matter-target-picker.tsx#9"
           },
           {
             "location": "apps/web/src/components/office/silurus-office-viewer.tsx#4"
@@ -19594,6 +20263,9 @@
           },
           {
             "location": "apps/web/src/components/templates/template-form.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/translate-document-dialog.tsx#13"
           },
           {
             "location": "apps/web/src/components/workspaces/copy-to-matter-dialog.tsx#5"
@@ -19827,7 +20499,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@6.1.2",
+      "bom-ref": "pkg:npm/bullmq@6.2.0",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -19925,10 +20597,10 @@
           "value": "apps/api/node_modules/bullmq/package.json"
         }
       ],
-      "purl": "pkg:npm/bullmq@6.1.2",
+      "purl": "pkg:npm/bullmq@6.2.0",
       "scope": "required",
       "type": "library",
-      "version": "6.1.2"
+      "version": "6.2.0"
     },
     {
       "authors": [
@@ -20291,7 +20963,7 @@
       "version": "2.0.1"
     },
     {
-      "bom-ref": "pkg:npm/crossws@0.4.10",
+      "bom-ref": "pkg:npm/crossws@0.4.12",
       "description": "Cross-platform WebSocket Servers for Node.js, Deno, Bun and Cloudflare Workers",
       "evidence": {
         "identity": [
@@ -20346,10 +21018,10 @@
           "value": "apps/collab/node_modules/crossws/package.json"
         }
       ],
-      "purl": "pkg:npm/crossws@0.4.10",
+      "purl": "pkg:npm/crossws@0.4.12",
       "scope": "required",
       "type": "library",
-      "version": "0.4.10"
+      "version": "0.4.12"
     },
     {
       "bom-ref": "pkg:npm/diff@9.0.0",
@@ -21038,7 +21710,7 @@
             "location": "apps/api/src/handlers/chat/send-message-thread.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/send-message.ts#3"
+            "location": "apps/api/src/handlers/chat/send-message.ts#4"
           },
           {
             "location": "apps/api/src/handlers/chat/stream-chat.ts#19"
@@ -21674,6 +22346,18 @@
             "location": "apps/api/src/handlers/sharepoint/status.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/skills/comments/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/comments/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/comments/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/comments/update.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/skills/create.ts#2"
           },
           {
@@ -21687,6 +22371,24 @@
           },
           {
             "location": "apps/api/src/handlers/skills/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/from-comments/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/get.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/review.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/skills/resources/create.ts#2"
@@ -21705,6 +22407,12 @@
           },
           {
             "location": "apps/api/src/handlers/skills/resources/upload.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/revisions/get.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/revisions/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/skills/seed.ts#2"
@@ -21996,6 +22704,12 @@
           },
           {
             "location": "apps/api/src/lib/agent-auth.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/agent-skills/access.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/agent-skills/revisions.ts#1"
           },
           {
             "location": "apps/api/src/lib/agent-skills/skill-tools.ts#3"
@@ -22403,6 +23117,9 @@
             "location": "apps/api/src/lib/organization-storage-teardown.ts#2"
           },
           {
+            "location": "apps/api/src/lib/pending-upload-keys.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/properties/delete-playbook-columns.ts#17"
           },
           {
@@ -22656,6 +23373,9 @@
           },
           {
             "location": "apps/api/src/mcp/template-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/upload-purpose-gate.ts#1"
           },
           {
             "location": "apps/api/src/scripts/adapter-health.ts#18"
@@ -23971,6 +24691,18 @@
             "location": "apps/api/src/handlers/sharepoint/set-enablement.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/skills/comments/create.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/comments/delete.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/comments/list.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/comments/update.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/skills/create.ts#3"
           },
           {
@@ -23998,6 +24730,27 @@
             "location": "apps/api/src/handlers/skills/list.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/skills/proposals/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/delete.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/from-comments/create.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/get.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/list.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/review.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/proposals/update.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/skills/resources/create.ts#3"
           },
           {
@@ -24014,6 +24767,12 @@
           },
           {
             "location": "apps/api/src/handlers/skills/resources/upload.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/revisions/get.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/revisions/list.ts#3"
           },
           {
             "location": "apps/api/src/handlers/skills/routes.ts#1"
@@ -24388,6 +25147,9 @@
             "location": "apps/api/src/handlers/work-obligations/update.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/work-obligations/update.ts#4"
+          },
+          {
             "location": "apps/api/src/handlers/workspaces/anonymization-allowlist/create.ts#3"
           },
           {
@@ -24631,6 +25393,74 @@
       ],
       "type": "framework",
       "version": "1.4.29"
+    },
+    {
+      "authors": [
+        {
+          "name": "Felix Boehm <me@feedic.com>"
+        }
+      ],
+      "bom-ref": "pkg:npm/entities@4.5.0",
+      "description": "Encode & decode XML and HTML entities with ease & speed",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/api/node_modules/entities/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/api/node_modules/entities/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/markdown/ai-tool.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/markdown/chat-message.ts#2"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "git://github.com/fb55/entities.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-2-Clause",
+            "url": "https://opensource.org/licenses/BSD-2-Clause"
+          }
+        }
+      ],
+      "name": "entities",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/entities/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/api/node_modules/entities/package.json"
+        }
+      ],
+      "purl": "pkg:npm/entities@4.5.0",
+      "scope": "required",
+      "tags": [
+        "decode",
+        "html",
+        "xml"
+      ],
+      "type": "library",
+      "version": "4.5.0"
     },
     {
       "bom-ref": "pkg:npm/expect-type@1.4.0",
@@ -24939,6 +25769,60 @@
     {
       "authors": [
         {
+          "name": "Titus Wormer <tituswormer@gmail.com> (http://wooorm.com)"
+        }
+      ],
+      "bom-ref": "pkg:npm/franc@6.2.0",
+      "description": "Detect the language of text",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/api/node_modules/franc/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/api/node_modules/franc/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/document-translation/source-language.ts#1"
+          }
+        ]
+      },
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "franc",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/franc/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/api/node_modules/franc/package.json"
+        }
+      ],
+      "purl": "pkg:npm/franc@6.2.0",
+      "scope": "required",
+      "type": "library",
+      "version": "6.2.0"
+    },
+    {
+      "authors": [
+        {
           "name": "Michel Weststrate <info@michel.codes>"
         }
       ],
@@ -25148,7 +26032,7 @@
           "name": "Filip Skokan <panva.ip@gmail.com>"
         }
       ],
-      "bom-ref": "pkg:npm/jose@6.2.9",
+      "bom-ref": "pkg:npm/jose@6.2.10",
       "description": "JWA, JWS, JWE, JWT, JWK, JWKS for Node.js, Browser, Cloudflare Workers, Deno, Bun, and other Web-interoperable runtimes",
       "evidence": {
         "identity": [
@@ -25218,13 +26102,13 @@
           "value": "apps/api/node_modules/jose/package.json"
         }
       ],
-      "purl": "pkg:npm/jose@6.2.9",
+      "purl": "pkg:npm/jose@6.2.10",
       "scope": "required",
       "tags": [
         "security"
       ],
       "type": "library",
-      "version": "6.2.9"
+      "version": "6.2.10"
     },
     {
       "authors": [
@@ -25284,7 +26168,7 @@
             "location": "apps/api/src/lib/docx-archive.ts#13"
           },
           {
-            "location": "apps/api/src/lib/files/xlsx-preprocess.ts#1"
+            "location": "apps/api/src/lib/file-scan/archive.ts#13"
           },
           {
             "location": "apps/api/src/lib/skills/skill-package.ts#2"
@@ -25338,6 +26222,71 @@
       "scope": "required",
       "type": "library",
       "version": "3.10.1"
+    },
+    {
+      "bom-ref": "pkg:npm/katex@0.16.47",
+      "description": "Fast math typesetting for the web.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/web/node_modules/katex/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/web/node_modules/katex/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#29"
+          },
+          {
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#29"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://katex.org"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/KaTeX/KaTeX.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "katex",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/katex/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/web/node_modules/katex/package.json"
+        }
+      ],
+      "purl": "pkg:npm/katex@0.16.47",
+      "scope": "required",
+      "tags": [
+        "web"
+      ],
+      "type": "library",
+      "version": "0.16.47"
     },
     {
       "authors": [
@@ -25415,7 +26364,7 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#34"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#40"
+            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#34"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#18"
@@ -25583,7 +26532,7 @@
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#12"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#13"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#19"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-facet-bar.tsx#3"
@@ -25604,6 +26553,15 @@
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#4"
           },
           {
+            "location": "apps/web/src/components/inspector/skill-history/proposal-panel.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/revision-menu.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/skill-body-toolbar.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#3"
           },
           {
@@ -25622,16 +26580,13 @@
             "location": "apps/web/src/components/language-picker.tsx#1"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#3"
-          },
-          {
             "location": "apps/web/src/components/matter-icon.tsx#1"
           },
           {
             "location": "apps/web/src/components/matter-number-hint.tsx#3"
           },
           {
-            "location": "apps/web/src/components/matter-target-picker.tsx#5"
+            "location": "apps/web/src/components/matter-target-picker.tsx#16"
           },
           {
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#8"
@@ -25661,7 +26616,7 @@
             "location": "apps/web/src/components/search-dialog-results.tsx#13"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#12"
+            "location": "apps/web/src/components/search-dialog.tsx#20"
           },
           {
             "location": "apps/web/src/components/search-match-controls.tsx#1"
@@ -25685,7 +26640,7 @@
             "location": "apps/web/src/components/theme-picker.tsx#1"
           },
           {
-            "location": "apps/web/src/components/translate-document-dialog.tsx#13"
+            "location": "apps/web/src/components/translate-document-dialog.tsx#14"
           },
           {
             "location": "apps/web/src/components/versions/version-list.tsx#19"
@@ -26132,7 +27087,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#26"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#27"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx#9"
@@ -26240,6 +27195,9 @@
             "location": "apps/web/src/routes/onboarding/-components/catalogue-detail-preview.tsx#11"
           },
           {
+            "location": "apps/web/src/routes/onboarding/-components/clipboard-workflow-preview.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/onboarding/-components/onboarding-layout.tsx#3"
           },
           {
@@ -26249,7 +27207,7 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#8"
+            "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#3"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#3"
@@ -26325,6 +27283,15 @@
           },
           {
             "location": "packages/ui/src/components/toast.tsx#14"
+          },
+          {
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#34"
+          },
+          {
+            "location": "packages/ui/src/review/review-comment-card.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/review/review-decision-actions.tsx#3"
           },
           {
             "location": "packages/workspace-ui/src/calculations.tsx#3"
@@ -26740,7 +27707,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.418.5",
+      "bom-ref": "pkg:npm/posthog-js@1.418.10",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -26799,10 +27766,10 @@
           "value": "apps/web/node_modules/posthog-js/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.418.5",
+      "purl": "pkg:npm/posthog-js@1.418.10",
       "scope": "required",
       "type": "library",
-      "version": "1.418.5"
+      "version": "1.418.10"
     },
     {
       "authors": [
@@ -26810,7 +27777,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.49.1",
+      "bom-ref": "pkg:npm/posthog-node@5.50.0",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -26859,10 +27826,10 @@
           "value": "apps/api/node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.49.1",
+      "purl": "pkg:npm/posthog-node@5.50.0",
       "scope": "required",
       "type": "library",
-      "version": "5.49.1"
+      "version": "5.50.0"
     },
     {
       "bom-ref": "pkg:npm/prism-react-renderer@2.4.1",
@@ -27514,6 +28481,9 @@
             "location": "apps/web/src/components/drag-preview.tsx#12"
           },
           {
+            "location": "packages/ui/src/kanban/fixtures/sortable-interactions.fixture.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/mainview/main.tsx#2"
           },
           {
@@ -27557,6 +28527,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/kanban/fixtures/sortable-interactions.fixture.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#4"
           }
         ]
       },
@@ -27828,6 +28804,9 @@
             "location": "apps/web/src/components/docx-preview-zoom.ts#2"
           },
           {
+            "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
           },
           {
@@ -27973,9 +28952,6 @@
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/track-changes-style.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/entities.ts#1"
@@ -28443,7 +29419,7 @@
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#2"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-facet-bar.tsx#1"
@@ -28468,6 +29444,12 @@
           },
           {
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/proposal-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/skill-body-workspace.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
@@ -28506,10 +29488,10 @@
             "location": "apps/web/src/components/legal-reader/document-ast-text.tsx#2"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-folio-editor.tsx#1"
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/markdown-icon.tsx#1"
@@ -28617,7 +29599,7 @@
             "location": "apps/web/src/components/search-dialog.tsx#1"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#2"
+            "location": "apps/web/src/components/search-dialog.tsx#9"
           },
           {
             "location": "apps/web/src/components/search-document-preview.tsx#1"
@@ -28657,9 +29639,6 @@
           },
           {
             "location": "apps/web/src/components/translate-document-dialog.tsx#9"
-          },
-          {
-            "location": "apps/web/src/components/user-avatar.tsx#1"
           },
           {
             "location": "apps/web/src/components/versions/version-list.tsx#12"
@@ -28846,6 +29825,9 @@
           },
           {
             "location": "apps/web/src/features/style-sets/style-set-preview.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-preview.tsx#2"
           },
           {
             "location": "apps/web/src/lib/analytics/analytics-provider.tsx#1"
@@ -29550,6 +30532,9 @@
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/application-shell.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/bidi-text.tsx#3"
           },
           {
@@ -29683,6 +30668,27 @@
           },
           {
             "location": "packages/ui/src/kanban/column-header.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/review/review-author-avatar.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-comment-card.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-decision-actions.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-diff-text.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-out-of-date-notice.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/review/review-status-badge.tsx#1"
           },
           {
             "location": "packages/workspace-ui/src/calculations.tsx#1"
@@ -29851,6 +30857,9 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "apps/api/src/lib/document-translation/docx-language.ts#1"
+          },
           {
             "location": "apps/api/src/lib/document-translation/docx-review.ts#2"
           },
@@ -30557,16 +31566,19 @@
             "location": "apps/web/src/components/contact-picker.tsx#6"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#4"
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#20"
           },
           {
             "location": "apps/web/src/components/search-dialog-facets.tsx#4"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#13"
+            "location": "apps/web/src/components/search-dialog.tsx#21"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#3"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-preview.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#16"
@@ -30686,6 +31698,9 @@
           },
           {
             "location": "apps/web/src/components/docx/use-folio-collaboration-session.ts#7"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#4"
           },
           {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#3"
@@ -30814,7 +31829,7 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#35"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#41"
+            "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#35"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#19"
@@ -30991,13 +32006,16 @@
             "location": "apps/web/src/components/desktop-download-buttons.tsx#2"
           },
           {
-            "location": "apps/web/src/components/document-language-picker.tsx#6"
+            "location": "apps/web/src/components/document-language-picker.tsx#7"
           },
           {
             "location": "apps/web/src/components/docx/docx-browser-editor.tsx#25"
           },
           {
             "location": "apps/web/src/components/docx/docx-find-bar.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/drag-and-drop-live-region.tsx#8"
           },
           {
             "location": "apps/web/src/components/empty-screen.tsx#5"
@@ -31048,7 +32066,7 @@
             "location": "apps/web/src/components/inspector/file-facets.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#14"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#20"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-facet-bar.tsx#4"
@@ -31070,6 +32088,21 @@
           },
           {
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/comment-list.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/proposal-panel.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/revision-menu.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/skill-body-toolbar.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/skill-body-workspace.tsx#4"
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#4"
@@ -31099,13 +32132,13 @@
             "location": "apps/web/src/components/legal-reader/outline-jump-field.tsx#1"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#5"
+            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#21"
           },
           {
             "location": "apps/web/src/components/matter-number-hint.tsx#4"
           },
           {
-            "location": "apps/web/src/components/matter-target-picker.tsx#6"
+            "location": "apps/web/src/components/matter-target-picker.tsx#17"
           },
           {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#8"
@@ -31153,7 +32186,7 @@
             "location": "apps/web/src/components/search-dialog-results.tsx#14"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#14"
+            "location": "apps/web/src/components/search-dialog.tsx#22"
           },
           {
             "location": "apps/web/src/components/search-match-controls.tsx#2"
@@ -31186,7 +32219,7 @@
             "location": "apps/web/src/components/theme-picker.tsx#2"
           },
           {
-            "location": "apps/web/src/components/translate-document-dialog.tsx#14"
+            "location": "apps/web/src/components/translate-document-dialog.tsx#15"
           },
           {
             "location": "apps/web/src/components/usage/run-size-confirm-dialog.tsx#1"
@@ -31402,7 +32435,7 @@
             "location": "apps/web/src/features/style-sets/style-set-picker-dialog.tsx#6"
           },
           {
-            "location": "apps/web/src/features/style-sets/style-set-preview.tsx#3"
+            "location": "apps/web/src/features/style-sets/style-set-preview.tsx#6"
           },
           {
             "location": "apps/web/src/lib/pdf/pdf-error-boundary.tsx#4"
@@ -31849,7 +32882,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#27"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#28"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx#10"
@@ -32035,7 +33068,7 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#9"
+            "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#4"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#4"
@@ -32381,6 +33414,9 @@
             "location": "apps/api/src/handlers/skills/generate-draft.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/skills/proposals/from-comments/create.ts#4"
+          },
+          {
             "location": "apps/api/src/handlers/template-recipes/definition.ts#1"
           },
           {
@@ -32510,7 +33546,7 @@
             "location": "apps/api/src/lib/tanstack-ai-models.ts#17"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-schema.ts#7"
+            "location": "apps/api/src/lib/tanstack-ai-schema.ts#12"
           },
           {
             "location": "apps/api/src/lib/template-binding/binding-sources.ts#15"
@@ -32541,6 +33577,9 @@
           },
           {
             "location": "apps/api/src/mcp/api-key-auth.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/auth.ts#3"
           },
           {
             "location": "apps/api/src/mcp/billing-tools.ts#3"
@@ -32834,7 +33873,7 @@
             "location": "apps/web/src/routes/auth/two-factor.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/consent.tsx#11"
+            "location": "apps/web/src/routes/dev.tsx#4"
           },
           {
             "location": "apps/web/src/routes/law/$country/statutes/$documentId.tsx#6"
