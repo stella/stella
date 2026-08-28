@@ -292,7 +292,24 @@ describe("custom oxlint guardrails", () => {
     expect(pluginSource).toContain("useQueryClient().getQueryData");
     expect(pluginSource).toContain("abandoned pending renders");
     expect(reactQuerySource).toContain("ensureRouteInfiniteQueryData");
-    expect(reactQuerySource).toContain("fetchInfiniteQuery");
+    // Scoped to the helper body: the non-critical prefetch also calls
+    // `infiniteQuery`, so a file-wide match would not notice the route-fresh
+    // helper drifting off it.
+    const routeInfiniteStart = reactQuerySource.indexOf(
+      "export const ensureRouteInfiniteQueryData",
+    );
+    expect(routeInfiniteStart).toBeGreaterThan(-1);
+    const routeInfiniteEnd = reactQuerySource.indexOf(
+      "\nexport const ",
+      routeInfiniteStart + 1,
+    );
+    const routeInfiniteHelper = reactQuerySource.slice(
+      routeInfiniteStart,
+      routeInfiniteEnd === -1 ? undefined : routeInfiniteEnd,
+    );
+    expect(routeInfiniteHelper).toContain(
+      "queryClient.infiniteQuery(routeQueryOptions(options))",
+    );
 
     expect(configSource).toContain(
       "./.oxlint-plugins/no-raw-route-query-client.ts",
