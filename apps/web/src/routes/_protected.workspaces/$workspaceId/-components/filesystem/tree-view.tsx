@@ -1496,7 +1496,8 @@ const FilesystemRow = ({
     >
       {isEditing ? (
         <InlineEdit
-          inputClassName="w-48"
+          className="min-w-0 flex-1"
+          inputClassName="min-w-0 flex-1"
           onCancel={cancelEditing}
           onChange={setEditValue}
           onCommit={commitRename}
