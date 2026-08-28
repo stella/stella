@@ -143,7 +143,6 @@ type RowActionsProps = {
   workspaceId: string;
   open?: boolean | undefined;
   onOpenChange?: ((open: boolean) => void) | undefined;
-  onOpen?: (() => void) | undefined;
   onRename?: (() => void) | undefined;
   onSubfolderCreated?:
     | ((entityId: string, parentId: string) => void)
@@ -244,7 +243,6 @@ export const RowActions = ({
   workspaceId,
   open,
   onOpenChange,
-  onOpen,
   onRename,
   onSubfolderCreated,
   triggerClassName,
@@ -369,11 +367,11 @@ export const RowActions = ({
       }
     : undefined;
 
-  const resolvedOnOpen = resolvePreviewHandler({
-    anchor: entity,
+  // Preview opens every selected entity the inspector can render and
+  // focuses the row the menu was opened on.
+  const resolvedOnOpen = openInspectorSelection({
     entities: bulkTargets,
-    isBulk,
-    onOpen,
+    anchor: entity,
     workspaceId,
   });
 
@@ -983,30 +981,6 @@ export const RowActions = ({
       )}
     </Menu>
   );
-};
-
-type ResolvePreviewHandlerArgs = {
-  anchor: WorkspaceEntity;
-  entities: readonly WorkspaceEntity[];
-  isBulk: boolean;
-  onOpen: (() => void) | undefined;
-  workspaceId: string;
-};
-
-/** Preview opens every selected entity the inspector can render and focuses
- *  the row the menu was opened on. `onOpen` overrides a single-entity menu
- *  only; a bulk selection always opens as a whole. */
-const resolvePreviewHandler = ({
-  anchor,
-  entities,
-  isBulk,
-  onOpen,
-  workspaceId,
-}: ResolvePreviewHandlerArgs): (() => void) | undefined => {
-  if (!isBulk && onOpen) {
-    return onOpen;
-  }
-  return openInspectorSelection({ entities, anchor, workspaceId });
 };
 
 const RowOpenMenuActions = ({

@@ -5,6 +5,11 @@ import {
   isFileActiveInMainRoute,
 } from "@/components/chat/entity-route-detect";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import {
+  definedFields,
+  type FileTabSourceField,
+  toFileTab,
+} from "@/components/inspector/open-entities.logic";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -14,19 +19,7 @@ import type { EmailCitationSource } from "@/lib/files/email-citations";
 import type { OfficeCitationSource } from "@/lib/files/office-citations";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
-import type {
-  FieldId,
-  PropertyId,
-  WorkspaceEntity,
-  WorkspaceField,
-  WorkspaceFieldContent,
-} from "@/lib/types";
-
-type EntityFileField = {
-  id: FieldId;
-  propertyId?: PropertyId | undefined;
-  content: WorkspaceFieldContent;
-};
+import type { WorkspaceEntity } from "@/lib/types";
 
 const openDisplayableFile = ({
   entityId,
@@ -36,45 +29,33 @@ const openDisplayableFile = ({
   openInPreview = false,
 }: {
   entityId: string;
-  fields: Iterable<EntityFileField>;
+  fields: Iterable<FileTabSourceField>;
   label: string;
   workspaceId: string;
   openInPreview?: boolean | undefined;
 }) => {
-  const sameAsMainRoute = isEntityActiveInMainRoute(entityId, workspaceId);
-
-  for (const field of fields) {
-    if (field.content.type !== "file" || !isFileDisplayable(field.content)) {
-      continue;
-    }
-
-    useInspectorTabsStore.getState().openFile({
-      id: field.id,
-      entityId,
-      label,
-      fileName: field.content.fileName,
-      mimeType: field.content.mimeType,
-      pdfFileId: field.content.pdfFileId,
-      propertyId: field.propertyId,
-      workspaceId,
-      // The file is already in the main view; don't compete with
-      // it — open the inspector to its metadata view so the
-      // mention click reveals fields/properties instead of
-      // re-rendering the same document.
-      ...(sameAsMainRoute && !openInPreview
-        ? { metadataLane: "expanded" as const }
-        : {}),
-    });
-    return true;
+  const tab = toFileTab({ entityId, fields, label, workspaceId });
+  if (tab === null) {
+    return false;
   }
-
-  return false;
+  const sameAsMainRoute = isEntityActiveInMainRoute(entityId, workspaceId);
+  useInspectorTabsStore.getState().openFile({
+    ...tab,
+    // The file is already in the main view; don't compete with
+    // it — open the inspector to its metadata view so the
+    // mention click reveals fields/properties instead of
+    // re-rendering the same document.
+    ...(sameAsMainRoute && !openInPreview
+      ? { metadataLane: "expanded" as const }
+      : {}),
+  });
+  return true;
 };
 
 type OpenEntityFileFieldArgs = {
   entityId: string;
   fieldId: string;
-  fields: Iterable<EntityFileField>;
+  fields: Iterable<FileTabSourceField>;
   label: string;
   workspaceId: string;
 };
@@ -107,15 +88,6 @@ export const openEntityFileFieldInInspector = ({
   }
   return false;
 };
-
-const toEntityFileFields = (entity: WorkspaceEntity): EntityFileField[] =>
-  Object.values(entity.fields)
-    .filter((field): field is WorkspaceField => field !== undefined)
-    .map((field) => ({
-      id: field.id,
-      propertyId: field.propertyId,
-      content: field.content,
-    }));
 
 type OpenEntityResult =
   | { type: "opened" }
@@ -173,7 +145,7 @@ export const openEntityInInspector = async (
 
     openDisplayableFile({
       entityId,
-      fields: toEntityFileFields(entity),
+      fields: definedFields(entity),
       label,
       workspaceId,
     });

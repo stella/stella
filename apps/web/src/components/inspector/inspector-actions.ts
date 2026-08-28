@@ -1,7 +1,9 @@
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { planInspectorOpen } from "@/components/inspector/open-entities.logic";
-import type { WorkspaceEntity } from "@/lib/types";
+import {
+  type InspectorOpenArgs,
+  planInspectorOpen,
+} from "@/components/inspector/open-entities.logic";
 
 /** Activate a tab, then queue its rename command for the lazy tab consumer. */
 export const requestInspectorRename = (tabId: string): void => {
@@ -9,21 +11,12 @@ export const requestInspectorRename = (tabId: string): void => {
   useInspectorCommandStore.getState().requestRename(tabId);
 };
 
-type InspectorOpenSelectionArgs = {
-  entities: readonly WorkspaceEntity[];
-  /** The row the user acted on; its tab takes focus. */
-  anchor: WorkspaceEntity;
-  workspaceId: string;
-};
-
 /** The open handler for a selection, or undefined when nothing in it can
  *  open (which is what hides the Preview action). */
-export const openInspectorSelection = ({
-  entities,
-  anchor,
-  workspaceId,
-}: InspectorOpenSelectionArgs): (() => void) | undefined => {
-  const plan = planInspectorOpen({ entities, anchor, workspaceId });
+export const openInspectorSelection = (
+  args: InspectorOpenArgs,
+): (() => void) | undefined => {
+  const plan = planInspectorOpen(args);
   if (plan === null) {
     return undefined;
   }
