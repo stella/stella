@@ -4043,6 +4043,7 @@
       "outputLabel": "Fordítás típusa",
       "progress": "Fordítási folyamat",
       "progressCount": "{completed}/{total} elkészült",
+      "providerUnavailable": "A fordítási szolgáltatás nem érhető el. Próbálja újra később, vagy lépjen kapcsolatba a rendszergazdával.",
       "runFailed": "A fordítást nem sikerült befejezni.",
       "selectPlaceholder": "Válasszon nyelvet",
       "sourceDetected": "Automatikusan felismerve. A nyelv módosítható.",

@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { DOCUMENT_TRANSLATION_RUN_ERROR_CODES } from "@stll/api-contract/document-translation";
+
 import {
   canStartDocumentTranslation,
   commentPolicyStateForSource,
+  documentTranslationRunFailureKey,
   resolvedDocumentTranslationSource,
 } from "./translate-document-dialog.logic";
 
@@ -43,6 +46,25 @@ describe("document translation start availability", () => {
       canStartDocumentTranslation({ ...options, hasCommentPolicy: true }),
     ).toBeTrue();
   });
+});
+
+describe("document translation failure copy", () => {
+  test("names a persisted provider availability failure", () => {
+    expect(documentTranslationRunFailureKey("provider_unavailable")).toBe(
+      "translate.dialog.providerUnavailable",
+    );
+  });
+
+  test.each([...DOCUMENT_TRANSLATION_RUN_ERROR_CODES])(
+    "maps persisted $0 errors to intentional copy",
+    (errorCode) => {
+      expect(documentTranslationRunFailureKey(errorCode)).toBe(
+        errorCode === "provider_unavailable"
+          ? "translate.dialog.providerUnavailable"
+          : "translate.dialog.runFailed",
+      );
+    },
+  );
 });
 
 describe("document translation source resolution", () => {

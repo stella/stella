@@ -102,12 +102,31 @@ const providerStatusCodeFromCauseChain = (error: unknown): number | null => {
   return null;
 };
 
-export const classifyAIError = (error: unknown): AIErrorKind => {
+const classifyAIErrorInternal = (
+  error: unknown,
+  seen: Set<object>,
+): AIErrorKind => {
+  if (isRecord(error)) {
+    if (seen.has(error)) {
+      return "unknown";
+    }
+    seen.add(error);
+  }
+
   if (ChatLoopDetectedError.is(error)) {
     return "loop_detected";
   }
   if (ChatEmptyCompletionError.is(error)) {
     return "empty_completion";
+  }
+  // TanStack wraps provider RUN_ERROR events in a 502 HandlerError. Preserve a
+  // recognised provider cause so a permanent provider response does not look
+  // like a transient transport outage.
+  if (HandlerError.is(error) && error.cause !== undefined) {
+    const causeKind = classifyAIErrorInternal(error.cause, seen);
+    if (causeKind !== "unknown") {
+      return causeKind;
+    }
   }
   if (isApiCallError(error)) {
     const statusCode = providerStatusCode(error);
@@ -138,10 +157,13 @@ export const classifyAIError = (error: unknown): AIErrorKind => {
   // mapped HTTP status / UX copy.
   const cause = errorCause(error);
   if (cause !== undefined) {
-    return classifyAIError(cause);
+    return classifyAIErrorInternal(cause, seen);
   }
   return "unknown";
 };
+
+export const classifyAIError = (error: unknown): AIErrorKind =>
+  classifyAIErrorInternal(error, new Set<object>());
 
 /**
  * The provider HTTP status a failure carries, as fingerprint fields.

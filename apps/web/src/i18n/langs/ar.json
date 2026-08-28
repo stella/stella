@@ -4043,6 +4043,7 @@
       "outputLabel": "نوع الترجمة",
       "progress": "تقدم الترجمة",
       "progressCount": "اكتمل {completed} من {total}",
+      "providerUnavailable": "خدمة الترجمة غير متاحة. حاول مرة أخرى لاحقًا أو تواصل مع المسؤول.",
       "runFailed": "تعذّر إكمال الترجمة.",
       "selectPlaceholder": "اختر لغة",
       "sourceDetected": "تم اكتشافها تلقائيًا. يمكنك تغييرها.",

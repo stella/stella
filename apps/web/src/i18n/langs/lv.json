@@ -4043,6 +4043,7 @@
       "outputLabel": "Tulkojuma veids",
       "progress": "Tulkošanas progress",
       "progressCount": "Pabeigts {completed} no {total}",
+      "providerUnavailable": "Tulkošanas pakalpojums nav pieejams. Mēģiniet vēlāk vēlreiz vai sazinieties ar administratoru.",
       "runFailed": "Tulkojumu neizdevās pabeigt.",
       "selectPlaceholder": "Izvēlieties valodu",
       "sourceDetected": "Valoda noteikta automātiski. Varat to mainīt.",

@@ -46,6 +46,7 @@ import {
 import {
   canStartDocumentTranslation,
   commentPolicyStateForSource,
+  documentTranslationRunFailureKey,
   resolvedDocumentTranslationSource,
   type DocumentTranslationCommentPolicy,
   type DocumentTranslationCommentPolicyState,
@@ -300,7 +301,7 @@ export const TranslateDocumentDialog = (
       terminalNotifiedRunRef.current = runId;
       stellaToast.add({
         title: t("translate.error.title"),
-        description: t("translate.dialog.runFailed"),
+        description: t(documentTranslationRunFailureKey(run.errorCode)),
         type: "error",
       });
     }
