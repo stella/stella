@@ -832,3 +832,35 @@ describe("AI provider weekly tool execution contract", () => {
     }
   });
 });
+
+describe("AI provider canary provider rejections", () => {
+  const signal = new AbortController().signal;
+  // Shapes the shared generate path produces from a Bedrock RUN_ERROR.
+  const limit = {
+    message:
+      "The maximum tokens you requested exceeds the model limit of 10000. Try again with a maximum tokens value that is lower than 10000.",
+    status: 502,
+  };
+  const access = {
+    message:
+      "Model access is denied due to IAM user or service role is not authorized to perform the required operation.",
+    status: 502,
+  };
+
+  test("summarises a wrapped preflight rejection with a fixed phrase", () => {
+    expect(errorSummary(limit, signal)).toBe(
+      "provider rejected request (output ceiling above model limit)",
+    );
+    expect(errorSummary(access, signal)).toBe(
+      "provider rejected request (model access denied)",
+    );
+    expect(errorSummary({ error: limit }, signal)).toBe(
+      "provider rejected request (output ceiling above model limit)",
+    );
+  });
+
+  test("does not retry a preflight rejection", () => {
+    expect(isRetryableCanaryError(limit, signal)).toBe(false);
+    expect(isRetryableCanaryError(access, signal)).toBe(false);
+  });
+});

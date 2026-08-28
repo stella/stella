@@ -475,6 +475,59 @@ const credentialRejectionSignature = (
   return null;
 };
 
+// Provider preflight rejections are deterministic for the request shape, so
+// retrying is waste, and the shared generate path wraps them in a 502 whose
+// status says nothing about the cause. Each signature is matched
+// case-insensitively against the message on the error chain and summarised
+// with a fixed phrase; the provider's own text never reaches the log.
+const PROVIDER_REJECTION_SIGNATURES = [
+  ["exceeds the model limit", "output ceiling above model limit"], // bedrock-converse
+  ["model access is denied", "model access denied"], // bedrock-converse
+] as const;
+type ProviderRejectionReason =
+  (typeof PROVIDER_REJECTION_SIGNATURES)[number][1];
+
+const providerRejectionSignature = (
+  value: unknown,
+): ProviderRejectionReason | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.toLowerCase();
+  return (
+    PROVIDER_REJECTION_SIGNATURES.find(([signature]) =>
+      normalized.includes(signature),
+    )?.[1] ?? null
+  );
+};
+
+export const providerRejectionReason = (
+  error: unknown,
+  depth = 0,
+): ProviderRejectionReason | null => {
+  const direct = providerRejectionSignature(error);
+  if (direct !== null) {
+    return direct;
+  }
+  if (!isRecord(error)) {
+    return null;
+  }
+  const message = providerRejectionSignature(error["message"]);
+  if (message !== null) {
+    return message;
+  }
+  if (depth >= 3) {
+    return null;
+  }
+  for (const key of PROVIDER_ERROR_NESTED_KEYS) {
+    const nested = providerRejectionReason(error[key], depth + 1);
+    if (nested !== null) {
+      return nested;
+    }
+  }
+  return null;
+};
+
 const credentialRejectionStatus = (
   status: number | null,
 ): CredentialRejectionReason | null => {
@@ -553,6 +606,11 @@ export const isRetryableCanaryError = (
 
   // A rejected credential fails every remaining attempt identically.
   if (classifyCanaryFailure(error).kind === "credential-rejected") {
+    return false;
+  }
+
+  // So does a preflight rejection of the request shape.
+  if (providerRejectionReason(error) !== null) {
     return false;
   }
 
@@ -1340,6 +1398,11 @@ export const errorSummary = (error: unknown, signal: AbortSignal): string => {
 
   if (classifyCanaryFailure(error).kind === "credential-rejected") {
     return "credential rejected";
+  }
+
+  const rejection = providerRejectionReason(error);
+  if (rejection !== null) {
+    return `provider rejected request (${rejection})`;
   }
 
   if (error instanceof CanaryProviderRunError) {
