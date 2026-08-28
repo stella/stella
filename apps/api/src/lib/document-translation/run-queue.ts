@@ -79,6 +79,7 @@ import {
   buildBilingualFileName,
   resolveTranslatedOutput,
 } from "@/api/lib/document-translation/output";
+import { documentTranslationProviderErrorCode } from "@/api/lib/document-translation/provider-error";
 import {
   applyDocxTranslationSegments,
   DocxTranslationError,
@@ -549,7 +550,7 @@ const translateCommentsWithAI = async (
   comments: readonly DocxCommentTranslationUnit[],
   run: ClaimedRun,
   context: BilingualAIContext,
-): Promise<Result<Map<number, string>, "translation_failed">> => {
+): Promise<Result<Map<number, string>, DocumentTranslationRunErrorCode>> => {
   const translated = new Map<number, string>();
   for (const comment of comments) {
     if (comment.text === "") {
@@ -559,7 +560,7 @@ const translateCommentsWithAI = async (
   const pending = comments.filter((comment) => comment.text !== "");
   const translateNextBatch = async (
     index: number,
-  ): Promise<Result<void, "translation_failed">> => {
+  ): Promise<Result<void, DocumentTranslationRunErrorCode>> => {
     if (index >= pending.length) {
       return Result.ok();
     }
@@ -583,7 +584,7 @@ const translateCommentsWithAI = async (
     });
     if (Result.isError(response)) {
       captureError(response.error, { runId: actor.runId });
-      return Result.err("translation_failed");
+      return Result.err(documentTranslationProviderErrorCode(response.error));
     }
     for (const comment of batch) {
       const tagged = response.value.get(`comment:${comment.id}`);
@@ -607,7 +608,7 @@ const translateCommentsWithDeepL = async (
   comments: readonly DocxCommentTranslationUnit[],
   run: ClaimedRun,
   apiKey: string,
-): Promise<Result<Map<number, string>, "translation_failed">> => {
+): Promise<Result<Map<number, string>, DocumentTranslationRunErrorCode>> => {
   const pending = comments.filter((comment) => comment.text !== "");
   const response = await Result.tryPromise({
     try: async () =>
@@ -622,7 +623,7 @@ const translateCommentsWithDeepL = async (
   });
   if (Result.isError(response)) {
     captureError(response.error, { runId: actor.runId });
-    return Result.err("translation_failed");
+    return Result.err(documentTranslationProviderErrorCode(response.error));
   }
   return mapDeepLCommentTranslations(comments, response.value);
 };
@@ -648,7 +649,7 @@ const translateWithDeepL = async (
   });
   if (Result.isError(translated)) {
     captureError(translated.error, { runId: actor.runId });
-    return Result.err("translation_failed");
+    return Result.err(documentTranslationProviderErrorCode(translated.error));
   }
   const output = resolveTranslatedOutput({
     sourceFileName: run.sourceFileName,
@@ -723,7 +724,7 @@ const translateDocxWithAI = async (
   const translated = new Map<string, string>();
   const translateNextBatch = async (
     index: number,
-  ): Promise<Result<void, "translation_failed">> => {
+  ): Promise<Result<void, DocumentTranslationRunErrorCode>> => {
     if (index >= segments.length) {
       return Result.ok();
     }
@@ -753,7 +754,7 @@ const translateDocxWithAI = async (
     });
     if (Result.isError(result)) {
       captureError(result.error, { runId: actor.runId });
-      return Result.err("translation_failed");
+      return Result.err(documentTranslationProviderErrorCode(result.error));
     }
     const updates: { unitKey: string; targetText: string }[] = [];
     for (const segment of batch) {
@@ -858,7 +859,7 @@ const translateBilingualWithAI = async (
     catch: (cause) => cause,
   });
   if (Result.isError(prepared)) {
-    return Result.err("provider_unavailable");
+    return Result.err(documentTranslationProviderErrorCode(prepared.error));
   }
   const rows: StoredRow[] = prepared.value.rows.map((row) => ({
     ...row,
@@ -897,7 +898,7 @@ const translateBilingualWithAI = async (
   const translated = new Map<string, string>();
   const translateNextBatch = async (
     index: number,
-  ): Promise<Result<void, "translation_failed">> => {
+  ): Promise<Result<void, DocumentTranslationRunErrorCode>> => {
     if (index >= pending.length) {
       return Result.ok();
     }
@@ -927,7 +928,7 @@ const translateBilingualWithAI = async (
       catch: (cause) => cause,
     });
     if (Result.isError(result)) {
-      return Result.err("translation_failed");
+      return Result.err(documentTranslationProviderErrorCode(result.error));
     }
     const updates: { unitKey: string; targetText: string }[] = [];
     for (const row of batch) {

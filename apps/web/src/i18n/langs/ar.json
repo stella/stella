@@ -4043,6 +4043,7 @@
       "outputLabel": "نوع الترجمة",
       "progress": "تقدم الترجمة",
       "progressCount": "اكتمل {completed} من {total}",
+      "providerUnavailable": "موفر الترجمة أو النموذج المحدد غير متاح مؤقتًا بسبب ارتفاع الطلب. حاول مرة أخرى بعد بضع دقائق.",
       "runFailed": "تعذّر إكمال الترجمة.",
       "selectPlaceholder": "اختر لغة",
       "sourceDetected": "تم اكتشافها تلقائيًا. يمكنك تغييرها.",

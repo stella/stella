@@ -4046,6 +4046,7 @@ type Messages = {
       "outputLabel": "Translation type";
       "progress": "Translation progress";
       "progressCount": "{completed} of {total} completed";
+      "providerUnavailable": "The translation provider or selected model is temporarily unavailable because demand is high. Try again in a few minutes.";
       "runFailed": "The translation could not be completed.";
       "selectPlaceholder": "Choose a language";
       "sourceDetected": "Detected automatically. You can change it.";

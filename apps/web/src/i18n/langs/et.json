@@ -4043,6 +4043,7 @@
       "outputLabel": "Tõlke tüüp",
       "progress": "Tõlke edenemine",
       "progressCount": "Valmis {completed} / {total}",
+      "providerUnavailable": "Tõlketeenuse pakkuja või valitud mudel ei ole suure nõudluse tõttu ajutiselt saadaval. Proovige mõne minuti pärast uuesti.",
       "runFailed": "Tõlget ei saanud lõpule viia.",
       "selectPlaceholder": "Valige keel",
       "sourceDetected": "Automaatselt tuvastatud. Saate keelt muuta.",

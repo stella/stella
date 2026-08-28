@@ -4043,6 +4043,7 @@
       "outputLabel": "Vertimo tipas",
       "progress": "Vertimo eiga",
       "progressCount": "Atlikta {completed} iš {total}",
+      "providerUnavailable": "Vertimo teikėjas arba pasirinktas modelis laikinai nepasiekiamas dėl didelės paklausos. Bandykite dar kartą po kelių minučių.",
       "runFailed": "Vertimo nepavyko užbaigti.",
       "selectPlaceholder": "Pasirinkite kalbą",
       "sourceDetected": "Kalba aptikta automatiškai. Galite ją pakeisti.",

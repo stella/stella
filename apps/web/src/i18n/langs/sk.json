@@ -4043,6 +4043,7 @@
       "outputLabel": "Typ prekladu",
       "progress": "Priebeh prekladu",
       "progressCount": "Dokončené {completed} z {total}",
+      "providerUnavailable": "Poskytovateľ prekladu alebo vybraný model je pre vysoký dopyt dočasne nedostupný. Skúste to znova o niekoľko minút.",
       "runFailed": "Preklad sa nepodarilo dokončiť.",
       "selectPlaceholder": "Vyberte jazyk",
       "sourceDetected": "Rozpoznané automaticky. Jazyk môžete zmeniť.",

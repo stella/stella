@@ -3,6 +3,33 @@ import type {
   DocumentTranslationSourceLanguageDetection,
 } from "@stll/api-contract/document-translation";
 
+import type { TranslationKey } from "@/i18n/types";
+
+type DocumentTranslationRunFailureKey =
+  | "translate.dialog.providerUnavailable"
+  | "translate.dialog.runFailed";
+
+/** Maps the persisted safe error code, never an upstream provider message. */
+export const documentTranslationRunFailureKey = (
+  errorCode: string | null,
+): TranslationKey & DocumentTranslationRunFailureKey => {
+  switch (errorCode) {
+    case "provider_unavailable":
+      return "translate.dialog.providerUnavailable";
+    case null:
+    case "document_changed":
+    case "document_unresolved":
+    case "format_validation_failed":
+    case "internal":
+    case "translation_failed":
+    case "unsupported_format":
+    case "unsupported_review_markup":
+      return "translate.dialog.runFailed";
+    default:
+      return "translate.dialog.runFailed";
+  }
+};
+
 type CanStartDocumentTranslationOptions = {
   canUseDeepL: boolean;
   isDeepL: boolean;

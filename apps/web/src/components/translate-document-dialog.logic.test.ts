@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   canStartDocumentTranslation,
   commentPolicyStateForSource,
+  documentTranslationRunFailureKey,
   resolvedDocumentTranslationSource,
 } from "./translate-document-dialog.logic";
 
@@ -42,6 +43,20 @@ describe("document translation start availability", () => {
     expect(
       canStartDocumentTranslation({ ...options, hasCommentPolicy: true }),
     ).toBeTrue();
+  });
+});
+
+describe("document translation failure copy", () => {
+  test("names a persisted provider availability failure", () => {
+    expect(documentTranslationRunFailureKey("provider_unavailable")).toBe(
+      "translate.dialog.providerUnavailable",
+    );
+  });
+
+  test("does not treat an unknown persisted code as provider copy", () => {
+    expect(documentTranslationRunFailureKey("unknown-provider-code")).toBe(
+      "translate.dialog.runFailed",
+    );
   });
 });
 
