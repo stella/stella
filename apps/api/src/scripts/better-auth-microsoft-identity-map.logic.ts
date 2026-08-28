@@ -8,9 +8,13 @@ import type { BetterAuthTrustedIdentityMap } from "@/api/scripts/better-auth-mig
 const MICROSOFT_AUTHORITY = "https://login.microsoftonline.com";
 const MICROSOFT_ID_TOKEN_ALGORITHM = "RS256";
 // Work and school tokens live about an hour; personal-account tokens are
-// issued for a full day. Each class is bounded by its own documented lifetime.
+// issued for a full day. The provider pads both by five minutes of issuance
+// skew (`exp - iat` is 65 minutes and 24 hours 5 minutes respectively), so
+// each class is bounded by its documented lifetime plus that padding.
+const MICROSOFT_ID_TOKEN_ISSUANCE_SKEW_SECONDS = 5 * 60;
 const MICROSOFT_ID_TOKEN_MAX_LIFETIME_SECONDS = 2 * 60 * 60;
-const MICROSOFT_CONSUMER_ID_TOKEN_MAX_LIFETIME_SECONDS = 24 * 60 * 60;
+const MICROSOFT_CONSUMER_ID_TOKEN_MAX_LIFETIME_SECONDS =
+  24 * 60 * 60 + MICROSOFT_ID_TOKEN_ISSUANCE_SKEW_SECONDS;
 const MICROSOFT_ID_TOKEN_CLOCK_TOLERANCE_SECONDS = 60;
 const MICROSOFT_TENANT = {
   COMMON: "common",

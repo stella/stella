@@ -352,7 +352,8 @@ describe("deriveBetterAuthMicrosoftIdentityMap", () => {
     const consumerObjectId = "00000000-0000-0000-1a2b-3c4d5e6f7a8b";
     const fixture = await createTokenFixture({
       issuer: `https://login.microsoftonline.com/${consumerTenant}/v2.0`,
-      lifetimeSeconds: 24 * 60 * 60,
+      // A day plus the provider's five-minute issuance padding.
+      lifetimeSeconds: 24 * 60 * 60 + 5 * 60,
       objectId: consumerObjectId,
       tenant: consumerTenant,
     });
