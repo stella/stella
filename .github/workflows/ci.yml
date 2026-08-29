@@ -193,8 +193,6 @@ jobs:
       - uses: ./.github/actions/setup-bun-workspace
         with:
           repository-checks: "true"
-      - name: Check quarantine expiry annotations
-        run: bun run check:quarantine-expires
       - name: Audit Bun dependencies
         run: bun audit
       - uses: ./.github/actions/setup-rust-ci
