@@ -13,6 +13,7 @@ import {
   FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
   FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
+  folioCollabPresenceColor,
 } from "@stll/api-contract/folio-collab";
 import { FetchBoundaryError } from "@stll/errors";
 import type { DocxEditorCollaboration } from "@stll/folio-react";
@@ -67,7 +68,6 @@ type UseFolioCollaborationRoomOptions = {
   propertyId: string;
   /** Collaborator identity for awareness; null keeps the local editor path. */
   user: {
-    color: string;
     id: string;
     image: string | null;
     name: string;
@@ -199,27 +199,22 @@ export const useFolioCollaborationRoom = ({
   });
 
   const collabUrl = env.VITE_COLLAB_URL;
-  const userColor = user?.color ?? null;
   const userId = user?.id ?? null;
   const userImage = user?.image ?? null;
   const userName = user?.name ?? null;
   const getAwarenessUser = useLatestCallback(() => {
-    if (userColor === null || userId === null || userName === null) {
+    if (userId === null || userName === null) {
       return null;
     }
     return {
-      color: userColor,
+      color: folioCollabPresenceColor(userId),
       id: userId,
       image: userImage,
       name: userName,
     };
   });
   const canConnect =
-    enabled &&
-    collabUrl !== undefined &&
-    userColor !== null &&
-    userId !== null &&
-    userName !== null;
+    enabled && collabUrl !== undefined && userId !== null && userName !== null;
 
   useExternalSyncEffect(() => {
     if (!canConnect) {

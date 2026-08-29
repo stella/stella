@@ -31,7 +31,6 @@ import {
 import type { EditorView } from "prosemirror-view";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { folioCollabPresenceColor } from "@stll/api-contract/folio-collab";
 import {
   FolioUIProvider,
   FormattingBar,
@@ -2049,7 +2048,6 @@ const useDocxBrowserCollaboration = ({
     propertyId,
     user: currentUser
       ? {
-          color: folioCollabPresenceColor(currentUser.id),
           id: currentUser.id,
           image: currentUser.image ?? null,
           name:
