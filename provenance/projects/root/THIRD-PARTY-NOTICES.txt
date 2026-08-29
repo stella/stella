@@ -74,12 +74,12 @@ Project: root
 - @tanstack/react-devtools 0.10.12 — MIT
 - @tanstack/react-form 1.33.5 — MIT
 - @tanstack/react-hotkeys 0.10.0 — MIT
-- @tanstack/react-query 5.101.4 — MIT
-- @tanstack/react-query-devtools 5.101.4 — MIT
-- @tanstack/react-router 1.170.31 — MIT
+- @tanstack/react-query 5.102.0 — MIT
+- @tanstack/react-query-devtools 5.102.0 — MIT
+- @tanstack/react-router 1.170.32 — MIT
 - @tanstack/react-router-devtools 1.167.1 — MIT
 - @tanstack/react-router-ssr-query 1.167.1 — MIT
-- @tanstack/react-start 1.168.48 — MIT
+- @tanstack/react-start 1.168.49 — MIT
 - @tanstack/react-store 0.11.1 — MIT
 - @tanstack/react-table 9.1.2 — MIT
 - @tanstack/react-table-devtools 9.2.0 — MIT
