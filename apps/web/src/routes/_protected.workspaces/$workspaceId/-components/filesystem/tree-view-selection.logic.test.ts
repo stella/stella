@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  getFileRowClickIntent,
   getFolderClickIntent,
   orderSelectedIds,
 } from "./tree-view-selection.logic";
@@ -51,5 +52,38 @@ describe("ordering a selection for bulk open", () => {
     const ordered = ["a", "b", "c"];
     const once = orderSelectedIds(new Set(["a", "b", "c"]), ordered);
     expect(orderSelectedIds(new Set(once), ordered)).toEqual(once);
+  });
+});
+
+describe("file row clicks", () => {
+  test("a plain click always selects, so the range anchor cannot go stale", () => {
+    expect(
+      getFileRowClickIntent({ clickCount: 1, hasMeta: false, hasShift: false }),
+    ).toEqual({
+      type: "select",
+      meta: false,
+      shift: false,
+      snapshotSelection: true,
+    });
+  });
+
+  test("a modifier click selects without snapshotting: it collapses nothing", () => {
+    for (const mods of [
+      { hasMeta: true, hasShift: false },
+      { hasMeta: false, hasShift: true },
+    ]) {
+      expect(getFileRowClickIntent({ clickCount: 1, ...mods })).toEqual({
+        type: "select",
+        meta: mods.hasMeta,
+        shift: mods.hasShift,
+        snapshotSelection: false,
+      });
+    }
+  });
+
+  test("the closing click of a double-click leaves the selection alone", () => {
+    expect(
+      getFileRowClickIntent({ clickCount: 2, hasMeta: false, hasShift: false }),
+    ).toEqual({ type: "keep-selection" });
   });
 });

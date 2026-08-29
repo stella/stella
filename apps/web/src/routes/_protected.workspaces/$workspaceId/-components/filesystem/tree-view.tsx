@@ -92,6 +92,7 @@ import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import { calculateFolderStatistics } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/folder-statistics.logic";
 import type { FolderStatistics } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/folder-statistics.logic";
 import {
+  getFileRowClickIntent,
   getFolderClickIntent,
   orderSelectedIds,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view-selection.logic";
@@ -1626,6 +1627,10 @@ const FilesystemRow = ({
     </>
   );
 
+  // `click` fires before `dblclick` and collapses a multi-row selection onto
+  // this row, so the opening click records the set it is about to collapse.
+  const dblClickSelectionRef = useRef<WorkspaceEntity[] | undefined>(undefined);
+
   // Double-click opens the whole selection, focusing the node clicked. The
   // context menu takes the same path through RowActions' `selectedEntities`.
   const openInInspector = () => {
@@ -1633,7 +1638,8 @@ const FilesystemRow = ({
       return;
     }
     openInspectorSelection({
-      entities: getBulkSelectedEntities() ?? [node],
+      entities: dblClickSelectionRef.current ??
+        getBulkSelectedEntities() ?? [node],
       anchor: node,
       workspaceId,
     })?.();
@@ -1674,15 +1680,27 @@ const FilesystemRow = ({
       className={rowButtonCls}
       onClick={(event) => {
         if (!isFolder) {
-          const meta = event.metaKey || event.ctrlKey;
-          // A plain click on a member of a multi-row selection keeps
-          // it, mirroring right-click, so the `click` before `dblclick`
-          // cannot collapse the selection the double-click opens.
-          if (isBulkSelected && !meta && !event.shiftKey) {
-            return;
+          const intent = getFileRowClickIntent({
+            clickCount: event.detail,
+            hasMeta: event.metaKey || event.ctrlKey,
+            hasShift: event.shiftKey,
+          });
+          switch (intent.type) {
+            case "select":
+              dblClickSelectionRef.current = intent.snapshotSelection
+                ? getBulkSelectedEntities()
+                : undefined;
+              onSelect(node.entityId, {
+                meta: intent.meta,
+                shift: intent.shift,
+              });
+              return;
+            case "keep-selection":
+              return;
+            default:
+              intent satisfies never;
+              return;
           }
-          onSelect(node.entityId, { meta, shift: event.shiftKey });
-          return;
         }
 
         // Shift extends a range like the file rows, taking priority
