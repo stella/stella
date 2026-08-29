@@ -45,6 +45,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Input } from "@stll/ui/input";
+import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@stll/ui/inspector";
 import {
   Menu,
   MenuItem,
@@ -124,7 +125,6 @@ import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
-import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { formatHotkeyForPlatform, NAV_KEY } from "@/lib/hotkeys";
 import { knowledgeSections } from "@/lib/knowledge/navigation";

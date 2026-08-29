@@ -20,34 +20,50 @@ so a bundler keeps only what is imported:
 
 ```tsx
 import { Button } from "@stll/ui/button";
-import { ApplicationShell } from "@stll/ui/application-shell";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { Inspector, InspectorDock } from "@stll/ui/inspector";
 import { cn } from "@stll/ui/utils";
+import { WorkspaceShell } from "@stll/ui/workspace-shell";
 ```
 
 One flat subpath per module: `@stll/ui/<name>` for components, hooks, and
 helpers alike. `@stll/ui` re-exports all of them under one specifier for
 convenience; the subpaths are the real surface, and in-repo code uses those.
 
-## Application shell
+## Workspace shell
 
-`ApplicationShell` keeps the navigation, page chrome and content, and an
-optional inline-end inspector as sibling columns. Pass the host application's
-surfaces as slots; route state, navigation behavior, and inspector behavior
-remain in the host.
+`WorkspaceShell` is the complete desktop and tablet application frame. It
+keeps navigation, sticky top chrome, the active route, and a required
+inline-end dock as sibling surfaces inside one dynamic viewport. Route content
+is the sole scroller, so a feature cannot accidentally render an app inside
+the app.
 
 ```tsx
-import { ApplicationShell } from "@stll/ui/application-shell";
+import { WorkspaceEndRail, WorkspaceShell } from "@stll/ui/workspace-shell";
 
-<ApplicationShell
-  header={<PageHeader />}
-  inspector={<InspectorDock />}
-  sidebar={<Navigation />}
+<WorkspaceShell
+  endDock={
+    <WorkspaceEndRail
+      chatAction={{
+        label: "New chat",
+        onActivate: openChat,
+        status: "enabled",
+      }}
+      label="Workspace inspector"
+      topAction={<InspectorToggle />}
+    />
+  }
+  navigation={<Navigation />}
+  topBar={<WorkspaceHeader />}
 >
-  <Page />
-</ApplicationShell>;
+  <Workspace />
+</WorkspaceShell>;
 ```
+
+`WorkspaceEndRail` owns the 48px rail, 44px touch targets, scrolling tab
+region, and permanent bottom chat position. Its chat action is a discriminated
+union: a host must wire an enabled action or expose a reasoned, fail-closed
+unavailable state.
 
 ### Deprecated grouped subpaths
 

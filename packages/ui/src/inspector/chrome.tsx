@@ -75,13 +75,44 @@ export const InspectorRailCell = ({
   />
 );
 
+/** Scroll owner for rail tabs and other middle actions. */
+export const InspectorRailContent = ({
+  className,
+  ...props
+}: React.ComponentProps<"div">) => (
+  <div
+    className={cn(
+      "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain",
+      className,
+    )}
+    data-slot="inspector-rail-content"
+    {...props}
+  />
+);
+
+/** Permanent inline-end action row, normally the new-chat affordance. */
+export const InspectorRailFooter = ({
+  className,
+  ...props
+}: React.ComponentProps<"div">) => (
+  <div
+    className={cn(
+      "flex w-full shrink-0 items-center justify-center border-t",
+      TOOLBAR_ROW_HEIGHT,
+      className,
+    )}
+    data-slot="inspector-rail-footer"
+    {...props}
+  />
+);
+
 export const InspectorRailIconButton = ({
   className,
   ...props
 }: React.ComponentProps<"button">) => (
   <button
     className={cn(
-      "text-muted-foreground hover:bg-accent hover:text-foreground flex items-center justify-center rounded-md transition-colors",
+      "text-muted-foreground hover:bg-accent hover:text-foreground flex items-center justify-center rounded-md outline-hidden transition-colors focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50",
       SIDE_RAIL_ICON_BUTTON_SIZE,
       className,
     )}

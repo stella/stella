@@ -22,6 +22,8 @@ export {
   InspectorPropertyValue,
   InspectorRail,
   InspectorRailCell,
+  InspectorRailContent,
+  InspectorRailFooter,
   InspectorRailIconButton,
   InspectorRailTab,
   InspectorSection,

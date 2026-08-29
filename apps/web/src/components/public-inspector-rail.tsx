@@ -1,79 +1,53 @@
 import type { ReactNode } from "react";
 
-import { useRouterState } from "@tanstack/react-router";
-import { MessageSquarePlusIcon, PanelRightIcon } from "lucide-react";
+import { PanelRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { InspectorRailIconButton, SIDE_RAIL_WIDTH } from "@stll/ui/inspector";
 import { cn } from "@stll/ui/utils";
+import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 
 import Tooltip from "@/components/tooltip";
-import {
-  SIDE_RAIL_CONTAINER_CLASS,
-  SIDE_RAIL_ICON_BUTTON_SIZE,
-  SIDE_RAIL_WIDTH,
-  TOOLBAR_ROW_HEIGHT,
-} from "@/lib/consts";
 
 /** Reading width of an expanded public inspector pane, in pixels. */
 export const PUBLIC_INSPECTOR_PANE_WIDTH = 420;
 
 /**
- * Anonymous twin of the inspector side rail: same geometry and chrome as the
- * authenticated rail, with every affordance routed to sign-in.
+ * Public twin of the inspector side rail: same geometry and chrome as the
+ * authenticated rail, with every affordance routed by the host.
  */
 export const PublicInspectorRail = ({
-  requestSignIn,
+  onActivate,
 }: {
-  requestSignIn: (redirectTo: string) => void;
+  onActivate: () => void;
 }) => {
   const t = useTranslations();
-  const currentHref = useRouterState({
-    select: (state) => state.location.href,
-  });
-
-  const railButton = ({ icon, label, edgeClass }: RailButtonOptions) => (
-    <div
-      className={cn(
-        "flex w-full shrink-0 items-center justify-center",
-        edgeClass,
-        TOOLBAR_ROW_HEIGHT,
-      )}
-    >
-      <Tooltip
-        content={label}
-        render={
-          <button
-            aria-label={label}
-            className={cn(
-              "text-muted-foreground hover:bg-accent hover:text-foreground flex items-center justify-center rounded-md transition-colors",
-              SIDE_RAIL_ICON_BUTTON_SIZE,
-            )}
-            onClick={() => requestSignIn(currentHref)}
-            type="button"
-          />
-        }
-      >
-        {icon}
-      </Tooltip>
-    </div>
-  );
 
   return (
     <PublicInspectorDock>
       <div className="bg-background flex h-full shadow-lg">
-        <div className={SIDE_RAIL_CONTAINER_CLASS}>
-          {railButton({
-            icon: <PanelRightIcon className="size-4" />,
-            label: t("inspector.showPane"),
-            edgeClass: "border-b",
-          })}
-          <div className="flex-1" />
-          {railButton({
-            icon: <MessageSquarePlusIcon className="size-4" />,
+        <WorkspaceEndRail
+          chatAction={{
             label: t("inspector.openChat"),
-            edgeClass: "border-t",
-          })}
-        </div>
+            onActivate,
+            status: "enabled",
+          }}
+          className="h-full"
+          label={t("inspector.title")}
+          topAction={
+            <Tooltip
+              content={t("inspector.showPane")}
+              render={
+                <InspectorRailIconButton
+                  aria-label={t("inspector.showPane")}
+                  onClick={onActivate}
+                />
+              }
+            >
+              <PanelRightIcon className="size-4" />
+            </Tooltip>
+          }
+        />
       </div>
     </PublicInspectorDock>
   );
@@ -117,10 +91,4 @@ export const PublicInspectorDock = ({
       </div>
     </div>
   );
-};
-
-type RailButtonOptions = {
-  icon: ReactNode;
-  label: string;
-  edgeClass: string;
 };

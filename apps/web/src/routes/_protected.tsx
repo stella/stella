@@ -17,8 +17,11 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { ApplicationShell } from "@stll/ui/application-shell";
 import { Button } from "@stll/ui/button";
+import {
+  SIDE_RAIL_ICON_BUTTON_SIZE,
+  SIDE_RAIL_WIDTH,
+} from "@stll/ui/inspector";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
 import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "@stll/ui/sheet";
@@ -26,6 +29,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/toast";
 import { useViewportWidth } from "@stll/ui/use-viewport-width";
 import { cn } from "@stll/ui/utils";
+import { WorkspaceEndRail, WorkspaceShell } from "@stll/ui/workspace-shell";
 
 import { ApiVersionMismatchBanner } from "@/components/api-version-mismatch-banner";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -57,11 +61,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { roleOptions } from "@/lib/auth-queries";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
-import {
-  SIDE_RAIL_ICON_BUTTON_SIZE,
-  SIDE_RAIL_WIDTH,
-  TOOLBAR_ROW_HEIGHT,
-} from "@/lib/consts";
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
@@ -90,50 +90,34 @@ const LazyInspectorPanel = lazy(
 // "new chat") so the rail doesn't render as an empty strip during
 // the lazy chunk fetch. Buttons are inert; they activate once the
 // real panel mounts.
-const InspectorRailFallback = () => (
-  <div className="bg-background flex h-full border-s shadow-lg">
-    <div
-      className={cn(
-        "bg-muted/50 flex shrink-0 flex-col border-e",
-        SIDE_RAIL_WIDTH,
-      )}
-    >
-      <div
-        aria-hidden="true"
-        className={cn(
-          "text-muted-foreground flex w-full shrink-0 items-center justify-center border-b",
-          TOOLBAR_ROW_HEIGHT,
-        )}
-      >
-        <span
-          className={cn(
-            "flex items-center justify-center",
-            SIDE_RAIL_ICON_BUTTON_SIZE,
-          )}
-        >
-          <PanelRightIcon className="size-4" />
-        </span>
-      </div>
-      <div className="flex-1" />
-      <div
-        aria-hidden="true"
-        className={cn(
-          "text-muted-foreground flex w-full shrink-0 items-center justify-center border-t",
-          TOOLBAR_ROW_HEIGHT,
-        )}
-      >
-        <span
-          className={cn(
-            "flex items-center justify-center",
-            SIDE_RAIL_ICON_BUTTON_SIZE,
-          )}
-        >
-          <MessageSquarePlusIcon className="size-4" />
-        </span>
-      </div>
+const InspectorRailFallback = () => {
+  const t = useTranslations();
+
+  return (
+    <div className="bg-background flex h-full border-s shadow-lg">
+      <WorkspaceEndRail
+        chatAction={{
+          label: t("chat.newChat"),
+          reason: t("common.loading"),
+          status: "unavailable",
+        }}
+        className="h-full"
+        label={t("inspector.title")}
+        topAction={
+          <span
+            aria-hidden="true"
+            className={cn(
+              "text-muted-foreground flex items-center justify-center",
+              SIDE_RAIL_ICON_BUTTON_SIZE,
+            )}
+          >
+            <PanelRightIcon className="size-4" />
+          </span>
+        }
+      />
     </div>
-  </div>
-);
+  );
+};
 
 const MobileInspectorFallback = () => (
   <div className="bg-background flex h-full min-w-0 flex-col">
@@ -376,13 +360,13 @@ function ProtectedComponent() {
             <ChatEditorProvider>
               <GlobalChatMentionRegistration />
               <DragAndDropLiveRegion />
-              <ApplicationShell
-                header={<ProtectedContent />}
-                inspector={<WorkspaceInspectorSidePanel />}
-                sidebar={<AppSidebar />}
+              <WorkspaceShell
+                endDock={<WorkspaceInspectorSidePanel />}
+                navigation={<AppSidebar />}
+                topBar={<ProtectedContent />}
               >
                 <Outlet />
-              </ApplicationShell>
+              </WorkspaceShell>
               <CreateMatterDialog />
               <ShortcutEchoHud />
               <KeyboardShortcutsDialog />

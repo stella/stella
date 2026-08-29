@@ -17,6 +17,8 @@ import {
   InspectorPropertyValue,
   InspectorRail,
   InspectorRailCell,
+  InspectorRailContent,
+  InspectorRailFooter,
   InspectorRailIconButton,
   InspectorRailTab,
   InspectorSection,
@@ -116,6 +118,21 @@ describe("rail", () => {
       ]),
     );
   });
+
+  test("rail actions retain an iPad-safe touch target and keyboard focus", () => {
+    const classes = classesOf(
+      renderToStaticMarkup(<InspectorRailIconButton />),
+      "inspector-rail-icon-button",
+    );
+
+    expect(classes).toEqual(
+      expect.arrayContaining([
+        "size-11",
+        "focus-visible:ring-2",
+        "disabled:pointer-events-none",
+      ]),
+    );
+  });
 });
 
 describe("dock", () => {
@@ -203,6 +220,8 @@ const SLOT_BY_EXPORT = {
   InspectorPropertyValue: "inspector-property-value",
   InspectorRail: "inspector-rail",
   InspectorRailCell: "inspector-rail-cell",
+  InspectorRailContent: "inspector-rail-content",
+  InspectorRailFooter: "inspector-rail-footer",
   InspectorRailIconButton: "inspector-rail-icon-button",
   InspectorRailTab: "inspector-rail-tab",
   InspectorSection: "inspector-section",
@@ -232,7 +251,10 @@ describe("bidi", () => {
           <InspectorRailCell>
             <InspectorRailIconButton />
           </InspectorRailCell>
-          <InspectorRailTab active>Overview</InspectorRailTab>
+          <InspectorRailContent>
+            <InspectorRailTab active>Overview</InspectorRailTab>
+          </InspectorRailContent>
+          <InspectorRailFooter />
         </InspectorRail>
         <InspectorHeader>
           <InspectorHeaderText>

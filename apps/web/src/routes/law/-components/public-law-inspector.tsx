@@ -4,8 +4,8 @@ import { useRouterState } from "@tanstack/react-router";
 import { PanelRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { InspectorRailTab } from "@stll/ui/inspector";
-import { cn } from "@stll/ui/utils";
+import { InspectorRailIconButton, InspectorRailTab } from "@stll/ui/inspector";
+import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 
 import {
   isGenericInspectorTab,
@@ -20,11 +20,6 @@ import {
 import { usePublicSignInRequest } from "@/components/public-sign-in-request";
 import Tooltip from "@/components/tooltip";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
-import {
-  SIDE_RAIL_CONTAINER_CLASS,
-  SIDE_RAIL_ICON_BUTTON_SIZE,
-  TOOLBAR_ROW_HEIGHT,
-} from "@/lib/consts";
 
 // The full inspector pulls the chat stack in with it. Only a reader with a
 // session can reach any of it, so it stays out of this shell's own chunk.
@@ -73,7 +68,7 @@ export const PublicLawInspector = () => {
     // `requestSignIn` is provided by the public shell this dock renders in;
     // without it the rail's affordances would lead nowhere.
     return requestSignIn === null ? null : (
-      <PublicInspectorRail requestSignIn={requestSignIn} />
+      <PublicInspectorRail onActivate={() => requestSignIn("/chat/new")} />
     );
   }
 
@@ -94,6 +89,7 @@ const AnonymousViewDock = ({ tabs }: { tabs: readonly GenericTab[] }) => {
   const setActive = useInspectorTabsStore((state) => state.setActive);
   const setMinimized = useInspectorTabsStore((state) => state.setMinimized);
   const closeTab = useInspectorTabsStore((state) => state.closeTab);
+  const requestSignIn = usePublicSignInRequest();
 
   // A tab may have been closed in a peer browser tab between renders, so the
   // active id is not assumed to name one of these.
@@ -103,36 +99,42 @@ const AnonymousViewDock = ({ tabs }: { tabs: readonly GenericTab[] }) => {
   return (
     <PublicInspectorDock expanded={expanded}>
       <div className="bg-background flex h-full shadow-lg">
-        <div className={SIDE_RAIL_CONTAINER_CLASS}>
-          <div
-            className={cn(
-              "flex w-full shrink-0 items-center justify-center border-b",
-              TOOLBAR_ROW_HEIGHT,
-            )}
-          >
+        <WorkspaceEndRail
+          chatAction={
+            requestSignIn === null
+              ? {
+                  label: t("inspector.openChat"),
+                  reason: t("auth.signIn"),
+                  status: "unavailable",
+                }
+              : {
+                  label: t("inspector.openChat"),
+                  onActivate: () => requestSignIn("/chat/new"),
+                  status: "enabled",
+                }
+          }
+          className="h-full"
+          label={t("inspector.title")}
+          topAction={
             <Tooltip
               content={
                 minimized ? t("inspector.showPane") : t("inspector.hidePane")
               }
               render={
-                <button
+                <InspectorRailIconButton
                   aria-label={
                     minimized
                       ? t("inspector.showPane")
                       : t("inspector.hidePane")
                   }
-                  className={cn(
-                    "text-muted-foreground hover:bg-accent hover:text-foreground flex items-center justify-center rounded-md transition-colors",
-                    SIDE_RAIL_ICON_BUTTON_SIZE,
-                  )}
                   onClick={() => setMinimized(!minimized)}
-                  type="button"
                 />
               }
             >
               <PanelRightIcon className="size-4" />
             </Tooltip>
-          </div>
+          }
+        >
           <div className="flex flex-col">
             {tabs.map((tab) => (
               <RailTabButton
@@ -146,7 +148,7 @@ const AnonymousViewDock = ({ tabs }: { tabs: readonly GenericTab[] }) => {
               />
             ))}
           </div>
-        </div>
+        </WorkspaceEndRail>
         {expanded && (
           <RegisteredView onClose={() => closeTab(active.id)} tab={active} />
         )}
