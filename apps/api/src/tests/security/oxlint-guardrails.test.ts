@@ -505,15 +505,16 @@ describe("custom oxlint guardrails", () => {
     // The plugin cannot import application code, so it carries a copy of
     // the pattern. Hold the copy equal to the source of truth, or the rule
     // would accept a key the sanitizer drops (or the reverse).
-    const policy = await import("@/api/lib/observability/log-attribute-policy");
-    const plugin =
-      await import("../../../../../.oxlint-plugins/no-redacted-log-attribute-key");
-
-    expect(plugin.SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.source).toBe(
-      policy.SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.source,
+    // Compared as source text: importing the plugin would pull the plugin
+    // folder into this package's type program.
+    const { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN: policy } =
+      await import("@/api/lib/observability/log-attribute-policy");
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/no-redacted-log-attribute-key.ts",
     );
-    expect(plugin.SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.flags).toBe(
-      policy.SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.flags,
+
+    expect(pluginSource).toContain(
+      `export const SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN =\n  /${policy.source}/${policy.flags};`,
     );
   });
 
