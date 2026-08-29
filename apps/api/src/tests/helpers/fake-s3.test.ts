@@ -107,7 +107,7 @@ describe("fake S3 carries the real s3 helpers", () => {
     expect(fake.objects.has(`${bucket}/retry/ok`)).toBe(true);
 
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
-    await expect(
+    expect(
       writeS3ObjectWithRetry({ key: "retry/denied", data: "payload" }),
     ).rejects.toThrow(/AccessDenied/u);
     expect(fake.objects.has(`${bucket}/retry/denied`)).toBe(false);

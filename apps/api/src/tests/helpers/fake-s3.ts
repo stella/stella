@@ -286,7 +286,7 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     stop: () => {
       resetS3ForTesting();
       resetAwsS3ClientForTesting();
-      server.stop(true);
+      void server.stop(true);
     },
   };
 };

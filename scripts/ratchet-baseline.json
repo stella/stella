@@ -635,9 +635,9 @@
     "files": {}
   },
   "internal-module-mock-ledger-entries": {
-    "count": 244,
+    "count": 246,
     "files": {
-      "scripts/internal-module-mock-ledger.json": 244
+      "scripts/internal-module-mock-ledger.json": 246
     }
   }
 }

@@ -72,9 +72,9 @@ describe("encryptContent / decryptContent", () => {
   test("separates tenants: another organization cannot decrypt", async () => {
     const { ciphertext, iv } = await encryptContent(organizationId, plaintext);
 
-    await expect(
-      decryptContent(otherOrganizationId, ciphertext, iv),
-    ).rejects.toThrow(DOMException);
+    expect(decryptContent(otherOrganizationId, ciphertext, iv)).rejects.toThrow(
+      DOMException,
+    );
   });
 
   test("encrypts the same plaintext to different ciphertext per organization", async () => {
@@ -87,7 +87,7 @@ describe("encryptContent / decryptContent", () => {
   test("rejects a tampered ciphertext body", async () => {
     const { ciphertext, iv } = await encryptContent(organizationId, plaintext);
 
-    await expect(
+    expect(
       decryptContent(organizationId, flipByteAt(ciphertext, 0), iv),
     ).rejects.toThrow(DOMException);
   });
@@ -95,7 +95,7 @@ describe("encryptContent / decryptContent", () => {
   test("rejects a tampered auth tag (the trailing 16 bytes)", async () => {
     const { ciphertext, iv } = await encryptContent(organizationId, plaintext);
 
-    await expect(
+    expect(
       decryptContent(
         organizationId,
         flipByteAt(ciphertext, ciphertext.length - 1),
@@ -107,7 +107,7 @@ describe("encryptContent / decryptContent", () => {
   test("rejects a truncated ciphertext (auth tag stripped)", async () => {
     const { ciphertext, iv } = await encryptContent(organizationId, plaintext);
 
-    await expect(
+    expect(
       decryptContent(organizationId, ciphertext.subarray(0, 4), iv),
     ).rejects.toThrow(DOMException);
   });
@@ -116,9 +116,9 @@ describe("encryptContent / decryptContent", () => {
     const { ciphertext } = await encryptContent(organizationId, plaintext);
     const { iv: otherIv } = await encryptContent(organizationId, plaintext);
 
-    await expect(
-      decryptContent(organizationId, ciphertext, otherIv),
-    ).rejects.toThrow(DOMException);
+    expect(decryptContent(organizationId, ciphertext, otherIv)).rejects.toThrow(
+      DOMException,
+    );
   });
 
   test("reads a zero-IV envelope back as stored plaintext", async () => {

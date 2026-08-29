@@ -296,7 +296,7 @@ describe("folio collaboration room snapshot generation", () => {
     scopedFailure = new Error("snapshot transaction failed");
     scopedFailureAfterCalls = 1;
 
-    await expect(
+    expect(
       storeFolioCollabSnapshot({
         authority: { type: "participant", userId: firstUserId },
         expectedGeneration: 3,
