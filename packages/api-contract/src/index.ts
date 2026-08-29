@@ -115,6 +115,11 @@ export type {
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
 export {
+  FOLIO_COLLAB_REDIS_SCOPE,
+  parseFolioCollabRoomName,
+  toFolioCollabRoomName,
+} from "./folio-collab";
+export {
   DESKTOP_EDIT_FILE_TYPES,
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
   desktopEditFileTypeForMimeType,

@@ -166,6 +166,15 @@ export type AuthorizedFolioCollabRoom = {
   workspaceId: SafeId<"workspace">;
 };
 
+export type FolioCollabSnapshotTarget = Pick<
+  AuthorizedFolioCollabRoom,
+  "organizationId" | "roomId" | "scopedDb" | "workspaceId"
+>;
+
+type FolioCollabSnapshotStoreAuthority =
+  | { type: "collab-service" }
+  | { type: "participant"; userId: SafeId<"user"> };
+
 type IssueFolioCollabTokenOptions = {
   generation: number;
   permissions: FolioCollabTokenPermissions;
@@ -516,7 +525,7 @@ export const touchFolioCollabRoom = async (
 };
 
 export const loadFolioCollabSnapshot = async (
-  value: AuthorizedFolioCollabRoom,
+  value: FolioCollabSnapshotTarget,
   readObject = readS3ObjectIfPresent,
 ) => {
   const readPointer = async () => {
@@ -592,18 +601,18 @@ export type StoreFolioCollabSnapshotResult =
 
 type SnapshotStoreDecisionInput = {
   actualGeneration: number;
+  authority: FolioCollabSnapshotStoreAuthority;
   expectedGeneration: number;
   seedClaimedBy: string | null;
   seedState: "claimed" | "empty" | "seeded";
-  userId: string;
 };
 
 export const decideFolioCollabSnapshotStore = ({
   actualGeneration,
+  authority,
   expectedGeneration,
   seedClaimedBy,
   seedState,
-  userId,
 }: SnapshotStoreDecisionInput):
   | { status: "accepted" }
   | { status: "generation-conflict"; actualGeneration: number }
@@ -614,20 +623,26 @@ export const decideFolioCollabSnapshotStore = ({
   if (seedState === "empty") {
     return { status: "seed-owner-conflict" };
   }
-  if (seedState === "claimed" && seedClaimedBy !== userId) {
+  if (
+    seedState === "claimed" &&
+    authority.type === "participant" &&
+    seedClaimedBy !== authority.userId
+  ) {
     return { status: "seed-owner-conflict" };
   }
   return { status: "accepted" };
 };
 
 export const storeFolioCollabSnapshot = async ({
+  authority,
   expectedGeneration,
   snapshotBytes,
   value,
 }: {
+  authority: FolioCollabSnapshotStoreAuthority;
   expectedGeneration: number;
   snapshotBytes: Uint8Array;
-  value: AuthorizedFolioCollabRoom;
+  value: FolioCollabSnapshotTarget;
 }): Promise<StoreFolioCollabSnapshotResult> => {
   const nextSnapshotFileId = createSafeId<"userFile">();
   const nextCleanupIntentId = createSafeId<"pendingUpload">();
@@ -708,10 +723,10 @@ export const storeFolioCollabSnapshot = async ({
         }
         const decision = decideFolioCollabSnapshotStore({
           actualGeneration: room.generation,
+          authority,
           expectedGeneration,
           seedClaimedBy: room.seedClaimedBy,
           seedState: room.seedState,
-          userId: value.userId,
         });
         if (decision.status !== "accepted") {
           return decision;

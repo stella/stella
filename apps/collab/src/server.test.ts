@@ -2,15 +2,16 @@ import { HocuspocusProvider } from "@hocuspocus/provider";
 import { describe, expect, test } from "bun:test";
 import { applyUpdate, Doc } from "yjs";
 
-import { createCollabServer } from "./server";
+import { createCollabServer, REDIS_RETRY_CLOSE_CODE } from "./server";
 
 type FakeStellaApiOptions = {
+  additionalRoomIds?: string[];
   canEdit?: boolean;
   generation?: number;
   initialSnapshotBase64?: string | null;
   refreshedToken?: string;
   replacementToken?: string;
-  roomName?: string;
+  roomId?: string;
   token?: string;
   tokenExpiresAt?: string;
 };
@@ -23,7 +24,8 @@ type FakeStellaApi = {
   latestSnapshotBase64: () => string | null;
   loadRequestBodies: () => Record<string, unknown>[];
   refreshRequests: () => number;
-  storeRequestTokens: () => string[];
+  setGeneration: (generation: number) => void;
+  snapshotAuthorizationHeaders: () => (string | null)[];
   storeRequestBodies: () => Record<string, unknown>[];
   storeRequests: () => number;
   url: string;
@@ -35,15 +37,23 @@ type AwarenessUserState = {
   };
 };
 
+type RedisBackedCollabProcess = {
+  destroy: () => Promise<void>;
+  httpUrl: string;
+  redisExtensionFirst: boolean;
+  websocketUrl: string;
+};
+
 const waitFor = async (
-  predicate: () => boolean,
+  predicate: () => boolean | Promise<boolean>,
   message: string,
   timeoutMs = 3000,
 ) => {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < timeoutMs) {
-    if (predicate()) {
+    // oxlint-disable-next-line no-await-in-loop -- polling predicates may perform an asynchronous readiness probe
+    if (await predicate()) {
       return;
     }
 
@@ -77,26 +87,41 @@ const getTextContent = (doc: Doc, name: string) => doc.getText(name).toJSON();
 const farFutureTokenExpiresAt = () =>
   new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
+const TEST_ROOM_ID = "00000000-0000-4000-8000-000000000001";
+const TEST_ROOM_NAME = `{${TEST_ROOM_ID}}`;
+const SECOND_TEST_ROOM_ID = "00000000-0000-4000-8000-000000000002";
+const SECOND_TEST_ROOM_NAME = `{${SECOND_TEST_ROOM_ID}}`;
+const TEST_SERVICE_TOKEN = "test_collaboration_service_token_32_chars";
+const DOCKER_OPERATION_TIMEOUT_MS = 10_000;
+
 const createFakeStellaApi = ({
+  additionalRoomIds = [],
   canEdit = true,
   generation = 0,
   initialSnapshotBase64 = null,
   refreshedToken = "collab_token_refreshed",
   replacementToken,
-  roomName = "folio_collab_room_test",
+  roomId = TEST_ROOM_ID,
   token = "collab_token_test",
   tokenExpiresAt = farFutureTokenExpiresAt(),
 }: FakeStellaApiOptions = {}): FakeStellaApi => {
+  const roomGenerations = new Map(
+    [roomId, ...additionalRoomIds].map((acceptedRoomId) => [
+      acceptedRoomId,
+      generation,
+    ]),
+  );
   let authorizeRequests = 0;
   const authorizeRequestBodies: Record<string, unknown>[] = [];
   const heartbeatRequestBodies: Record<string, unknown>[] = [];
   const loadRequestBodies: Record<string, unknown>[] = [];
   let latestSnapshotBase64 = initialSnapshotBase64;
   let refreshRequests = 0;
-  const storeRequestTokens: string[] = [];
+  const snapshotAuthorizationHeaders: (string | null)[] = [];
   const storeRequestBodies: Record<string, unknown>[] = [];
   let storeRequests = 0;
   let currentToken = token;
+  const tokenGeneration = generation;
 
   const server = Bun.serve({
     fetch: async (request) => {
@@ -107,11 +132,19 @@ const createFakeStellaApi = ({
         authorizeRequests += 1;
         authorizeRequestBodies.push(body);
         const requestToken = body["token"];
+        const requestedRoomName = body["roomName"];
+        const requestedRoomId = [...roomGenerations.keys()].find(
+          (acceptedRoomId) => `{${acceptedRoomId}}` === requestedRoomName,
+        );
         const tokenAuthorized =
           requestToken === token ||
           (replacementToken !== undefined && requestToken === replacementToken);
 
-        if (body["roomId"] !== roomName || !tokenAuthorized) {
+        if (
+          requestedRoomId === undefined ||
+          !tokenAuthorized ||
+          tokenGeneration !== roomGenerations.get(requestedRoomId)
+        ) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
@@ -124,9 +157,9 @@ const createFakeStellaApi = ({
 
         return Response.json({
           canEdit,
-          generation,
-          roomId: roomName,
-          roomName,
+          generation: roomGenerations.get(requestedRoomId),
+          roomId: requestedRoomId,
+          roomName: requestedRoomName,
           tokenExpiresAt,
           userId: "user_test",
           workspaceId: "workspace_test",
@@ -136,14 +169,18 @@ const createFakeStellaApi = ({
       if (url.pathname === "/v1/folio-collab-rooms/refresh-token") {
         refreshRequests += 1;
 
-        if (body["roomId"] !== roomName || body["token"] !== currentToken) {
+        if (
+          !roomGenerations.has(String(body["roomId"])) ||
+          body["token"] !== currentToken ||
+          tokenGeneration !== roomGenerations.get(String(body["roomId"]))
+        ) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
         currentToken = refreshedToken;
         return Response.json({
           canEdit,
-          generation,
+          generation: roomGenerations.get(String(body["roomId"])),
           token: refreshedToken,
           tokenExpiresAt: farFutureTokenExpiresAt(),
         });
@@ -151,7 +188,10 @@ const createFakeStellaApi = ({
 
       if (url.pathname === "/v1/folio-collab-rooms/heartbeat") {
         heartbeatRequestBodies.push(body);
-        if (body["roomId"] !== roomName || body["token"] !== currentToken) {
+        if (
+          !roomGenerations.has(String(body["roomId"])) ||
+          body["token"] !== currentToken
+        ) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
@@ -160,33 +200,48 @@ const createFakeStellaApi = ({
 
       if (url.pathname === "/v1/folio-collab-rooms/snapshot/load") {
         loadRequestBodies.push(body);
-        if (body["roomId"] !== roomName || body["token"] !== currentToken) {
+        snapshotAuthorizationHeaders.push(request.headers.get("authorization"));
+        if (
+          !roomGenerations.has(String(body["roomId"])) ||
+          request.headers.get("authorization") !==
+            `Bearer ${TEST_SERVICE_TOKEN}`
+        ) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
         return Response.json({
-          generation,
+          generation: roomGenerations.get(String(body["roomId"])),
           snapshotBase64: latestSnapshotBase64,
         });
       }
 
       if (url.pathname === "/v1/folio-collab-rooms/snapshot/store") {
         storeRequestBodies.push(body);
-        if (body["roomId"] !== roomName || body["token"] !== currentToken) {
+        snapshotAuthorizationHeaders.push(request.headers.get("authorization"));
+        if (
+          !roomGenerations.has(String(body["roomId"])) ||
+          request.headers.get("authorization") !==
+            `Bearer ${TEST_SERVICE_TOKEN}`
+        ) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
+        const currentGeneration = roomGenerations.get(String(body["roomId"]));
+        if (body["expectedGeneration"] !== currentGeneration) {
+          return Response.json(
+            { message: "Snapshot generation changed." },
+            { status: 409 },
+          );
+        }
+
         storeRequests += 1;
-        storeRequestTokens.push(
-          typeof body["token"] === "string" ? body["token"] : "",
-        );
         latestSnapshotBase64 =
           typeof body["snapshotBase64"] === "string"
             ? body["snapshotBase64"]
             : null;
 
         return Response.json({
-          generation,
+          generation: currentGeneration,
           storedAt: new Date().toISOString(),
         });
       }
@@ -211,7 +266,10 @@ const createFakeStellaApi = ({
     latestSnapshotBase64: () => latestSnapshotBase64,
     loadRequestBodies: () => loadRequestBodies,
     refreshRequests: () => refreshRequests,
-    storeRequestTokens: () => storeRequestTokens,
+    setGeneration: (nextGeneration) => {
+      roomGenerations.set(roomId, nextGeneration);
+    },
+    snapshotAuthorizationHeaders: () => snapshotAuthorizationHeaders,
     storeRequestBodies: () => storeRequestBodies,
     storeRequests: () => storeRequests,
     url: `http://127.0.0.1:${port}`,
@@ -220,11 +278,13 @@ const createFakeStellaApi = ({
 
 const createProvider = ({
   name,
+  onClose,
   token,
   url,
   ydoc,
 }: {
   name: string;
+  onClose?: (code: number) => void;
   token: string;
   url: string;
   ydoc: Doc;
@@ -232,9 +292,164 @@ const createProvider = ({
   new HocuspocusProvider({
     document: ydoc,
     name,
+    onClose: ({ event }) => onClose?.(event.code),
     token,
     url,
   });
+
+const redisTestUrl = process.env["STELLA_COLLAB_TEST_REDIS_URL"];
+const redisContainerId = process.env["STELLA_COLLAB_TEST_REDIS_CONTAINER_ID"];
+
+const requireRedisTestUrl = () => {
+  if (redisTestUrl === undefined) {
+    throw new Error("STELLA_COLLAB_TEST_REDIS_URL is required.");
+  }
+
+  return redisTestUrl;
+};
+
+const runDocker = async (action: "start" | "stop", containerId: string) => {
+  const dockerProcess = Bun.spawn(["docker", action, containerId], {
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const exitCode = await Promise.race([
+    dockerProcess.exited,
+    new Promise<never>((_resolve, reject) => {
+      timeout = setTimeout(() => {
+        dockerProcess.kill();
+        reject(
+          new Error(
+            `docker ${action} exceeded ${DOCKER_OPERATION_TIMEOUT_MS} ms`,
+          ),
+        );
+      }, DOCKER_OPERATION_TIMEOUT_MS);
+    }),
+  ]).finally(() => {
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
+    }
+  });
+  const stderr = await new Response(dockerProcess.stderr).text();
+  if (exitCode !== 0) {
+    throw new Error(`docker ${action} failed: ${stderr}`);
+  }
+};
+
+const spawnRedisBackedCollabProcess = async ({
+  apiUrl,
+  redisUrl,
+}: {
+  apiUrl: string;
+  redisUrl: string;
+}): Promise<RedisBackedCollabProcess> => {
+  const subprocess = Bun.spawn(["bun", "server-test-process.ts"], {
+    cwd: import.meta.dirname,
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      STELLA_API_URL: apiUrl,
+      STELLA_COLLAB_MODE: "redis",
+      STELLA_COLLAB_REDIS_URL: redisUrl,
+      STELLA_COLLAB_SERVICE_TOKEN: TEST_SERVICE_TOKEN,
+    },
+    stderr: "inherit",
+    stdout: "pipe",
+  });
+  let outputBuffer = "";
+  const startup = Promise.withResolvers<{
+    port: number;
+    redisExtensionFirst: boolean;
+  }>();
+  const outputDone = (async () => {
+    const decoder = new TextDecoder();
+    const reader = subprocess.stdout.getReader();
+    while (true) {
+      // oxlint-disable-next-line no-await-in-loop -- stream chunks must be consumed in order until the child exits
+      const chunk = await reader.read();
+      if (chunk.done) {
+        return;
+      }
+
+      outputBuffer += decoder.decode(chunk.value, { stream: true });
+      let newlineIndex = outputBuffer.indexOf("\n");
+      while (newlineIndex >= 0) {
+        const line = outputBuffer.slice(0, newlineIndex);
+        outputBuffer = outputBuffer.slice(newlineIndex + 1);
+        newlineIndex = outputBuffer.indexOf("\n");
+        if (!line.startsWith("STELLA_COLLAB_TEST_READY ")) {
+          continue;
+        }
+
+        const fields = line.split(" ");
+        const parsedPort = Number(fields.at(1));
+        if (!Number.isInteger(parsedPort) || parsedPort < 1) {
+          continue;
+        }
+        startup.resolve({
+          port: parsedPort,
+          redisExtensionFirst: fields.at(2) === "true",
+        });
+      }
+    }
+  })();
+
+  const startupTimeout = setTimeout(() => {
+    startup.reject(
+      new Error("Collaboration child process did not report its port."),
+    );
+  }, 10_000);
+  const started = await (async () => {
+    try {
+      return await Promise.race([
+        startup.promise,
+        subprocess.exited.then(() => {
+          throw new Error("Collaboration child process exited before startup.");
+        }),
+      ]);
+    } catch (error) {
+      if (subprocess.exitCode === null) {
+        subprocess.kill();
+      }
+      await subprocess.exited;
+      await outputDone;
+      throw error;
+    } finally {
+      clearTimeout(startupTimeout);
+    }
+  })();
+
+  return {
+    destroy: async () => {
+      if (subprocess.exitCode === null) {
+        subprocess.kill();
+      }
+      await subprocess.exited;
+      await outputDone;
+    },
+    httpUrl: `http://127.0.0.1:${String(started.port)}`,
+    redisExtensionFirst: started.redisExtensionFirst,
+    websocketUrl: `ws://127.0.0.1:${String(started.port)}`,
+  };
+};
+
+const spawnRedisBackedCollabProcesses = async (options: {
+  apiUrl: string;
+  redisUrl: string;
+}) => {
+  const first = await spawnRedisBackedCollabProcess(options);
+  try {
+    const second = await spawnRedisBackedCollabProcess(options);
+    return { first, second };
+  } catch (error) {
+    await first.destroy();
+    throw error;
+  }
+};
+
+const readinessStatus = async (server: RedisBackedCollabProcess) =>
+  (await fetch(`${server.httpUrl}/readyz`)).status;
 
 describe("collaboration server", () => {
   test("serves HTTP health and accepts a Bun WebSocket upgrade", async () => {
@@ -242,11 +457,13 @@ describe("collaboration server", () => {
     const collabServer = await createCollabServer({
       apiUrl: fakeApi.url,
       port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
     });
 
     try {
       const response = await fetch(collabServer.httpUrl);
       expect(await response.text()).toBe("Welcome to Hocuspocus!");
+      expect((await fetch(`${collabServer.httpUrl}/readyz`)).status).toBe(200);
 
       await new Promise<void>((resolve, reject) => {
         const websocket = new WebSocket(collabServer.websocketUrl);
@@ -277,18 +494,19 @@ describe("collaboration server", () => {
       debounceMs: 20,
       maxDebounceMs: 100,
       port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
     });
 
     const firstDoc = new Doc();
     const secondDoc = new Doc();
     const firstProvider = createProvider({
-      name: "folio_collab_room_test",
+      name: TEST_ROOM_NAME,
       token: "collab_token_test",
       url: collabServer.websocketUrl,
       ydoc: firstDoc,
     });
     const secondProvider = createProvider({
-      name: "folio_collab_room_test",
+      name: TEST_ROOM_NAME,
       token: "collab_token_test",
       url: collabServer.websocketUrl,
       ydoc: secondDoc,
@@ -301,19 +519,17 @@ describe("collaboration server", () => {
       );
 
       expect(fakeApi.authorizeRequestBodies()).toEqual([
-        { roomId: "folio_collab_room_test", token: "collab_token_test" },
-        { roomId: "folio_collab_room_test", token: "collab_token_test" },
+        { roomName: TEST_ROOM_NAME, token: "collab_token_test" },
+        { roomName: TEST_ROOM_NAME, token: "collab_token_test" },
       ]);
       expect(fakeApi.heartbeatRequestBodies()).toEqual([
-        { roomId: "folio_collab_room_test", token: "collab_token_test" },
+        { roomId: TEST_ROOM_ID, token: "collab_token_test" },
       ]);
       await waitFor(
         () => fakeApi.loadRequestBodies().length === 1,
         "Server did not load the room snapshot.",
       );
-      expect(fakeApi.loadRequestBodies()).toEqual([
-        { roomId: "folio_collab_room_test", token: "collab_token_test" },
-      ]);
+      expect(fakeApi.loadRequestBodies()).toEqual([{ roomId: TEST_ROOM_ID }]);
 
       firstProvider.awareness?.setLocalStateField("user", {
         color: "#000000",
@@ -350,9 +566,12 @@ describe("collaboration server", () => {
       );
       expect(fakeApi.storeRequestBodies()[0]).toMatchObject({
         expectedGeneration: 0,
-        roomId: "folio_collab_room_test",
-        token: "collab_token_test",
+        roomId: TEST_ROOM_ID,
       });
+      expect(fakeApi.snapshotAuthorizationHeaders()).toEqual([
+        `Bearer ${TEST_SERVICE_TOKEN}`,
+        `Bearer ${TEST_SERVICE_TOKEN}`,
+      ]);
       expect(fakeApi.authorizeRequests()).toBeGreaterThanOrEqual(2);
     } finally {
       firstProvider.destroy();
@@ -360,6 +579,135 @@ describe("collaboration server", () => {
       firstDoc.destroy();
       secondDoc.destroy();
       await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test("rejects a stale snapshot generation without publishing old room state", async () => {
+    const fakeApi = createFakeStellaApi({
+      additionalRoomIds: [SECOND_TEST_ROOM_ID],
+    });
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 20,
+      maxDebounceMs: 100,
+      port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
+      shutdownDrainTimeoutMs: 25,
+    });
+    const ydoc = new Doc();
+    const closeCodes: number[] = [];
+    const secondRoomCloseCodes: number[] = [];
+    const provider = createProvider({
+      name: TEST_ROOM_NAME,
+      onClose: (code) => {
+        closeCodes.push(code);
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc,
+    });
+    const secondRoomDoc = new Doc();
+    const secondRoomProvider = createProvider({
+      name: SECOND_TEST_ROOM_NAME,
+      onClose: (code) => {
+        secondRoomCloseCodes.push(code);
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc: secondRoomDoc,
+    });
+
+    try {
+      await waitFor(
+        () =>
+          provider.isAuthenticated &&
+          secondRoomProvider.isAuthenticated &&
+          fakeApi.loadRequestBodies().length >= 2,
+        "Providers did not load their initial room generations.",
+      );
+      fakeApi.setGeneration(1);
+
+      ydoc.getText("body").insert(0, "must remain local");
+
+      await waitFor(
+        () => fakeApi.storeRequestBodies().length > 0,
+        "Server did not reject the stale room generation.",
+      );
+      await Bun.sleep(100);
+      expect(closeCodes).toContain(REDIS_RETRY_CLOSE_CODE);
+      expect(secondRoomCloseCodes).not.toContain(REDIS_RETRY_CLOSE_CODE);
+      expect(secondRoomProvider.isAuthenticated).toBeTrue();
+      provider.destroy();
+      await Bun.sleep(100);
+      expect(fakeApi.storeRequests()).toBe(0);
+      expect(fakeApi.latestSnapshotBase64()).toBeNull();
+      for (const body of fakeApi.storeRequestBodies()) {
+        expect(body).toMatchObject({
+          expectedGeneration: 0,
+          roomId: TEST_ROOM_ID,
+        });
+      }
+      expect(
+        fakeApi
+          .loadRequestBodies()
+          .filter((body) => body["roomId"] === TEST_ROOM_ID),
+      ).toHaveLength(1);
+    } finally {
+      provider.destroy();
+      secondRoomProvider.destroy();
+      ydoc.destroy();
+      secondRoomDoc.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test("bounds shutdown when a document cannot unload", async () => {
+    const fakeApi = createFakeStellaApi();
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
+      shutdownDrainTimeoutMs: 25,
+    });
+    const ydoc = new Doc();
+    const provider = createProvider({
+      name: TEST_ROOM_NAME,
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc,
+    });
+    let destroyed = false;
+
+    try {
+      await waitFor(
+        () =>
+          provider.isAuthenticated &&
+          fakeApi.loadRequestBodies().length === 1 &&
+          collabServer.hocuspocus.getDocumentsCount() === 1,
+        "Provider did not load a document before shutdown.",
+      );
+      const neverUnload = new Promise<void>(() => {
+        // This test models a buggy extension that never completes its hook.
+      });
+      collabServer.hocuspocus.configuration.extensions.push({
+        beforeUnloadDocument: async () => {
+          await neverUnload;
+        },
+      });
+
+      const startedAt = Date.now();
+      await collabServer.destroy();
+      destroyed = true;
+
+      expect(Date.now() - startedAt).toBeLessThan(1000);
+    } finally {
+      provider.destroy();
+      ydoc.destroy();
+      if (!destroyed) {
+        await collabServer.destroy();
+      }
       await fakeApi.destroy();
     }
   });
@@ -377,11 +725,12 @@ describe("collaboration server", () => {
       debounceMs: 20,
       maxDebounceMs: 100,
       port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
     });
 
     const ydoc = new Doc();
     const provider = createProvider({
-      name: "folio_collab_room_test",
+      name: TEST_ROOM_NAME,
       token: initialToken,
       url: collabServer.websocketUrl,
       ydoc,
@@ -404,12 +753,13 @@ describe("collaboration server", () => {
         "Server did not persist a snapshot after refreshing.",
       );
 
-      expect(fakeApi.storeRequestTokens()).toEqual([refreshedToken]);
       expect(fakeApi.storeRequestBodies()[0]).toMatchObject({
         expectedGeneration: 0,
-        roomId: "folio_collab_room_test",
-        token: refreshedToken,
+        roomId: TEST_ROOM_ID,
       });
+      expect(fakeApi.snapshotAuthorizationHeaders()).toContain(
+        `Bearer ${TEST_SERVICE_TOKEN}`,
+      );
     } finally {
       provider.destroy();
       ydoc.destroy();
@@ -431,12 +781,13 @@ describe("collaboration server", () => {
       debounceMs: 20,
       maxDebounceMs: 100,
       port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
     });
 
     const firstDoc = new Doc();
     const secondDoc = new Doc();
     const firstProvider = createProvider({
-      name: "folio_collab_room_test",
+      name: TEST_ROOM_NAME,
       token: initialToken,
       url: collabServer.websocketUrl,
       ydoc: firstDoc,
@@ -449,7 +800,7 @@ describe("collaboration server", () => {
       );
 
       const secondProvider = createProvider({
-        name: "folio_collab_room_test",
+        name: TEST_ROOM_NAME,
         token: replacementToken,
         url: collabServer.websocketUrl,
         ydoc: secondDoc,
@@ -468,7 +819,9 @@ describe("collaboration server", () => {
           "Server did not persist a snapshot with the replacement token.",
         );
 
-        expect(fakeApi.storeRequestTokens()).toEqual([replacementToken]);
+        expect(fakeApi.snapshotAuthorizationHeaders()).toContain(
+          `Bearer ${TEST_SERVICE_TOKEN}`,
+        );
       } finally {
         secondProvider.destroy();
       }
@@ -488,11 +841,12 @@ describe("collaboration server", () => {
       debounceMs: 20,
       maxDebounceMs: 100,
       port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
     });
 
     const ydoc = new Doc();
     const provider = createProvider({
-      name: "folio_collab_room_test",
+      name: TEST_ROOM_NAME,
       token: "collab_token_test",
       url: collabServer.websocketUrl,
       ydoc,
@@ -523,6 +877,7 @@ describe("collaboration server", () => {
       debounceMs: 20,
       maxDebounceMs: 100,
       port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
     });
     const ydoc = new Doc();
     let authenticationFailed = false;
@@ -531,7 +886,7 @@ describe("collaboration server", () => {
     try {
       provider = new HocuspocusProvider({
         document: ydoc,
-        name: "folio_collab_room_test",
+        name: TEST_ROOM_NAME,
         onAuthenticationFailed: () => {
           authenticationFailed = true;
         },
@@ -583,12 +938,13 @@ describe("collaboration server", () => {
     const collabServer = await createCollabServer({
       apiUrl: `http://127.0.0.1:${String(redirectingApiPort)}`,
       port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
     });
     const ydoc = new Doc();
     let authenticationFailed = false;
     const provider = new HocuspocusProvider({
       document: ydoc,
-      name: "folio_collab_room_test",
+      name: TEST_ROOM_NAME,
       onAuthenticationFailed: () => {
         authenticationFailed = true;
       },
@@ -611,3 +967,170 @@ describe("collaboration server", () => {
     }
   });
 });
+
+describe.skipIf(redisTestUrl === undefined)(
+  "Redis-backed collaboration server",
+  () => {
+    test("converges document and awareness updates across two replicas", async () => {
+      const redisUrl = requireRedisTestUrl();
+      const fakeApi = createFakeStellaApi();
+      const { first: firstServer, second: secondServer } =
+        await spawnRedisBackedCollabProcesses({
+          apiUrl: fakeApi.url,
+          redisUrl,
+        });
+      const firstDoc = new Doc();
+      const secondDoc = new Doc();
+      const lateDoc = new Doc();
+      const firstCloseCodes: number[] = [];
+      const secondCloseCodes: number[] = [];
+      const firstProvider = createProvider({
+        name: TEST_ROOM_NAME,
+        onClose: (code) => {
+          firstCloseCodes.push(code);
+        },
+        token: "collab_token_test",
+        url: firstServer.websocketUrl,
+        ydoc: firstDoc,
+      });
+      const secondProvider = createProvider({
+        name: TEST_ROOM_NAME,
+        onClose: (code) => {
+          secondCloseCodes.push(code);
+        },
+        token: "collab_token_test",
+        url: secondServer.websocketUrl,
+        ydoc: secondDoc,
+      });
+      let lateProvider: HocuspocusProvider | undefined;
+      let redisWasStopped = false;
+
+      try {
+        await waitFor(
+          async () =>
+            (await readinessStatus(firstServer)) === 200 &&
+            (await readinessStatus(secondServer)) === 200,
+          "Redis clients did not become ready.",
+          10_000,
+        );
+        expect(firstServer.redisExtensionFirst).toBe(true);
+        expect(secondServer.redisExtensionFirst).toBe(true);
+        await waitFor(
+          () => firstProvider.isAuthenticated && secondProvider.isAuthenticated,
+          "Providers did not authenticate across replicas.",
+          10_000,
+        );
+
+        firstProvider.awareness?.setLocalStateField("user", {
+          color: "#000000",
+          name: "First user",
+        });
+        await waitFor(
+          () =>
+            Array.from(
+              secondProvider.awareness?.getStates().values() ?? [],
+            ).some((state) => hasAwarenessUserName(state, "First user")),
+          "Awareness did not cross the Redis boundary.",
+        );
+
+        const storesBeforeUpdate = fakeApi.storeRequests();
+        firstDoc.getText("body").insert(0, "shared");
+        await waitFor(
+          () => getTextContent(secondDoc, "body") === "shared",
+          "Document update did not cross the Redis boundary.",
+        );
+        await waitFor(
+          () => fakeApi.storeRequests() > storesBeforeUpdate,
+          "Redis-backed room was not persisted.",
+        );
+        await Bun.sleep(150);
+        expect(fakeApi.storeRequests() - storesBeforeUpdate).toBe(1);
+
+        firstDoc.getText("body").insert(0, "A");
+        secondDoc.getText("body").insert(0, "B");
+        await waitFor(
+          () =>
+            getTextContent(firstDoc, "body") ===
+              getTextContent(secondDoc, "body") &&
+            getTextContent(firstDoc, "body").length === 8,
+          "Concurrent cross-replica updates did not converge.",
+        );
+
+        lateProvider = createProvider({
+          name: TEST_ROOM_NAME,
+          token: "collab_token_test",
+          url: secondServer.websocketUrl,
+          ydoc: lateDoc,
+        });
+        await waitFor(
+          () =>
+            lateProvider?.isAuthenticated === true &&
+            getTextContent(lateDoc, "body") ===
+              getTextContent(firstDoc, "body"),
+          "Late joiner did not receive the converged room.",
+          10_000,
+        );
+
+        if (redisContainerId === undefined) {
+          return;
+        }
+
+        await runDocker("stop", redisContainerId);
+        redisWasStopped = true;
+        await waitFor(
+          async () =>
+            (await readinessStatus(firstServer)) === 503 &&
+            (await readinessStatus(secondServer)) === 503,
+          "Replicas remained ready after Redis stopped.",
+          10_000,
+        );
+        expect((await fetch(`${firstServer.httpUrl}/readyz`)).status).toBe(503);
+        expect((await fetch(`${secondServer.httpUrl}/readyz`)).status).toBe(
+          503,
+        );
+        await waitFor(
+          () =>
+            firstCloseCodes.includes(REDIS_RETRY_CLOSE_CODE) &&
+            secondCloseCodes.includes(REDIS_RETRY_CLOSE_CODE),
+          "Replicas did not close clients with the retryable code.",
+          10_000,
+        );
+
+        firstDoc.getText("body").insert(0, "offline-first-");
+        secondDoc.getText("body").insert(0, "offline-second-");
+
+        await runDocker("start", redisContainerId);
+        redisWasStopped = false;
+        await waitFor(
+          async () =>
+            (await readinessStatus(firstServer)) === 200 &&
+            (await readinessStatus(secondServer)) === 200,
+          "Replicas did not become ready after Redis restarted.",
+          20_000,
+        );
+        await waitFor(
+          () =>
+            firstProvider.isAuthenticated &&
+            secondProvider.isAuthenticated &&
+            getTextContent(firstDoc, "body") ===
+              getTextContent(secondDoc, "body"),
+          "Providers did not reconnect with their local Yjs updates.",
+          20_000,
+        );
+      } finally {
+        if (redisWasStopped && redisContainerId !== undefined) {
+          await runDocker("start", redisContainerId);
+        }
+        lateProvider?.destroy();
+        firstProvider.destroy();
+        secondProvider.destroy();
+        lateDoc.destroy();
+        firstDoc.destroy();
+        secondDoc.destroy();
+        await firstServer.destroy();
+        await secondServer.destroy();
+        await fakeApi.destroy();
+      }
+    }, 120_000);
+  },
+);

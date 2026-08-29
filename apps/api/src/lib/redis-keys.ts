@@ -22,6 +22,8 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { FOLIO_COLLAB_REDIS_SCOPE } from "@stll/api-contract/folio-collab";
+
 /**
  * How a scope's keys stop existing. `ttl` means every write sets one, so a
  * flush or a missed cleanup cannot leak the key forever. `unbounded` means the
@@ -32,6 +34,9 @@ export const COORDINATION_KEY_EXPIRY = {
   "auth-ratelimit": "ttl",
   "mcp-gateway-ratelimit": "ttl",
   "feedback-intake": "ttl",
+  // Pub/sub channels do not materialize values. The only stored key under this
+  // scope is Hocuspocus's Redlock key, whose lockTimeout supplies its TTL.
+  [FOLIO_COLLAB_REDIS_SCOPE]: "ttl",
   "security-canary": "ttl",
   "ocr-readiness": "ttl",
   "workflow-run": "ttl",

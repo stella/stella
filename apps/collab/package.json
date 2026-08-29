@@ -15,11 +15,14 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@hocuspocus/extension-redis": "4.6.0",
     "@hocuspocus/server": "^4.6.0",
+    "@stll/api-contract": "workspace:*",
     "@stll/errors": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "better-result": "catalog:",
     "crossws": "^0.4.12",
+    "ioredis": "~5.6.1",
     "valibot": "catalog:",
     "yjs": "^13.6.32"
   },

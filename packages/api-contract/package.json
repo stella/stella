@@ -11,6 +11,7 @@
     "./chat-file-types": "./src/chat-file-types.ts",
     "./document-translation": "./src/document-translation.ts",
     "./entity-options": "./src/entity-options.ts",
+    "./folio-collab": "./src/folio-collab.ts",
     "./legislation-status": "./src/legislation-status.ts",
     "./matter-activity": "./src/matter-activity.ts",
     "./safe-id": "./src/safe-id.ts",

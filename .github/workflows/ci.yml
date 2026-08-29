@@ -41,6 +41,7 @@ jobs:
       trusted: ${{ steps.check.outputs.trusted }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
+      collab_redis_required: ${{ steps.changed-files.outputs.collab_redis_required }}
       desktop_rust_checks_required: ${{ steps.changed-files.outputs.desktop_rust_checks_required }}
       e2e_core_required: ${{ steps.changed-files.outputs.e2e_core_required }}
       e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
@@ -95,6 +96,7 @@ jobs:
             {
               echo "agent_sandbox_docker_required=true"
               echo "api_image_deps_required=true"
+              echo "collab_redis_required=true"
               echo "desktop_rust_checks_required=true"
               echo "e2e_core_required=true"
               echo "e2e_landing_required=true"
@@ -118,6 +120,7 @@ jobs:
             {
               echo "agent_sandbox_docker_required=false"
               echo "api_image_deps_required=false"
+              echo "collab_redis_required=false"
               echo "desktop_rust_checks_required=false"
               echo "e2e_core_required=false"
               echo "e2e_landing_required=false"
@@ -162,6 +165,7 @@ jobs:
           # runner just to decide it has nothing to do.
           agent_sandbox_docker_required=false
           api_image_deps_required=false
+          collab_redis_required=false
           landing_build_required=false
           legal_atlas_image_required=false
           mobile_build_required=false
@@ -199,6 +203,11 @@ jobs:
                 ;;
             esac
             case "$file" in
+              apps/collab/*|apps/api/src/handlers/folio-collab/*|apps/api/src/handlers/entities/join-folio-collab-room.ts|apps/api/src/lib/folio-collab-*|apps/api/src/lib/configured-bearer-access*|packages/api-contract/package.json|packages/api-contract/src/folio-collab*|bun.lock|.github/workflows/ci.yml)
+                collab_redis_required=true
+                ;;
+            esac
+            case "$file" in
               apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
                 legal_atlas_image_required=true
                 ;;
@@ -232,6 +241,7 @@ jobs:
           {
             echo "agent_sandbox_docker_required=$agent_sandbox_docker_required"
             echo "api_image_deps_required=$api_image_deps_required"
+            echo "collab_redis_required=$collab_redis_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
             echo "e2e_core_required=$e2e_core_required"
             echo "e2e_landing_required=$e2e_landing_required"
@@ -1080,6 +1090,48 @@ jobs:
           else
             bun run check:result-consumption -- --base "origin/$BASE_REF"
           fi
+
+  collab-redis:
+    needs: ci-plan
+    if: >-
+      needs.ci-plan.outputs.collab_redis_required == 'true'
+      && (needs.ci-plan.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    services:
+      redis:
+        image: redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@7198083e27bdd963cacc0b7d70ca54fe3ec83393
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Run cross-replica collaboration suite
+        env:
+          STELLA_COLLAB_TEST_REDIS_CONTAINER_ID: ${{ job.services.redis.id }}
+          STELLA_COLLAB_TEST_REDIS_URL: redis://127.0.0.1:6379
+        run: bun --filter @stll/collab test src/server.test.ts
 
   # These suites use Postgres behavior that PGlite cannot reproduce (partial
   # indexes, advisory locks, roles, and policies). The runner derives its file
@@ -2220,6 +2272,7 @@ jobs:
         changeset,
         agent-sandbox-docker,
         ci-checks,
+        collab-redis,
         code-quality,
         postgres-suites,
         release-typecheck,
@@ -2245,6 +2298,7 @@ jobs:
           AGENT_SANDBOX_DOCKER_RESULT: ${{ needs.agent-sandbox-docker.result }}
           CHANGESET_RESULT: ${{ needs.changeset.result }}
           CI_RESULT: ${{ needs.ci-checks.result }}
+          COLLAB_REDIS_RESULT: ${{ needs.collab-redis.result }}
           DESKTOP_CLIPPY_RESULT: ${{ needs.desktop-clippy.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
           EVENT: ${{ github.event_name }}
@@ -2288,6 +2342,7 @@ jobs:
                   || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" \
                   || "$PLAN_RESULT" == "failure" || "$PLAN_RESULT" == "cancelled" \
                   || "$CHANGESET_RESULT" == "failure" || "$CHANGESET_RESULT" == "cancelled" \
+                  || "$COLLAB_REDIS_RESULT" == "failure" || "$COLLAB_REDIS_RESULT" == "cancelled" \
                   || "$DESKTOP_CLIPPY_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
               echo "::error::CI checks failed."
               exit 1
@@ -2312,12 +2367,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$MARKETING_SCREENSHOTS_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$COLLAB_REDIS_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$MARKETING_SCREENSHOTS_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$MARKETING_SCREENSHOTS_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$COLLAB_REDIS_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$MARKETING_SCREENSHOTS_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi
