@@ -132,12 +132,16 @@ const TEMP_UPLOAD_TAG_VALUE = "tmp";
 const TEMP_UPLOAD_TAGGING = `${TEMP_UPLOAD_TAG_KEY}=${TEMP_UPLOAD_TAG_VALUE}`;
 const S3_GET_OBJECT_ACTION = "s3:GetObject" as const;
 
+// Set only by `configureS3PresignForTesting`; production always uses the env.
+let _endpointOverride: string | null = null;
+const s3Endpoint = (): string => _endpointOverride ?? envBase.S3_ENDPOINT;
+
 const buildAwsS3Client = async (): Promise<CachedClient> => {
   const creds = await resolveS3Credentials();
   const client = new AwsS3Client({
     region: envBase.S3_REGION,
-    endpoint: envBase.S3_ENDPOINT,
-    forcePathStyle: isPathStyleRequired(envBase.S3_ENDPOINT),
+    endpoint: s3Endpoint(),
+    forcePathStyle: isPathStyleRequired(s3Endpoint()),
     ...(creds
       ? {
           credentials: {
@@ -339,8 +343,8 @@ const buildScopedAwsS3Client = async (
 
   const client = new AwsS3Client({
     region: envBase.S3_REGION,
-    endpoint: envBase.S3_ENDPOINT,
-    forcePathStyle: isPathStyleRequired(envBase.S3_ENDPOINT),
+    endpoint: s3Endpoint(),
+    forcePathStyle: isPathStyleRequired(s3Endpoint()),
     credentials: {
       accessKeyId: credentials.AccessKeyId,
       secretAccessKey: credentials.SecretAccessKey,
@@ -686,8 +690,24 @@ export const prewarmScopedDownloadSigning = async (
   );
 };
 
+/**
+ * Test seam: point the SDK clients this module builds at `endpoint`, an
+ * in-process store speaking the S3 wire protocol (see
+ * `tests/helpers/fake-s3.ts`), so `copyObject` and `headObject` run for real
+ * instead of being replaced by a module mock.
+ */
+export const configureS3PresignForTesting = ({
+  endpoint,
+}: {
+  endpoint: string;
+}): void => {
+  _endpointOverride = endpoint;
+  _clientPromise = null;
+};
+
 /** Reset the cached client. Test seam; not used in prod. */
 export const resetAwsS3ClientForTesting = (): void => {
+  _endpointOverride = null;
   _clientPromise = null;
   _stsClientPromise = null;
   for (const entry of _scopedClientCache.values()) {
