@@ -155,8 +155,9 @@ const upsertTaskTab = (state: Draft<InspectorTabsStore>, tab: TaskTab) => {
   existing.workspaceId = tab.workspaceId;
 };
 
-// One user action, one activation: opening a selection must leave focus on
-// the tab the caller names, not on whichever target happened to come last.
+// Bulk open: adds a tab for every target in a single store update, then
+// focuses the one the caller names. Opening a selection one tab at a time
+// would re-render per tab and leave focus on whichever came last.
 // `openFile` and `openTask` are the single-target form of the same call.
 const openTabs = (
   set: InspectorTabsSet,
