@@ -726,6 +726,26 @@ export const systemPromptsPatch = ({
   };
 };
 
+type AnthropicThinkingOption = Extract<
+  ResolvedTanStackTextModel,
+  { provider: "anthropic" }
+>["modelOptions"]["thinking"];
+
+/**
+ * Extended-thinking tokens an Anthropic request must carry on top of its
+ * output allowance.
+ *
+ * `max_tokens` bounds reasoning and visible output together, and the budget
+ * form is only valid while `budget_tokens` stays below it. Callers size
+ * `maxOutputTokens` for the reply alone, so the reservation is added to that
+ * allowance instead of being taken out of it. The adaptive form reserves
+ * nothing: it declares no budget, and the model sizes its own reasoning
+ * inside `max_tokens`.
+ */
+const anthropicThinkingReservation = (
+  thinking: AnthropicThinkingOption,
+): number => (thinking?.type === "enabled" ? thinking.budget_tokens : 0);
+
 export const mergeGenerationOptions = ({
   caching,
   model,
@@ -772,7 +792,11 @@ export const mergeGenerationOptions = ({
         ...model.modelOptions,
         ...(maxOutputTokens === undefined
           ? {}
-          : { max_tokens: maxOutputTokens }),
+          : {
+              max_tokens:
+                maxOutputTokens +
+                anthropicThinkingReservation(model.modelOptions.thinking),
+            }),
       };
       return { ...anthropicOptions, ...temperatureOverride };
     }

@@ -10,6 +10,12 @@ import {
 } from "bun:test";
 import * as v from "valibot";
 
+import {
+  BYOK_MODEL_OPTIONS,
+  MODEL_ROLES,
+  REASONING_EFFORTS,
+} from "@stll/ai-catalog";
+
 import type { CachingDecision } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
@@ -319,6 +325,37 @@ describe("TanStack AI structured output generation", () => {
     expect(options).toEqual({
       max_tokens: 1000,
       thinking: { type: "adaptive" },
+    });
+  });
+
+  test("reserves the Anthropic thinking budget on top of the output allowance", () => {
+    // The budget form spends reasoning and visible output from one
+    // `max_tokens`, and `budget_tokens` must stay below it. The caller's
+    // allowance sizes the reply alone, so the reservation is added to it:
+    // forwarding the allowance on its own both starves the reply and, below
+    // the budget, describes a request Anthropic cannot serve.
+    // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
+    // The adapter is irrelevant for this pure option-merge test.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+    const model = {
+      adapter: {},
+      keySource: "instance",
+      modelId: "claude-haiku-4-5-20251001",
+      modelOptions: { thinking: { type: "enabled", budget_tokens: 10_000 } },
+      provider: "anthropic",
+    } as ResolvedTanStackTextModel;
+
+    const options = mergeGenerationOptions({
+      caching: noCaching,
+      maxOutputTokens: 1800,
+      model,
+      serviceTier: "standard",
+      temperature: undefined,
+    });
+
+    expect(options).toEqual({
+      max_tokens: 11_800,
+      thinking: { type: "enabled", budget_tokens: 10_000 },
     });
   });
 
@@ -759,6 +796,61 @@ describe("TanStack AI text generation", () => {
       message: "OpenAI rate limit exceeded.",
       status: 502,
     });
+  });
+});
+
+describe("Anthropic extended-thinking budgets", () => {
+  // Two modules decide the halves of one constraint: the role builder picks
+  // `thinking.budget_tokens`, the merge picks `max_tokens`, and a budget that
+  // reaches `max_tokens` describes a request Anthropic cannot serve. Walking
+  // every offered model, role, and effort binds them, so a model added to the
+  // budget form cannot drift back past the smallest allowance a caller asks
+  // for.
+  const SMALLEST_CALLER_ALLOWANCE = 1;
+
+  test("keeps every emitted budget under the merged max_tokens", () => {
+    for (const modelId of BYOK_MODEL_OPTIONS.anthropic) {
+      for (const role of MODEL_ROLES) {
+        for (const reasoningEffort of [undefined, ...REASONING_EFFORTS]) {
+          const modelOptions = realTanStackAIModels.tanStackModelOptionsForRole(
+            {
+              modelId,
+              organizationId: null,
+              provider: "anthropic",
+              reasoningEffort,
+              role,
+            },
+          );
+          // SAFETY: mergeGenerationOptions only reads
+          // provider/modelOptions/modelId. The adapter is irrelevant for this
+          // pure option-merge invariant.
+          // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+          const model = {
+            adapter: {},
+            keySource: "byok",
+            modelId,
+            modelOptions,
+            provider: "anthropic",
+          } as ResolvedTanStackTextModel;
+
+          const merged: Record<string, unknown> = {
+            ...mergeGenerationOptions({
+              caching: noCaching,
+              maxOutputTokens: SMALLEST_CALLER_ALLOWANCE,
+              model,
+              serviceTier: "standard",
+              temperature: undefined,
+            }),
+          };
+
+          const budget =
+            modelOptions.thinking?.type === "enabled"
+              ? modelOptions.thinking.budget_tokens
+              : 0;
+          expect(merged["max_tokens"]).toBeGreaterThan(budget);
+        }
+      }
+    }
   });
 });
 
