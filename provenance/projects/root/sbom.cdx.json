@@ -85,6 +85,12 @@
         ],
         "occurrences": [
           {
+            "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#2"
+          },
+          {
             "location": "apps/desktop/src/shared/use-system-theme.ts#1"
           },
           {
@@ -290,6 +296,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-preview.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
@@ -1606,6 +1618,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#1"
           },
           {
@@ -1858,6 +1873,9 @@
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/application-rail.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/application-shell.tsx#1"
           },
           {
@@ -1990,6 +2008,9 @@
             "location": "packages/ui/src/inspector/dock.tsx#1"
           },
           {
+            "location": "packages/ui/src/inspector/tabs.tsx#3"
+          },
+          {
             "location": "packages/ui/src/kanban/card-shell.tsx#1"
           },
           {
@@ -1997,6 +2018,15 @@
           },
           {
             "location": "packages/ui/src/kanban/sortable-interactions.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/kanban/subgroup-board.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/kanban/subgroup-board.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/kanban/virtual-cell.tsx#7"
           },
           {
             "location": "packages/ui/src/review/review-author-avatar.tsx#1"
@@ -2291,16 +2321,22 @@
         ],
         "occurrences": [
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#7"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#8"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers.ts#3"
           },
           {
             "location": "packages/workspace-ui/src/view-switcher.logic.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#4"
@@ -2451,13 +2487,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#11"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#9"
+          },
+          {
             "location": "packages/ui/src/kanban/drag-interactions.ts#3"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#6"
@@ -2466,13 +2502,13 @@
             "location": "packages/workspace-ui/src/view-switcher.tsx#9"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#13"
+          },
+          {
             "location": "packages/ui/src/kanban/drag-interactions.ts#4"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#12"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#13"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#7"
@@ -2986,6 +3022,12 @@
         ],
         "occurrences": [
           {
+            "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#2"
+          },
+          {
             "location": "apps/desktop/src/shared/use-system-theme.ts#1"
           },
           {
@@ -3191,6 +3233,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-preview.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
@@ -4507,6 +4555,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#1"
           },
           {
@@ -4759,6 +4810,9 @@
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/application-rail.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/application-shell.tsx#1"
           },
           {
@@ -4891,6 +4945,9 @@
             "location": "packages/ui/src/inspector/dock.tsx#1"
           },
           {
+            "location": "packages/ui/src/inspector/tabs.tsx#3"
+          },
+          {
             "location": "packages/ui/src/kanban/card-shell.tsx#1"
           },
           {
@@ -4898,6 +4955,15 @@
           },
           {
             "location": "packages/ui/src/kanban/sortable-interactions.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/kanban/subgroup-board.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/kanban/subgroup-board.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/kanban/virtual-cell.tsx#7"
           },
           {
             "location": "packages/ui/src/review/review-author-avatar.tsx#1"
@@ -6653,6 +6719,12 @@
         ],
         "occurrences": [
           {
+            "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#2"
+          },
+          {
             "location": "apps/desktop/src/shared/use-system-theme.ts#1"
           },
           {
@@ -6858,6 +6930,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-preview.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
@@ -8174,6 +8252,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#1"
           },
           {
@@ -8426,6 +8507,9 @@
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/application-rail.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/application-shell.tsx#1"
           },
           {
@@ -8558,6 +8642,9 @@
             "location": "packages/ui/src/inspector/dock.tsx#1"
           },
           {
+            "location": "packages/ui/src/inspector/tabs.tsx#3"
+          },
+          {
             "location": "packages/ui/src/kanban/card-shell.tsx#1"
           },
           {
@@ -8565,6 +8652,15 @@
           },
           {
             "location": "packages/ui/src/kanban/sortable-interactions.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/kanban/subgroup-board.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/kanban/subgroup-board.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/kanban/virtual-cell.tsx#7"
           },
           {
             "location": "packages/ui/src/review/review-author-avatar.tsx#1"
@@ -10919,7 +11015,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.101.4",
+      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.102.0",
       "description": "Developer tools to interact with and visualize the TanStack/react-query cache",
       "evidence": {
         "identity": [
@@ -10972,13 +11068,13 @@
           "value": "apps/web/node_modules/@tanstack/react-query-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.101.4",
+      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.102.0",
       "scope": "required",
       "tags": [
         "tools"
       ],
       "type": "library",
-      "version": "5.101.4"
+      "version": "5.102.0"
     },
     {
       "authors": [
@@ -10986,7 +11082,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query@5.101.4",
+      "bom-ref": "pkg:npm/@tanstack/react-query@5.102.0",
       "description": "Hooks for managing, caching and syncing asynchronous and remote data in React",
       "evidence": {
         "identity": [
@@ -11203,7 +11299,7 @@
             "location": "apps/web/src/lib/prompts/use-saved-prompts.ts#1"
           },
           {
-            "location": "apps/web/src/lib/react-query.ts#8"
+            "location": "apps/web/src/lib/react-query.ts#7"
           },
           {
             "location": "apps/web/src/lib/search.ts#1"
@@ -12128,10 +12224,10 @@
           "value": "apps/web/node_modules/@tanstack/react-query/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query@5.101.4",
+      "purl": "pkg:npm/%40tanstack/react-query@5.102.0",
       "scope": "required",
       "type": "library",
-      "version": "5.101.4"
+      "version": "5.102.0"
     },
     {
       "authors": [
@@ -12267,7 +12363,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.31",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.32",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -12953,10 +13049,10 @@
           "value": "apps/web/node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.170.31",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.32",
       "scope": "required",
       "type": "library",
-      "version": "1.170.31"
+      "version": "1.170.32"
     },
     {
       "authors": [
@@ -12964,7 +13060,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.48",
+      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.49",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -13032,10 +13128,10 @@
           "value": "apps/web/node_modules/@tanstack/react-start/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-start@1.168.48",
+      "purl": "pkg:npm/%40tanstack/react-start@1.168.49",
       "scope": "required",
       "type": "library",
-      "version": "1.168.48"
+      "version": "1.168.49"
     },
     {
       "authors": [
@@ -13345,10 +13441,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#20"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#14"
+          },
+          {
+            "location": "packages/ui/src/kanban/virtual-cell.tsx#9"
           }
         ]
       },
@@ -13373,6 +13472,10 @@
       ],
       "name": "react-virtual",
       "properties": [
+        {
+          "name": "SrcFile",
+          "value": "packages/ui/node_modules/@tanstack/react-virtual/package.json"
+        },
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/react-virtual/package.json"
@@ -14359,6 +14462,12 @@
         ],
         "occurrences": [
           {
+            "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#2"
+          },
+          {
             "location": "apps/desktop/src/shared/use-system-theme.ts#1"
           },
           {
@@ -14564,6 +14673,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-preview.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
@@ -15880,6 +15995,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#1"
           },
           {
@@ -16132,6 +16250,9 @@
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/application-rail.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/application-shell.tsx#1"
           },
           {
@@ -16264,6 +16385,9 @@
             "location": "packages/ui/src/inspector/dock.tsx#1"
           },
           {
+            "location": "packages/ui/src/inspector/tabs.tsx#3"
+          },
+          {
             "location": "packages/ui/src/kanban/card-shell.tsx#1"
           },
           {
@@ -16271,6 +16395,15 @@
           },
           {
             "location": "packages/ui/src/kanban/sortable-interactions.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/kanban/subgroup-board.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/kanban/subgroup-board.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/kanban/virtual-cell.tsx#7"
           },
           {
             "location": "packages/ui/src/review/review-author-avatar.tsx#1"
@@ -17850,6 +17983,9 @@
             "location": "apps/api/src/handlers/feedback/routes.ts#16"
           },
           {
+            "location": "apps/api/src/handlers/fields/kanban-placement/update.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/fields/mark-column-flag.ts#1"
           },
           {
@@ -18516,9 +18652,6 @@
             "location": "apps/api/src/handlers/tasks/my-tasks-route.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/tasks/update.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/template-packs/get.ts#1"
           },
           {
@@ -18961,6 +19094,12 @@
           },
           {
             "location": "apps/api/src/lib/bbox/generate-b-boxes.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/bilingual/ai.ts#5"
+          },
+          {
+            "location": "apps/api/src/lib/bilingual/formatting.ts#1"
           },
           {
             "location": "apps/api/src/lib/bilingual/run-queue.ts#14"
@@ -19494,6 +19633,9 @@
             "location": "apps/api/src/lib/tasks/create-task-entity.ts#1"
           },
           {
+            "location": "apps/api/src/lib/tasks/update-task.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/template-clause-links.ts#2"
           },
           {
@@ -19896,7 +20038,7 @@
             "location": "apps/web/src/lib/public-tools-github-content.ts#2"
           },
           {
-            "location": "apps/web/src/lib/react-query.ts#9"
+            "location": "apps/web/src/lib/react-query.ts#8"
           },
           {
             "location": "apps/web/src/lib/secret-token.ts#1"
@@ -20118,7 +20260,13 @@
             "location": "packages/template-packs/src/catalogue.ts#8"
           },
           {
+            "location": "packages/ui/src/kanban/matrix.ts#1"
+          },
+          {
             "location": "packages/workspace-ui/src/calculation-format.ts#10"
+          },
+          {
+            "location": "packages/workspace-ui/src/kanban-view.ts#1"
           },
           {
             "location": "scripts/changeset-guard.ts#23"
@@ -20337,6 +20485,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-narrative-field.tsx#3"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#14"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#4"
           },
           {
@@ -20410,6 +20561,10 @@
         {
           "name": "SrcFile",
           "value": "packages/workspace-ui/node_modules/better-result/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/ui/node_modules/better-result/package.json"
         },
         {
           "name": "SrcFile",
@@ -22451,9 +22606,6 @@
             "location": "apps/api/src/handlers/tasks/my-tasks.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/tasks/update.ts#2"
-          },
-          {
             "location": "apps/api/src/handlers/template-packs/organization-context.ts#1"
           },
           {
@@ -23271,6 +23423,9 @@
           },
           {
             "location": "apps/api/src/lib/tasks/create-task-entity.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/tasks/update-task.ts#2"
           },
           {
             "location": "apps/api/src/lib/template-clause-links.ts#3"
@@ -24241,6 +24396,9 @@
             "location": "apps/api/src/handlers/feedback/routes.ts#17"
           },
           {
+            "location": "apps/api/src/handlers/fields/kanban-placement/update.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/fields/mark-column-flag.ts#13"
           },
           {
@@ -24847,12 +25005,6 @@
             "location": "apps/api/src/handlers/tasks/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/tasks/update.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/tasks/update.ts#4"
-          },
-          {
             "location": "apps/api/src/handlers/template-packs/get.ts#2"
           },
           {
@@ -25307,6 +25459,12 @@
           },
           {
             "location": "apps/api/src/lib/tasks/create-task-entity.ts#4"
+          },
+          {
+            "location": "apps/api/src/lib/tasks/update-task.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/tasks/update-task.ts#4"
           },
           {
             "location": "apps/api/src/lib/template-clause-links.ts#4"
@@ -27066,10 +27224,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#24"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/metadata-popover.tsx#1"
@@ -27129,7 +27290,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#21"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#23"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/expenses.tsx#4"
@@ -27286,6 +27447,9 @@
           },
           {
             "location": "packages/ui/src/kanban/sortable-interactions.tsx#34"
+          },
+          {
+            "location": "packages/ui/src/kanban/subgroup-board.tsx#4"
           },
           {
             "location": "packages/ui/src/review/review-comment-card.tsx#3"
@@ -28759,6 +28923,12 @@
         ],
         "occurrences": [
           {
+            "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#2"
+          },
+          {
             "location": "apps/desktop/src/shared/use-system-theme.ts#1"
           },
           {
@@ -28964,6 +29134,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-preview.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
@@ -30280,6 +30456,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#1"
           },
           {
@@ -30532,6 +30711,9 @@
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/application-rail.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/application-shell.tsx#1"
           },
           {
@@ -30664,6 +30846,9 @@
             "location": "packages/ui/src/inspector/dock.tsx#1"
           },
           {
+            "location": "packages/ui/src/inspector/tabs.tsx#3"
+          },
+          {
             "location": "packages/ui/src/kanban/card-shell.tsx#1"
           },
           {
@@ -30671,6 +30856,15 @@
           },
           {
             "location": "packages/ui/src/kanban/sortable-interactions.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/kanban/subgroup-board.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/kanban/subgroup-board.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/kanban/virtual-cell.tsx#7"
           },
           {
             "location": "packages/ui/src/review/review-author-avatar.tsx#1"
@@ -30857,6 +31051,9 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "apps/api/src/lib/bilingual/formatting.ts#2"
+          },
           {
             "location": "apps/api/src/lib/document-translation/docx-language.ts#1"
           },
@@ -32864,10 +33061,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#25"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#16"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/metadata-popover.tsx#3"
@@ -32936,7 +33136,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#22"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#5"
@@ -33441,7 +33641,7 @@
             "location": "apps/api/src/lib/bbox/ai-prompts.ts#1"
           },
           {
-            "location": "apps/api/src/lib/bilingual/ai.ts#5"
+            "location": "apps/api/src/lib/bilingual/ai.ts#6"
           },
           {
             "location": "apps/api/src/lib/branded-types.ts#1"
