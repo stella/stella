@@ -18,7 +18,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import {
   CheckCircle2Icon,
   EyeIcon,
@@ -131,6 +131,12 @@ import { useEditSession } from "./use-edit-session";
 const CHANGE_CHECKPOINT_DELAY = 2000;
 const COLLABORATOR_COLOR_SPACE = 16_777_215;
 const noop = () => undefined;
+
+class CollaborationCloseCutError extends TaggedError(
+  "CollaborationCloseCutError",
+)<{
+  message: string;
+}> {}
 
 const colorFromStableId = (value: string) => {
   let hash = 0;
@@ -788,6 +794,19 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         getAnalytics().captureError(flushResult.error);
         stellaToast.error(t("folio.networkError"));
         throw flushResult.error;
+      }
+      if (
+        !shouldReuseCollaborationPublication(
+          flushResult.value,
+          collaborationSession.getStateVectorBase64(),
+        )
+      ) {
+        const error = new CollaborationCloseCutError({
+          message: "The local collaboration state changed during close.",
+        });
+        getAnalytics().captureError(error);
+        stellaToast.error(t("folio.networkError"));
+        throw error;
       }
       cancelCollaboration();
       onClose();
