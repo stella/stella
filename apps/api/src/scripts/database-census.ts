@@ -24,7 +24,7 @@ const EXIT_CODE = {
   DIFFERENCE: 1,
   SUCCESS: 0,
 } as const;
-// Tables above this estimated size get a count only; a content digest would
+// Tables above this exact row count get a count only; a content digest would
 // scan the whole table on the clone.
 const DIGEST_ROW_BOUND = 500_000;
 const STATEMENT_TIMEOUT = "30min";
@@ -132,31 +132,41 @@ const readCensus = async (
       return Result.err(queryFailed(undefined));
     }
     const name = row["name"];
-    const estimate = Number(row["estimate"]);
-    const digestWanted = estimate >= 0 && estimate <= DIGEST_ROW_BOUND;
+    // The exact count decides whether the digest is affordable; planner
+    // estimates can be stale or absent for a never-analyzed table.
     const measured = await Result.tryPromise({
-      try: async () =>
-        digestWanted
-          ? await sql`
-              SELECT count(*)::text AS "rowCount",
-                     md5(coalesce(string_agg(md5(t::text), '' ORDER BY md5(t::text)), '')) AS "digest"
-                FROM ${sql(name)} t
-            `
-          : await sql`SELECT count(*)::text AS "rowCount", NULL AS "digest" FROM ${sql(name)}`,
+      try: async () => {
+        const counted: unknown[] =
+          await sql`SELECT count(*)::text AS "rowCount" FROM ${sql(name)}`;
+        const countRow: unknown = counted.at(0);
+        const rowCount =
+          isRecord(countRow) && typeof countRow["rowCount"] === "string"
+            ? countRow["rowCount"]
+            : null;
+        if (rowCount === null) {
+          return null;
+        }
+        if (Number(rowCount) > DIGEST_ROW_BOUND) {
+          return { digest: null, rowCount };
+        }
+        const digested: unknown[] = await sql`
+          SELECT md5(coalesce(string_agg(md5(t::text), '' ORDER BY md5(t::text)), '')) AS "digest"
+            FROM ${sql(name)} t
+        `;
+        const digestRow: unknown = digested.at(0);
+        return isRecord(digestRow) && typeof digestRow["digest"] === "string"
+          ? { digest: digestRow["digest"], rowCount }
+          : null;
+      },
       catch: queryFailed,
     });
     if (Result.isError(measured)) {
       return measured;
     }
-    const first: unknown = measured.value.at(0);
-    if (
-      !isRecord(first) ||
-      typeof first["rowCount"] !== "string" ||
-      (first["digest"] !== null && typeof first["digest"] !== "string")
-    ) {
+    if (measured.value === null) {
       return Result.err(queryFailed(undefined));
     }
-    tables[name] = { digest: first["digest"], rowCount: first["rowCount"] };
+    tables[name] = measured.value;
     return measureNextTable();
   };
   const tablesMeasured = await measureNextTable();
@@ -236,7 +246,8 @@ const readCensus = async (
     if (!isRecord(first) || typeof first["orphans"] !== "string") {
       return Result.err(queryFailed(undefined));
     }
-    foreignKeyOrphans[row["name"]] = first["orphans"];
+    // Constraint names are unique per table, not per schema.
+    foreignKeyOrphans[`${childTable}.${row["name"]}`] = first["orphans"];
     return sweepNextForeignKey();
   };
   const foreignKeysSwept = await sweepNextForeignKey();
@@ -308,20 +319,33 @@ const run = async (
     );
   }
   const sql = new SQL({ max: 1, url: databaseUrl });
-  const census = await readCensus(sql);
+  // One snapshot for the whole census, so counts, digests, and the orphan
+  // sweep describe a single database state.
+  const census = await Result.tryPromise({
+    try: async () =>
+      await sql.begin(async (transaction) => {
+        await transaction`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`;
+        return await readCensus(transaction);
+      }),
+    catch: queryFailed,
+  });
   await sql.end();
   if (Result.isError(census)) {
     return census;
   }
+  if (Result.isError(census.value)) {
+    return census.value;
+  }
+  const current = census.value.value;
   const command = parsed.value;
   if (command.mode === "snapshot") {
     const written = await Result.tryPromise({
       try: async () =>
-        await writeFile(
-          command.outputPath,
-          `${JSON.stringify(census.value)}\n`,
-          { encoding: "utf-8", flag: "wx", mode: 0o600 },
-        ),
+        await writeFile(command.outputPath, `${JSON.stringify(current)}\n`, {
+          encoding: "utf-8",
+          flag: "wx",
+          mode: 0o600,
+        }),
       catch: (cause) =>
         new DatabaseCensusError({
           cause,
@@ -347,9 +371,7 @@ const run = async (
   if (Result.isError(baseline)) {
     return baseline;
   }
-  return Result.ok(
-    compareCensus(baseline.value, census.value, command.exclude),
-  );
+  return Result.ok(compareCensus(baseline.value, current, command.exclude));
 };
 
 if (import.meta.main) {

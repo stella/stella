@@ -241,7 +241,7 @@ const run = async (
   // token exchange and key discovery; both are served locally and every
   // other destination is refused, so the replay never leaves the process.
   const localProviderFetch = async (
-    input: RequestInfo | URL,
+    input: string | URL | Request,
     init?: RequestInit,
   ): Promise<Response> => {
     const request = new Request(input, init);
