@@ -257,7 +257,7 @@ const createFakeStellaApi = ({
         if (body["expectedSnapshotRevision"] !== latestSnapshotRevision) {
           return Response.json(
             { message: "Snapshot revision changed." },
-            { status: 412 },
+            { status: 428 },
           );
         }
         latestSnapshotBase64 =
@@ -1308,6 +1308,11 @@ describe.skipIf(redisTestUrl === undefined)(
         await waitFor(
           () => firstProvider.isAuthenticated && secondProvider.isAuthenticated,
           "Providers did not authenticate across replicas.",
+          10_000,
+        );
+        await waitFor(
+          () => firstProvider.isSynced && secondProvider.isSynced,
+          "Providers did not finish their initial cross-replica sync.",
           10_000,
         );
 

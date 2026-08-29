@@ -595,13 +595,16 @@ export const createCollabServer = async (
       panic("Collaboration room snapshot generation is missing.");
     }
 
-    for (
-      let attempt = 0;
-      attempt < SNAPSHOT_REVISION_RETRY_LIMIT;
-      attempt += 1
-    ) {
+    const storeSnapshotAttempt = async (attempt: number): Promise<number> => {
+      if (attempt >= SNAPSHOT_REVISION_RETRY_LIMIT) {
+        throw new FetchBoundaryError({
+          url: `${apiUrl}/v1/folio-collab-rooms/snapshot/store`,
+          status: 428,
+          statusText: "Precondition Required",
+          message: "Collaboration snapshot revision did not converge.",
+        });
+      }
       try {
-        // oxlint-disable-next-line no-await-in-loop -- each CAS attempt depends on the revision returned by the prior attempt
         const stored = await postJson({
           apiUrl,
           authorizationToken: serviceToken,
@@ -637,11 +640,10 @@ export const createCollabServer = async (
           });
           throw error;
         }
-        if (error.status !== 412) {
+        if (error.status !== 428) {
           throw error;
         }
 
-        // oxlint-disable-next-line no-await-in-loop -- the stale revision must be reloaded before the next sequential CAS attempt
         const current = await postJson({
           apiUrl,
           authorizationToken: serviceToken,
@@ -662,14 +664,10 @@ export const createCollabServer = async (
           applyUpdate(document, Buffer.from(current.snapshotBase64, "base64"));
         }
         snapshot.snapshotRevision = current.snapshotRevision;
+        return await storeSnapshotAttempt(attempt + 1);
       }
-    }
-    throw new FetchBoundaryError({
-      url: `${apiUrl}/v1/folio-collab-rooms/snapshot/store`,
-      status: 412,
-      statusText: "Precondition Failed",
-      message: "Collaboration snapshot revision did not converge.",
-    });
+    };
+    return await storeSnapshotAttempt(0);
   };
 
   const queueRoomSnapshotStore = async (document: HocuspocusDocument) => {

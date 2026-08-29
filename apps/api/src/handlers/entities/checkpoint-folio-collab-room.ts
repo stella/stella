@@ -140,7 +140,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
       return Result.err(
         new HandlerError({
           code: "folio_collab_snapshot_revision_changed",
-          status: 412,
+          status: 428,
           message: "Collaborative snapshot revision changed.",
         }),
       );

@@ -145,7 +145,7 @@ describe("classifyAIError", () => {
 // Split so the exhaustiveness alias below fails to compile when a status is
 // added to `HandlerErrorStatusCode` without deciding which side it falls on.
 const CLIENT_STATUS_CODES = [
-  400, 401, 402, 403, 404, 409, 412, 413, 422, 428, 429,
+  400, 401, 402, 403, 404, 409, 413, 422, 428, 429,
 ] as const satisfies readonly HandlerErrorStatusCode[];
 
 const SERVER_STATUS_CODES = [
