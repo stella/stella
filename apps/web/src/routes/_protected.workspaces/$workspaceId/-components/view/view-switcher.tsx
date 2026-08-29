@@ -23,7 +23,6 @@ import {
   isRequiredViewLayout,
   type RequiredViewLayoutType,
 } from "@stll/api-contract";
-import type { ViewLayout, ViewLayoutType } from "@stll/api/types";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -57,6 +56,7 @@ import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
+import type { ViewLayout, ViewLayoutType } from "@/lib/api-contract";
 import type { WorkspaceView } from "@/lib/types";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { SaveAsTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog";

@@ -4,7 +4,6 @@ import { panic } from "better-result";
 import { PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { OptionColor } from "@stll/api/types";
 import { Button } from "@stll/ui/button";
 import {
   Popover,
@@ -20,6 +19,7 @@ import {
   optionColors,
   resolveOptionColor,
 } from "@/components/workspaces/property-utils";
+import type { OptionColor } from "@/lib/api-contract";
 import type { WorkspacePropertyOption } from "@/lib/types";
 
 const colorAt = (index: number): OptionColor =>

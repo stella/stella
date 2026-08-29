@@ -2,8 +2,7 @@ import { useRef } from "react";
 
 import { useShallow } from "zustand/react/shallow";
 
-import type { BoundingBox } from "@stll/api/types";
-
+import type { BoundingBox } from "@/lib/api-contract";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 

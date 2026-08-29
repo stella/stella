@@ -92,3 +92,18 @@ const isMcpWriteOnlyResourceScope = (
 
 export const MCP_WRITE_ONLY_RESOURCE_SCOPES =
   MCP_DEFAULT_RESOURCE_SCOPES.filter(isMcpWriteOnlyResourceScope);
+
+export const MCP_OAUTH_PROTOCOL_SCOPES = [
+  "openid",
+  "profile",
+  "email",
+  // Protocol scope (RFC 6749 / OIDC), not a Stella resource scope. It must
+  // never enter resource-metadata scope lists; granting it lets the OAuth
+  // provider issue a refresh token alongside the access token.
+  "offline_access",
+] as const;
+
+export type McpOAuthScope =
+  | (typeof MCP_OAUTH_PROTOCOL_SCOPES)[number]
+  | McpDefaultResourceScope
+  | McpAnonymizedResourceScope;

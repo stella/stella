@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@stll/api/types";
+import type { ChatMessage } from "@/lib/api-contract";
 
 const externalMcpDocumentUrl =
   "https://hj.tribunalconstitucional.es/HJ/es/Resolucion/Show/29068";

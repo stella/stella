@@ -1,6 +1,5 @@
-import type { McpOAuthScope } from "@stll/api/types";
-
 import type { TranslationKey } from "@/i18n/types";
+import type { McpOAuthScope } from "@/lib/api-contract";
 
 // `satisfies Record<McpOAuthScope, TranslationKey>` makes this exhaustive
 // over every scope the OAuth provider can grant (`MCP_OAUTH_SCOPES` in

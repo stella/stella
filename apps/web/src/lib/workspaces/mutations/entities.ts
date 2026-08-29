@@ -1,12 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import type { UpsertFieldContent } from "@stll/api/types";
 import { stellaToast } from "@stll/ui/toast";
 
 import { closeInspectorTabsForEntities } from "@/components/inspector/inspector-tabs-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import type { UpsertFieldContent } from "@/lib/api-contract";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";

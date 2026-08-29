@@ -2,13 +2,13 @@ import {
   GLOBAL_SEARCH_RESULT_TYPES,
   type GlobalSearchResultType,
 } from "@stll/api-contract";
-import type { EntityKind, GlobalSearchHit } from "@stll/api/types";
 
 import type {
   SearchFilters,
   TimeFilter,
 } from "@/components/search-filters.logic";
 import type { TranslationKey } from "@/i18n/types";
+import type { EntityKind, GlobalSearchHit } from "@/lib/api-contract";
 import type { TimePreset } from "@/lib/search";
 
 export const SEARCH_PREVIEW_CONTENT_CLASS_NAME =

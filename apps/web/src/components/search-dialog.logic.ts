@@ -1,6 +1,6 @@
 import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
-import type { GlobalSearchHit } from "@stll/api/types";
 
+import type { GlobalSearchHit } from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
 import type { RecentFile } from "@/lib/search-recents";
 

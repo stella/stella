@@ -17,7 +17,6 @@ import { TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
-import type { TemplateRecipeDefinition } from "@stll/api/types";
 import type {
   DirectiveKind,
   DirectiveRange,
@@ -30,14 +29,15 @@ import {
   setTemplatePreviewValues,
 } from "@stll/folio-react";
 import { isClauseSlotName, isFieldPath } from "@stll/template-conditions";
-import "@stll/folio-react/editor.css";
 import { stellaToast } from "@stll/ui/toast";
+import "@stll/folio-react/editor.css";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import type { TemplateRecipeDefinition } from "@/lib/api-contract";
 import { optionalArray } from "@/lib/arrays";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";

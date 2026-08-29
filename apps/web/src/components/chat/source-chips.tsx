@@ -5,7 +5,6 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { ExternalLinkIcon } from "lucide-react";
 
 import { isEntityKind } from "@stll/api-contract";
-import type { ChatMessage, ChatSourceDocument } from "@stll/api/types";
 import { BidiText } from "@stll/ui/bidi-text";
 import { cn } from "@stll/ui/utils";
 
@@ -24,6 +23,7 @@ import {
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { sanitizeHref } from "@/lib/sanitize-href";

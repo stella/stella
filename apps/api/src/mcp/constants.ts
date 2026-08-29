@@ -5,6 +5,8 @@ import {
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
+  MCP_OAUTH_PROTOCOL_SCOPES,
+  type McpOAuthScope,
 } from "@stll/api-contract";
 
 import { env } from "@/api/env";
@@ -26,6 +28,7 @@ export {
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
   MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_OAUTH_PROTOCOL_SCOPES,
 };
 
 export { MCP_DOCUMENTS_RESOURCE_SCOPES, MCP_MODES };
@@ -34,18 +37,6 @@ export type { McpMode };
 export const MCP_ALL_RESOURCE_SCOPES = [
   ...MCP_DEFAULT_RESOURCE_SCOPES,
   ...MCP_ANONYMIZED_RESOURCE_SCOPES,
-] as const;
-
-export const MCP_OAUTH_PROTOCOL_SCOPES = [
-  "openid",
-  "profile",
-  "email",
-  // Protocol scope (RFC 6749 / OIDC), not a stella resource scope: it must
-  // never leak into `MCP_ALL_RESOURCE_SCOPES` or the resource-metadata scope
-  // lists derived from it. Granting it is what makes
-  // `oauthProvider({ scopes: ... })` in `lib/auth.ts` issue a refresh token
-  // alongside the access token.
-  "offline_access",
 ] as const;
 
 export const MCP_OAUTH_SCOPES = [
@@ -59,7 +50,7 @@ export const MCP_OAUTH_SCOPES = [
  * union so a newly added scope fails the build instead of silently rendering
  * without a disclosure line.
  */
-export type McpOAuthScope = (typeof MCP_OAUTH_SCOPES)[number];
+export type { McpOAuthScope };
 
 export { MCP_ANONYMIZED_HTTP_PATH, MCP_DOCUMENTS_HTTP_PATH, MCP_HTTP_PATH };
 

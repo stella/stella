@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { ViewLayoutType } from "@stll/api/types";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -40,6 +39,7 @@ import { cn } from "@stll/ui/utils";
 
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import { usePermissions } from "@/hooks/use-permissions";
+import type { ViewLayoutType } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import type { WorkspaceViewTemplate } from "@/lib/workspaces/queries/view-templates";
 import { viewTemplatesOptions } from "@/lib/workspaces/queries/view-templates";

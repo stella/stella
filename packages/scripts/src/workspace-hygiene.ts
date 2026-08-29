@@ -2,6 +2,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { validateWorkspaceAppBoundaries } from "./workspace-app-boundaries";
+
 export const WORKSPACE_PARENT_DIRS = ["apps", "packages"] as const;
 const DEPENDENCY_FIELDS = [
   "dependencies",
@@ -669,6 +671,7 @@ const validateTurboInstallPins = (rootDir: string): WorkspaceIssue[] => {
 
 export const validateWorkspaceRoot = (rootDir: string): WorkspaceIssue[] => {
   const issues: WorkspaceIssue[] = [
+    ...validateWorkspaceAppBoundaries(rootDir),
     ...validateTurboInstallPins(rootDir),
     ...validateBabelToolchains(rootDir),
     ...validateTypeScriptToolchain(rootDir),

@@ -1,5 +1,4 @@
-import type { EntityKind, GlobalSearchResultType } from "@stll/api/types";
-
+import type { EntityKind, GlobalSearchResultType } from "@/lib/api-contract";
 import { presetUpdatedFrom } from "@/lib/search";
 import type { TimePreset } from "@/lib/search";
 

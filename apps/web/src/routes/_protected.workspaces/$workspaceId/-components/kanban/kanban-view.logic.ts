@@ -12,7 +12,6 @@ import {
   TASK_STATUSES as TASK_STATUS_ORDER,
 } from "@stll/api-contract";
 import type { EntityKind, TaskStatus } from "@stll/api-contract";
-import type { OptionColor } from "@stll/api/types";
 import type {
   KanbanBuiltInGroup,
   KanbanGrouping,
@@ -26,6 +25,7 @@ import {
   resolveKanbanGroupBy,
 } from "@/components/workspaces/entity-utils";
 import { resolveOptionColor } from "@/components/workspaces/property-utils";
+import type { OptionColor } from "@/lib/api-contract";
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 
 export type WorkspaceKanbanSchema = KanbanSchema<

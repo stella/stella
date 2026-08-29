@@ -30,6 +30,8 @@ import type { ChatRefContext, ChatRefEncoding } from "@/api/lib/chat/ref-token";
 import type { ChatMentionsData } from "@/api/lib/chat/references";
 import type { UserFileUrl } from "@/api/lib/user-files/types";
 
+export type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
+
 export {
   CHAT_MENTION_CATEGORIES,
   CHAT_MENTION_HREF_PREFIXES,

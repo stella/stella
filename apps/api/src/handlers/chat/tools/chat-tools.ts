@@ -1,3 +1,8 @@
+import {
+  BUILT_IN_CHAT_TOOL_POLICY_KINDS,
+  type ApprovalRequiredBuiltInChatToolName,
+  type BuiltInChatToolPolicyKindByName,
+} from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 import type { SkillMetadata } from "@stll/skills";
 
@@ -18,45 +23,20 @@ import {
 } from "@/api/handlers/chat/tools/active-docx-edit-tool";
 import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
-import {
-  BUSINESS_REGISTRY_LOOKUP_TOOL_NAME,
-  createBusinessRegistryTools,
-} from "@/api/handlers/chat/tools/business-registry-tools";
-import {
-  EXPAND_CHAT_HISTORY_TOOL_NAME,
-  createChatHistoryTools,
-  SEARCH_CHAT_HISTORY_TOOL_NAME,
-} from "@/api/handlers/chat/tools/chat-history-tools";
+import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
+import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
   createCreateDocumentTool,
 } from "@/api/handlers/chat/tools/create-document-tool";
-import {
-  CREATE_WORKSPACE_DOCUMENT_TOOL_NAME,
-  createCreateWorkspaceDocumentTools,
-} from "@/api/handlers/chat/tools/create-workspace-document-tools";
-import {
-  createEditWorkspaceDocumentTools,
-  EDIT_WORKSPACE_DOCUMENT_TOOL_NAME,
-} from "@/api/handlers/chat/tools/edit-workspace-document-tools";
+import { createCreateWorkspaceDocumentTools } from "@/api/handlers/chat/tools/create-workspace-document-tools";
+import { createEditWorkspaceDocumentTools } from "@/api/handlers/chat/tools/edit-workspace-document-tools";
 import {
   buildChatCodeModeTools,
   type ChatCodeModeToolMap,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
-import {
-  createFolderConsistencyReviewTools,
-  REVIEW_FOLDER_CONSISTENCY_TOOL_NAME,
-} from "@/api/handlers/chat/tools/folder-consistency-review-tool";
-import {
-  ADD_COMMENT_TOOL_NAME,
-  createFolioAgentDocTools,
-  FIND_TEXT_TOOL_NAME,
-  READ_CHANGES_TOOL_NAME,
-  READ_COMMENTS_TOOL_NAME,
-  READ_DOCUMENT_TOOL_NAME,
-  REPLY_COMMENT_TOOL_NAME,
-  RESOLVE_COMMENT_TOOL_NAME,
-} from "@/api/handlers/chat/tools/folio-agent-tools";
+import { createFolderConsistencyReviewTools } from "@/api/handlers/chat/tools/folder-consistency-review-tool";
+import { createFolioAgentDocTools } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import {
@@ -69,7 +49,6 @@ import {
 } from "@/api/handlers/chat/tools/remember-tool";
 import {
   createSpawnSubagentsTool,
-  SPAWN_SUBAGENTS_TOOL_NAME,
   SUBAGENT_DELEGATION_DEPTH_CAP,
 } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import { projectToolMapForSubagent } from "@/api/handlers/chat/tools/subagent-tools";
@@ -81,16 +60,8 @@ import {
   applyChatToolPolicies,
   CHAT_TOOL_POLICY_KIND,
 } from "@/api/handlers/chat/tools/tool-policy";
-import type { NeedsApprovalPolicyKind } from "@/api/handlers/chat/tools/tool-policy";
-import {
-  COMPARE_VERSIONS_TOOL_NAME,
-  createVersionCompareTools,
-} from "@/api/handlers/chat/tools/version-compare-tools";
-import {
-  createWebSearchTools,
-  FETCH_URL_TOOL_NAME,
-  WEB_SEARCH_TOOL_NAME,
-} from "@/api/handlers/chat/tools/web-search-tools";
+import { createVersionCompareTools } from "@/api/handlers/chat/tools/version-compare-tools";
+import { createWebSearchTools } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import { getChatSkillMetadata } from "@/api/lib/agent-skills/skills";
@@ -570,109 +541,22 @@ const createRememberTools = ({
   }),
 });
 
-const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
-  [APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
-  "ask-user": CHAT_TOOL_POLICY_KIND.internal,
-  boe_find_related_laws: CHAT_TOOL_POLICY_KIND.publicOfficial,
-  boe_get_law: CHAT_TOOL_POLICY_KIND.publicOfficial,
-  boe_get_law_block: CHAT_TOOL_POLICY_KIND.publicOfficial,
-  boe_get_law_structure: CHAT_TOOL_POLICY_KIND.publicOfficial,
-  boe_search_legislation: CHAT_TOOL_POLICY_KIND.external,
-  borme_get_summary: CHAT_TOOL_POLICY_KIND.publicOfficial,
-  [BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
-  // Server-executed, read-only version diff: resolves version ids to DOCX
-  // buffers under the caller's authorized workspaces and returns text, so it
-  // runs immediately without per-call approval.
-  [COMPARE_VERSIONS_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
-  [REVIEW_FOLDER_CONSISTENCY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
-  "create-document": CHAT_TOOL_POLICY_KIND.internal,
-  "create-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
-  // Renders Markdown into a Stella-styled DOCX and creates a new entity in
-  // the active matter (`create-from-buffer.ts`'s S3 + DB write path): a
-  // mutation, gated on per-call approval like every other write.
-  [CREATE_WORKSPACE_DOCUMENT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.mutation,
-  describe_template: CHAT_TOOL_POLICY_KIND.internal,
-  // Headless (auto) DOCX edit: writes a new entity version with no per-
-  // suggestion human review step (unlike apply-active-docx-edits, which
-  // only queues suggestions), so it needs per-call approval like every
-  // other write.
-  [EDIT_WORKSPACE_DOCUMENT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.mutation,
-  // Code-mode tool discovery: read-only, gated by the same authorization that
-  // let the request reach chat at all; runs immediately without per-call
-  // approval, alongside the sandbox runner it feeds.
-  discover_tools: CHAT_TOOL_POLICY_KIND.internal,
-  // The sandbox code runner (replaces run-stella-query). Executes only the
-  // ref-mediated read projections in the hardened sandbox, so it is internal
-  // and executes without per-call approval.
-  execute_typescript: CHAT_TOOL_POLICY_KIND.internal,
-  [EXPAND_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
-  // Per-thread `webSearchEnabled` controls availability. Individual calls use
-  // the external-service policy because their inputs can contain free text.
-  [FETCH_URL_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.external,
-  [FIND_TEXT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
-  // folio-agents live-editor read tools: read-only, auto-run against the file
-  // overlay's editor bridge (same class as read_document / find_text).
-  [READ_CHANGES_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
-  [READ_COMMENTS_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
-  // folio-agents comment mutations: each writes a tracked comment / reply /
-  // resolution, so each is a per-call mutation behind approval, resolved
-  // client-side through the same flow as apply-active-docx-edits.
-  [ADD_COMMENT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.mutation,
-  [REPLY_COMMENT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.mutation,
-  [RESOLVE_COMMENT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.mutation,
-  // A write: served by the hand-written template chat tool (not the registry
-  // write projection), but still gated on approval like every other write.
-  fill_template: CHAT_TOOL_POLICY_KIND.mutation,
-  infosoud_lookup_case: CHAT_TOOL_POLICY_KIND.publicOfficial,
-  list_templates: CHAT_TOOL_POLICY_KIND.internal,
-  "load-skill": CHAT_TOOL_POLICY_KIND.internal,
-  [READ_DOCUMENT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
-  "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
-  [REMEMBER_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.mutation,
-  [SEARCH_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
-  suggest_template_fields: CHAT_TOOL_POLICY_KIND.internal,
-  "update-current-skill-body": CHAT_TOOL_POLICY_KIND.mutation,
-  "update-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
-  "update-entity-fields": CHAT_TOOL_POLICY_KIND.mutation,
-  [WEB_SEARCH_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.external,
-  // Registry write projections: every projected `access: "write"` tool is a
-  // per-call mutation, so it maps to `mutation` (needsApproval). The
-  // `Record<BuiltInChatToolPolicyName, ...>` satisfies below forces a policy
-  // entry for each projected write name, so a newly projected write cannot land
-  // without an approval classification.
-  delete_clause: CHAT_TOOL_POLICY_KIND.mutation,
-  delete_contact: CHAT_TOOL_POLICY_KIND.mutation,
-  delete_document: CHAT_TOOL_POLICY_KIND.mutation,
-  delete_matter: CHAT_TOOL_POLICY_KIND.mutation,
-  delete_time_entry: CHAT_TOOL_POLICY_KIND.mutation,
-  link_matter_contact: CHAT_TOOL_POLICY_KIND.mutation,
-  manage_organization: CHAT_TOOL_POLICY_KIND.mutation,
-  run_playbook: CHAT_TOOL_POLICY_KIND.mutation,
-  save_clause: CHAT_TOOL_POLICY_KIND.mutation,
-  save_contact: CHAT_TOOL_POLICY_KIND.mutation,
-  save_document: CHAT_TOOL_POLICY_KIND.mutation,
-  save_matter: CHAT_TOOL_POLICY_KIND.mutation,
-  save_task: CHAT_TOOL_POLICY_KIND.mutation,
-  save_template: CHAT_TOOL_POLICY_KIND.mutation,
-  save_time_entry: CHAT_TOOL_POLICY_KIND.mutation,
-  set_field_value: CHAT_TOOL_POLICY_KIND.mutation,
-  set_practice_jurisdictions: CHAT_TOOL_POLICY_KIND.mutation,
-  // `spawn_subagents` itself is approval-gated at the top level. A subagent's
-  // own writes are NOT executed under that grant: `projectToolMapForSubagent`
-  // replaces every approval-requiring tool with a non-executing proposal that
-  // is surfaced back to the top-level loop for per-write user approval
-  // (buffered approval).
-  [SPAWN_SUBAGENTS_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.mutation,
-} as const satisfies Record<
+/* Contract-owned so browser approval UX and server enforcement cannot drift. */
+BUILT_IN_CHAT_TOOL_POLICY_KINDS satisfies Record<
   BuiltInChatToolPolicyName,
   (typeof CHAT_TOOL_POLICY_KIND)[keyof typeof CHAT_TOOL_POLICY_KIND]
 >;
+true satisfies Exclude<
+  keyof typeof BUILT_IN_CHAT_TOOL_POLICY_KINDS,
+  BuiltInChatToolPolicyName
+> extends never
+  ? true
+  : never;
 
 /** Every built-in chat tool's policy kind, keyed by tool name. Single source
  * of truth consumers (e.g. the web client) derive their own tool-name unions
  * from, instead of hand-mirroring this classification. */
-export type BuiltInChatToolPolicyKindByName =
-  typeof BUILT_IN_CHAT_TOOL_POLICY_KINDS;
+export type { BuiltInChatToolPolicyKindByName };
 
 /**
  * Built-in tool names whose policy kind requires approval, derived from
@@ -680,11 +564,7 @@ export type BuiltInChatToolPolicyKindByName =
  * rather than hand-listed, so a reclassified tool moves in or out of this
  * union automatically.
  */
-export type ApprovalRequiredBuiltInChatToolName = {
-  [K in keyof BuiltInChatToolPolicyKindByName]: BuiltInChatToolPolicyKindByName[K] extends NeedsApprovalPolicyKind
-    ? K
-    : never;
-}[keyof BuiltInChatToolPolicyKindByName];
+export type { ApprovalRequiredBuiltInChatToolName };
 
 export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {

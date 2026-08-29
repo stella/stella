@@ -1,7 +1,6 @@
 import { SquareMinusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { OptionColor, PropertyContent } from "@stll/api/types";
 import { PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
@@ -12,6 +11,7 @@ import {
   PropertyPopoverLabel,
 } from "@/components/workspaces/property-helpers";
 import { resolveOptionColor } from "@/components/workspaces/property-utils";
+import type { OptionColor, PropertyContent } from "@/lib/api-contract";
 import type { WorkspaceProperty } from "@/lib/types";
 
 const isPropertyValid = (property: WorkspaceProperty) => {

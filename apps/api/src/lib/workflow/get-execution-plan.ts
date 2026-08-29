@@ -8,6 +8,7 @@ import type {
   AiExtractablePropertyContent,
   AIModelTool,
   PlaybookVerdictTool,
+  PropertyContent,
   PropertyTool,
 } from "@/api/db/schema-validators";
 import { isAiExtractablePropertyContent } from "@/api/db/schema-validators";
@@ -16,7 +17,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { parseStoredCondition } from "@/api/lib/conditions/parse-stored";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
-import type { PropertyContent } from "@/api/types";
 
 /**
  * Whether a property is queued for the workflow to (re)compute it.

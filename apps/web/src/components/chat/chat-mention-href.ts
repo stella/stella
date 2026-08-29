@@ -4,10 +4,11 @@ import {
   RESOURCE_TYPE,
 } from "@stll/api-contract";
 import type { ChatMentionResourceLinkTarget } from "@stll/api-contract";
+
 import type {
   ChatMentionCategory,
   ChatMentionHrefPrefixMap,
-} from "@stll/api/types";
+} from "@/lib/api-contract";
 
 export type MentionCategory = ChatMentionCategory;
 

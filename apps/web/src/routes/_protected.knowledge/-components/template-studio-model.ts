@@ -1,13 +1,13 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import type { TemplateRecipeDefinition } from "@stll/api/types";
 import type { ConditionNode } from "@stll/conditions";
 import { conditionNodeSchema } from "@stll/conditions";
 import { isFieldPath } from "@stll/template-conditions";
 
 import { DATE_FORMAT_STYLES } from "@/components/templates/template-date-format";
 import { isLookupRegistry } from "@/components/templates/template-field-manifest";
+import type { TemplateRecipeDefinition } from "@/lib/api-contract";
 import { optionalArray } from "@/lib/arrays";
 import { includesValue } from "@/lib/utils";
 import {

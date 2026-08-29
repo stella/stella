@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { GlobalSearchHit } from "@stll/api/types";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CommandItem } from "@stll/ui/command";
@@ -29,6 +28,7 @@ import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { api } from "@/lib/api";
+import type { GlobalSearchHit } from "@/lib/api-contract";
 import type { SearchAISummaryParams } from "@/lib/search";
 import type { RecentFile, RecentSearch } from "@/lib/search-recents";
 

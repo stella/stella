@@ -6,23 +6,23 @@
 import type { ChatClientState, UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
+import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
+import type { FolioAgentToolName } from "@stll/folio-agents";
+
+import type { TranslationKey } from "@/i18n/types";
 import type {
   ApprovalRequiredBuiltInChatToolName,
   BuiltInChatToolPolicyKindByName,
   ChatMessage,
   ChatPart as TanStackChatPart,
   ChatUITools,
-} from "@stll/api/types";
-import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
-import type { FolioAgentToolName } from "@stll/folio-agents";
-
-import type { TranslationKey } from "@/i18n/types";
+} from "@/lib/api-contract";
 
 export type {
   ChatAnonRestoration,
   ChatMessage,
   ChatUITools,
-} from "@stll/api/types";
+} from "@/lib/api-contract";
 export type ChatPart = TanStackChatPart;
 export type PersistedChatMessage = ChatMessage;
 type TanStackChatToolCallPart = Extract<

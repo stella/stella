@@ -15,7 +15,6 @@ import { panic, Result } from "better-result";
 import { KanbanIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { OptionColor } from "@stll/api/types";
 import type { KanbanGroup } from "@stll/ui/kanban";
 import {
   buildKanbanBoardMatrix,
@@ -35,6 +34,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import type { OptionColor } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { ClientOperationError } from "@/lib/errors/client";
 import { toSafeId } from "@/lib/safe-id";

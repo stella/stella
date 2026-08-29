@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { isMockAI } from "@/api/consts";
 import { justifications } from "@/api/db/schema";
+import type { BoundingBox } from "@/api/db/schema-validators";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -12,7 +13,6 @@ import { generateBBoxes } from "@/api/lib/bbox/generate-b-boxes";
 import { generateBBoxesMock } from "@/api/lib/bbox/generate-b-boxes-mock";
 import { prepareJustificationData } from "@/api/lib/bbox/generate-b-boxes-shared";
 import { tSafeId } from "@/api/lib/custom-schema";
-import type { BoundingBox } from "@/api/types";
 
 const config = {
   permissions: { workspace: ["update"] },

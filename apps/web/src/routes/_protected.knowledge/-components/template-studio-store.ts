@@ -1,8 +1,8 @@
 import { create } from "zustand";
 
-import type { TemplateRecipeDefinition } from "@stll/api/types";
 import type { DirectiveRange, TemplatePreviewValue } from "@stll/folio-react";
 
+import type { TemplateRecipeDefinition } from "@/lib/api-contract";
 import type { ReplacementSpec } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
 import {
   templateValueSourceTransition,

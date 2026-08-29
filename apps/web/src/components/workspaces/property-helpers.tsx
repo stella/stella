@@ -2,9 +2,9 @@ import type { ComponentProps } from "react";
 
 import { useTranslations } from "use-intl";
 
-import type { PropertyContentType } from "@stll/api/types";
 import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
+import type { PropertyContentType } from "@/lib/api-contract";
 import type { WorkspaceField } from "@/lib/types";
 
 export { PropertyIcon } from "@stll/workspace-ui/property-icon";

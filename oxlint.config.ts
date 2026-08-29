@@ -277,7 +277,11 @@ const noZodImport = {
   message: "Use 'valibot' instead of 'zod'.",
 };
 
-const webLocalApiImportGroup = ["@/api/*", "@/api/**/*"];
+const webLocalApiImportGroup = [
+  "@/api/*",
+  "@/api/**/*",
+  "!@/api/handlers/chat/types",
+];
 
 const webProtectedRouteImportGroup = [
   "@/routes/_protected",
@@ -288,8 +292,8 @@ const webProtectedRouteImportGroup = [
 
 const webCrossWorkspaceImports = [
   {
-    group: ["@stll/api", "@stll/api/**", "!@stll/api/types"],
-    message: "apps/web may only import the public '@stll/api/types' surface.",
+    group: ["@stll/api", "@stll/api/**", "!@stll/api/eden-contract"],
+    message: "apps/web may only import the counted API Eden contract surface.",
   },
   {
     group: [
@@ -1864,7 +1868,7 @@ export default defineConfig({
             patterns: [
               {
                 group: webLocalApiImportGroup,
-                message: "Use '@stll/api/types' instead of '@/api/'.",
+                message: "Use '@/lib/api-contract' instead of '@/api/'.",
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
@@ -1962,7 +1966,7 @@ export default defineConfig({
             patterns: [
               {
                 group: webLocalApiImportGroup,
-                message: "Use '@stll/api/types' instead of '@/api/'.",
+                message: "Use '@/lib/api-contract' instead of '@/api/'.",
               },
               ...webCrossWorkspaceImports,
             ],
@@ -1991,7 +1995,7 @@ export default defineConfig({
             patterns: [
               {
                 group: webLocalApiImportGroup,
-                message: "Use '@stll/api/types' instead of '@/api/'.",
+                message: "Use '@/lib/api-contract' instead of '@/api/'.",
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
@@ -2019,7 +2023,7 @@ export default defineConfig({
               },
               {
                 group: webLocalApiImportGroup,
-                message: "Use '@stll/api/types' instead of '@/api/'.",
+                message: "Use '@/lib/api-contract' instead of '@/api/'.",
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
@@ -2064,7 +2068,7 @@ export default defineConfig({
               },
               {
                 group: webLocalApiImportGroup,
-                message: "Use '@stll/api/types' instead of '@/api/'.",
+                message: "Use '@/lib/api-contract' instead of '@/api/'.",
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
