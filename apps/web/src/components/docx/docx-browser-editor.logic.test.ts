@@ -223,19 +223,19 @@ describe("DOCX edit finalization", () => {
 
 describe("collaboration publication retry", () => {
   const current = {
+    documentMutationRevision: 8,
     generation: 2,
     roomId: "room-current",
-    stateVectorBase64: "same-cut",
   };
 
-  test("reuses idempotency only for the same room generation and Yjs cut", () => {
+  test("reuses idempotency only for the same room generation and mutation cut", () => {
     expect(
       shouldReuseCollaborationPublication({ current, pending: current }),
     ).toBe(true);
     expect(
       shouldReuseCollaborationPublication({
         current,
-        pending: { ...current, stateVectorBase64: "old-cut" },
+        pending: { ...current, documentMutationRevision: 7 },
       }),
     ).toBe(false);
     expect(

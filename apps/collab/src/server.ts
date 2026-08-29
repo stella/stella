@@ -9,7 +9,7 @@ import type { Peer } from "crossws";
 import crossws from "crossws/adapters/bun";
 import RedisClient from "ioredis";
 import * as v from "valibot";
-import { applyUpdate, encodeStateAsUpdate, encodeStateVector } from "yjs";
+import { applyUpdate, encodeStateAsUpdate } from "yjs";
 
 import {
   FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
@@ -94,10 +94,12 @@ const refreshTokenResponseSchema = v.strictObject({
 const loadSnapshotResponseSchema = v.strictObject({
   generation: v.pipe(v.number(), v.integer(), v.minValue(0)),
   snapshotBase64: v.nullable(v.string()),
+  snapshotRevision: v.pipe(v.number(), v.integer(), v.minValue(0)),
 });
 
 const storeSnapshotResponseSchema = v.strictObject({
   generation: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  snapshotRevision: v.pipe(v.number(), v.integer(), v.minValue(0)),
   storedAt: v.string(),
 });
 
@@ -119,6 +121,7 @@ const ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS = 30_000;
 const REDIS_LOCK_TIMEOUT_MS = 30_000;
 const REDIS_INITIAL_SYNC_TIMEOUT_MS = 3000;
 const SHUTDOWN_DRAIN_TIMEOUT_MS = 10_000;
+const SNAPSHOT_REVISION_RETRY_LIMIT = 3;
 const REDIS_RETRY_CLOSE_REASON = "Collaboration coordination unavailable";
 const ROOM_GENERATION_CLOSE_REASON = "Collaboration room generation changed";
 
@@ -340,7 +343,7 @@ export const createCollabServer = async (
   const roomHeartbeatStates = new Map<string, CollabRoomHeartbeatState>();
   const documentSnapshots = new WeakMap<
     HocuspocusDocument,
-    { generation: number; roomId: string }
+    { generation: number; roomId: string; snapshotRevision: number }
   >();
   // Debounced persistence and an explicit publication flush can overlap. The
   // capture plus store must stay ordered so a flush acknowledgement always
@@ -592,43 +595,81 @@ export const createCollabServer = async (
       panic("Collaboration room snapshot generation is missing.");
     }
 
-    const snapshotBase64 = Buffer.from(encodeStateAsUpdate(document)).toString(
-      "base64",
-    );
-    const stateVectorBase64 = Buffer.from(encodeStateVector(document)).toString(
-      "base64",
-    );
-    try {
-      await postJson({
-        apiUrl,
-        authorizationToken: serviceToken,
-        body: {
-          expectedGeneration: snapshot.generation,
-          roomId: snapshot.roomId,
-          snapshotBase64,
-        },
-        path: "/folio-collab-rooms/snapshot/store",
-        schema: storeSnapshotResponseSchema,
-      });
-    } catch (error) {
-      if (!(error instanceof FetchBoundaryError) || error.status !== 409) {
-        throw error;
+    for (
+      let attempt = 0;
+      attempt < SNAPSHOT_REVISION_RETRY_LIMIT;
+      attempt += 1
+    ) {
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- each CAS attempt depends on the revision returned by the prior attempt
+        const stored = await postJson({
+          apiUrl,
+          authorizationToken: serviceToken,
+          body: {
+            expectedGeneration: snapshot.generation,
+            expectedSnapshotRevision: snapshot.snapshotRevision,
+            roomId: snapshot.roomId,
+            snapshotBase64: Buffer.from(encodeStateAsUpdate(document)).toString(
+              "base64",
+            ),
+          },
+          path: "/folio-collab-rooms/snapshot/store",
+          schema: storeSnapshotResponseSchema,
+        });
+        snapshot.snapshotRevision = stored.snapshotRevision;
+        return stored.snapshotRevision;
+      } catch (error) {
+        if (!(error instanceof FetchBoundaryError)) {
+          throw error;
+        }
+        if (error.status === 409) {
+          closeManagedRoomConnections(
+            document.name,
+            FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
+            ROOM_GENERATION_CLOSE_REASON,
+          );
+          clearRoomTokens(document.name);
+          logCollabEvent({
+            event: "snapshot_generation_conflict",
+            generation: snapshot.generation,
+            level: "error",
+            roomId: snapshot.roomId,
+          });
+          throw error;
+        }
+        if (error.status !== 412) {
+          throw error;
+        }
+
+        // oxlint-disable-next-line no-await-in-loop -- the stale revision must be reloaded before the next sequential CAS attempt
+        const current = await postJson({
+          apiUrl,
+          authorizationToken: serviceToken,
+          body: { roomId: snapshot.roomId },
+          path: "/folio-collab-rooms/snapshot/load",
+          schema: loadSnapshotResponseSchema,
+        });
+        if (current.generation !== snapshot.generation) {
+          closeManagedRoomConnections(
+            document.name,
+            FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
+            ROOM_GENERATION_CLOSE_REASON,
+          );
+          clearRoomTokens(document.name);
+          throw error;
+        }
+        if (current.snapshotBase64 !== null) {
+          applyUpdate(document, Buffer.from(current.snapshotBase64, "base64"));
+        }
+        snapshot.snapshotRevision = current.snapshotRevision;
       }
-      closeManagedRoomConnections(
-        document.name,
-        FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
-        ROOM_GENERATION_CLOSE_REASON,
-      );
-      clearRoomTokens(document.name);
-      logCollabEvent({
-        event: "snapshot_generation_conflict",
-        generation: snapshot.generation,
-        level: "error",
-        roomId: snapshot.roomId,
-      });
-      throw error;
     }
-    return stateVectorBase64;
+    throw new FetchBoundaryError({
+      url: `${apiUrl}/v1/folio-collab-rooms/snapshot/store`,
+      status: 412,
+      statusText: "Precondition Failed",
+      message: "Collaboration snapshot revision did not converge.",
+    });
   };
 
   const queueRoomSnapshotStore = async (document: HocuspocusDocument) => {
@@ -764,6 +805,7 @@ export const createCollabServer = async (
       documentSnapshots.set(document, {
         generation: result.generation,
         roomId: context.roomId,
+        snapshotRevision: result.snapshotRevision,
       });
 
       if (!result.snapshotBase64) {
@@ -777,11 +819,11 @@ export const createCollabServer = async (
       if (!parsed.success) {
         return;
       }
-      const stateVectorBase64 = await queueRoomSnapshotStore(document);
+      const snapshotRevision = await queueRoomSnapshotStore(document);
       connection.sendStateless(
         JSON.stringify({
           requestId: parsed.output.requestId,
-          stateVectorBase64,
+          snapshotRevision,
           type: FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
         }),
       );

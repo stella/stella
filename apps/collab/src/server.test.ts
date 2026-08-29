@@ -1,6 +1,6 @@
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { describe, expect, test } from "bun:test";
-import { applyUpdate, Doc, encodeStateVector } from "yjs";
+import { applyUpdate, Doc } from "yjs";
 
 import {
   FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
@@ -30,6 +30,7 @@ type FakeStellaApi = {
   destroy: () => Promise<void>;
   heartbeatRequestBodies: () => Record<string, unknown>[];
   latestSnapshotBase64: () => string | null;
+  latestSnapshotRevision: () => number;
   loadRequestBodies: () => Record<string, unknown>[];
   refreshRequests: () => number;
   releaseFirstStore: () => void;
@@ -126,6 +127,7 @@ const createFakeStellaApi = ({
   const heartbeatRequestBodies: Record<string, unknown>[] = [];
   const loadRequestBodies: Record<string, unknown>[] = [];
   let latestSnapshotBase64 = initialSnapshotBase64;
+  let latestSnapshotRevision = initialSnapshotBase64 === null ? 0 : 1;
   let refreshRequests = 0;
   const snapshotAuthorizationHeaders: (string | null)[] = [];
   const storeRequestBodies: Record<string, unknown>[] = [];
@@ -224,6 +226,7 @@ const createFakeStellaApi = ({
         return Response.json({
           generation: roomGenerations.get(String(body["roomId"])),
           snapshotBase64: latestSnapshotBase64,
+          snapshotRevision: latestSnapshotRevision,
         });
       }
 
@@ -251,13 +254,21 @@ const createFakeStellaApi = ({
           firstStoreHeld = false;
           await firstStoreGate.promise;
         }
+        if (body["expectedSnapshotRevision"] !== latestSnapshotRevision) {
+          return Response.json(
+            { message: "Snapshot revision changed." },
+            { status: 412 },
+          );
+        }
         latestSnapshotBase64 =
           typeof body["snapshotBase64"] === "string"
             ? body["snapshotBase64"]
             : null;
+        latestSnapshotRevision += 1;
 
         return Response.json({
           generation: currentGeneration,
+          snapshotRevision: latestSnapshotRevision,
           storedAt: new Date().toISOString(),
         });
       }
@@ -281,6 +292,7 @@ const createFakeStellaApi = ({
     },
     heartbeatRequestBodies: () => heartbeatRequestBodies,
     latestSnapshotBase64: () => latestSnapshotBase64,
+    latestSnapshotRevision: () => latestSnapshotRevision,
     loadRequestBodies: () => loadRequestBodies,
     refreshRequests: () => refreshRequests,
     releaseFirstStore: () => firstStoreGate.resolve(undefined),
@@ -623,9 +635,7 @@ describe("collaboration server", () => {
           payload ===
           JSON.stringify({
             requestId,
-            stateVectorBase64: Buffer.from(
-              encodeStateVector(document),
-            ).toString("base64"),
+            snapshotRevision: 1,
             type: FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
           })
         ) {
@@ -749,6 +759,116 @@ describe("collaboration server", () => {
       await fakeApi.destroy();
     }
   });
+
+  test("merges and retries when another replica advances the durable snapshot", async () => {
+    const fakeApi = createFakeStellaApi({ holdFirstStore: true });
+    const firstServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 10_000,
+      maxDebounceMs: 10_000,
+      port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const secondServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 10_000,
+      maxDebounceMs: 10_000,
+      port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const firstDocument = new Doc();
+    const secondDocument = new Doc();
+    const acknowledgements = new Set<string>();
+    const firstRequestId = "00000000-0000-4000-8000-000000000093";
+    const secondRequestId = "00000000-0000-4000-8000-000000000094";
+    const recordAcknowledgement = (payload: string) => {
+      const parsed: unknown = JSON.parse(payload);
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        "requestId" in parsed &&
+        typeof parsed.requestId === "string"
+      ) {
+        acknowledgements.add(parsed.requestId);
+      }
+    };
+    const firstProvider = createProvider({
+      name: TEST_ROOM_NAME,
+      onStateless: recordAcknowledgement,
+      token: "collab_token_test",
+      url: firstServer.websocketUrl,
+      ydoc: firstDocument,
+    });
+    const secondProvider = createProvider({
+      name: TEST_ROOM_NAME,
+      onStateless: recordAcknowledgement,
+      token: "collab_token_test",
+      url: secondServer.websocketUrl,
+      ydoc: secondDocument,
+    });
+
+    try {
+      await waitFor(
+        () => firstProvider.isAuthenticated && secondProvider.isAuthenticated,
+        "Providers did not authenticate across replicas.",
+      );
+      firstDocument.getText("firstReplica").insert(0, "first");
+      firstProvider.flushPendingUpdates();
+      firstProvider.sendStateless(
+        JSON.stringify({
+          requestId: firstRequestId,
+          type: FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
+        }),
+      );
+      await waitFor(
+        () => fakeApi.storeRequestBodies().length === 1,
+        "First replica snapshot store did not start.",
+      );
+
+      secondDocument.getText("secondReplica").insert(0, "second");
+      secondProvider.flushPendingUpdates();
+      secondProvider.sendStateless(
+        JSON.stringify({
+          requestId: secondRequestId,
+          type: FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
+        }),
+      );
+      await waitFor(
+        () => acknowledgements.has(secondRequestId),
+        "Second replica snapshot was not acknowledged.",
+      );
+
+      fakeApi.releaseFirstStore();
+      await waitFor(
+        () => acknowledgements.has(firstRequestId),
+        "Stale first replica did not merge and retry.",
+      );
+
+      expect(fakeApi.latestSnapshotRevision()).toBe(2);
+      expect(
+        fakeApi
+          .storeRequestBodies()
+          .map((body) => body["expectedSnapshotRevision"]),
+      ).toEqual([0, 0, 1]);
+      const restored = new Doc();
+      applyUpdate(
+        restored,
+        Buffer.from(fakeApi.latestSnapshotBase64() ?? "", "base64"),
+      );
+      expect(getTextContent(restored, "firstReplica")).toBe("first");
+      expect(getTextContent(restored, "secondReplica")).toBe("second");
+      restored.destroy();
+    } finally {
+      fakeApi.releaseFirstStore();
+      firstProvider.destroy();
+      secondProvider.destroy();
+      firstDocument.destroy();
+      secondDocument.destroy();
+      await firstServer.destroy();
+      await secondServer.destroy();
+      await fakeApi.destroy();
+    }
+  }, 15_000);
 
   test("rejects a stale snapshot generation without publishing old room state", async () => {
     const fakeApi = createFakeStellaApi({

@@ -19,6 +19,7 @@ import type { DocxEditorCollaboration } from "@stll/folio-react";
 
 import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -27,17 +28,26 @@ import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 
+import { advanceFolioCollaborationMutationRevision } from "./folio-collaboration-mutations";
+
 type ConnectedDocxEditorCollaboration = DocxEditorCollaboration & {
   awareness: NonNullable<DocxEditorCollaboration["awareness"]>;
 };
 
 export type FolioCollaborationRoom = {
   collaboration: ConnectedDocxEditorCollaboration;
-  flushSnapshot: () => Promise<string>;
+  flushSnapshot: () => Promise<FolioCollaborationFlush>;
   generation: number;
-  getStateVectorBase64: () => string;
+  getDocumentMutationRevision: () => number;
+  getLocalMutationRevision: () => number;
   roomId: string;
   seedDocumentBuffer: ArrayBuffer | null;
+};
+
+export type FolioCollaborationFlush = {
+  documentMutationRevision: number;
+  localMutationRevision: number;
+  snapshotRevision: number;
 };
 
 type ConnectedRoomState =
@@ -75,18 +85,10 @@ const flushResponseSchema = v.pipe(
   v.parseJson(),
   v.strictObject({
     requestId: v.pipe(v.string(), v.uuid()),
-    stateVectorBase64: v.string(),
+    snapshotRevision: v.pipe(v.number(), v.integer(), v.minValue(0)),
     type: v.literal(FOLIO_COLLAB_FLUSH_RESPONSE_TYPE),
   }),
 );
-
-const bytesToBase64 = (bytes: Uint8Array) => {
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCodePoint(byte);
-  }
-  return btoa(binary);
-};
 
 const waitForAbortableDelay = async (signal: AbortSignal, delayMs: number) => {
   const retrySignal = AbortSignal.any([signal, AbortSignal.timeout(delayMs)]);
@@ -181,6 +183,15 @@ export const useFolioCollaborationRoom = ({
   workspaceId,
 }: UseFolioCollaborationRoomOptions): FolioCollaborationRoomState => {
   const t = useTranslations();
+  const getActionFailedMessage = useLatestCallback(() =>
+    t("errors.actionFailed"),
+  );
+  const getEditOpenFailedMessage = useLatestCallback(() =>
+    t("folio.editOpenFailed"),
+  );
+  const getEditPermissionDeniedMessage = useLatestCallback(() =>
+    t("folio.editPermissionDenied"),
+  );
   const [state, setState] = useState<FolioCollaborationRoomState>({
     status: "unavailable",
     room: null,
@@ -215,7 +226,7 @@ export const useFolioCollaborationRoom = ({
       string,
       {
         reject: (error: CollaborationFlushError) => void;
-        resolve: (stateVectorBase64: string) => void;
+        resolve: (snapshotRevision: number) => void;
         timer: ReturnType<typeof setTimeout>;
       }
     >();
@@ -243,7 +254,7 @@ export const useFolioCollaborationRoom = ({
           setState({
             status: "unavailable",
             room: null,
-            message: userErrorMessage(joinError, t("folio.editOpenFailed")),
+            message: userErrorMessage(joinError, getEditOpenFailedMessage()),
           });
           return;
         }
@@ -388,7 +399,10 @@ export const useFolioCollaborationRoom = ({
                   },
                   flushSnapshot: currentRoom.flushSnapshot,
                   generation: rejoined.generation,
-                  getStateVectorBase64: currentRoom.getStateVectorBase64,
+                  getDocumentMutationRevision:
+                    currentRoom.getDocumentMutationRevision,
+                  getLocalMutationRevision:
+                    currentRoom.getLocalMutationRevision,
                   roomId: currentRoom.roomId,
                   seedDocumentBuffer: null,
                 };
@@ -453,7 +467,7 @@ export const useFolioCollaborationRoom = ({
             setState({
               status: "unavailable",
               room: null,
-              message: t("folio.editPermissionDenied"),
+              message: getEditPermissionDeniedMessage(),
             });
           },
           onClose: ({ event }) => {
@@ -473,14 +487,14 @@ export const useFolioCollaborationRoom = ({
             if (!parsed.success) {
               return;
             }
-            const { requestId, stateVectorBase64 } = parsed.output;
+            const { requestId, snapshotRevision } = parsed.output;
             const pending = pendingFlushes.get(requestId);
             if (pending === undefined) {
               return;
             }
             clearTimeout(pending.timer);
             pendingFlushes.delete(requestId);
-            pending.resolve(stateVectorBase64);
+            pending.resolve(snapshotRevision);
           },
           onStatus: ({ status }) => {
             if (
@@ -510,7 +524,7 @@ export const useFolioCollaborationRoom = ({
           setState({
             status: "unavailable",
             room: null,
-            message: t("folio.editOpenFailed"),
+            message: getEditOpenFailedMessage(),
           });
           return;
         }
@@ -519,6 +533,17 @@ export const useFolioCollaborationRoom = ({
           id: userId,
           image: userImage,
           name: userName,
+        });
+
+        let mutationRevision = { document: 0, local: 0 };
+        ydoc.on("afterTransaction", (transaction) => {
+          mutationRevision = advanceFolioCollaborationMutationRevision({
+            current: mutationRevision,
+            hasChanges:
+              transaction.changed.size > 0 ||
+              transaction.deleteSet.clients.size > 0,
+            local: transaction.local,
+          });
         });
 
         const collaboration = {
@@ -533,31 +558,41 @@ export const useFolioCollaborationRoom = ({
         };
         const flushSnapshot = async () => {
           connectedProvider.flushPendingUpdates();
+          const documentMutationRevisionAtRequest = mutationRevision.document;
+          const localMutationRevisionAtRequest = mutationRevision.local;
           const requestId = crypto.randomUUID();
-          return await new Promise<string>((resolve, reject) => {
-            const timer = setTimeout(() => {
-              pendingFlushes.delete(requestId);
-              reject(
-                new CollaborationFlushError({
-                  message: "Timed out while persisting the collaboration cut.",
+          const snapshotRevision = await new Promise<number>(
+            (resolve, reject) => {
+              const timer = setTimeout(() => {
+                pendingFlushes.delete(requestId);
+                reject(
+                  new CollaborationFlushError({
+                    message:
+                      "Timed out while persisting the collaboration cut.",
+                  }),
+                );
+              }, COLLAB_FLUSH_TIMEOUT_MS);
+              pendingFlushes.set(requestId, { reject, resolve, timer });
+              connectedProvider.sendStateless(
+                JSON.stringify({
+                  requestId,
+                  type: FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
                 }),
               );
-            }, COLLAB_FLUSH_TIMEOUT_MS);
-            pendingFlushes.set(requestId, { reject, resolve, timer });
-            connectedProvider.sendStateless(
-              JSON.stringify({
-                requestId,
-                type: FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
-              }),
-            );
-          });
+            },
+          );
+          return {
+            documentMutationRevision: documentMutationRevisionAtRequest,
+            localMutationRevision: localMutationRevisionAtRequest,
+            snapshotRevision,
+          };
         };
         activeRoom = {
           collaboration,
           flushSnapshot,
           generation: data.generation,
-          getStateVectorBase64: () =>
-            bytesToBase64(yjs.encodeStateVector(ydoc)),
+          getDocumentMutationRevision: () => mutationRevision.document,
+          getLocalMutationRevision: () => mutationRevision.local,
           roomId,
           seedDocumentBuffer,
         };
@@ -573,7 +608,7 @@ export const useFolioCollaborationRoom = ({
         setState({
           status: "unavailable",
           room: null,
-          message: userErrorFromThrown(error, t("errors.actionFailed")),
+          message: userErrorFromThrown(error, getActionFailedMessage()),
         });
       }),
       "use-folio-collaboration-room.join",
@@ -597,8 +632,10 @@ export const useFolioCollaborationRoom = ({
     canConnect,
     collabUrl,
     entityId,
+    getActionFailedMessage,
+    getEditOpenFailedMessage,
+    getEditPermissionDeniedMessage,
     propertyId,
-    t,
     userColor,
     userId,
     userImage,

@@ -185,12 +185,12 @@ type DocxBrowserEditorBaseProps = {
 };
 
 type PendingCollaborationPublication = {
+  documentMutationRevision: number;
   downloadUrl: string;
   generation: number;
   idempotencyKey: string;
   roomId: string;
   sha256Hex: string;
-  stateVectorBase64: string;
 };
 
 type DocxBrowserEditorProps = DocxBrowserEditorBaseProps;
@@ -795,7 +795,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         stellaToast.error(t("folio.networkError"));
         throw flushResult.error;
       }
-      if (flushResult.value !== collaborationSession.getStateVectorBase64()) {
+      if (
+        flushResult.value.localMutationRevision !==
+        collaborationSession.getLocalMutationRevision()
+      ) {
         const error = new CollaborationCloseCutError({
           message: "The local collaboration state changed during close.",
         });
@@ -1273,9 +1276,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       pendingPublication !== null &&
       !shouldReuseCollaborationPublication({
         current: {
+          documentMutationRevision:
+            collaborationSession.getDocumentMutationRevision(),
           generation: collaborationSession.generation,
           roomId: collaborationSession.roomId,
-          stateVectorBase64: collaborationSession.getStateVectorBase64(),
         },
         pending: pendingPublication,
       })
@@ -1302,6 +1306,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
           ["folio-collab-rooms"].checkpoint.post({
             expectedGeneration: collaborationSession.generation,
+            expectedSnapshotRevision: flushResult.value.snapshotRevision,
             roomId: toSafeId<"folioCollabRoom">(collaborationSession.roomId),
           }),
       );
@@ -1328,12 +1333,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
 
       const checkpoint = checkpointResult.value.data;
       pendingPublication = {
+        documentMutationRevision: flushResult.value.documentMutationRevision,
         downloadUrl: checkpoint.downloadUrl,
         generation: checkpoint.generation,
         idempotencyKey: crypto.randomUUID(),
         roomId: collaborationSession.roomId,
         sha256Hex: checkpoint.sha256Hex,
-        stateVectorBase64: flushResult.value,
       };
       pendingCollaborationPublicationRef.current = pendingPublication;
     }

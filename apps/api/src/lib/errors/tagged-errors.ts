@@ -9,6 +9,7 @@ export type HandlerErrorStatusCode =
   | 403
   | 404
   | 409
+  | 412
   | 413
   | 422
   | 428

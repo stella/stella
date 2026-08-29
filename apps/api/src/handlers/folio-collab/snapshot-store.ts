@@ -21,13 +21,19 @@ import { authorizeFolioCollabService } from "./service-credentials";
 const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: permissiveBodySchema({
-    keys: ["expectedGeneration", "roomId", "snapshotBase64"],
+    keys: [
+      "expectedGeneration",
+      "expectedSnapshotRevision",
+      "roomId",
+      "snapshotBase64",
+    ],
   }),
 } satisfies TokenHandlerConfig;
 
 /** Validated after authorization; see `permissive-route-schema.ts`. */
 const strictBodySchema = t.Object({
   expectedGeneration: t.Integer({ minimum: 0 }),
+  expectedSnapshotRevision: t.Integer({ minimum: 0 }),
   roomId: tSafeId("folioCollabRoom"),
   snapshotBase64: t.String({
     maxLength: FOLIO_COLLAB_SNAPSHOT_MAX_BASE64_LENGTH,
@@ -45,7 +51,12 @@ const storeFolioCollabSnapshotHandler = createSafeTokenHandler(
         new HandlerError({ status: 422, message: validatedBody.message }),
       );
     }
-    const { expectedGeneration, roomId, snapshotBase64 } = validatedBody.value;
+    const {
+      expectedGeneration,
+      expectedSnapshotRevision,
+      roomId,
+      snapshotBase64,
+    } = validatedBody.value;
     const value = yield* Result.await(resolveFolioCollabServiceRoom(roomId));
 
     const snapshotBytes = Buffer.from(snapshotBase64, "base64");
@@ -61,6 +72,7 @@ const storeFolioCollabSnapshotHandler = createSafeTokenHandler(
     const stored = await storeFolioCollabSnapshot({
       authority: { type: "collab-service" },
       expectedGeneration,
+      expectedSnapshotRevision,
       snapshotBytes,
       value,
     });
@@ -78,6 +90,15 @@ const storeFolioCollabSnapshotHandler = createSafeTokenHandler(
         new HandlerError({
           status: 409,
           message: "Collaborative room generation changed.",
+        }),
+      );
+    }
+    if (stored.status === "snapshot-revision-conflict") {
+      return Result.err(
+        new HandlerError({
+          code: "folio_collab_snapshot_revision_changed",
+          status: 412,
+          message: "Collaborative snapshot revision changed.",
         }),
       );
     }
@@ -100,6 +121,7 @@ const storeFolioCollabSnapshotHandler = createSafeTokenHandler(
 
     return Result.ok({
       generation: expectedGeneration,
+      snapshotRevision: stored.snapshotRevision,
       storedAt: stored.storedAt.toISOString(),
     });
   },

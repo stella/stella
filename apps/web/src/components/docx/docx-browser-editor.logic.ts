@@ -132,9 +132,9 @@ export const shouldFinalizeEditSession = ({
   isDirty || hasSessionChanges || hasPendingEditorChanges;
 
 type CollaborationPublicationCut = {
+  documentMutationRevision: number;
   generation: number;
   roomId: string;
-  stateVectorBase64: string;
 };
 
 export const shouldReuseCollaborationPublication = ({
@@ -146,7 +146,7 @@ export const shouldReuseCollaborationPublication = ({
 }) =>
   pending.roomId === current.roomId &&
   pending.generation === current.generation &&
-  pending.stateVectorBase64 === current.stateVectorBase64;
+  pending.documentMutationRevision === current.documentMutationRevision;
 
 type ShouldPromptReadonlyUnlockOptions = {
   canUnlock: boolean;

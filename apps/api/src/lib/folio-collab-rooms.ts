@@ -596,6 +596,7 @@ export const loadFolioCollabSnapshot = async (
         .select({
           generation: folioCollabRooms.generation,
           yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+          yjsSnapshotRevision: folioCollabRooms.yjsSnapshotRevision,
           yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
         })
         .from(folioCollabRooms)
@@ -615,7 +616,11 @@ export const loadFolioCollabSnapshot = async (
     return null;
   }
   if (!room.yjsSnapshotUpdatedAt) {
-    return { generation: room.generation, snapshotBase64: null };
+    return {
+      generation: room.generation,
+      snapshotBase64: null,
+      snapshotRevision: room.yjsSnapshotRevision,
+    };
   }
 
   const readSnapshot = async (fileId: SafeId<"userFile">) =>
@@ -637,7 +642,11 @@ export const loadFolioCollabSnapshot = async (
       return null;
     }
     if (!room.yjsSnapshotUpdatedAt) {
-      return { generation: room.generation, snapshotBase64: null };
+      return {
+        generation: room.generation,
+        snapshotBase64: null,
+        snapshotRevision: room.yjsSnapshotRevision,
+      };
     }
     if (room.yjsSnapshotFileId === previousFileId) {
       return panic("Current collaboration snapshot object is missing");
@@ -651,12 +660,19 @@ export const loadFolioCollabSnapshot = async (
   return {
     generation: room.generation,
     snapshotBase64: Buffer.from(buffer).toString("base64"),
+    snapshotRevision: room.yjsSnapshotRevision,
   };
 };
 
 export type StoreFolioCollabSnapshotResult =
-  | { status: "stored"; storedAt: Date; sizeBytes: number }
+  | {
+      status: "stored";
+      snapshotRevision: number;
+      storedAt: Date;
+      sizeBytes: number;
+    }
   | { status: "generation-conflict"; actualGeneration: number }
+  | { status: "snapshot-revision-conflict"; actualSnapshotRevision: number }
   | { status: "room-missing" }
   | { status: "seed-owner-conflict" }
   | { status: "workspace-inactive" };
@@ -665,22 +681,30 @@ type SnapshotStoreDecisionInput = {
   actualGeneration: number;
   authority: FolioCollabSnapshotStoreAuthority;
   expectedGeneration: number;
+  expectedSnapshotRevision: number;
+  actualSnapshotRevision: number;
   seedClaimedBy: string | null;
   seedState: "claimed" | "empty" | "seeded";
 };
 
 export const decideFolioCollabSnapshotStore = ({
   actualGeneration,
+  actualSnapshotRevision,
   authority,
   expectedGeneration,
+  expectedSnapshotRevision,
   seedClaimedBy,
   seedState,
 }: SnapshotStoreDecisionInput):
   | { status: "accepted" }
   | { status: "generation-conflict"; actualGeneration: number }
+  | { status: "snapshot-revision-conflict"; actualSnapshotRevision: number }
   | { status: "seed-owner-conflict" } => {
   if (actualGeneration !== expectedGeneration) {
     return { status: "generation-conflict", actualGeneration };
+  }
+  if (actualSnapshotRevision !== expectedSnapshotRevision) {
+    return { status: "snapshot-revision-conflict", actualSnapshotRevision };
   }
   if (seedState === "empty") {
     return { status: "seed-owner-conflict" };
@@ -698,11 +722,13 @@ export const decideFolioCollabSnapshotStore = ({
 export const storeFolioCollabSnapshot = async ({
   authority,
   expectedGeneration,
+  expectedSnapshotRevision,
   snapshotBytes,
   value,
 }: {
   authority: FolioCollabSnapshotStoreAuthority;
   expectedGeneration: number;
+  expectedSnapshotRevision: number;
   snapshotBytes: Uint8Array;
   value: FolioCollabSnapshotTarget;
 }): Promise<StoreFolioCollabSnapshotResult> => {
@@ -767,6 +793,7 @@ export const storeFolioCollabSnapshot = async ({
             seedClaimedBy: folioCollabRooms.seedClaimedBy,
             seedState: folioCollabRooms.seedState,
             yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+            yjsSnapshotRevision: folioCollabRooms.yjsSnapshotRevision,
             yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
           })
           .from(folioCollabRooms)
@@ -785,8 +812,10 @@ export const storeFolioCollabSnapshot = async ({
         }
         const decision = decideFolioCollabSnapshotStore({
           actualGeneration: room.generation,
+          actualSnapshotRevision: room.yjsSnapshotRevision,
           authority,
           expectedGeneration,
+          expectedSnapshotRevision,
           seedClaimedBy: room.seedClaimedBy,
           seedState: room.seedState,
         });
@@ -803,6 +832,7 @@ export const storeFolioCollabSnapshot = async ({
                   seededAt: storedAt,
                   seedState: "seeded",
                   yjsSnapshotFileId: nextSnapshotFileId,
+                  yjsSnapshotRevision: room.yjsSnapshotRevision + 1,
                   yjsSnapshotSizeBytes: snapshotBytes.byteLength,
                   yjsSnapshotUpdatedAt: storedAt,
                 }
@@ -810,6 +840,7 @@ export const storeFolioCollabSnapshot = async ({
                   lastActivityAt: storedAt,
                   seedState: "seeded",
                   yjsSnapshotFileId: nextSnapshotFileId,
+                  yjsSnapshotRevision: room.yjsSnapshotRevision + 1,
                   yjsSnapshotSizeBytes: snapshotBytes.byteLength,
                   yjsSnapshotUpdatedAt: storedAt,
                 },
@@ -819,15 +850,28 @@ export const storeFolioCollabSnapshot = async ({
               eq(folioCollabRooms.id, value.roomId),
               eq(folioCollabRooms.workspaceId, value.workspaceId),
               eq(folioCollabRooms.generation, expectedGeneration),
+              eq(
+                folioCollabRooms.yjsSnapshotRevision,
+                expectedSnapshotRevision,
+              ),
             ),
           )
-          .returning({ id: folioCollabRooms.id });
+          .returning({
+            snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
+          });
 
-        if (!updated.at(0)) {
+        const updatedRoom = updated.at(0);
+        if (!updatedRoom) {
+          if (room.generation !== expectedGeneration) {
+            return {
+              status: "generation-conflict",
+              actualGeneration: room.generation,
+            } satisfies StoreFolioCollabSnapshotResult;
+          }
           return {
-            status: "generation-conflict",
-            actualGeneration: room.generation,
-          } as const;
+            status: "snapshot-revision-conflict",
+            actualSnapshotRevision: room.yjsSnapshotRevision,
+          } satisfies StoreFolioCollabSnapshotResult;
         }
 
         if (room.yjsSnapshotUpdatedAt !== null) {
@@ -857,6 +901,7 @@ export const storeFolioCollabSnapshot = async ({
           .where(eq(bufferObjectCleanupIntents.id, nextCleanupIntentId));
 
         return {
+          snapshotRevision: updatedRoom.snapshotRevision,
           status: "stored",
         } as const;
       }),
@@ -877,6 +922,7 @@ export const storeFolioCollabSnapshot = async ({
 
   return {
     status: "stored",
+    snapshotRevision: result.snapshotRevision,
     storedAt,
     sizeBytes: snapshotBytes.byteLength,
   };
