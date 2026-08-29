@@ -53,11 +53,12 @@ enforcement, branded types) live in
   use mocks when simulating failure modes, testing varied
   edge-case inputs, or isolating external services
 - Do not `mock.module` a workspace module (`@/...`, `@stll/...`, a
-  relative path). The fabricated module never drifts with the real one, so
-  the test keeps passing after the contract it depends on changes, and Bun's
-  mock registry is process-wide. Inject the collaborator instead (handler
-  context, an options parameter) and pass a plain fake; if the module wraps
-  an external boundary, mock the npm package it calls or expose a test seam.
+  relative path), and always name the target with a string literal. The
+  fabricated module never drifts with the real one, so the test keeps passing
+  after the contract it depends on changes, and Bun's mock registry is
+  process-wide. Inject the collaborator instead (handler context, an options
+  parameter) and pass a plain fake; if the module wraps an external boundary,
+  mock the npm package it calls or expose a test seam.
   `no-internal-module-mock` enforces this; existing pairs are grandfathered
   in `scripts/internal-module-mock-ledger.json`, which only shrinks: delete a
   line when you remove its mock, never add one.
