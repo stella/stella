@@ -1,26 +1,38 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
+import type {
+  AIUsageMetering,
+  TanStackAIAnalyticsCallbacks,
+} from "@/api/lib/analytics/tanstack-ai";
 import type { BilingualAIContext } from "@/api/lib/bilingual/ai";
 import type { FormattedBilingualUnit } from "@/api/lib/bilingual/formatting";
 import { toSafeId } from "@/api/lib/branded-types";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
-type GenerateOptions = { prompt: string };
+type GenerateOptions = {
+  analytics: TanStackAIAnalyticsCallbacks;
+  prompt: string;
+};
 type FormattedOutput = {
   items: { n: number; spans: { id: string; text: string }[] }[];
 };
 
 const outputs: FormattedOutput[] = [];
 const prompts: string[] = [];
-const generateObjectMock = mock(async ({ prompt }: GenerateOptions) => {
-  prompts.push(prompt);
-  const output = outputs.shift();
-  if (!output) {
-    throw new Error("test did not configure a model output");
-  }
-  return await Promise.resolve(output);
-});
+const dispatchedCallbacks: TanStackAIAnalyticsCallbacks[] = [];
+const generateObjectMock = mock(
+  async ({ analytics, prompt }: GenerateOptions) => {
+    dispatchedCallbacks.push(analytics);
+    prompts.push(prompt);
+    const output = outputs.shift();
+    if (!output) {
+      throw new Error("test did not configure a model output");
+    }
+    return await Promise.resolve(output);
+  },
+);
 
 void mock.module("@/api/lib/tanstack-ai-generate", () => ({
   abortControllerFromSignal: mock(),
@@ -31,10 +43,6 @@ void mock.module("@/api/lib/tanstack-ai-generate", () => ({
   streamTanStackObjectForRole: mock(),
   streamTanStackTextForRole: mock(),
   systemPromptsPatch: mock(),
-}));
-
-void mock.module("@/api/lib/analytics/tanstack-ai", () => ({
-  createTanStackAIAnalyticsCallbacks: () => ({}),
 }));
 
 const { translateFormattedBatch } = await import("@/api/lib/bilingual/ai");
@@ -77,10 +85,18 @@ const formattedUnit = (
 });
 
 describe("formatted bilingual AI boundary", () => {
+  let analytics: RecordingAnalytics;
+
   beforeEach(() => {
     outputs.length = 0;
     prompts.length = 0;
+    dispatchedCallbacks.length = 0;
     generateObjectMock.mockClear();
+    analytics = installRecordingAnalytics();
+  });
+
+  afterEach(() => {
+    analytics.restore();
   });
 
   test("retries only rows whose ordered span contract is invalid", async () => {
@@ -128,6 +144,12 @@ describe("formatted bilingual AI boundary", () => {
     );
 
     expect(generateObjectMock).toHaveBeenCalledTimes(2);
+    // The retry reuses one callbacks instance, so both attempts stay on one
+    // trace instead of reporting as two independent generations.
+    expect(dispatchedCallbacks.at(1)).toBe(dispatchedCallbacks.at(0));
+    expect(dispatchedCallbacks.at(0)?.middleware.name).toBe(
+      "stella-tanstack-analytics",
+    );
     expect(prompts.at(1)).toContain("Contract repair:");
     expect(prompts.at(1)).not.toContain("#1:");
     expect(prompts.at(1)).toContain("#2:");
@@ -167,6 +189,8 @@ describe("formatted bilingual AI boundary", () => {
       _tag: "BilingualAIContractError",
     });
     expect(generateObjectMock).not.toHaveBeenCalled();
+    // A rejected contract is the caller's error to handle, not a captured defect.
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("rejects cumulative formatted row serialization before model dispatch", async () => {
@@ -195,5 +219,7 @@ describe("formatted bilingual AI boundary", () => {
       _tag: "BilingualAIContractError",
     });
     expect(generateObjectMock).not.toHaveBeenCalled();
+    // A rejected contract is the caller's error to handle, not a captured defect.
+    expect(analytics.exceptions()).toEqual([]);
   });
 });

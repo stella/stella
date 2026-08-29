@@ -1,14 +1,23 @@
 import type { MCPClient } from "@tanstack/ai-mcp";
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
 const loadActiveMcpConnectionsForUserMock = mock();
 const createMcpClientForConnectionMock = mock();
-const captureErrorMock = mock();
 const withTimeoutMock =
   mock<
     (
@@ -20,13 +29,6 @@ const withTimeoutMock =
 void mock.module("@/api/lib/mcp-upstream/connections", () => ({
   createMcpClientForConnection: createMcpClientForConnectionMock,
   loadActiveMcpConnectionsForUser: loadActiveMcpConnectionsForUserMock,
-}));
-
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
 }));
 
 void mock.module("@/api/lib/with-timeout", () => ({
@@ -92,18 +94,26 @@ const passThroughTimeout = async (
   operation: () => Promise<unknown>,
 ): Promise<unknown> => await operation();
 
+// The real capture path runs; only the sink is in memory, and installing per
+// test clears its repeat-suppression window.
+let analytics: RecordingAnalytics;
+
 beforeEach(() => {
+  analytics = installRecordingAnalytics();
   loadActiveMcpConnectionsForUserMock.mockReset();
   createMcpClientForConnectionMock.mockReset();
-  captureErrorMock.mockReset();
   withTimeoutMock.mockReset();
   withTimeoutMock.mockImplementation(passThroughTimeout);
 });
 
+afterEach(() => {
+  analytics.restore();
+});
+
 // Bun runs every test file in one process, and `mock.module` mutates a
 // shared registry: without restoring here, these `mock.module` calls (for
-// `mcp-upstream/connections`, `analytics/capture`, and `with-timeout`) would
-// leak into whichever other test file runs next in the same process.
+// `mcp-upstream/connections` and `with-timeout`) would leak into whichever
+// other test file runs next in the same process.
 afterAll(() => {
   mock.restore();
 });
@@ -129,13 +139,15 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
 
     expect(loaded.connectors).toEqual([]);
     expect(fakeClient.close).toHaveBeenCalledTimes(1);
-    expect(captureErrorMock).toHaveBeenCalledWith(
-      expect.any(Error),
-      expect.objectContaining({
-        source: "external-mcp-tools",
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      {
+        "error.class": "Error",
         connectorSlug: "test-connector",
-      }),
-    );
+        source: "external-mcp-tools",
+      },
+    ]);
 
     // The whole-load `close()` never learned about this client (discovery
     // discarded it before returning), so it must not double-close.

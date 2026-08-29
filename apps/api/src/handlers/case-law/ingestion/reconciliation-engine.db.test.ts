@@ -1,4 +1,11 @@
-import { afterAll, beforeAll, beforeEach, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  test,
+} from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -41,6 +48,8 @@ import type {
   ReconciliationSlicePageOptions,
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 // A settled short slice is short forever — that is what settled means — so it
 // is never re-walked and its `checkedAt` never moves on its own. The candidate
@@ -140,10 +149,17 @@ const builds: unknown[] = [];
 // Both arrays are module state the stub writes to, and tests assert their
 // exact contents. Reset per test so the order tests run in cannot decide
 // whether they pass.
+let logs: RecordingLogger;
+
 beforeEach(() => {
+  logs = installRecordingLogger();
   listed.length = 0;
   builds.length = 0;
   listing.totalPages = 1;
+});
+
+afterEach(() => {
+  logs.restore();
 });
 
 const stubReconciliation: SourceReconciliation = {
@@ -1415,30 +1431,16 @@ test("a failed item build reports the SQLSTATE without logging any message text"
   // emitted would reach telemetry verbatim, and a driver message quotes the
   // statement and can quote the row that failed. Fixed vocabulary only.
   const sourceId = await seedSource();
-  const loggerModule = await import("@/api/lib/observability/logger");
-  const warned: Record<string, unknown>[] = [];
-  // Spread both levels rather than redeclaring them: the module also exports
-  // `sanitizeLogAttributes`, and a mock that drops it is exactly what this
-  // suite's sibling guard forbids.
-  await mock.module("@/api/lib/observability/logger", () => ({
-    ...loggerModule,
-    logger: {
-      ...loggerModule.logger,
-      warn: (_event: string, attributes: Record<string, unknown>) => {
-        warned.push(attributes);
-      },
-    },
-  }));
 
-  try {
-    await runUnit(sourceId, drivenFailureStub);
-  } finally {
-    await mock.module("@/api/lib/observability/logger", () => loggerModule);
-  }
+  await runUnit(sourceId, drivenFailureStub);
 
-  const failure = warned.find(
-    (attributes) => attributes["identityKey"] !== undefined,
-  );
+  // The recorded attributes are what the real logger emitted, sanitizer
+  // included, so the message-text guard below covers the record that would
+  // ship rather than the call arguments.
+  const failure = logs
+    .at("WARN")
+    .map((record) => record.attributes)
+    .find((attributes) => attributes?.["identityKey"] !== undefined);
   expect(failure?.["error.cause.pg_code"]).toBe("42703");
   // Over every value, not a named key: the guard has to hold for a field
   // added later, and the point is that no attribute carries message text.

@@ -1,26 +1,33 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { toSafeId } from "@/api/lib/branded-types";
+import { containsRawUuid } from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: mock(),
-  captureRequestError: mock(),
-}));
+import { buildMcpContextFromChat } from "./mcp-chat-context";
+import { runRegistryReadTool } from "./run-registry-tool";
 
-const { buildMcpContextFromChat } = await import("./mcp-chat-context");
-const { runRegistryReadTool } = await import("./run-registry-tool");
-const { containsRawUuid } = await import("@/api/lib/chat/projection-schema");
+// Every case here is a projection that must succeed, so the recorded sink is
+// the assertion that no fail-closed refusal was reported behind the payload.
+let analytics: RecordingAnalytics;
+
+beforeEach(() => {
+  analytics = installRecordingAnalytics();
+});
+
+afterEach(() => {
+  analytics.restore();
+});
 
 const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const ENTITY_UUID = "11111111-1111-4111-8111-111111111111";
@@ -113,6 +120,7 @@ describe("follow-up (b): read_document propertyId path", () => {
     // The property UUID is gone; only the passthrough field-row id (a non-tenant
     // handle declared in passthroughIdPaths) remains UUID-shaped.
     expect(JSON.stringify(payload)).not.toContain(PROP_UUID);
+    expect(analytics.exceptions()).toEqual([]);
   });
 });
 
@@ -158,6 +166,7 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
       entry: { entityId: "ent_1", workspaceId: "mat_1" },
     });
     expect(JSON.stringify(payload)).not.toContain(ENTITY_UUID);
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("list_invoices by invoice_id alone resolves nested line-item entity refs", async () => {
@@ -222,5 +231,6 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
     // legitimately remain in the payload.
     expect(containsRawUuid(payload)).toBe(true);
     expect(serialized).toContain(INV_UUID);
+    expect(analytics.exceptions()).toEqual([]);
   });
 });

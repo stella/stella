@@ -1,4 +1,4 @@
-import { beforeEach, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
@@ -6,6 +6,8 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
@@ -40,7 +42,6 @@ const executeMock = mock(async (_query: SQL) => [
 const syncWorkspaceSearchActivityMock = mock(
   async (_workspaceId: unknown, _db: unknown) => undefined,
 );
-const captureErrorMock = mock(() => undefined);
 const organizationId = toSafeId<"organization">("org_1");
 // Extracted content is stored as a real per-org AES-GCM envelope; fixtures
 // encrypt with the same key the projection decrypts with, so a plaintext
@@ -119,17 +120,14 @@ void mock.module("@/api/db/root", () => ({
   },
 }));
 
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-}));
-
 void mock.module("@/api/lib/search/index-global", () => ({
   syncWorkspaceSearchActivity: syncWorkspaceSearchActivityMock,
 }));
 
+let analytics: RecordingAnalytics;
+
 beforeEach(() => {
+  analytics = installRecordingAnalytics();
   executeMock.mockClear();
   selectMock.mockClear();
   selectLimitMock.mockClear();
@@ -140,9 +138,12 @@ beforeEach(() => {
   findFirstMock.mockResolvedValue(entityRow);
   latestVersionId = entityRow.currentVersion.id;
   latestVersionFindFirstMock.mockClear();
-  captureErrorMock.mockClear();
   syncWorkspaceSearchActivityMock.mockClear();
   transactionMock.mockClear();
+});
+
+afterEach(() => {
+  analytics.restore();
 });
 
 test("persists an entity's semantic updated timestamp when indexing", async () => {
@@ -273,9 +274,14 @@ test("keeps the last complete projection when extracted content cannot decrypt",
   );
 
   expect(rejection).toBeInstanceOf(DOMException);
-  expect(captureErrorMock).toHaveBeenCalledWith(rejection, {
-    entityId: toSafeId<"entity">("entity_1"),
-  });
+  expect(analytics.exceptions().map((event) => event.properties)).toMatchObject(
+    [
+      {
+        "error.class": "DOMException",
+        entityId: toSafeId<"entity">("entity_1"),
+      },
+    ],
+  );
   expect(executeMock).not.toHaveBeenCalled();
   expect(syncWorkspaceSearchActivityMock).not.toHaveBeenCalled();
 });

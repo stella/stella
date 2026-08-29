@@ -1,21 +1,22 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 
 const generateObjectMock = mock(async () => ({ boxes: [] as unknown[] }));
-const captureErrorMock = mock((_error: unknown) => undefined);
 
 void mock.module("@/api/lib/tanstack-ai-generate", () => ({
   generateTanStackObjectForRole: generateObjectMock,
-}));
-
-void mock.module("@/api/lib/analytics/tanstack-ai", () => ({
-  createTanStackAIAnalyticsCallbacks: () => ({
-    middleware: {},
-    captureError: captureErrorMock,
-  }),
 }));
 
 const { generateBBoxData } = await import("./ai-generate-b-boxes");
@@ -36,6 +37,19 @@ const generate = async () =>
   });
 
 describe("generateBBoxData", () => {
+  let analytics: RecordingAnalytics;
+  let logs: RecordingLogger;
+
+  beforeEach(() => {
+    analytics = installRecordingAnalytics();
+    logs = installRecordingLogger();
+  });
+
+  afterEach(() => {
+    analytics.restore();
+    logs.restore();
+  });
+
   test("reports a page with no matching content as an empty page", async () => {
     generateObjectMock.mockResolvedValueOnce({ boxes: [] });
 
@@ -43,6 +57,7 @@ describe("generateBBoxData", () => {
 
     expect(Result.isOk(result)).toBe(true);
     expect(Result.isOk(result) && result.value).toEqual([]);
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("carries the provider failure on the error's cause", async () => {
@@ -56,5 +71,24 @@ describe("generateBBoxData", () => {
       Result.isError(result) && WorkflowIntegrationError.is(result.error),
     ).toBe(true);
     expect(Result.isError(result) && result.error.cause).toBe(providerFailure);
+  });
+
+  test("reports the provider failure as a bbox generation failure", async () => {
+    generateObjectMock.mockRejectedValueOnce(
+      new Error("provider rejected the request"),
+    );
+
+    await generate();
+
+    expect(
+      analytics.events
+        .filter(
+          (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+        )
+        .map((event) => event.properties),
+    ).toMatchObject([{ failure_reason: "provider", feature: "bbox.generate" }]);
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([{ "error.class": "Error", feature: "bbox.generate" }]);
   });
 });

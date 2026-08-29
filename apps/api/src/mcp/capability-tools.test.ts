@@ -1,22 +1,24 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 // --- Mocks, installed before the MCP graph is imported -----------------------
-
-const captureErrorMock = mock();
-const realAnalytics = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realAnalytics,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
-}));
 
 const realLoader = await import("@/api/lib/ai-config-loader");
 const loadOrgSettingsMock = mock(async () => ({
@@ -182,12 +184,18 @@ const createContext = ({
 const call = async (toolName: string, args: Record<string, unknown>) =>
   await handleMcpToolCall({ args, context: createContext(), toolName });
 
+let analytics: RecordingAnalytics;
+
 beforeEach(() => {
-  captureErrorMock.mockReset();
+  analytics = installRecordingAnalytics();
   loadOrgSettingsMock.mockClear();
   consumeRateLimitMock.mockClear();
   consumeRateLimitMock.mockResolvedValue({ ok: true, retryAfterSeconds: 60 });
   disabledFeatures.clear();
+});
+
+afterEach(() => {
+  analytics.restore();
 });
 
 afterAll(() => {
@@ -335,6 +343,9 @@ describe("invoke_capability gates", () => {
     const error = errorEnvelope(result);
     expect(error.code).toBe("not_found");
     expect(error.hint).toContain("time-entries.create");
+    // A mistyped capability is a caller error: the gate rejects it without
+    // spending an exception event.
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("token/public capabilities are not invokable", async () => {
@@ -367,6 +378,7 @@ describe("invoke_capability gates", () => {
     const error = errorEnvelope(result);
     expect(error.code).toBe("missing_scope");
     expect(error.message).toContain("stella:knowledge_write");
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("compound capability scope rejects a document-only grant", async () => {

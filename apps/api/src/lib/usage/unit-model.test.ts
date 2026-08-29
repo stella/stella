@@ -1,31 +1,37 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setSystemTime,
+  test,
+} from "bun:test";
 
-const captureErrorMock = mock();
+import { MODEL_RATES } from "@stll/ai-catalog";
 
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
-}));
-
-const {
+import {
   computeRawUsageMicroUnits,
   normalizeProviderPromptTokens,
   usageUnitsFromTokens,
   MICRO_UNITS_PER_USAGE_UNIT,
-} = await import("@/api/lib/usage/unit-model");
-const { MODEL_RATES } = await import("@stll/ai-catalog");
+} from "@/api/lib/usage/unit-model";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+
+/** Past the capture throttle window, so a repeat is admitted on its merits. */
+const advancePastCaptureWindow = (): void => {
+  setSystemTime(new Date(Date.now() + 61_000));
+};
+
+let analytics: RecordingAnalytics;
 
 beforeEach(() => {
-  captureErrorMock.mockReset();
+  analytics = installRecordingAnalytics();
 });
 
-// Bun runs every test file in one process, and `mock.module` mutates a
-// shared registry: without restoring here, this call would leak into
-// whichever other test file runs next in the same process.
-afterAll(() => {
-  mock.restore();
+afterEach(() => {
+  analytics.restore();
+  setSystemTime();
 });
 
 describe("computeRawUsageMicroUnits", () => {
@@ -177,7 +183,16 @@ describe("computeRawUsageMicroUnits", () => {
         expect(units).toBeLessThanOrEqual(baseline);
       }
     }
-    expect(captureErrorMock).toHaveBeenCalled();
+    // The repeat throttle collapses the run of anomalies into the first one.
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      {
+        "error.class": "TelemetryError",
+        anomaly: "invalid-uncachedInputTokens",
+        source: "usage-unit-model",
+      },
+    ]);
 
     // +Infinity is an oversized positive count, not an absent one: it must
     // clamp to the ceiling (over-metering), never coerce to zero.
@@ -209,7 +224,15 @@ describe("computeRawUsageMicroUnits", () => {
         outputTokens: 0,
       }),
     );
-    expect(captureErrorMock).toHaveBeenCalled();
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      {
+        anomaly: "invalid-uncachedInputTokens",
+        modelId: "gemini-2.5-pro",
+        source: "usage-unit-model",
+      },
+    ]);
   });
 
   test("clamps absurdly large counts instead of overflowing", () => {
@@ -222,7 +245,11 @@ describe("computeRawUsageMicroUnits", () => {
     });
     expect(Number.isSafeInteger(units)).toBe(true);
     expect(units).toBe(2 ** 41);
-    expect(captureErrorMock).toHaveBeenCalled();
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      { anomaly: "invalid-outputTokens", source: "usage-unit-model" },
+    ]);
   });
 
   test("keeps rate scaling exact when the intermediate product is unsafe", () => {
@@ -255,7 +282,7 @@ describe("normalizeProviderPromptTokens", () => {
       uncachedInputTokens: 217 + 1204,
       cacheReadTokens: 45_082,
     });
-    expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(analytics.exceptions()).toEqual([]);
 
     // End to end: 1421 uncached at 200_000/MTok (285) + 45_082 cached at
     // 20_000/MTok (902) + 1538 output at 1_000_000/MTok (1538).
@@ -283,7 +310,7 @@ describe("normalizeProviderPromptTokens", () => {
       uncachedInputTokens: 768,
       cacheReadTokens: 31_744,
     });
-    expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(analytics.exceptions()).toEqual([]);
 
     // 768 uncached at 400_000/MTok (308) + 31_744 cached at 40_000/MTok
     // (1270) + 2048 output at 2_000_000/MTok (4096).
@@ -315,13 +342,16 @@ describe("normalizeProviderPromptTokens", () => {
       uncachedInputTokens: 1024,
       cacheReadTokens: 2048,
     });
-    expect(captureErrorMock).toHaveBeenCalledWith(
-      expect.any(Error),
-      expect.objectContaining({
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      {
+        "error.class": "TelemetryError",
         anomaly: "cache-read-exceeds-included-prompt",
+        provider: "openai",
         source: "usage-unit-model",
-      }),
-    );
+      },
+    ]);
   });
 
   test("malformed provider counts coerce conservatively and report", () => {
@@ -338,7 +368,15 @@ describe("normalizeProviderPromptTokens", () => {
       uncachedInputTokens: 97,
       cacheReadTokens: 0,
     });
-    expect(captureErrorMock).toHaveBeenCalled();
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      {
+        anomaly: "invalid-promptTokens",
+        modelId: "claude-sonnet-5-malformed-shape",
+        source: "usage-unit-model",
+      },
+    ]);
   });
 
   test("anomaly telemetry dedupes per model id and anomaly", () => {
@@ -352,9 +390,12 @@ describe("normalizeProviderPromptTokens", () => {
     } as const;
 
     normalizeProviderPromptTokens(usage);
+    // Past the shared repeat throttle, so the module's own per-model dedupe
+    // is what suppresses the second report.
+    advancePastCaptureWindow();
     normalizeProviderPromptTokens(usage);
 
-    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+    expect(analytics.exceptions()).toHaveLength(1);
   });
 });
 
@@ -443,6 +484,9 @@ describe("catalog-miss telemetry", () => {
       outputTokens: 100,
       uncachedInputTokens: 100,
     });
+    // Past the shared repeat throttle, so the per-model dedupe is what the
+    // second miss has to clear.
+    advancePastCaptureWindow();
     computeRawUsageMicroUnits({
       modelId,
       outputTokens: 200,
@@ -451,11 +495,11 @@ describe("catalog-miss telemetry", () => {
 
     // Deduped per process by model id: the second miss for the same id
     // must not capture again.
-    expect(captureErrorMock).toHaveBeenCalledTimes(1);
-    expect(captureErrorMock).toHaveBeenCalledWith(
-      expect.any(Error),
-      expect.objectContaining({ source: "usage-unit-model", modelId }),
-    );
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      { "error.class": "TelemetryError", modelId, source: "usage-unit-model" },
+    ]);
   });
 
   test("does not report telemetry for a model already in the rate catalog", () => {
@@ -465,6 +509,6 @@ describe("catalog-miss telemetry", () => {
       outputTokens: 100,
     });
 
-    expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(analytics.exceptions()).toEqual([]);
   });
 });

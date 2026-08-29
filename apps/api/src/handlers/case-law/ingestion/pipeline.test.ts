@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -28,6 +28,8 @@ import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 const concatInlineText = (inlines: Inline[]): string => {
   let out = "";
@@ -831,12 +833,15 @@ describe("processDecision — decision date on an existing row", () => {
 
 describe("processDecision — source raw upload failure", () => {
   let fake: FakeS3;
+  let logs: RecordingLogger;
 
   beforeEach(() => {
     fake = startFakeS3();
+    logs = installRecordingLogger();
   });
 
   afterEach(() => {
+    logs.restore();
     fake.stop();
   });
 
@@ -935,16 +940,6 @@ describe("processDecision — source raw upload failure", () => {
     // diagnosable from the log. The code comes from the store's own
     // rejection through the real client, so this also pins that the
     // client still surfaces it where `errorSystemFields` looks.
-    const logged: Record<string, unknown>[] = [];
-    await mock.module("@/api/lib/observability/logger", () => ({
-      logger: {
-        error: (_event: string, attributes: Record<string, unknown>) => {
-          logged.push(attributes);
-        },
-        warn: () => undefined,
-        info: () => undefined,
-      },
-    }));
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
 
     const scopedDb: ScopedDb = async (callback) => {
@@ -995,7 +990,7 @@ describe("processDecision — source raw upload failure", () => {
       observedAt: new Date("2026-08-05T00:00:00.000Z"),
     });
 
-    const failure = logged.at(0);
-    expect(failure?.["error.code"]).toBe("AccessDenied");
+    const failure = logs.at("ERROR").at(0);
+    expect(failure?.attributes?.["error.code"]).toBe("AccessDenied");
   });
 });

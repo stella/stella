@@ -11,6 +11,8 @@ import { createFileKey } from "@/api/lib/file-key";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -64,14 +66,6 @@ void mock.module("@/api/lib/search/projection-repair-queue", () => ({
   flushContactSearchRepairs: idleRepairOutcome,
   flushEntitySearchRepairs: flushEntitySearchRepairsMock,
   flushWorkspaceSearchRepairs: idleRepairOutcome,
-}));
-
-const captureErrorMock = mock(() => undefined);
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
 }));
 
 const syncWorkspaceSearchActivityMock = mock(async () => {});
@@ -224,14 +218,17 @@ const requestKeys = (method: "COPY" | "DELETE" | "GET"): string[] =>
     .filter((request) => request.method === method)
     .map(({ key }) => key);
 
+let analytics: RecordingAnalytics;
+
 afterEach(() => {
+  analytics.restore();
   fake.stop();
 });
 
 beforeEach(() => {
+  analytics = installRecordingAnalytics();
   fake = startFakeS3();
   seedSourceObject(sourceFileId, sourceFileMimeType);
-  captureErrorMock.mockClear();
   requestNativeExtractionRunsMock.mockClear();
   enqueueDocumentProcessingRunMock.mockClear();
   enqueueEntitySearchRepairsMock.mockClear();
@@ -1311,7 +1308,19 @@ describe("copy-to-workspace", () => {
     expect(fake.objects.has(`${envBase.S3_BUCKET}/${movedKeys.at(0)}`)).toBe(
       true,
     );
-    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      {
+        // `safeDb` wraps a throwing query, so the reported defect is the
+        // wrapper and the raw failure rides along as its cause.
+        "error.class": "UnhandledException",
+        "error.cause.class": "Error",
+        operation: "move-cleanup",
+        sourceEntityId: documentId,
+        sourceWorkspaceId,
+      },
+    ]);
   });
 
   test("copies folder tree with children", async () => {

@@ -9,11 +9,21 @@
  * module graph, and `template-tools.test.ts` already imports it statically.
  */
 
-import { afterAll, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
 const PROVIDER_ERROR = new Error(
   "upstream provider rejected request: invalid api key sk-live-abc123",
@@ -22,25 +32,29 @@ const PROVIDER_ERROR = new Error(
 const suggestTemplateFieldsMock = mock(async () => {
   throw PROVIDER_ERROR;
 });
-const captureErrorMock = mock();
 
 void mock.module("@/api/lib/templates/suggest-template-fields", () => ({
   suggestTemplateFields: suggestTemplateFieldsMock,
 }));
 
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
-}));
-
 // Bun runs every test file in one process, and `mock.module` mutates a
-// shared registry: without restoring here, these `mock.module` calls (for
-// `suggest-template-fields` and `analytics/capture`) would leak into
-// whichever other test file runs next in the same process.
+// shared registry: without restoring here, this `mock.module` call (for
+// `suggest-template-fields`) would leak into whichever other test file runs
+// next in the same process.
 afterAll(() => {
   mock.restore();
+});
+
+// The real capture path runs; only the sink is in memory, so the assertion
+// below is on the `$exception` event that would have shipped.
+let analytics: RecordingAnalytics;
+
+beforeEach(() => {
+  analytics = installRecordingAnalytics();
+});
+
+afterEach(() => {
+  analytics.restore();
 });
 
 const { createTemplateAuthoringTools, SUGGEST_TEMPLATE_FIELDS_TOOL_NAME } =
@@ -91,10 +105,13 @@ describe("suggest_template_fields tool error handling", () => {
       "Template field suggestion failed; the workspace's AI provider returned an error.",
     );
 
-    // The original error is still captured for telemetry, not swallowed.
-    expect(captureErrorMock).toHaveBeenCalledWith(
-      PROVIDER_ERROR,
-      expect.anything(),
-    );
+    // The original error is still captured for telemetry, not swallowed —
+    // and the provider's message is redacted on the way to the sink.
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      { "error.class": "Error", feature: "templates.suggest_fields" },
+    ]);
+    expect(JSON.stringify(analytics.events)).not.toContain("sk-live-abc123");
   });
 });

@@ -1,32 +1,11 @@
 import { Result } from "better-result";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { expectTypeOf } from "expect-type";
 import * as v from "valibot";
 
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import type { PersistedJsonValue } from "@/api/lib/chat/persisted-message-content";
-import type {
-  ChatProjectionSchema,
-  DehydratedInput,
-} from "@/api/lib/chat/projection-schema";
-import type {
-  AssertNoExtraFields,
-  LIST_MATTERS_LIST_PROJECTION,
-  LIST_PROPERTIES_PROJECTION,
-} from "@/api/lib/chat/projections";
-
-// Mocked so the fail-closed tests can assert the exact telemetry contract
-// (paths only, never values) without touching the analytics client.
-const captureErrorMock = mock();
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
-}));
-
-const { createChatRefRegistry } = await import("@/api/lib/chat/ref-registry");
-const {
+import {
   chatEntityRef,
   chatRef,
   containsRawUuid,
@@ -39,9 +18,26 @@ const {
   renderProjectionShape,
   strippedField,
   unenumeratedJson,
-} = await import("@/api/lib/chat/projection-schema");
-const { READ_TOOL_REF_FIELD_MAP, WRITE_TOOL_REF_FIELD_MAP } =
-  await import("./ref-field-map");
+} from "@/api/lib/chat/projection-schema";
+import type {
+  ChatProjectionSchema,
+  DehydratedInput,
+} from "@/api/lib/chat/projection-schema";
+import type {
+  AssertNoExtraFields,
+  LIST_MATTERS_LIST_PROJECTION,
+  LIST_PROPERTIES_PROJECTION,
+} from "@/api/lib/chat/projections";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+// The fail-closed tests assert the exact telemetry contract (paths only,
+// never values) on the event the real capture path would have shipped.
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+
+import {
+  READ_TOOL_REF_FIELD_MAP,
+  WRITE_TOOL_REF_FIELD_MAP,
+} from "./ref-field-map";
 
 const LIST_MATTERS_PROJECTION = READ_TOOL_REF_FIELD_MAP.list_matters.projection;
 const READ_DOCUMENT_PROJECTION =
@@ -84,9 +80,20 @@ describe("projectForChat", () => {
       toolName: "test_tool",
     });
 
+  // Per test: every fail-closed case captures from the same construction
+  // site, which the real path throttles to one event per window.
+  let analytics: RecordingAnalytics;
+
   beforeEach(() => {
-    captureErrorMock.mockClear();
+    analytics = installRecordingAnalytics();
   });
+
+  afterEach(() => {
+    analytics.restore();
+  });
+
+  const exceptionProperties = () =>
+    analytics.exceptions().map((event) => event.properties);
 
   test("an undeclared field fails the strict parse with its path, never its value", () => {
     const result = project({
@@ -115,16 +122,16 @@ describe("projectForChat", () => {
       expect(result.error.message).toBe(PROJECTION_SCHEMA_FAILURE_MESSAGE);
       expect(JSON.stringify(result.error)).not.toContain(ROGUE_UUID);
     }
-    expect(captureErrorMock).toHaveBeenCalledWith(
-      expect.objectContaining({ message: PROJECTION_SCHEMA_FAILURE_MESSAGE }),
-      expect.objectContaining({
-        paths: expect.stringContaining("matters[].plumbingId"),
-        source: "run-registry-tool",
-        toolName: "test_tool",
-      }),
+    const [exception] = analytics.exceptions();
+    expect(exception?.properties).toMatchObject({
+      "error.class": "ChatToolError",
+      source: "run-registry-tool",
+      toolName: "test_tool",
+    });
+    expect(JSON.stringify(exception?.properties)).toContain(
+      "matters[].plumbingId",
     );
-    const [, telemetryContext] = captureErrorMock.mock.calls.at(0) ?? [];
-    expect(JSON.stringify(telemetryContext)).not.toContain(ROGUE_UUID);
+    expect(JSON.stringify(analytics.exceptions())).not.toContain(ROGUE_UUID);
   });
 
   test("each simple ref kind hydrates to the registry's chat ref", () => {
@@ -436,16 +443,15 @@ describe("projectForChat", () => {
       expect(result.error.kind).toBe("server-defect");
       expect(result.error.message).toBe(REF_PROJECTION_FAILURE_MESSAGE);
     }
-    expect(captureErrorMock).toHaveBeenCalledWith(
-      expect.objectContaining({ message: REF_PROJECTION_FAILURE_MESSAGE }),
+    expect(exceptionProperties()).toMatchObject([
       {
+        "error.class": "ChatToolError",
         path: "content.nodes[].value",
         source: "run-registry-tool",
         toolName: "test_tool",
       },
-    );
-    const [, telemetryContext] = captureErrorMock.mock.calls.at(0) ?? [];
-    expect(JSON.stringify(telemetryContext)).not.toContain(ROGUE_UUID);
+    ]);
+    expect(JSON.stringify(analytics.exceptions())).not.toContain(ROGUE_UUID);
   });
 
   test("a UUID embedded in a declared plain string fails closed with its path", () => {
@@ -463,10 +469,9 @@ describe("projectForChat", () => {
       expect(result.error.message).toBe(REF_PROJECTION_FAILURE_MESSAGE);
       expect(result.error.message).not.toContain(ROGUE_UUID);
     }
-    expect(captureErrorMock).toHaveBeenCalledWith(
-      expect.objectContaining({ message: REF_PROJECTION_FAILURE_MESSAGE }),
-      expect.objectContaining({ path: "matters[].reference" }),
-    );
+    expect(exceptionProperties()).toMatchObject([
+      { "error.class": "ChatToolError", path: "matters[].reference" },
+    ]);
   });
 
   test("an entity ref whose workspace is unrecoverable fails closed instead of leaking", () => {
@@ -488,10 +493,9 @@ describe("projectForChat", () => {
       expect(result.error.kind).toBe("server-defect");
       expect(result.error.message).toBe(REF_PROJECTION_FAILURE_MESSAGE);
     }
-    expect(captureErrorMock).toHaveBeenCalledWith(
-      expect.objectContaining({ message: REF_PROJECTION_FAILURE_MESSAGE }),
-      expect.objectContaining({ path: "entityId" }),
-    );
+    expect(exceptionProperties()).toMatchObject([
+      { "error.class": "ChatToolError", path: "entityId" },
+    ]);
   });
 
   test("a matching payload with no ids projects to the declared shape verbatim", () => {

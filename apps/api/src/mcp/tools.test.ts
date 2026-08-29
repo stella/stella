@@ -26,6 +26,8 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -115,7 +117,6 @@ void mock.module("@/api/lib/with-timeout", () => ({
 
 const anonymizeTextFieldsMock = mock();
 const loadAnonymizationGazetteerEntriesMock = mock();
-const captureErrorMock = mock();
 const searchAcrossMattersExecute = mock();
 const readContentAcrossMattersExecute = mock();
 const readContactExecute = mock();
@@ -225,13 +226,6 @@ const normalizeAnonymizationBlacklistEntriesMock = (
 
   return Result.ok(normalized);
 };
-
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
-}));
 
 void mock.module("@/api/lib/search/provider", () => ({
   getSearchProvider: () => ({
@@ -786,11 +780,13 @@ const createContext = ({
 });
 
 describe("OpenAI-compatible MCP tools", () => {
+  let analytics: RecordingAnalytics;
+
   beforeEach(() => {
+    analytics = installRecordingAnalytics();
     anonymizeTextFieldsMock.mockReset();
     loadAnonymizationGazetteerEntriesMock.mockReset();
     loadAnonymizationGazetteerEntriesMock.mockResolvedValue([]);
-    captureErrorMock.mockReset();
     searchAcrossMattersExecute.mockReset();
     searchProviderSearchMock.mockClear();
     readContentAcrossMattersExecute.mockReset();
@@ -817,6 +813,7 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   afterEach(() => {
+    analytics.restore();
     fake.stop();
   });
 
@@ -2564,9 +2561,15 @@ describe("OpenAI-compatible MCP tools", () => {
       message: "Tool execution failed",
       hint: "If this looks like a stella bug, report it with the send_feedback tool.",
     });
-    expect(captureErrorMock).toHaveBeenCalledWith(
-      expect.objectContaining({ message: "database timeout" }),
-      { source: "mcp", toolName: "search" },
+    // The message stays out of the event by design; the class, tool, and
+    // source are what identify the failure.
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      { "error.class": "Error", source: "mcp", toolName: "search" },
+    ]);
+    expect(JSON.stringify(analytics.exceptions())).not.toContain(
+      "database timeout",
     );
   });
 

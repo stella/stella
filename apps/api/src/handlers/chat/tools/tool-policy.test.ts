@@ -1,39 +1,35 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
-
-const captureErrorMock = mock();
-
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
-}));
-
-const {
-  applyChatToolPolicy,
+import {
   applyChatToolPolicies,
+  applyChatToolPolicy,
   CHAT_TOOL_POLICY_KIND,
   copyChatToolPolicy,
   getChatToolPolicy,
-} = await import("@/api/handlers/chat/tools/tool-policy");
+} from "@/api/handlers/chat/tools/tool-policy";
+import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
 const tool = (name: string): ChatTool => ({
   name,
   description: `Tool ${name}`,
 });
 
+// Installed per test: the real capture path throttles identical errors to one
+// event per window, and every policy miss here shares a construction site.
+let analytics: RecordingAnalytics;
+
 beforeEach(() => {
-  captureErrorMock.mockReset();
+  analytics = installRecordingAnalytics();
 });
 
-// Bun runs every test file in one process, and `mock.module` mutates a
-// shared registry: without restoring here, this call would leak into
-// whichever other test file runs next in the same process.
-afterAll(() => {
-  mock.restore();
+afterEach(() => {
+  analytics.restore();
 });
+
+const exceptionProperties = () =>
+  analytics.exceptions().map((event) => event.properties);
 
 describe("getChatToolPolicy", () => {
   test("fails closed and reports telemetry on a WeakMap miss", () => {
@@ -46,14 +42,13 @@ describe("getChatToolPolicy", () => {
       'Chat tool policy is missing for "policy-miss-tool"',
     );
 
-    expect(captureErrorMock).toHaveBeenCalledTimes(1);
-    expect(captureErrorMock).toHaveBeenCalledWith(
-      expect.any(Error),
-      expect.objectContaining({
+    expect(exceptionProperties()).toMatchObject([
+      {
+        "error.class": "TelemetryError",
         source: "chat-tool-policy",
         toolName: "policy-miss-tool",
-      }),
-    );
+      },
+    ]);
   });
 
   test("does not report telemetry for a tool registered via applyChatToolPolicy", () => {
@@ -64,7 +59,7 @@ describe("getChatToolPolicy", () => {
 
     expect(policy.kind).toBe(CHAT_TOOL_POLICY_KIND.external);
     expect(policy.needsApproval).toBe(true);
-    expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("copyChatToolPolicy preserves a registered policy without reporting telemetry", () => {
@@ -77,7 +72,7 @@ describe("getChatToolPolicy", () => {
     expect(getChatToolPolicy(to).kind).toBe(
       CHAT_TOOL_POLICY_KIND.publicOfficial,
     );
-    expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("copyChatToolPolicy from an unregistered tool fails closed", () => {
@@ -88,14 +83,13 @@ describe("getChatToolPolicy", () => {
       'Chat tool policy is missing for "policy-copy-missing-source"',
     );
 
-    expect(captureErrorMock).toHaveBeenCalledTimes(1);
-    expect(captureErrorMock).toHaveBeenCalledWith(
-      expect.any(Error),
-      expect.objectContaining({
+    expect(exceptionProperties()).toMatchObject([
+      {
+        "error.class": "TelemetryError",
         source: "chat-tool-policy",
         toolName: "policy-copy-missing-source",
-      }),
-    );
+      },
+    ]);
     expect(() => getChatToolPolicy(to)).toThrow(
       'Chat tool policy is missing for "policy-copy-missing-target"',
     );
@@ -112,7 +106,7 @@ describe("applyChatToolPolicies", () => {
     expect(getChatToolPolicy(dynamic).kind).toBe(
       CHAT_TOOL_POLICY_KIND.external,
     );
-    expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("rejects a tool whose policy is omitted instead of silently skipping it", () => {

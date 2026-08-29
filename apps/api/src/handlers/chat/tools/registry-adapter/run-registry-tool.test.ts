@@ -1,27 +1,23 @@
 import { Result } from "better-result";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  containsRawUuid,
+  PROJECTION_SCHEMA_FAILURE_MESSAGE,
+} from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-const captureErrorMock = mock();
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
-}));
-
-const { buildMcpContextFromChat } = await import("./mcp-chat-context");
-const { containsRawUuid, PROJECTION_SCHEMA_FAILURE_MESSAGE } =
-  await import("@/api/lib/chat/projection-schema");
-const { dehydrateInputRefs } = await import("./ref-mediation");
-const { runRegistryReadTool } = await import("./run-registry-tool");
+import { buildMcpContextFromChat } from "./mcp-chat-context";
+import { dehydrateInputRefs } from "./ref-mediation";
+import { runRegistryReadTool } from "./run-registry-tool";
 
 const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const OTHER_WS_UUID = "4e919658-a448-5354-8e3a-e99911214d2c";
@@ -59,8 +55,16 @@ const buildContext = ({
   });
 
 describe("runRegistryReadTool", () => {
+  // Per test: the real capture path throttles identical errors to one event
+  // per window, and installing clears that window state.
+  let analytics: RecordingAnalytics;
+
   beforeEach(() => {
-    captureErrorMock.mockClear();
+    analytics = installRecordingAnalytics();
+  });
+
+  afterEach(() => {
+    analytics.restore();
   });
 
   test("runs list_matters end-to-end: output UUIDs become refs, input ref dehydrates", async () => {
@@ -158,16 +162,17 @@ describe("runRegistryReadTool", () => {
     }
     // Telemetry carries the offending path so the survivor is traceable, but
     // never the leaked value itself.
-    expect(captureErrorMock).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.any(String) }),
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
       {
+        "error.class": "ChatToolError",
+        path: "matters[].reference",
         source: "run-registry-tool",
         toolName: "list_matters",
-        path: "matters[].reference",
       },
-    );
-    const [, telemetryContext] = captureErrorMock.mock.calls.at(0) ?? [];
-    expect(JSON.stringify(telemetryContext)).not.toContain(OTHER_WS_UUID);
+    ]);
+    expect(JSON.stringify(analytics.exceptions())).not.toContain(OTHER_WS_UUID);
   });
 
   // A scopedDb whose relational query double serves read_document's two
@@ -244,16 +249,16 @@ describe("runRegistryReadTool", () => {
       expect(result.error.message).not.toContain(OTHER_WS_UUID);
     }
     // Telemetry carries the offending path(s), never the refused value.
-    expect(captureErrorMock).toHaveBeenCalledWith(
-      expect.objectContaining({ message: PROJECTION_SCHEMA_FAILURE_MESSAGE }),
-      expect.objectContaining({
-        source: "run-registry-tool",
-        toolName: "read_document",
-        paths: expect.stringContaining("fields[].extractorRunId"),
-      }),
+    const [exception] = analytics.exceptions();
+    expect(exception?.properties).toMatchObject({
+      "error.class": "ChatToolError",
+      source: "run-registry-tool",
+      toolName: "read_document",
+    });
+    expect(JSON.stringify(exception?.properties)).toContain(
+      "fields[].extractorRunId",
     );
-    const [, telemetryContext] = captureErrorMock.mock.calls.at(0) ?? [];
-    expect(JSON.stringify(telemetryContext)).not.toContain(OTHER_WS_UUID);
+    expect(JSON.stringify(analytics.exceptions())).not.toContain(OTHER_WS_UUID);
   });
 
   test("file-content plumbing UUIDs are stripped from the projected payload", async () => {

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -7,16 +7,22 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-const captureErrorMock = mock();
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
-}));
+// The real capture path runs; only the sink is in memory, and installing per
+// test clears its repeat-suppression window.
+let analytics: RecordingAnalytics;
+
+beforeEach(() => {
+  analytics = installRecordingAnalytics();
+});
+
+afterEach(() => {
+  analytics.restore();
+});
 
 // Gate FEATURE_TIME_BILLING off (every other feature stays enabled) so the
 // feature-gate branch can be asserted directly.
@@ -183,7 +189,6 @@ describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
     // ordinary string, which no annotation licenses to carry a UUID: a raw
     // uuid there is refused rather than leaked, with only the path (never the
     // value) reaching telemetry.
-    captureErrorMock.mockClear();
     const result = projectForChat({
       dehydration: {
         args: {},
@@ -203,16 +208,17 @@ describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
       expect(result.error.kind).toBe("server-defect");
       expect(result.error.message).toBe(REF_PROJECTION_FAILURE_MESSAGE);
     }
-    expect(captureErrorMock).toHaveBeenCalledWith(
-      expect.objectContaining({ message: REF_PROJECTION_FAILURE_MESSAGE }),
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
       {
+        "error.class": "ChatToolError",
         path: "matterNumberPattern",
         source: "run-registry-write-tool",
         toolName: "manage_organization",
       },
-    );
-    const [, telemetryContext] = captureErrorMock.mock.calls.at(0) ?? [];
-    expect(JSON.stringify(telemetryContext)).not.toContain(OTHER_WS_UUID);
+    ]);
+    expect(JSON.stringify(analytics.exceptions())).not.toContain(OTHER_WS_UUID);
   });
 });
 

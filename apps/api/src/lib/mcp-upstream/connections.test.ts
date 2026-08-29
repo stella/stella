@@ -1,18 +1,21 @@
 import { Result } from "better-result";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // This suite pins the OAuth/token-refresh connection lifecycle in
 // `connections.ts` against faked crypto, OAuth, transport, and DB
 // collaborators. All external collaborators are injected either as
-// arguments (`safeDb`) or replaced with `mock.module`, so no network,
-// KMS, or Postgres access happens. The point is to lock in the exact
-// failure-normalization contract the MCP gateway depends on.
+// arguments (`safeDb`), replaced with `mock.module`, or routed into an
+// in-memory recorder (analytics), so no network, KMS, or Postgres access
+// happens. The point is to lock in the exact failure-normalization
+// contract the MCP gateway depends on.
 
 type RefreshResult = Result<
   { access_token: string; refresh_token?: string },
@@ -26,7 +29,6 @@ type CapturedTransport = {
 
 // Mutable controls the mocked collaborators close over. Reset per test.
 const state = {
-  captured: [] as unknown[],
   closes: 0,
   dbSets: [] as Record<string, unknown>[],
   encryptCalls: 0,
@@ -77,14 +79,6 @@ void mock.module("@/api/lib/safe-outbound-fetch", () => ({
     Result.err(new Error("unused: transport is mocked at the client layer")),
   validateOutboundFetchTarget: async (url: string) =>
     Result.ok({ url: new URL(url) }),
-}));
-
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: (error: unknown) => {
-    state.captured.push(error);
-  },
 }));
 
 const { createMcpClientForConnection, proxyMcpToolCall } =
@@ -149,8 +143,10 @@ const lastAuthHeader = () =>
 const hasStatusSet = (status: string) =>
   state.dbSets.some((set) => set["status"] === status);
 
+let analytics: RecordingAnalytics;
+
 beforeEach(() => {
-  state.captured = [];
+  analytics = installRecordingAnalytics();
   state.closes = 0;
   state.dbSets = [];
   state.encryptCalls = 0;
@@ -161,6 +157,10 @@ beforeEach(() => {
     { execute: async () => ({ content: [{ text: "ok", type: "text" }] }) },
   ];
   state.transports = [];
+});
+
+afterEach(() => {
+  analytics.restore();
 });
 
 describe("MCP upstream connection lifecycle", () => {
@@ -211,6 +211,9 @@ describe("MCP upstream connection lifecycle", () => {
 
     expect(client).toBeNull();
     expect(hasStatusSet("needs_reauth")).toBe(true);
+    // An upstream that revoked the grant is an expected state the module
+    // normalizes, so nothing is reported as an exception.
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("refresh failure surfaces as an error tool-result, never a raw throw", async () => {

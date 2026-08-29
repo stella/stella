@@ -8,6 +8,8 @@ import { createFileKey } from "@/api/lib/file-key";
 import { DOC_MIME_TYPE, DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -40,7 +42,6 @@ const enqueueImageThumbnailMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
 const enqueuePdfDerivativeMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
-const captureErrorMock = mock(() => {});
 
 const realDeepLClient = await import("@/api/lib/deepl/client");
 void mock.module("@/api/lib/deepl/client", () => ({
@@ -71,13 +72,6 @@ void mock.module("@/api/lib/file-derivative-queue", () => ({
   enqueuePdfDerivative: enqueuePdfDerivativeMock,
   enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
   initFileDerivativeWorker: mock(() => undefined),
-}));
-
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: mock(() => {}),
 }));
 
 const translateEntity = (await import("./translate")).default;
@@ -187,7 +181,10 @@ const createContext = ({
 };
 
 describe("translateEntity", () => {
+  let analytics: RecordingAnalytics;
+
   beforeEach(() => {
+    analytics = installRecordingAnalytics();
     fake = startFakeS3();
     translateDocumentMock.mockClear();
     scanFileMock.mockClear();
@@ -196,6 +193,7 @@ describe("translateEntity", () => {
   });
 
   afterEach(() => {
+    analytics.restore();
     fake.stop();
   });
 
@@ -232,6 +230,9 @@ describe("translateEntity", () => {
     );
     expect(processExtractionMock).not.toHaveBeenCalled();
     expect(enqueuePdfDerivativeOrMarkFailedMock).not.toHaveBeenCalled();
+    // A scan verdict is an expected outcome the caller is told about, not a
+    // defect: nothing is reported as an exception.
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("scans legacy DOC provider output as DOCX before persistence", async () => {
