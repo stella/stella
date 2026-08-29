@@ -9,7 +9,7 @@ import type { Peer } from "crossws";
 import crossws from "crossws/adapters/bun";
 import RedisClient from "ioredis";
 import * as v from "valibot";
-import { applyUpdate, encodeStateAsUpdate } from "yjs";
+import { applyUpdate, encodeStateAsUpdate, encodeStateVector } from "yjs";
 
 import {
   FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
@@ -585,6 +585,12 @@ export const createCollabServer = async (
       panic("Collaboration room snapshot generation is missing.");
     }
 
+    const snapshotBase64 = Buffer.from(encodeStateAsUpdate(document)).toString(
+      "base64",
+    );
+    const stateVectorBase64 = Buffer.from(encodeStateVector(document)).toString(
+      "base64",
+    );
     try {
       await postJson({
         apiUrl,
@@ -592,9 +598,7 @@ export const createCollabServer = async (
         body: {
           expectedGeneration: snapshot.generation,
           roomId: snapshot.roomId,
-          snapshotBase64: Buffer.from(encodeStateAsUpdate(document)).toString(
-            "base64",
-          ),
+          snapshotBase64,
         },
         path: "/folio-collab-rooms/snapshot/store",
         schema: storeSnapshotResponseSchema,
@@ -617,6 +621,7 @@ export const createCollabServer = async (
       });
       throw error;
     }
+    return stateVectorBase64;
   };
 
   const hocuspocus = new Hocuspocus<CollabAuthContext>({
@@ -746,10 +751,11 @@ export const createCollabServer = async (
       if (!parsed.success) {
         return;
       }
-      await storeRoomSnapshot(document);
+      const stateVectorBase64 = await storeRoomSnapshot(document);
       connection.sendStateless(
         JSON.stringify({
           requestId: parsed.output.requestId,
+          stateVectorBase64,
           type: FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
         }),
       );

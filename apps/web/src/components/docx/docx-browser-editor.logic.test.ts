@@ -8,6 +8,7 @@ import {
   shouldBlockDocxEdit,
   shouldFinalizeEditSession,
   shouldPromptReadonlyUnlock,
+  shouldReuseCollaborationPublication,
   shouldUseDocxBrowserEditor,
 } from "./docx-browser-editor.logic";
 import type { DocxPreviewFile } from "./docx-browser-editor.logic";
@@ -217,6 +218,17 @@ describe("DOCX edit finalization", () => {
         hasPendingEditorChanges: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe("collaboration publication retry", () => {
+  test("reuses idempotency only while the Yjs cut is unchanged", () => {
+    expect(shouldReuseCollaborationPublication("same-cut", "same-cut")).toBe(
+      true,
+    );
+    expect(shouldReuseCollaborationPublication("old-cut", "new-cut")).toBe(
+      false,
+    );
   });
 });
 

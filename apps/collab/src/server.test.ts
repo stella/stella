@@ -1,6 +1,6 @@
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { describe, expect, test } from "bun:test";
-import { applyUpdate, Doc } from "yjs";
+import { applyUpdate, Doc, encodeStateVector } from "yjs";
 
 import {
   FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
@@ -614,6 +614,9 @@ describe("collaboration server", () => {
           payload ===
           JSON.stringify({
             requestId,
+            stateVectorBase64: Buffer.from(
+              encodeStateVector(document),
+            ).toString("base64"),
             type: FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
           })
         ) {

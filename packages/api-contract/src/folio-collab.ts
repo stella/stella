@@ -12,6 +12,7 @@ export type FolioCollabFlushRequest = {
 
 export type FolioCollabFlushResponse = {
   requestId: string;
+  stateVectorBase64: string;
   type: typeof FOLIO_COLLAB_FLUSH_RESPONSE_TYPE;
 };
 

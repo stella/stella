@@ -131,6 +131,11 @@ export const shouldFinalizeEditSession = ({
 }: ShouldFinalizeEditSessionOptions) =>
   isDirty || hasSessionChanges || hasPendingEditorChanges;
 
+export const shouldReuseCollaborationPublication = (
+  checkpointStateVectorBase64: string,
+  currentStateVectorBase64: string,
+) => checkpointStateVectorBase64 === currentStateVectorBase64;
+
 type ShouldPromptReadonlyUnlockOptions = {
   canUnlock: boolean;
   isEditing: boolean;

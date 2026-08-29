@@ -108,6 +108,7 @@ import {
   selectDocxBrowserEditorBuffer,
   selectPreviewFile,
   shouldFinalizeEditSession,
+  shouldReuseCollaborationPublication,
 } from "./docx-browser-editor.logic";
 import type { OptimisticPreviewFile } from "./docx-browser-editor.logic";
 import {
@@ -183,6 +184,7 @@ type PendingCollaborationPublication = {
   idempotencyKey: string;
   roomId: string;
   sha256Hex: string;
+  stateVectorBase64: string;
 };
 
 type DocxBrowserEditorProps = DocxBrowserEditorBaseProps;
@@ -1244,6 +1246,16 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       setIsPublishingCollaborationVersion(false);
     };
     let pendingPublication = pendingCollaborationPublicationRef.current;
+    if (
+      pendingPublication !== null &&
+      !shouldReuseCollaborationPublication(
+        pendingPublication.stateVectorBase64,
+        collaborationSession.getStateVectorBase64(),
+      )
+    ) {
+      pendingCollaborationPublicationRef.current = null;
+      pendingPublication = null;
+    }
     if (pendingPublication === null) {
       const flushResult = await Result.tryPromise(
         async () => await collaborationSession.flushSnapshot(),
@@ -1294,6 +1306,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         idempotencyKey: crypto.randomUUID(),
         roomId: collaborationSession.roomId,
         sha256Hex: checkpoint.sha256Hex,
+        stateVectorBase64: flushResult.value,
       };
       pendingCollaborationPublicationRef.current = pendingPublication;
     }
