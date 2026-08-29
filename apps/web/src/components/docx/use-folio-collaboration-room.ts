@@ -198,7 +198,7 @@ export const useFolioCollaborationRoom = ({
 
     detached(
       (async () => {
-        const { data, error } = await api
+        const { data, error: joinError } = await api
           .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
           ["folio-collab-rooms"].join.post({
             entityId: toSafeId<"entity">(entityId),
@@ -207,11 +207,11 @@ export const useFolioCollaborationRoom = ({
         if (isDisposed()) {
           return;
         }
-        if (error) {
+        if (joinError) {
           setState({
             status: "unavailable",
             room: null,
-            message: userErrorMessage(error, t("folio.editOpenFailed")),
+            message: userErrorMessage(joinError, t("folio.editOpenFailed")),
           });
           return;
         }
@@ -260,16 +260,18 @@ export const useFolioCollaborationRoom = ({
         };
 
         const startGenerationRejoin = () => {
+          const activeProvider = provider;
+          const currentRoom = activeRoom;
           if (
             disposed ||
-            provider === null ||
-            activeRoom === null ||
+            activeProvider === null ||
+            currentRoom === null ||
             generationRejoinPromise !== null
           ) {
             return;
           }
 
-          provider.disconnect();
+          activeProvider.disconnect();
           setConnectedState("reconnecting");
           generationRejoinPromise = (async () => {
             const { data: rejoined, error: rejoinError } = await api
@@ -278,7 +280,7 @@ export const useFolioCollaborationRoom = ({
                 entityId: toSafeId<"entity">(entityId),
                 propertyId: toSafeId<"property">(propertyId),
               });
-            if (disposed) {
+            if (isDisposed()) {
               return;
             }
             if (rejoinError) {
@@ -301,10 +303,6 @@ export const useFolioCollaborationRoom = ({
 
             token = rejoined.token;
             tokenExpiresAtMs = new Date(rejoined.tokenExpiresAt).getTime();
-            const currentRoom = activeRoom;
-            if (currentRoom === null) {
-              return;
-            }
             activeRoom = {
               collaboration: {
                 awareness: currentRoom.collaboration.awareness,
@@ -318,7 +316,10 @@ export const useFolioCollaborationRoom = ({
               seedDocumentBuffer: null,
             };
             setConnectedState("reconnecting");
-            provider?.connect();
+            detached(
+              activeProvider.connect(),
+              "use-folio-collaboration-room.generation-reconnect",
+            );
           })()
             .catch((error: unknown) => {
               if (disposed) {
@@ -327,10 +328,7 @@ export const useFolioCollaborationRoom = ({
               setState({
                 status: "unavailable",
                 room: null,
-                message: userErrorFromThrown(
-                  error,
-                  t("errors.actionFailed"),
-                ),
+                message: userErrorFromThrown(error, t("errors.actionFailed")),
               });
             })
             .finally(() => {
