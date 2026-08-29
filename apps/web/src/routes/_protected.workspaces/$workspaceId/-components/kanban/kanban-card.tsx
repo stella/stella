@@ -12,6 +12,7 @@ import { cn } from "@stll/ui/utils";
 
 import { withDragAnnouncementData } from "@/components/drag-and-drop-live-region.logic";
 import { InlineEdit } from "@/components/inline-edit";
+import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { UserIdentity } from "@/components/user-avatar";
 import { EditableField } from "@/components/workspaces/editable-field";
@@ -37,7 +38,6 @@ import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
-import { isFileDisplayable } from "@/lib/types";
 import type {
   WorkspaceEntity,
   WorkspaceFieldContent,
@@ -72,7 +72,6 @@ export const KanbanCard = ({
 }: KanbanCardProps) => {
   const name = getEntityName(entity);
   const file = getFirstFile(entity);
-  const navigable = file !== null && isFileDisplayable(file);
   const isActivePeek = useInspectorTabsStore((s) => {
     if (!s.activeId) {
       return false;
@@ -265,30 +264,11 @@ export const KanbanCard = ({
   const cardRef = useRef<HTMLDivElement>(null);
   useInspectorFlash(entity.entityId, cardRef);
 
-  const openCard = (() => {
-    if (isTask) {
-      return () =>
-        useInspectorTabsStore.getState().openTask({
-          taskId: entity.entityId,
-          workspaceId,
-          label: name,
-        });
-    }
-    if (navigable) {
-      return () =>
-        useInspectorTabsStore.getState().openFile({
-          id: file.fieldId,
-          entityId: file.entityId,
-          label: name,
-          fileName: file.fileName,
-          mimeType: file.mimeType,
-          pdfFileId: file.pdfFileId,
-          propertyId: file.propertyId,
-          workspaceId,
-        });
-    }
-    return undefined;
-  })();
+  const openCard = openInspectorSelection({
+    entities: [entity],
+    anchor: entity,
+    workspaceId,
+  });
 
   return (
     <KanbanCardShell

@@ -120,6 +120,9 @@ export type InspectorTab =
   | SkillResourceTab
   | GenericTab;
 
+/** A tab shape `openTabs` can materialize: the kinds a workspace entity maps to. */
+export type InspectorOpenTarget = FileTab | TaskTab;
+
 export type DocumentTextSelection = {
   text: string;
   seq: number;
@@ -197,6 +200,13 @@ export type FileFieldReplacement = {
   propertyId?: string | undefined;
 };
 
+/** `activeId` must name one of `targets`; the caller picks the focused tab
+ *  because "first in the selection" differs between the table and the tree. */
+export type OpenTabsArgs = {
+  targets: readonly InspectorOpenTarget[];
+  activeId: string;
+};
+
 export type InspectorTabsActions = {
   openFile: (tab: Omit<FileTab, "type">) => void;
   openFileForEntity: (tab: Omit<FileTab, "type">) => void;
@@ -207,6 +217,7 @@ export type InspectorTabsActions = {
     isNew?: boolean;
   }) => void;
   openPendingTask: (args: { workspaceId: string; label?: string }) => string;
+  openTabs: (args: OpenTabsArgs) => void;
   resolvePendingTask: (args: { pendingTaskId: string; taskId: string }) => void;
   openExternal: (args: {
     url: string;

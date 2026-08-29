@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { current, type Draft } from "immer";
 import { v7 as uuidv7 } from "uuid";
 
@@ -8,7 +9,9 @@ import type {
   InspectorTabsSet,
   InspectorTabsStore,
   MatterTabId,
+  OpenTabsArgs,
   SkillResourceTabId,
+  TaskTab,
 } from "@/components/inspector/inspector-store-types";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import { normalizeOptionalArray } from "@/lib/arrays";
@@ -74,11 +77,14 @@ const normalizeFileTabFacet = (tab: Draft<FileTab>): void => {
   }
 };
 
+/** Focus-neutral: the caller owns `activeId`. Returns the id the matching
+ *  tab had before this upsert, or null when a tab was inserted, so callers
+ *  that follow focus across an id replacement can do so. */
 const upsertFileTab = (
   state: Draft<InspectorTabsStore>,
   tab: Omit<FileTab, "type">,
   { renderIdPolicy }: UpsertFileTabOptions,
-) => {
+): string | null => {
   const matchIndex = state.tabs.findIndex(
     (candidate) =>
       candidate.type === "pdf" &&
@@ -86,13 +92,12 @@ const upsertFileTab = (
   );
   if (matchIndex === -1) {
     state.tabs.push({ type: "pdf", renderId: uuidv7(), ...tab });
-    state.activeId = tab.id;
-    return;
+    return null;
   }
 
   const existing = state.tabs[matchIndex];
   if (existing?.type !== "pdf") {
-    return;
+    return null;
   }
 
   const previousId = existing.id;
@@ -125,9 +130,63 @@ const upsertFileTab = (
         (candidate.entityId === tab.entityId || candidate.id === tab.id)
       ),
   );
-  if (state.activeId === previousId) {
-    state.activeId = tab.id;
+  return previousId;
+};
+
+/** Mirror of `upsertFileTab` for task tabs: focus-neutral, and keeps an
+ *  existing tab's `creationStatus`. */
+const upsertTaskTab = (state: Draft<InspectorTabsStore>, tab: TaskTab) => {
+  const existing = state.tabs.find((candidate) => candidate.id === tab.id);
+  if (!existing) {
+    // Copy so the store never aliases (and immer never freezes) the
+    // caller's object.
+    state.tabs.push({ ...tab });
+    return;
   }
+  if (existing.type !== "task") {
+    return;
+  }
+  if (tab.label) {
+    existing.label = tab.label;
+  }
+  if (tab.isNew) {
+    existing.isNew = true;
+  }
+  existing.workspaceId = tab.workspaceId;
+};
+
+// Bulk open: adds a tab for every target in a single store update, then
+// focuses the one the caller names. Opening a selection one tab at a time
+// would re-render per tab and leave focus on whichever came last.
+// `openFile` and `openTask` are the single-target form of the same call.
+const openTabs = (
+  set: InspectorTabsSet,
+  { targets, activeId }: OpenTabsArgs,
+) => {
+  if (!targets.some((target) => target.id === activeId)) {
+    panic("openTabs was given an activeId outside its targets");
+  }
+  set((state) => {
+    for (const target of targets) {
+      switch (target.type) {
+        case "pdf":
+          upsertFileTab(state, target, {
+            renderIdPolicy: FILE_TAB_RENDER_ID_POLICY.whenIdChanges,
+          });
+          dropSupersededFileSuggestion(state, target);
+          break;
+        case "task":
+          upsertTaskTab(state, target);
+          break;
+        default:
+          target satisfies never;
+          panic("Unhandled inspector open target");
+      }
+    }
+    state.activeId = activeId;
+    state.activationSeq += 1;
+    state.minimized = false;
+  });
 };
 
 export const createInspectorTabsSlice = (
@@ -142,51 +201,42 @@ export const createInspectorTabsSlice = (
   reviveSuggestion: null,
 
   openFile: (tab) =>
-    set((state) => {
-      upsertFileTab(state, tab, {
-        renderIdPolicy: FILE_TAB_RENDER_ID_POLICY.whenIdChanges,
-      });
-      state.activeId = tab.id;
-      state.activationSeq += 1;
-      state.minimized = false;
-      dropSupersededFileSuggestion(state, tab);
+    openTabs(set, {
+      targets: [{ type: "pdf", ...tab }],
+      activeId: tab.id,
     }),
 
   openFileForEntity: (tab) =>
     set((state) => {
-      upsertFileTab(state, tab, {
+      const previousId = upsertFileTab(state, tab, {
         renderIdPolicy: FILE_TAB_RENDER_ID_POLICY.always,
       });
+      // Focus follows only a fresh tab or the tab that was already focused;
+      // an entity-driven refresh must not steal focus from another tab.
+      if (previousId === null || state.activeId === previousId) {
+        state.activeId = tab.id;
+      }
       state.activationSeq += 1;
       state.minimized = false;
       dropSupersededFileSuggestion(state, tab);
     }),
 
   openTask: ({ taskId, workspaceId, label = "", isNew = false }) =>
-    set((state) => {
-      const existing = state.tabs.find((tab) => tab.id === taskId);
-      if (!existing) {
-        state.tabs.push({
+    openTabs(set, {
+      targets: [
+        {
           type: "task",
           id: taskId,
           creationStatus: "ready",
           label,
           isNew,
           workspaceId,
-        });
-      } else if (existing.type === "task") {
-        if (label) {
-          existing.label = label;
-        }
-        if (isNew) {
-          existing.isNew = true;
-        }
-        existing.workspaceId = workspaceId;
-      }
-      state.activeId = taskId;
-      state.activationSeq += 1;
-      state.minimized = false;
+        },
+      ],
+      activeId: taskId,
     }),
+
+  openTabs: (args) => openTabs(set, args),
 
   openPendingTask: ({ workspaceId, label = "" }) => {
     const pendingTaskId = `pending-task:${uuidv7()}`;

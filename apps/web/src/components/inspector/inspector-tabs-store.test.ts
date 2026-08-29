@@ -187,6 +187,93 @@ describe("optimistic task creation", () => {
   });
 });
 
+describe("openTabs", () => {
+  const fileTarget = (suffix: string) =>
+    ({
+      type: "pdf",
+      id: `field-${suffix}`,
+      entityId: `entity-${suffix}`,
+      label: `Document ${suffix}`,
+      fileName: `Document ${suffix}.pdf`,
+      mimeType: "application/pdf",
+      pdfFileId: `pdf-${suffix}`,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    }) as const;
+
+  test("opens every target in order and focuses the one named, not the last", () => {
+    useInspectorTabsStore.setState({ minimized: true });
+
+    useInspectorTabsStore.getState().openTabs({
+      targets: [fileTarget("a"), fileTarget("b"), fileTarget("c")],
+      activeId: "field-b",
+    });
+
+    expect(useInspectorTabsStore.getState()).toMatchObject({
+      activeId: "field-b",
+      activationSeq: 1,
+      minimized: false,
+    });
+    expect(useInspectorTabsStore.getState().tabs.map((tab) => tab.id)).toEqual([
+      "field-a",
+      "field-b",
+      "field-c",
+    ]);
+  });
+
+  test("opens a mixed selection of files and tasks", () => {
+    useInspectorTabsStore.getState().openTabs({
+      targets: [
+        fileTarget("a"),
+        {
+          type: "task",
+          id: "task-1",
+          creationStatus: "ready",
+          label: "Serve notice",
+          isNew: false,
+          workspaceId: "workspace-1",
+        },
+      ],
+      activeId: "task-1",
+    });
+
+    expect(useInspectorTabsStore.getState()).toMatchObject({
+      activeId: "task-1",
+      tabs: [
+        { type: "pdf", id: "field-a" },
+        { type: "task", id: "task-1", creationStatus: "ready" },
+      ],
+    });
+  });
+
+  test("reuses an already-open tab and still honours the requested focus", () => {
+    useInspectorTabsStore.getState().openFile(fileTarget("a"));
+
+    useInspectorTabsStore.getState().openTabs({
+      targets: [fileTarget("a"), fileTarget("b")],
+      activeId: "field-a",
+    });
+
+    expect(useInspectorTabsStore.getState()).toMatchObject({
+      activeId: "field-a",
+      activationSeq: 2,
+    });
+    expect(useInspectorTabsStore.getState().tabs.map((tab) => tab.id)).toEqual([
+      "field-a",
+      "field-b",
+    ]);
+  });
+
+  test("rejects a focus target that is not being opened", () => {
+    expect(() =>
+      useInspectorTabsStore.getState().openTabs({
+        targets: [fileTarget("a")],
+        activeId: "field-b",
+      }),
+    ).toThrow("activeId outside its targets");
+  });
+});
+
 describe("openChat", () => {
   test("creates a workspace-scoped tab when workspaceId is provided", () => {
     const threadId = toChatThreadId("thread-A");

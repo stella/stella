@@ -55,7 +55,7 @@ import { cn } from "@stll/ui/utils";
 
 import { buildEntityMentionOption } from "@/components/chat-mention-helpers";
 import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { CopyToMatterDialog } from "@/components/workspaces/copy-to-matter-dialog";
@@ -102,7 +102,6 @@ import type {
   WorkspaceCellMetadata,
   WorkspaceEntity,
 } from "@/lib/types";
-import { isFileDisplayable } from "@/lib/types";
 import { downloadFile } from "@/lib/utils";
 import {
   useCreateEntities,
@@ -144,7 +143,6 @@ type RowActionsProps = {
   workspaceId: string;
   open?: boolean | undefined;
   onOpenChange?: ((open: boolean) => void) | undefined;
-  onOpen?: (() => void) | undefined;
   onRename?: (() => void) | undefined;
   onSubfolderCreated?:
     | ((entityId: string, parentId: string) => void)
@@ -245,7 +243,6 @@ export const RowActions = ({
   workspaceId,
   open,
   onOpenChange,
-  onOpen,
   onRename,
   onSubfolderCreated,
   triggerClassName,
@@ -370,35 +367,14 @@ export const RowActions = ({
       }
     : undefined;
 
-  // Derive a default open handler when the caller doesn't
-  // provide one. Tasks open in the inspector; displayable
-  // files open in the PDF peek viewer.
-  const resolvedOnOpen =
-    onOpen ??
-    (() => {
-      if (entity.kind === "task") {
-        return () =>
-          useInspectorTabsStore.getState().openTask({
-            taskId: entity.entityId,
-            workspaceId,
-            label: name,
-          });
-      }
-      if (file && isFileDisplayable(file)) {
-        return () =>
-          useInspectorTabsStore.getState().openFile({
-            id: file.fieldId,
-            entityId: file.entityId,
-            label: name,
-            fileName: file.fileName,
-            mimeType: file.mimeType,
-            pdfFileId: file.pdfFileId,
-            propertyId: file.propertyId,
-            workspaceId,
-          });
-      }
-      return undefined;
-    })();
+  // Preview opens every selected entity the inspector can render and focuses
+  // the row the menu was opened on, not the first of the selection: the tab
+  // that takes focus is the row the user acted on, on every surface.
+  const resolvedOnOpen = openInspectorSelection({
+    entities: bulkTargets,
+    anchor: entity,
+    workspaceId,
+  });
 
   const hasPdfConversion =
     file !== null && file.pdfFileId !== null && file.mimeType !== PDF_MIME_TYPE;
