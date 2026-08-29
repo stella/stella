@@ -29,7 +29,7 @@ import {
   XIcon,
 } from "lucide-react";
 import type { EditorView } from "prosemirror-view";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import {
   FolioUIProvider,
@@ -154,6 +154,9 @@ type DocxBrowserEditorBaseProps = {
   onCompatibilityChange?:
     | ((compatibility: DocxCompatibility) => void)
     | undefined;
+  onCollaborationPublishableChange?:
+    | ((publishable: boolean) => void)
+    | undefined;
   canUnlock?: boolean | undefined;
   onBlockedUnlock?: (() => void) | undefined;
   onUnlockedChange?: ((isUnlocked: boolean) => void) | undefined;
@@ -234,6 +237,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     isEditing = true,
     initialScrollTop,
     onClose,
+    onCollaborationPublishableChange,
     onCompatibilityChange,
     onBlockedUnlock,
     onUnlockedChange,
@@ -674,6 +678,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     enabled: surface === "inspector",
   });
   const t = useTranslations();
+  const format = useFormatter();
   /* eslint-disable react/react-compiler -- optimistic preview and its derived query data are deliberately carried across the finalize/refetch window in a mutable ref */
   const optimisticPreview = optimisticPreviewRef.current;
   const previewPlaceholderData =
@@ -706,6 +711,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     isCollaborativeEditing,
     requestCollaboration,
   } = collaborationRuntime;
+  const canPublishCollaborationVersion =
+    collaborationState.status === "synced" && !isPublishingCollaborationVersion;
+
+  useExternalSyncEffect(() => {
+    onCollaborationPublishableChange?.(canPublishCollaborationVersion);
+  }, [canPublishCollaborationVersion, onCollaborationPublishableChange]);
 
   if (previewFileQuery.error) {
     throw previewFileQuery.error;
@@ -1216,7 +1227,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const handlePublishCollaborationVersion = useCallback(async () => {
     if (
       collaborationSession === null ||
-      collaborationState.status === "readOnly" ||
+      collaborationState.status !== "synced" ||
       isPublishingCollaborationVersion
     ) {
       return;
@@ -1336,7 +1347,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     });
     stellaToast.add({
       description: t("folio.versionCreatedDescription", {
-        versionNumber: String(publishResult.value.data.versionNumber),
+        versionNumber: format.number(publishResult.value.data.versionNumber),
       }),
       title: t("folio.versionCreatedTitle"),
       type: "success",
@@ -1344,6 +1355,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   }, [
     collaborationSession,
     collaborationState.status,
+    format,
     isPublishingCollaborationVersion,
     queryClient,
     t,
@@ -1611,10 +1623,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             <>
               <Button
                 className="min-h-11 px-3"
-                disabled={
-                  collaborationState.status !== "synced" ||
-                  isPublishingCollaborationVersion
-                }
+                disabled={!canPublishCollaborationVersion}
                 onClick={() => {
                   detached(
                     handlePublishCollaborationVersion(),

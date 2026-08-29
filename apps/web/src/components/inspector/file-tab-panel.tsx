@@ -488,6 +488,8 @@ export const FileTabPanel = ({
   const [selectedEmailAttachmentId, setSelectedEmailAttachmentId] = useState<
     string | null
   >(null);
+  const [isCollaborationPublishable, setIsCollaborationPublishable] =
+    useState(false);
   const {
     emailAttachmentOverlayActivation,
     emailAttachmentScaleOffset,
@@ -959,6 +961,7 @@ export const FileTabPanel = ({
             "transition-colors",
             isCollaboratingNativeDocx && "min-h-11",
           )}
+          disabled={isCollaboratingNativeDocx && !isCollaborationPublishable}
           onClick={() => {
             docxActionsRef.current.get(tab.id)?.finalize();
           }}
@@ -1208,6 +1211,7 @@ export const FileTabPanel = ({
             // the UI back out of edit mode.
             setEditingDocxTabId(null);
           }}
+          onCollaborationPublishableChange={setIsCollaborationPublishable}
           onCompatibilityChange={(compatibility) => {
             setDocxCompatibilityByTab((prev) => {
               if (prev.get(tab.id) === compatibility) {
