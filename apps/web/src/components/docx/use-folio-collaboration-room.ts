@@ -136,7 +136,8 @@ const postFolioCollabJson = async ({
       url: response.url,
     });
   }
-  return await response.json();
+  const data: unknown = await response.json();
+  return data;
 };
 
 const waitForAbortableDelay = async (signal: AbortSignal, delayMs: number) => {
@@ -312,6 +313,7 @@ export const useFolioCollaborationRoom = ({
         const roomId = data.roomId;
         let token = data.token;
         let tokenExpiresAtMs = new Date(data.tokenExpiresAt).getTime();
+        let synchronizedStatus: "readOnly" | "synced" = "synced";
         const seedDocumentBuffer = await (async () => {
           if (!data.shouldSeed) {
             return null;
@@ -348,6 +350,7 @@ export const useFolioCollaborationRoom = ({
           token = refreshed.token;
           tokenExpiresAtMs = new Date(refreshed.tokenExpiresAt).getTime();
           if (!refreshed.canEdit) {
+            synchronizedStatus = "readOnly";
             setConnectedState("readOnly");
           }
           return token;
@@ -491,9 +494,11 @@ export const useFolioCollaborationRoom = ({
           onAuthenticated: ({ scope }) => {
             hasConnected = true;
             if (scope === "readonly") {
+              synchronizedStatus = "readOnly";
               setConnectedState("readOnly");
               return;
             }
+            synchronizedStatus = "synced";
             setConnectedState(provider?.isSynced ? "synced" : "connecting");
           },
           onAuthenticationFailed: () => {
@@ -549,11 +554,9 @@ export const useFolioCollaborationRoom = ({
               setConnectedState("reconnecting");
               return;
             }
-            setConnectedState(
-              provider?.authorizedScope === "readonly" ? "readOnly" : "synced",
-            );
+            setConnectedState(synchronizedStatus);
           },
-          token: async () => (await refreshTokenIfNeeded()) ?? "",
+          token: refreshTokenIfNeeded,
           url: collabUrl,
         });
 
@@ -635,11 +638,9 @@ export const useFolioCollaborationRoom = ({
           roomId,
           seedDocumentBuffer,
         };
-        if (connectedProvider.authorizedScope === "readonly") {
-          setConnectedState("readOnly");
-          return;
-        }
-        setConnectedState(connectedProvider.isSynced ? "synced" : "connecting");
+        setConnectedState(
+          connectedProvider.isSynced ? synchronizedStatus : "connecting",
+        );
       })().catch((error: unknown) => {
         if (disposed) {
           return;
