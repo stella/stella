@@ -3,20 +3,19 @@ import { describe, expect, test } from "bun:test";
 import { applyUpdate, Doc, encodeStateVector } from "yjs";
 
 import {
+  FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
+  FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
 } from "@stll/api-contract/folio-collab";
 
-import {
-  createCollabServer,
-  REDIS_RETRY_CLOSE_CODE,
-  ROOM_GENERATION_RETRY_CLOSE_CODE,
-} from "./server";
+import { createCollabServer } from "./server";
 
 type FakeStellaApiOptions = {
   additionalRoomIds?: string[];
   canEdit?: boolean;
   generation?: number;
+  holdFirstStore?: boolean;
   initialSnapshotBase64?: string | null;
   refreshedToken?: string;
   replacementToken?: string;
@@ -33,6 +32,7 @@ type FakeStellaApi = {
   latestSnapshotBase64: () => string | null;
   loadRequestBodies: () => Record<string, unknown>[];
   refreshRequests: () => number;
+  releaseFirstStore: () => void;
   setGeneration: (generation: number) => void;
   snapshotAuthorizationHeaders: () => (string | null)[];
   storeRequestBodies: () => Record<string, unknown>[];
@@ -107,6 +107,7 @@ const createFakeStellaApi = ({
   additionalRoomIds = [],
   canEdit = true,
   generation = 0,
+  holdFirstStore = false,
   initialSnapshotBase64 = null,
   refreshedToken = "collab_token_refreshed",
   replacementToken,
@@ -131,6 +132,8 @@ const createFakeStellaApi = ({
   let storeRequests = 0;
   let currentToken = token;
   const tokenGeneration = generation;
+  const firstStoreGate = Promise.withResolvers<undefined>();
+  let firstStoreHeld = holdFirstStore;
 
   const server = Bun.serve({
     fetch: async (request) => {
@@ -244,6 +247,10 @@ const createFakeStellaApi = ({
         }
 
         storeRequests += 1;
+        if (firstStoreHeld) {
+          firstStoreHeld = false;
+          await firstStoreGate.promise;
+        }
         latestSnapshotBase64 =
           typeof body["snapshotBase64"] === "string"
             ? body["snapshotBase64"]
@@ -269,12 +276,14 @@ const createFakeStellaApi = ({
     authorizeRequests: () => authorizeRequests,
     authorizeRequestBodies: () => authorizeRequestBodies,
     destroy: async () => {
+      firstStoreGate.resolve(undefined);
       await server.stop(true);
     },
     heartbeatRequestBodies: () => heartbeatRequestBodies,
     latestSnapshotBase64: () => latestSnapshotBase64,
     loadRequestBodies: () => loadRequestBodies,
     refreshRequests: () => refreshRequests,
+    releaseFirstStore: () => firstStoreGate.resolve(undefined),
     setGeneration: (nextGeneration) => {
       roomGenerations.set(roomId, nextGeneration);
     },
@@ -659,6 +668,88 @@ describe("collaboration server", () => {
     }
   });
 
+  test("serializes overlapping stores before acknowledging the latest cut", async () => {
+    const fakeApi = createFakeStellaApi({ holdFirstStore: true });
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 10_000,
+      maxDebounceMs: 10_000,
+      port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const document = new Doc();
+    const firstRequestId = "00000000-0000-4000-8000-000000000091";
+    const secondRequestId = "00000000-0000-4000-8000-000000000092";
+    const acknowledgements = new Set<string>();
+    const provider = createProvider({
+      name: TEST_ROOM_NAME,
+      onStateless: (payload) => {
+        const parsed: unknown = JSON.parse(payload);
+        if (
+          typeof parsed === "object" &&
+          parsed !== null &&
+          "requestId" in parsed &&
+          typeof parsed.requestId === "string"
+        ) {
+          acknowledgements.add(parsed.requestId);
+        }
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc: document,
+    });
+
+    try {
+      await waitFor(
+        () => provider.isAuthenticated,
+        "Provider did not authenticate.",
+      );
+      document.getText("body").insert(0, "first");
+      provider.flushPendingUpdates();
+      provider.sendStateless(
+        JSON.stringify({
+          requestId: firstRequestId,
+          type: FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
+        }),
+      );
+      await waitFor(
+        () => fakeApi.storeRequests() === 1,
+        "First snapshot store did not start.",
+      );
+
+      document.getText("body").insert(5, " second");
+      provider.flushPendingUpdates();
+      provider.sendStateless(
+        JSON.stringify({
+          requestId: secondRequestId,
+          type: FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
+        }),
+      );
+      await Bun.sleep(50);
+      expect(fakeApi.storeRequests()).toBe(1);
+
+      fakeApi.releaseFirstStore();
+      await waitFor(
+        () => fakeApi.storeRequests() === 2 && acknowledgements.size === 2,
+        "Queued snapshot store did not finish.",
+      );
+
+      const restored = new Doc();
+      applyUpdate(
+        restored,
+        Buffer.from(fakeApi.latestSnapshotBase64() ?? "", "base64"),
+      );
+      expect(getTextContent(restored, "body")).toBe("first second");
+      restored.destroy();
+    } finally {
+      fakeApi.releaseFirstStore();
+      provider.destroy();
+      document.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
   test("rejects a stale snapshot generation without publishing old room state", async () => {
     const fakeApi = createFakeStellaApi({
       additionalRoomIds: [SECOND_TEST_ROOM_ID],
@@ -711,10 +802,10 @@ describe("collaboration server", () => {
         "Server did not reject the stale room generation.",
       );
       await Bun.sleep(100);
-      expect(closeCodes).toContain(ROOM_GENERATION_RETRY_CLOSE_CODE);
-      expect(closeCodes).not.toContain(REDIS_RETRY_CLOSE_CODE);
+      expect(closeCodes).toContain(FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE);
+      expect(closeCodes).not.toContain(FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE);
       expect(secondRoomCloseCodes).not.toContain(
-        ROOM_GENERATION_RETRY_CLOSE_CODE,
+        FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
       );
       expect(secondRoomProvider.isAuthenticated).toBeTrue();
       provider.destroy();
@@ -1169,8 +1260,8 @@ describe.skipIf(redisTestUrl === undefined)(
         );
         await waitFor(
           () =>
-            firstCloseCodes.includes(REDIS_RETRY_CLOSE_CODE) &&
-            secondCloseCodes.includes(REDIS_RETRY_CLOSE_CODE),
+            firstCloseCodes.includes(FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE) &&
+            secondCloseCodes.includes(FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE),
           "Replicas did not close clients with the retryable code.",
           10_000,
         );

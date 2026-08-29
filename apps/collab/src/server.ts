@@ -12,8 +12,10 @@ import * as v from "valibot";
 import { applyUpdate, encodeStateAsUpdate, encodeStateVector } from "yjs";
 
 import {
+  FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
+  FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_REDIS_SCOPE,
   parseFolioCollabRoomName,
 } from "@stll/api-contract/folio-collab";
@@ -117,8 +119,6 @@ const ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS = 30_000;
 const REDIS_LOCK_TIMEOUT_MS = 30_000;
 const REDIS_INITIAL_SYNC_TIMEOUT_MS = 3000;
 const SHUTDOWN_DRAIN_TIMEOUT_MS = 10_000;
-export const REDIS_RETRY_CLOSE_CODE = 4503;
-export const ROOM_GENERATION_RETRY_CLOSE_CODE = 4504;
 const REDIS_RETRY_CLOSE_REASON = "Collaboration coordination unavailable";
 const ROOM_GENERATION_CLOSE_REASON = "Collaboration room generation changed";
 
@@ -244,7 +244,7 @@ export const createCollabServer = async (
   const managedConnectionsBySocketId = new Map<string, ManagedConnection>();
   const closeManagedConnectionsForRetry = (reason: string) => {
     for (const { socket } of managedConnections) {
-      socket.close(REDIS_RETRY_CLOSE_CODE, reason);
+      socket.close(FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE, reason);
     }
   };
   const closeManagedRoomConnections = (
@@ -341,6 +341,13 @@ export const createCollabServer = async (
   const documentSnapshots = new WeakMap<
     HocuspocusDocument,
     { generation: number; roomId: string }
+  >();
+  // Debounced persistence and an explicit publication flush can overlap. The
+  // capture plus store must stay ordered so a flush acknowledgement always
+  // describes the snapshot that remains at the durable room pointer.
+  const documentSnapshotStoreTails = new WeakMap<
+    HocuspocusDocument,
+    Promise<void>
   >();
   const roomCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -609,7 +616,7 @@ export const createCollabServer = async (
       }
       closeManagedRoomConnections(
         document.name,
-        ROOM_GENERATION_RETRY_CLOSE_CODE,
+        FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
         ROOM_GENERATION_CLOSE_REASON,
       );
       clearRoomTokens(document.name);
@@ -622,6 +629,25 @@ export const createCollabServer = async (
       throw error;
     }
     return stateVectorBase64;
+  };
+
+  const queueRoomSnapshotStore = async (document: HocuspocusDocument) => {
+    const previous = documentSnapshotStoreTails.get(document);
+    const current = (previous ?? Promise.resolve()).then(
+      async () => await storeRoomSnapshot(document),
+    );
+    const tail = current.then(
+      () => undefined,
+      () => undefined,
+    );
+    documentSnapshotStoreTails.set(document, tail);
+    void tail.then(() => {
+      if (documentSnapshotStoreTails.get(document) === tail) {
+        documentSnapshotStoreTails.delete(document);
+      }
+      return undefined;
+    });
+    return await current;
   };
 
   const hocuspocus = new Hocuspocus<CollabAuthContext>({
@@ -751,7 +777,7 @@ export const createCollabServer = async (
       if (!parsed.success) {
         return;
       }
-      const stateVectorBase64 = await storeRoomSnapshot(document);
+      const stateVectorBase64 = await queueRoomSnapshotStore(document);
       connection.sendStateless(
         JSON.stringify({
           requestId: parsed.output.requestId,
@@ -761,7 +787,7 @@ export const createCollabServer = async (
       );
     },
     async onStoreDocument({ document }) {
-      await storeRoomSnapshot(document);
+      await queueRoomSnapshotStore(document);
     },
   });
 
@@ -805,7 +831,10 @@ export const createCollabServer = async (
       },
       open(peer) {
         if (!redisReady) {
-          peer.close(REDIS_RETRY_CLOSE_CODE, REDIS_RETRY_CLOSE_REASON);
+          peer.close(
+            FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
+            REDIS_RETRY_CLOSE_REASON,
+          );
           return;
         }
 

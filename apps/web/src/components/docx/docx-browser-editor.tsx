@@ -781,6 +781,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const finalizeActiveSession = finalizeDesktopSession;
   const cancelActiveSession = useCallback(async () => {
     if (collaborationSession !== null) {
+      const flushResult = await Result.tryPromise(
+        async () => await collaborationSession.flushSnapshot(),
+      );
+      if (Result.isError(flushResult)) {
+        getAnalytics().captureError(flushResult.error);
+        stellaToast.error(t("folio.networkError"));
+        throw flushResult.error;
+      }
       cancelCollaboration();
       onClose();
       return;
@@ -792,6 +800,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     cancelDesktopSession,
     collaborationSession,
     onClose,
+    t,
   ]);
 
   useExternalSyncEffect(() => {
@@ -1490,9 +1499,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
 
   const handleCancel = useCallback(async () => {
     clearQueuedChangeCheckpoint();
+    await cancelActiveSession();
     preservedLoadedBufferRef.current = null;
     hasSessionChangesRef.current = false;
-    await cancelActiveSession();
   }, [cancelActiveSession, clearQueuedChangeCheckpoint]);
 
   const handleUnlock = useCallback(() => {

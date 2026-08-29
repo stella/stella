@@ -50,6 +50,7 @@ describe("shouldReplaceFileFieldAfterSync", () => {
   test("switches away from a deleted historical version", () => {
     expect(
       shouldReplaceFileFieldAfterSync({
+        isFieldIdPinned: false,
         isSelectedFieldMissing: true,
         previousCurrentFieldId: "current-field",
         selectedFieldId: "deleted-historical-field",
@@ -60,9 +61,21 @@ describe("shouldReplaceFileFieldAfterSync", () => {
   test("keeps a historical version that still exists", () => {
     expect(
       shouldReplaceFileFieldAfterSync({
+        isFieldIdPinned: false,
         isSelectedFieldMissing: false,
         previousCurrentFieldId: "current-field",
         selectedFieldId: "historical-field",
+      }),
+    ).toBe(false);
+  });
+
+  test("pins the active field while its collaboration room is editing", () => {
+    expect(
+      shouldReplaceFileFieldAfterSync({
+        isFieldIdPinned: true,
+        isSelectedFieldMissing: true,
+        previousCurrentFieldId: "current-field",
+        selectedFieldId: "editing-field",
       }),
     ).toBe(false);
   });

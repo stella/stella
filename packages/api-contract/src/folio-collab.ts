@@ -4,6 +4,8 @@ import type { SafeId } from "./safe-id";
 export const FOLIO_COLLAB_REDIS_SCOPE = "collab";
 export const FOLIO_COLLAB_FLUSH_REQUEST_TYPE = "snapshot-flush-request";
 export const FOLIO_COLLAB_FLUSH_RESPONSE_TYPE = "snapshot-flush-response";
+export const FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE = 4503;
+export const FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE = 4504;
 
 export type FolioCollabFlushRequest = {
   requestId: string;

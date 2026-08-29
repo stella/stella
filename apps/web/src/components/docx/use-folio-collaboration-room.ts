@@ -9,8 +9,10 @@ import type * as YProseMirror from "y-prosemirror";
 import type * as Yjs from "yjs";
 
 import {
+  FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
+  FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
 } from "@stll/api-contract/folio-collab";
 import { FetchBoundaryError } from "@stll/errors";
 import type { DocxEditorCollaboration } from "@stll/folio-react";
@@ -65,8 +67,6 @@ type UseFolioCollaborationRoomOptions = {
 
 const FOLIO_COLLAB_TOKEN_REFRESH_LEEWAY_MS = 5 * 60 * 1000;
 const SEED_DOCUMENT_DOWNLOAD_TIMEOUT_MS = 10_000;
-const RETRYABLE_COLLAB_CLOSE_CODE = 4503;
-const ROOM_GENERATION_RETRY_CLOSE_CODE = 4504;
 const COLLAB_FLUSH_TIMEOUT_MS = 10_000;
 const GENERATION_REJOIN_RETRY_DELAY_MS = 1000;
 const GENERATION_REJOIN_MAX_RETRY_DELAY_MS = 10_000;
@@ -454,11 +454,14 @@ export const useFolioCollaborationRoom = ({
             });
           },
           onClose: ({ event }) => {
-            if (event.code === ROOM_GENERATION_RETRY_CLOSE_CODE) {
+            if (event.code === FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE) {
               startGenerationRejoin();
               return;
             }
-            if (event.code === RETRYABLE_COLLAB_CLOSE_CODE || hasConnected) {
+            if (
+              event.code === FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE ||
+              hasConnected
+            ) {
               setConnectedState("reconnecting");
             }
           },
