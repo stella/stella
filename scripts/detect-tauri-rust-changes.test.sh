@@ -18,6 +18,7 @@ assert_detection() {
 assert_detection true apps/desktop/src-tauri/src/types.rs
 assert_detection true apps/desktop/src/i18n/langs/en.json
 assert_detection true apps/desktop/src/shared/rpc.gen.ts
+assert_detection true packages/api-contract/src/desktop-edit-file-types.ts
 assert_detection false apps/desktop/src/shared/rpc.ts
 assert_detection false apps/web/src/lib/desktop-bridge.ts
 

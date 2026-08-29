@@ -34,12 +34,13 @@ setup_repo() {
   git init -q -b main
   git config user.email test@example.invalid
   git config user.name test
-  mkdir -p apps/desktop/src-tauri/src apps/desktop/src/shared
+  mkdir -p apps/desktop/src-tauri/src apps/desktop/src/shared packages/api-contract/src
   printf '%s\n' "$TYPES_RS" > apps/desktop/src-tauri/src/types.rs
   echo "// initial bridge" > apps/desktop/src-tauri/src/bridge.rs
   echo "// initial commands" > apps/desktop/src-tauri/src/commands.rs
   echo "// initial generated rpc" > apps/desktop/src/shared/rpc.gen.ts
   echo "// initial rpc" > apps/desktop/src/shared/rpc.ts
+  echo "// initial shared file types" > packages/api-contract/src/desktop-edit-file-types.ts
   echo "// other" > apps/desktop/src/unrelated.ts
   git add -A
   git commit -q -m "initial"
@@ -125,27 +126,34 @@ echo "// generated field" >> apps/desktop/src/shared/rpc.gen.ts
 git commit -aq -m "generated rpc field"
 run_case "rpc.gen.ts changed, version unchanged → 1" 1
 
-# 7. bridge.rs changed AND version bumped → OK.
+# 7. packages/api-contract/src/desktop-edit-file-types.ts changed,
+#    version not bumped → FAIL.
+setup_repo
+echo "// add file type" >> packages/api-contract/src/desktop-edit-file-types.ts
+git commit -aq -m "shared desktop file types"
+run_case "shared desktop file types changed, version unchanged → 1" 1
+
+# 8. bridge.rs changed AND version bumped → OK.
 setup_repo
 echo "// new endpoint" >> apps/desktop/src-tauri/src/bridge.rs
 bump_version
 git commit -aq -m "add bridge route + bump"
 run_case "bridge.rs + version both changed → 0" 0
 
-# 8. rpc.ts changed AND version bumped → OK.
+# 9. rpc.ts changed AND version bumped → OK.
 setup_repo
 echo "// new field" >> apps/desktop/src/shared/rpc.ts
 bump_version
 git commit -aq -m "rpc field + bump"
 run_case "rpc.ts + version both changed → 0" 0
 
-# 9. Only version bumped (no bridge files touched) → OK.
+# 10. Only version bumped (no bridge files touched) → OK.
 setup_repo
 bump_version
 git commit -aq -m "bump only"
 run_case "only version changed → 0" 0
 
-# 10. bridge.rs changed but only a non-version line in types.rs
+# 11. bridge.rs changed but only a non-version line in types.rs
 #    edited → FAIL (catches "I touched types.rs but not the
 #    version line").
 setup_repo
@@ -154,7 +162,7 @@ echo "// stray comment" >> apps/desktop/src-tauri/src/types.rs
 git commit -aq -m "bridge + non-version types edit"
 run_case "bridge + non-version types edit → 1" 1
 
-# 11. Multiple bridge files changed AND version bumped → OK.
+# 12. Multiple bridge files changed AND version bumped → OK.
 setup_repo
 echo "// new endpoint" >> apps/desktop/src-tauri/src/bridge.rs
 echo "// new field" >> apps/desktop/src/shared/rpc.ts
@@ -162,7 +170,7 @@ bump_version
 git commit -aq -m "multi-file bridge change + bump"
 run_case "multiple bridge files + version → 0" 0
 
-# 12. bridge.rs changed AND BRIDGE_VERSION line edited but integer
+# 13. bridge.rs changed AND BRIDGE_VERSION line edited but integer
 #     unchanged (e.g. trailing comment) → FAIL. Old line-diff
 #     check would have passed this; strict-increase must reject.
 setup_repo
@@ -171,7 +179,7 @@ reformat_version_line
 git commit -aq -m "bridge + comment-only edit on version line"
 run_case "bridge + comment-only version line edit → 1" 1
 
-# 13. bridge.rs changed AND BRIDGE_VERSION decreased → FAIL.
+# 14. bridge.rs changed AND BRIDGE_VERSION decreased → FAIL.
 #     A negative bump is never a valid compatibility signal.
 setup_repo
 echo "// new endpoint" >> apps/desktop/src-tauri/src/bridge.rs
@@ -179,7 +187,7 @@ unbump_version
 git commit -aq -m "bridge + version decrease"
 run_case "bridge + version decreased → 1" 1
 
-# 14. Only a non-version line in types.rs changed (no bump) → FAIL.
+# 15. Only a non-version line in types.rs changed (no bump) → FAIL.
 #     types.rs is part of the wire surface (AppSnapshot lives
 #     there); a change to its contents must force a bump just
 #     like the other bridge files.
@@ -188,7 +196,7 @@ echo "// new struct field" >> apps/desktop/src-tauri/src/types.rs
 git commit -aq -m "types.rs edit, no version bump"
 run_case "types.rs edit, no bump → 1" 1
 
-# 15. types.rs serialized-shape change AND version bumped → OK.
+# 16. types.rs serialized-shape change AND version bumped → OK.
 setup_repo
 sed -i.bak 's|BRIDGE_VERSION: u32 = 1;|BRIDGE_VERSION: u32 = 2;\npub struct Extra {}|' \
   apps/desktop/src-tauri/src/types.rs

@@ -33,6 +33,7 @@ bridge_files=(
   apps/desktop/src-tauri/src/types.rs
   apps/desktop/src/shared/rpc.gen.ts
   apps/desktop/src/shared/rpc.ts
+  packages/api-contract/src/desktop-edit-file-types.ts
 )
 
 bridge_changed=false
@@ -97,6 +98,7 @@ the web app talks to has shifted:
   - apps/desktop/src-tauri/src/types.rs
   - apps/desktop/src/shared/rpc.gen.ts
   - apps/desktop/src/shared/rpc.ts
+  - packages/api-contract/src/desktop-edit-file-types.ts
 
 Bump BRIDGE_VERSION in $types_path to a value greater than $old_version
 (and add a string to BRIDGE_CAPABILITIES if you added a new endpoint)
