@@ -10,9 +10,9 @@ type CollabLogEvent =
       transport: "publish" | "subscribe";
     }
   | {
-      event: "snapshot_generation_refreshed";
+      event: "snapshot_generation_conflict";
       generation: number;
-      level: "info";
+      level: "error";
       roomId: string;
     }
   | {

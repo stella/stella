@@ -27,6 +27,8 @@ describe("Stella API transport", () => {
 describe("Redis transport", () => {
   test.each([
     "rediss://redis.example.test:6379",
+    "rediss://redis.example.test:6379/0",
+    "rediss://redis.example.test:6379?db=0",
     "redis://localhost:6379",
     "redis://127.0.0.1:6379",
     "redis://[::1]:6379",
@@ -36,6 +38,8 @@ describe("Redis transport", () => {
 
   test.each([
     "redis://redis.example.test:6379",
+    "rediss://redis.example.test:6379/1",
+    "rediss://redis.example.test:6379?db=1",
     "http://redis.example.test",
     "invalid",
   ])("rejects insecure Redis URL %s", (url) => {

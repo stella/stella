@@ -102,6 +102,7 @@ const REDIS_INITIAL_SYNC_TIMEOUT_MS = 3000;
 const SHUTDOWN_DRAIN_TIMEOUT_MS = 10_000;
 export const REDIS_RETRY_CLOSE_CODE = 4503;
 const REDIS_RETRY_CLOSE_REASON = "Collaboration coordination unavailable";
+const ROOM_GENERATION_CLOSE_REASON = "Collaboration room generation changed";
 
 const parseTokenExpiresAt = (value: string) => {
   const expiresAtMs = Date.parse(value);
@@ -213,7 +214,7 @@ export const createCollabServer = async (
 
   if (options.mode === "redis" && !isSecureCollabRedisUrl(options.redisUrl)) {
     panic(
-      "STELLA_COLLAB_REDIS_URL must use rediss:// unless it targets a loopback address.",
+      "STELLA_COLLAB_REDIS_URL must use database 0 and rediss:// unless it targets a loopback address.",
     );
   }
 
@@ -221,9 +222,9 @@ export const createCollabServer = async (
   let redisUnavailableLogged = false;
   let shuttingDown = false;
   const managedSockets = new Set<ManagedWebSocketLike>();
-  const closeConnectionsForRedisLoss = () => {
+  const closeManagedConnectionsForRetry = (reason: string) => {
     for (const socket of managedSockets) {
-      socket.close(REDIS_RETRY_CLOSE_CODE, REDIS_RETRY_CLOSE_REASON);
+      socket.close(REDIS_RETRY_CLOSE_CODE, reason);
     }
   };
   const redisExtension =
@@ -255,7 +256,7 @@ export const createCollabServer = async (
       return;
     }
 
-    closeConnectionsForRedisLoss();
+    closeManagedConnectionsForRetry(REDIS_RETRY_CLOSE_REASON);
   };
 
   const markRedisUnavailable = (
@@ -278,7 +279,7 @@ export const createCollabServer = async (
       });
     }
     if (wasReady) {
-      closeConnectionsForRedisLoss();
+      closeManagedConnectionsForRetry(REDIS_RETRY_CLOSE_REASON);
     }
   };
 
@@ -590,28 +591,28 @@ export const createCollabServer = async (
       }
 
       cancelRoomCleanup(documentName);
-      const tokenState = upsertRoomToken({
-        canEdit: authorized.canEdit,
-        generation: authorized.generation,
-        roomId: authorized.roomId,
-        roomName: authorized.roomName,
-        token,
-        tokenExpiresAt: authorized.tokenExpiresAt,
-      });
       try {
+        const tokenState = upsertRoomToken({
+          canEdit: authorized.canEdit,
+          generation: authorized.generation,
+          roomId: authorized.roomId,
+          roomName: authorized.roomName,
+          token,
+          tokenExpiresAt: authorized.tokenExpiresAt,
+        });
         await ensureRoomHeartbeat(tokenState);
+        connectionConfig.readOnly = !authorized.canEdit;
+
+        return {
+          roomId: authorized.roomId,
+          tokenState,
+          userId: authorized.userId,
+          workspaceId: authorized.workspaceId,
+        };
       } catch (error) {
         clearRoomTokens(documentName);
         throw error;
       }
-      connectionConfig.readOnly = !authorized.canEdit;
-
-      return {
-        roomId: authorized.roomId,
-        tokenState,
-        userId: authorized.userId,
-        workspaceId: authorized.workspaceId,
-      };
     },
     async onLoadDocument({ context, document, documentName }) {
       cancelRoomCleanup(documentName);
@@ -636,7 +637,7 @@ export const createCollabServer = async (
 
       applyUpdate(document, Buffer.from(result.snapshotBase64, "base64"));
     },
-    async onStoreDocument({ document }) {
+    async onStoreDocument({ document, documentName }) {
       const snapshot = documentSnapshots.get(document);
       if (snapshot === undefined) {
         panic("Collaboration room snapshot generation is missing.");
@@ -664,26 +665,16 @@ export const createCollabServer = async (
         if (!(error instanceof FetchBoundaryError) || error.status !== 409) {
           throw error;
         }
+        closeManagedConnectionsForRetry(ROOM_GENERATION_CLOSE_REASON);
+        clearRoomTokens(documentName);
+        logCollabEvent({
+          event: "snapshot_generation_conflict",
+          generation: snapshot.generation,
+          level: "error",
+          roomId: snapshot.roomId,
+        });
+        throw error;
       }
-
-      const refreshed = await postJson({
-        apiUrl,
-        authorizationToken: serviceToken,
-        body: { roomId: snapshot.roomId },
-        path: "/folio-collab-rooms/snapshot/load",
-        schema: loadSnapshotResponseSchema,
-      });
-      snapshot.generation = refreshed.generation;
-      if (refreshed.snapshotBase64 !== null) {
-        applyUpdate(document, Buffer.from(refreshed.snapshotBase64, "base64"));
-      }
-      logCollabEvent({
-        event: "snapshot_generation_refreshed",
-        generation: refreshed.generation,
-        level: "info",
-        roomId: snapshot.roomId,
-      });
-      await store();
     },
   });
 

@@ -23,10 +23,14 @@ export const isSecureCollabRedisUrl = (value: string) => {
   }
 
   const url = new URL(value);
+  const usesDatabaseZero =
+    (url.pathname === "" || url.pathname === "/" || url.pathname === "/0") &&
+    (url.searchParams.get("db") === null || url.searchParams.get("db") === "0");
   return (
-    url.protocol === "rediss:" ||
-    (url.protocol === "redis:" &&
-      LOOPBACK_HOSTNAMES.has(url.hostname.toLowerCase()))
+    usesDatabaseZero &&
+    (url.protocol === "rediss:" ||
+      (url.protocol === "redis:" &&
+        LOOPBACK_HOSTNAMES.has(url.hostname.toLowerCase())))
   );
 };
 
@@ -48,7 +52,7 @@ export const collabEnvInvariantViolation = ({
     return "STELLA_COLLAB_REDIS_URL is required in redis mode.";
   }
   if (redisUrl !== undefined && !isSecureCollabRedisUrl(redisUrl)) {
-    return "STELLA_COLLAB_REDIS_URL must use rediss:// unless it targets a loopback address.";
+    return "STELLA_COLLAB_REDIS_URL must use database 0 and rediss:// unless it targets a loopback address.";
   }
   return null;
 };

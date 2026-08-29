@@ -89,6 +89,7 @@ const farFutureTokenExpiresAt = () =>
 const TEST_ROOM_ID = "00000000-0000-4000-8000-000000000001";
 const TEST_ROOM_NAME = `{${TEST_ROOM_ID}}`;
 const TEST_SERVICE_TOKEN = "test_collaboration_service_token_32_chars";
+const DOCKER_OPERATION_TIMEOUT_MS = 10_000;
 
 const createFakeStellaApi = ({
   canEdit = true,
@@ -111,6 +112,7 @@ const createFakeStellaApi = ({
   const storeRequestBodies: Record<string, unknown>[] = [];
   let storeRequests = 0;
   let currentToken = token;
+  const tokenGeneration = generation;
 
   const server = Bun.serve({
     fetch: async (request) => {
@@ -125,7 +127,11 @@ const createFakeStellaApi = ({
           requestToken === token ||
           (replacementToken !== undefined && requestToken === replacementToken);
 
-        if (body["roomName"] !== TEST_ROOM_NAME || !tokenAuthorized) {
+        if (
+          body["roomName"] !== TEST_ROOM_NAME ||
+          !tokenAuthorized ||
+          tokenGeneration !== currentGeneration
+        ) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
@@ -150,7 +156,11 @@ const createFakeStellaApi = ({
       if (url.pathname === "/v1/folio-collab-rooms/refresh-token") {
         refreshRequests += 1;
 
-        if (body["roomId"] !== roomId || body["token"] !== currentToken) {
+        if (
+          body["roomId"] !== roomId ||
+          body["token"] !== currentToken ||
+          tokenGeneration !== currentGeneration
+        ) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
@@ -286,10 +296,25 @@ const runDocker = async (action: "start" | "stop", containerId: string) => {
     stderr: "pipe",
     stdout: "pipe",
   });
-  const [exitCode, stderr] = await Promise.all([
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const exitCode = await Promise.race([
     dockerProcess.exited,
-    new Response(dockerProcess.stderr).text(),
-  ]);
+    new Promise<never>((_resolve, reject) => {
+      timeout = setTimeout(() => {
+        dockerProcess.kill();
+        reject(
+          new Error(
+            `docker ${action} exceeded ${DOCKER_OPERATION_TIMEOUT_MS} ms`,
+          ),
+        );
+      }, DOCKER_OPERATION_TIMEOUT_MS);
+    }),
+  ]).finally(() => {
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
+    }
+  });
+  const stderr = await new Response(dockerProcess.stderr).text();
   if (exitCode !== 0) {
     throw new Error(`docker ${action} failed: ${stderr}`);
   }
@@ -541,7 +566,7 @@ describe("collaboration server", () => {
     }
   });
 
-  test("refreshes a stale snapshot generation without losing local updates", async () => {
+  test("rejects a stale snapshot generation without publishing old room state", async () => {
     const fakeApi = createFakeStellaApi();
     const collabServer = await createCollabServer({
       apiUrl: fakeApi.url,
@@ -549,10 +574,15 @@ describe("collaboration server", () => {
       maxDebounceMs: 100,
       port: 0,
       serviceToken: TEST_SERVICE_TOKEN,
+      shutdownDrainTimeoutMs: 25,
     });
     const ydoc = new Doc();
+    const closeCodes: number[] = [];
     const provider = createProvider({
       name: TEST_ROOM_NAME,
+      onClose: (code) => {
+        closeCodes.push(code);
+      },
       token: "collab_token_test",
       url: collabServer.websocketUrl,
       ydoc,
@@ -566,25 +596,25 @@ describe("collaboration server", () => {
       );
       fakeApi.setGeneration(1);
 
-      ydoc.getText("body").insert(0, "survives generation refresh");
+      ydoc.getText("body").insert(0, "must remain local");
 
       await waitFor(
-        () => fakeApi.storeRequests() === 1,
-        "Server did not persist after refreshing the room generation.",
+        () => fakeApi.storeRequestBodies().length > 0,
+        "Server did not reject the stale room generation.",
       );
-      expect(fakeApi.storeRequestBodies()).toHaveLength(2);
-      expect(
-        fakeApi.storeRequestBodies().map((body) => body["expectedGeneration"]),
-      ).toEqual([0, 1]);
-      expect(fakeApi.loadRequestBodies()).toHaveLength(2);
-
-      const persisted = new Doc();
-      const snapshotBase64 = fakeApi.latestSnapshotBase64();
-      applyUpdate(persisted, Buffer.from(snapshotBase64 ?? "", "base64"));
-      expect(getTextContent(persisted, "body")).toBe(
-        "survives generation refresh",
-      );
-      persisted.destroy();
+      await Bun.sleep(100);
+      expect(closeCodes).toContain(REDIS_RETRY_CLOSE_CODE);
+      provider.destroy();
+      await Bun.sleep(100);
+      expect(fakeApi.storeRequests()).toBe(0);
+      expect(fakeApi.latestSnapshotBase64()).toBeNull();
+      for (const body of fakeApi.storeRequestBodies()) {
+        expect(body).toMatchObject({
+          expectedGeneration: 0,
+          roomId: TEST_ROOM_ID,
+        });
+      }
+      expect(fakeApi.loadRequestBodies()).toHaveLength(1);
     } finally {
       provider.destroy();
       ydoc.destroy();
@@ -1061,6 +1091,6 @@ describe.skipIf(redisTestUrl === undefined)(
         await secondServer.destroy();
         await fakeApi.destroy();
       }
-    }, 30_000);
+    }, 120_000);
   },
 );
