@@ -356,9 +356,12 @@ export const useFolioCollaborationRoom = ({
                     reportedFailure = true;
                     getAnalytics().captureError(apiError);
                   }
-                  setConnectedState(
-                    apiError.status === 403 ? "readOnly" : "reconnecting",
-                  );
+                  if (apiError.status === 403) {
+                    setConnectedState("readOnly");
+                    resolve();
+                    return;
+                  }
+                  setConnectedState("reconnecting");
                   await waitForRetry();
                   if (isDisposed()) {
                     resolve();

@@ -131,10 +131,22 @@ export const shouldFinalizeEditSession = ({
 }: ShouldFinalizeEditSessionOptions) =>
   isDirty || hasSessionChanges || hasPendingEditorChanges;
 
-export const shouldReuseCollaborationPublication = (
-  checkpointStateVectorBase64: string,
-  currentStateVectorBase64: string,
-) => checkpointStateVectorBase64 === currentStateVectorBase64;
+type CollaborationPublicationCut = {
+  generation: number;
+  roomId: string;
+  stateVectorBase64: string;
+};
+
+export const shouldReuseCollaborationPublication = ({
+  current,
+  pending,
+}: {
+  current: CollaborationPublicationCut;
+  pending: CollaborationPublicationCut;
+}) =>
+  pending.roomId === current.roomId &&
+  pending.generation === current.generation &&
+  pending.stateVectorBase64 === current.stateVectorBase64;
 
 type ShouldPromptReadonlyUnlockOptions = {
   canUnlock: boolean;

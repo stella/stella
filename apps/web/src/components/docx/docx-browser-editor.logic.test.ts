@@ -222,13 +222,34 @@ describe("DOCX edit finalization", () => {
 });
 
 describe("collaboration publication retry", () => {
-  test("reuses idempotency only while the Yjs cut is unchanged", () => {
-    expect(shouldReuseCollaborationPublication("same-cut", "same-cut")).toBe(
-      true,
-    );
-    expect(shouldReuseCollaborationPublication("old-cut", "new-cut")).toBe(
-      false,
-    );
+  const current = {
+    generation: 2,
+    roomId: "room-current",
+    stateVectorBase64: "same-cut",
+  };
+
+  test("reuses idempotency only for the same room generation and Yjs cut", () => {
+    expect(
+      shouldReuseCollaborationPublication({ current, pending: current }),
+    ).toBe(true);
+    expect(
+      shouldReuseCollaborationPublication({
+        current,
+        pending: { ...current, stateVectorBase64: "old-cut" },
+      }),
+    ).toBe(false);
+    expect(
+      shouldReuseCollaborationPublication({
+        current,
+        pending: { ...current, generation: 1 },
+      }),
+    ).toBe(false);
+    expect(
+      shouldReuseCollaborationPublication({
+        current,
+        pending: { ...current, roomId: "room-previous" },
+      }),
+    ).toBe(false);
   });
 });
 

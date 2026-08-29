@@ -795,12 +795,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         stellaToast.error(t("folio.networkError"));
         throw flushResult.error;
       }
-      if (
-        !shouldReuseCollaborationPublication(
-          flushResult.value,
-          collaborationSession.getStateVectorBase64(),
-        )
-      ) {
+      if (flushResult.value !== collaborationSession.getStateVectorBase64()) {
         const error = new CollaborationCloseCutError({
           message: "The local collaboration state changed during close.",
         });
@@ -1276,10 +1271,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     let pendingPublication = pendingCollaborationPublicationRef.current;
     if (
       pendingPublication !== null &&
-      !shouldReuseCollaborationPublication(
-        pendingPublication.stateVectorBase64,
-        collaborationSession.getStateVectorBase64(),
-      )
+      !shouldReuseCollaborationPublication({
+        current: {
+          generation: collaborationSession.generation,
+          roomId: collaborationSession.roomId,
+          stateVectorBase64: collaborationSession.getStateVectorBase64(),
+        },
+        pending: pendingPublication,
+      })
     ) {
       pendingCollaborationPublicationRef.current = null;
       pendingPublication = null;
