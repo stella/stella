@@ -125,8 +125,8 @@ export const PublicWorkspaceShell = ({
       <SidebarProvider>
         <WorkspaceShell
           endDock={inspector ?? defaultInspector}
-          navigation={
-            authStatus.isAuthenticated ? (
+          navigation={{
+            content: authStatus.isAuthenticated ? (
               <Suspense
                 fallback={
                   <PublicSidebar
@@ -142,9 +142,10 @@ export const PublicWorkspaceShell = ({
                 authStatus={authStatus}
                 requestAuth={requestAuth}
               />
-            )
-          }
-          topBar={topBar}
+            ),
+            mode: "responsive",
+          }}
+          topBar={() => topBar}
         >
           <Outlet />
         </WorkspaceShell>

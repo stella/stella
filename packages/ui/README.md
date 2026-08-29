@@ -53,11 +53,38 @@ import { WorkspaceEndRail, WorkspaceShell } from "@stll/ui/workspace-shell";
       topAction={<InspectorToggle />}
     />
   }
-  navigation={<Navigation />}
-  topBar={<WorkspaceHeader />}
+  navigation={{ content: <Navigation />, mode: "responsive" }}
+  topBar={() => <WorkspaceHeader />}
 >
   <Workspace />
 </WorkspaceShell>;
+```
+
+Applications without their own responsive navigation use the shell-managed
+contract. Stella then owns the desktop/compact cutoff, sheet portal, backdrop,
+Escape and viewport-close behavior; the top-bar callback places the supplied
+trigger in product-specific chrome.
+
+```tsx
+<WorkspaceShell
+  endDock={<WorkspaceInspector />}
+  navigation={{
+    compact: {
+      content: <Navigation expanded />,
+      label: "Open navigation",
+      onOpenChange: setNavigationOpen,
+      open: navigationOpen,
+      trigger: <button type="button">Menu</button>,
+    },
+    desktop: <NavigationRail />,
+    mode: "shell-managed",
+  }}
+  topBar={({ compactNavigationTrigger }) => (
+    <WorkspaceHeader navigationTrigger={compactNavigationTrigger} />
+  )}
+>
+  <Workspace />
+</WorkspaceShell>
 ```
 
 `WorkspaceEndRail` owns the 48px rail, 44px touch targets, scrolling tab
