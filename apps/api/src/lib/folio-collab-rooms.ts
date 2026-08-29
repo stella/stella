@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -32,7 +32,7 @@ import {
 import { isMemberRole } from "@/api/lib/member-roles";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
-  getS3,
+  deleteS3ObjectWithSignal,
   readS3ObjectIfPresent,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
@@ -42,6 +42,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 const FOLIO_COLLAB_TOKEN_PART_LENGTH = 32;
 const FOLIO_COLLAB_TOKEN_CLEANUP_BATCH_SIZE = 100;
 const FOLIO_COLLAB_SNAPSHOT_CLEANUP_GRACE_MS = 60_000;
+const FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS = 10_000;
 
 export {
   FOLIO_COLLAB_SNAPSHOT_MAX_BASE64_LENGTH,
@@ -117,11 +118,12 @@ const deleteStoredRoomFile = async ({
     workspaceId,
   });
 
-  await getS3()
-    .delete(key)
-    .catch((error: unknown) => {
-      captureError(error, { roomId, storageKey: key });
-    });
+  await deleteS3ObjectWithSignal(
+    key,
+    AbortSignal.timeout(FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS),
+  ).catch((error: unknown) => {
+    captureError(error, { roomId, storageKey: key });
+  });
 };
 
 export const deleteFolioCollabStoredRoomFiles = async ({
@@ -595,103 +597,7 @@ export const storeFolioCollabSnapshot = async ({
     key: nextKey,
   });
 
-  const storedAt = new Date();
-  const result = await value.scopedDb(async (tx) => {
-    const rooms = await tx
-      .select({
-        generation: folioCollabRooms.generation,
-        seedClaimedBy: folioCollabRooms.seedClaimedBy,
-        seedState: folioCollabRooms.seedState,
-        yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
-        yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
-      })
-      .from(folioCollabRooms)
-      .where(
-        and(
-          eq(folioCollabRooms.id, value.roomId),
-          eq(folioCollabRooms.workspaceId, value.workspaceId),
-        ),
-      )
-      .limit(1)
-      .for("update");
-
-    const room = rooms.at(0);
-    if (!room) {
-      return { status: "room-missing" } as const;
-    }
-    const decision = decideFolioCollabSnapshotStore({
-      actualGeneration: room.generation,
-      expectedGeneration,
-      seedClaimedBy: room.seedClaimedBy,
-      seedState: room.seedState,
-      userId: value.userId,
-    });
-    if (decision.status !== "accepted") {
-      return decision;
-    }
-
-    const updated = await tx
-      .update(folioCollabRooms)
-      .set(
-        room.seedState === "claimed"
-          ? {
-              lastActivityAt: storedAt,
-              seededAt: storedAt,
-              seedState: "seeded",
-              yjsSnapshotFileId: nextSnapshotFileId,
-              yjsSnapshotSizeBytes: snapshotBytes.byteLength,
-              yjsSnapshotUpdatedAt: storedAt,
-            }
-          : {
-              lastActivityAt: storedAt,
-              seedState: "seeded",
-              yjsSnapshotFileId: nextSnapshotFileId,
-              yjsSnapshotSizeBytes: snapshotBytes.byteLength,
-              yjsSnapshotUpdatedAt: storedAt,
-            },
-      )
-      .where(
-        and(
-          eq(folioCollabRooms.id, value.roomId),
-          eq(folioCollabRooms.workspaceId, value.workspaceId),
-          eq(folioCollabRooms.generation, expectedGeneration),
-        ),
-      )
-      .returning({ id: folioCollabRooms.id });
-
-    if (!updated.at(0)) {
-      return {
-        status: "generation-conflict",
-        actualGeneration: room.generation,
-      } as const;
-    }
-
-    if (room.yjsSnapshotUpdatedAt !== null) {
-      const previousKey = createFileKey({
-        fileId: room.yjsSnapshotFileId,
-        mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-        organizationId: value.organizationId,
-        workspaceId: value.workspaceId,
-      });
-      // audit: skip; this is bounded storage-cleanup bookkeeping for an
-      // immutable snapshot superseded by the room update in this transaction.
-      await tx.insert(bufferObjectCleanupIntents).values({
-        id: createSafeId<"pendingUpload">(),
-        nextAttemptAt: new Date(
-          storedAt.getTime() + FOLIO_COLLAB_SNAPSHOT_CLEANUP_GRACE_MS,
-        ),
-        objectKey: previousKey,
-        organizationId: value.organizationId,
-        workspaceId: value.workspaceId,
-      });
-    }
-
-    return {
-      status: "stored",
-    } as const;
-  });
-
-  if (result.status !== "stored") {
+  const discardNewObject = async () =>
     await deleteStoredRoomFile({
       file: {
         fileId: nextSnapshotFileId,
@@ -701,6 +607,116 @@ export const storeFolioCollabSnapshot = async ({
       roomId: value.roomId,
       workspaceId: value.workspaceId,
     });
+
+  const storedAt = new Date();
+  const transactionResult = await Result.tryPromise({
+    try: async () =>
+      await value.scopedDb(async (tx) => {
+        const rooms = await tx
+          .select({
+            generation: folioCollabRooms.generation,
+            seedClaimedBy: folioCollabRooms.seedClaimedBy,
+            seedState: folioCollabRooms.seedState,
+            yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+            yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
+          })
+          .from(folioCollabRooms)
+          .where(
+            and(
+              eq(folioCollabRooms.id, value.roomId),
+              eq(folioCollabRooms.workspaceId, value.workspaceId),
+            ),
+          )
+          .limit(1)
+          .for("update");
+
+        const room = rooms.at(0);
+        if (!room) {
+          return { status: "room-missing" } as const;
+        }
+        const decision = decideFolioCollabSnapshotStore({
+          actualGeneration: room.generation,
+          expectedGeneration,
+          seedClaimedBy: room.seedClaimedBy,
+          seedState: room.seedState,
+          userId: value.userId,
+        });
+        if (decision.status !== "accepted") {
+          return decision;
+        }
+
+        const updated = await tx
+          .update(folioCollabRooms)
+          .set(
+            room.seedState === "claimed"
+              ? {
+                  lastActivityAt: storedAt,
+                  seededAt: storedAt,
+                  seedState: "seeded",
+                  yjsSnapshotFileId: nextSnapshotFileId,
+                  yjsSnapshotSizeBytes: snapshotBytes.byteLength,
+                  yjsSnapshotUpdatedAt: storedAt,
+                }
+              : {
+                  lastActivityAt: storedAt,
+                  seedState: "seeded",
+                  yjsSnapshotFileId: nextSnapshotFileId,
+                  yjsSnapshotSizeBytes: snapshotBytes.byteLength,
+                  yjsSnapshotUpdatedAt: storedAt,
+                },
+          )
+          .where(
+            and(
+              eq(folioCollabRooms.id, value.roomId),
+              eq(folioCollabRooms.workspaceId, value.workspaceId),
+              eq(folioCollabRooms.generation, expectedGeneration),
+            ),
+          )
+          .returning({ id: folioCollabRooms.id });
+
+        if (!updated.at(0)) {
+          return {
+            status: "generation-conflict",
+            actualGeneration: room.generation,
+          } as const;
+        }
+
+        if (room.yjsSnapshotUpdatedAt !== null) {
+          const previousKey = createFileKey({
+            fileId: room.yjsSnapshotFileId,
+            mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+            organizationId: value.organizationId,
+            workspaceId: value.workspaceId,
+          });
+          // audit: skip; this is bounded storage-cleanup bookkeeping for an
+          // immutable snapshot superseded by the room update in this transaction.
+          await tx.insert(bufferObjectCleanupIntents).values({
+            id: createSafeId<"pendingUpload">(),
+            nextAttemptAt: new Date(
+              storedAt.getTime() + FOLIO_COLLAB_SNAPSHOT_CLEANUP_GRACE_MS,
+            ),
+            objectKey: previousKey,
+            organizationId: value.organizationId,
+            workspaceId: value.workspaceId,
+          });
+        }
+
+        return {
+          status: "stored",
+        } as const;
+      }),
+    catch: (cause) => cause,
+  });
+
+  if (Result.isError(transactionResult)) {
+    await discardNewObject();
+    throw transactionResult.error;
+  }
+
+  const result = transactionResult.value;
+
+  if (result.status !== "stored") {
+    await discardNewObject();
     return result;
   }
 

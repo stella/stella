@@ -261,7 +261,7 @@ export const joinFolioCollabRoomHandler = async function* ({
       }
 
       const now = new Date();
-      let rooms = await tx
+      const rooms = await tx
         .select({
           baseVersionId: folioCollabRooms.baseVersionId,
           fileName: folioCollabRooms.fileName,
@@ -298,16 +298,26 @@ export const joinFolioCollabRoomHandler = async function* ({
         }
 
         const roomId = createSafeId<"folioCollabRoom">();
-        await tx.insert(folioCollabRooms).values({
-          baseVersionId: currentTarget.baseVersionId,
-          docxCheckpointFileId: createSafeId<"userFile">(),
-          entityId,
-          fileName: currentTarget.fileContent.fileName,
-          id: roomId,
-          propertyId,
-          workspaceId,
-          yjsSnapshotFileId: createSafeId<"userFile">(),
-        });
+        const insertedRooms = await tx
+          .insert(folioCollabRooms)
+          .values({
+            baseVersionId: currentTarget.baseVersionId,
+            docxCheckpointFileId: createSafeId<"userFile">(),
+            entityId,
+            fileName: currentTarget.fileContent.fileName,
+            id: roomId,
+            propertyId,
+            workspaceId,
+            yjsSnapshotFileId: createSafeId<"userFile">(),
+          })
+          .returning({
+            baseVersionId: folioCollabRooms.baseVersionId,
+            fileName: folioCollabRooms.fileName,
+            generation: folioCollabRooms.generation,
+            id: folioCollabRooms.id,
+            seedClaimedAt: folioCollabRooms.seedClaimedAt,
+            seedState: folioCollabRooms.seedState,
+          });
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,
@@ -326,24 +336,7 @@ export const joinFolioCollabRoomHandler = async function* ({
           },
         });
 
-        rooms = await tx
-          .select({
-            baseVersionId: folioCollabRooms.baseVersionId,
-            fileName: folioCollabRooms.fileName,
-            generation: folioCollabRooms.generation,
-            id: folioCollabRooms.id,
-            seedClaimedAt: folioCollabRooms.seedClaimedAt,
-            seedState: folioCollabRooms.seedState,
-          })
-          .from(folioCollabRooms)
-          .where(
-            and(
-              eq(folioCollabRooms.id, roomId),
-              eq(folioCollabRooms.workspaceId, workspaceId),
-            ),
-          )
-          .limit(1);
-        room = rooms.at(0);
+        room = insertedRooms.at(0);
       }
 
       if (!room) {

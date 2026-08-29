@@ -6,7 +6,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, lt } from "drizzle-orm";
 
 import { folioCollabRooms, folioCollabRoomTokens } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -20,8 +20,8 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import {
+  claimFolioCollabRoomSeed,
   decideFolioCollabSeedClaim,
-  folioCollabSeedClaimPredicate,
 } from "./join-folio-collab-room";
 
 let testDb: TestDatabase;
@@ -93,26 +93,18 @@ const claimConcurrently = async ({
   await Promise.all(
     [ids.userA1, ids.userA2].map(
       async (userId) =>
-        await testDb.transaction(async (tx) => {
-          const claimed = await tx
-            .update(folioCollabRooms)
-            .set({
-              generation: sql`${folioCollabRooms.generation} + 1`,
-              seedClaimedAt: new Date(),
-              seedClaimedBy: userId,
-              seedState: "claimed",
-            })
-            .where(
-              folioCollabSeedClaimPredicate({
-                expectedGeneration,
-                expectedSeedState,
-                roomId,
-                workspaceId: ids.wsA1,
-              }),
-            )
-            .returning({ generation: folioCollabRooms.generation });
-          return claimed.at(0) ?? null;
-        }),
+        await testDb.transaction(
+          async (tx) =>
+            await claimFolioCollabRoomSeed({
+              expectedGeneration,
+              expectedSeedState,
+              now: new Date(),
+              roomId,
+              tx,
+              userId,
+              workspaceId: ids.wsA1,
+            }),
+        ),
     ),
   );
 

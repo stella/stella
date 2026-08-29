@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -17,6 +17,9 @@ type QueryBuilder = {
 
 let nextRows: Record<string, unknown>[] = [];
 let scopedRows: Record<string, unknown>[][] = [];
+let scopedFailure: Error | null = null;
+const deletedStorageKeys: string[] = [];
+const writtenStorageKeys: string[] = [];
 const builder: QueryBuilder = {
   select: () => builder,
   from: () => builder,
@@ -37,9 +40,24 @@ const scopedBuilder: QueryBuilder = {
 void mock.module("@/api/db/root", () => ({ rootDb: builder, rlsDb: {} }));
 void mock.module("@/api/lib/root-scoped-db", () => ({
   createRootScopedDb:
-    () => async (callback: (tx: QueryBuilder) => Promise<unknown>) =>
-      await callback(scopedBuilder),
+    () => async (callback: (tx: QueryBuilder) => Promise<unknown>) => {
+      if (scopedFailure !== null) {
+        throw new Error(scopedFailure.message, { cause: scopedFailure });
+      }
+      return await callback(scopedBuilder);
+    },
   createRootSafeDb: () => "SAFE_DB_SENTINEL",
+}));
+const realS3 = await import("@/api/lib/s3");
+void mock.module("@/api/lib/s3", () => ({
+  ...realS3,
+  deleteS3ObjectWithSignal: async (key: string) => {
+    deletedStorageKeys.push(key);
+  },
+  readS3ObjectIfPresent: async () => null,
+  writeS3ObjectWithRetry: async ({ key }: { key: string }) => {
+    writtenStorageKeys.push(key);
+  },
 }));
 
 const {
@@ -51,6 +69,7 @@ const {
   FOLIO_COLLAB_TOKEN_TTL_MS,
   FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
   loadFolioCollabSnapshot,
+  storeFolioCollabSnapshot,
 } = await import("@/api/lib/folio-collab-rooms");
 const { DOCX_MIME_TYPE } = await import("@/api/mime-types");
 
@@ -61,6 +80,12 @@ const organizationId = toSafeId<"organization">("org_1");
 const workspaceId = toSafeId<"workspace">("ws_1");
 const yjsSnapshotFileId = toSafeId<"userFile">("file_yjs");
 const docxCheckpointFileId = toSafeId<"userFile">("file_docx");
+
+afterEach(() => {
+  deletedStorageKeys.length = 0;
+  scopedFailure = null;
+  writtenStorageKeys.length = 0;
+});
 
 type Row = Record<string, unknown>;
 
@@ -230,6 +255,26 @@ describe("folio collaboration room snapshot generation", () => {
         userId: "user_2",
       }),
     ).toEqual({ status: "seed-owner-conflict" });
+  });
+
+  test("deletes a newly written snapshot when its database transaction fails", async () => {
+    const authorized = await authorize(validRow());
+    expect(authorized.status).toBe("authorized");
+    if (authorized.status !== "authorized") {
+      return;
+    }
+
+    scopedFailure = new Error("snapshot transaction failed");
+
+    expect(
+      storeFolioCollabSnapshot({
+        expectedGeneration: 3,
+        snapshotBytes: new TextEncoder().encode("snapshot"),
+        value: authorized.value,
+      }),
+    ).rejects.toThrow("snapshot transaction failed");
+    expect(writtenStorageKeys).toHaveLength(1);
+    expect(deletedStorageKeys).toEqual(writtenStorageKeys);
   });
 });
 
