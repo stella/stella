@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, ne } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -9,7 +9,8 @@ import {
   documentProcessingRuns,
   entities,
   entityVersions,
-  folioCollabSessions,
+  fields,
+  folioCollabRooms,
   searchDocuments,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -19,6 +20,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -72,18 +74,42 @@ export const deleteEntityVersionHandler = async function* ({
   // and current version the first already changed.
   //
   // Canonical docx-edit lock order (issue #1139): docx-edit advisory lock ->
-  // desktop_edit_session rows -> entities row. This handler takes no advisory
-  // lock, but it MUST lock the sessions it will cancel BEFORE the entity row so
-  // it agrees with finalize-desktop-edit-session (which locks the session row,
-  // then the entity row). Locking the entity first here and the sessions second
-  // would invert finalize's order and risk an ABBA deadlock.
+  // desktop_edit_session rows -> entities row. Acquire every target lock for
+  // this version in stable order before checking room ownership. A concurrent
+  // first join must therefore publish its room before this handler decides
+  // whether the version can be tombstoned.
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
-      // Lock (not yet cancel) every open session anchored to this version first,
-      // establishing the session -> entity order. Both session kinds anchor to a
-      // base version (desktop_edit_sessions and folio_collab_sessions), so both
-      // must be withdrawn when that version is tombstoned. The cancel UPDATEs
-      // below re-touch these already-locked rows.
+      const targetProperties = await tx
+        .select({ propertyId: fields.propertyId })
+        .from(fields)
+        .innerJoin(
+          entityVersions,
+          eq(fields.entityVersionId, entityVersions.id),
+        )
+        .where(
+          and(
+            eq(entityVersions.id, params.versionId),
+            eq(entityVersions.entityId, params.entityId),
+            eq(entityVersions.workspaceId, workspaceId),
+          ),
+        )
+        .orderBy(asc(fields.propertyId))
+        .limit(LIMITS.propertiesCount);
+      for (const { propertyId } of targetProperties) {
+        // oxlint-disable-next-line no-await-in-loop -- advisory locks must be acquired sequentially in the stable property order above
+        await lockDocxEditTarget({
+          entityId: params.entityId,
+          propertyId,
+          tx,
+          workspaceId,
+        });
+      }
+
+      // Lock every edit owner anchored to this version first, establishing the
+      // edit-state -> entity order. Desktop sessions can be cancelled below;
+      // durable collaboration rooms must instead block the tombstone so their
+      // shared working state never loses its base.
       await tx
         .select({ id: desktopEditSessions.id })
         .from(desktopEditSessions)
@@ -95,14 +121,13 @@ export const deleteEntityVersionHandler = async function* ({
           ),
         )
         .for("update");
-      await tx
-        .select({ id: folioCollabSessions.id })
-        .from(folioCollabSessions)
+      const collabRooms = await tx
+        .select({ id: folioCollabRooms.id })
+        .from(folioCollabRooms)
         .where(
           and(
-            eq(folioCollabSessions.baseVersionId, params.versionId),
-            eq(folioCollabSessions.workspaceId, workspaceId),
-            eq(folioCollabSessions.status, "open"),
+            eq(folioCollabRooms.baseVersionId, params.versionId),
+            eq(folioCollabRooms.workspaceId, workspaceId),
           ),
         )
         .for("update");
@@ -149,6 +174,14 @@ export const deleteEntityVersionHandler = async function* ({
           ok: false as const,
           status: 404 as const,
           message: "Version not found",
+        };
+      }
+      if (collabRooms.at(0)) {
+        return {
+          ok: false as const,
+          status: 409 as const,
+          message:
+            "Create a newer collaborative version before deleting this base version",
         };
       }
 
@@ -271,16 +304,9 @@ export const deleteEntityVersionHandler = async function* ({
           ),
         );
 
-      // Cascade the withdrawal to every open edit session anchored to this
-      // version: without this an in-flight session could resume/seed and
-      // re-download the withdrawn version's bytes. Both session kinds anchor to
-      // a base version, and the baseVersionId FK is `onDelete: cascade` — which
-      // never fires here because we soft-delete (tombstone) rather than DELETE —
-      // so each kind must be cancelled explicitly. Cancel them in the same
-      // transaction so the tombstone and the closures commit atomically. The
-      // resume-path chokepoint (readVersionDocxTarget) is the class guard for
-      // desktop sessions should a future tombstone writer forget this step;
-      // closing here is the primary fix for both kinds.
+      // Withdraw desktop sessions in the same transaction so none can resume
+      // from the tombstoned version. Durable collaboration rooms were rejected
+      // above because they have no participant-owned close transition.
       const cancelledSessions = await tx
         .update(desktopEditSessions)
         .set({ status: "cancelled", closedAt: new Date() })
@@ -292,18 +318,6 @@ export const deleteEntityVersionHandler = async function* ({
           ),
         )
         .returning({ id: desktopEditSessions.id });
-      const cancelledCollabSessions = await tx
-        .update(folioCollabSessions)
-        .set({ status: "cancelled", closedAt: new Date() })
-        .where(
-          and(
-            eq(folioCollabSessions.baseVersionId, params.versionId),
-            eq(folioCollabSessions.workspaceId, workspaceId),
-            eq(folioCollabSessions.status, "open"),
-          ),
-        )
-        .returning({ id: folioCollabSessions.id });
-
       const events: AuditEvent[] = [
         {
           action: AUDIT_ACTION.DELETE,
@@ -337,15 +351,6 @@ export const deleteEntityVersionHandler = async function* ({
         events.push({
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
-          resourceId: session.id,
-          changes: { status: { old: "open", new: "cancelled" } },
-          metadata: { reason: "base_version_tombstoned" },
-        });
-      }
-      for (const session of cancelledCollabSessions) {
-        events.push({
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_SESSION,
           resourceId: session.id,
           changes: { status: { old: "open", new: "cancelled" } },
           metadata: { reason: "base_version_tombstoned" },

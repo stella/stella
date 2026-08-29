@@ -3,8 +3,8 @@ import Elysia from "elysia";
 
 import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
 
-// The folio-collab session endpoints authorize themselves from a
-// caller-supplied credential pair (sessionId + token). Their route schemas
+// The folio-collab room endpoints authorize themselves from a
+// caller-supplied credential pair (roomId + token). Their route schemas
 // are deliberately permissive, so framework validation can never answer a
 // probe before the handler's own credential check: a request with malformed
 // credentials must be byte-identical to one with unknown credentials (404),
@@ -16,7 +16,7 @@ const app = new Elysia().use(folioCollabRoute);
 const VALID_UUID = "0198c0de-0000-4000-8000-000000000000";
 const WELL_FORMED_TOKEN = "a".repeat(64);
 
-const NOT_FOUND_BODY = { message: "Collaborative edit session not found." };
+const NOT_FOUND_BODY = { message: "Collaborative editing room not found." };
 
 const jsonRequest = (path: string, body: unknown): Request =>
   new Request(`http://localhost${path}`, {
@@ -34,22 +34,11 @@ const expectAuthShapedNotFound = async (request: Request) => {
 };
 
 const bodyCredentialPaths = [
-  "/folio-collab-sessions/authorize",
-  "/folio-collab-sessions/refresh-token",
-  "/folio-collab-sessions/snapshot/load",
-  "/folio-collab-sessions/snapshot/store",
-];
-
-const paramCredentialPaths = [
-  `/folio-collab-sessions/${VALID_UUID}/cancel`,
-  `/folio-collab-sessions/${VALID_UUID}/checkpoint`,
-  `/folio-collab-sessions/${VALID_UUID}/finalize`,
-];
-
-const garbageParamPaths = [
-  "/folio-collab-sessions/not-a-uuid/cancel",
-  "/folio-collab-sessions/not-a-uuid/checkpoint",
-  "/folio-collab-sessions/not-a-uuid/finalize",
+  "/folio-collab-rooms/authorize",
+  "/folio-collab-rooms/refresh-token",
+  "/folio-collab-rooms/heartbeat",
+  "/folio-collab-rooms/snapshot/load",
+  "/folio-collab-rooms/snapshot/store",
 ];
 
 describe("folio-collab probes with malformed bodies never see validation errors", () => {
@@ -64,19 +53,19 @@ describe("folio-collab probes with malformed bodies never see validation errors"
       await expectAuthShapedNotFound(jsonRequest(path, {}));
       // Token of the wrong length.
       await expectAuthShapedNotFound(
-        jsonRequest(path, { sessionId: VALID_UUID, token: "short" }),
+        jsonRequest(path, { roomId: VALID_UUID, token: "short" }),
       );
       // Session id that is not even a UUID.
       await expectAuthShapedNotFound(
-        jsonRequest(path, { sessionId: "garbage", token: WELL_FORMED_TOKEN }),
+        jsonRequest(path, { roomId: "garbage", token: WELL_FORMED_TOKEN }),
       );
       // Non-string JSON values must reach the handler too; otherwise the
       // permissive route schema itself leaks a 422 before authorization.
       await expectAuthShapedNotFound(
-        jsonRequest(path, { sessionId: [], token: 0 }),
+        jsonRequest(path, { roomId: [], token: 0 }),
       );
       await expectAuthShapedNotFound(
-        jsonRequest(path, { sessionId: true, token: {} }),
+        jsonRequest(path, { roomId: true, token: {} }),
       );
       // Non-object JSON roots must also reach the handler. An object-only
       // route schema would reject these before credential authorization.
@@ -106,47 +95,4 @@ describe("folio-collab probes with malformed bodies never see validation errors"
       );
     },
   );
-
-  test.each(paramCredentialPaths)(
-    "POST %s: malformed token bodies answer 404, not 422",
-    async (path) => {
-      await expectAuthShapedNotFound(
-        new Request(`http://localhost${path}`, { method: "POST" }),
-      );
-      await expectAuthShapedNotFound(jsonRequest(path, {}));
-      await expectAuthShapedNotFound(jsonRequest(path, { token: "short" }));
-      await expectAuthShapedNotFound(jsonRequest(path, { token: 0 }));
-      await expectAuthShapedNotFound(jsonRequest(path, { token: [] }));
-      await expectAuthShapedNotFound(jsonRequest(path, null));
-      await expectAuthShapedNotFound(jsonRequest(path, []));
-      await expectAuthShapedNotFound(jsonRequest(path, 0));
-      await expectAuthShapedNotFound(jsonRequest(path, "probe"));
-    },
-  );
-
-  test.each(garbageParamPaths)(
-    "POST %s: a non-UUID session id in the path answers 404, not 422",
-    async (path) => {
-      await expectAuthShapedNotFound(
-        jsonRequest(path, { token: WELL_FORMED_TOKEN }),
-      );
-    },
-  );
-
-  test("checkpoint: a multipart probe without a valid token answers 404 before any file handling", async () => {
-    const form = new FormData();
-    form.append("token", "short");
-    form.append(
-      "file",
-      new File([new Uint8Array([0x50, 0x4b])], "probe.docx", {
-        type: "application/zip",
-      }),
-    );
-    await expectAuthShapedNotFound(
-      new Request(
-        `http://localhost/folio-collab-sessions/${VALID_UUID}/checkpoint`,
-        { method: "POST", body: form },
-      ),
-    );
-  });
 });

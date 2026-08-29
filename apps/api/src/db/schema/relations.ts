@@ -62,8 +62,8 @@ import {
   entityVersionAiSummaries,
   entityVersions,
   fields,
-  folioCollabSessionTokens,
-  folioCollabSessions,
+  folioCollabRooms,
+  folioCollabRoomTokens,
   justifications,
   pendingUploads,
   taskAssignees,
@@ -153,8 +153,8 @@ export const relations = defineRelations(
     entityVersionAiSummaries,
     desktopEditSessions,
     desktopEditHandoffs,
-    folioCollabSessions,
-    folioCollabSessionTokens,
+    folioCollabRooms,
+    folioCollabRoomTokens,
     pendingUploads,
     fields,
     justifications,
@@ -370,9 +370,9 @@ export const relations = defineRelations(
         from: r.workspaces.id,
         to: r.workspaceViews.workspaceId,
       }),
-      folioCollabSessions: r.many.folioCollabSessions({
+      folioCollabRooms: r.many.folioCollabRooms({
         from: r.workspaces.id,
-        to: r.folioCollabSessions.workspaceId,
+        to: r.folioCollabRooms.workspaceId,
       }),
       workObligations: r.many.workObligations({
         from: r.workspaces.id,
@@ -629,9 +629,9 @@ export const relations = defineRelations(
         from: r.entities.id,
         to: r.desktopEditSessions.entityId,
       }),
-      folioCollabSessions: r.many.folioCollabSessions({
+      folioCollabRooms: r.many.folioCollabRooms({
         from: r.entities.id,
-        to: r.folioCollabSessions.entityId,
+        to: r.folioCollabRooms.entityId,
       }),
       currentVersion: r.one.entityVersions({
         from: r.entities.currentVersionId,
@@ -806,49 +806,40 @@ export const relations = defineRelations(
         to: r.user.id,
       }),
     },
-    folioCollabSessions: {
+    folioCollabRooms: {
       workspace: r.one.workspaces({
-        from: r.folioCollabSessions.workspaceId,
+        from: r.folioCollabRooms.workspaceId,
         to: r.workspaces.id,
       }),
       entity: r.one.entities({
-        from: r.folioCollabSessions.entityId,
+        from: r.folioCollabRooms.entityId,
         to: r.entities.id,
       }),
       property: r.one.properties({
-        from: r.folioCollabSessions.propertyId,
+        from: r.folioCollabRooms.propertyId,
         to: r.properties.id,
       }),
       baseVersion: r.one.entityVersions({
-        from: r.folioCollabSessions.baseVersionId,
+        from: r.folioCollabRooms.baseVersionId,
         to: r.entityVersions.id,
-        alias: "folioCollabSessionBaseVersion",
+        alias: "folioCollabRoomBaseVersion",
       }),
-      finalizedVersion: r.one.entityVersions({
-        from: r.folioCollabSessions.finalizedVersionId,
-        to: r.entityVersions.id,
-        alias: "folioCollabSessionFinalizedVersion",
-      }),
-      createdByUser: r.one.user({
-        from: r.folioCollabSessions.createdBy,
-        to: r.user.id,
-      }),
-      tokens: r.many.folioCollabSessionTokens({
-        from: r.folioCollabSessions.id,
-        to: r.folioCollabSessionTokens.sessionId,
+      tokens: r.many.folioCollabRoomTokens({
+        from: r.folioCollabRooms.id,
+        to: r.folioCollabRoomTokens.roomId,
       }),
     },
-    folioCollabSessionTokens: {
-      session: r.one.folioCollabSessions({
-        from: r.folioCollabSessionTokens.sessionId,
-        to: r.folioCollabSessions.id,
+    folioCollabRoomTokens: {
+      room: r.one.folioCollabRooms({
+        from: r.folioCollabRoomTokens.roomId,
+        to: r.folioCollabRooms.id,
       }),
       workspace: r.one.workspaces({
-        from: r.folioCollabSessionTokens.workspaceId,
+        from: r.folioCollabRoomTokens.workspaceId,
         to: r.workspaces.id,
       }),
       user: r.one.user({
-        from: r.folioCollabSessionTokens.userId,
+        from: r.folioCollabRoomTokens.userId,
         to: r.user.id,
       }),
     },

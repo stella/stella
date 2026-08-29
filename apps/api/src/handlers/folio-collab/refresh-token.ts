@@ -3,26 +3,25 @@ import { Result } from "better-result";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { refreshFolioCollabToken as refreshStoredFolioCollabToken } from "@/api/lib/folio-collab-sessions";
+import { refreshFolioCollabToken as refreshStoredFolioCollabToken } from "@/api/lib/folio-collab-rooms";
 import { permissiveBodySchema } from "@/api/lib/permissive-route-schema";
 
-import { authorizeFolioCollabCredentials } from "./session-credentials";
+import { authorizeFolioCollabCredentials } from "./room-credentials";
 
 const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
-  body: permissiveBodySchema({ keys: ["sessionId", "token"] }),
+  body: permissiveBodySchema({ keys: ["roomId", "token"] }),
 } satisfies TokenHandlerConfig;
 
 const refreshFolioCollabToken = createSafeTokenHandler(
   config,
   async function* ({ body }) {
-    const { session: value, token } = yield* Result.await(
+    const { room: value, token } = yield* Result.await(
       authorizeFolioCollabCredentials(body),
     );
     const refreshed = await value.scopedDb(
       async (tx) =>
         await refreshStoredFolioCollabToken({
-          sessionCreatedAt: value.sessionCreatedAt,
           tokenId: value.tokenId,
           tx,
         }),
@@ -38,6 +37,8 @@ const refreshFolioCollabToken = createSafeTokenHandler(
     }
 
     return Result.ok({
+      canEdit: value.canEdit,
+      generation: value.generation,
       token,
       tokenExpiresAt: refreshed.tokenExpiresAt.toISOString(),
     });

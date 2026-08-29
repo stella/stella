@@ -8,20 +8,29 @@ import { applyUpdate, encodeStateAsUpdate } from "yjs";
 
 import { FetchBoundaryError } from "@stll/errors";
 
+import { isSecureStellaApiUrl } from "./env-schema";
+
 type CollabAuthContext = {
-  canEdit: boolean;
-  sessionId: string;
-  tokenState: CollabSessionTokenState;
+  roomId: string;
+  tokenState: CollabRoomTokenState;
   userId: string;
   workspaceId: string;
 };
 
-type CollabSessionTokenState = {
+type CollabRoomTokenState = {
+  canEdit: boolean;
+  generation: number;
   refreshInFlight: Promise<string> | null;
   refreshTimer: ReturnType<typeof setTimeout> | null;
-  sessionId: string;
+  roomId: string;
   token: string;
   tokenExpiresAtMs: number;
+};
+
+type CollabRoomHeartbeatState = {
+  inFlight: Promise<void> | null;
+  timer: ReturnType<typeof setTimeout> | null;
+  tokenState: CollabRoomTokenState;
 };
 
 type ManagedWebSocketLike = WebSocketLike & {
@@ -38,28 +47,37 @@ type CreateCollabServerOptions = {
 
 const authorizeResponseSchema = v.strictObject({
   canEdit: v.boolean(),
+  generation: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  roomId: v.string(),
   roomName: v.string(),
-  sessionId: v.string(),
   tokenExpiresAt: v.string(),
   userId: v.string(),
   workspaceId: v.string(),
 });
 
 const refreshTokenResponseSchema = v.strictObject({
+  canEdit: v.boolean(),
+  generation: v.pipe(v.number(), v.integer(), v.minValue(0)),
   token: v.string(),
   tokenExpiresAt: v.string(),
 });
 
 const loadSnapshotResponseSchema = v.strictObject({
+  generation: v.pipe(v.number(), v.integer(), v.minValue(0)),
   snapshotBase64: v.nullable(v.string()),
 });
 
 const storeSnapshotResponseSchema = v.strictObject({
+  generation: v.pipe(v.number(), v.integer(), v.minValue(0)),
   storedAt: v.string(),
 });
 
+const heartbeatResponseSchema = v.strictObject({
+  activeAt: v.string(),
+});
+
 const TOKEN_REFRESH_LEEWAY_MS = 5 * 60 * 1000;
-const TOKEN_REFRESH_RETRY_MS = 1000;
+const ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS = 30_000;
 
 const parseTokenExpiresAt = (value: string) => {
   const expiresAtMs = Date.parse(value);
@@ -99,6 +117,7 @@ const postJson = async <TSchema extends v.GenericSchema>({
     body: JSON.stringify(body),
     headers: { "Content-Type": "application/json" },
     method: "POST",
+    redirect: "error",
     signal: AbortSignal.timeout(10_000),
   });
 
@@ -149,9 +168,16 @@ export const createCollabServer = async ({
   maxDebounceMs = 10_000,
   port,
 }: CreateCollabServerOptions) => {
-  const sessionTokens = new Map<string, CollabSessionTokenState>();
+  if (!isSecureStellaApiUrl(apiUrl)) {
+    panic(
+      "STELLA_API_URL must use HTTPS unless it targets a loopback address.",
+    );
+  }
 
-  const clearSessionTokenRefresh = (state: CollabSessionTokenState) => {
+  const tokenStates = new Map<string, CollabRoomTokenState>();
+  const roomHeartbeatStates = new Map<string, CollabRoomHeartbeatState>();
+
+  const clearRoomTokenRefresh = (state: CollabRoomTokenState) => {
     if (!state.refreshTimer) {
       return;
     }
@@ -160,47 +186,58 @@ export const createCollabServer = async ({
     state.refreshTimer = null;
   };
 
-  const clearSessionToken = (sessionId: string) => {
-    const state = sessionTokens.get(sessionId);
+  const clearRoomHeartbeat = (roomId: string) => {
+    const state = roomHeartbeatStates.get(roomId);
     if (!state) {
       return;
     }
 
-    clearSessionTokenRefresh(state);
-    sessionTokens.delete(sessionId);
+    if (state.timer) {
+      clearTimeout(state.timer);
+    }
+    roomHeartbeatStates.delete(roomId);
+  };
+
+  const clearRoomTokens = (roomId: string) => {
+    clearRoomHeartbeat(roomId);
+    for (const [token, state] of tokenStates) {
+      if (state.roomId !== roomId) {
+        continue;
+      }
+      clearRoomTokenRefresh(state);
+      tokenStates.delete(token);
+    }
   };
 
   const scheduleTokenRefresh = (
-    state: CollabSessionTokenState,
+    state: CollabRoomTokenState,
     delayMs = tokenRefreshDelayMs(state.tokenExpiresAtMs),
   ) => {
-    clearSessionTokenRefresh(state);
+    clearRoomTokenRefresh(state);
     state.refreshTimer = setTimeout(() => {
       state.refreshTimer = null;
-      void refreshSessionToken(state).catch(() => {
-        const retryDelayMs = Math.min(
-          TOKEN_REFRESH_RETRY_MS,
-          Math.max(0, state.tokenExpiresAtMs - Date.now()),
-        );
-
-        if (retryDelayMs > 0 && sessionTokens.get(state.sessionId) === state) {
-          scheduleTokenRefresh(state, retryDelayMs);
-        }
+      void refreshRoomToken(state).catch(() => {
+        hocuspocus.closeConnections(state.roomId);
+        clearRoomTokens(state.roomId);
       });
     }, delayMs);
   };
 
-  const upsertSessionToken = ({
-    sessionId,
+  const upsertRoomToken = ({
+    canEdit,
+    generation,
+    roomId,
     token,
     tokenExpiresAt,
   }: {
-    sessionId: string;
+    canEdit: boolean;
+    generation: number;
+    roomId: string;
     token: string;
     tokenExpiresAt: string;
   }) => {
     const tokenExpiresAtMs = parseTokenExpiresAt(tokenExpiresAt);
-    const existing = sessionTokens.get(sessionId);
+    const existing = tokenStates.get(token);
 
     if (existing && existing.tokenExpiresAtMs > tokenExpiresAtMs) {
       return existing;
@@ -212,24 +249,28 @@ export const createCollabServer = async ({
       }
       existing.token = token;
       existing.tokenExpiresAtMs = tokenExpiresAtMs;
+      existing.canEdit = canEdit;
+      existing.generation = generation;
       scheduleTokenRefresh(existing);
       return existing;
     }
 
-    const state: CollabSessionTokenState = {
+    const state: CollabRoomTokenState = {
+      canEdit,
+      generation,
       refreshInFlight: null,
       refreshTimer: null,
-      sessionId,
+      roomId,
       token,
       tokenExpiresAtMs,
     };
-    sessionTokens.set(sessionId, state);
+    tokenStates.set(token, state);
     scheduleTokenRefresh(state);
 
     return state;
   };
 
-  const refreshSessionToken = async (state: CollabSessionTokenState) => {
+  const refreshRoomToken = async (state: CollabRoomTokenState) => {
     if (state.refreshInFlight) {
       return await state.refreshInFlight;
     }
@@ -240,10 +281,10 @@ export const createCollabServer = async ({
       const refreshed = await postJson({
         apiUrl,
         body: {
-          sessionId: state.sessionId,
+          roomId: state.roomId,
           token,
         },
-        path: "/folio-collab-sessions/refresh-token",
+        path: "/folio-collab-rooms/refresh-token",
         schema: refreshTokenResponseSchema,
       });
 
@@ -251,10 +292,22 @@ export const createCollabServer = async ({
         return state.token;
       }
 
+      if (refreshed.token !== token) {
+        tokenStates.delete(token);
+        tokenStates.set(refreshed.token, state);
+      }
       state.token = refreshed.token;
       state.tokenExpiresAtMs = parseTokenExpiresAt(refreshed.tokenExpiresAt);
-      if (sessionTokens.get(state.sessionId) === state) {
+      const requiresReconnect =
+        state.canEdit !== refreshed.canEdit ||
+        state.generation !== refreshed.generation;
+      state.canEdit = refreshed.canEdit;
+      state.generation = refreshed.generation;
+      if (tokenStates.get(state.token) === state) {
         scheduleTokenRefresh(state);
+        if (requiresReconnect) {
+          hocuspocus.closeConnections(state.roomId);
+        }
       }
 
       return state.token;
@@ -270,29 +323,92 @@ export const createCollabServer = async ({
     }
   };
 
-  const getFreshSessionToken = async (state: CollabSessionTokenState) => {
+  const getFreshRoomToken = async (state: CollabRoomTokenState) => {
     if (state.tokenExpiresAtMs - Date.now() > TOKEN_REFRESH_LEEWAY_MS) {
       return state.token;
     }
 
-    return await refreshSessionToken(state);
+    return await refreshRoomToken(state);
+  };
+
+  const heartbeatRoom = async (state: CollabRoomTokenState) => {
+    const token = await getFreshRoomToken(state);
+    await postJson({
+      apiUrl,
+      body: { roomId: state.roomId, token },
+      path: "/folio-collab-rooms/heartbeat",
+      schema: heartbeatResponseSchema,
+    });
+  };
+
+  const scheduleRoomHeartbeat = (roomId: string) => {
+    const state = roomHeartbeatStates.get(roomId);
+    if (!state || state.timer) {
+      return;
+    }
+
+    state.timer = setTimeout(() => {
+      state.timer = null;
+      const request = heartbeatRoom(state.tokenState);
+      state.inFlight = request;
+      void request
+        .then(() => {
+          if (roomHeartbeatStates.get(roomId) === state) {
+            state.inFlight = null;
+            scheduleRoomHeartbeat(roomId);
+          }
+          return undefined;
+        })
+        .catch(() => {
+          hocuspocus.closeConnections(roomId);
+          clearRoomTokens(roomId);
+        });
+    }, ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS);
+  };
+
+  const ensureRoomHeartbeat = async (tokenState: CollabRoomTokenState) => {
+    const existing = roomHeartbeatStates.get(tokenState.roomId);
+    if (existing) {
+      existing.tokenState = tokenState;
+      if (existing.inFlight) {
+        await existing.inFlight;
+      }
+      return;
+    }
+
+    const state: CollabRoomHeartbeatState = {
+      inFlight: null,
+      timer: null,
+      tokenState,
+    };
+    roomHeartbeatStates.set(tokenState.roomId, state);
+    const request = heartbeatRoom(tokenState);
+    state.inFlight = request;
+    try {
+      await request;
+      state.inFlight = null;
+      scheduleRoomHeartbeat(tokenState.roomId);
+    } catch (error) {
+      clearRoomHeartbeat(tokenState.roomId);
+      throw error;
+    }
   };
 
   const hocuspocus = new Hocuspocus<CollabAuthContext>({
     debounce: debounceMs,
     async afterUnloadDocument({ documentName }) {
-      clearSessionToken(documentName);
+      clearRoomTokens(documentName);
       await Promise.resolve();
     },
     maxDebounce: maxDebounceMs,
-    async onAuthenticate({ documentName, token }) {
+    async onAuthenticate({ connectionConfig, documentName, token }) {
       const authorized = await postJson({
         apiUrl,
         body: {
-          sessionId: documentName,
+          roomId: documentName,
           token,
         },
-        path: "/folio-collab-sessions/authorize",
+        path: "/folio-collab-rooms/authorize",
         schema: authorizeResponseSchema,
       });
 
@@ -300,31 +416,35 @@ export const createCollabServer = async ({
         panic("Collaboration token does not match the room.");
       }
 
-      const tokenState = upsertSessionToken({
-        sessionId: authorized.sessionId,
+      const tokenState = upsertRoomToken({
+        canEdit: authorized.canEdit,
+        generation: authorized.generation,
+        roomId: authorized.roomId,
         token,
         tokenExpiresAt: authorized.tokenExpiresAt,
       });
+      await ensureRoomHeartbeat(tokenState);
+      connectionConfig.readOnly = !authorized.canEdit;
 
       return {
-        canEdit: authorized.canEdit,
-        sessionId: authorized.sessionId,
+        roomId: authorized.roomId,
         tokenState,
         userId: authorized.userId,
         workspaceId: authorized.workspaceId,
       };
     },
     async onLoadDocument({ context, document }) {
-      const token = await getFreshSessionToken(context.tokenState);
+      const token = await getFreshRoomToken(context.tokenState);
       const result = await postJson({
         apiUrl,
         body: {
-          sessionId: context.sessionId,
+          roomId: context.roomId,
           token,
         },
-        path: "/folio-collab-sessions/snapshot/load",
+        path: "/folio-collab-rooms/snapshot/load",
         schema: loadSnapshotResponseSchema,
       });
+      context.tokenState.generation = result.generation;
 
       if (!result.snapshotBase64) {
         return;
@@ -333,21 +453,22 @@ export const createCollabServer = async ({
       applyUpdate(document, Buffer.from(result.snapshotBase64, "base64"));
     },
     async onStoreDocument({ document, lastContext: context }) {
-      if (!context.canEdit) {
+      if (!context.tokenState.canEdit) {
         return;
       }
 
-      const token = await getFreshSessionToken(context.tokenState);
+      const token = await getFreshRoomToken(context.tokenState);
       await postJson({
         apiUrl,
         body: {
-          sessionId: context.sessionId,
+          expectedGeneration: context.tokenState.generation,
+          roomId: context.roomId,
           snapshotBase64: Buffer.from(encodeStateAsUpdate(document)).toString(
             "base64",
           ),
           token,
         },
-        path: "/folio-collab-sessions/snapshot/store",
+        path: "/folio-collab-rooms/snapshot/store",
         schema: storeSnapshotResponseSchema,
       });
     },
@@ -417,10 +538,13 @@ export const createCollabServer = async ({
   });
 
   const destroy = async () => {
-    for (const state of sessionTokens.values()) {
-      clearSessionTokenRefresh(state);
+    for (const roomId of roomHeartbeatStates.keys()) {
+      clearRoomHeartbeat(roomId);
     }
-    sessionTokens.clear();
+    for (const state of tokenStates.values()) {
+      clearRoomTokenRefresh(state);
+    }
+    tokenStates.clear();
 
     await server.stop(true);
 

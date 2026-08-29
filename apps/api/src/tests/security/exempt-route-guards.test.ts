@@ -90,16 +90,14 @@ const REVIEWED_UNGUARDED: Record<string, string[]> = {
   // per-IP rate limiting and content dedup inside receivePublicFeedback,
   // not identity.
   "feedback/routes.ts": ["POST /feedback"],
-  // Folio collaboration session lifecycle: authenticated via the session's
-  // own collab token, minted and checked inside each handler.
+  // Folio collaboration room lifecycle: authenticated via the room's own
+  // collab token, minted and checked inside each handler.
   "folio-collab/routes.ts": [
     "POST /authorize",
     "POST /refresh-token",
+    "POST /heartbeat",
     "POST /snapshot/load",
     "POST /snapshot/store",
-    "POST /:sessionId/cancel",
-    "POST /:sessionId/checkpoint",
-    "POST /:sessionId/finalize",
   ],
   // Deliberately mounted outside the auth macro; authenticated by the HMAC
   // signature verified inside receiveHostedUsageWebhook, not identity.

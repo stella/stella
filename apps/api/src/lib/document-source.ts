@@ -5,16 +5,16 @@
  * import slice can add the `sharepoint` branch without migrating a
  * yes/no column, and so callers must switch exhaustively:
  *   - "upload": the user uploaded the file directly (presigned PUT).
- *   - "desktop-edit": the bytes came back from a desktop / collaborative
- *     Word edit round-trip.
+ *   - "desktop-edit": the bytes came back from a desktop Word edit round-trip.
+ *   - "collaboration": the version was published from a browser collaboration room.
  *   - "sharepoint": the version was copied (one-way, read-only) from a
  *     Microsoft Graph drive item the user had permission to read. The
  *     payload pins the exact item and its ETag at copy time so a later
  *     re-import can detect drift without a sync loop.
  *
- * Groundwork: only `upload` and `desktop-edit` are produced today. The
- * `sharepoint` branch is populated by the future SharePoint/OneDrive
- * import pipeline (deferred).
+ * Groundwork: `upload` and `desktop-edit` are produced today. `collaboration`
+ * is reserved for room publication, and `sharepoint` for the future
+ * SharePoint/OneDrive import pipeline.
  */
 
 import * as v from "valibot";
@@ -22,6 +22,7 @@ import * as v from "valibot";
 export const documentSourceSchema = v.variant("kind", [
   v.strictObject({ kind: v.literal("upload") }),
   v.strictObject({ kind: v.literal("desktop-edit") }),
+  v.strictObject({ kind: v.literal("collaboration") }),
   v.strictObject({
     kind: v.literal("sharepoint"),
     driveId: v.pipe(v.string(), v.minLength(1)),
@@ -40,4 +41,9 @@ export const UPLOAD_DOCUMENT_SOURCE: DocumentSource = { kind: "upload" };
 /** Constant desktop-edit provenance — produced by edit round-trip paths. */
 export const DESKTOP_EDIT_DOCUMENT_SOURCE: DocumentSource = {
   kind: "desktop-edit",
+};
+
+/** Constant browser-collaboration provenance, used by room publications. */
+export const COLLABORATION_DOCUMENT_SOURCE: DocumentSource = {
+  kind: "collaboration",
 };

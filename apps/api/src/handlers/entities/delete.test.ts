@@ -17,6 +17,20 @@ test("commits the entity withdrawal fence before storage cleanup is dispatched",
   expect(source).not.toContain("deleteS3Objects(");
 });
 
+test("transfers durable room objects before the entity cascade removes their pointers", () => {
+  const roomRead = source.indexOf(".from(folioCollabRooms)");
+  const roomLock = source.indexOf('.for("update")', roomRead);
+  const entityRead = source.indexOf(".from(entities)");
+  const roomFiles = source.indexOf("collectFolioCollabStoredRoomFiles(room)");
+  const deleteEntity = source.indexOf(".delete(entities)");
+
+  expect(roomRead).toBeGreaterThan(-1);
+  expect(roomLock).toBeGreaterThan(roomRead);
+  expect(entityRead).toBeGreaterThan(roomLock);
+  expect(roomFiles).toBeGreaterThan(roomRead);
+  expect(deleteEntity).toBeGreaterThan(roomFiles);
+});
+
 // OCR run identity includes the entity version and field, so one long-lived
 // document can outgrow any fixed ceiling. Rejecting the deletion instead would
 // make that entity and its stored data permanently undeletable.

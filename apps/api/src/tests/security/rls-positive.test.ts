@@ -540,6 +540,7 @@ describe("workspace INSERT — correct scope", () => {
           id: testId(),
           workspaceId: ids.wsA1,
           entityId: ids.entityA1,
+          versionNumber: 2,
         })
         .returning({ id: entityVersions.id });
       expect(rows).toHaveLength(1);
@@ -1039,6 +1040,7 @@ describe("workspace DELETE — correct scope", () => {
         id: delId,
         workspaceId: ids.wsA1,
         entityId: ids.entityA1,
+        versionNumber: 2,
       });
       const rows = await tx
         .delete(entityVersions)

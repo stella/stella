@@ -86,6 +86,7 @@ beforeAll(async () => {
     id: tombstonedVersionId,
     workspaceId: ids.wsA1,
     entityId: ids.entityA1,
+    versionNumber: 2,
     deletedAt: new Date("2026-07-17T09:00:00.000Z"),
     deletedBy: ids.userA1,
   });

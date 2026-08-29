@@ -35,7 +35,8 @@ import {
   desktopEditSessions,
   entities,
   fileChatThreads,
-  folioCollabSessions,
+  folioCollabRoomTokens,
+  folioCollabRooms,
   mcpOAuthState,
   mcpUserConnections,
   pendingUploads,
@@ -73,7 +74,6 @@ import {
 } from "@/api/lib/destructive-effect-chunks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey, createUserFileKey } from "@/api/lib/files/utils";
-import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-sessions";
 import { LIMITS } from "@/api/lib/limits";
 import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
 import {
@@ -81,7 +81,6 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 // ── Extracted steps for verifyAndDeleteUser ─────────────────────────────
 //
@@ -737,6 +736,89 @@ const recordAccountDeletionAuditEvents = async (
   }
 };
 
+export const RESET_FOLIO_COLLAB_USER_STATE_TABLES = [
+  folioCollabRoomTokens,
+  folioCollabRooms,
+] as const satisfies readonly PgTable[];
+
+/**
+ * Revoke this user's room tokens and release only their in-flight seed claims.
+ * The room and every durable snapshot remain workspace-owned; the generation
+ * bump fences an upload already in flight when account deletion started.
+ */
+export const resetFolioCollabUserState = async (
+  tx: Transaction,
+  currentUserId: string,
+): Promise<void> => {
+  const claims = await tx
+    .select({
+      generation: folioCollabRooms.generation,
+      id: folioCollabRooms.id,
+      organizationId: workspaces.organizationId,
+      workspaceId: folioCollabRooms.workspaceId,
+    })
+    .from(folioCollabRooms)
+    .innerJoin(workspaces, eq(workspaces.id, folioCollabRooms.workspaceId))
+    .where(
+      and(
+        eq(folioCollabRooms.seedClaimedBy, currentUserId),
+        eq(folioCollabRooms.seedState, "claimed"),
+      ),
+    )
+    .for("update");
+
+  await tx
+    .delete(folioCollabRoomTokens)
+    .where(eq(folioCollabRoomTokens.userId, currentUserId));
+  if (claims.length === 0) {
+    return;
+  }
+
+  await tx
+    .update(folioCollabRooms)
+    .set({
+      generation: sql`${folioCollabRooms.generation} + 1`,
+      seedClaimedAt: null,
+      seedClaimedBy: null,
+      seedState: "empty",
+      seededAt: null,
+      yjsSnapshotSizeBytes: null,
+      yjsSnapshotUpdatedAt: null,
+    })
+    .where(
+      and(
+        inArray(
+          folioCollabRooms.id,
+          claims.map(({ id }) => id),
+        ),
+        eq(folioCollabRooms.seedClaimedBy, currentUserId),
+        eq(folioCollabRooms.seedState, "claimed"),
+      ),
+    );
+
+  await recordAccountDeletionAuditEvents(
+    tx,
+    brandPersistedUserId(currentUserId),
+    claims.map((claim) => ({
+      organizationId: brandPersistedOrganizationId(claim.organizationId),
+      event: {
+        action: AUDIT_ACTION.UPDATE,
+        changes: {
+          generation: {
+            old: claim.generation,
+            new: claim.generation + 1,
+          },
+          seedState: { old: "claimed", new: "empty" },
+        },
+        metadata: { reason: "seed_claim_released_on_account_deletion" },
+        resourceId: claim.id,
+        resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,
+        workspaceId: claim.workspaceId,
+      },
+    })),
+  );
+};
+
 export type DeleteDesktopEditSessionsParams = {
   tx: Transaction;
   currentUserId: string;
@@ -788,65 +870,6 @@ export const deleteDesktopEditSessionsAndHandoffs = async ({
   await tx
     .delete(desktopEditSessions)
     .where(eq(desktopEditSessions.createdBy, currentUserId));
-};
-
-export type DeleteFolioCollabSessionsParams = {
-  tx: Transaction;
-  currentUserId: string;
-  s3KeysToDelete: string[];
-};
-
-export const DELETE_FOLIO_COLLAB_SESSIONS_TABLES = [
-  folioCollabSessions,
-] as const satisfies readonly PgTable[];
-
-/**
- * 7. Folio collab sessions — tokens cascade when session is deleted.
- */
-export const deleteFolioCollabSessions = async ({
-  tx,
-  currentUserId,
-  s3KeysToDelete,
-}: DeleteFolioCollabSessionsParams): Promise<void> => {
-  const folioCheckpointRows = await tx
-    .select({
-      docxCheckpointFileId: folioCollabSessions.docxCheckpointFileId,
-      docxCheckpointUpdatedAt: folioCollabSessions.docxCheckpointUpdatedAt,
-      organizationId: workspaces.organizationId,
-      workspaceId: folioCollabSessions.workspaceId,
-      yjsSnapshotFileId: folioCollabSessions.yjsSnapshotFileId,
-      yjsSnapshotUpdatedAt: folioCollabSessions.yjsSnapshotUpdatedAt,
-    })
-    .from(folioCollabSessions)
-    .innerJoin(workspaces, eq(workspaces.id, folioCollabSessions.workspaceId))
-    .where(eq(folioCollabSessions.createdBy, currentUserId));
-  for (const row of folioCheckpointRows) {
-    if (row.yjsSnapshotUpdatedAt !== null) {
-      s3KeysToDelete.push(
-        createFileKey({
-          fileId: row.yjsSnapshotFileId,
-          mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-          organizationId: brandPersistedOrganizationId(row.organizationId),
-          workspaceId: brandPersistedWorkspaceId(row.workspaceId),
-        }),
-      );
-    }
-
-    if (row.docxCheckpointUpdatedAt !== null) {
-      s3KeysToDelete.push(
-        createFileKey({
-          fileId: row.docxCheckpointFileId,
-          mimeType: DOCX_MIME_TYPE,
-          organizationId: brandPersistedOrganizationId(row.organizationId),
-          workspaceId: brandPersistedWorkspaceId(row.workspaceId),
-        }),
-      );
-    }
-  }
-
-  await tx
-    .delete(folioCollabSessions)
-    .where(eq(folioCollabSessions.createdBy, currentUserId));
 };
 
 export type DeletePendingUploadsParams = {
@@ -1116,8 +1139,8 @@ export const ACCOUNT_DELETION_MANUAL_TABLES = [
   ...DELETE_MCP_CREDENTIALS_TABLES,
   ...CLEAR_WORKSPACE_LEAD_ROLE_TABLES,
   ...REASSIGN_ACTIVE_TASKS_TABLES,
+  ...RESET_FOLIO_COLLAB_USER_STATE_TABLES,
   ...DELETE_DESKTOP_EDIT_SESSIONS_TABLES,
-  ...DELETE_FOLIO_COLLAB_SESSIONS_TABLES,
   ...DELETE_PENDING_UPLOADS_TABLES,
   ...DELETE_USER_FILES_TABLES,
   ...DELETE_CHAT_THREADS_TABLES,

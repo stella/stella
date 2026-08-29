@@ -9,7 +9,7 @@ import {
   documentProcessingRuns,
   entityDeletionCleanupRequests,
   fields,
-  folioCollabSessions,
+  folioCollabRooms,
   pendingUploads,
   styleSets,
   templateVersions,
@@ -250,26 +250,26 @@ const recordDesktopEditCheckpointPage = async (
   await recordDesktopEditCheckpointPage(scope, workspaceId, record, lastRow.id);
 };
 
-const recordFolioCollabCheckpointPage = async (
+const recordFolioCollabRoomFilePage = async (
   scope: OrganizationTeardownScope,
   workspaceId: SafeId<"workspace">,
   record: TeardownPageSink,
-  cursor: PageCursor<"folioCollabSession"> = null,
+  cursor: PageCursor<"folioCollabRoom"> = null,
 ): Promise<void> => {
   const page = await scope.tx
     .select({
-      docxCheckpointFileId: folioCollabSessions.docxCheckpointFileId,
-      id: folioCollabSessions.id,
-      yjsSnapshotFileId: folioCollabSessions.yjsSnapshotFileId,
+      docxCheckpointFileId: folioCollabRooms.docxCheckpointFileId,
+      id: folioCollabRooms.id,
+      yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
     })
-    .from(folioCollabSessions)
+    .from(folioCollabRooms)
     .where(
       and(
-        eq(folioCollabSessions.workspaceId, workspaceId),
-        cursor === null ? undefined : gt(folioCollabSessions.id, cursor),
+        eq(folioCollabRooms.workspaceId, workspaceId),
+        cursor === null ? undefined : gt(folioCollabRooms.id, cursor),
       ),
     )
-    .orderBy(asc(folioCollabSessions.id))
+    .orderBy(asc(folioCollabRooms.id))
     .limit(TEARDOWN_PAGE_SIZE);
   if (page.length === 0) {
     return;
@@ -297,7 +297,7 @@ const recordFolioCollabCheckpointPage = async (
   if (!lastRow) {
     return;
   }
-  await recordFolioCollabCheckpointPage(scope, workspaceId, record, lastRow.id);
+  await recordFolioCollabRoomFilePage(scope, workspaceId, record, lastRow.id);
 };
 
 /**
@@ -541,7 +541,7 @@ const recordMatterStorage = async (
   await recordFieldFilePage(scope, workspaceId, record);
   await recordOcrDerivatives(scope, workspaceId, record);
   await recordDesktopEditCheckpointPage(scope, workspaceId, record);
-  await recordFolioCollabCheckpointPage(scope, workspaceId, record);
+  await recordFolioCollabRoomFilePage(scope, workspaceId, record);
   await recordPendingUploadPage(scope, workspaceId, record);
   await recordMatterStorage(scope, workspaceIds, record, index + 1);
 };

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -10,6 +10,7 @@ import {
   entities,
   entityVersions,
   fields,
+  folioCollabRooms,
   workspaces,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -30,6 +31,7 @@ import {
   createFileKey,
   createOcrSearchablePdfKey,
 } from "@/api/lib/files/utils";
+import { collectFolioCollabStoredRoomFiles } from "@/api/lib/folio-collab-rooms";
 import { LIMITS } from "@/api/lib/limits";
 import {
   forEachOcrDerivativePage,
@@ -68,6 +70,47 @@ export const deleteEntitiesHandler = async function* ({
 }: DeleteEntitiesHandlerProps) {
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
+      );
+      const workspaceRows = await tx
+        .select({ status: workspaces.status })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId))
+        .limit(1)
+        .for("update");
+      if (workspaceRows.at(0)?.status !== "active") {
+        return {
+          status: "rejected" as const,
+          error: new HandlerError({
+            status: 409,
+            message: "Workspace is not active",
+          }),
+        };
+      }
+
+      // Room pointer publication and version deletion both lock a room before
+      // its entity. Follow that order so the cleanup request captures the last
+      // committed snapshot pointer without introducing an inverse lock edge.
+      const collabRooms = await tx
+        .select({
+          docxCheckpointFileId: folioCollabRooms.docxCheckpointFileId,
+          docxCheckpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
+          id: folioCollabRooms.id,
+          yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+          yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
+        })
+        .from(folioCollabRooms)
+        .where(
+          and(
+            eq(folioCollabRooms.workspaceId, workspaceId),
+            inArray(folioCollabRooms.entityId, body.entityIds),
+          ),
+        )
+        .orderBy(asc(folioCollabRooms.id))
+        .limit(LIMITS.entitiesPageSizeMax * LIMITS.propertiesCount)
+        .for("update");
+
       // OCR dispatch takes this same entity fence before changing a run to
       // `running`. The committed entity deletion is the durable withdrawal
       // fence; storage cleanup happens later from a durable request, never
@@ -164,6 +207,18 @@ export const deleteEntitiesHandler = async function* ({
       await recordCleanupRequest(
         unreferencedFileRefs.map(({ fileId, mimeType }) =>
           createFileKey({ organizationId, workspaceId, fileId, mimeType }),
+        ),
+      );
+      await recordCleanupRequest(
+        collabRooms.flatMap((room) =>
+          collectFolioCollabStoredRoomFiles(room).map(({ fileId, mimeType }) =>
+            createFileKey({
+              fileId,
+              mimeType,
+              organizationId,
+              workspaceId,
+            }),
+          ),
         ),
       );
       await forEachOcrDerivativePage({

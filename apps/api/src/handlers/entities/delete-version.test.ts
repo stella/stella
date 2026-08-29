@@ -97,11 +97,11 @@ describe("delete-version chain-of-custody guard", () => {
     );
   });
 
-  test("locks each session kind before the entity row (finalize's order)", () => {
+  test("locks edit owners before the entity row (finalize's order)", () => {
     // Lock-order hierarchy (issue #1139): docx-edit advisory lock ->
     // edit-session rows -> entities row. This handler takes no advisory lock,
     // but it MUST lock the sessions it cancels BEFORE the entity row so it
-    // agrees with finalize-desktop-edit-session, which locks the session row
+    // agrees with the edit finalizers, which lock the session row
     // (FOR UPDATE) and then the entity row. Locking the entity first here and
     // the sessions second (the cancel UPDATE) would invert finalize's order and
     // risk an ABBA deadlock between a concurrent delete and finalize.
@@ -121,25 +121,23 @@ describe("delete-version chain-of-custody guard", () => {
     };
 
     const desktopSessionLock = lockIndexFor(".from(desktopEditSessions)");
-    const collabSessionLock = lockIndexFor(".from(folioCollabSessions)");
+    const collabRoomLock = lockIndexFor(".from(folioCollabRooms)");
     const entityLock = lockIndexFor(".from(entities)");
 
     // Every lock is actually acquired (its .from(...) is followed by FOR UPDATE).
     expect(desktopSessionLock).toBeGreaterThan(-1);
-    expect(collabSessionLock).toBeGreaterThan(-1);
+    expect(collabRoomLock).toBeGreaterThan(-1);
     expect(entityLock).toBeGreaterThan(-1);
 
-    // Both session kinds are locked before the entity row.
+    // Every edit owner is locked before the entity row.
     expect(desktopSessionLock).toBeLessThan(entityLock);
-    expect(collabSessionLock).toBeLessThan(entityLock);
+    expect(collabRoomLock).toBeLessThan(entityLock);
   });
 
-  test("cancels every session kind anchored to the tombstoned version", () => {
-    // Class-2 discovery guard: any table that anchors an edit session to a base
-    // version (a base_version_id FK to entity_versions) must be cancelled in the
-    // delete-version transaction, or a session could resume/seed and re-serve
-    // the withdrawn version's bytes. Discover those tables from the schema so a
-    // NEW session kind trips this test until delete-version withdraws it too.
+  test("resolves every edit owner anchored to the tombstoned version", () => {
+    // Class-2 discovery guard: every table anchored to a base version must have
+    // an explicit tombstone disposition. Ephemeral desktop sessions are
+    // cancelled; durable collaboration rooms block deletion.
     const schemaDir = nodePath.join(API_SRC, "db/schema");
     const schemaText = collectSourceFiles(schemaDir)
       .map((file) => readFileSync(file, "utf-8"))
@@ -157,18 +155,23 @@ describe("delete-version chain-of-custody guard", () => {
       .map((segment) => /^(\w+)/u.exec(segment)?.[1])
       .filter((name): name is string => name !== undefined);
 
-    // Sanity: the two known session kinds are discovered.
+    // Sanity: every current edit owner is discovered.
     expect(sessionTables).toContain("desktopEditSessions");
-    expect(sessionTables).toContain("folioCollabSessions");
+    expect(sessionTables).toContain("folioCollabRooms");
 
     const deleteVersionSource = readFileSync(
       nodePath.join(import.meta.dir, "delete-version.ts"),
       "utf-8",
     );
-    const uncancelled = sessionTables.filter(
-      (table) => !deleteVersionSource.includes(`update(${table})`),
+    const dispositionByTable = new Map([
+      ["desktopEditSessions", "cancel"],
+      ["folioCollabRooms", "block"],
+    ]);
+    expect(sessionTables.toSorted()).toEqual(
+      [...dispositionByTable.keys()].toSorted(),
     );
-    expect(uncancelled).toEqual([]);
+    expect(deleteVersionSource).toContain("update(desktopEditSessions)");
+    expect(deleteVersionSource).toContain("if (collabRooms.at(0))");
   });
 
   test("no relational fields/cellMetadata read is keyed by entityVersionId", () => {
@@ -279,13 +282,6 @@ describe("delete-version chain-of-custody guard", () => {
           anchor: "existingSession.baseVersionId",
           reason:
             "Session-resume staleness check: reads versionNumber only. The byte-serving chokepoint (readVersionDocxTarget) separately requires deletedAt IS NULL.",
-        },
-      ],
-      "handlers/folio-collab/finalize.ts": [
-        {
-          anchor: "sessionPreview.baseVersionId",
-          reason:
-            "Collab finalize: reads the base version to build the merge target on a write path, gated by an open collab session.",
         },
       ],
       "mcp/document-tools.ts": [

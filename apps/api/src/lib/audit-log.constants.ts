@@ -43,7 +43,7 @@ export const AUDIT_RESOURCE_TYPE = {
   FIELD: "field",
   FLOW_DEFINITION: "flow_definition",
   FLOW_RUN: "flow_run",
-  FOLIO_COLLAB_SESSION: "folio_collab_session",
+  FOLIO_COLLAB_ROOM: "folio_collab_room",
   INVOICE: "invoice",
   MACHINE_API_KEY: "machine_api_key",
   LEGAL_LIST: "legal_list",
