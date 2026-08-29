@@ -113,11 +113,12 @@ pub fn build_tray_menu(
   // Check for updates
   builder = builder.item(
     &MenuItemBuilder::with_id(CHECK_FOR_UPDATES_ACTION, t("tray.checkForUpdates"))
-      .enabled(
-        snapshot.update.status != "checking"
-          && snapshot.update.status != "downloading"
-          && snapshot.update.status != "applying",
-      )
+      .enabled(!matches!(
+        snapshot.update.status,
+        crate::types::DesktopUpdateStatus::Checking
+          | crate::types::DesktopUpdateStatus::Downloading
+          | crate::types::DesktopUpdateStatus::Applying
+      ))
       .build(app)?,
   );
 

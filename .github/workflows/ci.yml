@@ -874,8 +874,10 @@ jobs:
       # script itself is caught immediately, not on the next desktop
       # bridge change. Always runs (no `if:` gate) — it's seconds
       # and has no deps.
-      - name: Test bridge-version guard script
-        run: bash scripts/check-bridge-version.test.sh
+      - name: Test desktop bridge CI guards
+        run: |
+          bash scripts/check-bridge-version.test.sh
+          bash scripts/detect-tauri-rust-changes.test.sh
 
       # Self-test the release-channel script. The desktop release
       # pipeline relies on three independent steps deriving the

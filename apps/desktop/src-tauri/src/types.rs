@@ -11,6 +11,7 @@ pub const PPTX_MIME_TYPE: &str =
 macro_rules! define_desktop_edit_file_types {
   ($($variant:ident => $wire_name:literal),+ $(,)?) => {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    #[cfg_attr(test, derive(ts_rs::TS))]
     pub enum DesktopEditFileType {
       $(
         #[serde(rename = $wire_name)]
@@ -72,6 +73,7 @@ impl DesktopEditFileType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "lowercase")]
 pub enum SessionStatus {
   Opening,
@@ -82,8 +84,10 @@ pub enum SessionStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct SessionSnapshot {
+  #[cfg_attr(test, ts(type = "number"))]
   pub base_version_number: i64,
   pub entity_id: String,
   pub file_type: DesktopEditFileType,
@@ -100,6 +104,7 @@ pub struct SessionSnapshot {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopNotificationPreferences {
   pub document_ready: bool,
@@ -118,6 +123,7 @@ impl Default for DesktopNotificationPreferences {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct LinkedAccountSnapshot {
   pub email: String,
@@ -126,8 +132,10 @@ pub struct LinkedAccountSnapshot {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct OpenFileRemoteSession {
+  #[cfg_attr(test, ts(type = "number"))]
   pub base_version_number: i64,
   pub download_url: String,
   pub file_type: DesktopEditFileType,
@@ -139,7 +147,23 @@ pub struct OpenFileRemoteSession {
   pub took_over_existing_session: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "snake_case")]
+pub enum DesktopUpdateStatus {
+  Idle,
+  Checking,
+  Available,
+  Downloading,
+  Ready,
+  Applying,
+  UpToDate,
+  Error,
+  Disabled,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopUpdateSnapshot {
   pub base_url: Option<String>,
@@ -149,7 +173,7 @@ pub struct DesktopUpdateSnapshot {
   pub last_checked_at: Option<String>,
   pub latest_hash: Option<String>,
   pub latest_version: Option<String>,
-  pub status: String,
+  pub status: DesktopUpdateStatus,
   pub status_message: String,
   pub update_available: bool,
   pub update_ready: bool,
@@ -169,7 +193,7 @@ impl Default for DesktopUpdateSnapshot {
       last_checked_at: None,
       latest_hash: None,
       latest_version: None,
-      status: "disabled".to_string(),
+      status: DesktopUpdateStatus::Disabled,
       status_message: "Updates will appear here once configured.".to_string(),
       update_available: false,
       update_ready: false,
@@ -178,6 +202,7 @@ impl Default for DesktopUpdateSnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct TrustedSelfHostConnection {
   pub api_base_url: String,
@@ -188,13 +213,14 @@ pub struct TrustedSelfHostConnection {
 /// Monotonic bridge contract revision. Increment whenever the bridge
 /// surface changes so the web app can require a minimum revision without
 /// coupling to the desktop's literal app version.
-pub const BRIDGE_VERSION: u32 = 9;
+pub const BRIDGE_VERSION: u32 = 10;
 
 /// Versioned contracts advertised to the web app. A client requires the
 /// capability it uses; breaking semantics receive a new capability id.
 pub const BRIDGE_CAPABILITIES: &[&str] = &["office-edit.v1", "self-host.connect"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct AppSnapshot {
   pub bridge_port: u16,
@@ -211,11 +237,12 @@ pub struct AppSnapshot {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct OpenFileRequest {
   pub api_base_url: String,
   pub entity_id: String,
-  #[serde(default)]
+  #[serde(default, skip_serializing_if = "Option::is_none")]
   pub handoff_id: Option<String>,
   pub linked_account: Option<LinkedAccountSnapshot>,
   pub property_id: String,
@@ -249,6 +276,7 @@ pub fn is_safe_session_id(value: &str) -> bool {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct OpenFileResponse {
   pub already_open: bool,
@@ -539,15 +567,133 @@ mod tests {
   }
 }
 
-/// Golden-fixture contract shared with the TypeScript bridge types.
+#[cfg(test)]
+mod rpc_codegen_tests {
+  use super::*;
+  use std::any::TypeId;
+  use std::collections::HashSet;
+  use std::path::Path;
+  use ts_rs::{Config, TS, TypeVisitor};
+
+  const GENERATED_PATH: &str = "../src/shared/rpc.gen.ts";
+  const COMMITTED_BINDINGS: &str = include_str!("../../src/shared/rpc.gen.ts");
+  const GENERATED_HEADER: &str = "// Generated from apps/desktop/src-tauri/src/types.rs.\n// Regenerate from the repository root with `bun --filter @stll/desktop rpc:generate`.\n// Do not edit by hand.\n\n";
+
+  type DesktopRpcContract = (AppSnapshot, OpenFileRequest, OpenFileResponse);
+
+  struct DeclarationVisitor<'a> {
+    config: &'a Config,
+    declarations: Vec<String>,
+    seen: HashSet<TypeId>,
+  }
+
+  impl TypeVisitor for DeclarationVisitor<'_> {
+    fn visit<T: TS + 'static + ?Sized>(&mut self) {
+      if !self.seen.insert(TypeId::of::<T>()) {
+        return;
+      }
+
+      if T::output_path().is_some() {
+        self
+          .declarations
+          .push(use_bracket_array_syntax(T::decl(self.config)));
+      }
+      T::visit_dependencies(self);
+      T::visit_generics(self);
+    }
+  }
+
+  fn use_bracket_array_syntax(mut declaration: String) -> String {
+    while let Some(start) = declaration.rfind("Array<") {
+      let inner_start = start + "Array<".len();
+      let mut depth = 1_u32;
+      let mut end = None;
+      for (offset, character) in declaration[inner_start..].char_indices() {
+        match character {
+          '<' => depth += 1,
+          '>' => {
+            depth -= 1;
+            if depth == 0 {
+              end = Some(inner_start + offset);
+              break;
+            }
+          }
+          _ => {}
+        }
+      }
+      let end = end.unwrap_or_else(|| panic!("unclosed Array type in {declaration}"));
+      let inner = &declaration[inner_start..end];
+      let replacement = if inner.contains(" | ") || inner.contains(" & ") {
+        format!("({inner})[]")
+      } else {
+        format!("{inner}[]")
+      };
+      declaration.replace_range(start..=end, &replacement);
+    }
+    declaration
+      .lines()
+      .map(str::trim_end)
+      .collect::<Vec<_>>()
+      .join("\n")
+  }
+
+  fn render_desktop_rpc_bindings() -> String {
+    let config = Config::default();
+    let mut visitor = DeclarationVisitor {
+      config: &config,
+      declarations: Vec::new(),
+      seen: HashSet::new(),
+    };
+    DesktopRpcContract::visit_generics(&mut visitor);
+    visitor.declarations.sort();
+
+    let mut output = String::from(GENERATED_HEADER);
+    for declaration in visitor.declarations {
+      output.push_str("export ");
+      output.push_str(&declaration);
+      output.push_str("\n\n");
+    }
+    let content_end = output.trim_end().len();
+    output.truncate(content_end);
+    output.push('\n');
+    output
+  }
+
+  #[test]
+  fn generated_desktop_rpc_bindings_are_current() {
+    assert_eq!(
+      COMMITTED_BINDINGS,
+      render_desktop_rpc_bindings(),
+      "desktop RPC bindings are stale; run `bun --filter @stll/desktop rpc:generate`",
+    );
+  }
+
+  #[test]
+  fn generated_arrays_follow_repository_typescript_syntax() {
+    assert_eq!(
+      use_bracket_array_syntax("type Nested = Array<Array<string>>;".to_string()),
+      "type Nested = string[][];"
+    );
+    assert_eq!(
+      use_bracket_array_syntax("type Nullable = Array<string | null>;".to_string()),
+      "type Nullable = (string | null)[];"
+    );
+  }
+
+  #[test]
+  #[ignore = "writes the committed TypeScript bindings"]
+  fn generate_desktop_rpc_bindings() {
+    std::fs::write(Path::new(GENERATED_PATH), render_desktop_rpc_bindings())
+      .expect("generated desktop RPC bindings are writable");
+  }
+}
+
+/// Golden-fixture compatibility checks for the generated bridge types.
 ///
-/// The JSON files under `apps/desktop/fixtures/rpc/` are the single
-/// source of truth for every message that crosses the web <-> desktop
-/// bridge. `src/shared/rpc.golden.test.ts` validates the same files
-/// against the TypeScript `rpc.ts` types; this module validates the Rust
-/// serde types. A field renamed, retyped, or dropped on either side
-/// without updating the fixtures fails one of the two suites, so
-/// TS/Rust message-shape drift cannot land silently.
+/// Rust serde DTOs are the source for `src/shared/rpc.gen.ts`. The JSON files
+/// under `apps/desktop/fixtures/rpc/` independently pin representative wire
+/// payloads, and `tests/rpc.golden.test.ts` validates those same fixtures
+/// against the generated declarations.
 ///
 /// The fixtures are embedded with `include_str!` (path relative to this
 /// source file), the same mechanism `i18n.rs` uses for bundled language
@@ -569,6 +715,8 @@ mod fixture_tests {
     include_str!("../../fixtures/rpc/open-pptx-request.json");
   const OPEN_DOCX_RESPONSE: &str =
     include_str!("../../fixtures/rpc/open-docx-response.json");
+  const OPEN_HANDOFF_REQUEST: &str =
+    include_str!("../../fixtures/rpc/open-handoff-request.json");
   const LINKED_ACCOUNT: &str = include_str!("../../fixtures/rpc/linked-account.json");
   const DESKTOP_UPDATE: &str = include_str!("../../fixtures/rpc/desktop-update.json");
   const TRUSTED_SELF_HOST: &str =
@@ -643,16 +791,11 @@ mod fixture_tests {
     assert_roundtrip::<DesktopNotificationPreferences>(NOTIFICATION_PREFERENCES);
   }
 
-  /// `OpenFileRequest` is intentionally deserialize-only here: the Rust
-  /// struct carries a `#[serde(default)] handoff_id` that the TypeScript
-  /// `OpenFileRequest` type (and the HTTP bridge payload the web sends)
-  /// omit. Since the field has no `skip_serializing_if`, re-serializing
-  /// injects `"handoffId": null`, which the shared fixture deliberately
-  /// does not contain, so a strict round-trip would not hold. We assert
-  /// the fixture deserializes and the required fields decode correctly;
-  /// the asymmetry is documented rather than papered over.
   #[test]
-  fn open_file_request_fixture_deserializes() {
+  fn open_file_request_fixtures_roundtrip_both_handoff_forms() {
+    assert_roundtrip::<OpenFileRequest>(OPEN_DOCX_REQUEST);
+    assert_roundtrip::<OpenFileRequest>(OPEN_HANDOFF_REQUEST);
+
     let request: OpenFileRequest =
       serde_json::from_str(OPEN_DOCX_REQUEST).expect("fixture deserializes");
     assert_eq!(request.api_base_url, "https://api.example.com");
@@ -666,6 +809,13 @@ mod fixture_tests {
     assert_eq!(request.remote_session.file_name, "motion.docx");
     let linked = request.linked_account.expect("linked account present");
     assert_eq!(linked.email, "counsel@example.com");
+
+    let handoff_request: OpenFileRequest =
+      serde_json::from_str(OPEN_HANDOFF_REQUEST).expect("handoff fixture deserializes");
+    assert_eq!(
+      handoff_request.handoff_id.as_deref(),
+      Some("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+    );
   }
 
   #[test]
