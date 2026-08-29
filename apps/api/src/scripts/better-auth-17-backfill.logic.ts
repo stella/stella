@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { isRecord } from "@/api/lib/type-guards";
-import { DEFAULT_OAUTH_APPLICATION_TYPE } from "@/api/scripts/better-auth-migration-audit.logic";
+import { readOAuthApplicationType } from "@/api/scripts/better-auth-migration-audit.logic";
 import type {
   BetterAuthExpectedOAuthResource,
   BetterAuthTrustedIdentityMap,
@@ -460,8 +460,7 @@ const backfillOAuthClientPage = async ({
   for (const row of selected.value) {
     const clientId = isRecord(row) ? requiredString(row["clientId"]) : null;
     const applicationType = isRecord(row)
-      ? (requiredString(row["applicationType"]) ??
-        DEFAULT_OAUTH_APPLICATION_TYPE)
+      ? readOAuthApplicationType(row)
       : null;
     const scopes = isRecord(row) ? optionalStringArray(row["scopes"]) : null;
     const grantTypes = isRecord(row)
