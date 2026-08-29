@@ -157,6 +157,21 @@ describe("DOCX browser editor buffer selection", () => {
       }),
     ).toBe(previewBuffer);
   });
+
+  test("keeps an already-seeded room buffer stable when a publish refreshes the preview", () => {
+    const roomBuffer = bufferFrom([5]);
+
+    expect(
+      selectDocxBrowserEditorBuffer({
+        collaborationSeedBuffer: null,
+        isCollaborativeEditing: true,
+        lastEditingBuffer: roomBuffer,
+        preservedLoadedBuffer: null,
+        previewBuffer: bufferFrom([6]),
+        state: { status: "idle" },
+      }),
+    ).toBe(roomBuffer);
+  });
 });
 
 describe("DOCX readonly unlock prompt", () => {

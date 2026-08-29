@@ -97,7 +97,7 @@ export const selectDocxBrowserEditorBuffer = ({
   state,
 }: SelectDocxBrowserEditorBufferOptions) => {
   if (isCollaborativeEditing) {
-    return collaborationSeedBuffer ?? previewBuffer;
+    return collaborationSeedBuffer ?? lastEditingBuffer ?? previewBuffer;
   }
 
   if (state.status === "editing") {
