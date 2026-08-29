@@ -931,9 +931,13 @@ const readProjectedAccountIdentities = async (
           }
           break;
         case AUTH_PROVIDER_IDS.MICROSOFT:
+          // A row is mapped whether it still carries the legacy subject or
+          // already the projected identity; the backfill is a fixed point and
+          // its second pass audits rows it has already rewritten.
           if (
             microsoftIdentity === undefined ||
-            microsoftIdentity.legacyAccountId !== currentAccountId
+            (microsoftIdentity.legacyAccountId !== currentAccountId &&
+              microsoftIdentity.accountId !== currentAccountId)
           ) {
             mappingComplete = false;
             break;
