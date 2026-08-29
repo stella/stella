@@ -8,6 +8,7 @@ import {
 } from "@stll/ai-catalog";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import {
   CanaryCredentialRejectedError,
@@ -873,5 +874,64 @@ describe("AI provider canary provider rejections", () => {
       "provider rejected request (output ceiling above model limit)",
     );
     expect(isRetryableCanaryError(streamed, signal)).toBe(false);
+  });
+});
+
+// The shared generate path rethrows provider RUN_ERRORs as a HandlerError
+// whose 502 is the handler's own status; the canary must read the wrapped
+// evidence instead of printing that wrapper.
+describe("AI provider canary wrapped generate errors", () => {
+  const signal = new AbortController().signal;
+
+  test("names an Anthropic output-ceiling cut-off instead of the wrapper 502", () => {
+    const cutOff = new HandlerError({
+      status: 502,
+      code: "max_tokens",
+      message:
+        "The response was cut off because the maximum token limit was reached.",
+    });
+
+    expect(errorSummary(cutOff, signal)).toBe("provider error (max_tokens)");
+    expect(isRetryableCanaryError(cutOff, signal)).toBe(false);
+  });
+
+  test("reads a prefixed provider body for its status and rejection", () => {
+    const tier = new HandlerError({
+      status: 502,
+      message:
+        'Mistral API error 403: {"object":"error","message":"This model is not available in your subscription tier","type":"tier_not_allowed","param":null,"code":"1910","raw_status_code":403}',
+    });
+
+    expect(errorSummary(tier, signal)).toBe(
+      "provider rejected request (model outside subscription tier)",
+    );
+    expect(isRetryableCanaryError(tier, signal)).toBe(false);
+    expect(
+      errorSummary(
+        new HandlerError({
+          status: 502,
+          message:
+            'Mistral API error 503: {"object":"error","message":"busy","type":"service_unavailable","raw_status_code":503}',
+        }),
+        signal,
+      ),
+    ).toBe("provider HTTP 503");
+  });
+
+  test("keeps a wrapped Anthropic overload retryable with its class named", () => {
+    const overloaded = new HandlerError({
+      status: 502,
+      code: "529",
+      message: "529 Overloaded",
+      cause: {
+        type: "error",
+        error: { type: "overloaded_error", message: "Overloaded" },
+      },
+    });
+
+    expect(errorSummary(overloaded, signal)).toBe(
+      "provider HTTP 529 (overloaded_error)",
+    );
+    expect(isRetryableCanaryError(overloaded, signal)).toBe(true);
   });
 });

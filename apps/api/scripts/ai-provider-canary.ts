@@ -15,6 +15,7 @@ import type { ModelRole } from "@stll/ai-catalog";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
   abortControllerFromSignal,
@@ -44,7 +45,6 @@ import { createWeeklyToolShapeDefinition } from "./ai-provider-canary-weekly";
 
 const CAPABILITY_ROLE = "fast" satisfies ModelRole;
 const TOOL_CALL_ROLE = "chat" satisfies ModelRole;
-const MAX_OUTPUT_TOKENS = 64;
 const CAPABILITY_PROBE_TIMEOUT_MS = 20_000;
 const MODEL_ROLE_PROBE_TIMEOUT_MS = 30_000;
 const TOOL_ROUND_TRIP_PROBE_TIMEOUT_MS = 45_000;
@@ -82,7 +82,6 @@ const SAFE_CANARY_ERROR_MESSAGES = new Set([
   "Canary resolved an unexpected provider model.",
   "Provider did not execute the canary tool exactly once.",
   "Provider adapter preserved a synthetic null tool argument.",
-  "Provider generated an unexpected optional tool argument.",
   "Provider returned unexpected canary tool arguments.",
   "Provider did not execute the weekly canary tool exactly once.",
   "Provider returned unexpected weekly canary tool arguments.",
@@ -148,6 +147,7 @@ const SAFE_PROVIDER_CODES = new Set([
   "invalid_prompt",
   "invalid_request",
   "invalid_request_error",
+  "max_tokens", // ai-anthropic: stream cut off at the output ceiling
   "not_found_error",
   "overloaded_error",
   "parse-error",
@@ -157,6 +157,7 @@ const SAFE_PROVIDER_CODES = new Set([
   "rate_limit_exceeded",
   "refusal",
   "server_error",
+  "tier_not_allowed", // ai-mistral: model outside the key's subscription tier
   "timeout",
   "timeout_error",
 ]);
@@ -217,10 +218,13 @@ const providerErrorBodyFromMessage = (
   if (message.length > PROVIDER_ERROR_MESSAGE_MAX_LENGTH) {
     return null;
   }
-  const body = message.trimStart();
-  if (!body.startsWith("{")) {
+  // Adapters prefix the body ("Mistral API error 403: {...}"); the JSON object
+  // is the provider's, whatever precedes it is the adapter's.
+  const bodyStart = message.indexOf("{");
+  if (bodyStart === -1) {
     return null;
   }
+  const body = message.slice(bodyStart);
 
   const parsed = Result.try((): unknown => JSON.parse(body));
   if (Result.isError(parsed) || !isRecord(parsed.value)) {
@@ -288,7 +292,12 @@ const rawProviderCode = (error: unknown, depth = 0): string | null => {
   }
 
   const code = error["code"];
-  return typeof code === "string" ? code : null;
+  if (typeof code === "string") {
+    return code;
+  }
+  // Anthropic and Mistral bodies name the failure class in `type`, not `code`.
+  const type = error["type"];
+  return typeof type === "string" ? type : null;
 };
 
 const safeProviderCode = (code: string | null): string | null =>
@@ -317,6 +326,16 @@ const safeIncompleteReason = (error: unknown, depth = 0): string | null => {
   return null;
 };
 
+// The shared generate path rethrows every provider RUN_ERROR as a HandlerError
+// whose 502 answers the handler's own HTTP caller and says nothing about the
+// provider; the wrapper's code, message, and cause are the provider evidence.
+// Read those, never the wrapper's status, or an Anthropic `max_tokens` cut-off
+// and a Mistral 403 both print as "provider HTTP 502".
+const providerEvidence = (error: unknown): unknown =>
+  error instanceof HandlerError
+    ? { code: error.code, message: error.message, cause: error.cause }
+    : error;
+
 const providerStatus = (error: unknown, depth = 0): number | null => {
   if (!isRecord(error)) {
     return null;
@@ -338,15 +357,25 @@ const providerStatus = (error: unknown, depth = 0): number | null => {
     }
   }
 
-  for (const key of ["status", "statusCode", "code"] as const) {
+  for (const key of [
+    "status",
+    "statusCode",
+    "raw_status_code",
+    "code",
+  ] as const) {
     const value = error[key];
+    // Adapters relay an SDK status as `code: String(err.status)`.
+    const numeric =
+      typeof value === "string" && /^\d{3}$/u.test(value)
+        ? Number(value)
+        : value;
     if (
-      typeof value === "number" &&
-      Number.isInteger(value) &&
-      value >= 100 &&
-      value <= 599
+      typeof numeric === "number" &&
+      Number.isInteger(numeric) &&
+      numeric >= 100 &&
+      numeric <= 599
     ) {
-      return value;
+      return numeric;
     }
   }
   return null;
@@ -483,6 +512,10 @@ const credentialRejectionSignature = (
 const PROVIDER_REJECTION_SIGNATURES = [
   ["exceeds the model limit", "output ceiling above model limit"], // bedrock-converse
   ["model access is denied", "model access denied"], // bedrock-converse
+  [
+    "not available in your subscription tier",
+    "model outside subscription tier",
+  ], // ai-mistral
 ] as const;
 type ProviderRejectionReason =
   (typeof PROVIDER_REJECTION_SIGNATURES)[number][1];
@@ -632,15 +665,16 @@ export const isRetryableCanaryError = (
     return error.retryCode === null || isRetryableProviderCode(error.retryCode);
   }
 
-  const code = rawProviderCode(error);
-  if (terminalProviderCode(error) !== null) {
+  const evidence = providerEvidence(error);
+  const code = rawProviderCode(evidence);
+  if (terminalProviderCode(evidence) !== null) {
     return false;
   }
-  const retryable = explicitRetryability(error);
+  const retryable = explicitRetryability(evidence);
   if (retryable !== null) {
     return retryable;
   }
-  const status = providerStatus(error);
+  const status = providerStatus(evidence);
   if (status !== null) {
     return isRetryableProviderStatus(status);
   }
@@ -880,11 +914,14 @@ const capabilityProbes = [
     type: "capability",
     name: "structured-output",
     timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
-    run: async ({ config }, signal) => {
+    run: async ({ config, provider }, signal) => {
       await generateTanStackObjectForRole({
         abortSignal: signal,
         caching: NO_CACHING,
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
+        maxOutputTokens: structuredOutputModelRoleMaxOutputTokens({
+          modelId: DEFAULT_MODELS[provider][CAPABILITY_ROLE],
+          role: CAPABILITY_ROLE,
+        }),
         organizationId: null,
         orgAIConfig: config,
         outputSchema: structuredOutputSchema,
@@ -937,11 +974,14 @@ const capabilityProbes = [
     type: "capability",
     name: "prompt-caching",
     timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
-    run: async ({ config }, signal) => {
+    run: async ({ config, provider }, signal) => {
       const output = await generateTanStackTextForRole({
         abortSignal: signal,
         caching: CANARY_CACHING,
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
+        maxOutputTokens: modelRoleMaxOutputTokens({
+          modelId: DEFAULT_MODELS[provider][CAPABILITY_ROLE],
+          role: CAPABILITY_ROLE,
+        }),
         organizationId: null,
         orgAIConfig: config,
         prompt: SYNTHETIC_PROMPT,
@@ -1146,14 +1186,12 @@ const runToolCallRoundTripProbe = async ({
   ) {
     throw new TypeError("Provider returned unexpected canary tool arguments.");
   }
-  if ("optionalNote" in observedInput) {
-    if (observedInput["optionalNote"] === null) {
-      throw new TypeError(
-        "Provider adapter preserved a synthetic null tool argument.",
-      );
-    }
+  // Only the synthetic null is the adapter's defect. An empty string is a
+  // model choice the application schema accepts (maxLength 0), so it is not a
+  // provider-contract finding.
+  if (observedInput["optionalNote"] === null) {
     throw new TypeError(
-      "Provider generated an unexpected optional tool argument.",
+      "Provider adapter preserved a synthetic null tool argument.",
     );
   }
 };
@@ -1412,7 +1450,7 @@ export const errorSummary = (error: unknown, signal: AbortSignal): string => {
 
   if (error instanceof CanaryProviderRunError) {
     if (error.status !== null) {
-      return `provider HTTP ${error.status}`;
+      return withProviderCode(`provider HTTP ${error.status}`, error.code);
     }
     const stage = error.stage.replaceAll("-", " ");
     if (error.code === null) {
@@ -1432,9 +1470,16 @@ export const errorSummary = (error: unknown, signal: AbortSignal): string => {
     return error.message;
   }
 
-  const status = providerStatus(error);
-  return status === null ? "provider error" : `provider HTTP ${status}`;
+  const evidence = providerEvidence(error);
+  const status = providerStatus(evidence);
+  return withProviderCode(
+    status === null ? "provider error" : `provider HTTP ${status}`,
+    safeProviderCode(rawProviderCode(evidence)),
+  );
 };
+
+const withProviderCode = (summary: string, code: string | null): string =>
+  code === null ? summary : `${summary} (${code})`;
 
 const probeLabel = (context: CanaryContext, probe: Probe): string => {
   if (probe.type === "capability") {
