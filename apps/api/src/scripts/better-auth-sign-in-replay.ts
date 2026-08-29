@@ -19,6 +19,7 @@ import { Result, TaggedError } from "better-result";
 import { SQL } from "bun";
 import { drizzle } from "drizzle-orm/bun-sql";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
+import * as v from "valibot";
 
 import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
@@ -34,6 +35,8 @@ const EXIT_CODE = {
 const MICROSOFT_AUTHORITY = "https://login.microsoftonline.com";
 const SIGNING_KEY_ID = "replay-key";
 const MAX_SIGN_IN_ROWS = 1000;
+const MAX_SESSION_ROWS = 1000;
+const DATABASE_CONNECTION_TIMEOUT_SECONDS = 30;
 
 class BetterAuthSignInReplayError extends TaggedError(
   "BetterAuthSignInReplayError",
@@ -50,30 +53,40 @@ class BetterAuthSignInReplayError extends TaggedError(
 
 type ReplayArgs = { oauthBaseUrl: string; sessionSample: number };
 
+const commandArgsSchema = v.strictTuple([
+  v.literal("--oauth-base-url"),
+  v.pipe(
+    v.string(),
+    v.transform(normalizeBetterAuthOAuthBaseUrl),
+    v.string("The OAuth base URL must be an https origin"),
+  ),
+  v.literal("--session-sample"),
+  v.pipe(
+    v.string(),
+    v.decimal(),
+    v.transform(Number),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(MAX_SESSION_ROWS),
+  ),
+]);
+
 export const parseBetterAuthSignInReplayArgs = (
   args: readonly string[],
 ): Result<ReplayArgs, BetterAuthSignInReplayError> => {
-  const oauthBaseUrl =
-    args.at(0) === "--oauth-base-url" && args.at(1)
-      ? normalizeBetterAuthOAuthBaseUrl(args[1] ?? "")
-      : null;
-  const sessionSample = Number(args.at(3));
-  if (
-    oauthBaseUrl === null ||
-    args.at(2) !== "--session-sample" ||
-    !Number.isSafeInteger(sessionSample) ||
-    sessionSample < 0 ||
-    args.length !== 4
-  ) {
+  const parsed = v.safeParse(commandArgsSchema, args);
+  if (!parsed.success) {
     return Result.err(
       new BetterAuthSignInReplayError({
         code: "invalid-arguments",
-        message:
-          "Usage: better-auth-sign-in-replay --oauth-base-url <https-origin> --session-sample <n>",
+        message: `Usage: better-auth-sign-in-replay --oauth-base-url <https-origin> --session-sample <0..${MAX_SESSION_ROWS}>`,
       }),
     );
   }
-  return Result.ok({ oauthBaseUrl, sessionSample });
+  return Result.ok({
+    oauthBaseUrl: parsed.output[1],
+    sessionSample: parsed.output[3],
+  });
 };
 
 type MicrosoftRow = {
@@ -108,10 +121,11 @@ const readRows = async (client: SQL) => {
           FROM session
          WHERE expires_at > now()
          ORDER BY expires_at DESC
-         LIMIT 1000
+         LIMIT ${MAX_SESSION_ROWS}
       `,
       userCount: await client`SELECT count(*)::text AS "count" FROM "user"`,
       accountCount: await client`SELECT count(*)::text AS "count" FROM account`,
+      sessionCount: await client`SELECT count(*)::text AS "count" FROM session`,
     }),
     catch: queryFailed,
   });
@@ -148,17 +162,21 @@ const readRows = async (client: SQL) => {
   }
   const userCount = queried.value.userCount.at(0);
   const accountCount = queried.value.accountCount.at(0);
+  const sessionCount = queried.value.sessionCount.at(0);
   if (
     !isRecord(userCount) ||
     typeof userCount["count"] !== "string" ||
     !isRecord(accountCount) ||
-    typeof accountCount["count"] !== "string"
+    typeof accountCount["count"] !== "string" ||
+    !isRecord(sessionCount) ||
+    typeof sessionCount["count"] !== "string"
   ) {
     return Result.err(queryFailed(undefined));
   }
   return Result.ok({
     accountCount: accountCount["count"],
     microsoft,
+    sessionCount: sessionCount["count"],
     sessions,
     userCount: userCount["count"],
   });
@@ -203,7 +221,12 @@ const run = async (
     );
   }
   const { oauthBaseUrl, sessionSample } = parsed.value;
-  const client = new SQL({ max: 1, url: databaseUrl });
+  const client = new SQL({
+    connectionTimeout: DATABASE_CONNECTION_TIMEOUT_SECONDS,
+    max: 1,
+    url: databaseUrl,
+  });
+  const replayStartedAt = new Date();
   const rows = await readRows(client);
   if (Result.isError(rows)) {
     await client.end();
@@ -244,7 +267,8 @@ const run = async (
     input: string | URL | Request,
     init?: RequestInit,
   ): Promise<Response> => {
-    const request = new Request(input, init);
+    const request =
+      init === undefined ? new Request(input) : new Request(input, init);
     if (
       request.url.startsWith(`${MICROSOFT_AUTHORITY}/`) &&
       request.url.includes("/oauth2/v2.0/token")
@@ -393,7 +417,26 @@ const run = async (
     await resolveNext();
   }
 
-  const after = await readRows(client);
+  // Every replayed sign-in mints a session row; remove them so the database
+  // ends exactly as it started, and prove it by count.
+  const replayedUserIds = rows.value.microsoft.map(({ userId }) => userId);
+  const cleaned = await Result.tryPromise({
+    try: async () =>
+      replayedUserIds.length === 0
+        ? undefined
+        : await client`
+            DELETE FROM session
+             WHERE created_at >= ${replayStartedAt.toISOString()}::timestamptz
+               AND user_id IN ${client(replayedUserIds)}
+          `,
+    catch: (cause) =>
+      new BetterAuthSignInReplayError({
+        cause,
+        code: "database-query-failed",
+        message: "Sign-in replay could not remove its session rows",
+      }),
+  });
+  const after = Result.isError(cleaned) ? cleaned : await readRows(client);
   await client.end();
   if (Result.isError(replayed)) {
     return Result.err(replayed.error);
@@ -403,7 +446,8 @@ const run = async (
   }
   if (
     after.value.userCount !== rows.value.userCount ||
-    after.value.accountCount !== rows.value.accountCount
+    after.value.accountCount !== rows.value.accountCount ||
+    after.value.sessionCount !== rows.value.sessionCount
   ) {
     outcomes.created += 1;
   }

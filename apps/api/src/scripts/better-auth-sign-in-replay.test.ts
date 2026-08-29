@@ -58,6 +58,14 @@ describe("parseBetterAuthSignInReplayArgs", () => {
         "--oauth-base-url",
         "https://api.example.invalid",
         "--session-sample",
+        "1001",
+      ],
+    ],
+    [
+      [
+        "--oauth-base-url",
+        "https://api.example.invalid",
+        "--session-sample",
         "1",
         "extra",
       ],

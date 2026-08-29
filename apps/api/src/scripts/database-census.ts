@@ -28,6 +28,7 @@ const EXIT_CODE = {
 // scan the whole table on the clone.
 const DIGEST_ROW_BOUND = 500_000;
 const STATEMENT_TIMEOUT = "30min";
+const DATABASE_CONNECTION_TIMEOUT_SECONDS = 30;
 
 const censusSchema = v.strictObject({
   formatVersion: v.literal(1),
@@ -214,23 +215,32 @@ const readCensus = async (
       typeof row["childTable"] !== "string" ||
       typeof row["parentTable"] !== "string" ||
       !Array.isArray(row["childColumns"]) ||
-      !Array.isArray(row["parentColumns"])
+      !Array.isArray(row["parentColumns"]) ||
+      row["childColumns"].length === 0 ||
+      row["childColumns"].length !== row["parentColumns"].length
     ) {
       return Result.err(queryFailed(undefined));
     }
     const childColumns = row["childColumns"].map(String);
     const parentColumns = row["parentColumns"].map(String);
+    const columnPairs = childColumns.flatMap((child, index) => {
+      const parent = parentColumns[index];
+      return parent === undefined ? [] : [{ child, parent }];
+    });
+    if (columnPairs.length !== childColumns.length) {
+      return Result.err(queryFailed(undefined));
+    }
     const childTable = row["childTable"];
     const parentTable = row["parentTable"];
     const orphans = await Result.tryPromise({
       try: async () => {
-        const notNull = childColumns
-          .map((column) => `c.${quoteIdentifier(column)} IS NOT NULL`)
+        const notNull = columnPairs
+          .map(({ child }) => `c.${quoteIdentifier(child)} IS NOT NULL`)
           .join(" AND ");
-        const join = childColumns
+        const join = columnPairs
           .map(
-            (column, index) =>
-              `p.${quoteIdentifier(parentColumns[index] ?? column)} = c.${quoteIdentifier(column)}`,
+            ({ child, parent }) =>
+              `p.${quoteIdentifier(parent)} = c.${quoteIdentifier(child)}`,
           )
           .join(" AND ");
         return await sql.unsafe(
@@ -318,7 +328,11 @@ const run = async (
       }),
     );
   }
-  const sql = new SQL({ max: 1, url: databaseUrl });
+  const sql = new SQL({
+    connectionTimeout: DATABASE_CONNECTION_TIMEOUT_SECONDS,
+    max: 1,
+    url: databaseUrl,
+  });
   // One snapshot for the whole census, so counts, digests, and the orphan
   // sweep describe a single database state.
   const census = await Result.tryPromise({
