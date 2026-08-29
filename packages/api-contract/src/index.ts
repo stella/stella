@@ -1,6 +1,9 @@
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 1 as const;
 
+export { AGENDA_ITEM_KINDS, AGENDA_ITEM_SOURCES } from "./agenda";
+export type { AgendaItemKind, AgendaItemSource } from "./agenda";
+
 export { SKILL_RESOURCE_PATH_PATTERN } from "./agent-skills";
 export { AI_ERROR_KINDS } from "./ai-errors";
 export type { AIErrorKind } from "./ai-errors";
@@ -30,6 +33,17 @@ export {
   CHAT_TOOL_SCOPE,
   CHAT_TURN_INTENT,
 } from "./chat";
+export {
+  BUILT_IN_CHAT_TOOL_POLICY_KINDS,
+  CHAT_TOOL_POLICY_KIND,
+  CHAT_TOOL_POLICY_REQUIRES_APPROVAL,
+} from "./chat-tool-policy";
+export type {
+  ApprovalRequiredBuiltInChatToolName,
+  BuiltInChatToolPolicyKindByName,
+  ChatToolPolicyKind,
+  NeedsApprovalPolicyKind,
+} from "./chat-tool-policy";
 export type {
   ChatContinuation,
   ChatInterruptResolution,
@@ -228,11 +242,13 @@ export {
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
+  MCP_OAUTH_PROTOCOL_SCOPES,
   MCP_WRITE_ONLY_RESOURCE_SCOPES,
 } from "./mcp";
 export type {
   McpAnonymizedResourceScope,
   McpDefaultResourceScope,
+  McpOAuthScope,
   McpWriteOnlyResourceScope,
 } from "./mcp";
 export { OCR_EXPORT_STATUSES } from "./ocr-export";
@@ -252,11 +268,21 @@ export {
   resourcesChangedRealtimeEvent,
 } from "./realtime-events";
 export { encodeRfc3986Component } from "./rfc3986";
+export {
+  SAVED_SEARCH_CRITERIA_VERSION,
+  SAVED_SEARCH_SORTS,
+} from "./saved-search";
+export type {
+  SavedSearchCriteria,
+  SavedSearchSort,
+  SavedSearchTimeFilter,
+} from "./saved-search";
+export type { TemplateRecipeDefinition } from "./template-recipe";
 // `toSafeId` is deliberately absent from this barrel: it stamps the SafeId
 // brand without any ownership check, so it stays behind the explicit
 // '@stll/api-contract/safe-id' entry point that each app re-exports once.
 export { isSafeIdValue } from "./safe-id";
-export type { SafeId } from "./safe-id";
+export type { SafeId, SafeIdType } from "./safe-id";
 export { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "./workspace-contacts";
 export type { ContactType, WorkspaceContactRole } from "./workspace-contacts";
 export {

@@ -1,0 +1,482 @@
+[
+  {
+    "kind": "manifest-dependency",
+    "source": "apps/legal-atlas-runner/package.json",
+    "specifier": "@stll/api",
+    "target": "apps/api"
+  },
+  {
+    "kind": "manifest-dependency",
+    "source": "apps/web/package.json",
+    "specifier": "@stll/api",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/db.ts",
+    "specifier": "@/api/db/root",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/db.ts",
+    "specifier": "@/api/db/safe-db",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/db.ts",
+    "specifier": "@/api/db/schema",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/db.ts",
+    "specifier": "@/api/db/scoped",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/db.ts",
+    "specifier": "@/api/handlers/case-law/court-weights",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/db.ts",
+    "specifier": "@/api/lib/with-timeout",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
+    "specifier": "@/api/db/schema",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
+    "specifier": "@/api/handlers/case-law/corpus-index",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
+    "specifier": "@/api/handlers/legislation/corpus-index",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
+    "specifier": "@/api/lib/analytics/capture",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
+    "specifier": "@/api/lib/branded-types",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
+    "specifier": "@/api/lib/db/timestamp-cas",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
+    "specifier": "@/api/lib/errors/tagged-errors",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
+    "specifier": "@/api/lib/legal-search/corpus-family",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
+    "specifier": "@/api/lib/legal-search/corpus-storage",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
+    "specifier": "@/api/lib/legal-search/document-types",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
+    "specifier": "@/api/lib/s3",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/db/schema",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/env-base",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/handlers/case-law/citation-authority",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/handlers/case-law/citation-resolution",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/handlers/case-law/consts",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/handlers/case-law/corpus-index",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/handlers/case-law/ingestion/adapters/adapter-registry",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/handlers/case-law/ingestion/pipeline",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/handlers/case-law/ingestion/reconciliation-engine",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/handlers/case-law/ingestion/source-totals",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/handlers/legislation/corpus-index",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/handlers/legislation/search-index",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/lib/analytics/capture",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/lib/corpus-index/census",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/lib/errors/tagged-errors",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/lib/errors/utils",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/lib/legal-search/case-law-search-index",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/lib/legal-search/case-law-source-ingestion-lease",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/lib/legal-search/corpus-family",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/lib/legal-search/sk-document-backfill",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/lib/legal-search/sk-document-queue",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/lib/limits",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/lib/observability/logger",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
+    "specifier": "@/api/lib/s3",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/citation-resolution-drain.test.ts",
+    "specifier": "@/api/handlers/case-law/citation-resolution-status",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/citation-resolution-drain.test.ts",
+    "specifier": "@/api/handlers/case-law/citation-resolution",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/citation-resolution-drain.ts",
+    "specifier": "@/api/handlers/case-law/citation-resolution-status",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/citation-resolution-drain.ts",
+    "specifier": "@/api/handlers/case-law/citation-resolution",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/citation-resolution-drain.ts",
+    "specifier": "@/api/lib/pg-error",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/sk-document-drain.test.ts",
+    "specifier": "@/api/lib/branded-types",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/sk-document-drain.test.ts",
+    "specifier": "@/api/lib/case-law/document-ast",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/sk-document-drain.test.ts",
+    "specifier": "@/api/lib/legal-search/sk-document-backfill",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/sk-document-drain.test.ts",
+    "specifier": "@/api/lib/legal-search/sk-document-queue",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/sk-document-drain.ts",
+    "specifier": "@/api/lib/legal-search/sk-document-backfill",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/sk-document-drain.ts",
+    "specifier": "@/api/lib/legal-search/sk-document-queue",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/source-total-outcomes.test.ts",
+    "specifier": "@/api/db/schema",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/source-total-outcomes.test.ts",
+    "specifier": "@/api/handlers/case-law/ingestion/source-totals",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/source-total-outcomes.test.ts",
+    "specifier": "@/api/lib/legal-search/ingestion-constants",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/source-total-outcomes.test.ts",
+    "specifier": "@/api/lib/legal-search/ingestion-types",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/source-total-outcomes.ts",
+    "specifier": "@/api/handlers/case-law/ingestion/source-totals",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/source-total-outcomes.ts",
+    "specifier": "@/api/lib/legal-search/ingestion-types",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/source-total-poll.test.ts",
+    "specifier": "@/api/db/schema",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/source-total-poll.test.ts",
+    "specifier": "@/api/handlers/case-law/ingestion/source-totals",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/source-total-poll.test.ts",
+    "specifier": "@/api/lib/legal-search/ingestion-constants",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/source-total-poll.test.ts",
+    "specifier": "@/api/lib/legal-search/ingestion-types",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/source-total-poll.ts",
+    "specifier": "@/api/handlers/case-law/ingestion/source-totals",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/source-total-poll.ts",
+    "specifier": "@/api/lib/errors/error-tag",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/source-total-poll.ts",
+    "specifier": "@/api/lib/legal-search/ingestion-types",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/transient-connection-error.test.ts",
+    "specifier": "@/api/lib/errors/tagged-errors",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/transient-connection-error.test.ts",
+    "specifier": "@/api/lib/pg-error",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/transient-connection-error.ts",
+    "specifier": "@/api/lib/errors/tagged-errors",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/runners/transient-connection-error.ts",
+    "specifier": "@/api/lib/pg-error",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/playground/src/main.tsx",
+    "specifier": "../../web/src/i18n/langs/en.json",
+    "target": "apps/web"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/web/src/lib/api-contract.ts",
+    "specifier": "@/api/handlers/chat/types",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
+    "source": "apps/web/src/lib/eden-client.ts",
+    "specifier": "@stll/api/eden-contract",
+    "target": "apps/api"
+  },
+  {
+    "kind": "tsconfig-include",
+    "source": "apps/legal-atlas-runner/tsconfig.json",
+    "specifier": "../api/src",
+    "target": "apps/api"
+  },
+  {
+    "kind": "tsconfig-include",
+    "source": "packages/catalogue/scripts/tsconfig.json",
+    "specifier": "../../../apps/web/scripts/**/*.ts",
+    "target": "apps/web"
+  },
+  {
+    "kind": "tsconfig-include",
+    "source": "packages/skills/scripts/tsconfig.json",
+    "specifier": "../../../apps/web/scripts/**/*.ts",
+    "target": "apps/web"
+  },
+  {
+    "kind": "tsconfig-include",
+    "source": "packages/template-packs/scripts/tsconfig.json",
+    "specifier": "../../../apps/web/scripts/**/*.ts",
+    "target": "apps/web"
+  },
+  {
+    "kind": "tsconfig-path",
+    "source": "apps/legal-atlas-runner/tsconfig.json",
+    "specifier": "@/api/* -> ../api/src/*",
+    "target": "apps/api"
+  },
+  {
+    "kind": "tsconfig-path",
+    "source": "apps/web/tsconfig.json",
+    "specifier": "@/api/* -> ../api/src/*",
+    "target": "apps/api"
+  }
+]

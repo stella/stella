@@ -3,7 +3,6 @@ import { lazy, Suspense, useId, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import type { GlobalSearchHit } from "@stll/api/types";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -22,6 +21,7 @@ import {
   SEARCH_PREVIEW_CONTENT_CLASS_NAME,
 } from "@/components/search-dialog.shared";
 import { useFormatter } from "@/i18n/formatting-context";
+import type { GlobalSearchHit } from "@/lib/api-contract";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import {

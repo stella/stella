@@ -1,9 +1,9 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
-import type { EntityKind, GlobalSearchResultType } from "@stll/api/types";
 import { DAY_IN_MS } from "@stll/time";
 
 import { api } from "@/lib/api";
+import type { EntityKind, GlobalSearchResultType } from "@/lib/api-contract";
 import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";

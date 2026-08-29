@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import type { TemplateRecipeDefinition as ContractTemplateRecipeDefinition } from "@stll/api-contract";
 import { isFieldPath } from "@stll/template-conditions";
 
 import {
@@ -105,6 +106,15 @@ export const templateRecipeDefinitionSchema = v.strictObject({
   loop: v.optional(v.strictObject({ path: fieldPathSchema })),
 });
 
-export type TemplateRecipeDefinition = v.InferOutput<
+type SchemaTemplateRecipeDefinition = v.InferOutput<
   typeof templateRecipeDefinitionSchema
 >;
+
+true satisfies SchemaTemplateRecipeDefinition extends ContractTemplateRecipeDefinition
+  ? true
+  : never;
+true satisfies ContractTemplateRecipeDefinition extends SchemaTemplateRecipeDefinition
+  ? true
+  : never;
+
+export type TemplateRecipeDefinition = ContractTemplateRecipeDefinition;

@@ -18,7 +18,6 @@ import {
 import { useFormatter, useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import type { LegalListSourceLocator } from "@stll/api/types";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import {
@@ -46,6 +45,7 @@ import type { ListItemType } from "@/components/workspaces/tasks/task-detail-con
 import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import type { LegalListSourceLocator } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { ensureRouteQueryData } from "@/lib/react-query";

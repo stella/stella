@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { OptionColor } from "@stll/api/types";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -50,6 +49,7 @@ import { InlineEdit } from "@/components/inline-edit";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import { useFormatter } from "@/i18n/formatting-context";
+import type { OptionColor } from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   EntityKind,

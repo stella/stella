@@ -367,6 +367,7 @@ export const boundingBoxesSchema = t.Object({
 });
 
 export type BoundingBoxes = Static<typeof boundingBoxesSchema>;
+export type BoundingBox = BoundingBoxes["boxes"][number];
 
 // -- Billing schemas --
 

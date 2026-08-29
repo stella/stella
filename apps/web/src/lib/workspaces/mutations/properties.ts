@@ -1,9 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import type { PropertyContentType } from "@stll/api/types";
-
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import type { PropertyContentType } from "@/lib/api-contract";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type {

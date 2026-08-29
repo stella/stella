@@ -1,7 +1,6 @@
 import { SquareMinusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { OptionColor } from "@stll/api/types";
 import {
   Select,
   SelectItem,
@@ -11,6 +10,7 @@ import {
 } from "@stll/ui/select";
 
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
+import type { OptionColor } from "@/lib/api-contract";
 import type { WorkspacePropertyOption } from "@/lib/types";
 
 const ColorIcon = ({ color }: { color: OptionColor | null }) => {

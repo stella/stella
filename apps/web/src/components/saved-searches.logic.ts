@@ -1,5 +1,3 @@
-import type { SavedSearchCriteria } from "@stll/api/types";
-
 import {
   resolveUpdatedFrom,
   resolveUpdatedTo,
@@ -8,6 +6,7 @@ import type {
   SearchFilters,
   TimeFilter,
 } from "@/components/search-filters.logic";
+import type { SavedSearchCriteria } from "@/lib/api-contract";
 import { hasSearchQueryOrSelectiveFilter } from "@/lib/search";
 
 type SavedSearchTime = NonNullable<SavedSearchCriteria["time"]>;

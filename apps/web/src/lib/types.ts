@@ -5,6 +5,12 @@ import type {
 } from "@stll/api-contract";
 import type { ListItemType } from "@stll/api-contract/entity-options";
 import type {
+  OptionColor,
+  WorkspaceFieldContent,
+} from "@stll/workspace-ui/types";
+
+import { PDF_MIME_TYPE } from "@/consts";
+import type {
   BoundingBox,
   AgendaItemKind,
   AgendaItemSource,
@@ -13,13 +19,7 @@ import type {
   ViewLayout,
   ViewLayoutType,
   SafeId,
-} from "@stll/api/types";
-import type {
-  OptionColor,
-  WorkspaceFieldContent,
-} from "@stll/workspace-ui/types";
-
-import { PDF_MIME_TYPE } from "@/consts";
+} from "@/lib/api-contract";
 import {
   DOCX_MIME,
   getNativeOfficeViewerFormat,
@@ -38,7 +38,7 @@ export type {
   ViewLayout,
   ViewLayoutType,
   ViewTemplateProperty,
-} from "@stll/api/types";
+} from "@/lib/api-contract";
 
 export type RouterToPath = FileRouteTypes["to"];
 export type RouterFullPath = FileRouteTypes["fullPaths"];

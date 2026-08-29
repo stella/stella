@@ -1,6 +1,5 @@
-import type { ChatSourceDocument } from "@stll/api/types";
-
 import type { ExternalSourceReference } from "@/components/chat/external-source-store";
+import type { ChatSourceDocument } from "@/lib/api-contract";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 export type SourceDocumentEntry = {

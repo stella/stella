@@ -7,7 +7,7 @@ import type {
   JustificationBlock,
   JustificationContent,
 } from "@/api/db/schema";
-import type { FieldContent } from "@/api/db/schema-validators";
+import type { BoundingBox, FieldContent } from "@/api/db/schema-validators";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { BBoxItem } from "@/api/lib/bbox/ai-prompts";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -15,7 +15,6 @@ import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
-import type { BoundingBox } from "@/api/types";
 
 export type GenerateBBoxesProps = {
   abortSignal: AbortSignal;

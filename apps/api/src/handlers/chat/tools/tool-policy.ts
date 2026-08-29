@@ -1,17 +1,16 @@
+import {
+  CHAT_TOOL_POLICY_KIND,
+  CHAT_TOOL_POLICY_REQUIRES_APPROVAL,
+  type ChatToolPolicyKind,
+  type NeedsApprovalPolicyKind,
+} from "@stll/api-contract";
+
 import { captureError } from "@/api/lib/analytics/capture";
 import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 
-export const CHAT_TOOL_POLICY_KIND = {
-  external: "external",
-  internal: "internal",
-  mutation: "mutation",
-  publicOfficial: "public_official",
-  publicUnofficial: "public_unofficial",
-} as const;
-
-export type ChatToolPolicyKind =
-  (typeof CHAT_TOOL_POLICY_KIND)[keyof typeof CHAT_TOOL_POLICY_KIND];
+export { CHAT_TOOL_POLICY_KIND };
+export type { ChatToolPolicyKind, NeedsApprovalPolicyKind };
 
 export type ChatToolPolicy = {
   kind: ChatToolPolicyKind;
@@ -22,17 +21,20 @@ export type ChatToolPolicy = {
 const CHAT_TOOL_POLICIES = {
   [CHAT_TOOL_POLICY_KIND.external]: {
     kind: CHAT_TOOL_POLICY_KIND.external,
-    needsApproval: true,
+    needsApproval:
+      CHAT_TOOL_POLICY_REQUIRES_APPROVAL[CHAT_TOOL_POLICY_KIND.external],
     requiresAnonymization: false,
   },
   [CHAT_TOOL_POLICY_KIND.internal]: {
     kind: CHAT_TOOL_POLICY_KIND.internal,
-    needsApproval: false,
+    needsApproval:
+      CHAT_TOOL_POLICY_REQUIRES_APPROVAL[CHAT_TOOL_POLICY_KIND.internal],
     requiresAnonymization: false,
   },
   [CHAT_TOOL_POLICY_KIND.mutation]: {
     kind: CHAT_TOOL_POLICY_KIND.mutation,
-    needsApproval: true,
+    needsApproval:
+      CHAT_TOOL_POLICY_REQUIRES_APPROVAL[CHAT_TOOL_POLICY_KIND.mutation],
     requiresAnonymization: false,
   },
   /**
@@ -44,7 +46,8 @@ const CHAT_TOOL_POLICIES = {
    */
   [CHAT_TOOL_POLICY_KIND.publicOfficial]: {
     kind: CHAT_TOOL_POLICY_KIND.publicOfficial,
-    needsApproval: false,
+    needsApproval:
+      CHAT_TOOL_POLICY_REQUIRES_APPROVAL[CHAT_TOOL_POLICY_KIND.publicOfficial],
     requiresAnonymization: false,
   },
   /**
@@ -54,22 +57,13 @@ const CHAT_TOOL_POLICIES = {
    */
   [CHAT_TOOL_POLICY_KIND.publicUnofficial]: {
     kind: CHAT_TOOL_POLICY_KIND.publicUnofficial,
-    needsApproval: true,
+    needsApproval:
+      CHAT_TOOL_POLICY_REQUIRES_APPROVAL[
+        CHAT_TOOL_POLICY_KIND.publicUnofficial
+      ],
     requiresAnonymization: false,
   },
 } as const satisfies Record<ChatToolPolicyKind, ChatToolPolicy>;
-
-/**
- * Policy kinds that gate a tool call on user approval, derived from
- * `CHAT_TOOL_POLICIES["needsApproval"]` rather than hand-listed — a kind
- * whose `needsApproval` flips silently carries every tool mapped to it
- * along with it.
- */
-export type NeedsApprovalPolicyKind = {
-  [K in ChatToolPolicyKind]: (typeof CHAT_TOOL_POLICIES)[K]["needsApproval"] extends true
-    ? K
-    : never;
-}[ChatToolPolicyKind];
 
 const MISSING_CHAT_TOOL_POLICY = Symbol("missing-chat-tool-policy");
 const chatToolPolicies = new WeakMap<

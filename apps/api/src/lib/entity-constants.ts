@@ -1,12 +1,21 @@
+import type { AgendaItemKind, AgendaItemSource } from "@stll/api-contract";
+
 import type { ConstantMap } from "@/api/lib/constant-map";
 
 export {
+  AGENDA_ITEM_KINDS,
+  AGENDA_ITEM_SOURCES,
   ENTITY_PRIORITIES,
   ENTITY_PRIORITY,
   TASK_STATUS,
   TASK_STATUSES,
 } from "@stll/api-contract";
-export type { EntityPriority, TaskStatus } from "@stll/api-contract";
+export type {
+  AgendaItemKind,
+  AgendaItemSource,
+  EntityPriority,
+  TaskStatus,
+} from "@stll/api-contract";
 
 /**
  * The agenda enums, declared once.
@@ -17,27 +26,6 @@ export type { EntityPriority, TaskStatus } from "@stll/api-contract";
  * `text({ enum })` only narrows a column to a literal union for a readonly
  * tuple.
  */
-export const AGENDA_ITEM_KINDS = [
-  "task",
-  "deadline",
-  "meeting",
-  "hearing",
-  "event",
-] as const;
-
-export type AgendaItemKind = (typeof AGENDA_ITEM_KINDS)[number];
-
-export const AGENDA_ITEM_SOURCES = [
-  "manual",
-  "infosoud",
-  "calendar",
-  "email",
-  "import",
-  "api",
-] as const;
-
-export type AgendaItemSource = (typeof AGENDA_ITEM_SOURCES)[number];
-
 export const AGENDA_AVAILABILITIES = [
   "free",
   "tentative",

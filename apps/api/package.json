@@ -7,7 +7,7 @@
     "#quickjs-release-asyncify.wasm": "@jitl/quickjs-wasmfile-release-asyncify/wasm"
   },
   "exports": {
-    "./types": "./src/types.ts"
+    "./eden-contract": "./src/eden-contract.ts"
   },
   "scripts": {
     "build": "bun run build:mcp-apps",
