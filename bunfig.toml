@@ -18,7 +18,6 @@ minimumReleaseAgeExcludes = [
   # @vscode/markdown-editor ships near-daily pre-release builds; the hybrid
   # markdown editor pins the current one. Remove this exception once the normal
   # quarantine admits it.
-  "@vscode/markdown-editor", # quarantine-expires: 2026-08-29T15:21:22.000Z
   # Keep Astro's framework and Markdown packages on one patch line while
   # verifying their Vite 8.2/Rolldown 1.2 compatibility. Remove these
   # exceptions once the normal quarantine admits them.
