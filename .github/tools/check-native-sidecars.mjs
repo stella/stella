@@ -201,11 +201,9 @@ function assertReleaseMatrix(sidecar) {
   if (!releaseWorkflow.includes(matrixEntry)) {
     fail(`release.yml is missing matrix entry ${matrixEntry}`);
   }
-  const artifact = `npm-tarball-${sidecar.packageJson.name
-    .replace(/^@/, "")
-    .replaceAll("/", "-")}`;
-  if (!releaseWorkflow.includes(`- ${artifact}`)) {
-    fail(`release.yml publish-native matrix is missing ${artifact}`);
+  const packageFile = `packages/${sidecar.directory}/package.json`;
+  if (!releaseWorkflow.includes(`        ${packageFile}`)) {
+    fail(`release.yml runtime finalizer is missing ${packageFile}`);
   }
 }
 

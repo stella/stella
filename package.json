@@ -34,7 +34,7 @@
     "check:v1-native": "cd packages/anonymize && bun run check:v1-native",
     "check:v1-native:full": "cd packages/anonymize && bun run check:v1-native:full",
     "sync:version": "node .github/tools/sync-runtime-version.mjs",
-    "check:version": "node .github/tools/sync-runtime-version.mjs --check && node .github/tools/test-sync-runtime-version.mjs && node .github/tools/check-native-sidecars.mjs && bun run check:licenses && node .github/tools/check-turbo-build-environment.mjs && bun test scripts/bun-lock-workspace-versions.test.ts",
+    "check:version": "node .github/tools/sync-runtime-version.mjs --check && node .github/tools/test-sync-runtime-version.mjs && node .github/tools/check-native-sidecars.mjs && node --test .github/tools/check-release-privilege-boundaries.test.mjs .github/tools/check-python-release-wheels.test.mjs && bun run check:licenses && node .github/tools/check-turbo-build-environment.mjs && bun test scripts/bun-lock-workspace-versions.test.ts",
     "check:licenses": "node .github/tools/check-license-files.mjs",
     "changeset": "changeset",
     "changeset:version": "changeset version && node scripts/sync-changeset-version.mjs && bun scripts/check-lockfile-workspace-versions.ts --write && bun install --frozen-lockfile",

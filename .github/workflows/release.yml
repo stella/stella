@@ -30,8 +30,11 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+permissions: {}
+
 jobs:
   verify:
+    name: Verify
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,10 +42,12 @@ jobs:
       dist_tag: ${{ steps.dist-tag.outputs.dist_tag }}
       publish_data: ${{ steps.release-scope.outputs.publish_data }}
       publish_runtime: ${{ steps.release-scope.outputs.publish_runtime }}
+      version: ${{ steps.dist-tag.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Classify release scope
         id: release-scope
@@ -115,6 +120,7 @@ jobs:
           fi
 
           echo "dist_tag=$dist_tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
@@ -154,7 +160,7 @@ jobs:
 
       - name: Install uv
         run: |
-          python3 -m pip install --user "uv==${{ env.UV_VERSION }}"
+          python3 -m pip install --user "uv==${UV_VERSION}"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Python typecheck
@@ -197,6 +203,8 @@ jobs:
             runner: windows-2025
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
@@ -204,7 +212,9 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Install npm for packing
-        run: npm install --global "npm@${{ env.NPM_VERSION }}"
+        # Packing uses this exact CLI with lifecycle scripts disabled and no OIDC.
+        # zizmor: ignore[adhoc-packages]
+        run: npm install --global --ignore-scripts "npm@${NPM_VERSION}"
 
       - name: Verify Bun workflow pin
         run: node .github/tools/check-bun-workflows.mjs
@@ -230,7 +240,9 @@ jobs:
         run: bun run --cwd packages/anonymize smoke:dist
 
       - name: Enforce native install footprint
-        run: node packages/anonymize/scripts/check-native-install-footprint.mjs "${{ matrix.package }}"
+        env:
+          NATIVE_PACKAGE: ${{ matrix.package }}
+        run: node packages/anonymize/scripts/check-native-install-footprint.mjs "$NATIVE_PACKAGE"
 
       - name: Read package metadata
         id: package
@@ -284,63 +296,13 @@ jobs:
           path: ${{ steps.pack.outputs.tarball }}
           if-no-files-found: error
 
-  publish-native:
-    needs: [verify, pack-native]
+  pack-runtime:
+    name: Pack ${{ matrix.package }}
+    needs: verify
     if: needs.verify.outputs.publish_runtime == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
-      attestations: write
-    strategy:
-      fail-fast: false
-      matrix:
-        artifact:
-          - npm-tarball-stll-anonymize-linux-x64-gnu
-          - npm-tarball-stll-anonymize-linux-arm64-gnu
-          - npm-tarball-stll-anonymize-darwin-x64
-          - npm-tarball-stll-anonymize-darwin-arm64
-          - npm-tarball-stll-anonymize-win32-x64-msvc
-    steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: ${{ matrix.artifact }}
-          path: native-tarball
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
-        with:
-          node-version: "22"
-          registry-url: https://registry.npmjs.org
-
-      - name: Install npm for trusted publishing
-        run: npm install --global "npm@${{ env.NPM_VERSION }}"
-
-      - name: Find package tarball
-        id: tarball
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          tarballs=(native-tarball/*.tgz)
-          if [[ "${#tarballs[@]}" -ne 1 ]]; then
-            echo "::error::Expected one native tarball for ${{ matrix.artifact }}, found ${#tarballs[@]}"
-            exit 1
-          fi
-          echo "path=${tarballs[0]}" >> "$GITHUB_OUTPUT"
-
-      - name: Publish package
-        uses: stella/.github/.github/actions/npm-publish-hardened@48aacae31829ce15216a6b766b03a92fd2e84da3
-        with:
-          tarball: ${{ steps.tarball.outputs.path }}
-          tag: ${{ needs.verify.outputs.dist_tag }}
-
-  publish:
-    needs: [verify, publish-native]
-    if: needs.verify.outputs.publish_runtime == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -353,14 +315,18 @@ jobs:
           - packages/mcp
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: "22"
           registry-url: https://registry.npmjs.org
 
-      - name: Install npm for trusted publishing
-        run: npm install --global "npm@${{ env.NPM_VERSION }}"
+      - name: Install npm for packing
+        # Packing uses this exact CLI with lifecycle scripts disabled and no OIDC.
+        # zizmor: ignore[adhoc-packages]
+        run: npm install --global --ignore-scripts "npm@${NPM_VERSION}"
 
       - name: Verify Bun workflow pin
         run: node .github/tools/check-bun-workflows.mjs
@@ -427,13 +393,8 @@ jobs:
           path: ${{ steps.pack.outputs.tarball }}
           if-no-files-found: error
 
-      - name: Publish package
-        uses: stella/.github/.github/actions/npm-publish-hardened@48aacae31829ce15216a6b766b03a92fd2e84da3
-        with:
-          tarball: ${{ steps.pack.outputs.tarball }}
-          tag: ${{ needs.verify.outputs.dist_tag }}
-
   pack-data:
+    name: Pack data package
     needs: verify
     if: needs.verify.outputs.publish_data == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
     runs-on: ubuntu-latest
@@ -451,7 +412,9 @@ jobs:
           node-version: "22"
 
       - name: Install npm for packing
-        run: npm install --global --ignore-scripts "npm@${{ env.NPM_VERSION }}"
+        # Packing uses this exact CLI with lifecycle scripts disabled and no OIDC.
+        # zizmor: ignore[adhoc-packages]
+        run: npm install --global --ignore-scripts "npm@${NPM_VERSION}"
 
       - name: Verify Bun workflow pin
         run: node .github/tools/check-bun-workflows.mjs
@@ -525,13 +488,13 @@ jobs:
           if-no-files-found: error
 
   publish-data:
+    name: Publish data package
     needs: [verify, pack-data]
     if: needs.verify.outputs.publish_data == 'true' && needs.pack-data.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
-      attestations: write
+      id-token: write # Required only for npm trusted publishing.
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -544,7 +507,9 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Install npm for trusted publishing
-        run: npm install --global --ignore-scripts "npm@${{ env.NPM_VERSION }}"
+        # Trusted publishing needs npm 11.5.1 or newer; lifecycle scripts stay disabled.
+        # zizmor: ignore[adhoc-packages]
+        run: npm install --global --ignore-scripts "npm@${NPM_VERSION}"
 
       - name: Find data package tarball
         id: tarball
@@ -597,6 +562,8 @@ jobs:
             runner: windows-2025
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
@@ -671,17 +638,19 @@ jobs:
       - name: Install uv
         if: matrix.check_wheel
         run: |
-          python3 -m pip install --user "uv==${{ env.UV_VERSION }}"
+          python3 -m pip install --user "uv==${UV_VERSION}"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Verify wheel packlist and smoke test
         if: matrix.check_wheel
+        env:
+          WHEEL_TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
           shopt -s nullglob
           wheels=(dist/*.whl)
           if [[ "${#wheels[@]}" -ne 1 ]]; then
-            echo "::error::Expected one wheel for ${{ matrix.target }}, found ${#wheels[@]}"
+            echo "::error::Expected one wheel for ${WHEEL_TARGET}, found ${#wheels[@]}"
             exit 1
           fi
           ANONYMIZE_PYTHON_WHEEL_PATH="${wheels[0]}" bun run python:wheel
@@ -694,41 +663,163 @@ jobs:
           if-no-files-found: error
 
   publish-pypi:
+    name: Publish Python wheels
     needs: [verify, build-wheels]
     if: needs.verify.outputs.publish_runtime == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
     runs-on: ubuntu-latest
     permissions:
       # Trusted Publishing (OIDC): no PyPI API token is stored in the repo.
-      id-token: write
+      id-token: write # Required only for PyPI trusted publishing.
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: python-wheel-*
-          path: dist
-          merge-multiple: true
+          path: wheel-artifacts
 
-      - name: Check wheels are present
+      - name: Validate Python wheel artifacts
+        env:
+          EXPECTED_VERSION: ${{ needs.verify.outputs.version }}
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          wheels=(dist/*.whl)
-          if [[ "${#wheels[@]}" -eq 0 ]]; then
-            echo "::error::No wheels found to publish to PyPI"
-            exit 1
-          fi
-          printf 'Publishing %d wheel(s):\n' "${#wheels[@]}"
-          printf '  %s\n' "${wheels[@]}"
+          python3 - <<'PY'
+          from email.parser import BytesParser
+          from email.policy import default
+          from pathlib import Path
+          from zipfile import ZipFile
+          import os
+          import re
+          import shutil
+
+          project_name = "stella-anonymize-core"
+          distribution_name = "stella_anonymize_core"
+          version_match = re.fullmatch(
+              r"([0-9]+\.[0-9]+\.[0-9]+)(?:-(alpha|beta|rc)\.([0-9]+))?",
+              os.environ["EXPECTED_VERSION"],
+          )
+          if version_match is None:
+              raise SystemExit("::error::EXPECTED_VERSION is not a supported release version")
+
+          base_version, prerelease, prerelease_number = version_match.groups()
+          prerelease_label = {"alpha": "a", "beta": "b", "rc": "rc"}
+          wheel_version = base_version
+          if prerelease is not None:
+              wheel_version += f"{prerelease_label[prerelease]}{prerelease_number}"
+
+          expected = {
+              "python-wheel-x86_64-unknown-linux-gnu": (
+                  f"{distribution_name}-{wheel_version}-cp311-abi3-"
+                  "manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+                  {
+                      "cp311-abi3-manylinux_2_17_x86_64",
+                      "cp311-abi3-manylinux2014_x86_64",
+                  },
+              ),
+              "python-wheel-aarch64-unknown-linux-gnu": (
+                  f"{distribution_name}-{wheel_version}-cp311-abi3-"
+                  "manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+                  {
+                      "cp311-abi3-manylinux_2_17_aarch64",
+                      "cp311-abi3-manylinux2014_aarch64",
+                  },
+              ),
+              "python-wheel-x86_64-apple-darwin": (
+                  f"{distribution_name}-{wheel_version}-cp311-abi3-"
+                  "macosx_10_12_x86_64.whl",
+                  {"cp311-abi3-macosx_10_12_x86_64"},
+              ),
+              "python-wheel-aarch64-apple-darwin": (
+                  f"{distribution_name}-{wheel_version}-cp311-abi3-"
+                  "macosx_11_0_arm64.whl",
+                  {"cp311-abi3-macosx_11_0_arm64"},
+              ),
+              "python-wheel-x86_64-pc-windows-msvc": (
+                  f"{distribution_name}-{wheel_version}-cp311-abi3-win_amd64.whl",
+                  {"cp311-abi3-win_amd64"},
+              ),
+          }
+
+          artifact_root = Path("wheel-artifacts")
+          actual_artifacts = {path.name for path in artifact_root.iterdir()}
+          if actual_artifacts != set(expected):
+              raise SystemExit(
+                  "::error::Unexpected Python wheel artifact set: "
+                  f"{sorted(actual_artifacts)}"
+              )
+
+          publish_dir = Path("dist")
+          publish_dir.mkdir()
+          max_metadata_bytes = 1_048_576
+
+          for artifact_name, (filename, expected_tags) in expected.items():
+              artifact_dir = artifact_root / artifact_name
+              if not artifact_dir.is_dir() or artifact_dir.is_symlink():
+                  raise SystemExit(f"::error::{artifact_dir} must be a directory")
+              entries = list(artifact_dir.iterdir())
+              if len(entries) != 1 or entries[0].name != filename:
+                  raise SystemExit(
+                      f"::error::{artifact_name} must contain only {filename}"
+                  )
+
+              wheel_path = entries[0]
+              if not wheel_path.is_file() or wheel_path.is_symlink():
+                  raise SystemExit(f"::error::{wheel_path} must be a regular file")
+
+              dist_info = f"{distribution_name}-{wheel_version}.dist-info"
+              metadata_path = f"{dist_info}/METADATA"
+              wheel_metadata_path = f"{dist_info}/WHEEL"
+              with ZipFile(wheel_path) as wheel:
+                  names = wheel.namelist()
+                  for member in (metadata_path, wheel_metadata_path):
+                      if names.count(member) != 1:
+                          raise SystemExit(
+                              f"::error::{wheel_path} must contain exactly one {member}"
+                          )
+                      if wheel.getinfo(member).file_size > max_metadata_bytes:
+                          raise SystemExit(f"::error::{wheel_path} metadata is too large")
+
+                  metadata = BytesParser(policy=default).parsebytes(
+                      wheel.read(metadata_path)
+                  )
+                  if metadata["Name"] != project_name:
+                      raise SystemExit(
+                          f"::error::{wheel_path} has unexpected project name "
+                          f"{metadata['Name']}"
+                      )
+                  if metadata["Version"] != wheel_version:
+                      raise SystemExit(
+                          f"::error::{wheel_path} has unexpected version "
+                          f"{metadata['Version']}"
+                      )
+
+                  wheel_metadata = BytesParser(policy=default).parsebytes(
+                      wheel.read(wheel_metadata_path)
+                  )
+                  actual_tags = wheel_metadata.get_all("Tag", [])
+                  if (
+                      len(actual_tags) != len(expected_tags)
+                      or set(actual_tags) != expected_tags
+                  ):
+                      raise SystemExit(
+                          f"::error::{wheel_path} has unexpected wheel tags "
+                          f"{sorted(actual_tags)}"
+                      )
+
+              shutil.copyfile(wheel_path, publish_dir / filename)
+
+          print(f"Validated {len(expected)} Python wheels for {project_name}@{wheel_version}")
+          PY
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: dist
+          skip-existing: true
 
   github-release:
-    name: Finalize release
-    needs: [verify, publish-native, publish, publish-pypi]
-    if: needs.verify.outputs.publish_runtime == 'true' && needs.publish-native.result == 'success' && needs.publish.result == 'success' && needs.publish-pypi.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
-    uses: stella/.github/.github/workflows/npm-version-finalize.yml@7198083e27bdd963cacc0b7d70ca54fe3ec83393
+    name: Publish and finalize runtime release
+    needs: [verify, pack-native, pack-runtime, publish-pypi]
+    if: needs.verify.outputs.publish_runtime == 'true' && needs.pack-native.result == 'success' && needs.pack-runtime.result == 'success' && needs.publish-pypi.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
+    uses: stella/.github/.github/workflows/npm-version-finalize.yml@1ce0079bbdbf93a4c1917d2857496b89aedcec14
     with:
       package-files: |
         packages/anonymize/package.json
@@ -746,7 +837,10 @@ jobs:
       publish-to-npm: true
       update-changelog: false
     permissions:
-      contents: write
-      id-token: write
-      pull-requests: write
-    secrets: inherit
+      contents: write # Required to create the runtime tag and GitHub release.
+      id-token: write # Required only for npm trusted publishing.
+    secrets:
+      CHANGELOG_APP_ID: ${{ secrets.CHANGELOG_APP_ID }}
+      CHANGELOG_APP_PRIVATE_KEY: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
+      RELEASE_APP_ID: ${{ secrets.RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
