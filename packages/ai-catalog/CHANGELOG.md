@@ -1,5 +1,13 @@
 # @stll/ai-catalog
 
+## 0.1.4
+
+### Patch Changes
+
+- [#2584](https://github.com/stella/stella/pull/2584) [`c918286`](https://github.com/stella/stella/commit/c9182860575e40ae1ad3b6f81bfc7e85362f8b62) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Default the Mistral chat role to `mistral-medium-latest`; `mistral-large-latest` is gated behind a higher subscription tier.
+
+- [#2568](https://github.com/stella/stella/pull/2568) [`760149f`](https://github.com/stella/stella/commit/760149f073adf3b8e45a9ece4df179d7ef8c7bd2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the GPT-5.6 model family
+
 ## 0.1.3
 
 ### Patch Changes
