@@ -141,13 +141,13 @@
     },
     {
       "name": "language-cs",
-      "packageDigest": "d55318fcbfdf91e6a862c09848ea0700536a1865068c1e444d80a442461217dc",
+      "packageDigest": "ae7a99c6087a0c625cd70daa51f44a816f3cad56c67d78a2e0fd566f96f3d157",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "language-de",
-      "packageDigest": "bdc8502f0c1bc0e05826d918b350d6aaa2310e988e1964a01f8e0cd9cad83246",
+      "packageDigest": "9ecfff63a9498098eb940c153329b82d474563b8e589dab92e3023b81daf4c63",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
@@ -159,13 +159,13 @@
     },
     {
       "name": "language-ja",
-      "packageDigest": "e893ea4ee834927108814ac9ea0f4e1c15891d9b6f4ac536301875364ac68105",
+      "packageDigest": "0f52078f5798dbb777f77fc29cdef801cba1df811c035712844a1a8571574a81",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "language-cs-sk",
-      "packageDigest": "28f20cd7e0e51bcd68de4303420458572825358a2a070cff4cef2dfc205753f9",
+      "packageDigest": "147255a3c08369df4b127b4f46fe9874ad98babbf18761cb62d0031dbcf816f9",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
@@ -243,13 +243,13 @@
     },
     {
       "name": "legal-forms-multilang",
-      "packageDigest": "b066aa7fef1c18d3f035d76fea9a277f6ec3dd562115262676819f44b5cb412c",
+      "packageDigest": "4f5370da14ba9351fd99c7a4bbc237e708aaa93e007d0d080c2260a244d48ce6",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "with-test-dictionaries",
-      "packageDigest": "3c5a1c76811cae2828ad778e6fea23865a34228c2c20c9410501e32674d62ac4",
+      "packageDigest": "479350a756de10795d9266b2084a2d84e823093815e8c30998ceac06fd3335ca",
       "hasDictionaries": true,
       "gazetteerCount": 0
     }

@@ -14,6 +14,11 @@
     },
     {
       "type": "array",
+      "path": ["address_seed_data", "unit_abbreviations"],
+      "segments": []
+    },
+    {
+      "type": "array",
       "path": ["coreference_data", "definition_patterns"],
       "segments": []
     },

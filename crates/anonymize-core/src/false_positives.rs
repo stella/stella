@@ -715,12 +715,23 @@ fn is_all_caps_boilerplate_line(
   if starts_with_section_heading_prefix(context.line) {
     return Ok(true);
   }
-  // Contracts routinely set party clauses in all caps. A legal-form suffix is
-  // positive organization evidence, so it outweighs only the surrounding
-  // prose heuristic; explicit section prefixes and long heading-shaped entity
-  // text remain rejected.
-  if entity.source != DetectionSource::LegalForm
-    && outside_entity_letters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS
+  // Contracts routinely set party clauses and captions in all caps. A
+  // legal-form suffix is positive organization evidence, so it outweighs the
+  // surrounding prose heuristic when the entity sits inside the clause or is
+  // followed by caption punctuation. At the start of an unpunctuated heading,
+  // however, a short ambiguous suffix can make the first heading words look
+  // like an organization.
+  let legal_form_heading_prefix = entity.source == DetectionSource::LegalForm
+    && context.before.trim().is_empty()
+    && !context
+      .after
+      .trim_start()
+      .chars()
+      .next()
+      .is_some_and(|ch| matches!(ch, ',' | ';' | '('));
+  if outside_entity_letters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS
+    && (entity.source != DetectionSource::LegalForm
+      || legal_form_heading_prefix)
   {
     return Ok(true);
   }
@@ -2218,6 +2229,45 @@ mod tests {
     .unwrap();
 
     assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn rejects_legal_form_prefixes_in_unnumbered_all_caps_headings() {
+    let text = "RÁMCOVÁ DOHODA NA POSKYTOVÁNÍ PRÁVNÍCH SLUŽEB\n";
+    let entity_text = "RÁMCOVÁ DOHODA NA";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        text,
+        entity_text,
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn keeps_leading_all_caps_legal_form_captions() {
+    let text =
+      "ACME LIMITED, A DELAWARE CORPORATION AND PARTY TO THIS AGREEMENT\n";
+    let entity_text = "ACME LIMITED";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        text,
+        entity_text,
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
   }
 
   #[test]
