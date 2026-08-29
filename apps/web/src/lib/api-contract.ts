@@ -67,7 +67,6 @@ export type {
   EntityKind,
   GlobalSearchResultType,
   McpOAuthScope,
-  OptionColor,
   SafeId,
   SafeIdType,
   SavedSearchCriteria,
