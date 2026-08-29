@@ -205,6 +205,7 @@ jobs:
             case "$file" in
               apps/collab/*|apps/api/src/handlers/folio-collab/*|apps/api/src/handlers/entities/join-folio-collab-room.ts|apps/api/src/lib/folio-collab-*|apps/api/src/lib/configured-bearer-access*|packages/api-contract/package.json|packages/api-contract/src/folio-collab*|bun.lock|.github/workflows/ci.yml)
                 collab_redis_required=true
+                e2e_core_required=true
                 ;;
             esac
             case "$file" in
@@ -1702,6 +1703,8 @@ jobs:
         # steps; application code runs only after the runner has logged
         # out again.
         uses: ./.github/actions/setup-e2e-stack
+        env:
+          STELLA_COLLAB_SERVICE_TOKEN: local-collab-service-token-at-least-32-chars
         with:
           dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -1709,8 +1712,16 @@ jobs:
       - name: Start web dev server
         if: steps.e2e-stack.outputs.status == 'ready'
         run: |
+          STELLA_API_URL=http://localhost:3001 \
+          STELLA_COLLAB_MODE=single-process \
+          STELLA_COLLAB_PORT=3002 \
+          STELLA_COLLAB_SERVICE_TOKEN=local-collab-service-token-at-least-32-chars \
+            nohup bun apps/collab/src/index.ts > /tmp/collab.log 2>&1 &
+          echo $! > /tmp/collab.pid
           cd apps/web
-          nohup bun --bun vite --port 3000 > /tmp/web.log 2>&1 &
+          VITE_FEATURE_FOLIO_COLLAB=true \
+          VITE_COLLAB_URL=ws://localhost:3002 \
+            nohup bun --bun vite --port 3000 > /tmp/web.log 2>&1 &
           echo $! > /tmp/web.pid
 
       - name: Wait for web dev server
@@ -1727,6 +1738,20 @@ jobs:
           tail -200 /tmp/web.log || true
           exit 1
 
+      - name: Wait for collaboration server
+        if: steps.e2e-stack.outputs.status == 'ready'
+        run: |
+          for i in {1..60}; do
+            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3002/readyz > /dev/null 2>&1; then
+              echo "Collaboration server up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Collaboration server never came up"
+          tail -200 /tmp/collab.log || true
+          exit 1
+
       - name: Install Playwright browsers
         if: steps.e2e-stack.outputs.status == 'ready'
         uses: ./.github/actions/setup-playwright
@@ -1740,6 +1765,12 @@ jobs:
           bun --filter @stll/web test:e2e --
           e2e/specs/vite-dependency-canary.spec.ts
           --project chromium
+
+      - name: Run lockless collaboration browser suite
+        if: steps.e2e-stack.outputs.status == 'ready'
+        env:
+          E2E_EXPECT_DEV_ROUTES: "true"
+        run: bun --filter @stll/web test:e2e:collab -- --project chromium
 
       # These imports load only through cold lazy routes; a mid-test optimizer
       # restart would make the apparent canary result nondeterministic.
@@ -1760,6 +1791,10 @@ jobs:
             kill "$(cat /tmp/web.pid)" || true
             rm -f /tmp/web.pid
           fi
+          if [[ -f /tmp/collab.pid ]]; then
+            kill "$(cat /tmp/collab.pid)" || true
+            rm -f /tmp/collab.pid
+          fi
 
       - name: Upload Playwright blob report
         if: always() && steps.e2e-stack.outputs.status == 'ready'
@@ -1776,6 +1811,7 @@ jobs:
           name: server-logs-vite-canary
           path: |
             /tmp/api.log
+            /tmp/collab.log
             /tmp/web.log
           retention-days: 7
 

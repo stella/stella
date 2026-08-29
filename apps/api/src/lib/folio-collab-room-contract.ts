@@ -9,6 +9,11 @@ export const FOLIO_COLLAB_ROOM_SEED_STATES = [
 export type FolioCollabRoomSeedState =
   (typeof FOLIO_COLLAB_ROOM_SEED_STATES)[number];
 
+export const FOLIO_COLLAB_ROOM_UNSEEDED_STATES = [
+  "empty",
+  "claimed",
+] satisfies readonly FolioCollabRoomSeedState[];
+
 /** Room tokens are renewable credentials; expiry never deletes room state. */
 export const FOLIO_COLLAB_TOKEN_TTL_MS = 60 * 60 * 1000;
 

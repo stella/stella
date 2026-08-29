@@ -1900,6 +1900,9 @@
     "contentControlDropdownNoOptions": "Keine Optionen",
     "copy": "Kopieren",
     "copyLink": "Link kopieren",
+    "createVersion": "Version erstellen",
+    "createVersionFailedDescription": "Ihre Änderungen bleiben im gemeinsamen Dokument erhalten. Versuchen Sie erneut, die Version zu erstellen.",
+    "createVersionFailedTitle": "Version konnte nicht erstellt werden",
     "cut": "Ausschneiden",
     "decreaseIndent": "Einzug verkleinern",
     "delete": "Löschen",
@@ -1912,6 +1915,7 @@
     "doneEditing": "Bearbeitung abschließen",
     "doubleClickFooter": "Zum Hinzufügen einer Fußzeile doppelklicken",
     "doubleClickHeader": "Zum Hinzufügen einer Kopfzeile doppelklicken",
+    "downloadCheckpoint": "Prüfpunkt herunterladen",
     "editAuthRequired": "Aktualisieren Sie stella und melden Sie sich erneut an, bevor Sie dieses Dokument bearbeiten.",
     "editDownloadFailed": "Das Dokument konnte nicht zur Bearbeitung heruntergeladen werden.",
     "editLink": "Link bearbeiten",
@@ -2009,6 +2013,10 @@
     "unlockForEditing": "Zum Bearbeiten entsperren",
     "unsupportedDocxEditDescription": "Diese DOCX enthält Strukturen, die Folio nicht sicher umschreiben kann. Laden Sie sie herunter und bearbeiten Sie sie in Word, um eine Beschädigung der Datei zu vermeiden.",
     "unsupportedDocxEditTitle": "Bearbeitung gesperrt",
+    "versionConflictDescription": "Außerhalb dieses Kollaborationsraums gibt es eine neuere Version. Ihr Prüfpunkt ist intakt und kann heruntergeladen werden.",
+    "versionConflictTitle": "Neuere Version gefunden",
+    "versionCreatedDescription": "Version {versionNumber} wurde erstellt. Alle können weiterarbeiten.",
+    "versionCreatedTitle": "Version erstellt",
     "viewOnly": "Nur Ansicht"
   },
   "guides": {

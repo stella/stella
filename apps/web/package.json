@@ -21,6 +21,7 @@
     "test:timings": "mkdir -p .cache && bun test --parallel=2 --timings=.cache/e2e-unit-timings.json --update-timings e2e/unit",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlF 'fc.assert' src --include='*.test.ts' --include='*.test.tsx')",
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
+    "test:e2e:collab": "playwright test --config e2e/playwright.collab.config.ts",
     "test:e2e:ui-playground": "playwright test --config e2e/playwright.ui-playground.config.ts",
     "test:e2e:ui-playground:update": "playwright test --config e2e/playwright.ui-playground.config.ts --update-snapshots=all",
     "test:e2e:marketing": "playwright test --config e2e/playwright.marketing.config.ts --project app",

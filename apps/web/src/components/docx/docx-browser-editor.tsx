@@ -13,16 +13,23 @@ import {
 } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { Result, TaggedError } from "better-result";
 import {
   CheckCircle2Icon,
   EyeIcon,
+  GitCommitHorizontalIcon,
   LockOpenIcon,
   PenLineIcon,
   RefreshCwIcon,
+  XIcon,
 } from "lucide-react";
 import type { EditorView } from "prosemirror-view";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import {
   FolioUIProvider,
@@ -65,7 +72,7 @@ import { DocxFindBar } from "@/components/docx/docx-find-bar";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
 import { useDocxBlockScroll } from "@/components/docx/use-docx-block-scroll";
 import { useDocxFind } from "@/components/docx/use-docx-find";
-import { useFolioCollaborationSession } from "@/components/docx/use-folio-collaboration-session";
+import { useFolioCollaborationRoom } from "@/components/docx/use-folio-collaboration-room";
 import { useSyncDocxSuggestions } from "@/components/docx/use-sync-docx-suggestions";
 import {
   useInspectorAnonymizationStore,
@@ -73,19 +80,27 @@ import {
 } from "@/components/inspector/inspector-anonymization-store";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
+import { RenderStormRegion } from "@/components/render-storm-canary";
 import { StatusMessage } from "@/components/route-components";
+import { UserIdentityAvatar } from "@/components/user-avatar";
 import { env } from "@/env";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
+import { api } from "@/lib/api";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { fileOptions } from "@/lib/files/queries";
 import { folioUIComponents } from "@/lib/folio-ui-components";
-import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
+import { getDisplayName } from "@/lib/get-display-name";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
+import { toSafeId } from "@/lib/safe-id";
 import "@/components/pdf/peek/peek-docx.css";
+import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 import {
   getDocxEditBlockReason,
@@ -93,6 +108,7 @@ import {
   selectDocxBrowserEditorBuffer,
   selectPreviewFile,
   shouldFinalizeEditSession,
+  shouldReuseCollaborationPublication,
 } from "./docx-browser-editor.logic";
 import type { OptimisticPreviewFile } from "./docx-browser-editor.logic";
 import {
@@ -113,18 +129,13 @@ import type {
 import { useEditSession } from "./use-edit-session";
 
 const CHANGE_CHECKPOINT_DELAY = 2000;
-const COLLABORATOR_COLOR_SPACE = 16_777_215;
 const noop = () => undefined;
 
-const colorFromStableId = (value: string) => {
-  let hash = 0;
-  for (const character of value) {
-    hash =
-      (hash * 31 + (character.codePointAt(0) ?? 0)) % COLLABORATOR_COLOR_SPACE;
-  }
-  const color = (hash * 2_654_435_761) % COLLABORATOR_COLOR_SPACE;
-  return `#${color.toString(16).padStart(6, "0")}`;
-};
+class CollaborationCloseCutError extends TaggedError(
+  "CollaborationCloseCutError",
+)<{
+  message: string;
+}> {}
 
 /** The inspector docks the editor beside the page; full view owns the page. */
 export type DocxEditorSurface = "fullView" | "inspector";
@@ -139,6 +150,9 @@ type DocxBrowserEditorBaseProps = {
   onClose: () => void;
   onCompatibilityChange?:
     | ((compatibility: DocxCompatibility) => void)
+    | undefined;
+  onCollaborationPublishableChange?:
+    | ((publishable: boolean) => void)
     | undefined;
   canUnlock?: boolean | undefined;
   onBlockedUnlock?: (() => void) | undefined;
@@ -157,6 +171,15 @@ type DocxBrowserEditorBaseProps = {
   surface: DocxEditorSurface;
   errorFallback?: ((props: { reset: () => void }) => ReactNode) | undefined;
   onError?: ((error: Error) => void) | undefined;
+};
+
+type PendingCollaborationPublication = {
+  documentMutationRevision: number;
+  downloadUrl: string;
+  generation: number;
+  idempotencyKey: string;
+  roomId: string;
+  sha256Hex: string;
 };
 
 type DocxBrowserEditorProps = DocxBrowserEditorBaseProps;
@@ -190,7 +213,9 @@ export const DocxBrowserEditor = (props: DocxBrowserEditorProps) => {
       onError={onError}
       resetKeys={[workspaceId, fieldId]}
     >
-      <DocxBrowserEditorContent {...props} />
+      <RenderStormRegion name="docx-browser-editor">
+        <DocxBrowserEditorContent {...props} />
+      </RenderStormRegion>
     </QuerySuspenseBoundary>
   );
 };
@@ -210,6 +235,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     isEditing = true,
     initialScrollTop,
     onClose,
+    onCollaborationPublishableChange,
     onCompatibilityChange,
     onBlockedUnlock,
     onUnlockedChange,
@@ -222,6 +248,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   } = props;
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const pendingCollaborationPublicationRef =
+    useRef<PendingCollaborationPublication | null>(null);
+  const isPublishingCollaborationVersionRef = useRef(false);
+  const queryClient = useQueryClient();
+  const [
+    isPublishingCollaborationVersion,
+    setIsPublishingCollaborationVersion,
+  ] = useState(false);
   // Track the live ProseMirror view so we can dispatch the
   // workspace anonymization-term list into the decoration plugin
   // installed inside Folio. The view is captured via the
@@ -643,6 +677,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     enabled: surface === "inspector",
   });
   const t = useTranslations();
+  const format = useFormatter();
   /* eslint-disable react/react-compiler -- optimistic preview and its derived query data are deliberately carried across the finalize/refetch window in a mutable ref */
   const optimisticPreview = optimisticPreviewRef.current;
   const previewPlaceholderData =
@@ -671,9 +706,17 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     collaborationEnabled,
     collaborationSession,
     collaborationState,
+    canEditCollaboratively,
     isCollaborativeEditing,
     requestCollaboration,
   } = collaborationRuntime;
+  const canPublishCollaborationVersion =
+    collaborationState.status === "synced" && !isPublishingCollaborationVersion;
+
+  useExternalSyncEffect(() => {
+    onCollaborationPublishableChange?.(canPublishCollaborationVersion);
+    return () => onCollaborationPublishableChange?.(false);
+  }, [canPublishCollaborationVersion, onCollaborationPublishableChange]);
 
   if (previewFileQuery.error) {
     throw previewFileQuery.error;
@@ -733,17 +776,49 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const finalizeActiveSession = finalizeDesktopSession;
   const cancelActiveSession = useCallback(async () => {
     if (collaborationSession !== null) {
+      if (collaborationState.status === "readOnly") {
+        cancelCollaboration();
+        onClose();
+        return;
+      }
+      const flushResult = await Result.tryPromise(
+        async () => await collaborationSession.flushSnapshot(),
+      );
+      if (Result.isError(flushResult)) {
+        getAnalytics().captureError(flushResult.error);
+        stellaToast.error(t("folio.networkError"));
+        throw flushResult.error;
+      }
+      if (
+        flushResult.value.localMutationRevision !==
+        collaborationSession.getLocalMutationRevision()
+      ) {
+        const error = new CollaborationCloseCutError({
+          message: "The local collaboration state changed during close.",
+        });
+        getAnalytics().captureError(error);
+        stellaToast.error(t("folio.networkError"));
+        throw error;
+      }
       cancelCollaboration();
       onClose();
       return;
     }
 
-    await cancelDesktopSession();
+    const cancelResult = await Result.tryPromise(
+      async () => await cancelDesktopSession(),
+    );
+    if (Result.isError(cancelResult)) {
+      stellaToast.error(t("folio.networkError"));
+      throw cancelResult.error;
+    }
   }, [
     cancelCollaboration,
     cancelDesktopSession,
     collaborationSession,
+    collaborationState.status,
     onClose,
+    t,
   ]);
 
   useExternalSyncEffect(() => {
@@ -754,6 +829,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     finalizedBufferRef.current = null;
     lastEditingBufferRef.current = null;
     hasSessionChangesRef.current = false;
+    pendingCollaborationPublicationRef.current = null;
     preservedLoadedBufferRef.current = null;
     pendingEditRequestRef.current = false;
     setCompatibilityState({ targetKey: editTargetKey, value: null });
@@ -857,7 +933,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       return;
     }
     if (collaborationEnabled) {
-      requestCollaboration();
       return;
     }
     didOpenRef.current = true;
@@ -869,7 +944,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     isEditing,
     open,
     previewFile,
-    requestCollaboration,
     abandonUnsafeEditAttempt,
     state.status,
   ]);
@@ -910,7 +984,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     resetError();
   }, [onClose, resetError, state, t]);
 
-  const isUnlocked = isCollaborativeEditing || state.status === "editing";
+  const isUnlocked = canEditCollaboratively || state.status === "editing";
   const wasUnlockedRef = useRef(false);
 
   useExternalSyncEffect(() => {
@@ -1125,25 +1199,223 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     setAutosaveStatus,
   ]);
 
-  const handleAiDocxCommentsChange = (comments: DocxComments) => {
-    setPendingInitialDocxCommentsSyncDocId(null);
-    setDocxComments(comments);
-    handleChange();
-  };
+  // Folio may publish controlled comments after reparsing the same semantic
+  // list. Stable callbacks plus equivalent-write suppression prevent a child
+  // notification from becoming a parent/child render feedback loop.
+  const handleAiDocxCommentsChange = useLatestCallback(
+    (comments: DocxComments) => {
+      const commentsChanged =
+        JSON.stringify(docxComments) !== JSON.stringify(comments);
+      setPendingInitialDocxCommentsSyncDocId(null);
+      if (!commentsChanged) {
+        return;
+      }
 
-  const handleEditorDocxCommentsChange = (comments: DocxComments) => {
-    const isInitialEditorSync = pendingInitialDocxCommentsSyncDocId !== null;
-    setPendingInitialDocxCommentsSyncDocId(null);
-    const commentsChanged =
-      JSON.stringify(docxComments) !== JSON.stringify(comments);
-    setDocxComments(comments);
-    if (isInitialEditorSync) {
+      setDocxComments(comments);
+      handleChange();
+    },
+  );
+
+  const handleEditorDocxCommentsChange = useLatestCallback(
+    (comments: DocxComments) => {
+      const isInitialEditorSync = pendingInitialDocxCommentsSyncDocId !== null;
+      const commentsChanged =
+        JSON.stringify(docxComments) !== JSON.stringify(comments);
+      setPendingInitialDocxCommentsSyncDocId(null);
+      if (!commentsChanged) {
+        return;
+      }
+
+      setDocxComments(comments);
+      if (!isInitialEditorSync) {
+        handleChange();
+      }
+    },
+  );
+
+  const handleEditorModeChange = useCallback(
+    (mode: EditorMode) => {
+      if (mode !== "viewing") {
+        setEditorMode(mode);
+      }
+    },
+    [setEditorMode],
+  );
+
+  const handleCompatibilityChange = useLatestCallback(
+    (nextCompatibility: DocxCompatibility) => {
+      if (previewFileQuery.isPlaceholderData) {
+        return;
+      }
+
+      setCompatibilityState({
+        targetKey: editTargetKey,
+        value: nextCompatibility,
+      });
+      onCompatibilityChange?.(nextCompatibility);
+    },
+  );
+
+  const handlePublishCollaborationVersion = useCallback(async () => {
+    if (
+      collaborationSession === null ||
+      collaborationState.status !== "synced" ||
+      isPublishingCollaborationVersion ||
+      isPublishingCollaborationVersionRef.current
+    ) {
       return;
     }
-    if (commentsChanged) {
-      handleChange();
+
+    isPublishingCollaborationVersionRef.current = true;
+    setIsPublishingCollaborationVersion(true);
+    const finishPublishing = () => {
+      isPublishingCollaborationVersionRef.current = false;
+      setIsPublishingCollaborationVersion(false);
+    };
+    let pendingPublication = pendingCollaborationPublicationRef.current;
+    if (
+      pendingPublication !== null &&
+      !shouldReuseCollaborationPublication({
+        current: {
+          documentMutationRevision:
+            collaborationSession.getDocumentMutationRevision(),
+          generation: collaborationSession.generation,
+          roomId: collaborationSession.roomId,
+        },
+        pending: pendingPublication,
+      })
+    ) {
+      pendingCollaborationPublicationRef.current = null;
+      pendingPublication = null;
     }
-  };
+    if (pendingPublication === null) {
+      const flushResult = await Result.tryPromise(
+        async () => await collaborationSession.flushSnapshot(),
+      );
+      if (Result.isError(flushResult)) {
+        getAnalytics().captureError(flushResult.error);
+        finishPublishing();
+        stellaToast.add({
+          description: t("folio.createVersionFailedDescription"),
+          title: t("folio.createVersionFailedTitle"),
+          type: "error",
+        });
+        return;
+      }
+      const checkpointResult = await Result.tryPromise(async () =>
+        api
+          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          ["folio-collab-rooms"].checkpoint.post({
+            expectedGeneration: collaborationSession.generation,
+            expectedSnapshotRevision: flushResult.value.snapshotRevision,
+            roomId: toSafeId<"folioCollabRoom">(collaborationSession.roomId),
+          }),
+      );
+      if (Result.isError(checkpointResult)) {
+        getAnalytics().captureError(checkpointResult.error);
+        finishPublishing();
+        stellaToast.add({
+          description: t("folio.createVersionFailedDescription"),
+          title: t("folio.createVersionFailedTitle"),
+          type: "error",
+        });
+        return;
+      }
+      if (checkpointResult.value.error) {
+        getAnalytics().captureError(toAPIError(checkpointResult.value.error));
+        finishPublishing();
+        stellaToast.add({
+          description: t("folio.createVersionFailedDescription"),
+          title: t("folio.createVersionFailedTitle"),
+          type: "error",
+        });
+        return;
+      }
+
+      const checkpoint = checkpointResult.value.data;
+      pendingPublication = {
+        documentMutationRevision: flushResult.value.documentMutationRevision,
+        downloadUrl: checkpoint.downloadUrl,
+        generation: checkpoint.generation,
+        idempotencyKey: crypto.randomUUID(),
+        roomId: collaborationSession.roomId,
+        sha256Hex: checkpoint.sha256Hex,
+      };
+      pendingCollaborationPublicationRef.current = pendingPublication;
+    }
+    const publishResult = await Result.tryPromise(async () =>
+      api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        ["folio-collab-rooms"]["publish-version"].post({
+          expectedGeneration: pendingPublication.generation,
+          expectedSha256Hex: pendingPublication.sha256Hex,
+          idempotencyKey: pendingPublication.idempotencyKey,
+          roomId: toSafeId<"folioCollabRoom">(pendingPublication.roomId),
+        }),
+    );
+    finishPublishing();
+    if (Result.isError(publishResult)) {
+      getAnalytics().captureError(publishResult.error);
+      stellaToast.add({
+        description: t("folio.createVersionFailedDescription"),
+        title: t("folio.createVersionFailedTitle"),
+        type: "error",
+      });
+      return;
+    }
+    if (publishResult.value.error) {
+      const apiError = toAPIError(publishResult.value.error);
+      getAnalytics().captureError(apiError);
+      if (apiError.code === "folio_collab_base_version_changed") {
+        pendingCollaborationPublicationRef.current = null;
+        stellaToast.add({
+          action: {
+            label: t("folio.downloadCheckpoint"),
+            onClick: () => {
+              openIsolatedWindow(pendingPublication.downloadUrl);
+            },
+          },
+          description: t("folio.versionConflictDescription"),
+          title: t("folio.versionConflictTitle"),
+          type: "warning",
+        });
+        return;
+      }
+      if (
+        apiError.code === "folio_collab_checkpoint_changed" ||
+        apiError.code === "folio_collab_idempotency_key_reused"
+      ) {
+        pendingCollaborationPublicationRef.current = null;
+      }
+      stellaToast.add({
+        description: t("folio.createVersionFailedDescription"),
+        title: t("folio.createVersionFailedTitle"),
+        type: "error",
+      });
+      return;
+    }
+
+    pendingCollaborationPublicationRef.current = null;
+    hasSessionChangesRef.current = false;
+    await queryClient.invalidateQueries({
+      queryKey: entitiesKeys.all(workspaceId),
+    });
+    stellaToast.add({
+      description: t("folio.versionCreatedDescription", {
+        versionNumber: format.number(publishResult.value.data.versionNumber),
+      }),
+      title: t("folio.versionCreatedTitle"),
+      type: "success",
+    });
+  }, [
+    collaborationSession,
+    collaborationState.status,
+    format,
+    isPublishingCollaborationVersion,
+    queryClient,
+    t,
+    workspaceId,
+  ]);
 
   const handleFinalize = useCallback(async () => {
     // Soft, non-blocking reminder: if AI suggestions are still pending
@@ -1164,8 +1436,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
 
     if (isCollaborativeEditing) {
       clearQueuedChangeCheckpoint();
-      cancelCollaboration();
-      onClose();
+      await handlePublishCollaborationVersion();
       return;
     }
 
@@ -1237,13 +1508,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   }, [
     cancelActiveSession,
     clearQueuedChangeCheckpoint,
-    cancelCollaboration,
     entityId,
     fieldId,
     finalizeActiveSession,
     isCollaborativeEditing,
+    handlePublishCollaborationVersion,
     isDirty,
-    onClose,
     optimisticPreviewRef,
     previewFile,
     saveActiveCheckpoint,
@@ -1253,9 +1523,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
 
   const handleCancel = useCallback(async () => {
     clearQueuedChangeCheckpoint();
+    await cancelActiveSession();
     preservedLoadedBufferRef.current = null;
     hasSessionChangesRef.current = false;
-    await cancelActiveSession();
   }, [cancelActiveSession, clearQueuedChangeCheckpoint]);
 
   const handleUnlock = useCallback(() => {
@@ -1397,13 +1667,52 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   });
   /* eslint-enable react/react-compiler */
   const finishEditingLabel = t("folio.finishEditing");
+  const createVersionLabel = t("folio.createVersion");
 
   const toolbarExtra = (() => {
     if (showActionBar || actionBarControls !== undefined) {
       return (
         <>
           {actionBarControls}
-          {showActionBar && isUnlocked && (
+          {showActionBar && collaborationState.room !== null && (
+            <>
+              <Button
+                className="min-h-11 px-3"
+                disabled={!canPublishCollaborationVersion}
+                onClick={() => {
+                  detached(
+                    handlePublishCollaborationVersion(),
+                    "docx-browser-editor.publish-collaboration-version",
+                  );
+                }}
+                size="sm"
+                tooltip={createVersionLabel}
+              >
+                <GitCommitHorizontalIcon />
+                <span>{createVersionLabel}</span>
+              </Button>
+              <CollaborationStatusIndicator
+                status={collaborationState.status}
+              />
+              <CollaborationPresence
+                awareness={collaborationState.room.collaboration.awareness}
+              />
+              <Button
+                aria-label={t("common.close")}
+                className="min-h-11 px-3"
+                onClick={() => {
+                  detached(handleCancel(), "docx-browser-editor.close");
+                }}
+                size="sm"
+                tooltip={t("common.close")}
+                variant="ghost"
+              >
+                <XIcon />
+                <span>{t("common.close")}</span>
+              </Button>
+            </>
+          )}
+          {showActionBar && isUnlocked && !isCollaborativeEditing && (
             <>
               <Button
                 aria-label={finishEditingLabel}
@@ -1411,7 +1720,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
                 disabled={
                   state.status === "opening" ||
                   state.status === "saving" ||
-                  collaborationState.status === "opening"
+                  collaborationState.status === "connecting"
                 }
                 onClick={handleToggleLock}
                 size="sm"
@@ -1494,7 +1803,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     );
   }
 
-  if (collaborationState.status === "error") {
+  if (
+    collaborationState.status === "unavailable" &&
+    collaborationState.message !== null
+  ) {
     return (
       <StatusMessage
         actionButton={
@@ -1589,22 +1901,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             documentBuffer={editorBuffer}
             initialZoom={targetZoom}
             mode={isUnlocked ? editorMode : "viewing"}
-            onModeChange={(mode) => {
-              if (mode !== "viewing") {
-                setEditorMode(mode);
-              }
-            }}
-            onCompatibilityChange={(nextCompatibility) => {
-              if (previewFileQuery.isPlaceholderData) {
-                return;
-              }
-
-              setCompatibilityState({
-                targetKey: editTargetKey,
-                value: nextCompatibility,
-              });
-              onCompatibilityChange?.(nextCompatibility);
-            }}
+            onModeChange={handleEditorModeChange}
+            onCompatibilityChange={handleCompatibilityChange}
             onAnonymizationMatchesChange={handleAnonymizationMatchesChange}
             onSelectionTextChange={handleSelectionTextChange}
             onAnonymizationTermClick={handleAnonymizationTermClick}
@@ -1705,10 +2003,10 @@ type UseDocxBrowserCollaborationOptions = {
   workspaceId: string;
 };
 
-type CollaborationRequestState = {
-  requested: boolean;
-  targetKey: string;
-};
+type CollaborationRequestState =
+  | { status: "automatic" }
+  | { status: "cancelled"; targetKey: string }
+  | { status: "requested"; targetKey: string };
 
 const useDocxBrowserCollaboration = ({
   canUnlock,
@@ -1719,14 +2017,28 @@ const useDocxBrowserCollaboration = ({
   workspaceId,
 }: UseDocxBrowserCollaborationOptions) => {
   const targetKey = `${workspaceId}:${entityId}:${propertyId}`;
-  const [requestState, setRequestState] = useState<CollaborationRequestState>({
-    requested: initiallyRequested,
-    targetKey,
-  });
-  const requested =
-    requestState.targetKey === targetKey
-      ? requestState.requested
-      : initiallyRequested;
+  const [requestState, setRequestState] = useState(
+    (): CollaborationRequestState => ({ status: "automatic" }),
+  );
+  const requested = (() => {
+    if (
+      requestState.status === "automatic" ||
+      requestState.targetKey !== targetKey
+    ) {
+      return initiallyRequested;
+    }
+
+    switch (requestState.status) {
+      case "requested":
+        return true;
+      case "cancelled":
+        return false;
+      default: {
+        const exhaustive: never = requestState;
+        return exhaustive;
+      }
+    }
+  })();
   // Read the identity from the provider, not from route context. The editor
   // is persistent chrome: the inspector keeps it mounted across navigation,
   // so a strict `useRouteContext({ from: "/_protected" })` throws the moment
@@ -1736,28 +2048,35 @@ const useDocxBrowserCollaboration = ({
   const currentUser = useMaybeAuthenticatedUser();
   const collaborationEnabled =
     env.VITE_FEATURE_FOLIO_COLLAB && env.VITE_COLLAB_URL !== undefined;
-  const collaborationState = useFolioCollaborationSession({
+  const collaborationState = useFolioCollaborationRoom({
     enabled: collaborationEnabled && requested && canUnlock,
     entityId,
     propertyId,
     user: currentUser
       ? {
-          color: colorFromStableId(currentUser.id),
-          name: currentUser.name ?? currentUser.email,
+          id: currentUser.id,
+          image: currentUser.image ?? null,
+          name:
+            getDisplayName(currentUser.name, currentUser.email) ??
+            currentUser.email,
         }
       : null,
     workspaceId,
   });
-  useExternalSyncEffect(() => {
-    setRequestState({ requested: initiallyRequested, targetKey });
-  }, [initiallyRequested, targetKey]);
-  const collaborationSession =
-    collaborationState.status === "ready" ? collaborationState.session : null;
+  const collaborationSession = collaborationState.room;
   const cancelCollaboration = useCallback(() => {
-    setRequestState({ requested: false, targetKey });
+    setRequestState((previous) =>
+      previous.status === "cancelled" && previous.targetKey === targetKey
+        ? previous
+        : { status: "cancelled", targetKey },
+    );
   }, [targetKey]);
   const requestCollaboration = useCallback(() => {
-    setRequestState({ requested: true, targetKey });
+    setRequestState((previous) =>
+      previous.status === "requested" && previous.targetKey === targetKey
+        ? previous
+        : { status: "requested", targetKey },
+    );
   }, [targetKey]);
 
   return {
@@ -1767,6 +2086,8 @@ const useDocxBrowserCollaboration = ({
     collaborationEnabled,
     collaborationSession,
     collaborationState,
+    canEditCollaboratively:
+      collaborationSession !== null && collaborationState.status !== "readOnly",
     isCollaborativeEditing: collaborationSession !== null,
     requestCollaboration,
   };
@@ -1788,11 +2109,164 @@ const AutosaveIndicator = ({ status }: { status: AutosaveStatus }) => {
           return <CheckCircle2Icon className="size-3.5" />;
         }
         if (isSyncing) {
-          return <RefreshCwIcon className="size-3.5 animate-spin" />;
+          return (
+            <RefreshCwIcon className="size-3.5 motion-safe:animate-spin" />
+          );
         }
         return <RefreshCwIcon className="size-3.5 opacity-45" />;
       })()}
     </span>
+  );
+};
+
+const CollaborationStatusIndicator = ({
+  status,
+}: {
+  status: "connecting" | "readOnly" | "reconnecting" | "synced";
+}) => {
+  const t = useTranslations();
+  const label = (() => {
+    switch (status) {
+      case "connecting":
+        return t("folio.syncing");
+      case "readOnly":
+        return t("folio.viewOnly");
+      case "reconnecting":
+        return t("common.reconnecting");
+      case "synced":
+        return t("folio.synced");
+      default: {
+        const exhaustive: never = status;
+        return exhaustive;
+      }
+    }
+  })();
+  const icon = (() => {
+    switch (status) {
+      case "synced":
+        return <CheckCircle2Icon className="size-3.5" />;
+      case "readOnly":
+        return <EyeIcon className="size-3.5" />;
+      case "connecting":
+      case "reconnecting":
+        return <RefreshCwIcon className="size-3.5 motion-safe:animate-spin" />;
+      default: {
+        const exhaustive: never = status;
+        return exhaustive;
+      }
+    }
+  })();
+
+  return (
+    <span
+      className="text-foreground-muted inline-flex min-h-11 items-center gap-1.5 px-2 text-xs"
+      role="status"
+    >
+      {icon}
+      <span>{label}</span>
+    </span>
+  );
+};
+
+type CollaborationPresenceUser = {
+  id: string;
+  image: string | null;
+  name: string;
+};
+
+const readCollaborationPresenceUser = (
+  value: unknown,
+): CollaborationPresenceUser | null => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  if (!("user" in value)) {
+    return null;
+  }
+  const user = value.user;
+  if (user === null || typeof user !== "object" || Array.isArray(user)) {
+    return null;
+  }
+  if (!("id" in user) || !("image" in user) || !("name" in user)) {
+    return null;
+  }
+  const { id, image, name } = user;
+  if (
+    typeof id !== "string" ||
+    typeof name !== "string" ||
+    (image !== null && typeof image !== "string")
+  ) {
+    return null;
+  }
+  return { id, image, name };
+};
+
+const readCollaborationPresence = (
+  awareness: NonNullable<DocxEditorCollaboration["awareness"]>,
+) => {
+  const users = new Map<string, CollaborationPresenceUser>();
+  for (const state of awareness.getStates().values()) {
+    const user = readCollaborationPresenceUser(state);
+    if (user !== null) {
+      users.set(user.id, user);
+    }
+  }
+  return [...users.values()];
+};
+
+const hasSameCollaborationPresence = (
+  previous: CollaborationPresenceUser[],
+  next: CollaborationPresenceUser[],
+) =>
+  previous.length === next.length &&
+  previous.every((user, index) => {
+    const nextUser = next.at(index);
+    return (
+      nextUser !== undefined &&
+      user.id === nextUser.id &&
+      user.image === nextUser.image &&
+      user.name === nextUser.name
+    );
+  });
+
+const CollaborationPresence = ({
+  awareness,
+}: {
+  awareness: NonNullable<DocxEditorCollaboration["awareness"]>;
+}) => {
+  const [users, setUsers] = useState(() =>
+    readCollaborationPresence(awareness),
+  );
+
+  useExternalSyncEffect(() => {
+    const updatePresence = () => {
+      const next = readCollaborationPresence(awareness);
+      setUsers((previous) =>
+        hasSameCollaborationPresence(previous, next) ? previous : next,
+      );
+    };
+    updatePresence();
+    awareness.on("change", updatePresence);
+    return () => awareness.off("change", updatePresence);
+  }, [awareness]);
+
+  return (
+    <ul className="flex min-h-11 items-center -space-x-2 px-2">
+      {users.map((user) => (
+        <li
+          aria-label={user.name}
+          className="border-background rounded-full border-2"
+          key={user.id}
+          title={user.name}
+        >
+          <UserIdentityAvatar
+            className="size-7 text-[0.625rem]"
+            image={user.image}
+            name={user.name}
+          />
+        </li>
+      ))}
+    </ul>
   );
 };
 

@@ -9,6 +9,7 @@ describe("folio collaboration checkpoint snapshot cut", () => {
     baseVersionId: createSafeId<"entityVersion">(),
     generation: 3,
     snapshotFileId: createSafeId<"userFile">(),
+    snapshotRevision: 11,
     snapshotUpdatedAt: new Date("2026-08-29T08:00:00.000Z"),
   };
 
@@ -30,6 +31,15 @@ describe("folio collaboration checkpoint snapshot cut", () => {
         current: {
           ...materialized,
           baseVersionId: createSafeId<"entityVersion">(),
+        },
+        materialized,
+      }),
+    ).toBeFalse();
+    expect(
+      matchesFolioCollabSnapshotCut({
+        current: {
+          ...materialized,
+          snapshotRevision: 12,
         },
         materialized,
       }),

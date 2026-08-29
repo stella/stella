@@ -97,7 +97,7 @@ export const selectDocxBrowserEditorBuffer = ({
   state,
 }: SelectDocxBrowserEditorBufferOptions) => {
   if (isCollaborativeEditing) {
-    return collaborationSeedBuffer ?? previewBuffer;
+    return collaborationSeedBuffer ?? lastEditingBuffer ?? previewBuffer;
   }
 
   if (state.status === "editing") {
@@ -130,6 +130,23 @@ export const shouldFinalizeEditSession = ({
   hasPendingEditorChanges,
 }: ShouldFinalizeEditSessionOptions) =>
   isDirty || hasSessionChanges || hasPendingEditorChanges;
+
+type CollaborationPublicationCut = {
+  documentMutationRevision: number;
+  generation: number;
+  roomId: string;
+};
+
+export const shouldReuseCollaborationPublication = ({
+  current,
+  pending,
+}: {
+  current: CollaborationPublicationCut;
+  pending: CollaborationPublicationCut;
+}) =>
+  pending.roomId === current.roomId &&
+  pending.generation === current.generation &&
+  pending.documentMutationRevision === current.documentMutationRevision;
 
 type ShouldPromptReadonlyUnlockOptions = {
   canUnlock: boolean;

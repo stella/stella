@@ -1900,6 +1900,9 @@
     "contentControlDropdownNoOptions": "Žádné možnosti",
     "copy": "Kopírovat",
     "copyLink": "Kopírovat odkaz",
+    "createVersion": "Vytvořit verzi",
+    "createVersionFailedDescription": "Vaše úpravy zůstávají ve sdíleném dokumentu. Zkuste verzi vytvořit znovu.",
+    "createVersionFailedTitle": "Verzi se nepodařilo vytvořit",
     "cut": "Vyjmout",
     "decreaseIndent": "Zmenšit odsazení",
     "delete": "Smazat",
@@ -1912,6 +1915,7 @@
     "doneEditing": "Dokončit úpravy",
     "doubleClickFooter": "Dvojklikem přidáte zápatí",
     "doubleClickHeader": "Dvojklikem přidáte záhlaví",
+    "downloadCheckpoint": "Stáhnout kontrolní kopii",
     "editAuthRequired": "Před úpravou dokumentu obnovte Stellu a znovu se přihlaste.",
     "editDownloadFailed": "Dokument se nepodařilo stáhnout pro úpravy.",
     "editLink": "Upravit odkaz",
@@ -2009,6 +2013,10 @@
     "unlockForEditing": "Odemknout pro možnost úprav",
     "unsupportedDocxEditDescription": "Tento DOCX obsahuje struktury, které Folio neumí bezpečně přepsat. Aby se soubor nepoškodil, stáhněte ho a upravte ve Wordu.",
     "unsupportedDocxEditTitle": "Úpravy zablokovány",
+    "versionConflictDescription": "Mimo tuto místnost pro spolupráci existuje novější verze. Kontrolní kopie zůstala zachována a můžete ji stáhnout.",
+    "versionConflictTitle": "Nalezena novější verze",
+    "versionCreatedDescription": "Byla vytvořena verze {versionNumber}. Všichni mohou pokračovat v úpravách.",
+    "versionCreatedTitle": "Verze vytvořena",
     "viewOnly": "Jen ke čtení"
   },
   "guides": {

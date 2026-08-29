@@ -116,6 +116,7 @@ const validRow = (overrides: Row = {}): Row => ({
   tokenId: toSafeId<"folioCollabRoomToken">("fcrt_1"),
   tokenGeneration: 3,
   userId: "user_1",
+  userName: "Authorized user",
   workspaceId,
   workspaceClientId: "client_1",
   workspaceMemberId: null,
@@ -230,6 +231,7 @@ describe("folio collaboration room snapshot generation", () => {
         {
           generation: 3,
           yjsSnapshotFileId,
+          yjsSnapshotRevision: 4,
           yjsSnapshotUpdatedAt: new Date(),
         },
       ],
@@ -237,6 +239,7 @@ describe("folio collaboration room snapshot generation", () => {
         {
           generation: 3,
           yjsSnapshotFileId: nextSnapshotFileId,
+          yjsSnapshotRevision: 5,
           yjsSnapshotUpdatedAt: new Date(),
         },
       ],
@@ -253,6 +256,7 @@ describe("folio collaboration room snapshot generation", () => {
     expect(await loadFolioCollabSnapshot(authorized.value)).toEqual({
       generation: 3,
       snapshotBase64: "bmV4dA==",
+      snapshotRevision: 5,
     });
     // The store confirming the first key is gone is what sends the read back
     // to the pointer; the second read must ask for the replacement key.
@@ -266,20 +270,41 @@ describe("folio collaboration room snapshot generation", () => {
     expect(
       decideFolioCollabSnapshotStore({
         actualGeneration: 4,
+        actualSnapshotRevision: 2,
         authority: { type: "participant", userId: firstUserId },
         expectedGeneration: 3,
+        expectedSnapshotRevision: 2,
         seedClaimedBy: "user_1",
         seedState: "claimed",
       }),
     ).toEqual({ status: "generation-conflict", actualGeneration: 4 });
   });
 
+  test("rejects a store from a stale snapshot revision", () => {
+    expect(
+      decideFolioCollabSnapshotStore({
+        actualGeneration: 4,
+        actualSnapshotRevision: 3,
+        authority: { type: "collab-service" },
+        expectedGeneration: 4,
+        expectedSnapshotRevision: 2,
+        seedClaimedBy: "user_1",
+        seedState: "seeded",
+      }),
+    ).toEqual({
+      status: "snapshot-revision-conflict",
+      actualSnapshotRevision: 3,
+    });
+  });
+
   test("only the generation claim owner may write the first snapshot", () => {
     expect(
       decideFolioCollabSnapshotStore({
         actualGeneration: 4,
+        actualSnapshotRevision: 0,
         authority: { type: "participant", userId: secondUserId },
         expectedGeneration: 4,
+        expectedSnapshotRevision: 0,
         seedClaimedBy: "user_1",
         seedState: "claimed",
       }),
@@ -300,6 +325,7 @@ describe("folio collaboration room snapshot generation", () => {
       storeFolioCollabSnapshot({
         authority: { type: "participant", userId: firstUserId },
         expectedGeneration: 3,
+        expectedSnapshotRevision: 0,
         snapshotBytes: new TextEncoder().encode("snapshot"),
         value: authorized.value,
       }),
@@ -326,8 +352,10 @@ describe("folio collaboration room snapshot generation", () => {
     expect(
       decideFolioCollabSnapshotStore({
         actualGeneration: 4,
+        actualSnapshotRevision: 0,
         authority: { type: "collab-service" },
         expectedGeneration: 4,
+        expectedSnapshotRevision: 0,
         seedClaimedBy: "user_1",
         seedState: "claimed",
       }),

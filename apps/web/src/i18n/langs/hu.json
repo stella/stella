@@ -1900,6 +1900,9 @@
     "contentControlDropdownNoOptions": "Nincsenek lehetőségek",
     "copy": "Másolás",
     "copyLink": "Hivatkozás másolása",
+    "createVersion": "Verzió létrehozása",
+    "createVersionFailedDescription": "A módosításai megmaradnak a megosztott dokumentumban. Próbálja újra létrehozni a verziót.",
+    "createVersionFailedTitle": "Nem sikerült létrehozni a verziót",
     "cut": "Kivágás",
     "decreaseIndent": "Behúzás csökkentése",
     "delete": "Törlés",
@@ -1912,6 +1915,7 @@
     "doneEditing": "Szerkesztés befejezése",
     "doubleClickFooter": "Kattintson duplán élőláb hozzáadásához",
     "doubleClickHeader": "Kattintson duplán élőfej hozzáadásához",
+    "downloadCheckpoint": "Ellenőrzőpont letöltése",
     "editAuthRequired": "Frissítse a Stellát, és a dokumentum szerkesztése előtt jelentkezzen be újra.",
     "editDownloadFailed": "Nem sikerült letölteni a dokumentumot szerkesztésre.",
     "editLink": "Hivatkozás szerkesztése",
@@ -2009,6 +2013,10 @@
     "unlockForEditing": "Feloldás szerkesztéshez",
     "unsupportedDocxEditDescription": "Ez a DOCX olyan szerkezeteket tartalmaz, amelyeket a Folio nem tud biztonságosan átírni. A fájl sérülésének elkerülése érdekében töltse le, és szerkessze Wordben.",
     "unsupportedDocxEditTitle": "A szerkesztés letiltva",
+    "versionConflictDescription": "A közös szerkesztési szobán kívül újabb verzió található. Az ellenőrzőpont sértetlen, és letölthető.",
+    "versionConflictTitle": "Újabb verzió található",
+    "versionCreatedDescription": "A(z) {versionNumber}. verzió létrejött. Mindenki folytathatja a szerkesztést.",
+    "versionCreatedTitle": "Verzió létrehozva",
     "viewOnly": "Csak megtekintés"
   },
   "guides": {

@@ -1900,6 +1900,9 @@
     "contentControlDropdownNoOptions": "Valikuid pole",
     "copy": "Kopeeri",
     "copyLink": "Kopeeri link",
+    "createVersion": "Loo versioon",
+    "createVersionFailedDescription": "Sinu muudatused jäävad ühisdokumenti. Proovi versioon uuesti luua.",
+    "createVersionFailedTitle": "Versiooni ei saanud luua",
     "cut": "Lõika",
     "decreaseIndent": "Vähenda taanet",
     "delete": "Kustuta",
@@ -1912,6 +1915,7 @@
     "doneEditing": "Lõpeta muutmine",
     "doubleClickFooter": "Topeltklõpsa jaluse lisamiseks",
     "doubleClickHeader": "Topeltklõpsa päise lisamiseks",
+    "downloadCheckpoint": "Laadi kontrollpunkt alla",
     "editAuthRequired": "Värskenda stellat ja logi enne dokumendi muutmist uuesti sisse.",
     "editDownloadFailed": "Dokumenti ei saanud muutmiseks alla laadida.",
     "editLink": "Muuda linki",
@@ -2009,6 +2013,10 @@
     "unlockForEditing": "Ava muutmiseks",
     "unsupportedDocxEditDescription": "See DOCX sisaldab struktuure, mida Folio ei suuda turvaliselt ümber kirjutada. Faili rikkumise vältimiseks laadi see alla ja muuda Wordis.",
     "unsupportedDocxEditTitle": "Muutmine on blokeeritud",
+    "versionConflictDescription": "Väljaspool seda koostööruumi on uuem versioon. Sinu kontrollpunkt on alles ja selle saab alla laadida.",
+    "versionConflictTitle": "Leiti uuem versioon",
+    "versionCreatedDescription": "Versioon {versionNumber} loodi. Kõik saavad redigeerimist jätkata.",
+    "versionCreatedTitle": "Versioon loodud",
     "viewOnly": "Ainult vaatamiseks"
   },
   "guides": {

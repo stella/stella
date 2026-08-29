@@ -1900,6 +1900,9 @@
     "contentControlDropdownNoOptions": "لا توجد خيارات",
     "copy": "نسخ",
     "copyLink": "نسخ الرابط",
+    "createVersion": "إنشاء إصدار",
+    "createVersionFailedDescription": "تظل تعديلاتك في المستند المشترك. حاول إنشاء الإصدار مرة أخرى.",
+    "createVersionFailedTitle": "تعذّر إنشاء الإصدار",
     "cut": "قص",
     "decreaseIndent": "إنقاص المسافة البادئة",
     "delete": "حذف",
@@ -1912,6 +1915,7 @@
     "doneEditing": "تم التعديل",
     "doubleClickFooter": "انقر نقرًا مزدوجًا لإضافة تذييل الصفحة",
     "doubleClickHeader": "انقر نقرًا مزدوجًا لإضافة رأس الصفحة",
+    "downloadCheckpoint": "تنزيل نقطة الحفظ",
     "editAuthRequired": "أعد تحميل stella وسجّل الدخول مرة أخرى قبل تعديل هذا المستند.",
     "editDownloadFailed": "تعذّر تنزيل المستند للتعديل.",
     "editLink": "تعديل الرابط",
@@ -2009,6 +2013,10 @@
     "unlockForEditing": "إلغاء القفل للتعديل",
     "unsupportedDocxEditDescription": "يحتوي ملف DOCX هذا على بِنى لا يستطيع Folio إعادة كتابتها بأمان. لتجنّب إتلاف الملف، نزّله وعدّله في Word.",
     "unsupportedDocxEditTitle": "التعديل محظور",
+    "versionConflictDescription": "يوجد إصدار أحدث خارج غرفة التعاون هذه. نقطة الحفظ سليمة ويمكن تنزيلها.",
+    "versionConflictTitle": "تم العثور على إصدار أحدث",
+    "versionCreatedDescription": "تم إنشاء الإصدار {versionNumber}. يمكن للجميع متابعة التحرير.",
+    "versionCreatedTitle": "تم إنشاء الإصدار",
     "viewOnly": "عرض فقط"
   },
   "guides": {

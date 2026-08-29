@@ -11,6 +11,7 @@ import {
   ChevronUpIcon,
 } from "lucide-react";
 
+import { useLatest } from "../hooks/use-latest";
 import { CONTROL_SIZE } from "../lib/control-size";
 import type { ControlSize } from "../lib/control-size";
 import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";
@@ -46,29 +47,33 @@ const renderSelectedDisplay =
 
 const Select = <Value, Multiple extends boolean | undefined = false>({
   children,
+  isItemEqualToValue,
   itemToStringLabel,
+  itemToStringValue,
   ...props
 }: SelectPrimitive.Root.Props<Value, Multiple>) => {
   const itemLabels = collectSelectItemLabels(children);
   const itemDisplays = collectSelectItemDisplays(children);
+  const itemLabelsRef = useLatest(itemLabels);
+  const resolveItemLabel = React.useCallback(
+    (value: Value) => itemLabelsRef.current.get(value) ?? String(value),
+    [itemLabelsRef],
+  );
 
-  const root =
-    itemToStringLabel || itemLabels.size === 0 ? (
-      <SelectPrimitive.Root itemToStringLabel={itemToStringLabel} {...props}>
-        {children}
-      </SelectPrimitive.Root>
-    ) : (
-      <SelectPrimitive.Root
-        itemToStringLabel={(value) => {
-          const stringValue = String(value);
-
-          return itemLabels.get(value) ?? stringValue;
-        }}
-        {...props}
-      >
-        {children}
-      </SelectPrimitive.Root>
-    );
+  const root = (
+    <SelectPrimitive.Root
+      {...props}
+      isItemEqualToValue={isItemEqualToValue}
+      itemToStringLabel={
+        itemToStringLabel === undefined && itemLabels.size === 0
+          ? undefined
+          : (itemToStringLabel ?? resolveItemLabel)
+      }
+      itemToStringValue={itemToStringValue}
+    >
+      {children}
+    </SelectPrimitive.Root>
+  );
 
   return (
     <SelectItemDisplaysContext value={itemDisplays}>

@@ -12,8 +12,10 @@ import * as v from "valibot";
 import { applyUpdate, encodeStateAsUpdate } from "yjs";
 
 import {
+  FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
+  FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_REDIS_SCOPE,
   parseFolioCollabRoomName,
 } from "@stll/api-contract/folio-collab";
@@ -26,10 +28,11 @@ type CollabAuthContext = {
   roomId: string;
   tokenState: CollabRoomTokenState;
   userId: string;
-  workspaceId: string;
+  userName: string;
 };
 
 type CollabRoomTokenState = {
+  activeConnections: number;
   canEdit: boolean;
   generation: number;
   refreshInFlight: Promise<string> | null;
@@ -79,7 +82,7 @@ const authorizeResponseSchema = v.strictObject({
   roomName: v.string(),
   tokenExpiresAt: v.string(),
   userId: v.string(),
-  workspaceId: v.string(),
+  userName: v.string(),
 });
 
 const refreshTokenResponseSchema = v.strictObject({
@@ -92,10 +95,12 @@ const refreshTokenResponseSchema = v.strictObject({
 const loadSnapshotResponseSchema = v.strictObject({
   generation: v.pipe(v.number(), v.integer(), v.minValue(0)),
   snapshotBase64: v.nullable(v.string()),
+  snapshotRevision: v.pipe(v.number(), v.integer(), v.minValue(0)),
 });
 
 const storeSnapshotResponseSchema = v.strictObject({
   generation: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  snapshotRevision: v.pipe(v.number(), v.integer(), v.minValue(0)),
   storedAt: v.string(),
 });
 
@@ -117,9 +122,32 @@ const ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS = 30_000;
 const REDIS_LOCK_TIMEOUT_MS = 30_000;
 const REDIS_INITIAL_SYNC_TIMEOUT_MS = 3000;
 const SHUTDOWN_DRAIN_TIMEOUT_MS = 10_000;
-export const REDIS_RETRY_CLOSE_CODE = 4503;
+const SNAPSHOT_REVISION_RETRY_LIMIT = 3;
+const FOLIO_COLLABORATOR_COLOR_SPACE = 16_777_215;
 const REDIS_RETRY_CLOSE_REASON = "Collaboration coordination unavailable";
 const ROOM_GENERATION_CLOSE_REASON = "Collaboration room generation changed";
+
+const presenceColorFromUserId = (userId: string) => {
+  let hash = 0;
+  for (const character of userId) {
+    hash =
+      (hash * 31 + (character.codePointAt(0) ?? 0)) %
+      FOLIO_COLLABORATOR_COLOR_SPACE;
+  }
+  const color = (hash * 2_654_435_761) % FOLIO_COLLABORATOR_COLOR_SPACE;
+  return `#${color.toString(16).padStart(6, "0")}`;
+};
+
+const readPresenceUserId = (state: unknown) => {
+  if (state === null || typeof state !== "object" || !("user" in state)) {
+    return null;
+  }
+  const user = state.user;
+  if (user === null || typeof user !== "object" || !("id" in user)) {
+    return null;
+  }
+  return typeof user.id === "string" ? user.id : null;
+};
 
 const parseTokenExpiresAt = (value: string) => {
   const expiresAtMs = Date.parse(value);
@@ -243,16 +271,17 @@ export const createCollabServer = async (
   const managedConnectionsBySocketId = new Map<string, ManagedConnection>();
   const closeManagedConnectionsForRetry = (reason: string) => {
     for (const { socket } of managedConnections) {
-      socket.close(REDIS_RETRY_CLOSE_CODE, reason);
+      socket.close(FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE, reason);
     }
   };
-  const closeManagedRoomConnectionsForRetry = (
+  const closeManagedRoomConnections = (
     roomName: string,
+    code: number,
     reason: string,
   ) => {
     for (const { roomConnectionCounts, socket } of managedConnections) {
       if (roomConnectionCounts.has(roomName)) {
-        socket.close(REDIS_RETRY_CLOSE_CODE, reason);
+        socket.close(code, reason);
       }
     }
   };
@@ -335,10 +364,20 @@ export const createCollabServer = async (
   }
 
   const tokenStates = new Map<string, CollabRoomTokenState>();
-  const roomHeartbeatStates = new Map<string, CollabRoomHeartbeatState>();
+  const roomHeartbeatStates = new Map<
+    CollabRoomTokenState,
+    CollabRoomHeartbeatState
+  >();
   const documentSnapshots = new WeakMap<
     HocuspocusDocument,
-    { generation: number; roomId: string }
+    { generation: number; roomId: string; snapshotRevision: number }
+  >();
+  // Debounced persistence and an explicit publication flush can overlap. The
+  // capture plus store must stay ordered so a flush acknowledgement always
+  // describes the snapshot that remains at the durable room pointer.
+  const documentSnapshotStoreTails = new WeakMap<
+    HocuspocusDocument,
+    Promise<void>
   >();
   const roomCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -361,8 +400,8 @@ export const createCollabServer = async (
     state.refreshTimer = null;
   };
 
-  const clearRoomHeartbeat = (roomId: string) => {
-    const state = roomHeartbeatStates.get(roomId);
+  const clearRoomHeartbeat = (tokenState: CollabRoomTokenState) => {
+    const state = roomHeartbeatStates.get(tokenState);
     if (!state) {
       return;
     }
@@ -370,13 +409,14 @@ export const createCollabServer = async (
     if (state.timer) {
       clearTimeout(state.timer);
     }
-    roomHeartbeatStates.delete(roomId);
+    roomHeartbeatStates.delete(tokenState);
   };
 
   const clearRoomTokens = (roomName: string) => {
-    const roomId = parseFolioCollabRoomName(roomName);
-    if (roomId !== null) {
-      clearRoomHeartbeat(roomId);
+    for (const tokenState of roomHeartbeatStates.keys()) {
+      if (tokenState.roomName === roomName) {
+        clearRoomHeartbeat(tokenState);
+      }
     }
     for (const [token, state] of tokenStates) {
       if (state.roomName !== roomName) {
@@ -438,6 +478,7 @@ export const createCollabServer = async (
     }
 
     const state: CollabRoomTokenState = {
+      activeConnections: 0,
       canEdit,
       generation,
       refreshInFlight: null,
@@ -524,8 +565,8 @@ export const createCollabServer = async (
     });
   };
 
-  const scheduleRoomHeartbeat = (roomId: string) => {
-    const state = roomHeartbeatStates.get(roomId);
+  const scheduleRoomHeartbeat = (tokenState: CollabRoomTokenState) => {
+    const state = roomHeartbeatStates.get(tokenState);
     if (!state || state.timer) {
       return;
     }
@@ -536,9 +577,9 @@ export const createCollabServer = async (
       state.inFlight = request;
       void request
         .then(() => {
-          if (roomHeartbeatStates.get(roomId) === state) {
+          if (roomHeartbeatStates.get(tokenState) === state) {
             state.inFlight = null;
-            scheduleRoomHeartbeat(roomId);
+            scheduleRoomHeartbeat(tokenState);
           }
           return undefined;
         })
@@ -550,9 +591,8 @@ export const createCollabServer = async (
   };
 
   const ensureRoomHeartbeat = async (tokenState: CollabRoomTokenState) => {
-    const existing = roomHeartbeatStates.get(tokenState.roomId);
+    const existing = roomHeartbeatStates.get(tokenState);
     if (existing) {
-      existing.tokenState = tokenState;
       if (existing.inFlight) {
         await existing.inFlight;
       }
@@ -564,15 +604,15 @@ export const createCollabServer = async (
       timer: null,
       tokenState,
     };
-    roomHeartbeatStates.set(tokenState.roomId, state);
+    roomHeartbeatStates.set(tokenState, state);
     const request = heartbeatRoom(tokenState);
     state.inFlight = request;
     try {
       await request;
       state.inFlight = null;
-      scheduleRoomHeartbeat(tokenState.roomId);
+      scheduleRoomHeartbeat(tokenState);
     } catch (error) {
-      clearRoomHeartbeat(tokenState.roomId);
+      clearRoomHeartbeat(tokenState);
       throw error;
     }
   };
@@ -583,37 +623,98 @@ export const createCollabServer = async (
       panic("Collaboration room snapshot generation is missing.");
     }
 
-    try {
-      await postJson({
-        apiUrl,
-        authorizationToken: serviceToken,
-        body: {
-          expectedGeneration: snapshot.generation,
-          roomId: snapshot.roomId,
-          snapshotBase64: Buffer.from(encodeStateAsUpdate(document)).toString(
-            "base64",
-          ),
-        },
-        path: "/folio-collab-rooms/snapshot/store",
-        schema: storeSnapshotResponseSchema,
-      });
-    } catch (error) {
-      if (!(error instanceof FetchBoundaryError) || error.status !== 409) {
-        throw error;
+    const storeSnapshotAttempt = async (attempt: number): Promise<number> => {
+      if (attempt >= SNAPSHOT_REVISION_RETRY_LIMIT) {
+        throw new FetchBoundaryError({
+          url: `${apiUrl}/v1/folio-collab-rooms/snapshot/store`,
+          status: 428,
+          statusText: "Precondition Required",
+          message: "Collaboration snapshot revision did not converge.",
+        });
       }
-      closeManagedRoomConnectionsForRetry(
-        document.name,
-        ROOM_GENERATION_CLOSE_REASON,
-      );
-      clearRoomTokens(document.name);
-      logCollabEvent({
-        event: "snapshot_generation_conflict",
-        generation: snapshot.generation,
-        level: "error",
-        roomId: snapshot.roomId,
-      });
-      throw error;
-    }
+      try {
+        const stored = await postJson({
+          apiUrl,
+          authorizationToken: serviceToken,
+          body: {
+            expectedGeneration: snapshot.generation,
+            expectedSnapshotRevision: snapshot.snapshotRevision,
+            roomId: snapshot.roomId,
+            snapshotBase64: Buffer.from(encodeStateAsUpdate(document)).toString(
+              "base64",
+            ),
+          },
+          path: "/folio-collab-rooms/snapshot/store",
+          schema: storeSnapshotResponseSchema,
+        });
+        snapshot.snapshotRevision = stored.snapshotRevision;
+        return stored.snapshotRevision;
+      } catch (error) {
+        if (!(error instanceof FetchBoundaryError)) {
+          throw error;
+        }
+        if (error.status === 409) {
+          closeManagedRoomConnections(
+            document.name,
+            FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
+            ROOM_GENERATION_CLOSE_REASON,
+          );
+          clearRoomTokens(document.name);
+          logCollabEvent({
+            event: "snapshot_generation_conflict",
+            generation: snapshot.generation,
+            level: "error",
+            roomId: snapshot.roomId,
+          });
+          throw error;
+        }
+        if (error.status !== 428) {
+          throw error;
+        }
+
+        const current = await postJson({
+          apiUrl,
+          authorizationToken: serviceToken,
+          body: { roomId: snapshot.roomId },
+          path: "/folio-collab-rooms/snapshot/load",
+          schema: loadSnapshotResponseSchema,
+        });
+        if (current.generation !== snapshot.generation) {
+          closeManagedRoomConnections(
+            document.name,
+            FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
+            ROOM_GENERATION_CLOSE_REASON,
+          );
+          clearRoomTokens(document.name);
+          throw error;
+        }
+        if (current.snapshotBase64 !== null) {
+          applyUpdate(document, Buffer.from(current.snapshotBase64, "base64"));
+        }
+        snapshot.snapshotRevision = current.snapshotRevision;
+        return await storeSnapshotAttempt(attempt + 1);
+      }
+    };
+    return await storeSnapshotAttempt(0);
+  };
+
+  const queueRoomSnapshotStore = async (document: HocuspocusDocument) => {
+    const previous = documentSnapshotStoreTails.get(document);
+    const current = (previous ?? Promise.resolve()).then(
+      async () => await storeRoomSnapshot(document),
+    );
+    const tail = current.then(
+      () => undefined,
+      () => undefined,
+    );
+    documentSnapshotStoreTails.set(document, tail);
+    void tail.then(() => {
+      if (documentSnapshotStoreTails.get(document) === tail) {
+        documentSnapshotStoreTails.delete(document);
+      }
+      return undefined;
+    });
+    return await current;
   };
 
   const hocuspocus = new Hocuspocus<CollabAuthContext>({
@@ -674,7 +775,13 @@ export const createCollabServer = async (
           token,
           tokenExpiresAt: authorized.tokenExpiresAt,
         });
-        await ensureRoomHeartbeat(tokenState);
+        tokenState.activeConnections += 1;
+        try {
+          await ensureRoomHeartbeat(tokenState);
+        } catch (error) {
+          tokenState.activeConnections -= 1;
+          throw error;
+        }
         connectionConfig.readOnly = !authorized.canEdit;
         const managedConnection = managedConnectionsByRequest.get(request);
         if (managedConnection === undefined) {
@@ -691,15 +798,22 @@ export const createCollabServer = async (
           roomId: authorized.roomId,
           tokenState,
           userId: authorized.userId,
-          workspaceId: authorized.workspaceId,
+          userName: authorized.userName,
         };
       } catch (error) {
         clearRoomTokens(documentName);
         throw error;
       }
     },
-    async onDisconnect({ documentName, socketId }) {
+    async onDisconnect({ context, documentName, socketId }) {
       await Promise.resolve();
+      context.tokenState.activeConnections = Math.max(
+        0,
+        context.tokenState.activeConnections - 1,
+      );
+      if (context.tokenState.activeConnections === 0) {
+        clearRoomHeartbeat(context.tokenState);
+      }
       const managedConnection = managedConnectionsBySocketId.get(socketId);
       const connectionCount =
         managedConnection?.roomConnectionCounts.get(documentName);
@@ -714,6 +828,33 @@ export const createCollabServer = async (
         documentName,
         connectionCount - 1,
       );
+    },
+    async beforeHandleAwareness({ context, document, states }) {
+      if (context === undefined) {
+        return;
+      }
+      for (const [clientId, state] of states) {
+        const existingUserId = readPresenceUserId(
+          document.awareness.getStates().get(clientId),
+        );
+        if (existingUserId !== null && existingUserId !== context.userId) {
+          states.delete(clientId);
+          logCollabEvent({
+            event: "awareness_identity_conflict",
+            generation: context.tokenState.generation,
+            level: "error",
+            roomId: context.roomId,
+          });
+          continue;
+        }
+        state["user"] = {
+          color: presenceColorFromUserId(context.userId),
+          id: context.userId,
+          image: null,
+          name: context.userName,
+        };
+      }
+      await Promise.resolve();
     },
     async onLoadDocument({ context, document, documentName }) {
       cancelRoomCleanup(documentName);
@@ -730,6 +871,7 @@ export const createCollabServer = async (
       documentSnapshots.set(document, {
         generation: result.generation,
         roomId: context.roomId,
+        snapshotRevision: result.snapshotRevision,
       });
 
       if (!result.snapshotBase64) {
@@ -743,16 +885,17 @@ export const createCollabServer = async (
       if (!parsed.success) {
         return;
       }
-      await storeRoomSnapshot(document);
+      const snapshotRevision = await queueRoomSnapshotStore(document);
       connection.sendStateless(
         JSON.stringify({
           requestId: parsed.output.requestId,
+          snapshotRevision,
           type: FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
         }),
       );
     },
     async onStoreDocument({ document }) {
-      await storeRoomSnapshot(document);
+      await queueRoomSnapshotStore(document);
     },
   });
 
@@ -796,7 +939,10 @@ export const createCollabServer = async (
       },
       open(peer) {
         if (!redisReady) {
-          peer.close(REDIS_RETRY_CLOSE_CODE, REDIS_RETRY_CLOSE_REASON);
+          peer.close(
+            FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
+            REDIS_RETRY_CLOSE_REASON,
+          );
           return;
         }
 
@@ -854,8 +1000,8 @@ export const createCollabServer = async (
 
   const destroy = async () => {
     shuttingDown = true;
-    for (const roomId of roomHeartbeatStates.keys()) {
-      clearRoomHeartbeat(roomId);
+    for (const tokenState of roomHeartbeatStates.keys()) {
+      clearRoomHeartbeat(tokenState);
     }
     for (const state of tokenStates.values()) {
       clearRoomTokenRefresh(state);

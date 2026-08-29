@@ -1903,6 +1903,9 @@ type Messages = {
     "contentControlDropdownNoOptions": "No options";
     "copy": "Copy";
     "copyLink": "Copy link";
+    "createVersion": "Create version";
+    "createVersionFailedDescription": "Your edits remain in the shared document. Try creating the version again.";
+    "createVersionFailedTitle": "Could not create version";
     "cut": "Cut";
     "decreaseIndent": "Decrease Indent";
     "delete": "Delete";
@@ -1915,6 +1918,7 @@ type Messages = {
     "doneEditing": "Done editing";
     "doubleClickFooter": "Double-click to add footer";
     "doubleClickHeader": "Double-click to add header";
+    "downloadCheckpoint": "Download checkpoint";
     "editAuthRequired": "Refresh stella and sign in again before editing this document.";
     "editDownloadFailed": "The document could not be downloaded for editing.";
     "editLink": "Edit link";
@@ -2012,6 +2016,10 @@ type Messages = {
     "unlockForEditing": "Unlock to edit";
     "unsupportedDocxEditDescription": "This DOCX contains structures Folio cannot safely rewrite. To avoid corrupting the file, download it and edit it in Word.";
     "unsupportedDocxEditTitle": "Editing blocked";
+    "versionConflictDescription": "A newer version exists outside this collaboration room. Your checkpoint is intact and can be downloaded.";
+    "versionConflictTitle": "Newer version found";
+    "versionCreatedDescription": "Version {versionNumber} was created. Everyone can keep editing.";
+    "versionCreatedTitle": "Version created";
     "viewOnly": "View only";
   };
   "guides": {

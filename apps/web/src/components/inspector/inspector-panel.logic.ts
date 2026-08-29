@@ -25,12 +25,15 @@ export const resolveFileFieldPropertyId = ({
 };
 
 export const shouldReplaceFileFieldAfterSync = ({
+  isFieldIdPinned,
   isSelectedFieldMissing,
   previousCurrentFieldId,
   selectedFieldId,
 }: {
+  isFieldIdPinned: boolean;
   isSelectedFieldMissing: boolean;
   previousCurrentFieldId: string | undefined;
   selectedFieldId: string;
 }): boolean =>
-  isSelectedFieldMissing || previousCurrentFieldId === selectedFieldId;
+  !isFieldIdPinned &&
+  (isSelectedFieldMissing || previousCurrentFieldId === selectedFieldId);

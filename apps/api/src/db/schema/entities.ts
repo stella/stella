@@ -3,6 +3,7 @@ import {
   FOLIO_COLLAB_CHECKPOINT_MAX_BYTES,
   FOLIO_COLLAB_CONTRIBUTOR_MAX_COUNT,
   FOLIO_COLLAB_ROOM_SEED_STATES,
+  FOLIO_COLLAB_ROOM_UNSEEDED_STATES,
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
 } from "@/api/lib/folio-collab-room-contract";
 
@@ -733,6 +734,9 @@ export const desktopEditHandoffs = p.pgTable(
 const FOLIO_COLLAB_ROOM_SEED_STATE_SQL_VALUES = sql.raw(
   FOLIO_COLLAB_ROOM_SEED_STATES.map((state) => `'${state}'`).join(", "),
 );
+const FOLIO_COLLAB_ROOM_UNSEEDED_STATE_SQL_VALUES = sql.raw(
+  FOLIO_COLLAB_ROOM_UNSEEDED_STATES.map((state) => `'${state}'`).join(", "),
+);
 
 export const folioCollabRooms = p.pgTable(
   "folio_collab_rooms",
@@ -747,6 +751,10 @@ export const folioCollabRooms = p.pgTable(
     baseVersionId: safeUuid<"entityVersion">("base_version_id").notNull(),
     fileName: p.varchar("file_name", { length: 256 }).notNull(),
     yjsSnapshotFileId: safeUuid<"userFile">("yjs_snapshot_file_id").notNull(),
+    yjsSnapshotRevision: p
+      .bigint("yjs_snapshot_revision", { mode: "number" })
+      .notNull()
+      .default(0),
     yjsSnapshotSizeBytes: p.integer("yjs_snapshot_size_bytes"),
     yjsSnapshotUpdatedAt: timestamptz("yjs_snapshot_updated_at"),
     docxCheckpointFileId: safeUuid<"userFile">(
@@ -795,6 +803,17 @@ export const folioCollabRooms = p.pgTable(
     p.check(
       "folio_collab_rooms_generation_check",
       sql`${table.generation} >= 0`,
+    ),
+    p.check(
+      "folio_collab_rooms_snapshot_revision_check",
+      sql`${table.yjsSnapshotRevision} >= 0`,
+    ),
+    p.check(
+      "folio_collab_rooms_snapshot_revision_seed_check",
+      sql`(
+        (${table.seedState} IN (${FOLIO_COLLAB_ROOM_UNSEEDED_STATE_SQL_VALUES}) AND ${table.yjsSnapshotRevision} = 0)
+        OR (${table.seedState} = 'seeded' AND ${table.yjsSnapshotRevision} > 0)
+      )`,
     ),
     p.check(
       "folio_collab_rooms_seed_state_check",

@@ -193,6 +193,9 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     shouldThrow: false,
   });
   const pdfRouteJustification = pdfRouteMatch?.search.justification ?? null;
+  const routeOwnedEditingFieldId = pdfRouteMatch?.search.editing
+    ? (pdfRouteMatch.search.field ?? null)
+    : null;
 
   // A revive suggestion for a route-owned view is only meaningful
   // while its owner route stays presented — leaving the route takes
@@ -274,13 +277,14 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       if (editingDocxTabId === tabId && action) {
         action
           .cancel()
-          .finally(() => {
+          .then(() => {
             docxActionsRef.current.delete(tabId);
             setEditingDocxTabId((current) =>
               current === tabId ? null : current,
             );
             clearAnonymization(tabId);
             closeTab(tabId, { suggestRevive: true });
+            return undefined;
           })
           .catch((error: unknown) => {
             getAnalytics().captureError(error);
@@ -591,6 +595,9 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 
         {pdfTabs.map((tab) => (
           <CurrentFileFieldSync
+            isFieldIdPinned={
+              editingDocxTabId === tab.id || routeOwnedEditingFieldId === tab.id
+            }
             isActive={!minimized && tab.id === activeId}
             key={`${tab.workspaceId}:${tab.entityId}:${tab.propertyId ?? tab.id}`}
             tab={tab}
@@ -646,9 +653,11 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 };
 
 const CurrentFileFieldSync = ({
+  isFieldIdPinned,
   isActive,
   tab,
 }: {
+  isFieldIdPinned: boolean;
   isActive: boolean;
   tab: FileTab;
 }) => {
@@ -712,6 +721,7 @@ const CurrentFileFieldSync = ({
     );
     if (
       !shouldReplaceFileFieldAfterSync({
+        isFieldIdPinned,
         isSelectedFieldMissing,
         previousCurrentFieldId,
         selectedFieldId: tab.id,
@@ -737,6 +747,7 @@ const CurrentFileFieldSync = ({
     activeFileField,
     currentFileFieldIdsByProperty,
     filePropertyId,
+    isFieldIdPinned,
     isSelectedFieldMissing,
     latestFileFieldForProperty,
     replaceFileFieldId,

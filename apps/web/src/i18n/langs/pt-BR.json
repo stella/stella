@@ -1900,6 +1900,9 @@
     "contentControlDropdownNoOptions": "Nenhuma opção",
     "copy": "Copiar",
     "copyLink": "Copiar link",
+    "createVersion": "Criar versão",
+    "createVersionFailedDescription": "Suas alterações permanecem no documento compartilhado. Tente criar a versão novamente.",
+    "createVersionFailedTitle": "Não foi possível criar a versão",
     "cut": "Cortar",
     "decreaseIndent": "Diminuir recuo",
     "delete": "Excluir",
@@ -1912,6 +1915,7 @@
     "doneEditing": "Edição concluída",
     "doubleClickFooter": "Clique duas vezes para adicionar rodapé",
     "doubleClickHeader": "Clique duas vezes para adicionar cabeçalho",
+    "downloadCheckpoint": "Baixar ponto de controle",
     "editAuthRequired": "Atualize stella e faça login novamente antes de editar este documento.",
     "editDownloadFailed": "Não foi possível fazer download do documento para edição.",
     "editLink": "Editar link",
@@ -2009,6 +2013,10 @@
     "unlockForEditing": "Desbloquear para editar",
     "unsupportedDocxEditDescription": "Este DOCX contém estruturas que o Folio não pode reescrever com segurança. Para evitar corromper o arquivo, baixe-o e edite-o no Word.",
     "unsupportedDocxEditTitle": "Edição bloqueada",
+    "versionConflictDescription": "Existe uma versão mais recente fora desta sala de colaboração. Seu ponto de controle está intacto e pode ser baixado.",
+    "versionConflictTitle": "Versão mais recente encontrada",
+    "versionCreatedDescription": "A versão {versionNumber} foi criada. Todos podem continuar editando.",
+    "versionCreatedTitle": "Versão criada",
     "viewOnly": "Somente leitura"
   },
   "guides": {

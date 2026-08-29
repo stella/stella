@@ -8,6 +8,7 @@ import {
   shouldBlockDocxEdit,
   shouldFinalizeEditSession,
   shouldPromptReadonlyUnlock,
+  shouldReuseCollaborationPublication,
   shouldUseDocxBrowserEditor,
 } from "./docx-browser-editor.logic";
 import type { DocxPreviewFile } from "./docx-browser-editor.logic";
@@ -157,6 +158,21 @@ describe("DOCX browser editor buffer selection", () => {
       }),
     ).toBe(previewBuffer);
   });
+
+  test("keeps an already-seeded room buffer stable when a publish refreshes the preview", () => {
+    const roomBuffer = bufferFrom([5]);
+
+    expect(
+      selectDocxBrowserEditorBuffer({
+        collaborationSeedBuffer: null,
+        isCollaborativeEditing: true,
+        lastEditingBuffer: roomBuffer,
+        preservedLoadedBuffer: null,
+        previewBuffer: bufferFrom([6]),
+        state: { status: "idle" },
+      }),
+    ).toBe(roomBuffer);
+  });
 });
 
 describe("DOCX readonly unlock prompt", () => {
@@ -200,6 +216,38 @@ describe("DOCX edit finalization", () => {
         isDirty: false,
         hasSessionChanges: false,
         hasPendingEditorChanges: false,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("collaboration publication retry", () => {
+  const current = {
+    documentMutationRevision: 8,
+    generation: 2,
+    roomId: "room-current",
+  };
+
+  test("reuses idempotency only for the same room generation and mutation cut", () => {
+    expect(
+      shouldReuseCollaborationPublication({ current, pending: current }),
+    ).toBe(true);
+    expect(
+      shouldReuseCollaborationPublication({
+        current,
+        pending: { ...current, documentMutationRevision: 7 },
+      }),
+    ).toBe(false);
+    expect(
+      shouldReuseCollaborationPublication({
+        current,
+        pending: { ...current, generation: 1 },
+      }),
+    ).toBe(false);
+    expect(
+      shouldReuseCollaborationPublication({
+        current,
+        pending: { ...current, roomId: "room-previous" },
       }),
     ).toBe(false);
   });

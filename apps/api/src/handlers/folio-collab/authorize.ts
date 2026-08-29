@@ -33,7 +33,7 @@ const authorizeFolioCollabSessionHandler = createSafeTokenHandler(
       roomName: toFolioCollabRoomName(value.roomId),
       tokenExpiresAt: value.tokenExpiresAt.toISOString(),
       userId: value.userId,
-      workspaceId: value.workspaceId,
+      userName: value.userName,
     });
   },
 );

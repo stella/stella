@@ -38,6 +38,7 @@ const CHECKPOINT_WRITE_RECOVERY_DELAY_MS = 2 * 60 * 1000;
 
 const checkpointFolioCollabRoomBodySchema = t.Object({
   expectedGeneration: t.Integer({ minimum: 0 }),
+  expectedSnapshotRevision: t.Integer({ minimum: 0 }),
   roomId: tSafeId("folioCollabRoom"),
 });
 
@@ -49,6 +50,7 @@ type FolioCollabSnapshotCut = {
   baseVersionId: SafeId<"entityVersion">;
   generation: number;
   snapshotFileId: SafeId<"userFile">;
+  snapshotRevision: number;
   snapshotUpdatedAt: Date | null;
 };
 
@@ -62,6 +64,7 @@ export const matchesFolioCollabSnapshotCut = ({
   current.baseVersionId === materialized.baseVersionId &&
   current.generation === materialized.generation &&
   current.snapshotFileId === materialized.snapshotFileId &&
+  current.snapshotRevision === materialized.snapshotRevision &&
   current.snapshotUpdatedAt?.getTime() ===
     materialized.snapshotUpdatedAt?.getTime();
 
@@ -72,7 +75,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
     mcp: { type: "internal", reason: "session_token_exchange" },
   } satisfies HandlerConfig,
   async function* ({
-    body: { expectedGeneration, roomId },
+    body: { expectedGeneration, expectedSnapshotRevision, roomId },
     recordAuditEvent,
     request,
     safeDb,
@@ -90,6 +93,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
             propertyId: folioCollabRooms.propertyId,
             seedState: folioCollabRooms.seedState,
             snapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+            snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
             snapshotSizeBytes: folioCollabRooms.yjsSnapshotSizeBytes,
             snapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
           })
@@ -129,6 +133,15 @@ const checkpointFolioCollabRoom = createSafeHandler(
           code: "folio_collab_generation_changed",
           status: 409,
           message: "Collaborative room generation changed.",
+        }),
+      );
+    }
+    if (target.room.snapshotRevision !== expectedSnapshotRevision) {
+      return Result.err(
+        new HandlerError({
+          code: "folio_collab_snapshot_revision_changed",
+          status: 428,
+          message: "Collaborative snapshot revision changed.",
         }),
       );
     }
@@ -273,6 +286,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
             checkpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
             generation: folioCollabRooms.generation,
             snapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+            snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
             snapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
           })
           .from(folioCollabRooms)
@@ -309,6 +323,10 @@ const checkpointFolioCollabRoom = createSafeHandler(
               eq(folioCollabRooms.id, roomId),
               eq(folioCollabRooms.workspaceId, workspaceId),
               eq(folioCollabRooms.generation, expectedGeneration),
+              eq(
+                folioCollabRooms.yjsSnapshotRevision,
+                expectedSnapshotRevision,
+              ),
             ),
           );
         if (room.checkpointUpdatedAt !== null) {
