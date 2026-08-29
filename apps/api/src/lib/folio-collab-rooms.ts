@@ -4,7 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { roles } from "@stll/permissions";
 
-import { member } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { rootDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -165,6 +165,8 @@ export type AuthorizedFolioCollabRoom = {
   tokenExpiresAt: Date;
   tokenId: SafeId<"folioCollabRoomToken">;
   userId: SafeId<"user">;
+  userImage: string | null;
+  userName: string;
   workspaceId: SafeId<"workspace">;
 };
 
@@ -417,6 +419,8 @@ export const authorizeFolioCollabRoom = async ({
       tokenId: folioCollabRoomTokens.id,
       tokenGeneration: folioCollabRoomTokens.generation,
       userId: folioCollabRoomTokens.userId,
+      userImage: user.image,
+      userName: user.name,
       workspaceId: folioCollabRooms.workspaceId,
       workspaceClientId: workspaces.clientId,
       workspaceMemberId: workspaceMembers.id,
@@ -431,6 +435,7 @@ export const authorizeFolioCollabRoom = async ({
       ),
     )
     .innerJoin(workspaces, eq(folioCollabRooms.workspaceId, workspaces.id))
+    .innerJoin(user, eq(user.id, folioCollabRoomTokens.userId))
     .leftJoin(
       member,
       and(
@@ -491,6 +496,8 @@ export const authorizeFolioCollabRoom = async ({
       tokenExpiresAt: row.expiresAt,
       tokenId: row.tokenId,
       userId: brandPersistedUserId(row.userId),
+      userImage: row.userImage,
+      userName: row.userName,
       workspaceId: row.workspaceId,
     },
   };

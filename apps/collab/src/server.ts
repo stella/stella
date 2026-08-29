@@ -17,6 +17,7 @@ import {
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
   FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_REDIS_SCOPE,
+  folioCollabPresenceColor,
   parseFolioCollabRoomName,
 } from "@stll/api-contract/folio-collab";
 import { FetchBoundaryError } from "@stll/errors";
@@ -28,6 +29,8 @@ type CollabAuthContext = {
   roomId: string;
   tokenState: CollabRoomTokenState;
   userId: string;
+  userImage: string | null;
+  userName: string;
   workspaceId: string;
 };
 
@@ -81,6 +84,8 @@ const authorizeResponseSchema = v.strictObject({
   roomName: v.string(),
   tokenExpiresAt: v.string(),
   userId: v.string(),
+  userImage: v.nullable(v.string()),
+  userName: v.string(),
   workspaceId: v.string(),
 });
 
@@ -124,6 +129,17 @@ const SHUTDOWN_DRAIN_TIMEOUT_MS = 10_000;
 const SNAPSHOT_REVISION_RETRY_LIMIT = 3;
 const REDIS_RETRY_CLOSE_REASON = "Collaboration coordination unavailable";
 const ROOM_GENERATION_CLOSE_REASON = "Collaboration room generation changed";
+
+const readPresenceUserId = (state: unknown) => {
+  if (state === null || typeof state !== "object" || !("user" in state)) {
+    return null;
+  }
+  const user = state.user;
+  if (user === null || typeof user !== "object" || !("id" in user)) {
+    return null;
+  }
+  return typeof user.id === "string" ? user.id : null;
+};
 
 const parseTokenExpiresAt = (value: string) => {
   const expiresAtMs = Date.parse(value);
@@ -764,6 +780,8 @@ export const createCollabServer = async (
           roomId: authorized.roomId,
           tokenState,
           userId: authorized.userId,
+          userImage: authorized.userImage,
+          userName: authorized.userName,
           workspaceId: authorized.workspaceId,
         };
       } catch (error) {
@@ -787,6 +805,33 @@ export const createCollabServer = async (
         documentName,
         connectionCount - 1,
       );
+    },
+    async beforeHandleAwareness({ context, document, states }) {
+      if (context === undefined) {
+        return;
+      }
+      for (const [clientId, state] of states) {
+        const existingUserId = readPresenceUserId(
+          document.awareness.getStates().get(clientId),
+        );
+        if (existingUserId !== null && existingUserId !== context.userId) {
+          states.delete(clientId);
+          logCollabEvent({
+            event: "awareness_identity_conflict",
+            generation: context.tokenState.generation,
+            level: "error",
+            roomId: context.roomId,
+          });
+          continue;
+        }
+        state["user"] = {
+          color: folioCollabPresenceColor(context.userId),
+          id: context.userId,
+          image: context.userImage,
+          name: context.userName,
+        };
+      }
+      await Promise.resolve();
     },
     async onLoadDocument({ context, document, documentName }) {
       cancelRoomCleanup(documentName);

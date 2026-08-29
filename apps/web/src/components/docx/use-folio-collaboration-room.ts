@@ -203,6 +203,17 @@ export const useFolioCollaborationRoom = ({
   const userId = user?.id ?? null;
   const userImage = user?.image ?? null;
   const userName = user?.name ?? null;
+  const getAwarenessUser = useLatestCallback(() => {
+    if (userColor === null || userId === null || userName === null) {
+      return null;
+    }
+    return {
+      color: userColor,
+      id: userId,
+      image: userImage,
+      name: userName,
+    };
+  });
   const canConnect =
     enabled &&
     collabUrl !== undefined &&
@@ -528,12 +539,11 @@ export const useFolioCollaborationRoom = ({
           });
           return;
         }
-        awareness.setLocalStateField("user", {
-          color: userColor,
-          id: userId,
-          image: userImage,
-          name: userName,
-        });
+        const awarenessUser = getAwarenessUser();
+        if (awarenessUser === null) {
+          panic("Collaboration awareness identity is unavailable.");
+        }
+        awareness.setLocalStateField("user", awarenessUser);
 
         let mutationRevision = { document: 0, local: 0 };
         ydoc.on("afterTransaction", (transaction) => {
@@ -633,13 +643,10 @@ export const useFolioCollaborationRoom = ({
     collabUrl,
     entityId,
     getActionFailedMessage,
+    getAwarenessUser,
     getEditOpenFailedMessage,
     getEditPermissionDeniedMessage,
     propertyId,
-    userColor,
-    userId,
-    userImage,
-    userName,
     workspaceId,
   ]);
 

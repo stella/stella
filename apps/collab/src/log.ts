@@ -16,6 +16,12 @@ type CollabLogEvent =
       roomId: string;
     }
   | {
+      event: "awareness_identity_conflict";
+      generation: number;
+      level: "error";
+      roomId: string;
+    }
+  | {
       event: "shutdown_drain_timeout";
       level: "error";
     };

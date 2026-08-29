@@ -31,6 +31,7 @@ import {
 import type { EditorView } from "prosemirror-view";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { folioCollabPresenceColor } from "@stll/api-contract/folio-collab";
 import {
   FolioUIProvider,
   FormattingBar,
@@ -129,7 +130,6 @@ import type {
 import { useEditSession } from "./use-edit-session";
 
 const CHANGE_CHECKPOINT_DELAY = 2000;
-const COLLABORATOR_COLOR_SPACE = 16_777_215;
 const noop = () => undefined;
 
 class CollaborationCloseCutError extends TaggedError(
@@ -137,16 +137,6 @@ class CollaborationCloseCutError extends TaggedError(
 )<{
   message: string;
 }> {}
-
-const colorFromStableId = (value: string) => {
-  let hash = 0;
-  for (const character of value) {
-    hash =
-      (hash * 31 + (character.codePointAt(0) ?? 0)) % COLLABORATOR_COLOR_SPACE;
-  }
-  const color = (hash * 2_654_435_761) % COLLABORATOR_COLOR_SPACE;
-  return `#${color.toString(16).padStart(6, "0")}`;
-};
 
 /** The inspector docks the editor beside the page; full view owns the page. */
 export type DocxEditorSurface = "fullView" | "inspector";
@@ -787,6 +777,11 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const finalizeActiveSession = finalizeDesktopSession;
   const cancelActiveSession = useCallback(async () => {
     if (collaborationSession !== null) {
+      if (collaborationState.status === "readOnly") {
+        cancelCollaboration();
+        onClose();
+        return;
+      }
       const flushResult = await Result.tryPromise(
         async () => await collaborationSession.flushSnapshot(),
       );
@@ -816,6 +811,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     cancelCollaboration,
     cancelDesktopSession,
     collaborationSession,
+    collaborationState.status,
     onClose,
     t,
   ]);
@@ -2053,7 +2049,7 @@ const useDocxBrowserCollaboration = ({
     propertyId,
     user: currentUser
       ? {
-          color: colorFromStableId(currentUser.id),
+          color: folioCollabPresenceColor(currentUser.id),
           id: currentUser.id,
           image: currentUser.image ?? null,
           name:

@@ -43,6 +43,8 @@ type FakeStellaApi = {
 
 type AwarenessUserState = {
   user: {
+    id: string;
+    image: string | null;
     name: string;
   };
 };
@@ -89,7 +91,11 @@ const hasAwarenessUserName = (
 ): state is AwarenessUserState =>
   typeof state["user"] === "object" &&
   state["user"] !== null &&
+  "id" in state["user"] &&
+  "image" in state["user"] &&
   "name" in state["user"] &&
+  typeof state["user"].id === "string" &&
+  (state["user"].image === null || typeof state["user"].image === "string") &&
   state["user"].name === name;
 
 const getTextContent = (doc: Doc, name: string) => doc.getText(name).toJSON();
@@ -176,6 +182,8 @@ const createFakeStellaApi = ({
           roomName: requestedRoomName,
           tokenExpiresAt,
           userId: "user_test",
+          userImage: "https://example.test/authorized-avatar.png",
+          userName: "Authorized user",
           workspaceId: "workspace_test",
         });
       }
@@ -566,16 +574,26 @@ describe("collaboration server", () => {
 
       firstProvider.awareness?.setLocalStateField("user", {
         color: "#000000",
+        id: "impersonated_user",
+        image: "https://attacker.invalid/avatar.png",
         name: "First user",
       });
 
       await waitFor(
         () =>
           Array.from(secondProvider.awareness?.getStates().values() ?? []).some(
-            (state) => hasAwarenessUserName(state, "First user"),
+            (state) => hasAwarenessUserName(state, "Authorized user"),
           ),
         "Awareness state did not reach the second provider.",
       );
+      const authorizedPresence = Array.from(
+        secondProvider.awareness?.getStates().values() ?? [],
+      ).find((state) => hasAwarenessUserName(state, "Authorized user"));
+      expect(authorizedPresence?.user).toMatchObject({
+        id: "user_test",
+        image: "https://example.test/authorized-avatar.png",
+        name: "Authorized user",
+      });
 
       firstDoc.getText("body").insert(0, "hello collaborative folio");
 
@@ -1324,7 +1342,7 @@ describe.skipIf(redisTestUrl === undefined)(
           () =>
             Array.from(
               secondProvider.awareness?.getStates().values() ?? [],
-            ).some((state) => hasAwarenessUserName(state, "First user")),
+            ).some((state) => hasAwarenessUserName(state, "Authorized user")),
           "Awareness did not cross the Redis boundary.",
         );
 
