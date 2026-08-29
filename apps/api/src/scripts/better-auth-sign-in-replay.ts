@@ -172,10 +172,18 @@ const cookieHeader = (response: Response) =>
 
 type ReplayOutcome = "resolved" | "rejected" | "created" | "mismatched";
 
-const run = async (args: readonly string[]) => {
+type ReplaySummary = {
+  accounts: number;
+  sessions: { resolved: number; unresolved: number };
+  signIns: Record<ReplayOutcome, number>;
+};
+
+const run = async (
+  args: readonly string[],
+): Promise<Result<ReplaySummary, BetterAuthSignInReplayError>> => {
   const parsed = parseBetterAuthSignInReplayArgs(args);
   if (Result.isError(parsed)) {
-    return parsed;
+    return Result.err(parsed.error);
   }
   const clientId = process.env["MICROSOFT_AUTH_CLIENT_ID"];
   const tenantId = process.env["MICROSOFT_AUTH_TENANT_ID"];
@@ -199,7 +207,7 @@ const run = async (args: readonly string[]) => {
   const rows = await readRows(client);
   if (Result.isError(rows)) {
     await client.end();
-    return rows;
+    return Result.err(rows.error);
   }
 
   const { privateKey, publicKey } = await generateKeyPair("RS256");
@@ -232,7 +240,10 @@ const run = async (args: readonly string[]) => {
   // The runtime's only outbound calls during a sign-in are the provider's
   // token exchange and key discovery; both are served locally and every
   // other destination is refused, so the replay never leaves the process.
-  const localProviderFetch: typeof fetch = async (input, init) => {
+  const localProviderFetch = async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ): Promise<Response> => {
     const request = new Request(input, init);
     if (
       request.url.startsWith(`${MICROSOFT_AUTHORITY}/`) &&
@@ -265,7 +276,9 @@ const run = async (args: readonly string[]) => {
     rejected: 0,
     resolved: 0,
   };
-  globalThis.fetch = localProviderFetch;
+  globalThis.fetch = Object.assign(localProviderFetch, {
+    preconnect: realFetch.preconnect,
+  });
   const replayed = await Result.tryPromise({
     try: async () => {
       const rowIterator = rows.value.microsoft.values();
@@ -383,10 +396,10 @@ const run = async (args: readonly string[]) => {
   const after = await readRows(client);
   await client.end();
   if (Result.isError(replayed)) {
-    return replayed;
+    return Result.err(replayed.error);
   }
   if (Result.isError(after)) {
-    return after;
+    return Result.err(after.error);
   }
   if (
     after.value.userCount !== rows.value.userCount ||
