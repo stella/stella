@@ -11,6 +11,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
   presignDocxDownloadFromFileId,
@@ -43,6 +44,26 @@ const checkpointFolioCollabRoomBodySchema = t.Object({
 type CheckpointFolioCollabRoomBody = Static<
   typeof checkpointFolioCollabRoomBodySchema
 >;
+
+type FolioCollabSnapshotCut = {
+  baseVersionId: SafeId<"entityVersion">;
+  generation: number;
+  snapshotFileId: SafeId<"userFile">;
+  snapshotUpdatedAt: Date | null;
+};
+
+export const matchesFolioCollabSnapshotCut = ({
+  current,
+  materialized,
+}: {
+  current: FolioCollabSnapshotCut;
+  materialized: FolioCollabSnapshotCut;
+}) =>
+  current.baseVersionId === materialized.baseVersionId &&
+  current.generation === materialized.generation &&
+  current.snapshotFileId === materialized.snapshotFileId &&
+  current.snapshotUpdatedAt?.getTime() ===
+    materialized.snapshotUpdatedAt?.getTime();
 
 const checkpointFolioCollabRoom = createSafeHandler(
   {
@@ -246,10 +267,13 @@ const checkpointFolioCollabRoom = createSafeHandler(
       safeDb(async (tx) => {
         const rooms = await tx
           .select({
+            baseVersionId: folioCollabRooms.baseVersionId,
             checkpointFileId: folioCollabRooms.docxCheckpointFileId,
             checkpointSha256Hex: folioCollabRooms.docxCheckpointSha256Hex,
             checkpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
             generation: folioCollabRooms.generation,
+            snapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+            snapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
           })
           .from(folioCollabRooms)
           .where(
@@ -261,7 +285,13 @@ const checkpointFolioCollabRoom = createSafeHandler(
           .limit(1)
           .for("update");
         const room = rooms.at(0);
-        if (!room || room.generation !== expectedGeneration) {
+        if (
+          !room ||
+          !matchesFolioCollabSnapshotCut({
+            current: room,
+            materialized: target.room,
+          })
+        ) {
           return false;
         }
 
@@ -322,9 +352,10 @@ const checkpointFolioCollabRoom = createSafeHandler(
       });
       return Result.err(
         new HandlerError({
-          code: "folio_collab_generation_changed",
+          code: "folio_collab_checkpoint_changed",
           status: 409,
-          message: "Collaborative room generation changed.",
+          message:
+            "Collaborative document changed while its checkpoint was created.",
         }),
       );
     }

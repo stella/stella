@@ -23,12 +23,13 @@ import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-versi
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { validateDesktopEditFileBuffer } from "@/api/lib/entity-versions/validate-desktop-edit-file-buffer";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_CONTRIBUTOR_MAX_COUNT } from "@/api/lib/folio-collab-room-contract";
+import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
   deleteS3ObjectWithSignal,
@@ -44,6 +45,8 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const PUBLICATION_WRITE_RECOVERY_DELAY_MS = 2 * 60 * 1000;
 const CHECKPOINT_CLEANUP_GRACE_MS = 60_000;
+const FOLIO_COLLAB_PUBLICATION_IDEMPOTENCY_CONSTRAINT =
+  "folio_collab_publications_idempotency_uidx";
 
 type FolioCollabCheckpointCut = {
   checkpointFileId: SafeId<"userFile">;
@@ -67,6 +70,35 @@ export const matchesFolioCollabCheckpointCut = ({
   checkpoint.checkpointSha256Hex === expectedSha256Hex &&
   checkpoint.checkpointFileId === expectedFileId &&
   checkpoint.checkpointUpdatedAt !== null;
+
+type FolioCollabPublishedCut = {
+  checkpointSha256Hex: string;
+  generation: number;
+  roomId: SafeId<"folioCollabRoom">;
+};
+
+export const matchesFolioCollabPublishedCut = ({
+  expectedGeneration,
+  expectedSha256Hex,
+  published,
+  roomId,
+}: {
+  expectedGeneration: number;
+  expectedSha256Hex: string;
+  published: FolioCollabPublishedCut;
+  roomId: SafeId<"folioCollabRoom">;
+}) =>
+  published.roomId === roomId &&
+  published.generation === expectedGeneration &&
+  published.checkpointSha256Hex === expectedSha256Hex;
+
+export const isFolioCollabIdempotencyConstraintError = (error: unknown) =>
+  DatabaseError.is(error) &&
+  isPgConstraintError(
+    error.cause,
+    PG_ERROR.UNIQUE_VIOLATION,
+    FOLIO_COLLAB_PUBLICATION_IDEMPOTENCY_CONSTRAINT,
+  );
 
 const publishFolioCollabVersionBodySchema = t.Object({
   description: t.Optional(t.String({ maxLength: 1024 })),
@@ -103,6 +135,8 @@ const publishFolioCollabVersion = createSafeHandler(
       safeDb(async (tx) => {
         const prior = await tx
           .select({
+            checkpointSha256Hex: folioCollabPublications.checkpointSha256Hex,
+            generation: folioCollabPublications.generation,
             roomId: folioCollabPublications.roomId,
             versionId: folioCollabPublications.entityVersionId,
             versionNumber: entityVersions.versionNumber,
@@ -116,7 +150,14 @@ const publishFolioCollabVersion = createSafeHandler(
           .limit(1);
         const published = prior.at(0);
         if (published) {
-          if (published.roomId !== roomId) {
+          if (
+            !matchesFolioCollabPublishedCut({
+              expectedGeneration,
+              expectedSha256Hex,
+              published,
+              roomId,
+            })
+          ) {
             return { status: "idempotency-conflict" } as const;
           }
           return {
@@ -276,220 +317,238 @@ const publishFolioCollabVersion = createSafeHandler(
       });
     };
 
-    const publication = yield* Result.await(
-      safeDb(async (tx) => {
-        await lockDocxEditTarget({
-          entityId: preliminary.room.entityId,
-          propertyId: preliminary.room.propertyId,
-          tx,
-          workspaceId,
-        });
-        const rooms = await tx
-          .select({
-            baseVersionId: folioCollabRooms.baseVersionId,
-            checkpointFileId: folioCollabRooms.docxCheckpointFileId,
-            checkpointSha256Hex: folioCollabRooms.docxCheckpointSha256Hex,
-            checkpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
-            entityId: folioCollabRooms.entityId,
-            generation: folioCollabRooms.generation,
-            propertyId: folioCollabRooms.propertyId,
-          })
-          .from(folioCollabRooms)
-          .where(
-            and(
-              eq(folioCollabRooms.id, roomId),
-              eq(folioCollabRooms.workspaceId, workspaceId),
-            ),
-          )
-          .limit(1)
-          .for("update");
-        const room = rooms.at(0);
-        if (!room) {
-          return { status: "missing" } as const;
-        }
+    const publicationResult = await safeDb(async (tx) => {
+      await lockDocxEditTarget({
+        entityId: preliminary.room.entityId,
+        propertyId: preliminary.room.propertyId,
+        tx,
+        workspaceId,
+      });
+      const rooms = await tx
+        .select({
+          baseVersionId: folioCollabRooms.baseVersionId,
+          checkpointFileId: folioCollabRooms.docxCheckpointFileId,
+          checkpointSha256Hex: folioCollabRooms.docxCheckpointSha256Hex,
+          checkpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
+          entityId: folioCollabRooms.entityId,
+          generation: folioCollabRooms.generation,
+          propertyId: folioCollabRooms.propertyId,
+        })
+        .from(folioCollabRooms)
+        .where(
+          and(
+            eq(folioCollabRooms.id, roomId),
+            eq(folioCollabRooms.workspaceId, workspaceId),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      const room = rooms.at(0);
+      if (!room) {
+        return { status: "missing" } as const;
+      }
 
-        const prior = await tx
-          .select({
-            roomId: folioCollabPublications.roomId,
-            versionId: folioCollabPublications.entityVersionId,
-            versionNumber: entityVersions.versionNumber,
-          })
-          .from(folioCollabPublications)
-          .innerJoin(
-            entityVersions,
-            eq(entityVersions.id, folioCollabPublications.entityVersionId),
-          )
-          .where(eq(folioCollabPublications.idempotencyKey, idempotencyKey))
-          .limit(1);
-        const alreadyPublished = prior.at(0);
-        if (alreadyPublished) {
-          if (alreadyPublished.roomId !== roomId) {
-            return { status: "idempotency-conflict" } as const;
-          }
-          return {
-            status: "idempotent",
-            versionId: alreadyPublished.versionId,
-            versionNumber: alreadyPublished.versionNumber,
-          } as const;
-        }
+      const prior = await tx
+        .select({
+          checkpointSha256Hex: folioCollabPublications.checkpointSha256Hex,
+          generation: folioCollabPublications.generation,
+          roomId: folioCollabPublications.roomId,
+          versionId: folioCollabPublications.entityVersionId,
+          versionNumber: entityVersions.versionNumber,
+        })
+        .from(folioCollabPublications)
+        .innerJoin(
+          entityVersions,
+          eq(entityVersions.id, folioCollabPublications.entityVersionId),
+        )
+        .where(eq(folioCollabPublications.idempotencyKey, idempotencyKey))
+        .limit(1);
+      const alreadyPublished = prior.at(0);
+      if (alreadyPublished) {
         if (
-          !matchesFolioCollabCheckpointCut({
-            checkpoint: room,
-            expectedFileId: preliminary.room.checkpointFileId,
+          !matchesFolioCollabPublishedCut({
             expectedGeneration,
             expectedSha256Hex,
+            published: alreadyPublished,
+            roomId,
           })
         ) {
-          return { status: "checkpoint-changed" } as const;
+          return { status: "idempotency-conflict" } as const;
         }
+        return {
+          status: "idempotent",
+          versionId: alreadyPublished.versionId,
+          versionNumber: alreadyPublished.versionNumber,
+        } as const;
+      }
+      if (
+        !matchesFolioCollabCheckpointCut({
+          checkpoint: room,
+          expectedFileId: preliminary.room.checkpointFileId,
+          expectedGeneration,
+          expectedSha256Hex,
+        })
+      ) {
+        return { status: "checkpoint-changed" } as const;
+      }
 
-        const contributorRows = await tx
-          .select({
-            id: folioCollabContributions.id,
-            userId: folioCollabContributions.userId,
-          })
-          .from(folioCollabContributions)
-          .where(
-            and(
-              eq(folioCollabContributions.roomId, roomId),
-              eq(folioCollabContributions.workspaceId, workspaceId),
-            ),
-          )
-          .orderBy(
-            asc(folioCollabContributions.createdAt),
-            asc(folioCollabContributions.id),
-          )
-          .limit(FOLIO_COLLAB_CONTRIBUTOR_MAX_COUNT);
-        const contributorUserIds = contributorRows.map(
-          (contributor) => contributor.userId,
-        );
-        const versionId = createSafeId<"entityVersion">();
-        const fieldId = createSafeId<"field">();
-        const nextCheckpointFileId = createSafeId<"userFile">();
-        const versionWrite = await writeFileVersion({
-          afterWrite: async ({ versionNumber }) => {
-            await tx
-              .update(folioCollabRooms)
-              .set({
-                baseVersionId: versionId,
-                docxCheckpointFileId: nextCheckpointFileId,
-                docxCheckpointScanWarnings: null,
-                docxCheckpointSha256Hex: null,
-                docxCheckpointSizeBytes: null,
-                docxCheckpointUpdatedAt: null,
-              })
-              .where(
-                and(
-                  eq(folioCollabRooms.id, roomId),
-                  eq(folioCollabRooms.workspaceId, workspaceId),
-                  eq(folioCollabRooms.generation, expectedGeneration),
-                  eq(
-                    folioCollabRooms.docxCheckpointSha256Hex,
-                    expectedSha256Hex,
-                  ),
-                ),
-              );
-            await tx.insert(folioCollabPublications).values({
-              checkpointSha256Hex: expectedSha256Hex,
-              entityId: room.entityId,
-              entityVersionId: versionId,
-              generation: expectedGeneration,
-              id: createSafeId<"folioCollabPublication">(),
-              idempotencyKey,
-              roomId,
-              workspaceId,
-            });
-            await tx
-              .delete(folioCollabContributions)
-              .where(
-                and(
-                  eq(folioCollabContributions.roomId, roomId),
-                  eq(folioCollabContributions.workspaceId, workspaceId),
-                ),
-              );
-            // audit: skip — durable storage recovery bookkeeping; the room
-            // publication and canonical entity/version mutations are audited.
-            await tx.insert(bufferObjectCleanupIntents).values({
-              id: createSafeId<"pendingUpload">(),
-              nextAttemptAt: new Date(Date.now() + CHECKPOINT_CLEANUP_GRACE_MS),
-              objectKey: checkpointKey,
-              organizationId: session.activeOrganizationId,
-              workspaceId,
-            });
-            await tx
-              .delete(bufferObjectCleanupIntents)
-              .where(eq(bufferObjectCleanupIntents.id, sourceCleanupIntentId));
-            await recordAuditEvent(tx, {
-              action: AUDIT_ACTION.UPDATE,
-              resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,
-              resourceId: roomId,
-              changes: {
-                baseVersionId: { old: room.baseVersionId, new: versionId },
-                checkpointSha256Hex: {
-                  old: expectedSha256Hex,
-                  new: null,
-                },
+      const contributorRows = await tx
+        .select({
+          id: folioCollabContributions.id,
+          userId: folioCollabContributions.userId,
+        })
+        .from(folioCollabContributions)
+        .where(
+          and(
+            eq(folioCollabContributions.roomId, roomId),
+            eq(folioCollabContributions.workspaceId, workspaceId),
+          ),
+        )
+        .orderBy(
+          asc(folioCollabContributions.createdAt),
+          asc(folioCollabContributions.id),
+        )
+        .limit(FOLIO_COLLAB_CONTRIBUTOR_MAX_COUNT);
+      const contributorUserIds = contributorRows.map(
+        (contributor) => contributor.userId,
+      );
+      const versionId = createSafeId<"entityVersion">();
+      const fieldId = createSafeId<"field">();
+      const nextCheckpointFileId = createSafeId<"userFile">();
+      const versionWrite = await writeFileVersion({
+        afterWrite: async ({ versionNumber }) => {
+          await tx
+            .update(folioCollabRooms)
+            .set({
+              baseVersionId: versionId,
+              docxCheckpointFileId: nextCheckpointFileId,
+              docxCheckpointScanWarnings: null,
+              docxCheckpointSha256Hex: null,
+              docxCheckpointSizeBytes: null,
+              docxCheckpointUpdatedAt: null,
+            })
+            .where(
+              and(
+                eq(folioCollabRooms.id, roomId),
+                eq(folioCollabRooms.workspaceId, workspaceId),
+                eq(folioCollabRooms.generation, expectedGeneration),
+                eq(folioCollabRooms.docxCheckpointSha256Hex, expectedSha256Hex),
+              ),
+            );
+          await tx.insert(folioCollabPublications).values({
+            checkpointSha256Hex: expectedSha256Hex,
+            entityId: room.entityId,
+            entityVersionId: versionId,
+            generation: expectedGeneration,
+            id: createSafeId<"folioCollabPublication">(),
+            idempotencyKey,
+            roomId,
+            workspaceId,
+          });
+          await tx
+            .delete(folioCollabContributions)
+            .where(
+              and(
+                eq(folioCollabContributions.roomId, roomId),
+                eq(folioCollabContributions.workspaceId, workspaceId),
+              ),
+            );
+          // audit: skip — durable storage recovery bookkeeping; the room
+          // publication and canonical entity/version mutations are audited.
+          await tx.insert(bufferObjectCleanupIntents).values({
+            id: createSafeId<"pendingUpload">(),
+            nextAttemptAt: new Date(Date.now() + CHECKPOINT_CLEANUP_GRACE_MS),
+            objectKey: checkpointKey,
+            organizationId: session.activeOrganizationId,
+            workspaceId,
+          });
+          await tx
+            .delete(bufferObjectCleanupIntents)
+            .where(eq(bufferObjectCleanupIntents.id, sourceCleanupIntentId));
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,
+            resourceId: roomId,
+            changes: {
+              baseVersionId: { old: room.baseVersionId, new: versionId },
+              checkpointSha256Hex: {
+                old: expectedSha256Hex,
+                new: null,
               },
-              metadata: { versionNumber },
-            });
-          },
-          entityId: room.entityId,
-          entityVersionId: versionId,
-          fieldId,
-          fileId: sourceFileId,
-          fileName: preliminary.room.fileName,
-          mimeType: DOCX_MIME_TYPE,
-          organizationId: session.activeOrganizationId,
-          recordAuditEvent,
-          scanWarnings: preliminary.room.checkpointScanWarnings ?? undefined,
-          sha256Hex: expectedSha256Hex,
-          sizeBytes: checkpointBytes.byteLength,
-          source: COLLABORATION_DOCUMENT_SOURCE,
-          tx,
-          userId: user.id,
-          versionMetadata: {
-            collaborationContributorUserIds: contributorUserIds,
-            ...(description !== undefined && { description }),
-            ...(label !== undefined && { label }),
-          },
-          workspaceId,
-          writePolicy: {
-            type: "collaboration-room-publish",
-            expectedCurrentVersionId: room.baseVersionId,
-            filePropertyId: room.propertyId,
-          },
-        });
-        if (versionWrite.status === "ok") {
-          await requestNativeExtractionRun({ entityId: room.entityId, tx });
+            },
+            metadata: { versionNumber },
+          });
+        },
+        entityId: room.entityId,
+        entityVersionId: versionId,
+        fieldId,
+        fileId: sourceFileId,
+        fileName: preliminary.room.fileName,
+        mimeType: DOCX_MIME_TYPE,
+        organizationId: session.activeOrganizationId,
+        recordAuditEvent,
+        scanWarnings: preliminary.room.checkpointScanWarnings ?? undefined,
+        sha256Hex: expectedSha256Hex,
+        sizeBytes: checkpointBytes.byteLength,
+        source: COLLABORATION_DOCUMENT_SOURCE,
+        tx,
+        userId: user.id,
+        versionMetadata: {
+          collaborationContributorUserIds: contributorUserIds,
+          ...(description !== undefined && { description }),
+          ...(label !== undefined && { label }),
+        },
+        workspaceId,
+        writePolicy: {
+          type: "collaboration-room-publish",
+          expectedCurrentVersionId: room.baseVersionId,
+          filePropertyId: room.propertyId,
+        },
+      });
+      if (versionWrite.status === "ok") {
+        await requestNativeExtractionRun({ entityId: room.entityId, tx });
+      }
+      switch (versionWrite.status) {
+        case "ok":
+          return {
+            entityId: room.entityId,
+            fieldId: versionWrite.fieldId,
+            status: "created",
+            versionId: versionWrite.entityVersionId,
+            versionNumber: versionWrite.versionNumber,
+          } as const;
+        case "current-version-changed":
+        case "current-version-not-found":
+        case "missing-file-field":
+        case "target-file-not-found":
+          return { status: "base-drift" } as const;
+        case "entity-not-found":
+          return { status: "missing" } as const;
+        case "entity-read-only":
+          return { status: "read-only" } as const;
+        case "edit-session-open":
+        case "workspace-not-active":
+          return { status: "unavailable" } as const;
+        default: {
+          const exhaustive: never = versionWrite;
+          return exhaustive;
         }
-        switch (versionWrite.status) {
-          case "ok":
-            return {
-              entityId: room.entityId,
-              fieldId: versionWrite.fieldId,
-              status: "created",
-              versionId: versionWrite.entityVersionId,
-              versionNumber: versionWrite.versionNumber,
-            } as const;
-          case "current-version-changed":
-          case "current-version-not-found":
-          case "missing-file-field":
-          case "target-file-not-found":
-            return { status: "base-drift" } as const;
-          case "entity-not-found":
-            return { status: "missing" } as const;
-          case "entity-read-only":
-            return { status: "read-only" } as const;
-          case "edit-session-open":
-          case "workspace-not-active":
-            return { status: "unavailable" } as const;
-          default: {
-            const exhaustive: never = versionWrite;
-            return exhaustive;
-          }
-        }
-      }),
-    );
+      }
+    });
+    if (Result.isError(publicationResult)) {
+      await cleanupSource();
+      if (isFolioCollabIdempotencyConstraintError(publicationResult.error)) {
+        return Result.err(
+          new HandlerError({
+            code: "folio_collab_idempotency_key_reused",
+            status: 409,
+            message: "This publication key was already used.",
+          }),
+        );
+      }
+      return Result.err(publicationResult.error);
+    }
+    const publication = publicationResult.value;
 
     if (publication.status === "created") {
       broadcastWorkspaceResourceUpdated(

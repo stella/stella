@@ -10,7 +10,13 @@ import {
 import { eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { entities, entityVersions, fields, properties } from "@/api/db/schema";
+import {
+  desktopEditSessions,
+  entities,
+  entityVersions,
+  fields,
+  properties,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createEntitiesHandler } from "@/api/handlers/entities/create";
 import { updateDocumentProperties } from "@/api/handlers/files/update-document-properties";
@@ -313,6 +319,56 @@ describe("first file version persistence", () => {
     expect(
       version?.fields.some((field) => field.propertyId === filePropertyId),
     ).toBeTrue();
+  });
+
+  test("does not publish a collaboration version over a live desktop session", async () => {
+    const entityId = await createEmptyEntity("document");
+    const initialWrite = await writeTestFile(entityId);
+    if (Result.isError(initialWrite)) {
+      throw initialWrite.error;
+    }
+    if (initialWrite.value.status !== "ok") {
+      throw new Error(`Initial write failed: ${initialWrite.value.status}`);
+    }
+
+    const sessionId = createSafeId<"desktopEditSession">();
+    await testDb.insert(desktopEditSessions).values({
+      baseVersionId: initialWrite.value.entityVersionId,
+      checkpointFileId: createSafeId<"userFile">(),
+      createdBy: ids.userA1,
+      entityId,
+      fileName: "desktop.docx",
+      fileType: "docx",
+      id: sessionId,
+      propertyId: filePropertyId,
+      sessionTokenHash: "b".repeat(64),
+      tokenExpiresAt: new Date("2100-01-01T00:00:00.000Z"),
+      workspaceId: ids.wsA1,
+    });
+
+    try {
+      const published = await writeTestFile(entityId, {
+        writePolicy: {
+          type: "collaboration-room-publish",
+          expectedCurrentVersionId: initialWrite.value.entityVersionId,
+          filePropertyId,
+        },
+      });
+      if (Result.isError(published)) {
+        throw published.error;
+      }
+      expect(published.value).toEqual({ status: "edit-session-open" });
+      expect(
+        await testDb.$count(
+          entityVersions,
+          eq(entityVersions.entityId, entityId),
+        ),
+      ).toBe(2);
+    } finally {
+      await testDb
+        .delete(desktopEditSessions)
+        .where(eq(desktopEditSessions.id, sessionId));
+    }
   });
 
   test("rejects a document-property write against a historical field", async () => {

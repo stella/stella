@@ -99,7 +99,7 @@ type WriteFileVersionInput = {
     | undefined;
 };
 
-const hasOpenDocxEditSession = async ({
+const hasOpenDesktopEditSession = async ({
   tx,
   workspaceId,
   entityId,
@@ -123,7 +123,28 @@ const hasOpenDocxEditSession = async ({
       ),
     )
     .limit(1);
-  if (liveDesktopSessions.at(0)) {
+  return liveDesktopSessions.at(0) !== undefined;
+};
+
+const hasOpenDocxEditSession = async ({
+  tx,
+  workspaceId,
+  entityId,
+  filePropertyId,
+}: {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  entityId: SafeId<"entity">;
+  filePropertyId: SafeId<"property">;
+}): Promise<boolean> => {
+  if (
+    await hasOpenDesktopEditSession({
+      tx,
+      workspaceId,
+      entityId,
+      filePropertyId,
+    })
+  ) {
     return true;
   }
 
@@ -203,12 +224,38 @@ export const writeFileVersion = async ({
         tx,
         workspaceId,
       });
+      if (
+        await hasOpenDesktopEditSession({
+          tx,
+          workspaceId,
+          entityId,
+          filePropertyId: writePolicy.filePropertyId,
+        })
+      ) {
+        return { status: "edit-session-open" };
+      }
       break;
     }
     default: {
       const exhaustive: never = writePolicy;
       return exhaustive;
     }
+  }
+
+  const targetsFileProperty =
+    writePolicy.type === "automatic-docx-edit" ||
+    writePolicy.type === "collaboration-room-publish";
+  const lockedWorkspace = targetsFileProperty
+    ? await tx
+        .select({ reference: workspaces.reference, status: workspaces.status })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId))
+        .limit(1)
+        .for("update")
+        .then((rows) => rows.at(0))
+    : null;
+  if (targetsFileProperty && lockedWorkspace?.status !== "active") {
+    return { status: "workspace-not-active" };
   }
 
   const entityRows = await tx
@@ -259,9 +306,6 @@ export const writeFileVersion = async ({
     return { status: "current-version-not-found" };
   }
 
-  const targetsFileProperty =
-    writePolicy.type === "automatic-docx-edit" ||
-    writePolicy.type === "collaboration-room-publish";
   const fileField = targetsFileProperty
     ? currentVersion.fields.find(
         (candidate) =>
@@ -310,16 +354,12 @@ export const writeFileVersion = async ({
     return { status: "missing-file-field" };
   }
 
-  const workspace = await tx.query.workspaces.findFirst({
-    where: { id: { eq: workspaceId } },
-    columns: { reference: true, status: true },
-  });
-  if (
-    writePolicy.type === "automatic-docx-edit" &&
-    workspace?.status !== "active"
-  ) {
-    return { status: "workspace-not-active" };
-  }
+  const workspace =
+    lockedWorkspace ??
+    (await tx.query.workspaces.findFirst({
+      where: { id: { eq: workspaceId } },
+      columns: { reference: true, status: true },
+    }));
   const versionNumber = await nextEntityVersionNumber(tx, {
     entityId,
     workspaceId,
