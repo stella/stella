@@ -320,16 +320,29 @@ impl TriggerRegexCache {
   }
 }
 
+pub(crate) struct ProcessTriggerMatchesArgs<'a> {
+  pub matches: &'a [SearchMatch],
+  pub slice: PatternSlice,
+  pub full_text: &'a str,
+  pub data: &'a PreparedTriggerData,
+  pub person_value_labels: &'a [String],
+  pub title_tokens: &'a BTreeSet<String>,
+  pub diagnostics: Option<&'a mut StaticRedactionDiagnostics>,
+}
+
 #[allow(clippy::too_many_lines)]
 pub(crate) fn process_trigger_matches(
-  matches: &[SearchMatch],
-  slice: PatternSlice,
-  full_text: &str,
-  data: &PreparedTriggerData,
-  person_value_labels: &[String],
-  title_tokens: &BTreeSet<String>,
-  mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
+  args: ProcessTriggerMatchesArgs<'_>,
 ) -> Result<Vec<PipelineEntity>> {
+  let ProcessTriggerMatchesArgs {
+    matches,
+    slice,
+    full_text,
+    data,
+    person_value_labels,
+    title_tokens,
+    mut diagnostics,
+  } = args;
   let offsets = ByteOffsets::new(full_text);
   let mut candidates = Vec::new();
   let extraction_data = TriggerExtractionData {
@@ -2943,8 +2956,8 @@ mod tests {
       n_words_rule("passport number", "passport number"),
       n_words_rule("passport number is", "passport number"),
     ]);
-    let entities = process_trigger_matches(
-      &[
+    let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: &[
         SearchMatch::Literal {
           pattern: 0,
           start: 0,
@@ -2956,13 +2969,13 @@ mod tests {
           end: u32::try_from("passport number is".len()).unwrap(),
         },
       ],
-      PatternSlice { start: 0, end: 2 },
-      text,
-      &data,
-      &[],
-      &BTreeSet::new(),
-      None,
-    )
+      slice: PatternSlice { start: 0, end: 2 },
+      full_text: text,
+      data: &data,
+      person_value_labels: &[],
+      title_tokens: &BTreeSet::new(),
+      diagnostics: None,
+    })
     .unwrap();
 
     assert_eq!(entities.len(), 1);
@@ -2977,8 +2990,8 @@ mod tests {
       n_words_rule("record number", "case number"),
     ]);
     let end = u32::try_from("record number".len()).unwrap();
-    let entities = process_trigger_matches(
-      &[
+    let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: &[
         SearchMatch::Literal {
           pattern: 0,
           start: 0,
@@ -2990,13 +3003,13 @@ mod tests {
           end,
         },
       ],
-      PatternSlice { start: 0, end: 2 },
-      text,
-      &data,
-      &[],
-      &BTreeSet::new(),
-      None,
-    )
+      slice: PatternSlice { start: 0, end: 2 },
+      full_text: text,
+      data: &data,
+      person_value_labels: &[],
+      title_tokens: &BTreeSet::new(),
+      diagnostics: None,
+    })
     .unwrap();
 
     assert_eq!(entities.len(), 2);
@@ -3017,8 +3030,8 @@ mod tests {
       },
       n_words_rule("record number code", "registration number"),
     ]);
-    let entities = process_trigger_matches(
-      &[
+    let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: &[
         SearchMatch::Literal {
           pattern: 0,
           start: 0,
@@ -3030,13 +3043,13 @@ mod tests {
           end: u32::try_from("record number code".len()).unwrap(),
         },
       ],
-      PatternSlice { start: 0, end: 2 },
-      text,
-      &data,
-      &[],
-      &BTreeSet::new(),
-      None,
-    )
+      slice: PatternSlice { start: 0, end: 2 },
+      full_text: text,
+      data: &data,
+      person_value_labels: &[],
+      title_tokens: &BTreeSet::new(),
+      diagnostics: None,
+    })
     .unwrap();
 
     assert_eq!(entities.len(), 2);
@@ -3059,8 +3072,8 @@ mod tests {
       },
       n_words_rule("VAT number", "tax identification number"),
     ]);
-    let entities = process_trigger_matches(
-      &[
+    let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: &[
         SearchMatch::Literal {
           pattern: 0,
           start: 0,
@@ -3072,13 +3085,13 @@ mod tests {
           end: u32::try_from("VAT number".len()).unwrap(),
         },
       ],
-      PatternSlice { start: 0, end: 2 },
-      text,
-      &data,
-      &[],
-      &BTreeSet::new(),
-      None,
-    )
+      slice: PatternSlice { start: 0, end: 2 },
+      full_text: text,
+      data: &data,
+      person_value_labels: &[],
+      title_tokens: &BTreeSet::new(),
+      diagnostics: None,
+    })
     .unwrap();
 
     assert_eq!(entities.len(), 1);
@@ -3107,8 +3120,8 @@ mod tests {
           include_trigger: false,
         },
       ]);
-      let entities = process_trigger_matches(
-        &[
+      let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+        matches: &[
           SearchMatch::Literal {
             pattern: 0,
             start: 0,
@@ -3120,13 +3133,13 @@ mod tests {
             end: u32::try_from("record number code".len()).unwrap(),
           },
         ],
-        PatternSlice { start: 0, end: 2 },
-        &text,
-        &data,
-        &[],
-        &BTreeSet::new(),
-        None,
-      )
+        slice: PatternSlice { start: 0, end: 2 },
+        full_text: &text,
+        data: &data,
+        person_value_labels: &[],
+        title_tokens: &BTreeSet::new(),
+        diagnostics: None,
+      })
       .unwrap();
 
       proptest::prop_assert_eq!(entities.len(), 1);
@@ -3165,19 +3178,19 @@ mod tests {
     })
     .unwrap();
 
-    let entities = process_trigger_matches(
-      &[SearchMatch::Literal {
+    let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: &[SearchMatch::Literal {
         pattern: 0,
         start: u32::try_from(start).unwrap(),
         end: u32::try_from(end).unwrap(),
       }],
-      PatternSlice { start: 0, end: 1 },
-      text,
-      &data,
-      &[],
-      &BTreeSet::new(),
-      None,
-    )
+      slice: PatternSlice { start: 0, end: 1 },
+      full_text: text,
+      data: &data,
+      person_value_labels: &[],
+      title_tokens: &BTreeSet::new(),
+      diagnostics: None,
+    })
     .unwrap();
 
     assert_eq!(entities.len(), 1);
@@ -3245,15 +3258,15 @@ mod tests {
     .unwrap();
 
     let matches = search.find_iter(text).unwrap();
-    let entities = process_trigger_matches(
-      &matches,
+    let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: &matches,
       slice,
-      text,
-      &data,
-      &[],
-      &BTreeSet::new(),
-      None,
-    )
+      full_text: text,
+      data: &data,
+      person_value_labels: &[],
+      title_tokens: &BTreeSet::new(),
+      diagnostics: None,
+    })
     .unwrap();
 
     assert_eq!(entities.len(), 1);
@@ -3296,19 +3309,19 @@ mod tests {
     })
     .unwrap();
 
-    let entities = process_trigger_matches(
-      &[SearchMatch::Literal {
+    let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: &[SearchMatch::Literal {
         pattern: 0,
         start: u32::try_from(trigger_start).unwrap(),
         end: u32::try_from(trigger_end).unwrap(),
       }],
-      PatternSlice { start: 0, end: 1 },
-      &text,
-      &data,
-      &[],
-      &BTreeSet::new(),
-      None,
-    )
+      slice: PatternSlice { start: 0, end: 1 },
+      full_text: &text,
+      data: &data,
+      person_value_labels: &[],
+      title_tokens: &BTreeSet::new(),
+      diagnostics: None,
+    })
     .unwrap();
 
     assert_eq!(entities.len(), 1);
@@ -3343,19 +3356,19 @@ mod tests {
     })
     .unwrap();
 
-    let entities = process_trigger_matches(
-      &[SearchMatch::Literal {
+    let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: &[SearchMatch::Literal {
         pattern: 0,
         start: u32::try_from(start).unwrap(),
         end: u32::try_from(end).unwrap(),
       }],
-      PatternSlice { start: 0, end: 1 },
-      text,
-      &data,
-      &[],
-      &BTreeSet::new(),
-      None,
-    )
+      slice: PatternSlice { start: 0, end: 1 },
+      full_text: text,
+      data: &data,
+      person_value_labels: &[],
+      title_tokens: &BTreeSet::new(),
+      diagnostics: None,
+    })
     .unwrap();
 
     // "ten" is a missing name particle (see is_name_particle); without it
@@ -3394,19 +3407,19 @@ mod tests {
     })
     .unwrap();
 
-    let entities = process_trigger_matches(
-      &[SearchMatch::Literal {
+    let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: &[SearchMatch::Literal {
         pattern: 0,
         start: u32::try_from(start).unwrap(),
         end: u32::try_from(end).unwrap(),
       }],
-      PatternSlice { start: 0, end: 1 },
-      text,
-      &data,
-      &[],
-      &BTreeSet::new(),
-      None,
-    )
+      slice: PatternSlice { start: 0, end: 1 },
+      full_text: text,
+      data: &data,
+      person_value_labels: &[],
+      title_tokens: &BTreeSet::new(),
+      diagnostics: None,
+    })
     .unwrap();
 
     assert_eq!(entities.len(), 1);
@@ -3476,19 +3489,19 @@ mod tests {
     ] {
       let start = text.find(trigger).unwrap();
       let end = start.saturating_add(trigger.len());
-      let entities = process_trigger_matches(
-        &[SearchMatch::Literal {
+      let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+        matches: &[SearchMatch::Literal {
           pattern: 0,
           start: u32::try_from(start).unwrap(),
           end: u32::try_from(end).unwrap(),
         }],
-        PatternSlice { start: 0, end: 1 },
-        text,
-        &data,
-        &[],
-        &BTreeSet::new(),
-        None,
-      )
+        slice: PatternSlice { start: 0, end: 1 },
+        full_text: text,
+        data: &data,
+        person_value_labels: &[],
+        title_tokens: &BTreeSet::new(),
+        diagnostics: None,
+      })
       .unwrap();
 
       assert_eq!(entities.len(), 1, "{text}");
@@ -3546,19 +3559,19 @@ mod tests {
     ] {
       let start = text.find(trigger).unwrap();
       let end = start.saturating_add(trigger.len());
-      let entities = process_trigger_matches(
-        &[SearchMatch::Literal {
+      let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+        matches: &[SearchMatch::Literal {
           pattern: 0,
           start: u32::try_from(start).unwrap(),
           end: u32::try_from(end).unwrap(),
         }],
-        PatternSlice { start: 0, end: 1 },
-        text,
-        &data,
-        &person_value_labels,
-        &BTreeSet::new(),
-        None,
-      )
+        slice: PatternSlice { start: 0, end: 1 },
+        full_text: text,
+        data: &data,
+        person_value_labels: &person_value_labels,
+        title_tokens: &BTreeSet::new(),
+        diagnostics: None,
+      })
       .unwrap();
 
       assert_eq!(entities.len(), 1, "{text}");
@@ -3576,19 +3589,19 @@ mod tests {
     ] {
       let start = text.find(trigger).unwrap();
       let end = start.saturating_add(trigger.len());
-      let entities = process_trigger_matches(
-        &[SearchMatch::Literal {
+      let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+        matches: &[SearchMatch::Literal {
           pattern: 0,
           start: u32::try_from(start).unwrap(),
           end: u32::try_from(end).unwrap(),
         }],
-        PatternSlice { start: 0, end: 1 },
-        text,
-        &data,
-        &person_value_labels,
-        &BTreeSet::new(),
-        None,
-      )
+        slice: PatternSlice { start: 0, end: 1 },
+        full_text: text,
+        data: &data,
+        person_value_labels: &person_value_labels,
+        title_tokens: &BTreeSet::new(),
+        diagnostics: None,
+      })
       .unwrap();
 
       assert!(entities.is_empty(), "{text}");
@@ -3643,19 +3656,19 @@ mod tests {
       return Vec::new();
     };
     let end = start.saturating_add("zhotovitel".len());
-    process_trigger_matches(
-      &[SearchMatch::Literal {
+    process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: &[SearchMatch::Literal {
         pattern: 0,
         start: u32::try_from(start).unwrap(),
         end: u32::try_from(end).unwrap(),
       }],
-      PatternSlice { start: 0, end: 1 },
-      text,
+      slice: PatternSlice { start: 0, end: 1 },
+      full_text: text,
       data,
-      &[],
-      &title_tokens,
-      None,
-    )
+      person_value_labels: &[],
+      title_tokens: &title_tokens,
+      diagnostics: None,
+    })
     .unwrap()
     .into_iter()
     .map(|entity| (entity.label, entity.text))
@@ -3783,19 +3796,19 @@ mod tests {
     })
     .unwrap();
 
-    let entities = process_trigger_matches(
-      &[SearchMatch::Literal {
+    let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: &[SearchMatch::Literal {
         pattern: 0,
         start: u32::try_from(start).unwrap(),
         end: u32::try_from(end).unwrap(),
       }],
-      PatternSlice { start: 0, end: 1 },
-      &text,
-      &data,
-      &[],
-      &BTreeSet::new(),
-      None,
-    )
+      slice: PatternSlice { start: 0, end: 1 },
+      full_text: &text,
+      data: &data,
+      person_value_labels: &[],
+      title_tokens: &BTreeSet::new(),
+      diagnostics: None,
+    })
     .unwrap();
 
     // No configured `maxLength` must mean genuinely uncapped: the value is
@@ -3839,19 +3852,19 @@ mod tests {
   fn run_single_trigger(text: &str, data: &PreparedTriggerData) -> Vec<String> {
     let start = text.find("Address").unwrap();
     let end = start.saturating_add("Address".len());
-    process_trigger_matches(
-      &[SearchMatch::Literal {
+    process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: &[SearchMatch::Literal {
         pattern: 0,
         start: u32::try_from(start).unwrap(),
         end: u32::try_from(end).unwrap(),
       }],
-      PatternSlice { start: 0, end: 1 },
-      text,
+      slice: PatternSlice { start: 0, end: 1 },
+      full_text: text,
       data,
-      &[],
-      &BTreeSet::new(),
-      None,
-    )
+      person_value_labels: &[],
+      title_tokens: &BTreeSet::new(),
+      diagnostics: None,
+    })
     .unwrap()
     .into_iter()
     .map(|entity| entity.text)
@@ -4122,19 +4135,19 @@ mod tests {
     })
     .unwrap();
 
-    let entities = process_trigger_matches(
-      &[SearchMatch::Literal {
+    let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: &[SearchMatch::Literal {
         pattern: 0,
         start: u32::try_from(start).unwrap(),
         end: u32::try_from(end).unwrap(),
       }],
-      PatternSlice { start: 0, end: 1 },
-      text,
-      &data,
-      &[],
-      &BTreeSet::new(),
-      None,
-    )
+      slice: PatternSlice { start: 0, end: 1 },
+      full_text: text,
+      data: &data,
+      person_value_labels: &[],
+      title_tokens: &BTreeSet::new(),
+      diagnostics: None,
+    })
     .unwrap();
 
     // phone_shape_end() must not hard-stop on ". " when digits follow
@@ -4174,19 +4187,19 @@ mod tests {
     })
     .unwrap();
 
-    let entities = process_trigger_matches(
-      &[SearchMatch::Literal {
+    let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: &[SearchMatch::Literal {
         pattern: 0,
         start: u32::try_from(start).unwrap(),
         end: u32::try_from(end).unwrap(),
       }],
-      PatternSlice { start: 0, end: 1 },
-      &text,
-      &data,
-      &[],
-      &BTreeSet::new(),
-      None,
-    )
+      slice: PatternSlice { start: 0, end: 1 },
+      full_text: &text,
+      data: &data,
+      person_value_labels: &[],
+      title_tokens: &BTreeSet::new(),
+      diagnostics: None,
+    })
     .unwrap();
 
     // The scan (and byte_value()'s trailing-whitespace trim) leaves
@@ -4229,19 +4242,19 @@ mod tests {
     })
     .unwrap();
 
-    let entities = process_trigger_matches(
-      &[SearchMatch::Literal {
+    let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: &[SearchMatch::Literal {
         pattern: 0,
         start: u32::try_from(start).unwrap(),
         end: u32::try_from(end).unwrap(),
       }],
-      PatternSlice { start: 0, end: 1 },
-      text,
-      &data,
-      &[],
-      &BTreeSet::new(),
-      None,
-    )
+      slice: PatternSlice { start: 0, end: 1 },
+      full_text: text,
+      data: &data,
+      person_value_labels: &[],
+      title_tokens: &BTreeSet::new(),
+      diagnostics: None,
+    })
     .unwrap();
 
     assert_eq!(entities.len(), 1);
@@ -4280,19 +4293,19 @@ mod tests {
     })
     .unwrap();
 
-    let entities = process_trigger_matches(
-      &[SearchMatch::Literal {
+    let entities = process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: &[SearchMatch::Literal {
         pattern: 0,
         start: u32::try_from(start).unwrap(),
         end: u32::try_from(end).unwrap(),
       }],
-      PatternSlice { start: 0, end: 1 },
-      text,
-      &data,
-      &[],
-      &BTreeSet::new(),
-      None,
-    )
+      slice: PatternSlice { start: 0, end: 1 },
+      full_text: text,
+      data: &data,
+      person_value_labels: &[],
+      title_tokens: &BTreeSet::new(),
+      diagnostics: None,
+    })
     .unwrap();
 
     assert_eq!(entities.len(), 1);

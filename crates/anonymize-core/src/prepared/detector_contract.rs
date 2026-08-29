@@ -20,7 +20,9 @@ use crate::processors::{
 };
 use crate::resolution::{PipelineEntity, ResolutionDocument};
 use crate::signatures::{PreparedSignatureData, detect_signatures};
-use crate::triggers::{PreparedTriggerData, process_trigger_matches};
+use crate::triggers::{
+  PreparedTriggerData, ProcessTriggerMatchesArgs, process_trigger_matches,
+};
 use crate::types::{Error, Result, SearchMatch};
 
 use super::PreparedEngine;
@@ -294,15 +296,15 @@ impl<'a> StaticDetectorContext<'a> {
       .signature_data()?
       .map(PreparedSignatureData::person_value_labels)
       .unwrap_or_default();
-    process_trigger_matches(
-      self.regex_matches()?,
-      self.triggers_slice()?,
-      self.full_text()?,
+    process_trigger_matches(ProcessTriggerMatchesArgs {
+      matches: self.regex_matches()?,
+      slice: self.triggers_slice()?,
+      full_text: self.full_text()?,
       data,
       person_value_labels,
-      self.title_tokens()?.unwrap_or(&empty_title_tokens),
+      title_tokens: self.title_tokens()?.unwrap_or(&empty_title_tokens),
       diagnostics,
-    )
+    })
   }
 
   pub(super) fn signature_is_active(&self) -> Result<bool> {
