@@ -36,6 +36,7 @@ export const WorkspaceDropZone = ({
 
   return (
     <FileDropZone
+      coverage="viewport"
       label={t("workspaces.dropToUploadFiles")}
       onDrop={(files) => {
         if (isPending) {

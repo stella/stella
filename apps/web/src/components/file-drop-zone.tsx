@@ -7,6 +7,19 @@ import { cn } from "@stll/ui/utils";
 import type { DroppedFileTree } from "@/hooks/external-file-drop.logic";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 
+const FILE_DROP_ZONE_COVERAGE = {
+  CONTENT: "content",
+  VIEWPORT: "viewport",
+} as const;
+
+type FileDropZoneCoverage =
+  (typeof FILE_DROP_ZONE_COVERAGE)[keyof typeof FILE_DROP_ZONE_COVERAGE];
+
+const FILE_DROP_ZONE_COVERAGE_CLASSES = {
+  [FILE_DROP_ZONE_COVERAGE.CONTENT]: "min-h-0",
+  [FILE_DROP_ZONE_COVERAGE.VIEWPORT]: "min-h-full",
+} as const satisfies Record<FileDropZoneCoverage, string>;
+
 type FileDropZoneProps = PropsWithChildren<{
   /** Files dropped onto the zone (folders are flattened to their files). */
   onDrop: (files: File[]) => void;
@@ -14,6 +27,8 @@ type FileDropZoneProps = PropsWithChildren<{
   onDropTree?: (tree: DroppedFileTree) => void;
   /** Overlay copy shown while a drag is over the zone. */
   label: string;
+  /** Whether the zone follows its content or covers its scroll viewport. */
+  coverage: FileDropZoneCoverage;
   enabled?: boolean;
   className?: string;
 }>;
@@ -27,6 +42,7 @@ export const FileDropZone = ({
   onDrop,
   onDropTree,
   label,
+  coverage,
   enabled,
   className,
   children,
@@ -40,7 +56,12 @@ export const FileDropZone = ({
 
   return (
     <div
-      className={cn("relative flex min-h-0 flex-1 flex-col", className)}
+      className={cn(
+        "relative flex flex-1 flex-col",
+        FILE_DROP_ZONE_COVERAGE_CLASSES[coverage],
+        className,
+      )}
+      data-slot="file-drop-zone"
       ref={ref}
     >
       {children}
