@@ -11,8 +11,4 @@ ALTER TABLE "folio_collab_rooms"
   CHECK (
     ("seed_state" IN ('empty', 'claimed') AND "yjs_snapshot_revision" = 0)
     OR ("seed_state" = 'seeded' AND "yjs_snapshot_revision" > 0)
-  ) NOT VALID;--> statement-breakpoint
-ALTER TABLE "folio_collab_rooms"
-  VALIDATE CONSTRAINT "folio_collab_rooms_snapshot_revision_check";--> statement-breakpoint
-ALTER TABLE "folio_collab_rooms"
-  VALIDATE CONSTRAINT "folio_collab_rooms_snapshot_revision_seed_check";
+  ) NOT VALID;
