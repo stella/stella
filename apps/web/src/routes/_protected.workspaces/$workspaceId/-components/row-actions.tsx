@@ -367,8 +367,9 @@ export const RowActions = ({
       }
     : undefined;
 
-  // Preview opens every selected entity the inspector can render and
-  // focuses the row the menu was opened on.
+  // Preview opens every selected entity the inspector can render and focuses
+  // the row the menu was opened on, not the first of the selection: the tab
+  // that takes focus is the row the user acted on, on every surface.
   const resolvedOnOpen = openInspectorSelection({
     entities: bulkTargets,
     anchor: entity,

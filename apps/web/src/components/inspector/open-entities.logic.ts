@@ -90,7 +90,9 @@ const toInspectorOpenTarget = (
 
 export type InspectorOpenArgs = {
   entities: readonly WorkspaceEntity[];
-  /** The row the user acted on; its tab takes focus. */
+  /** The row the user acted on; its tab takes focus, rather than the first
+   *  target, so every surface follows one rule: double-clicking the third of
+   *  three selected rows focuses that row, as right-clicking it does. */
   anchor: WorkspaceEntity;
   workspaceId: string;
 };
