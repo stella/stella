@@ -198,7 +198,7 @@ jobs:
                 ;;
             esac
             case "$file" in
-              apps/api/*|apps/legal-atlas-runner/*|packages/*|patches/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
+              apps/api/*|apps/collab/*|apps/legal-atlas-runner/*|packages/*|patches/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
                 api_image_deps_required=true
                 ;;
             esac
@@ -2005,14 +2005,14 @@ jobs:
             echo "Browser checks were cancelled; a newer run is authoritative."
           fi
 
-  # Image dependency guard. The API and legal-atlas-runner Dockerfiles use
+  # Image dependency guard. The API image and legal-atlas-runner Dockerfile use
   # Turbo only for pruned source overlays; dependency installs come from the
   # committed root bun.lock plus every workspace package.json so Bun remains
   # the lockfile source of truth. Mirror that install path here so deploy-time
   # lockfile drift fails the PR instead of the deploy.
   #
-  # The job then compiles the API entrypoints and runs the legal atlas runner
-  # production smoke against those Docker-style dependency trees.
+  # The job then compiles the API and collaboration entrypoints and runs the
+  # legal atlas runner production smoke against those dependency trees.
   api-image-deps:
     needs: ci-plan
     if: >-
@@ -2051,7 +2051,7 @@ jobs:
             -exec cp --parents -t install-json/ {} +
 
       - name: Prune monorepo for API image source
-        run: turbo prune @stll/api @stll/legal-atlas-runner --docker
+        run: turbo prune @stll/api @stll/collab @stll/legal-atlas-runner --docker
 
       - name: Install API image deps with frozen root lockfile
         run: |
@@ -2059,7 +2059,7 @@ jobs:
           rm -rf api-install
           cp -a install-json api-install
           cd api-install
-          bun install --filter @stll/api --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts
+          bun install --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts
         env:
           NPM_TOKEN: ""
 
@@ -2080,6 +2080,13 @@ jobs:
             --target bun \
             --outfile /tmp/server \
             apps/api/src/server.ts
+          bun build \
+            --compile \
+            --no-compile-autoload-dotenv \
+            --target bun \
+            --outfile /tmp/collab \
+            apps/collab/src/index.ts
+          test -x /tmp/collab
           bun build \
             --target bun \
             --outfile apps/api/src/db/migrate.js \
