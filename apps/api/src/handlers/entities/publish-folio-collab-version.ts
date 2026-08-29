@@ -518,7 +518,9 @@ const publishFolioCollabVersion = createSafeHandler(
         organizationId: session.activeOrganizationId,
         scopedDb: async (callback) => {
           const result = await safeDb(callback);
-          return result.unwrap();
+          return result.unwrap(
+            "Collaboration version diff reads stay inside the authorized workspace scope.",
+          );
         },
         versionId: publication.versionId,
         workspaceId,
