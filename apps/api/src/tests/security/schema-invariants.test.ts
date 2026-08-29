@@ -45,16 +45,33 @@ const balancedGroup = (sql: string, open: number): string => {
   throw new Error(`Unbalanced parenthesis at offset ${String(open)}`);
 };
 
-/** The quoted literals of the first `IN (...)` list, or null when there is none. */
-const inListValues = (sql: string): string[] | null => {
-  const opener = /\bIN\s*\(/iu.exec(sql);
-  if (!opener) {
-    return null;
+/**
+ * The quoted literals of every `IN (...)` list, in source order.
+ *
+ * Every list, not the first: a compound check gives each branch its own
+ * vocabulary (`document_review_findings_outcome_check` has one list per check
+ * kind, `case_law_citation_resolution_census_bucket_values` one per bucket
+ * kind). Reading only the first would leave every later list unguarded while
+ * the constraint still looked covered. Order carries the branch each list
+ * belongs to, so it is compared as a sequence rather than a set.
+ */
+const inListGroups = (sql: string): string[][] => {
+  const groups: string[][] = [];
+  const opener = /\bIN\s*\(/giu;
+  let match = opener.exec(sql);
+
+  while (match) {
+    const open = match.index + match[0].length - 1;
+    const group = balancedGroup(sql, open);
+    groups.push(
+      group.split(",").map((value) => value.trim().replace(/^'|'$/gu, "")),
+    );
+    // Resume past this group, so a nested `IN` inside it is not read twice.
+    opener.lastIndex = open + group.length + 2;
+    match = opener.exec(sql);
   }
 
-  return balancedGroup(sql, opener.index + opener[0].length - 1)
-    .split(",")
-    .map((value) => value.trim().replace(/^'|'$/gu, ""));
+  return groups;
 };
 
 /**
@@ -91,9 +108,15 @@ const extractCheckValues = (
     throw new Error(`CHECK constraint "${constraintName}" not found`);
   }
 
-  const values = inListValues(renderCheck(check));
-  if (values === null) {
+  const groups = inListGroups(renderCheck(check));
+  const values = groups.at(0);
+  if (values === undefined) {
     throw new Error(`Could not parse IN list from "${constraintName}"`);
+  }
+  if (groups.length > 1) {
+    throw new Error(
+      `"${constraintName}" has ${String(groups.length)} IN lists; this helper reads one`,
+    );
   }
 
   return values;
@@ -110,11 +133,11 @@ const extractCheckValues = (
  */
 const migrationCheckValues = (): Map<
   string,
-  { migration: string; values: string[] }
+  { migration: string; groups: string[][] }
 > => {
   const constraints = new Map<
     string,
-    { migration: string; values: string[] }
+    { migration: string; groups: string[][] }
   >();
   const migrations = readdirSync(MIGRATIONS_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -138,11 +161,11 @@ const migrationCheckValues = (): Map<
         continue;
       }
 
-      const values = inListValues(
+      const groups = inListGroups(
         balancedGroup(sql, match.index + match[0].length - 1),
       );
-      if (values) {
-        constraints.set(name, { migration, values });
+      if (groups.length > 0) {
+        constraints.set(name, { migration, groups });
       }
     }
   }
@@ -401,7 +424,7 @@ describe("schema invariants", () => {
     // rejected statement — the whole write fails, taking with it every row it
     // touched — and that has to fail here rather than in production.
     const migrations = migrationCheckValues();
-    const declared: { table: string; name: string; values: string[] }[] = [];
+    const declared: { table: string; name: string; groups: string[][] }[] = [];
 
     for (const value of Object.values(schema)) {
       if (!isPgTable(value)) {
@@ -409,9 +432,9 @@ describe("schema invariants", () => {
       }
       const config = getTableConfig(value);
       for (const check of config.checks) {
-        const values = inListValues(renderCheck(check));
-        if (values) {
-          declared.push({ table: config.name, name: check.name, values });
+        const groups = inListGroups(renderCheck(check));
+        if (groups.length > 0) {
+          declared.push({ table: config.name, name: check.name, groups });
         }
       }
     }
@@ -420,17 +443,25 @@ describe("schema invariants", () => {
     // producing IN lists would empty the set and pass every assertion below.
     expect(declared.length).toBeGreaterThan(100);
 
-    const unenforced = declared.filter(
-      ({ name, values }) =>
-        JSON.stringify(migrations.get(name)?.values.toSorted()) !==
-        JSON.stringify(values.toSorted()),
-    );
+    // Sort within each list (order inside an IN list is meaningless) but not
+    // across lists: a compound check's branches are positional, so a value
+    // moving between branches has to read as a difference.
+    const normalize = (groups: string[][]): string =>
+      JSON.stringify(groups.map((group) => group.toSorted()));
+
+    const unenforced = declared.filter(({ name, groups }) => {
+      const migrated = migrations.get(name)?.groups;
+      return (
+        migrated === undefined || normalize(migrated) !== normalize(groups)
+      );
+    });
 
     expect(
-      unenforced.map(({ table, name, values }) => ({
+      unenforced.map(({ table, name, groups }) => ({
         constraint: `${table}.${name}`,
-        schema: values.toSorted(),
-        migration: migrations.get(name)?.values.toSorted() ?? null,
+        schema: groups.map((group) => group.toSorted()),
+        migration:
+          migrations.get(name)?.groups.map((group) => group.toSorted()) ?? null,
       })),
     ).toEqual([]);
   });

@@ -23,3 +23,24 @@ ALTER TABLE "case_law_citations"
   DROP CONSTRAINT IF EXISTS "citations_resolution_rule_id_values",
   ADD CONSTRAINT "citations_resolution_rule_id_values"
   CHECK ("resolution_rule_id" IN ('unique-key', 'type-hint', 'court-hint', 'one-file-merits')) NOT VALID;
+--> statement-breakpoint
+
+-- The same omission, one table over: `CITATION_CENSUS_RULE_BUCKETS` spreads
+-- `CITATION_RESOLUTION_RULES`, so the census gained the rule bucket at the
+-- same commit and its constraint was not widened either. A census run that
+-- counts a court-hint resolution would fail on the row it writes.
+-- The other two branches are unchanged; they are restated because a CHECK
+-- can only be replaced whole.
+-- stella-migration-safety: reviewed drop-constraint - drops only this check
+-- constraint by name and re-adds it with the rule branch widened in the same
+-- statement, so no running API task ever observes the column unconstrained;
+-- no row data is touched. Rollback is the same statement with `court-hint`
+-- removed, which is safe once no row holds that bucket.
+ALTER TABLE "case_law_citation_resolution_census"
+  DROP CONSTRAINT IF EXISTS "case_law_citation_resolution_census_bucket_values",
+  ADD CONSTRAINT "case_law_citation_resolution_census_bucket_values"
+  CHECK (
+    ("kind" = 'status' AND "bucket" IN ('pending', 'resolved', 'unmatched', 'ambiguous'))
+    OR ("kind" = 'rule' AND "bucket" IN ('unique-key', 'type-hint', 'court-hint', 'one-file-merits', 'unattributed'))
+    OR ("kind" = 'shape' AND "bucket" IN ('at-cap', 'cross-court', 'untyped', 'one-file-merits', 'orders-only', 'merits-only', 'other'))
+  ) NOT VALID;
