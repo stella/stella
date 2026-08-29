@@ -54,8 +54,10 @@ export const NULL_WIDENING_CANARY_PROVIDERS = new Set(
 // for the model. An unsatisfiable regex (`a^`) expressed that until OpenAI's
 // strict-mode grammar compiler started dead-ending on it: the request ends
 // `incomplete` with zero output tokens before any tool call. `maxLength: 0`
-// says the same thing in a form every constrained decoder handles; a
-// hallucinated empty string still trips the probes' unexpected-argument check.
+// says the same thing in a form every constrained decoder handles. It still
+// admits the empty string, which non-strict models do emit for a field the
+// prompt told them to omit; the round-trip probe accepts that as a model
+// choice and fails only on the synthetic null the adapter must strip.
 export const IMPOSSIBLE_STRING_MAX_LENGTH = 0;
 
 export const CANARY_TIERS = ["daily", "weekly"] as const;

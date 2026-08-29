@@ -122,6 +122,9 @@ jobs:
   marketing-screenshots:
     uses: ./.github/workflows/marketing-screenshots.yml
     permissions:
+      # The check job polls the calling run's artifacts; a caller that grants
+      # less than the callee requests fails at startup, before any job runs.
+      actions: read
       contents: read
     with:
       mode: check

@@ -169,7 +169,7 @@ export const BYOK_DEFAULT_MODELS = {
   },
   mistral: {
     fast: "mistral-small-latest",
-    chat: "mistral-large-latest",
+    chat: "mistral-medium-latest",
     reasoning: "magistral-medium-latest",
     pdf: "mistral-large-latest",
   },

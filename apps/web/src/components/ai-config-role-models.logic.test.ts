@@ -52,7 +52,7 @@ describe("BYOK provider and model configuration", () => {
 
   test("does not default PDF flows to Mistral", () => {
     expect(createDefaultRoleModels(["mistral", "openai"])).toEqual({
-      chat: { provider: "mistral", modelId: "mistral-large-latest" },
+      chat: { provider: "mistral", modelId: "mistral-medium-latest" },
       fast: { provider: "mistral", modelId: "mistral-small-latest" },
       reasoning: {
         provider: "mistral",
