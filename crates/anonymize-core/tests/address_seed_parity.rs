@@ -333,34 +333,34 @@ fn keeps_both_halves_of_an_address_split_by_a_case_number() {
 #[test]
 fn paragraph_barriers_keep_unrelated_address_evidence_separate() {
   let prepared = barrier_address_engine();
-  let result = prepared
+  let paragraph_result = prepared
     .redact_static_entities(
       "The filing mentions 123 Main Street.\n\nParis 75002.",
       &OperatorConfig::default(),
     )
     .expect("static redaction should succeed");
-  let addresses = address_texts(&result);
+  let paragraph_addresses = address_texts(&paragraph_result);
   assert!(
-    !addresses.contains(&"123 Main Street"),
-    "unrelated street borrowed evidence across a paragraph: {addresses:?}",
+    !paragraph_addresses.contains(&"123 Main Street"),
+    "unrelated street borrowed evidence across a paragraph: {paragraph_addresses:?}",
   );
   assert!(
-    addresses.contains(&"Paris 75002"),
-    "self-contained city and postal code were dropped: {addresses:?}",
+    paragraph_addresses.contains(&"Paris 75002"),
+    "self-contained city and postal code were dropped: {paragraph_addresses:?}",
   );
 
   for separator in ["\n\n", "\r\n\r\n", "\u{2028}\u{2028}", "\u{2029}"] {
     let text = format!(
       "The filing mentions 123 Main Street.{separator}1:23-cv-04567{separator}Paris 75002."
     );
-    let result = prepared
+    let separator_result = prepared
       .redact_static_entities(&text, &OperatorConfig::default())
       .expect("static redaction should succeed");
 
-    let addresses = address_texts(&result);
+    let separator_addresses = address_texts(&separator_result);
     assert!(
-      !addresses.contains(&"123 Main Street"),
-      "unrelated street borrowed evidence across {separator:?}: {addresses:?}",
+      !separator_addresses.contains(&"123 Main Street"),
+      "unrelated street borrowed evidence across {separator:?}: {separator_addresses:?}",
     );
   }
 }
