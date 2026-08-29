@@ -1106,7 +1106,7 @@ const createWorkflowWorker = ({
   let redisPollLastWarnAtMs = 0;
   const logWorkerError = createQueueWorkerErrorLogger("workflow.worker_error", {
     queueClass,
-    queueName,
+    queue: queueName,
   });
   worker.on("error", (error) => {
     if (isRecoverableRedisPollError(error)) {
@@ -1119,7 +1119,7 @@ const createWorkflowWorker = ({
       logger.warn("workflow.worker_redis_poll_blip", {
         ...connectionErrorFields(error),
         queueClass,
-        queueName,
+        queue: queueName,
         blipsSinceLastWarn: String(redisPollBlipsSinceWarn),
       });
       redisPollBlipsSinceWarn = 0;
@@ -1130,7 +1130,7 @@ const createWorkflowWorker = ({
   logger.info("workflow.worker_started", {
     concurrency: String(concurrency),
     queueClass,
-    queueName,
+    queue: queueName,
   });
   return worker;
 };

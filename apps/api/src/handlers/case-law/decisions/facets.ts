@@ -3,6 +3,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
+import { errorTag } from "@/api/lib/errors/utils";
 import { createBrowseFacetsCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
 import { getLegalSearchProvider } from "@/api/lib/legal-search/provider";
@@ -48,7 +49,7 @@ export const listDecisionFacetsHandler = async ({
   const excludedSourceIds = await readNonRedistributableCaseLawSourceIds();
   if (Result.isError(excludedSourceIds)) {
     logger.warn("case_law.browse_facets.unavailable", {
-      message: excludedSourceIds.error.message,
+      "error.type": errorTag(excludedSourceIds.error),
     });
     return EMPTY_FACETS;
   }
@@ -67,7 +68,7 @@ export const listDecisionFacetsHandler = async ({
     // Facets are navigation chrome: an empty set collapses the selects into
     // free-text filters, which is a degraded page, not a broken one.
     logger.warn("case_law.browse_facets.unavailable", {
-      message: result.error.message,
+      "error.type": errorTag(result.error),
     });
     return EMPTY_FACETS;
   }

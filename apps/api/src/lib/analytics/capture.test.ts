@@ -1,43 +1,40 @@
-import {
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  setSystemTime,
-  test,
-} from "bun:test";
+import { beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 
+import {
+  captureError,
+  captureRequestError,
+  resetCaptureWindows,
+} from "@/api/lib/analytics/capture";
+import { setAnalyticsForTesting } from "@/api/lib/analytics/client";
 import {
   extractionWorkerErrorCode,
   ExtractionWorkerError,
   type ExtractionWorkerTermination,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
+import {
+  enrichRequestContext,
+  initRequestContext,
+} from "@/api/lib/observability/request-context";
 
 const captured: {
   groups?: Record<string, string>;
   properties: Record<string, unknown>;
 }[] = [];
 
-const realClient = await import("@/api/lib/analytics/client");
-void mock.module("@/api/lib/analytics/client", () => ({
-  ...realClient,
-  getAnalytics: () => ({
-    capture: (params: {
-      groups?: Record<string, string>;
-      properties: Record<string, unknown>;
-    }) => {
-      captured.push(params);
-    },
-    flush: async () => undefined,
-    identifyOrganizationGroup: () => undefined,
-  }),
-}));
-
-const { captureError, captureRequestError, resetCaptureWindows } =
-  await import("@/api/lib/analytics/capture");
-const { enrichRequestContext, initRequestContext } =
-  await import("@/api/lib/observability/request-context");
+// The seam, not a module mock: a mock of `analytics/client` is process-wide
+// and would swallow `setAnalyticsForTesting` for every test file batched
+// with this one.
+setAnalyticsForTesting({
+  capture: (params) => {
+    captured.push({
+      ...(params.groups ? { groups: params.groups } : {}),
+      properties: params.properties,
+    });
+  },
+  flush: async () => undefined,
+  identifyOrganizationGroup: () => undefined,
+});
 
 /**
  * Both helpers construct their error on a single source line, so every

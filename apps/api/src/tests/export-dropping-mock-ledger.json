@@ -1,5 +1,4 @@
 [
-  "src/handlers/case-law/ingestion/pipeline.test.ts::src/lib/observability/logger",
   "src/handlers/chat/send-message.test.ts::src/lib/search/index-chat",
   "src/handlers/chat/tools/create-workspace-document-tools.test.ts::src/lib/search/process-extraction",
   "src/handlers/chat/tools/edit-workspace-document-tools.test.ts::src/lib/search/process-extraction",

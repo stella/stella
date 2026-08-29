@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
@@ -11,6 +11,8 @@ import { chatThreads, chatTurns } from "@/api/db/schema";
 import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -62,19 +64,6 @@ void mock.module("@/api/handlers/chat/tools/external-mcp-tools", () => ({
   loadExternalMcpToolsForUser: loadExternalMcpToolsForUserMock,
 }));
 
-let contextCompactionAnalyticsHook: (() => void) | undefined;
-void mock.module("@/api/lib/analytics/tanstack-ai", () => ({
-  createTanStackAIAnalyticsCallbacks: ({ feature }: { feature: string }) => {
-    if (feature === "chat.context_compaction") {
-      contextCompactionAnalyticsHook?.();
-    }
-    return {
-      captureError: () => undefined,
-      middleware: [],
-    };
-  },
-}));
-
 const chatSideEffectsModule = await import("./send-message-side-effects");
 const realRollbackUnpersistedChatSideEffects =
   chatSideEffectsModule.rollbackUnpersistedChatSideEffects;
@@ -105,6 +94,18 @@ void mock.module("./send-message-side-effects", () => ({
 
 const { default: sendMessage, shouldLoadExternalMcpToolsForStreaming } =
   await import("./send-message");
+
+// The real analytics callbacks run through the handler; only the sink is in
+// memory, so no test here ships an event to the provider.
+let analytics: RecordingAnalytics;
+
+beforeEach(() => {
+  analytics = installRecordingAnalytics();
+});
+
+afterEach(() => {
+  analytics.restore();
+});
 
 type SendMessageCtx = Parameters<typeof sendMessage.handler>[0];
 type SendMessageInput = SendMessageCtx["body"]["forwardedProps"];
@@ -662,11 +663,8 @@ describe("send message disconnect handling", () => {
 
   test("terminalizes the claimed turn when compaction preflight disconnects", async () => {
     const abortController = new AbortController();
-    contextCompactionAnalyticsHook = () => {
-      contextCompactionAnalyticsHook = undefined;
-      abortController.abort();
-    };
     const turnUpdates: unknown[] = [];
+    let turnClaimed = false;
     const selectWithThreadLock = () => ({
       from: () => ({
         innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
@@ -691,6 +689,14 @@ describe("send message disconnect handling", () => {
       set: (values: unknown) => {
         turnUpdates.push(values);
         if (table === chatTurns) {
+          if (
+            typeof values === "object" &&
+            values !== null &&
+            "status" in values &&
+            values.status === "running"
+          ) {
+            turnClaimed = true;
+          }
           return {
             where: () => ({ returning: async () => [{ id: turnId }] }),
           };
@@ -709,7 +715,17 @@ describe("send message disconnect handling", () => {
           insert,
           query: {
             chatMessages: { findFirst: async () => null },
-            chatThreadCompactions: { findFirst: async () => null },
+            // The compaction preflight reads the checkpoint once the turn is
+            // claimed (the earlier read belongs to the history window), so
+            // disconnecting there lands the abort inside the preflight.
+            chatThreadCompactions: {
+              findFirst: async () => {
+                if (turnClaimed) {
+                  abortController.abort();
+                }
+                return null;
+              },
+            },
             chatThreads: {
               findFirst: async () => ({
                 chatModel: null,
@@ -738,7 +754,6 @@ describe("send message disconnect handling", () => {
         },
       }),
     );
-    contextCompactionAnalyticsHook = undefined;
 
     expect(result).toEqual({
       code: 400,
@@ -963,6 +978,17 @@ describe("send message disconnect handling", () => {
         status: "failed",
       }),
     );
+    // The 500 is reported once, carrying the wrapper and the underlying
+    // failure structurally — no message reaches the sink.
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      {
+        "error.cause.class": "Error",
+        "error.class": "HandlerError",
+        route: "/v1/chat/send",
+      },
+    ]);
   });
 
   test("stops before connector discovery when the client disconnects during persistence", async () => {
@@ -1135,11 +1161,12 @@ describe("send message turn persistence", () => {
     rollbackUnpersistedChatSideEffectsMock.mockImplementationOnce(async () =>
       Result.ok(),
     );
-    let compactionStarted = false;
-    contextCompactionAnalyticsHook = () => {
-      contextCompactionAnalyticsHook = undefined;
-      compactionStarted = true;
-    };
+    // The history window reads the compaction checkpoint once while
+    // hydrating the thread; the compaction preflight would read it again.
+    // A rejected send must stop before that second read, i.e. before any
+    // metered AI work.
+    const HISTORY_WINDOW_CHECKPOINT_READS = 1;
+    let compactionCheckpointReads = 0;
 
     const selectWithThreadLock = () => ({
       from: () => ({
@@ -1158,7 +1185,12 @@ describe("send message turn persistence", () => {
         transaction: {
           query: {
             chatMessages: { findFirst: async () => null },
-            chatThreadCompactions: { findFirst: async () => null },
+            chatThreadCompactions: {
+              findFirst: async () => {
+                compactionCheckpointReads += 1;
+                return null;
+              },
+            },
             chatThreads: {
               findFirst: async () => ({
                 chatModel: null,
@@ -1185,13 +1217,12 @@ describe("send message turn persistence", () => {
       code: 409,
       response: { message: "A chat turn is already running" },
     });
-    expect(compactionStarted).toBe(false);
+    expect(compactionCheckpointReads).toBe(HISTORY_WINDOW_CHECKPOINT_READS);
     expect(rollbackUnpersistedChatSideEffectsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         threadId,
         uploadedFiles: [uploadedFile],
       }),
     );
-    contextCompactionAnalyticsHook = undefined;
   });
 });

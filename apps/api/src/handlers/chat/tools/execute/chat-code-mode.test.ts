@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -6,23 +6,29 @@ import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sa
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+
+import { buildChatCodeMode } from "./chat-code-mode";
 
 // Drives the real QuickJS sandbox through execute_typescript: share the sandbox
 // suite's 15s ceiling and drain the process-global admission state after each
 // test so a run here cannot bleed into a later sandbox test file.
 registerSandboxTestHygiene();
 
-const captureErrorMock = mock();
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
-}));
+// The real capture path runs; only the sink is in memory, and installing per
+// test clears the repeat-suppression window.
+let analytics: RecordingAnalytics;
 
-const { buildChatCodeMode } = await import("./chat-code-mode");
+beforeEach(() => {
+  analytics = installRecordingAnalytics();
+});
+
+afterEach(() => {
+  analytics.restore();
+});
 
 const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 
@@ -202,6 +208,19 @@ describe("buildChatCodeMode", () => {
     expect(second).toMatchObject({ success: false });
     expect(selectCalls).toBe(callsAfterFirst);
     expect(JSON.stringify(second)).toContain("refused without re-executing");
+
+    // The defect is reported once, by the run that actually executed; the
+    // memoized refusal reports nothing new.
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      {
+        "error.class": "ChatToolError",
+        path: "matters[].reference",
+        source: "run-registry-tool",
+        toolName: "list_matters",
+      },
+    ]);
   });
 
   test("does not memoize non-defect failures: a corrected call still runs", async () => {

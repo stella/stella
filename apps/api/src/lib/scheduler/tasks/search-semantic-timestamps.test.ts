@@ -1,24 +1,19 @@
-import { beforeEach, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
 const executeMock = mock(
   async (_query: SQL): Promise<Record<string, unknown>[]> => [],
 );
 const upsertSearchDocumentMock = mock(async () => undefined);
-const captureErrorMock = mock(() => undefined);
 
 void mock.module("@/api/db/root", () => ({
   rootDb: { execute: executeMock },
-}));
-
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
 }));
 
 void mock.module("@/api/lib/search/index-entity", () => ({
@@ -28,10 +23,16 @@ void mock.module("@/api/lib/search/index-entity", () => ({
 const { repairSearchSemanticTimestamps } =
   await import("@/api/lib/scheduler/tasks/search-semantic-timestamps");
 
+let analytics: RecordingAnalytics;
+
 beforeEach(() => {
-  captureErrorMock.mockClear();
+  analytics = installRecordingAnalytics();
   executeMock.mockClear();
   upsertSearchDocumentMock.mockClear();
+});
+
+afterEach(() => {
+  analytics.restore();
 });
 
 test("rebuilds one bounded page and checkpoints after the projection", async () => {
@@ -280,7 +281,15 @@ test("checkpoints past an unreadable entity and repairs the rest of the page", a
   });
   expect(upsertSearchDocumentMock).toHaveBeenCalledWith(unreadableEntityId);
   expect(upsertSearchDocumentMock).toHaveBeenCalledWith(readableEntityId);
-  expect(captureErrorMock).toHaveBeenCalledTimes(1);
+  expect(analytics.exceptions().map((event) => event.properties)).toMatchObject(
+    [
+      {
+        "error.class": "Error",
+        entityId: unreadableEntityId,
+        schedulerTask: "search.repairSemanticTimestamps",
+      },
+    ],
+  );
   const checkpointQuery = new PgDialect().sqlToQuery(
     executeMock.mock.calls.at(1)?.at(0) ?? sql``,
   );

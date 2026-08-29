@@ -1,24 +1,26 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 
 import { env } from "@/api/env";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-const captureErrorMock = mock();
 const rehydrateCaseLawCandidatesMock = mock();
 const searchDecisionsHandlerMock = mock();
 const readDecisionHandlerMock = mock();
 const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/u, "");
-
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
-}));
 
 void mock.module("@/api/handlers/case-law/decisions/search", () => ({
   rehydrateCaseLawCandidates: rehydrateCaseLawCandidatesMock,
@@ -168,10 +170,16 @@ const parseToolPayload = (
 };
 
 describe("set_practice_jurisdictions MCP tool", () => {
+  let analytics: RecordingAnalytics;
+
   beforeEach(() => {
-    captureErrorMock.mockReset();
+    analytics = installRecordingAnalytics();
     searchDecisionsHandlerMock.mockReset();
     readDecisionHandlerMock.mockReset();
+  });
+
+  afterEach(() => {
+    analytics.restore();
   });
 
   afterAll(() => {
@@ -376,6 +384,9 @@ describe("set_practice_jurisdictions MCP tool", () => {
     });
 
     expect(result.isError).toBe(true);
+    // A rejected argument shape is the caller's mistake, not a server defect:
+    // it must not spend an exception event.
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("rejects non-array jurisdictions input", async () => {
@@ -388,14 +399,21 @@ describe("set_practice_jurisdictions MCP tool", () => {
     });
 
     expect(result.isError).toBe(true);
+    expect(analytics.exceptions()).toEqual([]);
   });
 });
 
 describe("empty-result onboarding hints", () => {
+  let analytics: RecordingAnalytics;
+
   beforeEach(() => {
-    captureErrorMock.mockReset();
+    analytics = installRecordingAnalytics();
     searchDecisionsHandlerMock.mockReset();
     readDecisionHandlerMock.mockReset();
+  });
+
+  afterEach(() => {
+    analytics.restore();
   });
 
   test("list_matters appends a hint when empty and jurisdictions are missing", async () => {

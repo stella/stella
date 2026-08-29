@@ -1,5 +1,13 @@
 import { Result } from "better-result";
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 import JSZip from "jszip";
 
 import type { Transaction } from "@/api/db/root";
@@ -7,6 +15,8 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -25,18 +35,10 @@ const releaseTemplatePersistenceClaimMock = mock();
 const fingerprintTemplatePersistenceRequestMock = mock();
 const configureTemplateFieldsMock = mock();
 const loadOrgAIConfigMock = mock();
-const captureErrorMock = mock();
 const anonymizeTextFieldsMock = mock();
 const loadAnonymizationGazetteerEntriesMock = mock();
 const realAnonymizationBlacklist =
   await import("@/api/lib/anonymization-blacklist");
-
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
-}));
 
 void mock.module("@/api/mcp/anonymization", () => ({
   anonymizeTextFields: anonymizeTextFieldsMock,
@@ -236,7 +238,10 @@ const makeValidDocxBase64 = async (): Promise<string> => {
 };
 
 describe("MCP template tools", () => {
+  let analytics: RecordingAnalytics;
+
   beforeEach(() => {
+    analytics = installRecordingAnalytics();
     describeStoredTemplateMock.mockReset();
     fillStoredTemplateDocxMock.mockReset();
     fillStoredTemplateWithTextMock.mockReset();
@@ -261,10 +266,13 @@ describe("MCP template tools", () => {
     configureTemplateFieldsMock.mockReset();
     loadOrgAIConfigMock.mockReset();
     loadOrgAIConfigMock.mockResolvedValue(null);
-    captureErrorMock.mockReset();
     anonymizeTextFieldsMock.mockReset();
     loadAnonymizationGazetteerEntriesMock.mockReset();
     loadAnonymizationGazetteerEntriesMock.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    analytics.restore();
   });
 
   afterAll(() => {
@@ -570,6 +578,9 @@ describe("MCP template tools", () => {
     expect(result.content).toEqual([
       { type: "text", text: "Template not found." },
     ]);
+    // A curated service rejection reaches the agent as-is; it is not a defect,
+    // so it must not spend an exception event.
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("fill_template returns a complete rendered document plus the DOCX as base64", async () => {

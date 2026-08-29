@@ -1,5 +1,5 @@
-import { Result } from "better-result";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { BoeSearchResponse } from "@stll/boe";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -22,6 +22,8 @@ import { encryptContent } from "@/api/lib/content-encryption";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -58,14 +60,6 @@ import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
  */
 
 // --- Module mocks (before dynamic imports, canary pattern) -------------------
-
-const captureErrorMock = mock();
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
-}));
 
 const readWorkspaceHandlerMock = mock();
 const readOverviewHandlerMock = mock();
@@ -1465,8 +1459,22 @@ const ALL_MOCKS = [
   executeRegistryLookupMock,
 ];
 
+// A projection refusal reports the offending path through the real capture
+// path; the recorded events turn a failing call into a diagnosable one.
+// The per-call tests are generated inside a loop, so they reach the recorder
+// through these module-scope helpers rather than closing over the binding.
+let analytics: RecordingAnalytics | null = null;
+
+const recordedExceptions = () =>
+  (analytics ?? panic("recording analytics is not installed")).exceptions();
+
+afterEach(() => {
+  analytics?.restore();
+  analytics = null;
+});
+
 beforeEach(() => {
-  captureErrorMock.mockClear();
+  analytics = installRecordingAnalytics();
   for (const handlerMock of ALL_MOCKS) {
     handlerMock.mockReset();
   }
@@ -1518,11 +1526,8 @@ describe("registry projection contract", () => {
         });
 
         if (Result.isError(result)) {
-          const leakPaths = captureErrorMock.mock.calls
-            .map((mockCall) => {
-              const [, telemetry] = mockCall;
-              return isRecord(telemetry) ? telemetry["path"] : undefined;
-            })
+          const leakPaths = recordedExceptions()
+            .map((event) => event.properties["path"])
             .filter((path): path is string => typeof path === "string");
           const leakSuffix =
             leakPaths.length > 0
@@ -1572,6 +1577,13 @@ describe("registry projection contract", () => {
               "be absent from the projected payload",
           ).toBe(0);
         }
+
+        // A clean projection reports nothing: no refusal or defect hides
+        // behind a payload that merely looks well formed.
+        expect(
+          recordedExceptions(),
+          `${toolName} (${call.mode}): the call reported an exception`,
+        ).toEqual([]);
       });
     }
   }

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { Paragraph } from "@stll/docx-core/model";
 import {
@@ -11,6 +11,8 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -96,7 +98,6 @@ const createEntityFromBufferMock = mock(
       fileName,
     }),
 );
-const captureErrorMock = mock(() => {});
 
 // Spread the real modules: mock.module is process-global; a partial mock
 // would delete the other exports for later test files.
@@ -120,12 +121,6 @@ void mock.module("@/api/lib/entities/create-from-buffer", () => ({
   ...realCreate,
   createEntityFromBuffer: createEntityFromBufferMock,
 }));
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-}));
-
 const createBilingualEntity = (await import("./create")).default;
 
 type Ctx = Parameters<typeof createBilingualEntity.handler>[0];
@@ -155,12 +150,18 @@ const createContext = (body: Partial<Ctx["body"]> = {}): Ctx =>
   });
 
 describe("createBilingualEntity", () => {
+  let analytics: RecordingAnalytics;
+
   beforeEach(() => {
+    analytics = installRecordingAnalytics();
     scanVerdict = "accept";
     loadEntityVersionDocxBufferMock.mockClear();
     scanFileMock.mockClear();
     createEntityFromBufferMock.mockClear();
-    captureErrorMock.mockClear();
+  });
+
+  afterEach(() => {
+    analytics.restore();
   });
 
   test("rejects identical source and target languages before loading anything", async () => {
@@ -195,6 +196,9 @@ describe("createBilingualEntity", () => {
       declaredMimeType: DOCX_MIME_TYPE,
       fileName: "Smlouva (CS-EN).docx",
     });
+    // Layout, DOCX validation, and the scan all succeeded, so nothing was
+    // reported: this pins that the happy path is silent.
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("does not persist a document the security scan rejects", async () => {
@@ -208,5 +212,8 @@ describe("createBilingualEntity", () => {
       },
     });
     expect(createEntityFromBufferMock).not.toHaveBeenCalled();
+    // A scan verdict is an expected outcome the caller is told about; only a
+    // scanner that fails to run is reported.
+    expect(analytics.exceptions()).toEqual([]);
   });
 });

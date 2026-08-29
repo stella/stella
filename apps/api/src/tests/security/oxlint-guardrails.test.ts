@@ -501,6 +501,23 @@ describe("custom oxlint guardrails", () => {
     );
   });
 
+  test("the redacted-log-key rule pins the logger's own denylist", async () => {
+    // The plugin cannot import application code, so it carries a copy of
+    // the pattern. Hold the copy equal to the source of truth, or the rule
+    // would accept a key the sanitizer drops (or the reverse).
+    // Compared as source text: importing the plugin would pull the plugin
+    // folder into this package's type program.
+    const { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN: policy } =
+      await import("@/api/lib/observability/log-attribute-policy");
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/no-redacted-log-attribute-key.ts",
+    );
+
+    expect(pluginSource).toContain(
+      `export const SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN =\n  /${policy.source}/${policy.flags};`,
+    );
+  });
+
   test("module mocks do not start dropping more of the real module's exports", () => {
     // A PARTIAL module mock (one export overridden, the rest dropped) removes
     // the other exports for every file sharing the process, so a file that

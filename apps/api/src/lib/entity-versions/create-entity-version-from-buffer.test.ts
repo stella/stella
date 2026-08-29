@@ -12,6 +12,8 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3, FakeS3Method } from "@/api/tests/helpers/fake-s3";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const writeFileVersionMock = mock();
@@ -64,13 +66,6 @@ void mock.module("@/api/lib/sse", () => ({
   broadcast: broadcastMock,
   broadcastToOrganization: mock(),
 }));
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: mock(),
-  captureRequestError: mock(),
-}));
-
 const { createEntityVersionFromBuffer } =
   await import("@/api/lib/entity-versions/create-entity-version-from-buffer");
 
@@ -154,7 +149,10 @@ const baseInput = {
 };
 
 describe("createEntityVersionFromBuffer", () => {
+  let analytics: RecordingAnalytics;
+
   beforeEach(() => {
+    analytics = installRecordingAnalytics();
     fake = startFakeS3();
     for (const fn of [
       writeFileVersionMock,
@@ -178,6 +176,7 @@ describe("createEntityVersionFromBuffer", () => {
   });
 
   afterEach(() => {
+    analytics.restore();
     fake.stop();
   });
 
@@ -247,6 +246,11 @@ describe("createEntityVersionFromBuffer", () => {
     // Cleanup was refused, so the intent stays claimable by the sweeper
     // instead of being abandoned with an object possibly still out there.
     expect(intentStatuses).toEqual(["scanning"]);
+    // The refused cleanup is reported with the object it could not remove,
+    // which is what makes the leaked object findable.
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([{ entityId: baseInput.entityId, objectKey: OBJECT_KEY }]);
   });
 
   test("stores bytes and delegates the canonical locked transaction", async () => {

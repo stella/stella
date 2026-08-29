@@ -1,5 +1,13 @@
 import { Result } from "better-result";
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -10,18 +18,12 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
 import type { McpToolHandler, McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-const captureErrorMock = mock();
 const createTimeEntryHandlerMock = mock();
-
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
-}));
 
 // Stub the backing time-entry create handler so the tool site receives a chosen
 // `Result` error (a curated 4xx business `HandlerError`, or an internal 5xx)
@@ -158,11 +160,24 @@ const REPRESENTATIVE_DB_FAILURES: {
   },
 ];
 
-describe("MCP tool DB failures return a structured internal_error envelope", () => {
-  beforeEach(() => {
-    captureErrorMock.mockReset();
-  });
+let analytics: RecordingAnalytics;
 
+beforeEach(() => {
+  analytics = installRecordingAnalytics();
+});
+
+afterEach(() => {
+  analytics.restore();
+});
+
+// Read the recorder through module-scope helpers: the table-driven tests below
+// are declared inside `for` loops, which may not close over the reassigned
+// binding directly.
+const capturedExceptions = () => analytics.exceptions();
+const capturedExceptionProperties = () =>
+  capturedExceptions().map((event) => event.properties);
+
+describe("MCP tool DB failures return a structured internal_error envelope", () => {
   afterAll(() => {
     mock.restore();
   });
@@ -172,11 +187,12 @@ describe("MCP tool DB failures return a structured internal_error envelope", () 
       const result = await handler({ args, context: createFailingDbContext() });
 
       expectInternalErrorEnvelope(result);
-      // The real cause still reaches telemetry (captured, not surfaced).
-      expect(captureErrorMock).toHaveBeenCalled();
-      expect(captureErrorMock).toHaveBeenCalledWith(expect.anything(), {
-        source: "mcp",
-      });
+      // The real cause still reaches telemetry (captured, not surfaced), and
+      // the redaction contract keeps the driver text out of the event.
+      expect(capturedExceptionProperties()).toMatchObject([{ source: "mcp" }]);
+      expect(JSON.stringify(capturedExceptions())).not.toContain(
+        DB_INTERNAL_LEAK_TOKEN,
+      );
     });
   }
 
@@ -197,9 +213,9 @@ describe("MCP tool DB failures return a structured internal_error envelope", () 
         hint: MCP_INTERNAL_ERROR_HINT,
       },
     });
-    expect(captureErrorMock).toHaveBeenCalledWith(expect.any(Error), {
-      source: "mcp",
-    });
+    expect(capturedExceptionProperties()).toMatchObject([
+      { "error.class": "Error", source: "mcp" },
+    ]);
   });
 });
 
@@ -223,10 +239,6 @@ describe("internalFailureResult preserves expected handler errors", () => {
     { status: 429, code: "rate_limited" },
   ];
 
-  beforeEach(() => {
-    captureErrorMock.mockReset();
-  });
-
   for (const { code, status } of EXPECTED_BUSINESS_CASES) {
     test(`a ${status} HandlerError surfaces its message as ${code} and is not captured`, () => {
       const message = `curated business message for ${status}`;
@@ -236,7 +248,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
 
       expectBusinessEnvelope(result, { code, message });
       // Expected business flow is not a telemetry error.
-      expect(captureErrorMock).not.toHaveBeenCalled();
+      expect(capturedExceptions()).toEqual([]);
     });
   }
 
@@ -249,7 +261,9 @@ describe("internalFailureResult preserves expected handler errors", () => {
     );
 
     expectInternalErrorEnvelope(result);
-    expect(captureErrorMock).toHaveBeenCalled();
+    expect(capturedExceptionProperties()).toMatchObject([
+      { "error.class": "HandlerError", source: "mcp" },
+    ]);
   });
 
   test("a tagged upstream outage is retryable without leaking its cause", () => {
@@ -271,7 +285,9 @@ describe("internalFailureResult preserves expected handler errors", () => {
       },
     });
     expect(envelopeText(result)).not.toContain(DB_INTERNAL_LEAK_TOKEN);
-    expect(captureErrorMock).toHaveBeenCalled();
+    expect(capturedExceptionProperties()).toMatchObject([
+      { "error.code": "upstream_unavailable", source: "mcp" },
+    ]);
   });
 });
 
@@ -290,7 +306,6 @@ describe("save_time_entry threads backing handler errors correctly", () => {
   };
 
   beforeEach(() => {
-    captureErrorMock.mockReset();
     createTimeEntryHandlerMock.mockReset();
   });
 
@@ -310,7 +325,7 @@ describe("save_time_entry threads backing handler errors correctly", () => {
 
     expectBusinessEnvelope(result, { code: "validation_error", message });
     expect(createTimeEntryHandlerMock).toHaveBeenCalledTimes(1);
-    expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(capturedExceptions()).toEqual([]);
   });
 
   test("an internal 5xx stays generic and is captured", async () => {
@@ -330,7 +345,9 @@ describe("save_time_entry threads backing handler errors correctly", () => {
     });
 
     expectInternalErrorEnvelope(result);
-    expect(captureErrorMock).toHaveBeenCalled();
+    expect(capturedExceptionProperties()).toMatchObject([
+      { "error.class": "HandlerError", source: "mcp" },
+    ]);
   });
 });
 

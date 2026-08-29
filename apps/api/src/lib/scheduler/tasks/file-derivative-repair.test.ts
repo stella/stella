@@ -28,12 +28,10 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import {
-  FileDerivativeRepairError,
-  UnrecognizedDerivativeStateError,
-} from "@/api/lib/errors/tagged-errors";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { logger } from "@/api/lib/observability/logger";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -90,14 +88,6 @@ const redisClientModule = await import("@/api/lib/redis-client");
 void mock.module("@/api/lib/redis-client", () => ({
   ...redisClientModule,
   createBullMqConnection: () => ({}),
-}));
-const captureErrorMock = mock(
-  (_error: unknown, _context?: Record<string, string>) => undefined,
-);
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
 }));
 
 const { REPAIR_FILE_DERIVATIVES_TASK, repairFileDerivatives } =
@@ -212,12 +202,14 @@ const jobIdsFor = (kind: string) =>
   queued.filter(({ opts }) => opts.jobId.endsWith(`-${kind}`));
 
 describe("file derivative repair", () => {
+  let analytics: RecordingAnalytics;
+
   beforeEach(async () => {
+    analytics = installRecordingAnalytics();
     queued.length = 0;
     removedJobIds.length = 0;
     priorJobs.clear();
     failingAddJobIds.clear();
-    captureErrorMock.mockClear();
     await testDb
       .insert(schedulerJobs)
       .values({
@@ -237,6 +229,7 @@ describe("file derivative repair", () => {
   // Each test owns its rows: a field left behind is still stuck, and the
   // next test's sweep would pick it up along with its own.
   afterEach(async () => {
+    analytics.restore();
     if (seededFieldIds.length > 0) {
       await testDb.delete(fields).where(inArray(fields.id, seededFieldIds));
       await testDb
@@ -387,10 +380,14 @@ describe("file derivative repair", () => {
     await runRepair();
 
     expect(queued.map(({ data }) => data.fieldId)).toEqual([stuck]);
-    const reported = captureErrorMock.mock.calls.filter(
-      ([error]) => error instanceof UnrecognizedDerivativeStateError,
-    );
-    expect(reported.map(([, context]) => context?.["fieldId"])).toEqual([
+    const reported = analytics
+      .exceptions()
+      .map((event) => event.properties)
+      .filter(
+        (properties) =>
+          properties["error.class"] === "UnrecognizedDerivativeStateError",
+      );
+    expect(reported.map((properties) => properties["fieldId"])).toEqual([
       corrupt,
     ]);
     // The tick finished: the cursor moved past both rows.
@@ -415,9 +412,12 @@ describe("file derivative repair", () => {
 
     expect(queued).toHaveLength(0);
     expect(
-      captureErrorMock.mock.calls.some(
-        ([error]) => error instanceof FileDerivativeRepairError,
-      ),
+      analytics
+        .exceptions()
+        .some(
+          ({ properties }) =>
+            properties["error.class"] === "FileDerivativeRepairError",
+        ),
     ).toBe(true);
 
     await runRepair();

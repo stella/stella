@@ -1,23 +1,18 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
 process.env["GOTENBERG_USERNAME"] ??= "test";
 process.env["GOTENBERG_PASSWORD"] ??= "test";
-
-const captureErrorMock = mock();
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-}));
-
-const loggerWarnMock = mock();
-const realLogger = await import("@/api/lib/observability/logger");
-void mock.module("@/api/lib/observability/logger", () => ({
-  ...realLogger,
-  logger: { ...realLogger.logger, warn: loggerWarnMock },
-}));
 
 const readinessGetMock = mock(async (): Promise<string | null> => null);
 const realRedisClient = await import("@/api/lib/redis-client");
@@ -33,6 +28,19 @@ const {
 } = await import("@/api/lib/document-processing-readiness");
 
 describe("document OCR worker readiness", () => {
+  let analytics: RecordingAnalytics;
+  let logs: RecordingLogger;
+
+  beforeEach(() => {
+    analytics = installRecordingAnalytics();
+    logs = installRecordingLogger();
+  });
+
+  afterEach(() => {
+    analytics.restore();
+    logs.restore();
+  });
+
   test("configures readiness clients to fail fast during Redis outages", async () => {
     const source = await Bun.file(
       new URL("document-processing-readiness.ts", import.meta.url),
@@ -60,8 +68,6 @@ describe("document OCR worker readiness", () => {
   });
 
   test("degrades to unavailable on a dropped socket without capturing", async () => {
-    captureErrorMock.mockClear();
-    loggerWarnMock.mockClear();
     // The transient and non-transient fixtures must classify differently,
     // or both assertions below would pass through the same branch.
     const transient = Object.assign(new Error("Connection closed"), {
@@ -79,15 +85,25 @@ describe("document OCR worker readiness", () => {
       throw transient;
     });
     expect(await isDocumentOcrWorkerAvailable()).toBe(false);
-    expect(captureErrorMock).not.toHaveBeenCalled();
-    expect(loggerWarnMock).toHaveBeenCalledTimes(1);
+    expect(analytics.exceptions()).toEqual([]);
+    expect(logs.at("WARN")).toMatchObject([
+      {
+        message: "document_processing.readiness_read_disrupted",
+        attributes: { "error.type": "Error" },
+      },
+    ]);
 
     readinessGetMock.mockImplementationOnce(async () => {
       throw defect;
     });
     expect(await isDocumentOcrWorkerAvailable()).toBe(false);
-    expect(captureErrorMock).toHaveBeenCalledTimes(1);
-    expect(loggerWarnMock).toHaveBeenCalledTimes(1);
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      { "error.class": "Error", "error.code": "ERR_REDIS_INVALID_TYPE" },
+    ]);
+    // The defect took the capture branch, so no second disruption warning.
+    expect(logs.at("WARN")).toHaveLength(1);
   });
 
   test("bounds readiness reads", async () => {

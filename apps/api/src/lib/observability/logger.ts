@@ -1,6 +1,8 @@
 import "@/api/lib/observability/otel";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
 
+import { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } from "@/api/lib/observability/log-attribute-policy";
+
 const otelLogger = logs.getLogger("stella.api");
 // Denylist of attribute-key substrings whose values may carry document
 // content, client-identifying text, PII, or credentials, none of which
@@ -13,8 +15,9 @@ const otelLogger = logs.getLogger("stella.api");
 // `prompt` is likewise narrowed with a negative lookahead so prompt CONTENT
 // keys (`prompt`, `promptText`, `systemPrompt`) are redacted while usage
 // metrics (`promptTokens`, `prompt_tokens`, `promptTokenCount`) survive.
-const SENSITIVE_ATTRIBUTE_KEY_PATTERN =
-  /(?:body|content|email|fileName|message|name|title|password|secret|credential|authorization|cookie|bearer|api[_-]?key|prompt(?!_?token)|snippet|subject|phone)/iu;
+// The pattern itself lives in `log-attribute-policy.ts` so the lint rule that
+// rejects such keys at the call site can pin the same one.
+const SENSITIVE_ATTRIBUTE_KEY_PATTERN = SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN;
 
 type LoggerAttributeValue = boolean | number | string;
 
@@ -73,6 +76,26 @@ export const sanitizeLogAttributes = (
   return safeAttributes;
 };
 
+export type LogRecord = {
+  readonly severityText: string;
+  readonly message: string;
+  readonly attributes: LoggerAttributes | undefined;
+};
+
+// Test seam: when set, every sanitized record goes here instead of to the
+// OTel pipeline and the process streams, so a test reads what the real
+// logger would have emitted (after attribute sanitization) without replacing
+// the module.
+let recordSink: ((record: LogRecord) => void) | null = null;
+
+export const setLogSinkForTesting = (sink: (record: LogRecord) => void) => {
+  recordSink = sink;
+};
+
+export const resetLogSinkForTesting = (): void => {
+  recordSink = null;
+};
+
 const emit = ({
   attributes,
   message,
@@ -85,6 +108,10 @@ const emit = ({
   severityText: string;
 }): void => {
   const safeAttributes = sanitizeLogAttributes(attributes);
+  if (recordSink !== null) {
+    recordSink({ severityText, message, attributes: safeAttributes });
+    return;
+  }
   const record = {
     severityNumber,
     severityText,
@@ -187,6 +214,10 @@ const emitRequest = ({
     ...(requestId === undefined ? {} : { "request.id": requestId }),
   };
 
+  if (recordSink !== null) {
+    recordSink({ severityText: severity, message, attributes: safeAttributes });
+    return;
+  }
   otelLogger.emit({
     attributes: safeAttributes,
     body: message,

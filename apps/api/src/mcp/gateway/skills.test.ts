@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -8,21 +8,13 @@ import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
+import {
+  loadVisibleSkillTools,
+  resolveSkillTool,
+} from "@/api/mcp/gateway/skills";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-
-// skills.ts routes its only failure path (a Result.err from safeDb) through
-// captureError; mock it so the failure test stays hermetic and can assert the
-// error is captured (not silently swallowed) rather than depending on PostHog.
-const captureErrorMock = mock();
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: mock(),
-}));
-
-const { loadVisibleSkillTools, resolveSkillTool } =
-  await import("@/api/mcp/gateway/skills");
 
 type SkillRow = {
   id: ReturnType<typeof toSafeId<"agentSkill">>;
@@ -97,8 +89,14 @@ const createContext = ({
 };
 
 describe("MCP gateway skill tools", () => {
+  let analytics: RecordingAnalytics;
+
   beforeEach(() => {
-    captureErrorMock.mockReset();
+    analytics = installRecordingAnalytics();
+  });
+
+  afterEach(() => {
+    analytics.restore();
   });
 
   test("namespaces each visible skill under the skill__ prefix", async () => {
@@ -185,9 +183,11 @@ describe("MCP gateway skill tools", () => {
     );
 
     expect(rejection).toBeInstanceOf(McpGatewayLoadError);
-    expect(captureErrorMock).toHaveBeenCalledWith(dbError, {
-      source: "mcp-gateway-skills",
-    });
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      { "error.class": "DatabaseError", source: "mcp-gateway-skills" },
+    ]);
   });
 
   test("resolveSkillTool finds a skill by its exposed name", async () => {

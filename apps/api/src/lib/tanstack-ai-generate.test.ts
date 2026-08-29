@@ -1,5 +1,13 @@
 import * as realTanStackAI from "@tanstack/ai";
-import { afterAll, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 import * as v from "valibot";
 
 import type { CachingDecision } from "@/api/lib/ai-config";
@@ -10,6 +18,14 @@ import {
   projectSchemaInputJsonSchema,
   toTanStackValibotSchema,
 } from "@/api/lib/tanstack-ai-schema";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 
 type CapturedChatOptions = {
   messages?: unknown;
@@ -47,21 +63,6 @@ void mock.module("@tanstack/ai", () => ({
   chat,
 }));
 
-const captureErrorMock = mock();
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
-}));
-
-const loggerWarnMock = mock();
-const realLogger = await import("@/api/lib/observability/logger");
-void mock.module("@/api/lib/observability/logger", () => ({
-  ...realLogger,
-  logger: { ...realLogger.logger, warn: loggerWarnMock },
-}));
-
 void mock.module("@/api/lib/tanstack-ai-models", () => ({
   ...realTanStackAIModels,
   getTanStackTextModelById: () => testModel,
@@ -88,6 +89,19 @@ const noCaching = {
   enabled: false,
   reason: "org-disabled",
 } satisfies CachingDecision;
+
+let analytics: RecordingAnalytics;
+let logs: RecordingLogger;
+
+beforeEach(() => {
+  analytics = installRecordingAnalytics();
+  logs = installRecordingLogger();
+});
+
+afterEach(() => {
+  analytics.restore();
+  logs.restore();
+});
 
 afterAll(() => {
   mock.restore();
@@ -528,8 +542,6 @@ describe("TanStack AI model-ingress guard", () => {
 
   test("redacts tenant ids out of the dispatched messages", async () => {
     capturedChatOptions.length = 0;
-    captureErrorMock.mockClear();
-    loggerWarnMock.mockClear();
     nextChatResult = createTextStream(["ok"]);
 
     await generateTanStackTextForRole({
@@ -548,13 +560,19 @@ describe("TanStack AI model-ingress guard", () => {
     // Membership-exact: a public decision id is not a tenant id.
     expect(dispatched).toContain(publicDecisionId);
     // Routine redaction hits log; only server-built surfaces still capture.
-    expect(captureErrorMock).not.toHaveBeenCalled();
-    expect(loggerWarnMock).toHaveBeenCalledTimes(1);
+    expect(analytics.exceptions()).toEqual([]);
+    expect(
+      logs.at("WARN").map((record) => ({
+        message: record.message,
+        surface: record.attributes?.["surface"],
+      })),
+    ).toEqual([
+      { message: "chat.model_ingress_redacted", surface: "messages" },
+    ]);
   });
 
   test("leaves a request without tenant ids untouched and silent", async () => {
     capturedChatOptions.length = 0;
-    captureErrorMock.mockClear();
     nextChatResult = createTextStream(["ok"]);
 
     await generateTanStackTextForRole({
@@ -574,13 +592,12 @@ describe("TanStack AI model-ingress guard", () => {
       "[internal-id-removed]",
     );
     expect(captured.systemPrompts).toEqual(["You are stella."]);
-    expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(analytics.exceptions()).toEqual([]);
+    expect(logs.at("WARN")).toEqual([]);
   });
 
   test("redacts an untrusted-embedding system prompt, fails closed on a server-built one", async () => {
     capturedChatOptions.length = 0;
-    captureErrorMock.mockClear();
-    loggerWarnMock.mockClear();
     nextChatResult = createTextStream(["ok"]);
 
     await generateTanStackTextForRole({
@@ -598,8 +615,18 @@ describe("TanStack AI model-ingress guard", () => {
       "Document context: workspace [internal-id-removed]",
     ]);
     // Routine redaction hits log; only server-built surfaces still capture.
-    expect(captureErrorMock).not.toHaveBeenCalled();
-    expect(loggerWarnMock).toHaveBeenCalledTimes(1);
+    expect(analytics.exceptions()).toEqual([]);
+    expect(
+      logs.at("WARN").map((record) => ({
+        message: record.message,
+        surface: record.attributes?.["surface"],
+      })),
+    ).toEqual([
+      {
+        message: "chat.model_ingress_redacted",
+        surface: "system-prompt-mixed",
+      },
+    ]);
 
     capturedChatOptions.length = 0;
     nextChatResult = createTextStream(["ok"]);
@@ -621,6 +648,17 @@ describe("TanStack AI model-ingress guard", () => {
     // Fail closed: the request never reached the provider.
     expect(serverBuiltFailure).toBeDefined();
     expect(capturedChatOptions).toHaveLength(0);
+    // A server-built surface embedding a tenant id is a defect, so it is
+    // captured under the guard's source rather than only logged.
+    expect(
+      analytics.exceptions().map((event) => event.properties),
+    ).toMatchObject([
+      {
+        "error.class": "TelemetryError",
+        source: "model-ingress-guard",
+        surface: "system-prompt",
+      },
+    ]);
   });
 });
 

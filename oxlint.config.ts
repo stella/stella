@@ -167,6 +167,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-error-logging.fixture.ts", [
     "no-raw-error-logging/no-raw-error-logging",
   ]),
+  fixtureRuleOverride("no-redacted-log-attribute-key.fixture.ts", [
+    "no-redacted-log-attribute-key/no-redacted-log-attribute-key",
+  ]),
   fixtureRuleOverride("no-raw-foreground-opacity.fixture.ts", [
     "no-raw-foreground-opacity/no-raw-foreground-opacity",
   ]),
@@ -713,6 +716,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-raw-error-logging.ts",
+    "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
@@ -2475,6 +2479,20 @@ export default defineConfig({
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
         "security-guards/require-secure-document-response": "error",
+      },
+    },
+    {
+      // A log attribute key the sanitizer would drop is an error where it is
+      // written. Tests are excluded: the logger's own suites and the
+      // recording-sink smoke test write such keys on purpose to prove the
+      // redaction.
+      files: ["apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.{ts,tsx}",
+        "apps/api/src/tests/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "no-redacted-log-attribute-key/no-redacted-log-attribute-key": "error",
       },
     },
     {

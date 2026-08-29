@@ -1,27 +1,36 @@
 import type { ModelMessage } from "@tanstack/ai";
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { guardModelSystemPrompt } from "@/api/lib/chat/model-ingress-guard";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 
-const captureErrorMock = mock();
-const realCapture = await import("@/api/lib/analytics/capture");
-void mock.module("@/api/lib/analytics/capture", () => ({
-  ...realCapture,
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
-}));
+import {
+  guardedCompactedMessages,
+  guardedLoopRecoveryPrompts,
+} from "./stream-chat";
 
-const loggerWarnMock = mock();
-const realLogger = await import("@/api/lib/observability/logger");
-void mock.module("@/api/lib/observability/logger", () => ({
-  ...realLogger,
-  logger: { ...realLogger.logger, warn: loggerWarnMock },
-}));
+// The real capture and logger paths run (fingerprinting, attribute
+// sanitization); only their sinks are in memory.
+let analytics: RecordingAnalytics;
+let logs: RecordingLogger;
 
-const { guardModelSystemPrompt } =
-  await import("@/api/lib/chat/model-ingress-guard");
-const { guardedCompactedMessages, guardedLoopRecoveryPrompts } =
-  await import("./stream-chat");
+beforeEach(() => {
+  analytics = installRecordingAnalytics();
+  logs = installRecordingLogger();
+});
+
+afterEach(() => {
+  analytics.restore();
+  logs.restore();
+});
 
 const WS_A = toSafeId<"workspace">("0dc54d0c-10d7-501d-897e-e801dbd0998c");
 const PUBLIC_UUID = "7c0f7d51-70a4-4d64-9f0e-0a4d64e9911b";
@@ -35,8 +44,6 @@ const BASE_SYSTEM = guardModelSystemPrompt({
 // what the middleware produces, and clean rewrites pass through untouched.
 describe("mid-loop rewrites re-enter the model-ingress guard", () => {
   test("redacts a tenant id an org tool name drags into the loop-recovery prompt", () => {
-    captureErrorMock.mockClear();
-
     const [prompt] = guardedLoopRecoveryPrompts({
       baseSystem: BASE_SYSTEM,
       detection: {
@@ -54,21 +61,22 @@ describe("mid-loop rewrites re-enter the model-ingress guard", () => {
     expect(prompt).toContain("Matter scope: mat_1.");
     // Redaction hits on rewrites are routine (the id arrived through an org
     // tool name), so they log rather than capture.
-    expect(captureErrorMock).not.toHaveBeenCalled();
-    expect(loggerWarnMock).toHaveBeenCalledTimes(1);
-    const [, attributes] = loggerWarnMock.mock.calls.at(0) ?? [];
-    expect(attributes).toEqual({
-      pathCount: "1",
-      paths: "$",
-      surface: "system-prompt-mixed",
-    });
-    expect(JSON.stringify(attributes)).not.toContain(WS_A);
+    expect(analytics.exceptions()).toEqual([]);
+    expect(logs.at("WARN")).toEqual([
+      {
+        severityText: "WARN",
+        message: "chat.model_ingress_redacted",
+        attributes: {
+          pathCount: "1",
+          paths: "$",
+          surface: "system-prompt-mixed",
+        },
+      },
+    ]);
+    expect(JSON.stringify(logs.records)).not.toContain(WS_A);
   });
 
   test("passes a clean loop-recovery prompt through unchanged and silent", () => {
-    captureErrorMock.mockClear();
-    loggerWarnMock.mockClear();
-
     const [prompt] = guardedLoopRecoveryPrompts({
       baseSystem: BASE_SYSTEM,
       detection: {
@@ -82,13 +90,11 @@ describe("mid-loop rewrites re-enter the model-ingress guard", () => {
 
     expect(prompt).toContain("search_case_law");
     expect(prompt).not.toContain("[internal-id-removed]");
-    expect(captureErrorMock).not.toHaveBeenCalled();
-    expect(loggerWarnMock).not.toHaveBeenCalled();
+    expect(analytics.exceptions()).toEqual([]);
+    expect(logs.at("WARN")).toEqual([]);
   });
 
   test("redacts a tenant id the compaction summary reintroduces", () => {
-    captureErrorMock.mockClear();
-    loggerWarnMock.mockClear();
     const previous: ModelMessage[] = [
       { role: "user", content: "Earlier turn." },
     ];
@@ -110,20 +116,22 @@ describe("mid-loop rewrites re-enter the model-ingress guard", () => {
     expect(dispatched).toContain("[internal-id-removed]");
     // Membership-exact: the public decision id survives compaction.
     expect(dispatched).toContain(PUBLIC_UUID);
-    expect(captureErrorMock).not.toHaveBeenCalled();
-    expect(loggerWarnMock).toHaveBeenCalledTimes(1);
-    const [, attributes] = loggerWarnMock.mock.calls.at(0) ?? [];
-    expect(attributes).toEqual({
-      pathCount: "1",
-      paths: "$[0].content",
-      surface: "messages",
-    });
-    expect(JSON.stringify(attributes)).not.toContain(WS_A);
+    expect(analytics.exceptions()).toEqual([]);
+    expect(logs.at("WARN")).toEqual([
+      {
+        severityText: "WARN",
+        message: "chat.model_ingress_redacted",
+        attributes: {
+          pathCount: "1",
+          paths: "$[0].content",
+          surface: "messages",
+        },
+      },
+    ]);
+    expect(JSON.stringify(logs.records)).not.toContain(WS_A);
   });
 
   test("keeps a clean summary intact and skips the patch when nothing compacted", () => {
-    captureErrorMock.mockClear();
-    loggerWarnMock.mockClear();
     const previous: ModelMessage[] = [
       { role: "user", content: "Earlier turn." },
     ];
@@ -146,7 +154,7 @@ describe("mid-loop rewrites re-enter the model-ingress guard", () => {
         tenantWorkspaceIds: [WS_A],
       }),
     ).toBeUndefined();
-    expect(captureErrorMock).not.toHaveBeenCalled();
-    expect(loggerWarnMock).not.toHaveBeenCalled();
+    expect(analytics.exceptions()).toEqual([]);
+    expect(logs.at("WARN")).toEqual([]);
   });
 });
