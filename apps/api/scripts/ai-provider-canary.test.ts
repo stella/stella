@@ -918,6 +918,16 @@ describe("AI provider canary wrapped generate errors", () => {
     ).toBe("provider HTTP 503");
   });
 
+  test("treats a terminal class carried in `type` as terminal despite a retryable status", () => {
+    const cutOff = new CanaryProviderRunError(
+      { rawEvent: { type: "max_tokens", raw_status_code: 503 } },
+      "before-tool-call",
+    );
+
+    expect(isRetryableCanaryError(cutOff, signal)).toBe(false);
+    expect(errorSummary(cutOff, signal)).toBe("provider HTTP 503 (max_tokens)");
+  });
+
   test("keeps a wrapped Anthropic overload retryable with its class named", () => {
     const overloaded = new HandlerError({
       status: 502,

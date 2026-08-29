@@ -398,9 +398,11 @@ const terminalProviderCode = (error: unknown, depth = 0): string | null => {
     return null;
   }
 
-  const code = error["code"];
-  if (typeof code === "string" && isTerminalProviderCode(code)) {
-    return code;
+  for (const key of ["code", "type"] as const) {
+    const value = error[key];
+    if (typeof value === "string" && isTerminalProviderCode(value)) {
+      return value;
+    }
   }
 
   if (depth < 3) {
