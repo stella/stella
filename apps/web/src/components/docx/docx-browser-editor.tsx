@@ -82,7 +82,7 @@ import { useInspectorCommandStore } from "@/components/inspector/inspector-comma
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { StatusMessage } from "@/components/route-components";
-import { UserAvatar } from "@/components/user-avatar";
+import { UserIdentityAvatar } from "@/components/user-avatar";
 import { env } from "@/env";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -2204,7 +2204,7 @@ const CollaborationPresence = ({
           role="listitem"
           title={user.name}
         >
-          <UserAvatar
+          <UserIdentityAvatar
             className="size-7 text-[0.625rem]"
             image={user.image}
             name={user.name}

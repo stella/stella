@@ -17,6 +17,21 @@ import { getDisplayName } from "@/lib/get-display-name";
  */
 export const UserAvatar = ReviewAuthorAvatar;
 
+type UserIdentityAvatarProps = {
+  className?: string;
+  image?: string | null | undefined;
+  name?: string | null;
+};
+
+/** Compact user identity for presence stacks and other avatar-only surfaces. */
+export const UserIdentityAvatar = ({
+  className,
+  image,
+  name,
+}: UserIdentityAvatarProps) => (
+  <ReviewAuthorAvatar className={className} image={image} name={name ?? null} />
+);
+
 type UserIdentityProps = {
   as?: "div" | "span";
   image?: string | null | undefined;
