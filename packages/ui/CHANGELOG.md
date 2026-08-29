@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.10.0
+
+### Minor Changes
+
+- [#2594](https://github.com/stella/stella/pull/2594) [`37b6437`](https://github.com/stella/stella/commit/37b64377f9806be3da0a9cf9b33e7b984e46ed1a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Replace the partial application frame with a complete fixed-viewport workspace shell and permanent typed end rail. This pre-1.0 breaking minor requires navigation, sticky top chrome, and an inline-end dock; chat must be wired or explicitly unavailable.
+
 ## 0.9.1
 
 ### Patch Changes
