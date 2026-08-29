@@ -5,7 +5,7 @@ import type {
   AIUsageMetering,
   TanStackAIAnalyticsCallbacks,
 } from "@/api/lib/analytics/tanstack-ai";
-import type { BilingualAIContext } from "@/api/lib/bilingual/ai";
+import type { BilingualAIDocumentContext } from "@/api/lib/bilingual/ai";
 import type { FormattedBilingualUnit } from "@/api/lib/bilingual/formatting";
 import { toSafeId } from "@/api/lib/branded-types";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -13,19 +13,19 @@ import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry
 
 type GenerateOptions = {
   analytics: TanStackAIAnalyticsCallbacks;
-  prompt: string;
+  messages: { content: { content: string; type: "text" }[] }[];
 };
 type FormattedOutput = {
   items: { n: number; spans: { id: string; text: string }[] }[];
 };
 
 const outputs: FormattedOutput[] = [];
-const prompts: string[] = [];
+const messages: GenerateOptions["messages"][] = [];
 const dispatchedCallbacks: TanStackAIAnalyticsCallbacks[] = [];
 const generateObjectMock = mock(
-  async ({ analytics, prompt }: GenerateOptions) => {
+  async ({ analytics, messages: request }: GenerateOptions) => {
     dispatchedCallbacks.push(analytics);
-    prompts.push(prompt);
+    messages.push(request);
     const output = outputs.shift();
     if (!output) {
       throw new Error("test did not configure a model output");
@@ -45,7 +45,11 @@ void mock.module("@/api/lib/tanstack-ai-generate", () => ({
   systemPromptsPatch: mock(),
 }));
 
-const { translateFormattedBatch } = await import("@/api/lib/bilingual/ai");
+const {
+  buildBilingualDocumentRequest,
+  SOURCE_DOCUMENT_CACHE_CHARS_MAX,
+  translateFormattedBatch,
+} = await import("@/api/lib/bilingual/ai");
 
 const organizationId = toSafeId<"organization">("organization-fixture");
 const workspaceId = toSafeId<"workspace">("workspace-fixture");
@@ -68,7 +72,17 @@ const context = {
   usageMetering,
   abortSignal: AbortSignal.timeout(10_000),
   scopeKey: "document-version-fixture",
-} satisfies BilingualAIContext;
+  sourceDocument: [
+    {
+      rowId: "source-row",
+      ordinal: 99,
+      kind: "paragraph",
+      inTable: false,
+      sourceParaId: "source-paragraph",
+      sourceText: "Stable source",
+    },
+  ],
+} satisfies BilingualAIDocumentContext;
 
 const formattedUnit = (
   ordinal: number,
@@ -89,7 +103,7 @@ describe("formatted bilingual AI boundary", () => {
 
   beforeEach(() => {
     outputs.length = 0;
-    prompts.length = 0;
+    messages.length = 0;
     dispatchedCallbacks.length = 0;
     generateObjectMock.mockClear();
     analytics = installRecordingAnalytics();
@@ -97,6 +111,63 @@ describe("formatted bilingual AI boundary", () => {
 
   afterEach(() => {
     analytics.restore();
+  });
+
+  test("marks the complete stable input before request-specific text", () => {
+    const request = buildBilingualDocumentRequest(
+      { ...context, promptCachingEnabled: true },
+      "chat",
+      "Translate rows 1 through 8",
+    );
+    const message = request.messages.at(0);
+    if (!message || !Array.isArray(message.content)) {
+      throw new Error("expected a multipart user message");
+    }
+    const source = message.content.at(0);
+    const variable = message.content.at(1);
+    if (source?.type !== "text" || variable?.type !== "text") {
+      throw new Error("expected text message parts");
+    }
+
+    expect(source.content).toContain("Input document:\n#99 [paragraph]");
+    expect(source.metadata).toEqual({
+      cache_control: { type: "ephemeral", ttl: "5m" },
+    });
+    expect(variable.content).toBe("Translate rows 1 through 8");
+    expect(request.caching).toEqual({
+      enabled: true,
+      ttl: "5m",
+      scopeKey: "document-version-fixture",
+    });
+  });
+
+  test("bounds the cached source region for unusually large documents", () => {
+    const sourceDocument = Array.from({ length: 4 }, (_unused, index) => ({
+      rowId: `large-row-${index}`,
+      ordinal: index + 1,
+      kind: "paragraph" as const,
+      inTable: false,
+      sourceParaId: `large-paragraph-${index}`,
+      sourceText: "x".repeat(20_000),
+    }));
+    const request = buildBilingualDocumentRequest(
+      { ...context, sourceDocument },
+      "chat",
+      "Translate one batch",
+    );
+    const message = request.messages.at(0);
+    if (!message || !Array.isArray(message.content)) {
+      throw new Error("expected a multipart user message");
+    }
+    const source = message.content.at(0);
+    if (source?.type !== "text") {
+      throw new Error("expected a text source part");
+    }
+
+    expect(source.content.length).toBeLessThanOrEqual(
+      "Input document:\n".length + SOURCE_DOCUMENT_CACHE_CHARS_MAX,
+    );
+    expect(source.content).toEndWith("[Cached input prefix truncated]");
   });
 
   test("retries only rows whose ordered span contract is invalid", async () => {
@@ -150,9 +221,12 @@ describe("formatted bilingual AI boundary", () => {
     expect(dispatchedCallbacks.at(0)?.middleware.name).toBe(
       "stella-tanstack-analytics",
     );
-    expect(prompts.at(1)).toContain("Contract repair:");
-    expect(prompts.at(1)).not.toContain("#1:");
-    expect(prompts.at(1)).toContain("#2:");
+    const firstContent = messages.at(0)?.at(0)?.content;
+    const retryContent = messages.at(1)?.at(0)?.content;
+    expect(firstContent?.at(0)?.content).toBe(retryContent?.at(0)?.content);
+    expect(retryContent?.at(1)?.content).toContain("Contract repair:");
+    expect(retryContent?.at(1)?.content).not.toContain("#1:");
+    expect(retryContent?.at(1)?.content).toContain("#2:");
     expect(result.get(1)).toEqual({
       text: "Ahoj světe",
       spans: [

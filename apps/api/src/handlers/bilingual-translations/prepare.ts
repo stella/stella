@@ -14,7 +14,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { decideDispositions, proposeGlossary } from "@/api/lib/bilingual/ai";
-import type { BilingualAIContext } from "@/api/lib/bilingual/ai";
+import type { BilingualAIDocumentContext } from "@/api/lib/bilingual/ai";
 import { BILINGUAL_LIMITS } from "@/api/lib/bilingual/contract";
 import {
   detectGlossaryCandidates,
@@ -101,7 +101,7 @@ const prepareBilingualTranslation = createSafeHandler(
     }
 
     const organizationId = session.activeOrganizationId;
-    const context: BilingualAIContext = {
+    const context: BilingualAIDocumentContext = {
       organizationId,
       workspaceId,
       orgAIConfig,
@@ -111,6 +111,7 @@ const prepareBilingualTranslation = createSafeHandler(
         AbortSignal.timeout(PREPARE_TIMEOUT_MS),
       ]),
       scopeKey: loaded.entityVersionId,
+      sourceDocument: units,
       usageMetering: {
         actionType: "doc_review",
         organizationId,

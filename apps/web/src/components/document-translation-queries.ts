@@ -1,8 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 const RUN_POLL_INTERVAL_MS = 2000;
 
@@ -130,6 +132,28 @@ export const documentTranslationRunOptions = (ref: DocumentTranslationRunRef) =>
         : false;
     },
   });
+
+/**
+ * Mark matter entity projections stale after a translation creates its output.
+ * The active source document must not refetch in place: that reloads Folio and
+ * every active entity projection while the completion action is being used.
+ * Collection views fetch the marked data when they are next shown; realtime
+ * invalidation can still refresh them sooner when connected.
+ */
+export const invalidateDocumentTranslationOutputQueries = async (
+  queryClient: QueryClient,
+  workspaceId: string,
+  sourceEntityId: string,
+) => {
+  const sourceKey = entitiesKeys.detail(workspaceId, sourceEntityId);
+  await queryClient.invalidateQueries({
+    queryKey: entitiesKeys.all(workspaceId),
+    refetchType: "active",
+    predicate: (query) =>
+      query.queryKey.length !== sourceKey.length ||
+      query.queryKey.some((part, index) => part !== sourceKey[index]),
+  });
+};
 
 const runPollInterval = (
   status: DocumentTranslationRunStatus,
