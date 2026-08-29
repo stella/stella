@@ -1,9 +1,5 @@
 name: Release
 
-env:
-  NPM_VERSION: "11.11.1"
-  UV_VERSION: "0.10.1"
-
 on:
   push:
     branches: [main]
@@ -30,7 +26,8 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   verify:
@@ -48,6 +45,24 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: "22.21.1"
+          registry-url: https://registry.npmjs.org
+
+      - name: Require main for manual publishing
+        if: >-
+          github.event_name == 'workflow_dispatch'
+          && inputs.publish_to_npm
+          && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Manual publishing must run from main."
+          exit 1
 
       - name: Classify release scope
         id: release-scope
@@ -122,17 +137,8 @@ jobs:
           echo "dist_tag=$dist_tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
-        with:
-          node-version: "22"
-          registry-url: https://registry.npmjs.org
-
       - name: Verify Bun workflow pin
         run: node .github/tools/check-bun-workflows.mjs
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -160,7 +166,7 @@ jobs:
 
       - name: Install uv
         run: |
-          python3 -m pip install --user "uv==${UV_VERSION}"
+          python3 -m pip install --user "uv==0.10.1"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Python typecheck
@@ -206,22 +212,22 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
-          node-version: "22"
+          node-version: "22.21.1"
           registry-url: https://registry.npmjs.org
 
       - name: Install npm for packing
         # Packing uses this exact CLI with lifecycle scripts disabled and no OIDC.
         # zizmor: ignore[adhoc-packages]
-        run: npm install --global --ignore-scripts "npm@${NPM_VERSION}"
+        run: npm install --global --ignore-scripts "npm@11.11.1"
 
       - name: Verify Bun workflow pin
         run: node .github/tools/check-bun-workflows.mjs
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -318,22 +324,22 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
-          node-version: "22"
+          node-version: "22.21.1"
           registry-url: https://registry.npmjs.org
 
       - name: Install npm for packing
         # Packing uses this exact CLI with lifecycle scripts disabled and no OIDC.
         # zizmor: ignore[adhoc-packages]
-        run: npm install --global --ignore-scripts "npm@${NPM_VERSION}"
+        run: npm install --global --ignore-scripts "npm@11.11.1"
 
       - name: Verify Bun workflow pin
         run: node .github/tools/check-bun-workflows.mjs
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -402,26 +408,27 @@ jobs:
       contents: read
     outputs:
       dist_tag: ${{ steps.data-version.outputs.dist_tag }}
+      version: ${{ steps.data-version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
-          node-version: "22"
+          node-version: "22.21.1"
 
       - name: Install npm for packing
         # Packing uses this exact CLI with lifecycle scripts disabled and no OIDC.
         # zizmor: ignore[adhoc-packages]
-        run: npm install --global --ignore-scripts "npm@${NPM_VERSION}"
+        run: npm install --global --ignore-scripts "npm@11.11.1"
 
       - name: Verify Bun workflow pin
         run: node .github/tools/check-bun-workflows.mjs
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -475,61 +482,33 @@ jobs:
             console.log(pack[0].filename);
           ' "$pack_json")"
           tarball="${pack_dir}/${filename}"
-          (cd "$pack_dir" && sha256sum "$filename" > "${filename}.sha256")
           echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
 
       - name: Upload data package tarball
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
         with:
           name: data-package-stll-anonymize-data
-          path: |
-            ${{ steps.pack.outputs.tarball }}
-            ${{ steps.pack.outputs.tarball }}.sha256
+          path: ${{ steps.pack.outputs.tarball }}
           if-no-files-found: error
 
   publish-data:
     name: Publish data package
     needs: [verify, pack-data]
-    if: needs.verify.outputs.publish_data == 'true' && needs.pack-data.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
-    runs-on: ubuntu-latest
+    if: >-
+      github.ref == 'refs/heads/main' && (
+        needs.verify.outputs.publish_data == 'true'
+        && needs.pack-data.result == 'success'
+        && (github.event_name == 'push'
+            || inputs.publish_to_npm == true))
+    uses: stella/.github/.github/workflows/npm-artifact-publish.yml@437d9d78c38114a15c368daed7d3d1b36fd6b8fc
+    with:
+      artifact-name: data-package-stll-anonymize-data
+      package-name: "@stll/anonymize-data"
+      version: ${{ needs.pack-data.outputs.version }}
+      dist-tag: ${{ needs.pack-data.outputs.dist_tag }}
     permissions:
       contents: read
       id-token: write # Required only for npm trusted publishing.
-    steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: data-package-stll-anonymize-data
-          path: data-tarball
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
-        with:
-          node-version: "22"
-          registry-url: https://registry.npmjs.org
-
-      - name: Install npm for trusted publishing
-        # Trusted publishing needs npm 11.5.1 or newer; lifecycle scripts stay disabled.
-        # zizmor: ignore[adhoc-packages]
-        run: npm install --global --ignore-scripts "npm@${NPM_VERSION}"
-
-      - name: Find data package tarball
-        id: tarball
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          tarballs=(data-tarball/*.tgz)
-          checksums=(data-tarball/*.tgz.sha256)
-          if [[ "${#tarballs[@]}" -ne 1 || "${#checksums[@]}" -ne 1 ]]; then
-            echo "::error::Expected one data tarball and checksum"
-            exit 1
-          fi
-          (cd data-tarball && sha256sum --check "$(basename "${checksums[0]}")")
-          echo "path=${tarballs[0]}" >> "$GITHUB_OUTPUT"
-
-      - name: Publish data package
-        uses: stella/.github/.github/actions/npm-publish-hardened@48aacae31829ce15216a6b766b03a92fd2e84da3
-        with:
-          tarball: ${{ steps.tarball.outputs.path }}
-          tag: ${{ needs.pack-data.outputs.dist_tag }}
 
   build-wheels:
     needs: verify
@@ -565,16 +544,16 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
-          node-version: "22"
+          node-version: "22.21.1"
 
       - name: Verify Bun workflow pin
         run: node .github/tools/check-bun-workflows.mjs
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -638,7 +617,7 @@ jobs:
       - name: Install uv
         if: matrix.check_wheel
         run: |
-          python3 -m pip install --user "uv==${UV_VERSION}"
+          python3 -m pip install --user "uv==0.10.1"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Verify wheel packlist and smoke test
@@ -665,161 +644,37 @@ jobs:
   publish-pypi:
     name: Publish Python wheels
     needs: [verify, build-wheels]
-    if: needs.verify.outputs.publish_runtime == 'true' && (github.event_name == 'push' || inputs.publish_to_npm == true)
+    if: >-
+      github.ref == 'refs/heads/main' && (
+        needs.verify.outputs.publish_runtime == 'true'
+        && (github.event_name == 'push'
+            || inputs.publish_to_npm == true))
     runs-on: ubuntu-latest
     permissions:
       # Trusted Publishing (OIDC): no PyPI API token is stored in the repo.
       id-token: write # Required only for PyPI trusted publishing.
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - name: Validate and publish exact Python wheel set
+        uses: stella/.github/.github/actions/pypi-publish-hardened@437d9d78c38114a15c368daed7d3d1b36fd6b8fc
         with:
-          pattern: python-wheel-*
-          path: wheel-artifacts
-
-      - name: Validate Python wheel artifacts
-        env:
-          EXPECTED_VERSION: ${{ needs.verify.outputs.version }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from email.parser import BytesParser
-          from email.policy import default
-          from pathlib import Path
-          from zipfile import ZipFile
-          import os
-          import re
-          import shutil
-
-          project_name = "stella-anonymize-core"
-          distribution_name = "stella_anonymize_core"
-          version_match = re.fullmatch(
-              r"([0-9]+\.[0-9]+\.[0-9]+)(?:-(alpha|beta|rc)\.([0-9]+))?",
-              os.environ["EXPECTED_VERSION"],
-          )
-          if version_match is None:
-              raise SystemExit("::error::EXPECTED_VERSION is not a supported release version")
-
-          base_version, prerelease, prerelease_number = version_match.groups()
-          prerelease_label = {"alpha": "a", "beta": "b", "rc": "rc"}
-          wheel_version = base_version
-          if prerelease is not None:
-              wheel_version += f"{prerelease_label[prerelease]}{prerelease_number}"
-
-          expected = {
-              "python-wheel-x86_64-unknown-linux-gnu": (
-                  f"{distribution_name}-{wheel_version}-cp311-abi3-"
-                  "manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-                  {
-                      "cp311-abi3-manylinux_2_17_x86_64",
-                      "cp311-abi3-manylinux2014_x86_64",
-                  },
-              ),
-              "python-wheel-aarch64-unknown-linux-gnu": (
-                  f"{distribution_name}-{wheel_version}-cp311-abi3-"
-                  "manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
-                  {
-                      "cp311-abi3-manylinux_2_17_aarch64",
-                      "cp311-abi3-manylinux2014_aarch64",
-                  },
-              ),
-              "python-wheel-x86_64-apple-darwin": (
-                  f"{distribution_name}-{wheel_version}-cp311-abi3-"
-                  "macosx_10_12_x86_64.whl",
-                  {"cp311-abi3-macosx_10_12_x86_64"},
-              ),
-              "python-wheel-aarch64-apple-darwin": (
-                  f"{distribution_name}-{wheel_version}-cp311-abi3-"
-                  "macosx_11_0_arm64.whl",
-                  {"cp311-abi3-macosx_11_0_arm64"},
-              ),
-              "python-wheel-x86_64-pc-windows-msvc": (
-                  f"{distribution_name}-{wheel_version}-cp311-abi3-win_amd64.whl",
-                  {"cp311-abi3-win_amd64"},
-              ),
-          }
-
-          artifact_root = Path("wheel-artifacts")
-          actual_artifacts = {path.name for path in artifact_root.iterdir()}
-          if actual_artifacts != set(expected):
-              raise SystemExit(
-                  "::error::Unexpected Python wheel artifact set: "
-                  f"{sorted(actual_artifacts)}"
-              )
-
-          publish_dir = Path("dist")
-          publish_dir.mkdir()
-          max_metadata_bytes = 1_048_576
-
-          for artifact_name, (filename, expected_tags) in expected.items():
-              artifact_dir = artifact_root / artifact_name
-              if not artifact_dir.is_dir() or artifact_dir.is_symlink():
-                  raise SystemExit(f"::error::{artifact_dir} must be a directory")
-              entries = list(artifact_dir.iterdir())
-              if len(entries) != 1 or entries[0].name != filename:
-                  raise SystemExit(
-                      f"::error::{artifact_name} must contain only {filename}"
-                  )
-
-              wheel_path = entries[0]
-              if not wheel_path.is_file() or wheel_path.is_symlink():
-                  raise SystemExit(f"::error::{wheel_path} must be a regular file")
-
-              dist_info = f"{distribution_name}-{wheel_version}.dist-info"
-              metadata_path = f"{dist_info}/METADATA"
-              wheel_metadata_path = f"{dist_info}/WHEEL"
-              with ZipFile(wheel_path) as wheel:
-                  names = wheel.namelist()
-                  for member in (metadata_path, wheel_metadata_path):
-                      if names.count(member) != 1:
-                          raise SystemExit(
-                              f"::error::{wheel_path} must contain exactly one {member}"
-                          )
-                      if wheel.getinfo(member).file_size > max_metadata_bytes:
-                          raise SystemExit(f"::error::{wheel_path} metadata is too large")
-
-                  metadata = BytesParser(policy=default).parsebytes(
-                      wheel.read(metadata_path)
-                  )
-                  if metadata["Name"] != project_name:
-                      raise SystemExit(
-                          f"::error::{wheel_path} has unexpected project name "
-                          f"{metadata['Name']}"
-                      )
-                  if metadata["Version"] != wheel_version:
-                      raise SystemExit(
-                          f"::error::{wheel_path} has unexpected version "
-                          f"{metadata['Version']}"
-                      )
-
-                  wheel_metadata = BytesParser(policy=default).parsebytes(
-                      wheel.read(wheel_metadata_path)
-                  )
-                  actual_tags = wheel_metadata.get_all("Tag", [])
-                  if (
-                      len(actual_tags) != len(expected_tags)
-                      or set(actual_tags) != expected_tags
-                  ):
-                      raise SystemExit(
-                          f"::error::{wheel_path} has unexpected wheel tags "
-                          f"{sorted(actual_tags)}"
-                      )
-
-              shutil.copyfile(wheel_path, publish_dir / filename)
-
-          print(f"Validated {len(expected)} Python wheels for {project_name}@{wheel_version}")
-          PY
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
-        with:
-          packages-dir: dist
-          skip-existing: true
+          expected-version: ${{ needs.verify.outputs.version }}
+          project-name: stella-anonymize-core
+          distribution-name: stella_anonymize_core
+          wheel-contract: >-
+            {"python-wheel-x86_64-unknown-linux-gnu":["manylinux_2_17_x86_64","manylinux2014_x86_64"],"python-wheel-aarch64-unknown-linux-gnu":["manylinux_2_17_aarch64","manylinux2014_aarch64"],"python-wheel-x86_64-apple-darwin":["macosx_10_12_x86_64"],"python-wheel-aarch64-apple-darwin":["macosx_11_0_arm64"],"python-wheel-x86_64-pc-windows-msvc":["win_amd64"]}
 
   github-release:
     name: Publish and finalize runtime release
     needs: [verify, pack-native, pack-runtime, publish-pypi]
-    if: needs.verify.outputs.publish_runtime == 'true' && needs.pack-native.result == 'success' && needs.pack-runtime.result == 'success' && needs.publish-pypi.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
-    uses: stella/.github/.github/workflows/npm-version-finalize.yml@1ce0079bbdbf93a4c1917d2857496b89aedcec14
+    if: >-
+      github.ref == 'refs/heads/main' && (
+        needs.verify.outputs.publish_runtime == 'true'
+        && needs.pack-native.result == 'success'
+        && needs.pack-runtime.result == 'success'
+        && needs.publish-pypi.result == 'success'
+        && (github.event_name == 'push'
+            || inputs.publish_to_npm == true))
+    uses: stella/.github/.github/workflows/npm-version-finalize.yml@437d9d78c38114a15c368daed7d3d1b36fd6b8fc
     with:
       package-files: |
         packages/anonymize/package.json
