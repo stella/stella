@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.11.0
+
+### Minor Changes
+
+- [#2596](https://github.com/stella/stella/pull/2596) [`c56a0c7`](https://github.com/stella/stella/commit/c56a0c7e97ef276b1353a7621e4658b2d9f2ada0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Make responsive navigation ownership explicit in `WorkspaceShell`, with a shell-managed compact sheet contract for hosts that do not already provide responsive navigation.
+
 ## 0.10.0
 
 ### Minor Changes

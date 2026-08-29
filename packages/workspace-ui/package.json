@@ -1,6 +1,6 @@
 {
   "name": "@stll/workspace-ui",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Reusable workspace presentation components and view helpers for Stella.",
   "keywords": [
     "calculations",
