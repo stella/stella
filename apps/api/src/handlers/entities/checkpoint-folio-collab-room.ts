@@ -12,7 +12,10 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { readVersionDocxTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import {
+  presignDocxDownloadFromFileId,
+  readVersionDocxTarget,
+} from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { validateDesktopEditFileBuffer } from "@/api/lib/entity-versions/validate-desktop-edit-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanFile } from "@/api/lib/file-scan/scan";
@@ -326,8 +329,15 @@ const checkpointFolioCollabRoom = createSafeHandler(
       );
     }
 
+    const downloadUrl = await presignDocxDownloadFromFileId({
+      fileId: nextFileId,
+      fileName: target.room.fileName,
+      organizationId: session.activeOrganizationId,
+      workspaceId,
+    });
     return Result.ok({
       checkpointedAt: checkpointedAt.toISOString(),
+      downloadUrl,
       generation: expectedGeneration,
       sha256Hex,
     });
