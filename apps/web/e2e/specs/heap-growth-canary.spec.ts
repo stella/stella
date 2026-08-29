@@ -126,11 +126,13 @@ test("repeated navigation does not grow the JS heap unboundedly", async ({
 
 const runNavigationCycle = async (page: Page) => {
   for (const [routeIndex, route] of CYCLE_ROUTES.entries()) {
-    const currentRouteRoot = page.locator("main > :last-child");
+    const currentRouteRoot = page.locator(
+      '[data-slot="workspace-shell-content"] > :last-child',
+    );
     const marker = `heap-canary-${routeIndex}`;
-    // Mark the Outlet-owned root (the shell's banners/header are earlier
-    // siblings). Its removal proves the previous route unmounted; URL changes
-    // alone can happen before a cold route chunk or loader has mounted.
+    // Mark the Outlet-owned root inside the persistent shell content scroller.
+    // Its removal proves the previous route unmounted; URL changes alone can
+    // happen before a cold route chunk or loader has mounted.
     // eslint-disable-next-line no-await-in-loop -- each marker belongs to the route being left in this sequential navigation cycle
     await currentRouteRoot.evaluate((element, value) => {
       element.dataset["heapCanaryRouteRoot"] = value;
