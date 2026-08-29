@@ -16,13 +16,13 @@ RUN mkdir -p /json && \
       -not -path '*/node_modules/*' \
       -exec cp --parents -t /json/ {} +
 
-# Prune the monorepo for the API
+# Prune the monorepo for the API image entrypoints.
 FROM base AS pruner
 COPY package.json .
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install -g "turbo@$(bun -p 'require("./package.json").devDependencies.turbo')"
 COPY . .
-RUN turbo prune @stll/api @stll/legal-atlas-runner --docker
+RUN turbo prune @stll/api @stll/collab @stll/legal-atlas-runner --docker
 
 # Install dependencies using only package manifests (cached layer)
 FROM base AS deps
@@ -30,7 +30,7 @@ COPY --from=install-inputs /json/ .
 # The cache mount is detached after this layer, so packages must be
 # materialized under /app instead of linked into the global virtual store.
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-    BUN_INSTALL_GLOBAL_STORE=0 bun install --filter @stll/api --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts --network-concurrency=8
+    BUN_INSTALL_GLOBAL_STORE=0 bun install --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts --network-concurrency=8
 
 # Copy source code and compile the API to a Bun binary.
 #
@@ -51,6 +51,14 @@ RUN bun build \
     --target bun \
     --outfile /app/server \
     apps/api/src/server.ts
+# Dedicated Hocuspocus collaboration service. The infrastructure runs this
+# binary from the same immutable image with command override ["/app/collab"].
+RUN bun build \
+    --compile \
+    --no-compile-autoload-dotenv \
+    --target bun \
+    --outfile /app/collab \
+    apps/collab/src/index.ts
 # One-off maintenance tool: assigns public slugs to legacy case-law rows that
 # predate slug-at-ingest. Bundled to a single JS file (like the workers above,
 # not --compile) so it reuses the container's Bun runtime instead of embedding
@@ -200,6 +208,7 @@ ENV TEMPLATE_PACKS_CONTENT_DIR=/app/template-packs-content
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 COPY --chown=stella:stella --from=builder /app/server /app/server
+COPY --chown=stella:stella --from=builder /app/collab /app/collab
 COPY --chown=stella:stella --from=builder /app/backfill.js /app/backfill.js
 COPY --chown=stella:stella --from=builder /app/better-auth-migration-audit.js /app/better-auth-migration-audit.js
 COPY --chown=stella:stella --from=builder /app/better-auth-microsoft-identity-map.js /app/better-auth-microsoft-identity-map.js
@@ -235,7 +244,7 @@ COPY --chown=stella:stella --from=install-inputs \
 WORKDIR /app/apps/api
 
 USER stella
-EXPOSE 3001
+EXPOSE 3001 3002
 CMD ["/app/server"]
 
 # Throwaway verification stage: run the runtime-asset probe on the exact
