@@ -28,7 +28,10 @@ import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queu
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { createFileKey } from "@/api/lib/files/utils";
-import { FOLIO_COLLAB_CONTRIBUTOR_MAX_COUNT } from "@/api/lib/folio-collab-room-contract";
+import {
+  FOLIO_COLLAB_CONTRIBUTOR_MAX_COUNT,
+  FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS,
+} from "@/api/lib/folio-collab-room-contract";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
@@ -395,6 +398,7 @@ const publishFolioCollabVersion = createSafeHandler(
       const contributorRows = await tx
         .select({
           id: folioCollabContributions.id,
+          updatedAt: folioCollabContributions.updatedAt,
           userId: folioCollabContributions.userId,
         })
         .from(folioCollabContributions)
@@ -453,6 +457,25 @@ const publishFolioCollabVersion = createSafeHandler(
                 eq(folioCollabContributions.workspaceId, workspaceId),
               ),
             );
+          const activeContributorCutoff =
+            Date.now() - FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS;
+          const connectedContributorRows = contributorRows.filter(
+            (contributor) =>
+              contributor.updatedAt.getTime() > activeContributorCutoff,
+          );
+          if (connectedContributorRows.length > 0) {
+            await tx.insert(folioCollabContributions).values(
+              connectedContributorRows.map((contributor) => ({
+                entityId: room.entityId,
+                id: createSafeId<"folioCollabContribution">(),
+                roomId,
+                sinceVersionId: versionId,
+                updatedAt: contributor.updatedAt,
+                userId: contributor.userId,
+                workspaceId,
+              })),
+            );
+          }
           // audit: skip — durable storage recovery bookkeeping; the room
           // publication and canonical entity/version mutations are audited.
           await tx.insert(bufferObjectCleanupIntents).values({

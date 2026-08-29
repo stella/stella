@@ -249,6 +249,7 @@ export const recordFolioCollabContribution = async ({
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 }) => {
+  const recordedAt = new Date();
   const rooms = await tx
     .select({
       baseVersionId: folioCollabRooms.baseVersionId,
@@ -266,6 +267,20 @@ export const recordFolioCollabContribution = async ({
   const room = rooms.at(0);
   if (!room) {
     return false;
+  }
+
+  const refreshed = await tx
+    .update(folioCollabContributions)
+    .set({ updatedAt: recordedAt })
+    .where(
+      and(
+        eq(folioCollabContributions.roomId, roomId),
+        eq(folioCollabContributions.userId, userId),
+      ),
+    )
+    .returning({ id: folioCollabContributions.id });
+  if (refreshed.at(0)) {
+    return true;
   }
 
   const contributionCount = await tx.$count(
@@ -584,12 +599,19 @@ export const touchFolioCollabRoom = async (
       )
       .returning({ id: folioCollabRooms.id });
 
-    return updated.at(0)
-      ? ({
-          status: "active",
-          activeAt: touchedAt,
-        } satisfies TouchFolioCollabRoomResult)
-      : ({ status: "room-missing" } satisfies TouchFolioCollabRoomResult);
+    if (!updated.at(0)) {
+      return { status: "room-missing" } satisfies TouchFolioCollabRoomResult;
+    }
+    await recordFolioCollabContribution({
+      roomId: value.roomId,
+      tx,
+      userId: value.userId,
+      workspaceId: value.workspaceId,
+    });
+    return {
+      status: "active",
+      activeAt: touchedAt,
+    } satisfies TouchFolioCollabRoomResult;
   });
 };
 

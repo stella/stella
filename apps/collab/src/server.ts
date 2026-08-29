@@ -35,6 +35,7 @@ type CollabAuthContext = {
 };
 
 type CollabRoomTokenState = {
+  activeConnections: number;
   canEdit: boolean;
   generation: number;
   refreshInFlight: Promise<string> | null;
@@ -356,7 +357,10 @@ export const createCollabServer = async (
   }
 
   const tokenStates = new Map<string, CollabRoomTokenState>();
-  const roomHeartbeatStates = new Map<string, CollabRoomHeartbeatState>();
+  const roomHeartbeatStates = new Map<
+    CollabRoomTokenState,
+    CollabRoomHeartbeatState
+  >();
   const documentSnapshots = new WeakMap<
     HocuspocusDocument,
     { generation: number; roomId: string; snapshotRevision: number }
@@ -389,8 +393,8 @@ export const createCollabServer = async (
     state.refreshTimer = null;
   };
 
-  const clearRoomHeartbeat = (roomId: string) => {
-    const state = roomHeartbeatStates.get(roomId);
+  const clearRoomHeartbeat = (tokenState: CollabRoomTokenState) => {
+    const state = roomHeartbeatStates.get(tokenState);
     if (!state) {
       return;
     }
@@ -398,13 +402,14 @@ export const createCollabServer = async (
     if (state.timer) {
       clearTimeout(state.timer);
     }
-    roomHeartbeatStates.delete(roomId);
+    roomHeartbeatStates.delete(tokenState);
   };
 
   const clearRoomTokens = (roomName: string) => {
-    const roomId = parseFolioCollabRoomName(roomName);
-    if (roomId !== null) {
-      clearRoomHeartbeat(roomId);
+    for (const tokenState of roomHeartbeatStates.keys()) {
+      if (tokenState.roomName === roomName) {
+        clearRoomHeartbeat(tokenState);
+      }
     }
     for (const [token, state] of tokenStates) {
       if (state.roomName !== roomName) {
@@ -466,6 +471,7 @@ export const createCollabServer = async (
     }
 
     const state: CollabRoomTokenState = {
+      activeConnections: 0,
       canEdit,
       generation,
       refreshInFlight: null,
@@ -552,8 +558,8 @@ export const createCollabServer = async (
     });
   };
 
-  const scheduleRoomHeartbeat = (roomId: string) => {
-    const state = roomHeartbeatStates.get(roomId);
+  const scheduleRoomHeartbeat = (tokenState: CollabRoomTokenState) => {
+    const state = roomHeartbeatStates.get(tokenState);
     if (!state || state.timer) {
       return;
     }
@@ -564,9 +570,9 @@ export const createCollabServer = async (
       state.inFlight = request;
       void request
         .then(() => {
-          if (roomHeartbeatStates.get(roomId) === state) {
+          if (roomHeartbeatStates.get(tokenState) === state) {
             state.inFlight = null;
-            scheduleRoomHeartbeat(roomId);
+            scheduleRoomHeartbeat(tokenState);
           }
           return undefined;
         })
@@ -578,9 +584,8 @@ export const createCollabServer = async (
   };
 
   const ensureRoomHeartbeat = async (tokenState: CollabRoomTokenState) => {
-    const existing = roomHeartbeatStates.get(tokenState.roomId);
+    const existing = roomHeartbeatStates.get(tokenState);
     if (existing) {
-      existing.tokenState = tokenState;
       if (existing.inFlight) {
         await existing.inFlight;
       }
@@ -592,15 +597,15 @@ export const createCollabServer = async (
       timer: null,
       tokenState,
     };
-    roomHeartbeatStates.set(tokenState.roomId, state);
+    roomHeartbeatStates.set(tokenState, state);
     const request = heartbeatRoom(tokenState);
     state.inFlight = request;
     try {
       await request;
       state.inFlight = null;
-      scheduleRoomHeartbeat(tokenState.roomId);
+      scheduleRoomHeartbeat(tokenState);
     } catch (error) {
-      clearRoomHeartbeat(tokenState.roomId);
+      clearRoomHeartbeat(tokenState);
       throw error;
     }
   };
@@ -763,7 +768,13 @@ export const createCollabServer = async (
           token,
           tokenExpiresAt: authorized.tokenExpiresAt,
         });
-        await ensureRoomHeartbeat(tokenState);
+        tokenState.activeConnections += 1;
+        try {
+          await ensureRoomHeartbeat(tokenState);
+        } catch (error) {
+          tokenState.activeConnections -= 1;
+          throw error;
+        }
         connectionConfig.readOnly = !authorized.canEdit;
         const managedConnection = managedConnectionsByRequest.get(request);
         if (managedConnection === undefined) {
@@ -789,8 +800,15 @@ export const createCollabServer = async (
         throw error;
       }
     },
-    async onDisconnect({ documentName, socketId }) {
+    async onDisconnect({ context, documentName, socketId }) {
       await Promise.resolve();
+      context.tokenState.activeConnections = Math.max(
+        0,
+        context.tokenState.activeConnections - 1,
+      );
+      if (context.tokenState.activeConnections === 0) {
+        clearRoomHeartbeat(context.tokenState);
+      }
       const managedConnection = managedConnectionsBySocketId.get(socketId);
       const connectionCount =
         managedConnection?.roomConnectionCounts.get(documentName);
@@ -977,8 +995,8 @@ export const createCollabServer = async (
 
   const destroy = async () => {
     shuttingDown = true;
-    for (const roomId of roomHeartbeatStates.keys()) {
-      clearRoomHeartbeat(roomId);
+    for (const tokenState of roomHeartbeatStates.keys()) {
+      clearRoomHeartbeat(tokenState);
     }
     for (const state of tokenStates.values()) {
       clearRoomTokenRefresh(state);
