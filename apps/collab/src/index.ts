@@ -22,6 +22,7 @@ const startCollabServer = async () => {
     apiUrl: env.STELLA_API_URL,
     mode: "redis",
     port: env.STELLA_COLLAB_PORT,
+    redisTlsRejectUnauthorized: env.REDIS_TLS_REJECT_UNAUTHORIZED,
     redisUrl,
     serviceToken: env.STELLA_COLLAB_SERVICE_TOKEN,
   });
