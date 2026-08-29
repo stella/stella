@@ -256,4 +256,6 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   },
   workObligationEvent: { type: "non_resource", reason: "event" },
   entityLink: { type: "non_resource", reason: "association" },
+  folioCollabContribution: { type: "non_resource", reason: "association" },
+  folioCollabPublication: { type: "non_resource", reason: "workflow" },
 } as const satisfies Record<SafeIdType, IdentityDisposition>;

@@ -34,6 +34,7 @@ import { FOLIO_COLLAB_SEED_CLAIM_STALE_MS } from "@/api/lib/folio-collab-room-co
 import {
   canUseFolioCollabWorkspace,
   issueFolioCollabToken,
+  recordFolioCollabContribution,
 } from "@/api/lib/folio-collab-rooms";
 import { isMemberRole } from "@/api/lib/member-roles";
 
@@ -439,6 +440,12 @@ export const joinFolioCollabRoomHandler = async function* ({
       const { token, tokenExpiresAt } = await issueFolioCollabToken({
         generation,
         permissions: { canEdit: true },
+        roomId: room.id,
+        tx,
+        userId,
+        workspaceId,
+      });
+      await recordFolioCollabContribution({
         roomId: room.id,
         tx,
         userId,

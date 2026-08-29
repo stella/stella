@@ -12,6 +12,8 @@ import * as v from "valibot";
 import { applyUpdate, encodeStateAsUpdate } from "yjs";
 
 import {
+  FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
+  FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
   FOLIO_COLLAB_REDIS_SCOPE,
   parseFolioCollabRoomName,
 } from "@stll/api-contract/folio-collab";
@@ -100,6 +102,15 @@ const storeSnapshotResponseSchema = v.strictObject({
 const heartbeatResponseSchema = v.strictObject({
   activeAt: v.string(),
 });
+
+const flushRequestSchema = v.pipe(
+  v.string(),
+  v.parseJson(),
+  v.strictObject({
+    requestId: v.pipe(v.string(), v.uuid()),
+    type: v.literal(FOLIO_COLLAB_FLUSH_REQUEST_TYPE),
+  }),
+);
 
 const TOKEN_REFRESH_LEEWAY_MS = 5 * 60 * 1000;
 const ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS = 30_000;
@@ -566,6 +577,45 @@ export const createCollabServer = async (
     }
   };
 
+  const storeRoomSnapshot = async (document: HocuspocusDocument) => {
+    const snapshot = documentSnapshots.get(document);
+    if (snapshot === undefined) {
+      panic("Collaboration room snapshot generation is missing.");
+    }
+
+    try {
+      await postJson({
+        apiUrl,
+        authorizationToken: serviceToken,
+        body: {
+          expectedGeneration: snapshot.generation,
+          roomId: snapshot.roomId,
+          snapshotBase64: Buffer.from(encodeStateAsUpdate(document)).toString(
+            "base64",
+          ),
+        },
+        path: "/folio-collab-rooms/snapshot/store",
+        schema: storeSnapshotResponseSchema,
+      });
+    } catch (error) {
+      if (!(error instanceof FetchBoundaryError) || error.status !== 409) {
+        throw error;
+      }
+      closeManagedRoomConnectionsForRetry(
+        document.name,
+        ROOM_GENERATION_CLOSE_REASON,
+      );
+      clearRoomTokens(document.name);
+      logCollabEvent({
+        event: "snapshot_generation_conflict",
+        generation: snapshot.generation,
+        level: "error",
+        roomId: snapshot.roomId,
+      });
+      throw error;
+    }
+  };
+
   const hocuspocus = new Hocuspocus<CollabAuthContext>({
     debounce: debounceMs,
     async afterUnloadDocument({ documentName }) {
@@ -688,47 +738,21 @@ export const createCollabServer = async (
 
       applyUpdate(document, Buffer.from(result.snapshotBase64, "base64"));
     },
-    async onStoreDocument({ document, documentName }) {
-      const snapshot = documentSnapshots.get(document);
-      if (snapshot === undefined) {
-        panic("Collaboration room snapshot generation is missing.");
-      }
-
-      const store = async () =>
-        await postJson({
-          apiUrl,
-          authorizationToken: serviceToken,
-          body: {
-            expectedGeneration: snapshot.generation,
-            roomId: snapshot.roomId,
-            snapshotBase64: Buffer.from(encodeStateAsUpdate(document)).toString(
-              "base64",
-            ),
-          },
-          path: "/folio-collab-rooms/snapshot/store",
-          schema: storeSnapshotResponseSchema,
-        });
-
-      try {
-        await store();
+    async onStateless({ connection, document, payload }) {
+      const parsed = v.safeParse(flushRequestSchema, payload);
+      if (!parsed.success) {
         return;
-      } catch (error) {
-        if (!(error instanceof FetchBoundaryError) || error.status !== 409) {
-          throw error;
-        }
-        closeManagedRoomConnectionsForRetry(
-          documentName,
-          ROOM_GENERATION_CLOSE_REASON,
-        );
-        clearRoomTokens(documentName);
-        logCollabEvent({
-          event: "snapshot_generation_conflict",
-          generation: snapshot.generation,
-          level: "error",
-          roomId: snapshot.roomId,
-        });
-        throw error;
       }
+      await storeRoomSnapshot(document);
+      connection.sendStateless(
+        JSON.stringify({
+          requestId: parsed.output.requestId,
+          type: FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
+        }),
+      );
+    },
+    async onStoreDocument({ document }) {
+      await storeRoomSnapshot(document);
     },
   });
 

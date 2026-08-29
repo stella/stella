@@ -89,6 +89,8 @@ export type SafeIdType =
   | "flowRunStep"
   | "folioCollabRoom"
   | "folioCollabRoomToken"
+  | "folioCollabContribution"
+  | "folioCollabPublication"
   | "folder"
   | "infoSoudTrackedCase"
   | "invoice"

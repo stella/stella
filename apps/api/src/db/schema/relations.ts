@@ -62,6 +62,8 @@ import {
   entityVersionAiSummaries,
   entityVersions,
   fields,
+  folioCollabContributions,
+  folioCollabPublications,
   folioCollabRooms,
   folioCollabRoomTokens,
   justifications,
@@ -155,6 +157,8 @@ export const relations = defineRelations(
     desktopEditHandoffs,
     folioCollabRooms,
     folioCollabRoomTokens,
+    folioCollabContributions,
+    folioCollabPublications,
     pendingUploads,
     fields,
     justifications,
@@ -828,6 +832,14 @@ export const relations = defineRelations(
         from: r.folioCollabRooms.id,
         to: r.folioCollabRoomTokens.roomId,
       }),
+      contributions: r.many.folioCollabContributions({
+        from: r.folioCollabRooms.id,
+        to: r.folioCollabContributions.roomId,
+      }),
+      publications: r.many.folioCollabPublications({
+        from: r.folioCollabRooms.id,
+        to: r.folioCollabPublications.roomId,
+      }),
     },
     folioCollabRoomTokens: {
       room: r.one.folioCollabRooms({
@@ -841,6 +853,47 @@ export const relations = defineRelations(
       user: r.one.user({
         from: r.folioCollabRoomTokens.userId,
         to: r.user.id,
+      }),
+    },
+    folioCollabContributions: {
+      room: r.one.folioCollabRooms({
+        from: r.folioCollabContributions.roomId,
+        to: r.folioCollabRooms.id,
+      }),
+      workspace: r.one.workspaces({
+        from: r.folioCollabContributions.workspaceId,
+        to: r.workspaces.id,
+      }),
+      entity: r.one.entities({
+        from: r.folioCollabContributions.entityId,
+        to: r.entities.id,
+      }),
+      user: r.one.user({
+        from: r.folioCollabContributions.userId,
+        to: r.user.id,
+      }),
+      sinceVersion: r.one.entityVersions({
+        from: r.folioCollabContributions.sinceVersionId,
+        to: r.entityVersions.id,
+        alias: "folioCollabContributionSinceVersion",
+      }),
+    },
+    folioCollabPublications: {
+      room: r.one.folioCollabRooms({
+        from: r.folioCollabPublications.roomId,
+        to: r.folioCollabRooms.id,
+      }),
+      workspace: r.one.workspaces({
+        from: r.folioCollabPublications.workspaceId,
+        to: r.workspaces.id,
+      }),
+      entity: r.one.entities({
+        from: r.folioCollabPublications.entityId,
+        to: r.entities.id,
+      }),
+      entityVersion: r.one.entityVersions({
+        from: r.folioCollabPublications.entityVersionId,
+        to: r.entityVersions.id,
       }),
     },
     fields: {

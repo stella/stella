@@ -4,6 +4,7 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import createBilingualEntity from "@/api/handlers/entities/bilingual/create";
 import checkStamp from "@/api/handlers/entities/check-stamp";
+import checkpointFolioCollabRoom from "@/api/handlers/entities/checkpoint-folio-collab-room";
 import clipEndpoint from "@/api/handlers/entities/clip";
 import compareVersions from "@/api/handlers/entities/compare-versions";
 import copyToWorkspace from "@/api/handlers/entities/copy-to-workspace";
@@ -27,6 +28,7 @@ import moveEntity from "@/api/handlers/entities/move";
 import requestOcr from "@/api/handlers/entities/ocr/create";
 import openDesktopEditSession from "@/api/handlers/entities/open-desktop-edit-session";
 import organizeSuggestions from "@/api/handlers/entities/organize-suggestions";
+import publishFolioCollabVersion from "@/api/handlers/entities/publish-folio-collab-version";
 import readFieldFile from "@/api/handlers/entities/read-field-file";
 import readFilesystemTree from "@/api/handlers/entities/read-filesystem-tree";
 import readGroupCounts from "@/api/handlers/entities/read-group-counts";
@@ -155,6 +157,18 @@ export const entitiesRoute = new Elysia({
     body: joinFolioCollabRoom.config.body,
     permissions: joinFolioCollabRoom.config.permissions,
   })
+  .post("/folio-collab-rooms/checkpoint", checkpointFolioCollabRoom.handler, {
+    body: checkpointFolioCollabRoom.config.body,
+    permissions: checkpointFolioCollabRoom.config.permissions,
+  })
+  .post(
+    "/folio-collab-rooms/publish-version",
+    publishFolioCollabVersion.handler,
+    {
+      body: publishFolioCollabVersion.config.body,
+      permissions: publishFolioCollabVersion.config.permissions,
+    },
+  )
   .post("/desktop-edit-sessions/release", releaseDesktopEditLock.handler, {
     body: releaseDesktopEditLock.config.body,
     permissions: releaseDesktopEditLock.config.permissions,
