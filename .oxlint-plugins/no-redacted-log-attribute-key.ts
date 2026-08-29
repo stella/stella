@@ -78,7 +78,7 @@ export default eslintCompatPlugin({
               if (
                 !isAstNode(property) ||
                 property.type !== "Property" ||
-                Boolean(property.computed)
+                property.computed
               ) {
                 continue;
               }
