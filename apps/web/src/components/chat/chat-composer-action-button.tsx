@@ -3,11 +3,13 @@ import type { ComponentProps } from "react";
 import { ArrowUpIcon, RotateCcwIcon, SquareIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  resolveChatComposerAction,
+  type ChatComposerActionState,
+} from "@stll/chat/composer";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
-import { resolveChatComposerAction } from "@/components/chat/chat-composer-action-button.logic";
-import type { ChatComposerActionState } from "@/components/chat/chat-composer-action-button.logic";
 import { COMPOSER_CONTROL_BUTTON_SIZE } from "@/components/chat/composer-control-style";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";

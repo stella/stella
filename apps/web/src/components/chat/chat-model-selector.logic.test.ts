@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   groupReasoningEfforts,
   modelSelectionLabel,
-} from "@/components/chat/chat-model-selector.logic";
+} from "@stll/chat/model-selector";
 
 describe("modelSelectionLabel", () => {
   test("shows a compact friendly model name and thinking level", () => {

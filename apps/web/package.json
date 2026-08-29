@@ -54,6 +54,7 @@
     "@stll/auth-model": "workspace:*",
     "@stll/calculations": "workspace:*",
     "@stll/catalogue": "workspace:*",
+    "@stll/chat": "workspace:*",
     "@stll/chat-limits": "workspace:*",
     "@stll/conditions": "workspace:*",
     "@stll/country-codes": "workspace:*",

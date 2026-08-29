@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { resolveChatComposerAction } from "@stll/chat/composer";
 import type {
   AISuggestion,
   AISuggestionPreset,
@@ -51,7 +52,6 @@ import type {
   ChatInputDraft,
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
-import { resolveChatComposerAction } from "@/components/chat/chat-composer-action-button.logic";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import {

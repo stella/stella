@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { modelSelectionLabel } from "@stll/chat/model-selector";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
@@ -16,7 +17,6 @@ import {
   EFFORT_LABEL_KEY,
   type ComposerModelsMenuProps,
 } from "@/components/chat/chat-model-options-menu";
-import { modelSelectionLabel } from "@/components/chat/chat-model-selector.logic";
 import { modelOptionsOptions } from "@/features/chat/queries";
 
 type ChatModelSelectorProps = {
