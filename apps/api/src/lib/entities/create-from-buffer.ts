@@ -84,7 +84,25 @@ type CreateEntityFromBufferInput = {
   afterCreate?:
     | ((tx: Transaction, result: CreateEntityFromBufferValue) => Promise<void>)
     | undefined;
+  dependencies?: CreateEntityFromBufferDependencies | undefined;
 };
+
+export type CreateEntityFromBufferDependencies = {
+  broadcastWorkspaceResourceUpdated: typeof broadcastWorkspaceResourceUpdated;
+  enqueueImageThumbnailOrMarkFailed: typeof enqueueImageThumbnailOrMarkFailed;
+  enqueuePdfDerivativeOrMarkFailed: typeof enqueuePdfDerivativeOrMarkFailed;
+  processExtraction: typeof processExtraction;
+  requestNativeExtractionRun: typeof requestNativeExtractionRun;
+};
+
+const defaultCreateEntityFromBufferDependencies = {
+  broadcastWorkspaceResourceUpdated,
+  enqueueImageThumbnailOrMarkFailed,
+  enqueuePdfDerivativeOrMarkFailed,
+  processExtraction,
+  requestNativeExtractionRun: async (options) =>
+    await requestNativeExtractionRun(options),
+} satisfies CreateEntityFromBufferDependencies;
 
 class EntityLimitError extends TaggedError("EntityLimitError")<{
   message: string;
@@ -138,6 +156,7 @@ export const createEntityFromBuffer = async ({
   scanWarnings,
   provenance,
   afterCreate,
+  dependencies = defaultCreateEntityFromBufferDependencies,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   if (bytes.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
@@ -345,7 +364,7 @@ export const createEntityFromBuffer = async ({
 
         // Durable extraction request, committed with the file it reads. The
         // post-commit call below only accelerates the queue handoff.
-        await requestNativeExtractionRun({ entityId, tx });
+        await dependencies.requestNativeExtractionRun({ entityId, tx });
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,
@@ -433,29 +452,33 @@ export const createEntityFromBuffer = async ({
   // must NOT invoke `maybeStartUploadTriggeredFlows` — only genuine USER uploads
   // fire the file-upload trigger, so a flow-created document can never spawn
   // another flow run. Keep the upload trigger out of this call site.
-  processExtraction(entityId).catch(captureError);
+  dependencies.processExtraction(entityId).catch(captureError);
 
-  enqueuePdfDerivativeOrMarkFailed({
-    encrypted,
-    entityId,
-    fieldId,
-    mimeType,
-    organizationId,
-    userId,
-    workspaceId,
-  }).catch(captureError);
+  dependencies
+    .enqueuePdfDerivativeOrMarkFailed({
+      encrypted,
+      entityId,
+      fieldId,
+      mimeType,
+      organizationId,
+      userId,
+      workspaceId,
+    })
+    .catch(captureError);
 
-  enqueueImageThumbnailOrMarkFailed({
-    encrypted,
-    entityId,
-    fieldId,
-    mimeType,
-    organizationId,
-    userId,
-    workspaceId,
-  }).catch(captureError);
+  dependencies
+    .enqueueImageThumbnailOrMarkFailed({
+      encrypted,
+      entityId,
+      fieldId,
+      mimeType,
+      organizationId,
+      userId,
+      workspaceId,
+    })
+    .catch(captureError);
 
-  broadcastWorkspaceResourceUpdated(
+  dependencies.broadcastWorkspaceResourceUpdated(
     workspaceId,
     resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
   );

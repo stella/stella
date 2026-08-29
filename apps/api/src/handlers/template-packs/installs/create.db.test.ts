@@ -14,7 +14,6 @@ import {
   beforeEach,
   describe,
   expect,
-  mock,
   setDefaultTimeout,
   test,
 } from "bun:test";
@@ -99,10 +98,6 @@ const createStoredTemplateMock = async function* ({
     createdAt: new Date(),
   });
 };
-
-void mock.module("@/api/lib/templates/create-template", () => ({
-  createStoredTemplate: createStoredTemplateMock,
-}));
 
 const noopAudit = asTestRaw<AuditRecorder>(async () => undefined);
 
@@ -215,7 +210,13 @@ beforeAll(async () => {
   otherOrgSafeDb = asTestRaw<SafeDb>(
     createSafeDb(testDb, [], ids.orgB, ids.userB1),
   );
-  ({ installTemplatePackHandler } = await import("./create"));
+  const { installTemplatePackHandler: installTemplatePackHandlerImpl } =
+    await import("./create");
+  installTemplatePackHandler = (props) =>
+    installTemplatePackHandlerImpl({
+      ...props,
+      createStoredTemplate: createStoredTemplateMock,
+    });
 });
 
 afterAll(async () => {

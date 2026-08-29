@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { isTransientRedisConnectionError } from "@/api/lib/redis-client";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -14,18 +15,15 @@ process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
 process.env["GOTENBERG_USERNAME"] ??= "test";
 process.env["GOTENBERG_PASSWORD"] ??= "test";
 
-const readinessGetMock = mock(async (): Promise<string | null> => null);
-const realRedisClient = await import("@/api/lib/redis-client");
-void mock.module("@/api/lib/redis-client", () => ({
-  ...realRedisClient,
-  createRedisClient: () => ({ get: readinessGetMock }),
-}));
+let readinessGet = async (): Promise<string | null> => null;
 
 const {
   isDocumentOcrWorkerAvailable,
   readDocumentOcrWorkerAvailability,
   refreshDocumentOcrWorkerReadiness,
 } = await import("@/api/lib/document-processing-readiness");
+
+const createReadinessClient = () => ({ get: readinessGet });
 
 describe("document OCR worker readiness", () => {
   let analytics: RecordingAnalytics;
@@ -76,15 +74,15 @@ describe("document OCR worker readiness", () => {
     const defect = Object.assign(new Error("WRONGTYPE"), {
       code: "ERR_REDIS_INVALID_TYPE",
     });
-    expect(realRedisClient.isTransientRedisConnectionError(transient)).toBe(
-      true,
-    );
-    expect(realRedisClient.isTransientRedisConnectionError(defect)).toBe(false);
+    expect(isTransientRedisConnectionError(transient)).toBe(true);
+    expect(isTransientRedisConnectionError(defect)).toBe(false);
 
-    readinessGetMock.mockImplementationOnce(async () => {
+    readinessGet = async () => {
       throw transient;
-    });
-    expect(await isDocumentOcrWorkerAvailable()).toBe(false);
+    };
+    expect(await isDocumentOcrWorkerAvailable(createReadinessClient)).toBe(
+      false,
+    );
     expect(analytics.exceptions()).toEqual([]);
     expect(logs.at("WARN")).toMatchObject([
       {
@@ -93,10 +91,12 @@ describe("document OCR worker readiness", () => {
       },
     ]);
 
-    readinessGetMock.mockImplementationOnce(async () => {
+    readinessGet = async () => {
       throw defect;
-    });
-    expect(await isDocumentOcrWorkerAvailable()).toBe(false);
+    };
+    expect(await isDocumentOcrWorkerAvailable(createReadinessClient)).toBe(
+      false,
+    );
     expect(
       analytics.exceptions().map((event) => event.properties),
     ).toMatchObject([
@@ -125,17 +125,19 @@ describe("document OCR worker readiness", () => {
   });
 
   test("publishes an expiring lease atomically", async () => {
-    const writeLease = mock(
-      async (_key: string, _value: string, _ttlSeconds: number) => "OK",
-    );
+    const calls: [string, string, number][] = [];
+    const writeLease = async (
+      key: string,
+      value: string,
+      ttlSeconds: number,
+    ) => {
+      calls.push([key, value, ttlSeconds]);
+      return "OK";
+    };
 
     await refreshDocumentOcrWorkerReadiness(writeLease);
 
-    expect(writeLease).toHaveBeenCalledWith(
-      "ocr-readiness:{ocr-worker}:v1",
-      "ready",
-      90,
-    );
+    expect(calls).toEqual([["ocr-readiness:{ocr-worker}:v1", "ready", 90]]);
   });
 
   test("bounds readiness heartbeats", async () => {

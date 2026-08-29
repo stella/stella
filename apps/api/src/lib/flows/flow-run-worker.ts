@@ -148,17 +148,34 @@ type ReconcileOrphanedFlowRunsOptions = {
   signal?: AbortSignal;
 };
 
+type ReconcileOrphanedFlowRunsDependencies = {
+  database: Pick<typeof rootDb, "select">;
+  enqueueStep: typeof enqueueFlowStep;
+};
+
+const RECONCILE_ORPHANED_FLOW_RUNS_DEPENDENCIES: ReconcileOrphanedFlowRunsDependencies =
+  {
+    database: rootDb,
+    enqueueStep: enqueueFlowStep,
+  };
+
 // Keyset-paginate by id through every `pending`/`running` run and re-enqueue its
 // current step. Re-adding the step does not change the row's status, so a plain
 // `LIMIT` scan would re-select the same head of the backlog on every restart and
 // never reach the tail; ordering by id and advancing a cursor visits each run
 // exactly once until the backlog is drained. `batchSize` is injectable so tests
 // can exercise the multi-batch path without seeding thousands of rows.
-export const reconcileOrphanedFlowRuns = async ({
-  batchSize = ORPHAN_SCAN_BATCH_SIZE,
-  stalledBefore,
-  signal,
-}: ReconcileOrphanedFlowRunsOptions = {}): Promise<void> => {
+export const reconcileOrphanedFlowRuns = async (
+  {
+    batchSize = ORPHAN_SCAN_BATCH_SIZE,
+    stalledBefore,
+    signal,
+  }: ReconcileOrphanedFlowRunsOptions = {},
+  {
+    database,
+    enqueueStep,
+  }: ReconcileOrphanedFlowRunsDependencies = RECONCILE_ORPHANED_FLOW_RUNS_DEPENDENCIES,
+): Promise<void> => {
   let cursor: SafeId<"flowRun"> | null = null;
   let reconciled = 0;
 
@@ -167,7 +184,7 @@ export const reconcileOrphanedFlowRuns = async ({
       break;
     }
     // oxlint-disable-next-line no-await-in-loop -- keyset pages are inherently sequential: each query needs the previous batch's last id as its cursor
-    const batch = await rootDb
+    const batch = await database
       .select({
         id: flowRuns.id,
         currentStepIndex: flowRuns.currentStepIndex,
@@ -196,7 +213,7 @@ export const reconcileOrphanedFlowRuns = async ({
 
     for (const row of batch) {
       // oxlint-disable-next-line no-await-in-loop -- sequential re-enqueue bounds concurrent queue writes; the batch is capped at batchSize
-      await enqueueFlowStep({ runId: row.id, stepIndex: row.currentStepIndex });
+      await enqueueStep({ runId: row.id, stepIndex: row.currentStepIndex });
     }
 
     reconciled += batch.length;

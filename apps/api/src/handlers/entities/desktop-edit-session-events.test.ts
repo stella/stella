@@ -1,23 +1,21 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { desktopEditSessionEventsHandler } from "@/api/handlers/entities/desktop-edit-session-events";
 import { toSafeId } from "@/api/lib/branded-types";
 
 const authorizeDesktopEditSessionMock = mock();
 const readDesktopEditSessionEventStateMock = mock();
 const refreshDesktopEditSessionLivenessMock = mock();
 
-void mock.module("@/api/lib/desktop-edit-sessions", () => ({
-  authorizeDesktopEditSession: authorizeDesktopEditSessionMock,
-  DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS: 60_000,
-  DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE: "desktop_edit_session_taken_over",
-  DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE:
-    "Desktop editing moved to another device. This local copy is preserved.",
-  readDesktopEditSessionEventState: readDesktopEditSessionEventStateMock,
-  refreshDesktopEditSessionLiveness: refreshDesktopEditSessionLivenessMock,
-}));
-
-const { desktopEditSessionEventsHandler } =
-  await import("@/api/handlers/entities/desktop-edit-session-events");
+const desktopEditSessionEventsHandlerForTest = async (
+  input: Parameters<typeof desktopEditSessionEventsHandler>[0],
+) =>
+  await desktopEditSessionEventsHandler(input, {
+    authorizeDesktopEditSession: authorizeDesktopEditSessionMock,
+    livenessRefreshIntervalMs: 60_000,
+    readDesktopEditSessionEventState: readDesktopEditSessionEventStateMock,
+    refreshDesktopEditSessionLiveness: refreshDesktopEditSessionLivenessMock,
+  });
 
 const sessionId = toSafeId<"desktopEditSession">(
   "019aa0bc-d957-7bb3-9234-9c2440377225",
@@ -25,10 +23,6 @@ const sessionId = toSafeId<"desktopEditSession">(
 const sessionToken = "a".repeat(64);
 
 describe("desktop edit session events", () => {
-  afterAll(() => {
-    mock.restore();
-  });
-
   beforeEach(() => {
     authorizeDesktopEditSessionMock.mockReset();
     readDesktopEditSessionEventStateMock.mockReset();
@@ -37,7 +31,7 @@ describe("desktop edit session events", () => {
   });
 
   test("rejects missing tokens before reading session state", async () => {
-    const response = await desktopEditSessionEventsHandler({
+    const response = await desktopEditSessionEventsHandlerForTest({
       headers: {},
       sessionId,
     });
@@ -60,7 +54,7 @@ describe("desktop edit session events", () => {
       pendingRequest: null,
     });
 
-    const response = await desktopEditSessionEventsHandler({
+    const response = await desktopEditSessionEventsHandlerForTest({
       headers: { authorization: `Bearer ${sessionToken}` },
       sessionId,
     });
@@ -98,7 +92,7 @@ describe("desktop edit session events", () => {
     refreshDesktopEditSessionLivenessMock.mockReturnValue(refreshPromise);
 
     let settled = false;
-    const responsePromise = desktopEditSessionEventsHandler({
+    const responsePromise = desktopEditSessionEventsHandlerForTest({
       headers: { authorization: `Bearer ${sessionToken}` },
       sessionId,
     }).then((response) => {

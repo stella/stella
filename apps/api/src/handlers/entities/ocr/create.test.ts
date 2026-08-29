@@ -6,20 +6,17 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { documentProcessingRuns } from "@/api/db/schema";
+import { requestManualOcrHandler } from "@/api/handlers/entities/ocr/create";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  classifyManualOcrCollision,
+  persistManualOcrRun,
+} from "@/api/lib/document-processing-request";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const rootTransactionMock = mock();
 const recordAuditEvent = mock(async () => undefined);
-
-void mock.module("@/api/db/root", () => ({
-  rootDb: { transaction: rootTransactionMock },
-}));
-const { requestManualOcrHandler } =
-  await import("@/api/handlers/entities/ocr/create");
-const { classifyManualOcrCollision, persistManualOcrRun } =
-  await import("@/api/lib/document-processing-request");
 
 const entityId = toSafeId<"entity">("entity_test");
 const entityVersionId = toSafeId<"entityVersion">("version_test");
@@ -261,6 +258,7 @@ describe("requestManualOcrHandler", () => {
       );
 
       const run = await persistManualOcrRun({
+        db: { transaction: rootTransactionMock },
         organizationId,
         recordAuditEvent,
         source: {
@@ -390,6 +388,7 @@ describe("requestManualOcrHandler", () => {
       );
 
       const run = await persistManualOcrRun({
+        db: { transaction: rootTransactionMock },
         organizationId,
         recordAuditEvent,
         source: {
@@ -511,6 +510,7 @@ describe("requestManualOcrHandler", () => {
       );
 
       const run = await persistManualOcrRun({
+        db: { transaction: rootTransactionMock },
         organizationId,
         recordAuditEvent,
         source: {
@@ -588,6 +588,7 @@ describe("requestManualOcrHandler", () => {
     );
 
     const run = await persistManualOcrRun({
+      db: { transaction: rootTransactionMock },
       organizationId,
       recordAuditEvent: async () => {
         events.push("audit");
@@ -676,6 +677,7 @@ describe("requestManualOcrHandler", () => {
     );
 
     const run = await persistManualOcrRun({
+      db: { transaction: rootTransactionMock },
       organizationId,
       recordAuditEvent,
       source: {
@@ -722,6 +724,7 @@ describe("requestManualOcrHandler", () => {
     );
 
     const run = await persistManualOcrRun({
+      db: { transaction: rootTransactionMock },
       organizationId,
       recordAuditEvent,
       source: {

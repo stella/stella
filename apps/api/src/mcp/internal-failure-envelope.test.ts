@@ -1,13 +1,5 @@
 import { Result } from "better-result";
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  test,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -31,13 +23,6 @@ const createTimeEntryHandlerMock = mock();
 // its own auth/schema/workspace pre-checks. Spread the real module so its other
 // exports (utilities imported elsewhere) keep working; only the handler is
 // swapped.
-const actualTimeEntryCreate =
-  await import("@/api/handlers/time-entries/create");
-void mock.module("@/api/handlers/time-entries/create", () => ({
-  ...actualTimeEntryCreate,
-  createTimeEntryHandler: createTimeEntryHandlerMock,
-}));
-
 const { MATTER_TOOL_HANDLERS } = await import("@/api/mcp/matter-tools");
 const { BILLING_TOOL_HANDLERS } = await import("@/api/mcp/billing-tools");
 const { DOCUMENT_TOOL_HANDLERS } = await import("@/api/mcp/document-tools");
@@ -75,6 +60,7 @@ const createFailingDbContext = (): McpRequestContext => ({
   memberRole: "owner",
   organizationId: toSafeId<"organization">("org_1"),
   recordAuditEvent: createRecordAuditEventMock(),
+  testDependencies: { createTimeEntryHandler: createTimeEntryHandlerMock },
   safeDb: toSafeDbMock(throwingScopedDb),
   scopedDb: throwingScopedDb,
   userId: toSafeId<"user">("user_1"),
@@ -178,10 +164,6 @@ const capturedExceptionProperties = () =>
   capturedExceptions().map((event) => event.properties);
 
 describe("MCP tool DB failures return a structured internal_error envelope", () => {
-  afterAll(() => {
-    mock.restore();
-  });
-
   for (const { args, file, handler } of REPRESENTATIVE_DB_FAILURES) {
     test(`${file}: hides the driver message and captures the cause`, async () => {
       const result = await handler({ args, context: createFailingDbContext() });

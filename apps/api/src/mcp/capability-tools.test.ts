@@ -1,12 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  test,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -18,25 +10,15 @@ import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-// --- Mocks, installed before the MCP graph is imported -----------------------
-
-const realLoader = await import("@/api/lib/ai-config-loader");
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
-  orgAIConfigStatus: "ok",
+  orgAIConfigStatus: "ok" as const,
   promptCachingEnabled: false,
 }));
-void mock.module("@/api/lib/ai-config-loader", () => ({
-  ...realLoader,
-  loadOrgSettingsForAuth: loadOrgSettingsMock,
-}));
-
 // Waive one capability so the refusal path is exercised; the real table is empty.
-void mock.module("@/api/mcp/capability-waivers", () => ({
-  CONTEXT_FIDELITY_WAIVERS: new Map([
-    ["billing-codes.create", "test-only waiver: needs response headers"],
-  ]),
-}));
+const contextFidelityWaivers = new Map([
+  ["billing-codes.create", "test-only waiver: needs response headers"],
+]);
 
 // Stub the gateway rate limit so execution tests are not throttled; a single
 // test flips it to exhausted to assert the rate_limited envelope. Restored by
@@ -45,21 +27,11 @@ const consumeRateLimitMock = mock(async () => ({
   ok: true,
   retryAfterSeconds: 60,
 }));
-void mock.module("@/api/mcp/capability-rate-limit", () => ({
-  consumeInvokeCapabilityRateLimit: consumeRateLimitMock,
-}));
 
 // Controllable feature gate: the real module short-circuits on the dev test
 // env, so the deployment-gate tests toggle flags through this set instead
 // (cleared in beforeEach). Default (empty set) behaves like everything-enabled.
 const disabledFeatures = new Set<string>();
-const realCapabilityFeature = await import("@/api/mcp/capability-feature");
-void mock.module("@/api/mcp/capability-feature", () => ({
-  ...realCapabilityFeature,
-  isCapabilityFeatureEnabled: (feature: string | undefined) =>
-    feature === undefined || !disabledFeatures.has(feature),
-}));
-
 const { handleMcpToolCall } = await import("@/api/mcp/tools");
 const { mapHandlerResult } = await import("@/api/mcp/capability-tools");
 const { UPLOAD_PURPOSE_GATE_BY_CAPABILITY } =
@@ -148,6 +120,13 @@ const createContext = ({
 } = {}): McpRequestContext => {
   const accessibleWorkspaceIdSet = new Set(workspaceIds);
   return {
+    testDependencies: {
+      loadOrgSettingsForAuth: loadOrgSettingsMock,
+      consumeInvokeCapabilityRateLimit: consumeRateLimitMock,
+      isCapabilityFeatureEnabled: (feature) =>
+        feature === undefined || !disabledFeatures.has(feature),
+      contextFidelityWaivers,
+    },
     accessibleWorkspaceIds: workspaceIds.map((id) => toSafeId<"workspace">(id)),
     accessibleWorkspaceIdSet,
     accessibleWorkspaceStatusById: new Map(
@@ -196,10 +175,6 @@ beforeEach(() => {
 
 afterEach(() => {
   analytics.restore();
-});
-
-afterAll(() => {
-  mock.restore();
 });
 
 describe("generated capability catalog", () => {

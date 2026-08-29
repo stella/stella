@@ -106,7 +106,10 @@ const requiredScopesForTool = (
 };
 
 type McpServerDependencies = {
-  authenticateMcpRequest: (token: string, mode: McpMode) => Promise<McpSession>;
+  authenticateMcpRequest: (
+    token: string,
+    options: { mode: McpMode },
+  ) => Promise<McpSession>;
   captureError: (error: unknown, context?: Record<string, string>) => void;
   getMcpToolDefinition: (
     toolName: string,
@@ -683,7 +686,7 @@ export const createMcpHttpRequestHandler = ({
     }
 
     try {
-      const session = await authenticateMcpRequest(token, mode);
+      const session = await authenticateMcpRequest(token, { mode });
 
       // Refuse session termination only after the token is accepted, so an
       // unauthenticated probe still receives the 401 + `WWW-Authenticate` that

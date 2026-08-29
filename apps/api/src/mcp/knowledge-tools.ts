@@ -1529,13 +1529,17 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
       organizationId,
       userId: context.userId,
       definition,
-      latestApprovedVersion: await loadLatestApprovedVersion({
+      latestApprovedVersion: await (
+        context.testDependencies?.loadLatestApprovedVersion ??
+        loadLatestApprovedVersion
+      )({
         tx,
         organizationId,
         playbookDefinitionId: definition.id,
       }),
       projection: PLAYBOOK_RUN_PROJECTION.COLUMNS,
       recordAuditEvent,
+      testDependencies: context.testDependencies,
     });
   });
   if (Result.isError(txResult)) {
@@ -1554,7 +1558,7 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
 
   const started = await Result.tryPromise({
     try: async () =>
-      await startWorkflow({
+      await (context.testDependencies?.startWorkflow ?? startWorkflow)({
         workspaceId,
         organizationId,
         userId: context.userId,

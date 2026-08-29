@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -13,13 +14,13 @@ import type {
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
 
+import { generateBBoxData } from "./ai-generate-b-boxes";
+
 const generateObjectMock = mock(async () => ({ boxes: [] as unknown[] }));
-
-void mock.module("@/api/lib/tanstack-ai-generate", () => ({
-  generateTanStackObjectForRole: generateObjectMock,
-}));
-
-const { generateBBoxData } = await import("./ai-generate-b-boxes");
+// SAFETY: This suite only dispatches the bbox schema and configures outputs
+// matching that schema; Bun's mock type cannot express the generic schema tie.
+const generateObjectForTest =
+  generateObjectMock as typeof generateTanStackObjectForRole;
 
 const generate = async () =>
   await generateBBoxData({
@@ -34,6 +35,7 @@ const generate = async () =>
     workspaceId: toSafeId<"workspace">("ws_test"),
     orgAIConfig: null,
     promptCachingEnabled: false,
+    generateObjectForRole: generateObjectForTest,
   });
 
 describe("generateBBoxData", () => {

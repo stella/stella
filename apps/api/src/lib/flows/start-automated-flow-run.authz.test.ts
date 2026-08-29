@@ -9,7 +9,7 @@
  * `resolveMemberAuthorization` membership rule runs.
  */
 
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -19,36 +19,31 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { resolveMemberAuthorization } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
+import { startAutomatedFlowRun } from "@/api/lib/flows/start-automated-flow-run";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 const testDb: TestDatabase = await getTestDb();
-
-void mock.module("@/api/db/root", () => ({ rootDb: testDb, rlsDb: testDb }));
+const authorizationDatabase =
+  asTestRaw<NonNullable<Parameters<typeof resolveMemberAuthorization>[1]>>(
+    testDb,
+  );
+const capDatabase =
+  asTestRaw<
+    NonNullable<
+      Parameters<typeof insertAutomatedFlowRunWithinCap>[0]["database"]
+    >
+  >(testDb);
 
 type EnqueuedStep = { runId: string; stepIndex: number };
 const enqueuedSteps: EnqueuedStep[] = [];
-void mock.module("@/api/lib/flows/flow-run-queue", () => ({
-  FLOW_RUN_QUEUE_NAME: "flow-run",
-  enqueueFlowStep: mock(
-    async ({ runId, stepIndex }: EnqueuedStep & { delayMs?: number }) => {
-      enqueuedSteps.push({ runId, stepIndex });
-    },
-  ),
-}));
-
-const realFlowRunEvents = await import("@/api/lib/flows/flow-run-events");
-void mock.module("@/api/lib/flows/flow-run-events", () => ({
-  ...realFlowRunEvents,
-  broadcastFlowRunUpdate: mock(() => undefined),
-}));
-
-const { startAutomatedFlowRun } =
-  await import("@/api/lib/flows/start-automated-flow-run");
 
 const AI_STEP: FlowStep = {
   kind: "ai",
@@ -135,15 +130,37 @@ describe("startAutomatedFlowRun authorization gate", () => {
       .where(eq(flowRuns.workspaceId, workspaceId));
 
   const startForWorkspace = async (workspaceId: SafeId<"workspace">) => {
-    await startAutomatedFlowRun({
-      definitionId,
-      organizationId,
-      workspaceId,
-      createdByUserId: authorId,
-      triggerSource: { type: "file-upload", entityId },
-      inputEntityIds: [entityId],
-      logContext: { definitionId, workspaceId, trigger: "file-upload" },
-    });
+    await startAutomatedFlowRun(
+      {
+        definitionId,
+        organizationId,
+        workspaceId,
+        createdByUserId: authorId,
+        triggerSource: { type: "file-upload", entityId },
+        inputEntityIds: [entityId],
+        logContext: { definitionId, workspaceId, trigger: "file-upload" },
+      },
+      {
+        findDefinition: async (args) =>
+          await testDb.query.flowDefinitions.findFirst({
+            where: {
+              id: { eq: args.definitionId },
+              organizationId: { eq: args.organizationId },
+            },
+            columns: { id: true, name: true, steps: true, enabled: true },
+          }),
+        resolveAuthorization: async (args) =>
+          await resolveMemberAuthorization(args, authorizationDatabase),
+        insertWithinCap: async (input) =>
+          await insertAutomatedFlowRunWithinCap({
+            ...input,
+            database: capDatabase,
+          }),
+        enqueueStep: async ({ runId, stepIndex }) => {
+          enqueuedSteps.push({ runId, stepIndex });
+        },
+      },
+    );
   };
 
   test("starts the run when the author can access the upload workspace", async () => {

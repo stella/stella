@@ -1,6 +1,7 @@
-import { afterAll, beforeAll, beforeEach, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import type { rootDb } from "@/api/db/root";
 import {
   documentProcessingRuns,
   entityVersions,
@@ -10,12 +11,13 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
-import type {
-  DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS as Feeds,
-  DOCUMENT_PROCESSING_RECONCILIATION_PHASES as Phases,
-  runDocumentProcessingReconciliationPhases as RunPhases,
+import {
+  createDocumentProcessingReconciliationPhases,
+  DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS,
+  runDocumentProcessingReconciliationPhases,
 } from "@/api/lib/document-processing-queue";
-import type * as RedisClientModule from "@/api/lib/redis-client";
+import type { DocumentProcessingReconciliationDependencies } from "@/api/lib/document-processing-queue";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
   setupRlsTestData,
@@ -55,73 +57,26 @@ let testDb: TestDatabase;
 let ids: TestIds;
 /** Flipped by the outage test; the repair phase is the only phase that asks. */
 let redisAvailable = true;
-let phases: typeof Phases;
-let feeds: typeof Feeds;
-let runPhases: typeof RunPhases;
+let phases: ReturnType<typeof createDocumentProcessingReconciliationPhases>;
 
 beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
-  void mock.module("@/api/db/root", () => ({ rootDb: testDb, rlsDb: testDb }));
-  // Reconciliation reaches Redis for the repair cursor, BullMQ for the
-  // handoff, the search provider for a replay, and realtime for the
-  // broadcast. None of them decide which rows a phase selects, which is
-  // all this test observes.
-  // Each mock declares its module's whole surface, including the exports
-  // this test never reaches, so a module that grows one does not quietly
-  // lose it here. Spreading the real module instead would import it, and
-  // these are the modules being kept out of the process.
-  void mock.module(
-    "@/api/lib/redis-client",
-    () =>
-      ({
-        connectWithColdStartRetries: async (connect: () => Promise<void>) =>
-          await connect(),
-        createBullMqConnection: () => ({}),
-        createLazyRedisClient: () => ({
-          close: () => undefined,
-          ready: async () => {
-            if (!redisAvailable) {
-              throw new Error("redis unavailable");
-            }
-            return await Promise.resolve({
-              get: async () => null,
-              send: async () => 1,
-            });
-          },
-        }),
-        createRedisClient: () => ({
-          close: () => undefined,
-          connect: async () => undefined,
-          get: async () => null,
-          send: async () => 1,
-        }),
-        isRecoverableRedisPollError: () => false,
-        isTransientRedisConnectionError: () => false,
-      }) satisfies Record<keyof typeof RedisClientModule, unknown>,
-  );
-  void mock.module("@/api/lib/document-processing-enqueue", () => ({
-    countPendingDocumentProcessingJobs: async () => 0,
-    DOCUMENT_PROCESSING_OCR_JOB_NAME: "ocr",
-    DOCUMENT_PROCESSING_QUEUE_NAME: "document-processing",
-    enqueueDocumentProcessingRun: async () => undefined,
-  }));
-  void mock.module("@/api/lib/search/provider", () => ({
-    getSearchProvider: () => ({ indexEntity: async () => undefined }),
-  }));
-  void mock.module("@/api/lib/resource-realtime", () => ({
-    broadcastOrganizationResourceSetUpdated: () => undefined,
-    broadcastWorkspaceResourceChanges: () => undefined,
-    broadcastWorkspaceResourceDeleted: () => undefined,
-    broadcastWorkspaceResourceSetUpdated: () => undefined,
+  const dependencies = {
     broadcastWorkspaceResourceUpdated: () => undefined,
-  }));
-  ({
-    DOCUMENT_PROCESSING_RECONCILIATION_PHASES: phases,
-    DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS: feeds,
-    runDocumentProcessingReconciliationPhases: runPhases,
-  } = await import("@/api/lib/document-processing-queue"));
+    database: asTestRaw<typeof rootDb>(testDb),
+    enqueueDocumentProcessingRun: async () => undefined,
+    indexEntity: async () => undefined,
+    readRepairScanCursor: async () => null,
+    readyRepairCursor: async () => {
+      if (!redisAvailable) {
+        throw new Error("redis unavailable");
+      }
+    },
+    writeRepairScanCursor: async () => true,
+  } satisfies DocumentProcessingReconciliationDependencies;
+  phases = createDocumentProcessingReconciliationPhases(dependencies);
 }, 120_000);
 
 afterAll(async () => {
@@ -359,7 +314,9 @@ test("the declared phase edges are the edges the phases actually produce", async
   // is meant to exercise would be trivially absent.
   expect([...produced].toSorted()).toEqual(phaseNames.toSorted());
 
-  const declared = Object.entries(feeds).flatMap(([phase, consumers]) =>
+  const declared = Object.entries(
+    DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS,
+  ).flatMap(([phase, consumers]) =>
     consumers.map((consumer) => `${phase} -> ${consumer}`),
   );
   expect([...observed].toSorted()).toEqual(declared.toSorted());
@@ -393,7 +350,7 @@ test("a Redis outage fails only the phase that needs Redis", async () => {
   const failedPhases: string[] = [];
   redisAvailable = false;
 
-  const results = await runPhases({
+  const results = await runDocumentProcessingReconciliationPhases({
     onPhaseError: (_error, phase) => {
       failedPhases.push(phase);
     },

@@ -9,6 +9,12 @@ import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
+import { createSendMessage } from "@/api/handlers/chat/send-message";
+import {
+  rollbackUnpersistedChatSideEffects,
+  uploadMessageFilesWithRollback,
+} from "@/api/handlers/chat/send-message-side-effects";
+import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -21,46 +27,36 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-const streamChatModule = await import("@/api/handlers/chat/stream-chat");
 const streamChatMock = mock(
   async () =>
     new Response("stream started", {
       headers: { "Content-Type": "text/event-stream" },
     }),
 );
-void mock.module("@/api/handlers/chat/stream-chat", () => ({
-  ...streamChatModule,
-  streamChat: streamChatMock,
-}));
+const loadExternalMcpToolsForTest = async () => {
+  const close = async () => undefined;
+  return {
+    close,
+    connectors: [],
+    source: externalMcpToolsModule.createStellaMcpToolSource({
+      closeClients: close,
+      sourceTools: {},
+    }),
+    tools: {},
+  };
+};
 
-const externalMcpToolsModule =
-  await import("@/api/handlers/chat/tools/external-mcp-tools");
-void mock.module("@/api/handlers/chat/tools/external-mcp-tools", () => ({
-  ...externalMcpToolsModule,
-  loadExternalMcpToolsForUser: async () => {
-    const close = async () => undefined;
-    return {
-      close,
-      connectors: [],
-      source: externalMcpToolsModule.createStellaMcpToolSource({
-        closeClients: close,
-        sourceTools: {},
-      }),
-      tools: {},
-    };
-  },
-}));
-
-const loadOrgKeysModule = await import("@/api/lib/web-search/load-org-keys");
-void mock.module("@/api/lib/web-search/load-org-keys", () => ({
-  ...loadOrgKeysModule,
-  loadWebSearchProvidersForOrg: async () => ({
+const sendMessage = createSendMessage({
+  indexThread: async () => undefined,
+  loadExternalMcpTools: loadExternalMcpToolsForTest,
+  loadWebSearchProviders: async () => ({
     urlFetcher: null,
     webSearchProvider: null,
   }),
-}));
-
-const sendMessage = (await import("./send-message")).default;
+  rollbackSideEffects: rollbackUnpersistedChatSideEffects,
+  streamResponse: streamChatMock,
+  uploadMessageFiles: uploadMessageFilesWithRollback,
+});
 type SendMessageCtx = Parameters<typeof sendMessage.handler>[0];
 
 const orgAIConfig = {

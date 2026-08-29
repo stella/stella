@@ -13,7 +13,7 @@
  * from co-batching the two.
  */
 
-import { afterAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 
 import type { RateLimitOptions } from "@/api/lib/rate-limit/rate-limit";
 
@@ -38,13 +38,7 @@ const peer = Bun.listen({
   },
 });
 
-const realEnv = await import("@/api/env-document-processing-worker");
-void mock.module("@/api/env-document-processing-worker", () => ({
-  envDocumentProcessingWorker: {
-    ...realEnv.envDocumentProcessingWorker,
-    REDIS_URL: `redis://127.0.0.1:${peer.port}`,
-  },
-}));
+process.env["REDIS_URL"] = `redis://127.0.0.1:${peer.port}`;
 
 const { createRedisClient } = await import("@/api/lib/redis-client");
 const { RedisRateLimitContext } =

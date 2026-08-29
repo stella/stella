@@ -76,9 +76,27 @@ export class FlowStepError extends TaggedError("FlowStepError")<{
 export const executeFlowStep = async (
   { runId: rawRunId, stepIndex }: FlowStepJobData,
   signal: AbortSignal,
+  {
+    generateTextForRole = generateTanStackTextForRole,
+    database = rootDb,
+    makeScopedDb = createRootScopedDb,
+    makeSafeDb = createRootSafeDb,
+    enqueueStep = enqueueFlowStep,
+    broadcastUpdate = broadcastFlowRunUpdate,
+    createEntity = createEntityFromBuffer,
+  }: {
+    /** External model-dispatch boundary; supplied by focused integration tests. */
+    generateTextForRole?: typeof generateTanStackTextForRole | undefined;
+    database?: Pick<typeof rootDb, "query"> | undefined;
+    makeScopedDb?: typeof createRootScopedDb | undefined;
+    makeSafeDb?: typeof createRootSafeDb | undefined;
+    enqueueStep?: typeof enqueueFlowStep | undefined;
+    broadcastUpdate?: typeof broadcastFlowRunUpdate | undefined;
+    createEntity?: typeof createEntityFromBuffer | undefined;
+  } = {},
 ): Promise<void> => {
   const runId = brandPersistedFlowRunId(rawRunId);
-  const run = await loadRun(runId);
+  const run = await loadRun(runId, database);
   if (!run) {
     logger.warn("flow.run_missing", { runId, stepIndex: String(stepIndex) });
     return;
@@ -88,7 +106,7 @@ export const executeFlowStep = async (
     return;
   }
 
-  const step = await loadStep(runId, stepIndex);
+  const step = await loadStep(runId, stepIndex, database);
   if (!step) {
     return panic("flow run step row missing for an in-flight run");
   }
@@ -101,7 +119,7 @@ export const executeFlowStep = async (
     return panic("flow step index out of snapshot bounds");
   }
 
-  const scope = await resolveRunScope(run);
+  const scope = await resolveRunScope(run, database);
   if (scope.actorUserId === null) {
     // The trigger guarantees an actor before starting an automated run; a null
     // here means the definition's author was deleted mid-flight. Fail cleanly
@@ -112,7 +130,7 @@ export const executeFlowStep = async (
     });
   }
   const actorUserId = scope.actorUserId;
-  const scopedDb = createRootScopedDb({
+  const scopedDb = makeScopedDb({
     organizationId: scope.organizationId,
     userId: actorUserId,
     workspaceIds: [run.workspaceId],
@@ -134,7 +152,7 @@ export const executeFlowStep = async (
       .where(eq(flowRuns.id, runId));
     return await readRunProgress(tx, runId);
   });
-  broadcastFlowRunUpdate(run.workspaceId, startedPayload);
+  broadcastUpdate(run.workspaceId, startedPayload);
 
   switch (stepDef.kind) {
     case "review-gate":
@@ -143,6 +161,7 @@ export const executeFlowStep = async (
         stepIndex,
         workspaceId: run.workspaceId,
         scopedDb,
+        broadcastUpdate,
       });
       return;
     case "ai": {
@@ -153,12 +172,13 @@ export const executeFlowStep = async (
         organizationId: scope.organizationId,
         actorUserId,
         scopedDb,
-        safeDb: createRootSafeDb({
+        safeDb: makeSafeDb({
           organizationId: scope.organizationId,
           userId: actorUserId,
           workspaceIds: [run.workspaceId],
         }),
         signal,
+        generateTextForRole,
       });
       await completeStepAndAdvance({
         runId,
@@ -167,6 +187,8 @@ export const executeFlowStep = async (
         output,
         workspaceId: run.workspaceId,
         scopedDb,
+        broadcastUpdate,
+        enqueueStep,
       });
       return;
     }
@@ -178,6 +200,7 @@ export const executeFlowStep = async (
         organizationId: scope.organizationId,
         actorUserId,
         scopedDb,
+        createEntity,
       });
       await completeStepAndAdvance({
         runId,
@@ -186,6 +209,8 @@ export const executeFlowStep = async (
         output,
         workspaceId: run.workspaceId,
         scopedDb,
+        broadcastUpdate,
+        enqueueStep,
       });
       return;
     }
@@ -205,8 +230,11 @@ type LoadedRun = {
   definitionSnapshot: { name: string; steps: FlowStep[] };
 };
 
-const loadRun = async (runId: SafeId<"flowRun">): Promise<LoadedRun | null> => {
-  const row = await rootDb.query.flowRuns.findFirst({
+const loadRun = async (
+  runId: SafeId<"flowRun">,
+  database: Pick<typeof rootDb, "query">,
+): Promise<LoadedRun | null> => {
+  const row = await database.query.flowRuns.findFirst({
     where: { id: { eq: runId } },
     columns: {
       id: true,
@@ -222,8 +250,12 @@ const loadRun = async (runId: SafeId<"flowRun">): Promise<LoadedRun | null> => {
   return row ?? null;
 };
 
-const loadStep = (runId: SafeId<"flowRun">, stepIndex: number) =>
-  rootDb.query.flowRunSteps.findFirst({
+const loadStep = (
+  runId: SafeId<"flowRun">,
+  stepIndex: number,
+  database: Pick<typeof rootDb, "query">,
+) =>
+  database.query.flowRunSteps.findFirst({
     where: {
       runId: { eq: runId },
       index: { eq: stepIndex },
@@ -238,8 +270,11 @@ type RunScope = {
   actorUserId: SafeId<"user"> | null;
 };
 
-const resolveRunScope = async (run: LoadedRun): Promise<RunScope> => {
-  const workspace = await rootDb.query.workspaces.findFirst({
+const resolveRunScope = async (
+  run: LoadedRun,
+  database: Pick<typeof rootDb, "query">,
+): Promise<RunScope> => {
+  const workspace = await database.query.workspaces.findFirst({
     where: { id: { eq: run.workspaceId } },
     columns: { organizationId: true },
   });
@@ -248,7 +283,7 @@ const resolveRunScope = async (run: LoadedRun): Promise<RunScope> => {
   }
   return {
     organizationId: workspace.organizationId,
-    actorUserId: await resolveActorUserId(run),
+    actorUserId: await resolveActorUserId(run, database),
   };
 };
 
@@ -262,12 +297,13 @@ const resolveRunScope = async (run: LoadedRun): Promise<RunScope> => {
  */
 const resolveActorUserId = async (
   run: LoadedRun,
+  database: Pick<typeof rootDb, "query">,
 ): Promise<SafeId<"user"> | null> => {
   if (run.triggerSource.type === "manual") {
     return brandPersistedUserId(run.triggerSource.userId);
   }
   if (run.definitionId) {
-    const definition = await rootDb.query.flowDefinitions.findFirst({
+    const definition = await database.query.flowDefinitions.findFirst({
       where: { id: { eq: run.definitionId } },
       columns: { createdByUserId: true },
     });
@@ -289,6 +325,7 @@ type RunAiStepArgs = {
   scopedDb: ReturnType<typeof createRootScopedDb>;
   safeDb: SafeDb;
   signal: AbortSignal;
+  generateTextForRole: typeof generateTanStackTextForRole;
 };
 
 const FLOW_AI_SYSTEM_PROMPT =
@@ -303,6 +340,7 @@ const runAiStep = async ({
   scopedDb,
   safeDb,
   signal,
+  generateTextForRole,
 }: RunAiStepArgs): Promise<FlowStepOutput> => {
   const priorOutputs = await scopedDb(
     async (tx) => await readPriorAiMarkdown(tx, run.id, stepIndex),
@@ -345,7 +383,7 @@ const runAiStep = async ({
   // exactly the retry signal the worker wants, so we let it propagate. Works
   // unchanged under `USE_MOCK_AI` (model resolution short-circuits to the mock
   // adapter). No tools are ever passed.
-  const markdown = await generateTanStackTextForRole({
+  const markdown = await generateTextForRole({
     role: "chat",
     organizationId,
     tenantWorkspaceIds: [run.workspaceId],
@@ -504,6 +542,7 @@ type RunCreateDocumentArgs = {
   organizationId: SafeId<"organization">;
   actorUserId: SafeId<"user">;
   scopedDb: ReturnType<typeof createRootScopedDb>;
+  createEntity: typeof createEntityFromBuffer;
 };
 
 const runCreateDocumentStep = async ({
@@ -513,6 +552,7 @@ const runCreateDocumentStep = async ({
   organizationId,
   actorUserId,
   scopedDb,
+  createEntity,
 }: RunCreateDocumentArgs): Promise<FlowStepOutput> => {
   const priorMarkdown = await scopedDb(
     async (tx) => await readPriorAiMarkdown(tx, run.id, stepIndex),
@@ -580,7 +620,7 @@ const runCreateDocumentStep = async ({
     server: null,
   });
 
-  const created = await createEntityFromBuffer({
+  const created = await createEntity({
     scopedDb,
     organizationId,
     workspaceId: run.workspaceId,
@@ -616,6 +656,8 @@ type CompleteStepArgs = {
   output: FlowStepOutput;
   workspaceId: SafeId<"workspace">;
   scopedDb: ReturnType<typeof createRootScopedDb>;
+  broadcastUpdate: typeof broadcastFlowRunUpdate;
+  enqueueStep: typeof enqueueFlowStep;
 };
 
 const completeStepAndAdvance = async ({
@@ -625,6 +667,8 @@ const completeStepAndAdvance = async ({
   output,
   workspaceId,
   scopedDb,
+  broadcastUpdate,
+  enqueueStep,
 }: CompleteStepArgs): Promise<void> => {
   const advance = advanceAfterStep({ stepIndex, stepCount });
   const now = new Date();
@@ -651,10 +695,10 @@ const completeStepAndAdvance = async ({
     return await readRunProgress(tx, runId);
   });
 
-  broadcastFlowRunUpdate(workspaceId, payload);
+  broadcastUpdate(workspaceId, payload);
 
   if (advance.kind === "advance") {
-    await enqueueFlowStep({ runId, stepIndex: advance.nextStepIndex });
+    await enqueueStep({ runId, stepIndex: advance.nextStepIndex });
   }
 };
 
@@ -663,11 +707,13 @@ const pauseAtReviewGate = async ({
   stepIndex,
   workspaceId,
   scopedDb,
+  broadcastUpdate,
 }: {
   runId: SafeId<"flowRun">;
   stepIndex: number;
   workspaceId: SafeId<"workspace">;
   scopedDb: ReturnType<typeof createRootScopedDb>;
+  broadcastUpdate: typeof broadcastFlowRunUpdate;
 }): Promise<void> => {
   const payload = await scopedDb(async (tx) => {
     await tx
@@ -682,7 +728,7 @@ const pauseAtReviewGate = async ({
       .where(eq(flowRuns.id, runId));
     return await readRunProgress(tx, runId);
   });
-  broadcastFlowRunUpdate(workspaceId, payload);
+  broadcastUpdate(workspaceId, payload);
 };
 
 const readRunProgress = async (
@@ -730,11 +776,11 @@ export const failFlowRunFromWorker = async (
   error: unknown,
 ): Promise<void> => {
   const runId = brandPersistedFlowRunId(rawRunId);
-  const run = await loadRun(runId);
+  const run = await loadRun(runId, rootDb);
   if (!run || isTerminalFlowRunStatus(run.status)) {
     return;
   }
-  const scope = await resolveRunScope(run);
+  const scope = await resolveRunScope(run, rootDb);
   const message = errorMessage(error);
   const now = new Date();
 
@@ -802,16 +848,23 @@ export type ResolveFlowReviewGateOptions = {
  * advance to the next step (approved) or cancel the run (rejected). Scoped to
  * the caller's workspace via the handler's `safeDb`.
  */
-export const resolveFlowReviewGate = async ({
-  safeDb,
-  workspaceId,
-  runId,
-  userId,
-  decision,
-  note,
-}: ResolveFlowReviewGateOptions): Promise<
-  Result<FlowRunActionResult, HandlerError | SafeDbError>
-> =>
+export const resolveFlowReviewGate = async (
+  {
+    safeDb,
+    workspaceId,
+    runId,
+    userId,
+    decision,
+    note,
+  }: ResolveFlowReviewGateOptions,
+  {
+    broadcastUpdate = broadcastFlowRunUpdate,
+    enqueueStep = enqueueFlowStep,
+  }: {
+    broadcastUpdate?: typeof broadcastFlowRunUpdate;
+    enqueueStep?: typeof enqueueFlowStep;
+  } = {},
+): Promise<Result<FlowRunActionResult, HandlerError | SafeDbError>> =>
   await Result.gen(async function* () {
     const run = yield* Result.await(
       safeDb((tx) =>
@@ -927,12 +980,12 @@ export const resolveFlowReviewGate = async ({
       }),
     );
 
-    broadcastFlowRunUpdate(workspaceId, result.payload);
+    broadcastUpdate(workspaceId, result.payload);
     if (resolution.kind === "advance") {
       yield* Result.await(
         Result.tryPromise({
           try: async () =>
-            await enqueueFlowStep({
+            await enqueueStep({
               runId,
               stepIndex: resolution.nextStepIndex,
             }),

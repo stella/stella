@@ -61,6 +61,8 @@ export type BilingualAIContext = {
   abortSignal: AbortSignal;
   /** Stable key for prompt-cache scoping, typically the entity version id. */
   scopeKey: string;
+  /** External model-dispatch boundary; supplied by focused integration tests. */
+  generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
 };
 
 export type BilingualAIDocumentContext = BilingualAIContext & {
@@ -226,7 +228,9 @@ export const decideDispositions = async (
           DISPOSITION_ROLE,
           `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\n${formatDispositionRows(slice, decided)}`,
         );
-        const output = await generateTanStackObjectForRole({
+        const output = await (
+          context.generateObjectForRole ?? generateTanStackObjectForRole
+        )({
           role: DISPOSITION_ROLE,
           orgAIConfig: context.orgAIConfig,
           organizationId: context.organizationId,
@@ -334,7 +338,9 @@ export const proposeGlossary = async (
     GLOSSARY_ROLE,
     `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\nDefined terms found:\n${candidates.map((term) => `- ${term}`).join("\n") || "(none)"}\n\nDocument sample:\n${sample}`,
   );
-  const output = await generateTanStackObjectForRole({
+  const output = await (
+    context.generateObjectForRole ?? generateTanStackObjectForRole
+  )({
     role: GLOSSARY_ROLE,
     orgAIConfig: context.orgAIConfig,
     organizationId: context.organizationId,
@@ -452,7 +458,9 @@ export const translateBatch = async (
     TRANSLATION_ROLE,
     `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\nGlossary:\n${glossaryLines || "(none)"}\n\nPreceding rows (context only):\n${contextLines || "(start of document)"}\n\nRows to translate:\n${rowLines}`,
   );
-  const output = await generateTanStackObjectForRole({
+  const output = await (
+    context.generateObjectForRole ?? generateTanStackObjectForRole
+  )({
     role: TRANSLATION_ROLE,
     orgAIConfig: context.orgAIConfig,
     organizationId: context.organizationId,
@@ -594,7 +602,9 @@ export const translateFormattedBatch = async (
       TRANSLATION_ROLE,
       `Source language: ${languages.sourceLang}. Target language: ${languages.targetLang}.\n\nGlossary:\n${glossaryLines || "(none)"}\n\nPreceding rows (context only):\n${contextLines || "(start of document)"}\n\nFormatted rows to translate:\n${rowLines}${repairInstruction}`,
     );
-    const output = await generateTanStackObjectForRole({
+    const output = await (
+      context.generateObjectForRole ?? generateTanStackObjectForRole
+    )({
       role: TRANSLATION_ROLE,
       orgAIConfig: context.orgAIConfig,
       organizationId: context.organizationId,

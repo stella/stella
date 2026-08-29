@@ -53,137 +53,157 @@ const config = {
   body: createBilingualBody,
 } satisfies HandlerConfig;
 
-const createBilingualEntity = createSafeHandler(
-  config,
-  async function* ({
-    safeDb,
-    scopedDb,
-    session,
-    workspaceId,
-    user,
-    body,
-    recordAuditEvent,
-    request,
-  }) {
-    if (body.sourceLang.toLowerCase() === body.targetLang.toLowerCase()) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Source and target language must differ",
+type BilingualDependencies = {
+  createEntityFromBuffer: typeof createEntityFromBuffer;
+  getScanWarnings: typeof getScanWarnings;
+  loadEntityVersionDocxBuffer: typeof loadEntityVersionDocxBuffer;
+  scanFile: typeof scanFile;
+};
+
+const DEFAULT_BILINGUAL_DEPENDENCIES: BilingualDependencies = {
+  createEntityFromBuffer,
+  getScanWarnings,
+  loadEntityVersionDocxBuffer,
+  scanFile,
+};
+
+export const createBilingualEntityHandler = (
+  dependencies: BilingualDependencies = DEFAULT_BILINGUAL_DEPENDENCIES,
+) =>
+  createSafeHandler(
+    config,
+    async function* ({
+      safeDb,
+      scopedDb,
+      session,
+      workspaceId,
+      user,
+      body,
+      recordAuditEvent,
+      request,
+    }) {
+      if (body.sourceLang.toLowerCase() === body.targetLang.toLowerCase()) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Source and target language must differ",
+          }),
+        );
+      }
+
+      const loaded = yield* Result.await(
+        dependencies.loadEntityVersionDocxBuffer({
+          safeDb,
+          organizationId: session.activeOrganizationId,
+          workspaceId,
+          entityId: body.entityId,
+          fileFieldId: body.fieldId,
+          // Only the bytes are read; the copy becomes a separate document.
+          allowReadOnly: true,
         }),
       );
-    }
 
-    const loaded = yield* Result.await(
-      loadEntityVersionDocxBuffer({
-        safeDb,
+      const conversion = await Result.tryPromise({
+        try: async () =>
+          await withTimeout(
+            async () =>
+              await createBilingualDocx(loaded.buffer, {
+                targetStyleSuffix: body.targetLang,
+                borders: body.borders ?? "none",
+              }),
+            {
+              label: "bilingual-docx",
+              signal: request.signal,
+              timeoutMs: CONVERSION_TIMEOUT_MS,
+            },
+          ),
+        catch: (error: unknown) => error,
+      });
+
+      if (conversion.isErr()) {
+        captureError(conversion.error, { source: "bilingual-document" });
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "The document could not be laid out as a bilingual table",
+          }),
+        );
+      }
+
+      const { buffer, rows, warnings } = conversion.value;
+      const fileName = buildBilingualFileName({
+        sourceFileName: loaded.fileName,
+        sourceLang: body.sourceLang,
+        targetLang: body.targetLang,
+      });
+
+      const validation = await validateDocxBuffer(buffer);
+      if (!validation.valid) {
+        captureError(new Error(validation.error), {
+          source: "bilingual-document",
+        });
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "The bilingual document failed validation",
+          }),
+        );
+      }
+
+      const scanResult = await dependencies.scanFile({
+        buffer: new Uint8Array(buffer),
+        declaredMimeType: DOCX_MIME_TYPE,
+        fileName,
+      });
+      if (Result.isError(scanResult)) {
+        captureError(scanResult.error, { source: "bilingual-document" });
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "Bilingual document security scan failed",
+          }),
+        );
+      }
+      if (scanResult.value.verdict === "reject") {
+        const reasons = scanResult.value.findings.flatMap((finding) =>
+          finding.severity === "reject" ? [finding.message] : [],
+        );
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: `Bilingual document rejected: ${reasons.join("; ")}`,
+          }),
+        );
+      }
+
+      const created = await dependencies.createEntityFromBuffer({
+        scopedDb,
         organizationId: session.activeOrganizationId,
         workspaceId,
-        entityId: body.entityId,
-        fileFieldId: body.fieldId,
-        // Only the bytes are read; the copy becomes a separate document.
-        allowReadOnly: true,
-      }),
-    );
-
-    const conversion = await Result.tryPromise({
-      try: async () =>
-        await withTimeout(
-          async () =>
-            await createBilingualDocx(loaded.buffer, {
-              targetStyleSuffix: body.targetLang,
-              borders: body.borders ?? "none",
-            }),
-          {
-            label: "bilingual-docx",
-            signal: request.signal,
-            timeoutMs: CONVERSION_TIMEOUT_MS,
-          },
-        ),
-      catch: (error: unknown) => error,
-    });
-
-    if (conversion.isErr()) {
-      captureError(conversion.error, { source: "bilingual-document" });
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "The document could not be laid out as a bilingual table",
-        }),
-      );
-    }
-
-    const { buffer, rows, warnings } = conversion.value;
-    const fileName = buildBilingualFileName({
-      sourceFileName: loaded.fileName,
-      sourceLang: body.sourceLang,
-      targetLang: body.targetLang,
-    });
-
-    const validation = await validateDocxBuffer(buffer);
-    if (!validation.valid) {
-      captureError(new Error(validation.error), {
-        source: "bilingual-document",
+        userId: user.id,
+        recordAuditEvent,
+        buffer,
+        fileName,
+        mimeType: DOCX_MIME_TYPE,
+        scanWarnings:
+          dependencies.getScanWarnings(scanResult.value) ?? undefined,
       });
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "The bilingual document failed validation",
-        }),
-      );
-    }
+      if (Result.isError(created)) {
+        return Result.err(
+          new HandlerError({ status: 400, message: created.error.message }),
+        );
+      }
 
-    const scanResult = await scanFile({
-      buffer: new Uint8Array(buffer),
-      declaredMimeType: DOCX_MIME_TYPE,
-      fileName,
-    });
-    if (Result.isError(scanResult)) {
-      captureError(scanResult.error, { source: "bilingual-document" });
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "Bilingual document security scan failed",
-        }),
-      );
-    }
-    if (scanResult.value.verdict === "reject") {
-      const reasons = scanResult.value.findings.flatMap((finding) =>
-        finding.severity === "reject" ? [finding.message] : [],
-      );
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: `Bilingual document rejected: ${reasons.join("; ")}`,
-        }),
-      );
-    }
+      return Result.ok({
+        entityId: created.value.entityId,
+        fieldId: created.value.fieldId,
+        fileName: created.value.fileName,
+        rowCount: rows.length,
+        warnings,
+      });
+    },
+  );
 
-    const created = await createEntityFromBuffer({
-      scopedDb,
-      organizationId: session.activeOrganizationId,
-      workspaceId,
-      userId: user.id,
-      recordAuditEvent,
-      buffer,
-      fileName,
-      mimeType: DOCX_MIME_TYPE,
-      scanWarnings: getScanWarnings(scanResult.value) ?? undefined,
-    });
-    if (Result.isError(created)) {
-      return Result.err(
-        new HandlerError({ status: 400, message: created.error.message }),
-      );
-    }
-
-    return Result.ok({
-      entityId: created.value.entityId,
-      fieldId: created.value.fieldId,
-      fileName: created.value.fileName,
-      rowCount: rows.length,
-      warnings,
-    });
-  },
-);
+const createBilingualEntity = createBilingualEntityHandler();
 
 export default createBilingualEntity;

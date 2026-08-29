@@ -6,6 +6,8 @@ import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/types";
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { NEUTRAL_PERSPECTIVE } from "@/api/lib/document-review/contract";
+import { compareReferenceDocuments } from "@/api/lib/document-review/reference-compare";
+import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -24,15 +26,10 @@ const generateObjectMock = mock(async (options: CapturedGenerateOptions) => {
   capturedGenerateOptions.push(options);
   return await Promise.resolve({ findings: [] });
 });
-
-const realTanstackAIGenerate = await import("@/api/lib/tanstack-ai-generate");
-void mock.module("@/api/lib/tanstack-ai-generate", () => ({
-  ...realTanstackAIGenerate,
-  generateTanStackObjectForRole: generateObjectMock,
-}));
-
-const { compareReferenceDocuments } =
-  await import("@/api/lib/document-review/reference-compare");
+// SAFETY: This suite only dispatches the reference-review schema and configures
+// outputs matching that schema; Bun's mock type cannot express that generic tie.
+const generateObjectForTest =
+  generateObjectMock as typeof generateTanStackObjectForRole;
 
 const organizationId = toSafeId<"organization">("organization-fixture");
 const workspaceId = toSafeId<"workspace">("workspace-fixture");
@@ -93,6 +90,7 @@ const compare = async () =>
     serviceTier: "standard",
     usageMetering,
     abortSignal: AbortSignal.timeout(1000),
+    generateObjectForRole: generateObjectForTest,
   });
 
 describe("reference review AI boundary", () => {

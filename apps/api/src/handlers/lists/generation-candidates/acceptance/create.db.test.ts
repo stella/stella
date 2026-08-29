@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterAll, beforeAll, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
@@ -52,14 +52,17 @@ beforeAll(
     // The handler materializes its entity through the shared task-creation
     // path, which is gated on the deployed feature flags. Legal Lists must be
     // on for the created-here control to reach entity creation at all.
-    void mock.module("@/api/lib/tasks/deployment-features", () => ({
-      deployedTaskFeatures: () => ({
-        governedWorkflow: false,
-        legalLists: true,
-      }),
-    }));
-    ({ default: acceptGenerationCandidate } =
-      await import("@/api/handlers/lists/generation-candidates/acceptance/create"));
+    const { createAcceptGenerationCandidate } =
+      await import("@/api/handlers/lists/generation-candidates/acceptance/create");
+    const { createTaskEntityHandler } =
+      await import("@/api/lib/tasks/create-task-entity");
+    acceptGenerationCandidate = createAcceptGenerationCandidate({
+      createTaskEntityHandler: (props) =>
+        createTaskEntityHandler({
+          ...props,
+          features: { governedWorkflow: false, legalLists: true },
+        }),
+    });
   },
   { timeout: 30_000 },
 );

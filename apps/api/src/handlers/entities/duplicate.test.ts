@@ -17,31 +17,18 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-// Spread the real module: the copy helper reads its search-index ownership
-// split from here. Only the durable extraction request itself is replaced.
-const realProcessExtraction =
-  await import("@/api/lib/search/process-extraction");
+import { copyFileObject } from "./copy-utils";
+import { createDuplicateEntity } from "./duplicate";
+
 const requestNativeExtractionRunsMock = mock(
   async ({ requests }: { requests: readonly unknown[] }) =>
     requests.map((_, index) =>
       toSafeId<"documentProcessingRun">(`run_${index}`),
     ),
 );
-void mock.module("@/api/lib/search/process-extraction", () => ({
-  ...realProcessExtraction,
-  requestNativeExtractionRun: mock(async () => null),
-  requestNativeExtractionRuns: requestNativeExtractionRunsMock,
-}));
-
 const enqueueDocumentProcessingRunMock = mock(
   async (_runId: SafeId<"documentProcessingRun">) => undefined,
 );
-const realDocumentProcessingEnqueue =
-  await import("@/api/lib/document-processing-enqueue");
-void mock.module("@/api/lib/document-processing-enqueue", () => ({
-  ...realDocumentProcessingEnqueue,
-  enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
-}));
 
 const enqueueEntitySearchRepairsMock = mock(
   async (_tx: unknown, _entityIds: readonly string[]) => undefined,
@@ -50,23 +37,12 @@ const flushEntitySearchRepairsMock = mock(async () => ({
   failed: 0,
   repaired: 0,
 }));
-// The full export set, not just the two this suite asserts on: a partial
-// factory silently leaves the rest of the module real, so a consumer reaching
-// the queue through another entry point would open a transaction here.
-const idleRepairOutcome = async () => ({ failed: 0, repaired: 0 });
-void mock.module("@/api/lib/search/projection-repair-queue", () => ({
-  SEARCH_PROJECTION_REPAIR_BATCH_SIZE: 32,
-  drainSearchProjectionRepairQueue: idleRepairOutcome,
-  enqueueContactSearchRepairs: async () => undefined,
+const duplicateEntity = createDuplicateEntity({
+  enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
   enqueueEntitySearchRepairs: enqueueEntitySearchRepairsMock,
-  enqueueWorkspaceSearchRepairs: async () => undefined,
-  flushContactSearchRepairs: idleRepairOutcome,
   flushEntitySearchRepairs: flushEntitySearchRepairsMock,
-  flushWorkspaceSearchRepairs: idleRepairOutcome,
-}));
-
-const { default: duplicateEntity } = await import("./duplicate");
-const { copyFileObject } = await import("./copy-utils");
+  requestNativeExtractionRuns: requestNativeExtractionRunsMock,
+});
 
 const workspaceId = toSafeId<"workspace">("workspace_1");
 const userId = toSafeId<"user">("user_1");

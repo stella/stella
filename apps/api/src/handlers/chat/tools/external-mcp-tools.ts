@@ -47,18 +47,32 @@ export type LoadedExternalMcpConnector = {
   toolNames: string[];
 };
 
+export type ExternalMcpDiscoveryDependencies = {
+  createMcpClientForConnection: typeof createMcpClientForConnection;
+  loadActiveMcpConnectionsForUser: typeof loadActiveMcpConnectionsForUser;
+  withTimeout: typeof withTimeout;
+};
+
+const defaultExternalMcpDiscoveryDependencies = {
+  createMcpClientForConnection,
+  loadActiveMcpConnectionsForUser,
+  withTimeout,
+} satisfies ExternalMcpDiscoveryDependencies;
+
 export const loadExternalMcpToolsForUser = async ({
   nullUnionStrategy,
   organizationId,
   safeDb,
   userId,
+  dependencies = defaultExternalMcpDiscoveryDependencies,
 }: {
   nullUnionStrategy: NullUnionStrategy;
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   userId: SafeId<"user">;
+  dependencies?: ExternalMcpDiscoveryDependencies | undefined;
 }): Promise<LoadedExternalMcpTools> => {
-  const rows = await loadActiveMcpConnectionsForUser({
+  const rows = await dependencies.loadActiveMcpConnectionsForUser({
     organizationId,
     safeDb,
     userId,
@@ -82,6 +96,7 @@ export const loadExternalMcpToolsForUser = async ({
           row,
           safeDb,
           userId,
+          dependencies,
         }),
     ),
   );
@@ -227,12 +242,14 @@ const loadConnectorTools = async ({
   row,
   safeDb,
   userId,
+  dependencies,
 }: {
   nullUnionStrategy: NullUnionStrategy;
   organizationId: SafeId<"organization">;
   row: LoadedMcpConnection;
   safeDb: SafeDb;
   userId: SafeId<"user">;
+  dependencies: ExternalMcpDiscoveryDependencies;
 }): Promise<LoadedExternalMcpConnectorResult | null> => {
   // Tracks the client for the whole life of this discovery attempt, from
   // the moment `createMcpClientForConnection` resolves, so every failure
@@ -251,7 +268,7 @@ const loadConnectorTools = async ({
   // the loser created.
   const discovery =
     (async (): Promise<LoadedExternalMcpConnectorResult | null> => {
-      const createdClient = await createMcpClientForConnection({
+      const createdClient = await dependencies.createMcpClientForConnection({
         organizationId,
         row,
         safeDb,
@@ -283,7 +300,7 @@ const loadConnectorTools = async ({
     })();
 
   try {
-    return await withTimeout(async () => await discovery, {
+    return await dependencies.withTimeout(async () => await discovery, {
       label: `external-mcp-tools:${row.slug}`,
       timeoutMs: EXTERNAL_MCP_DISCOVERY_TIMEOUT_MS,
     });

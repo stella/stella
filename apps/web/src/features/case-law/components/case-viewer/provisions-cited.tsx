@@ -87,8 +87,10 @@ const groupByWork = (rows: readonly ProvisionRow[]): WorkGroup[] => {
  */
 export const ProvisionsCited = ({
   decisionId,
+  isHydrated,
 }: {
   decisionId: SafeId<"caseLawDecision">;
+  isHydrated?: boolean;
 }) => {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
@@ -112,7 +114,8 @@ export const ProvisionsCited = ({
   // disappearing as though the decision cited nothing. Until hydrated the
   // panel is absent either way: the non-blocking prefetch may be known on
   // one side of hydration and not the other.
-  const hydrated = useHydrated();
+  const environmentHydrated = useHydrated();
+  const hydrated = isHydrated ?? environmentHydrated;
   if (!hydrated || (groups.length === 0 && !isError)) {
     return null;
   }

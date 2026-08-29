@@ -405,6 +405,8 @@ type CompareReferenceDocumentsArgs = {
   serviceTier: AIRequestServiceTier;
   usageMetering: AIUsageMetering;
   abortSignal: AbortSignal;
+  /** External model-dispatch boundary; supplied by focused integration tests. */
+  generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
 };
 
 export const compareReferenceDocuments = async ({
@@ -421,6 +423,7 @@ export const compareReferenceDocuments = async ({
   serviceTier,
   usageMetering,
   abortSignal,
+  generateObjectForRole = generateTanStackObjectForRole,
 }: CompareReferenceDocumentsArgs): Promise<
   Result<ReferenceReviewFinding[], WorkflowIntegrationError>
 > => {
@@ -447,7 +450,7 @@ export const compareReferenceDocuments = async ({
 
   return await Result.tryPromise({
     try: async () => {
-      const output = await generateTanStackObjectForRole({
+      const output = await generateObjectForRole({
         role: REFERENCE_REVIEW_ROLE,
         orgAIConfig,
         organizationId,

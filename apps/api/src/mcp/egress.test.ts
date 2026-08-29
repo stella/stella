@@ -2,6 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { AnonymizeTextFieldsInput } from "@/api/mcp/anonymization-core";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpEgressPlan } from "@/api/mcp/tool-types";
@@ -11,18 +12,10 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const anonymizeTextFieldsMock = mock();
 const loadAnonymizationGazetteerEntriesMock = mock();
-const realAnonymizationBlacklist =
-  await import("@/api/lib/anonymization-blacklist");
-
-void mock.module("@/api/mcp/anonymization", () => ({
-  anonymizeTextFields: anonymizeTextFieldsMock,
-}));
-
-void mock.module("@/api/lib/anonymization-blacklist", () => ({
-  ...realAnonymizationBlacklist,
-  loadAnonymizationGazetteerEntries: loadAnonymizationGazetteerEntriesMock,
-}));
-
+// SAFETY: This suite configures the anonymizer with production-shaped inputs
+// and outputs; Bun's mock type cannot express that external function contract.
+const anonymizeTextFieldsForTest =
+  anonymizeTextFieldsMock as typeof anonymizeTextFields;
 const { finalizeToolEgress } = await import("@/api/mcp/egress");
 
 /** Deny-list term stored against `ws_2` only, never against the org tier. */
@@ -80,7 +73,12 @@ const givenWorkspaceScopedTerm = (): void => {
 
 const finalizeMcpEgress = async (
   options: Parameters<typeof finalizeToolEgress>[0],
-) => serializeToolResult(await finalizeToolEgress(options));
+) =>
+  serializeToolResult(
+    await finalizeToolEgress(options, {
+      anonymizeTextFields: anonymizeTextFieldsForTest,
+    }),
+  );
 
 const createContext = (): McpRequestContext => {
   const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(mock());

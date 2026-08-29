@@ -318,7 +318,9 @@ const handleCompatSearchTool: McpToolHandler = async ({ args, context }) => {
   // position, so over-fetching and post-filtering would desync it and skip
   // results. Non-fetchable hits are dropped, so a page may be smaller than
   // the page size; callers keep paging while `nextCursor` is non-null.
-  const result = await getSearchProvider().search({
+  const result = await (
+    context.testDependencies?.getSearchProvider ?? getSearchProvider
+  )().search({
     query,
     organizationId: context.organizationId,
     workspaceIds: context.accessibleWorkspaceIds,

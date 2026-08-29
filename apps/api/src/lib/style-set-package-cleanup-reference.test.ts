@@ -5,7 +5,7 @@
  * rather than a stubbed lookup.
  */
 
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { styleSets } from "@/api/db/schema";
@@ -19,8 +19,6 @@ import {
 } from "@/api/tests/security/rls-fixture";
 
 const { testDb, ids } = await getRlsFixture();
-
-void mock.module("@/api/db/root", () => ({ rootDb: testDb, rlsDb: testDb }));
 
 const { deleteUnreferencedStyleSetPackage } =
   await import("@/api/lib/style-set-package-cleanup-queue");
@@ -56,7 +54,7 @@ describe("style set package cleanup reference check", () => {
 
   test("deletes only packages no style set names", async () => {
     // Abandoned before any row exists: the crash-shaped case.
-    await deleteUnreferencedStyleSetPackage(abandonedKey);
+    await deleteUnreferencedStyleSetPackage(abandonedKey, testDb);
     expect(storedKeys()).toEqual([liveKey, replacedKey]);
 
     await testDb.insert(styleSets).values({
@@ -70,16 +68,16 @@ describe("style set package cleanup reference check", () => {
       createdBy: ids.userA1,
     });
 
-    await deleteUnreferencedStyleSetPackage(liveKey);
+    await deleteUnreferencedStyleSetPackage(liveKey, testDb);
     // Still recorded in the row's cleanup outbox: not this job's to delete.
-    await deleteUnreferencedStyleSetPackage(replacedKey);
+    await deleteUnreferencedStyleSetPackage(replacedKey, testDb);
     expect(storedKeys()).toEqual([liveKey, replacedKey]);
 
     await testDb
       .update(styleSets)
       .set({ cleanupS3Key: null })
       .where(eq(styleSets.id, styleSetId));
-    await deleteUnreferencedStyleSetPackage(replacedKey);
+    await deleteUnreferencedStyleSetPackage(replacedKey, testDb);
     expect(storedKeys()).toEqual([liveKey]);
   });
 });

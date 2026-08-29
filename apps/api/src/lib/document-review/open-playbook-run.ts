@@ -30,6 +30,7 @@ import {
 } from "@/api/lib/workflow/materialize-playbook-run";
 import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
+import type { McpRequestContext } from "@/api/mcp/context";
 
 /** The live definition a run starts from: what to pin when it was never
  *  approved, plus the scope that gates which documents it reaches. */
@@ -49,6 +50,7 @@ export type OpenPlaybookRunArgs = {
   /** Extra context merged onto the EXECUTE audit row, e.g. the system/trigger
    *  marker an auto-routed run carries. */
   auditMetadata?: Record<string, unknown>;
+  testDependencies?: McpRequestContext["testDependencies"];
 };
 
 export type OpenPlaybookRunResult =
@@ -70,6 +72,7 @@ export const openPlaybookRun = async ({
   projection,
   recordAuditEvent,
   auditMetadata,
+  testDependencies,
 }: OpenPlaybookRunArgs): Promise<OpenPlaybookRunResult> => {
   // Findings are pinned to the version they were measured against, so every
   // surface resolves the same approved snapshot rather than reading the live
@@ -89,7 +92,9 @@ export const openPlaybookRun = async ({
 
   const materializedPropertyIds: SafeId<"property">[] = [];
   if (projection === PLAYBOOK_RUN_PROJECTION.COLUMNS) {
-    const materialized = await materializePlaybookRun({
+    const materialized = await (
+      testDependencies?.materializePlaybookRun ?? materializePlaybookRun
+    )({
       tx,
       workspaceId,
       organizationId,
@@ -105,7 +110,9 @@ export const openPlaybookRun = async ({
     materializedPropertyIds.push(...materialized.materializedPropertyIds);
   }
 
-  const tableRuns = await createPlaybookTableRuns({
+  const tableRuns = await (
+    testDependencies?.createPlaybookTableRuns ?? createPlaybookTableRuns
+  )({
     tx,
     workspaceId,
     organizationId,

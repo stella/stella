@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
 import { structuredErrorResult } from "@/api/mcp/tool-utils";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -16,17 +17,12 @@ const gatewayLoadErrorResultMock = mock();
 const recordSkillGatewayToolAuditMock = mock(async () => undefined);
 const resolveSkillToolMock = mock();
 
-void mock.module("@/api/mcp/gateway/external-tools", () => ({
+const dependencies = {
   callGatewayExternalMcpTool: callGatewayExternalMcpToolMock,
   gatewayLoadErrorResult: gatewayLoadErrorResultMock,
   recordSkillGatewayToolAudit: recordSkillGatewayToolAuditMock,
-}));
-void mock.module("@/api/mcp/gateway/skills", () => ({
   resolveSkillTool: resolveSkillToolMock,
-}));
-
-const { dispatchGatewayToolCall } =
-  await import("@/api/mcp/gateway/dispatch-call");
+};
 
 const context = asTestRaw<McpRequestContext>({
   organizationId: toSafeId<"organization">("org_1"),
@@ -61,6 +57,7 @@ describe("dispatchGatewayToolCall", () => {
       context,
       mode: "anonymized",
       toolName: "skill__alpha",
+      dependencies,
     });
 
     expect(result).toBeNull();
@@ -80,6 +77,7 @@ describe("dispatchGatewayToolCall", () => {
       context,
       mode: "default",
       toolName: "mcp__registry__lookup",
+      dependencies,
     });
 
     expect(result).toEqual({ type: "external_mcp", result: sentinel });
@@ -97,6 +95,7 @@ describe("dispatchGatewayToolCall", () => {
       context,
       mode: "default",
       toolName: "list_matters",
+      dependencies,
     });
 
     expect(result).toBeNull();
@@ -112,6 +111,7 @@ describe("dispatchGatewayToolCall", () => {
       context,
       mode: "default",
       toolName: "skill__missing",
+      dependencies,
     });
 
     expect(result?.type).toBe("internal");
@@ -138,6 +138,7 @@ describe("dispatchGatewayToolCall", () => {
       context,
       mode: "default",
       toolName: "skill__alpha",
+      dependencies,
     });
 
     expect(result?.type).toBe("internal");
@@ -187,6 +188,7 @@ describe("dispatchGatewayToolCall", () => {
       context,
       mode: "default",
       toolName: "skill__alpha",
+      dependencies,
     });
 
     expect(gatewayLoadErrorResultMock).toHaveBeenCalledWith(loadFault);
@@ -207,6 +209,7 @@ describe("dispatchGatewayToolCall", () => {
       context,
       mode: "default",
       toolName: "skill__alpha",
+      dependencies,
     }).then(
       () => null,
       (error: unknown) => error,

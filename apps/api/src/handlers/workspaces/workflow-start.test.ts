@@ -6,16 +6,11 @@ import type { WorkflowStartStatus } from "@/api/lib/workflow-queue";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+import { createWorkflowStart } from "./workflow-start";
+
 const startWorkflowMock = mock();
 
-const realWorkflowQueue = await import("@/api/lib/workflow-queue");
-
-void mock.module("@/api/lib/workflow-queue", () => ({
-  ...realWorkflowQueue,
-  startWorkflow: startWorkflowMock,
-}));
-
-const { default: workflowStart } = await import("./workflow-start");
+const workflowStart = createWorkflowStart({ startWorkflow: startWorkflowMock });
 
 type WorkflowStartCtx = Parameters<typeof workflowStart.handler>[0];
 

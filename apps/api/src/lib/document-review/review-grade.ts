@@ -66,6 +66,7 @@ type AiGradingDeps = {
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering?: AIUsageMetering | undefined;
+  gradeTierMatches?: typeof gradeTierMatches | undefined;
 };
 
 export type BuildFindingsArgs = AiGradingDeps & {
@@ -201,6 +202,7 @@ const gradeTierMatchPositions = async ({
   tiersBySourceId: ReadonlyMap<string, ResolvedTiers>;
   deps: AiGradingDeps;
 }): Promise<ReadonlyMap<string, GradingOutcome>> => {
+  const gradeTierMatchesForReview = deps.gradeTierMatches ?? gradeTierMatches;
   const verdicts = new Map<string, GradingOutcome>();
   for (
     let cursor = 0;
@@ -212,7 +214,7 @@ const gradeTierMatchPositions = async ({
     }
     const batch = positions.slice(cursor, cursor + TIER_MATCH_BATCH_SIZE);
     // oxlint-disable-next-line no-await-in-loop -- one model call per batch, in order, keeps the single-doc review's fan-out bounded
-    const graded = await gradeTierMatches({
+    const graded = await gradeTierMatchesForReview({
       items: batch.map((position) => ({
         key: position.sourceId,
         askValue:

@@ -1,12 +1,11 @@
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import type { BoeSearchResponse } from "@stll/boe";
+import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
-import * as publicSubject from "@/api/handlers/case-law/decisions/public-subject";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
@@ -73,72 +72,6 @@ const withRedistributableSubjectMock = mock();
 const searchConsolidatedLegislationMock = mock();
 const getLawTextBlockMock = mock();
 const executeRegistryLookupMock = mock();
-
-const realTemplateFillService =
-  await import("@/api/lib/templates/template-fill-service");
-const realCaseLawSearch =
-  await import("@/api/handlers/case-law/decisions/search");
-const realCaseLawGetDeferred =
-  await import("@/api/handlers/case-law/decisions/get-deferred-document");
-const realBoe = await import("@stll/boe");
-const realRegistryDispatch =
-  await import("@/api/lib/business-registries/dispatch");
-
-void mock.module("@/api/handlers/workspaces/get", () => ({
-  readWorkspaceHandler: readWorkspaceHandlerMock,
-}));
-void mock.module("@/api/handlers/workspaces/read-overview", () => ({
-  readOverviewHandler: readOverviewHandlerMock,
-}));
-void mock.module("@/api/handlers/workspaces/workspace-contacts-read", () => ({
-  readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
-}));
-void mock.module("@/api/handlers/workspaces/workspace-members-read", () => ({
-  readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
-}));
-void mock.module("@/api/lib/templates/template-fill-service", () => ({
-  ...realTemplateFillService,
-  describeStoredTemplate: describeStoredTemplateMock,
-}));
-void mock.module("@/api/lib/search/provider", () => ({
-  getSearchProvider: () => ({ search: searchProviderSearchMock }),
-}));
-void mock.module("@/api/handlers/case-law/decisions/search", () => ({
-  ...realCaseLawSearch,
-  searchDecisionsHandler: searchDecisionsHandlerMock,
-}));
-void mock.module(
-  "@/api/handlers/case-law/decisions/get-deferred-document",
-  () => ({
-    ...realCaseLawGetDeferred,
-    readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
-  }),
-);
-// The case-law read tool gates the subject before it reads, so the corpus
-// stands in for that lookup too; the fixture payload still comes from the
-// handler double above. Every export is declared rather than spread: the
-// module builds the public route handlers at import time, and the
-// `...(await import(SPEC))` idiom deadlocks on it.
-void mock.module("@/api/handlers/case-law/decisions/public-subject", () => ({
-  DECISION_NOT_FOUND: publicSubject.DECISION_NOT_FOUND,
-  createSafePublicSubjectHandler: publicSubject.createSafePublicSubjectHandler,
-  createSafePublicSubjectFollowUpHandler:
-    publicSubject.createSafePublicSubjectFollowUpHandler,
-  isSubjectGatedHandler: publicSubject.isSubjectGatedHandler,
-  normalizePublicDecisionLanguage:
-    publicSubject.normalizePublicDecisionLanguage,
-  subjectGatedHandlers: publicSubject.subjectGatedHandlers,
-  withRedistributableSubject: withRedistributableSubjectMock,
-}));
-void mock.module("@stll/boe", () => ({
-  ...realBoe,
-  searchConsolidatedLegislation: searchConsolidatedLegislationMock,
-  getLawTextBlock: getLawTextBlockMock,
-}));
-void mock.module("@/api/lib/business-registries/dispatch", () => ({
-  ...realRegistryDispatch,
-  executeRegistryLookup: executeRegistryLookupMock,
-}));
 
 const { buildMcpContextFromChat } = await import("./mcp-chat-context");
 const { runRegistryReadTool } = await import("./run-registry-tool");
@@ -237,6 +170,19 @@ const buildContext = (tx: unknown): McpRequestContext => {
       pinnedIds: [],
     }),
     userId: toSafeId<"user">("user_1"),
+    testDependencies: {
+      readWorkspaceHandler: readWorkspaceHandlerMock,
+      readOverviewHandler: readOverviewHandlerMock,
+      readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
+      readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
+      describeStoredTemplate: describeStoredTemplateMock,
+      getSearchProvider: () => asTestRaw({ search: searchProviderSearchMock }),
+      searchDecisionsHandler: searchDecisionsHandlerMock,
+      readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
+      searchConsolidatedLegislation: searchConsolidatedLegislationMock,
+      getLawTextBlock: getLawTextBlockMock,
+      executeRegistryLookup: executeRegistryLookupMock,
+    },
   });
 };
 
@@ -1327,7 +1273,7 @@ const CONTRACT_CORPUS = {
       setup: () => {
         getLawTextBlockMock.mockResolvedValue(
           "<bloque>Artículo 1</bloque>" satisfies Awaited<
-            ReturnType<typeof realBoe.getLawTextBlock>
+            ReturnType<typeof getLawTextBlock>
           >,
         );
       },
@@ -1337,7 +1283,7 @@ const CONTRACT_CORPUS = {
   lookup_business_registry: [
     {
       mode: "lookup",
-      buildArgs: () => ({ registry: "ares", query: "12345678" }),
+      buildArgs: () => ({ registry: "ares", query: "27074358" }),
       tx: () => ({
         query: {
           organizationSettings: {
@@ -1354,7 +1300,7 @@ const CONTRACT_CORPUS = {
           registry: "ares",
           hit: {
             registry: "ares",
-            id: "12345678",
+            id: "27074358",
             name: "Acme s.r.o.",
             legalForm: "s.r.o.",
             // `address` is a structured `BusinessRegistryAddress`, not a
@@ -1368,7 +1314,7 @@ const CONTRACT_CORPUS = {
               country: null,
               textAddress: "Praha 1",
             },
-            registryUrl: "https://ares.gov.cz/12345678",
+            registryUrl: "https://ares.gov.cz/27074358",
           },
         } satisfies RegistryLookupResponse);
       },

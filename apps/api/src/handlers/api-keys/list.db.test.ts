@@ -10,12 +10,14 @@
  * sub-millisecond digits can show that, so they are written by raw SQL.
  */
 
-import { afterAll, beforeAll, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
 import { apikey } from "@/api/db/auth-schema";
+import { createListMachineApiKeysHandler } from "@/api/handlers/api-keys/list";
 import { compareCodepoint } from "@/api/lib/collation";
 import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
+import { listOrganizationMachineApiKeys } from "@/api/lib/machine-api-key-queries";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import {
@@ -58,6 +60,7 @@ const DISTINCT_MS_TIMESTAMPS = [
 
 let testDb: TestDatabase;
 let ids: TestIds;
+let listMachineApiKeys: ReturnType<typeof createListMachineApiKeysHandler>;
 
 beforeAll(async () => {
   testDb = await getTestDb();
@@ -66,10 +69,10 @@ beforeAll(async () => {
 
   // The queries module reads this table through the owner connection; point
   // that connection at the test database.
-  void mock.module("@/api/db/root", () => ({
-    rootDb: testDb,
-    rlsDb: testDb,
-  }));
+  listMachineApiKeys = createListMachineApiKeysHandler(
+    async (input) =>
+      await listOrganizationMachineApiKeys({ ...input, db: testDb }),
+  );
 
   const timestamps = [...KEY_TIMESTAMPS, ...DISTINCT_MS_TIMESTAMPS];
   for (const [index, createdAt] of timestamps.entries()) {
@@ -99,8 +102,6 @@ afterAll(async () => {
 });
 
 const listPage = async (cursor: string | undefined) => {
-  const { default: listMachineApiKeys } =
-    await import("@/api/handlers/api-keys/list");
   type ListCtx = Parameters<typeof listMachineApiKeys.handler>[0];
   return await listMachineApiKeys.handler(
     createTestHandlerContext<ListCtx>({

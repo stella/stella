@@ -18,6 +18,7 @@ import { describe, expect, mock, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
+import { startWorkflow } from "@/api/lib/workflow-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const claimedRequestIds: string[] = [];
@@ -39,19 +40,14 @@ const releaseClaimMock = mock(
 );
 const clearMock = mock(async () => undefined);
 
-// Only the members this path reaches. Spreading the real store here would
-// recurse: inside the factory, the module specifier resolves to this mock, so
-// the getter would call itself.
-void mock.module("@/api/lib/workflow/root-run-state-store", () => ({
-  getRootWorkflowRunStateStore: () => ({
-    tryClaim: tryClaimMock,
-    setRequestId: setRequestIdMock,
-    releaseClaim: releaseClaimMock,
-    clear: clearMock,
-  }),
-}));
-
-const { startWorkflow } = await import("@/api/lib/workflow-queue");
+const runStateStore = asTestRaw<
+  NonNullable<Parameters<typeof startWorkflow>[0]["runStateStore"]>
+>({
+  tryClaim: tryClaimMock,
+  setRequestId: setRequestIdMock,
+  releaseClaim: releaseClaimMock,
+  clear: clearMock,
+});
 
 const WORKSPACE_ID = toSafeId<"workspace">(
   "01931f4a-0000-7000-8000-000000000101",
@@ -69,6 +65,7 @@ const startAfterFailedClaimWrite = async () =>
     scopedDb: asTestRaw<ScopedDb>(() => {
       throw new Error("the plan must not be read after a failed claim");
     }),
+    runStateStore,
   });
 
 describe("startWorkflow when the run state write fails after the claim", () => {

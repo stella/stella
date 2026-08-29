@@ -10,37 +10,13 @@ const openPlaybookRunMock = mock();
 const resolveApplicablePlaybooksMock = mock();
 const startWorkflowMock = mock();
 
-const realApprovedVersions =
-  await import("@/api/lib/document-review/approved-playbook-versions");
-const realOpenPlaybookRun =
-  await import("@/api/lib/document-review/open-playbook-run");
-const realRoutePlaybooks = await import("@/api/lib/workflow/route-playbooks");
-const realWorkflowQueue = await import("@/api/lib/workflow-queue");
-
-void mock.module(
-  "@/api/lib/document-review/approved-playbook-versions",
-  () => ({
-    ...realApprovedVersions,
-    loadLatestApprovedVersions: loadLatestApprovedVersionsMock,
-  }),
-);
-
-void mock.module("@/api/lib/document-review/open-playbook-run", () => ({
-  ...realOpenPlaybookRun,
+const { createAutoRunPlaybooks } = await import("./auto-run");
+const autoRunPlaybooks = createAutoRunPlaybooks({
+  loadLatestApprovedVersions: loadLatestApprovedVersionsMock,
   openPlaybookRun: openPlaybookRunMock,
-}));
-
-void mock.module("@/api/lib/workflow/route-playbooks", () => ({
-  ...realRoutePlaybooks,
   resolveApplicablePlaybooks: resolveApplicablePlaybooksMock,
-}));
-
-void mock.module("@/api/lib/workflow-queue", () => ({
-  ...realWorkflowQueue,
   startWorkflow: startWorkflowMock,
-}));
-
-const { default: autoRunPlaybooks } = await import("./auto-run");
+});
 
 type AutoRunCtx = Parameters<typeof autoRunPlaybooks.handler>[0];
 

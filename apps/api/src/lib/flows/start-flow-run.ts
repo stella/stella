@@ -58,6 +58,7 @@ export type StartFlowRunOptions = {
   admit?: (definition: {
     steps: FlowStep[];
   }) => Promise<HandlerError<402 | 428 | 500> | null>;
+  enqueueStep?: typeof enqueueFlowStep;
 };
 
 export type StartFlowRunResult = {
@@ -135,6 +136,7 @@ export const startFlowRun = async ({
   inputEntityIds,
   enqueueDelayMs,
   admit,
+  enqueueStep = enqueueFlowStep,
 }: StartFlowRunOptions): Promise<
   Result<StartFlowRunResult, FlowRunStartError | SafeDbError>
 > =>
@@ -203,7 +205,7 @@ export const startFlowRun = async ({
     yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await enqueueFlowStep({
+          await enqueueStep({
             runId,
             stepIndex: 0,
             ...(enqueueDelayMs !== undefined && { delayMs: enqueueDelayMs }),

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -8,8 +8,11 @@ import type {
   RunSubagentOptions,
   RunSubagentResult,
 } from "@/api/handlers/chat/subagent-runner";
-import * as realTanStackAiAgent from "@/api/handlers/chat/subagent-runner";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
+import {
+  createSpawnSubagentsTool,
+  resolveValidatedSubagentModelId,
+} from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
@@ -32,13 +35,10 @@ let runSubagentImpl: (
   usage: undefined,
 });
 
-void mock.module("@/api/handlers/chat/subagent-runner", () => ({
-  ...realTanStackAiAgent,
-  runSubagent: async (options: RunSubagentOptions) => {
-    runSubagentCalls.push(options);
-    return await runSubagentImpl(options);
-  },
-}));
+const runSubagentForTest = async (options: RunSubagentOptions) => {
+  runSubagentCalls.push(options);
+  return await runSubagentImpl(options);
+};
 
 type AssertUsageAvailableArgs = {
   organizationId: string;
@@ -53,21 +53,13 @@ let nextAssertUsageAvailableResult:
   available: 1000,
 };
 
-const realUsage = await import("@/api/lib/usage/usage-ledger");
-
-void mock.module("@/api/lib/usage/usage-ledger", () => ({
-  ...realUsage,
-  assertUsageAvailable: async ({
-    organizationId,
-    required,
-  }: AssertUsageAvailableArgs) => {
-    assertUsageAvailableCalls.push({ organizationId, required });
-    return nextAssertUsageAvailableResult;
-  },
-}));
-
-const { createSpawnSubagentsTool, resolveValidatedSubagentModelId } =
-  await import("@/api/handlers/chat/tools/spawn-subagents-tool");
+const assertUsageAvailableForTest = async ({
+  organizationId,
+  required,
+}: AssertUsageAvailableArgs) => {
+  assertUsageAvailableCalls.push({ organizationId, required });
+  return await Promise.resolve(nextAssertUsageAvailableResult);
+};
 
 describe("resolveValidatedSubagentModelId", () => {
   test("returns undefined when no override is supplied", () => {
@@ -173,6 +165,10 @@ const buildTool = () => {
     threadId,
     delegationDepth: 0,
     thirdPartyBoundary: rawBoundary,
+    dependencies: {
+      assertUsageAvailable: assertUsageAvailableForTest,
+      runSubagent: runSubagentForTest,
+    },
   });
   // SAFETY: test invokes the server tool's execute directly with a stub
   // call context, same pattern as template-tools.test.ts.

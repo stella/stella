@@ -8,6 +8,7 @@ import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -17,14 +18,14 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-const generateModule = await import("@/api/lib/tanstack-ai-generate");
 const generateTextMock = mock(async () => '"Title: Drafting an NDA"');
-void mock.module("@/api/lib/tanstack-ai-generate", () => ({
-  ...generateModule,
-  generateTanStackTextForRole: generateTextMock,
-}));
-
-const suggestThreadTitle = (await import("./suggest-thread-title")).default;
+// SAFETY: The test fake ignores request details and returns a fixture title.
+const generateTextForTest =
+  generateTextMock as typeof generateTanStackTextForRole;
+const { createSuggestThreadTitle } = await import("./suggest-thread-title");
+const suggestThreadTitle = createSuggestThreadTitle({
+  generateTextForRole: generateTextForTest,
+});
 type SuggestCtx = Parameters<typeof suggestThreadTitle.handler>[0];
 
 const orgAIConfig = {

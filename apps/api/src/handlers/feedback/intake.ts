@@ -96,11 +96,22 @@ export type PublicFeedbackBody = v.InferOutput<typeof publicFeedbackBodySchema>;
 type FeedbackSource = NonNullable<PublicFeedbackBody["source"]>;
 
 type IntakeDeps = {
+  email?: FeedbackEmailDependencies | undefined;
   guards?: FeedbackIntakeGuards;
   /** Delivery config; defaults to env. Present-but-undefined means "not configured". */
   emailTo?: string | undefined;
   skipRateLimit?: boolean | undefined;
 };
+
+type FeedbackEmailDependencies = {
+  isConfigured: typeof isTransactionalEmailConfigured;
+  send: typeof sendFeedbackEmail;
+};
+
+const defaultFeedbackEmailDependencies = {
+  isConfigured: isTransactionalEmailConfigured,
+  send: sendFeedbackEmail,
+} satisfies FeedbackEmailDependencies;
 
 type DeliveryOutcome = { ok: boolean; response: Response };
 
@@ -218,16 +229,18 @@ const deliverViaEmail = async ({
   source,
   title,
   to,
+  email,
 }: {
   composedBody: string;
   kind: PublicFeedbackBody["kind"];
   source: FeedbackSource | undefined;
   title: string;
   to: string;
+  email: FeedbackEmailDependencies;
 }): Promise<DeliveryOutcome> => {
   const sent = await Result.tryPromise({
     try: async () =>
-      await sendFeedbackEmail({
+      await email.send({
         to,
         kind,
         title,
@@ -263,15 +276,17 @@ const deliver = async ({
   kind,
   source,
   title,
+  email,
 }: {
   composedBody: string;
   emailTo: string | undefined;
   kind: PublicFeedbackBody["kind"];
   source: FeedbackSource | undefined;
   title: string;
+  email: FeedbackEmailDependencies;
 }): Promise<DeliveryOutcome> => {
   if (emailTo) {
-    if (!isTransactionalEmailConfigured()) {
+    if (!email.isConfigured()) {
       return {
         ok: false,
         response: errorResponse(
@@ -289,6 +304,7 @@ const deliver = async ({
       source,
       title,
       to: emailTo,
+      email,
     });
   }
 
@@ -368,6 +384,7 @@ export const receivePublicFeedback = async ({
     kind: body.kind,
     source: sanitizedSource,
     title: sanitizedTitle,
+    email: deps?.email ?? defaultFeedbackEmailDependencies,
   });
 
   // A failed delivery must not lock out a legitimate retry for the dedup window.

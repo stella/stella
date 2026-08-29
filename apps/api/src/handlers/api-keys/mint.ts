@@ -267,16 +267,18 @@ export type LoadedMachineApiKey = {
  * Every failure returns the same 404 so probing ids cannot distinguish a key in
  * another organization from one that does not exist.
  */
-export const loadOrganizationMachineApiKey = async ({
-  keyId,
-  organizationId,
-}: {
-  keyId: string;
-  organizationId: SafeId<"organization">;
-}): Promise<Result<LoadedMachineApiKey, HandlerError>> => {
+export const loadOrganizationMachineApiKey = async (
+  {
+    keyId,
+    organizationId,
+  }: {
+    keyId: string;
+    organizationId: SafeId<"organization">;
+  },
+  findKey: typeof findOrganizationMachineApiKey = findOrganizationMachineApiKey,
+): Promise<Result<LoadedMachineApiKey, HandlerError>> => {
   const found = await Result.tryPromise({
-    try: async () =>
-      await findOrganizationMachineApiKey({ keyId, organizationId }),
+    try: async () => await findKey({ keyId, organizationId }),
     catch: (error: unknown) => error,
   });
 
@@ -365,16 +367,22 @@ export const toMachineApiKeySummary = (
  * caller's headers instead would re-impose the plugin's caller-scoping and make
  * a colleague's key unrevokable.
  */
-export const disableMachineApiKey = async ({
-  keyId,
-  ownerUserId,
-}: {
-  keyId: string;
-  ownerUserId: string;
-}): Promise<Result<void, HandlerError>> => {
+export const disableMachineApiKey = async (
+  {
+    keyId,
+    ownerUserId,
+  }: {
+    keyId: string;
+    ownerUserId: string;
+  },
+  updateApiKey: (
+    ...args: Parameters<ReturnType<typeof getAuth>["api"]["updateApiKey"]>
+  ) => ReturnType<ReturnType<typeof getAuth>["api"]["updateApiKey"]> = getAuth()
+    .api.updateApiKey,
+): Promise<Result<void, HandlerError>> => {
   const updated = await Result.tryPromise({
     try: async () =>
-      await getAuth().api.updateApiKey({
+      await updateApiKey({
         body: {
           configId: MACHINE_API_KEY_CONFIG_ID,
           keyId,

@@ -502,7 +502,7 @@ const outputSchema = v.variant("success", [
   editWorkspaceDocumentAuthorNameRequiredSchema,
 ]);
 
-type CreateEditWorkspaceDocumentToolsProps = {
+export type CreateEditWorkspaceDocumentToolsProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -512,6 +512,9 @@ type CreateEditWorkspaceDocumentToolsProps = {
   recordAuditEvent: AuditRecorder;
   docxEditRepresentation: DocxEditRepresentation;
   expectedCurrentVersionId: SafeId<"entityVersion">;
+  createEntityVersionFromBuffer?: typeof createEntityVersionFromBuffer;
+  getScanWarnings?: typeof getScanWarnings;
+  scanFile?: typeof scanFile;
 };
 
 /**
@@ -541,6 +544,9 @@ export const createEditWorkspaceDocumentTools = ({
   recordAuditEvent,
   docxEditRepresentation,
   expectedCurrentVersionId,
+  createEntityVersionFromBuffer: createVersion = createEntityVersionFromBuffer,
+  getScanWarnings: getWarnings = getScanWarnings,
+  scanFile: scan = scanFile,
 }: CreateEditWorkspaceDocumentToolsProps) => ({
   [EDIT_WORKSPACE_DOCUMENT_TOOL_NAME]: toolDefinition({
     name: EDIT_WORKSPACE_DOCUMENT_TOOL_NAME,
@@ -635,7 +641,7 @@ export const createEditWorkspaceDocumentTools = ({
       });
     }
 
-    const scanResult = await scanFile({
+    const scanResult = await scan({
       buffer: new Uint8Array(applied.buffer),
       declaredMimeType: DOCX_MIME_TYPE,
       fileName: loaded.value.fileName,
@@ -656,11 +662,11 @@ export const createEditWorkspaceDocumentTools = ({
         message: `The edited document was rejected: ${reasons.join("; ")}`,
       });
     }
-    const scanWarnings = getScanWarnings(scanResult.value) ?? undefined;
+    const scanWarnings = getWarnings(scanResult.value) ?? undefined;
 
     const writeAttempt = await Result.tryPromise({
       try: async () =>
-        await createEntityVersionFromBuffer({
+        await createVersion({
           safeDb,
           organizationId,
           workspaceId,

@@ -50,7 +50,22 @@ export type RemoveWorkspaceMemberProps = {
   userId: SafeId<"user">;
   actorUserId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
+  dependencies?: RemoveWorkspaceMemberDependencies | undefined;
 };
+
+export type RemoveWorkspaceMemberDependencies = {
+  broadcastWorkspaceResourceSetUpdated: typeof broadcastWorkspaceResourceSetUpdated;
+  closeSessionConnections: typeof closeSessionConnections;
+  pushSessionEvent: typeof pushSessionEvent;
+  revokeWorkspaceSseAccess: typeof revokeWorkspaceSseAccess;
+};
+
+const defaultRemoveWorkspaceMemberDependencies = {
+  broadcastWorkspaceResourceSetUpdated,
+  closeSessionConnections,
+  pushSessionEvent,
+  revokeWorkspaceSseAccess,
+} satisfies RemoveWorkspaceMemberDependencies;
 
 // Shared remove-member logic reused by the HTTP handler and the
 // `manage_organization` MCP tool. Keeps the tx (last-member guard, lead
@@ -63,6 +78,7 @@ export const removeWorkspaceMemberHandler = async function* ({
   userId,
   actorUserId,
   recordAuditEvent,
+  dependencies = defaultRemoveWorkspaceMemberDependencies,
 }: RemoveWorkspaceMemberProps) {
   // Lock + delete in one transaction to prevent TOCTOU.
   // FOR UPDATE on the row select (not aggregate) locks
@@ -293,40 +309,49 @@ export const removeWorkspaceMemberHandler = async function* ({
     }),
   );
 
-  await revokeWorkspaceSseAccess(workspaceId, userId);
+  await dependencies.revokeWorkspaceSseAccess(workspaceId, userId);
 
   for (const sessionId of txResult.closedSessionIds) {
-    pushSessionEvent(sessionId, {
+    dependencies.pushSessionEvent(sessionId, {
       type: "session-closed",
       data: { reason: "released" },
     });
-    closeSessionConnections(sessionId);
+    dependencies.closeSessionConnections(sessionId);
   }
 
   if (txResult.closedSessionIds.length > 0) {
-    broadcastWorkspaceResourceSetUpdated(workspaceId, RESOURCE_TYPE.ENTITY);
+    dependencies.broadcastWorkspaceResourceSetUpdated(
+      workspaceId,
+      RESOURCE_TYPE.ENTITY,
+    );
   }
 
   return Result.ok({ id: txResult.id });
 };
 
-const removeWorkspaceMember = createSafeHandler(
-  config,
-  async function* ({
-    safeDb,
-    workspaceId,
-    params: { userId },
-    user,
-    recordAuditEvent,
-  }) {
-    return yield* removeWorkspaceMemberHandler({
+export const createRemoveWorkspaceMember = (
+  dependencies: RemoveWorkspaceMemberDependencies = defaultRemoveWorkspaceMemberDependencies,
+) =>
+  createSafeHandler(
+    config,
+    async function* ({
       safeDb,
       workspaceId,
-      userId: brandPersistedUserId(userId),
-      actorUserId: user.id,
+      params: { userId },
+      user,
       recordAuditEvent,
-    });
-  },
-);
+    }) {
+      return yield* removeWorkspaceMemberHandler({
+        safeDb,
+        workspaceId,
+        userId: brandPersistedUserId(userId),
+        actorUserId: user.id,
+        recordAuditEvent,
+        dependencies,
+      });
+    },
+  );
+
+const removeWorkspaceMember = createRemoveWorkspaceMember();
 
 export default removeWorkspaceMember;

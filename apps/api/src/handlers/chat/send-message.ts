@@ -199,6 +199,7 @@ import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
+import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import {
   requireTanStackAIAvailableForRole,
   validateTanStackDevModelOverride,
@@ -379,6 +380,7 @@ type ChatSendLifecycleOptions = {
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
+  rollbackSideEffects: typeof rollbackUnpersistedChatSideEffects;
 };
 
 /** Owns every resource that must be settled when a send stops before streaming. */
@@ -505,7 +507,7 @@ class ChatSendLifecycle {
       }
     }
     if (this.pendingSideEffects !== undefined) {
-      const rollbackResult = await rollbackUnpersistedChatSideEffects({
+      const rollbackResult = await this.options.rollbackSideEffects({
         recordAuditEvent: this.options.recordAuditEvent,
         safeDb: this.options.safeDb,
         threadId: this.options.threadId,
@@ -544,6 +546,7 @@ type AcceptIncomingTurnOptions = {
   userId: SafeId<"user">;
   validationThreadState: ThreadValidationState;
   workspaceId: SafeId<"workspace"> | null;
+  indexThread: typeof upsertChatThreadSearchDocument;
 };
 
 /** Persists the incoming message and establishes the turn's durable owner. */
@@ -561,6 +564,7 @@ const acceptIncomingTurn = async ({
   userId,
   validationThreadState,
   workspaceId,
+  indexThread,
 }: AcceptIncomingTurnOptions) =>
   await Result.gen(async function* () {
     const parsedMessage = parseMessage({
@@ -753,6 +757,7 @@ const acceptIncomingTurn = async ({
               observedDataWorkspaceIds: thread.data.dataWorkspaceIds,
               newDataWorkspaceIds: recomputedDataWorkspaceIds,
             },
+      indexThread,
     } as const;
 
     let turnExecution: ChatTurnExecution | null;
@@ -860,6 +865,10 @@ const acceptIncomingTurn = async ({
 type ChatToolsInput = Parameters<typeof getChatTools>[0];
 
 type PrepareValidatedIncomingMessageOptions = {
+  dependencies: {
+    loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
+    uploadMessageFiles: typeof uploadMessageFilesWithRollback;
+  };
   authorization: {
     accessibleWorkspaceIds: SafeId<"workspace">[];
     memberRole: { role: ChatToolsInput["memberRole"] };
@@ -905,6 +914,7 @@ type PrepareValidatedIncomingMessageOptions = {
 
 /** Validates the provider-facing message and adopts thread/file rollback ownership. */
 const prepareValidatedIncomingMessage = async ({
+  dependencies: { loadWebSearchProviders, uploadMessageFiles },
   authorization: {
     accessibleWorkspaceIds,
     memberRole,
@@ -952,8 +962,7 @@ const prepareValidatedIncomingMessage = async ({
     // Resolve the org's web-search providers once (BYOK key first,
     // platform env key as fallback) and reuse for both the validation
     // and streaming tool sets.
-    const webSearchProviders =
-      await loadWebSearchProvidersForOrg(organizationId);
+    const webSearchProviders = await loadWebSearchProviders(organizationId);
 
     if (isClientConnectionAborted()) {
       return Result.err(
@@ -1265,7 +1274,7 @@ const prepareValidatedIncomingMessage = async ({
       );
     }
 
-    const uploadResult = await uploadMessageFilesWithRollback({
+    const uploadResult = await uploadMessageFiles({
       message: stampedValidatedMessage.message,
       recordAuditEvent,
       safeDb,
@@ -1294,864 +1303,906 @@ const prepareValidatedIncomingMessage = async ({
     });
   });
 
-const sendMessage = createSafeRootHandler(
-  config,
-  async function* ({
-    body: transportBody,
-    createAuditRecorder,
-    getAccessibleWorkspaces,
-    getWorkspaceAccess,
-    memberRole,
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    pinServerValidatedWorkspaceId,
-    recordAuditEvent,
-    request,
-    safeDb,
-    scopedDb,
-    session,
-    usageLane,
-    user,
-  }) {
-    const body = transportBody.forwardedProps;
-    const parentRunId = "parentRunId" in body ? body.parentRunId : undefined;
-    const resume = "resume" in body ? body.resume : undefined;
-    const transportParentRunId =
-      "parentRunId" in transportBody ? transportBody.parentRunId : undefined;
-    const transportResume =
-      "resume" in transportBody ? transportBody.resume : undefined;
-    const isClientConnectionAborted = () => request.signal.aborted;
+export type SendMessageDependencies = {
+  indexThread: typeof upsertChatThreadSearchDocument;
+  loadExternalMcpTools: typeof loadExternalMcpToolsForUser;
+  loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
+  rollbackSideEffects: typeof rollbackUnpersistedChatSideEffects;
+  streamResponse: typeof streamChat;
+  uploadMessageFiles: typeof uploadMessageFilesWithRollback;
+};
 
-    if (isClientConnectionAborted()) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Client disconnected before AI work started",
-        }),
-      );
-    }
+const SEND_MESSAGE_DEPENDENCIES: SendMessageDependencies = {
+  indexThread: upsertChatThreadSearchDocument,
+  loadExternalMcpTools: loadExternalMcpToolsForUser,
+  loadWebSearchProviders: loadWebSearchProvidersForOrg,
+  rollbackSideEffects: rollbackUnpersistedChatSideEffects,
+  streamResponse: streamChat,
+  uploadMessageFiles: uploadMessageFilesWithRollback,
+};
 
-    yield* requireTanStackAIAvailableForRole({
-      configStatus: orgAIConfigStatus,
-      orgConfig: orgAIConfig,
-      role: "chat",
-    });
-
-    const hasEnvelopeCorrelationMismatch = (): boolean =>
-      transportBody.threadId !== body.threadId ||
-      transportBody.runId !== body.runId ||
-      transportParentRunId !== parentRunId ||
-      !deepEquals(transportResume, resume) ||
-      !deepEquals(transportBody.data, body) ||
-      !transportBody.messages.some(
-        (message) =>
-          message.id === body.message.id && message.role === body.message.role,
-      );
-    if (hasEnvelopeCorrelationMismatch()) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "AG-UI envelope correlation does not match forwarded input",
-        }),
-      );
-    }
-
-    yield* assertDevModelOverride(body.devModelId, orgAIConfig);
-    if (parentRunId === body.runId) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "AG-UI child run must differ from its parent run",
-        }),
-      );
-    }
-    if (
-      resume !== undefined &&
-      new Set(resume.map(({ interruptId }) => interruptId)).size !==
-        resume.length
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "AG-UI interrupt resume contains duplicate ids",
-        }),
-      );
-    }
-    const externalMcpNullUnionStrategy = "json-schema";
-
-    const accessibleWorkspaces = yield* Result.await(
-      Result.tryPromise(async () => await getAccessibleWorkspaces()),
-    );
-    const accessibleWorkspaceIds = usableWorkspaceIds(accessibleWorkspaces);
-    // Real per-workspace statuses for the projected write tools' MCP context.
-    // The usable ID set includes archived workspaces, so the write handlers'
-    // `ensureActiveWorkspace` gate must see the true status (not a default) to
-    // keep archived matters read-only.
-    const workspaceStatusById = new Map<string, AccessibleWorkspace["status"]>(
-      accessibleWorkspaces.map((workspace) => [workspace.id, workspace.status]),
-    );
-    /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope performs targeted workspace authorization */
-    const scope = yield* resolveChatScope({
+export const createSendMessage = (
+  dependencies: SendMessageDependencies = SEND_MESSAGE_DEPENDENCIES,
+) =>
+  createSafeRootHandler(
+    config,
+    async function* ({
+      body: transportBody,
+      createAuditRecorder,
+      getAccessibleWorkspaces,
       getWorkspaceAccess,
-      workspaceId: body.workspaceId,
-    });
-    /* eslint-enable no-body-ownership-ids/no-body-ownership-ids */
+      memberRole,
+      orgAIConfig,
+      orgAIConfigStatus,
+      promptCachingEnabled,
+      pinServerValidatedWorkspaceId,
+      recordAuditEvent,
+      request,
+      safeDb,
+      scopedDb,
+      session,
+      usageLane,
+      user,
+    }) {
+      const body = transportBody.forwardedProps;
+      const parentRunId = "parentRunId" in body ? body.parentRunId : undefined;
+      const resume = "resume" in body ? body.resume : undefined;
+      const transportParentRunId =
+        "parentRunId" in transportBody ? transportBody.parentRunId : undefined;
+      const transportResume =
+        "resume" in transportBody ? transportBody.resume : undefined;
+      const isClientConnectionAborted = () => request.signal.aborted;
 
-    const workspaceId = scope.scope === "workspace" ? scope.workspaceId : null;
-    const orgSettingsForChat = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.organizationSettings.findFirst({
-          where: {
-            organizationId: { eq: session.activeOrganizationId },
-          },
-          columns: {
-            practiceJurisdictions: true,
-            nativeToolOverrides: true,
-          },
-        }),
-      ),
-    );
-    const disabledNativeToolSlugs = getDisabledNativeToolSlugs({
-      practiceJurisdictions: normalizeOptionalArray(
-        orgSettingsForChat?.practiceJurisdictions,
-      ),
-      nativeToolOverrides: orgSettingsForChat?.nativeToolOverrides ?? {},
-    });
+      if (isClientConnectionAborted()) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
 
-    // The body's contextMatterIds is the AI's "draw-from" set —
-    // distinct from the chat's own scope (workspaceId/global). It
-    // may include the chat's matter plus any others the user wants
-    // in scope, validated against the user's accessible matters.
-    // Empty (or omitted) means "no matters pinned" — the AI is
-    // expected to discover relevant matters via the readonly
-    // Stella API instead of being preloaded with thousands of IDs.
-    const requestedContextMatterIds = normalizeOptionalArray(
-      body.contextMatterIds,
-    );
-    const accessibleSet = new Set<string>(accessibleWorkspaceIds);
-    if (!requestedContextMatterIds.every((id) => accessibleSet.has(id))) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "contextMatterIds includes inaccessible matter",
+      yield* requireTanStackAIAvailableForRole({
+        configStatus: orgAIConfigStatus,
+        orgConfig: orgAIConfig,
+        role: "chat",
+      });
+
+      const hasEnvelopeCorrelationMismatch = (): boolean =>
+        transportBody.threadId !== body.threadId ||
+        transportBody.runId !== body.runId ||
+        transportParentRunId !== parentRunId ||
+        !deepEquals(transportResume, resume) ||
+        !deepEquals(transportBody.data, body) ||
+        !transportBody.messages.some(
+          (message) =>
+            message.id === body.message.id &&
+            message.role === body.message.role,
+        );
+      if (hasEnvelopeCorrelationMismatch()) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message:
+              "AG-UI envelope correlation does not match forwarded input",
+          }),
+        );
+      }
+
+      yield* assertDevModelOverride(body.devModelId, orgAIConfig);
+      if (parentRunId === body.runId) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "AG-UI child run must differ from its parent run",
+          }),
+        );
+      }
+      if (
+        resume !== undefined &&
+        new Set(resume.map(({ interruptId }) => interruptId)).size !==
+          resume.length
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "AG-UI interrupt resume contains duplicate ids",
+          }),
+        );
+      }
+      const externalMcpNullUnionStrategy = "json-schema";
+
+      const accessibleWorkspaces = yield* Result.await(
+        Result.tryPromise(async () => await getAccessibleWorkspaces()),
+      );
+      const accessibleWorkspaceIds = usableWorkspaceIds(accessibleWorkspaces);
+      // Real per-workspace statuses for the projected write tools' MCP context.
+      // The usable ID set includes archived workspaces, so the write handlers'
+      // `ensureActiveWorkspace` gate must see the true status (not a default) to
+      // keep archived matters read-only.
+      const workspaceStatusById = new Map<
+        string,
+        AccessibleWorkspace["status"]
+      >(
+        accessibleWorkspaces.map((workspace) => [
+          workspace.id,
+          workspace.status,
+        ]),
+      );
+      /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope performs targeted workspace authorization */
+      const scope = yield* resolveChatScope({
+        getWorkspaceAccess,
+        workspaceId: body.workspaceId,
+      });
+      /* eslint-enable no-body-ownership-ids/no-body-ownership-ids */
+
+      const workspaceId =
+        scope.scope === "workspace" ? scope.workspaceId : null;
+      const orgSettingsForChat = yield* Result.await(
+        safeDb((tx) =>
+          tx.query.organizationSettings.findFirst({
+            where: {
+              organizationId: { eq: session.activeOrganizationId },
+            },
+            columns: {
+              practiceJurisdictions: true,
+              nativeToolOverrides: true,
+            },
+          }),
+        ),
+      );
+      const disabledNativeToolSlugs = getDisabledNativeToolSlugs({
+        practiceJurisdictions: normalizeOptionalArray(
+          orgSettingsForChat?.practiceJurisdictions,
+        ),
+        nativeToolOverrides: orgSettingsForChat?.nativeToolOverrides ?? {},
+      });
+
+      // The body's contextMatterIds is the AI's "draw-from" set —
+      // distinct from the chat's own scope (workspaceId/global). It
+      // may include the chat's matter plus any others the user wants
+      // in scope, validated against the user's accessible matters.
+      // Empty (or omitted) means "no matters pinned" — the AI is
+      // expected to discover relevant matters via the readonly
+      // Stella API instead of being preloaded with thousands of IDs.
+      const requestedContextMatterIds = normalizeOptionalArray(
+        body.contextMatterIds,
+      );
+      const accessibleSet = new Set<string>(accessibleWorkspaceIds);
+      if (!requestedContextMatterIds.every((id) => accessibleSet.has(id))) {
+        return Result.err(
+          new HandlerError({
+            status: 403,
+            message: "contextMatterIds includes inaccessible matter",
+          }),
+        );
+      }
+
+      const refRegistry = createChatRefRegistry();
+      // Turn-scoped alongside the ref registry: records tool calls that failed
+      // with a server defect so every toolset built this turn refuses to
+      // re-execute the identical call (see `ChatToolDefectMemo`).
+      const toolDefectMemo = createChatToolDefectMemo();
+      // Narrower than the combined `apply-active-docx-edits` gate below:
+      // only the file overlay (`file-chat-overlay.tsx`) mounts the
+      // auto-run watcher that resolves the folio-agents `read_document` /
+      // `find_text` tools via `addToolResult`. Template Studio has no such
+      // watcher, so a tool call there would hang the session until reload.
+      // Computed once and reused for tool registration (validation +
+      // streaming) and for the matching prompt guidance below.
+      const hasActiveDocxFileClient =
+        body.activeFile?.supportsDocxEdits === true;
+      // Per-turn DOCX-edit review-mode setting: which of the two mutually
+      // exclusive tools (`apply-active-docx-edits` manual /
+      // `edit_workspace_document` auto) `getChatTools` registers, and (for
+      // auto) which redline representation it applies with. Resolved once
+      // and reused for both the validation and streaming tool sets below,
+      // matching every other per-turn setting on this path.
+      const editApplyMode = body.editApplyMode ?? DEFAULT_CHAT_EDIT_APPLY_MODE;
+      const docxEditRepresentation =
+        body.docxEditRepresentation ?? DEFAULT_DOCX_EDIT_REPRESENTATION;
+      const activeFileEntity =
+        body.activeFile?.supportsDocxEdits === true && workspaceId !== null
+          ? yield* Result.await(
+              safeDb((tx) =>
+                tx.query.entities.findFirst({
+                  where: {
+                    id: { eq: body.activeFile?.entityId },
+                    workspaceId: { eq: workspaceId },
+                  },
+                  columns: { currentVersionId: true },
+                }),
+              ),
+            )
+          : undefined;
+      // Server-authoritative version binding for approval-gated automatic DOCX
+      // edits. The model must echo this id in the tool input; a later approval
+      // request rebuilds the schema from the then-current version, so an old
+      // pending call fails validation instead of applying to a newer document.
+      const activeFileForTools =
+        body.activeFile === undefined
+          ? undefined
+          : {
+              ...body.activeFile,
+              ...(activeFileEntity?.currentVersionId === null ||
+              activeFileEntity?.currentVersionId === undefined
+                ? {}
+                : { currentVersionId: activeFileEntity.currentVersionId }),
+            };
+      const validationThreadState = yield* Result.await(
+        readThreadValidationState({
+          messageId: body.message.id,
+          organizationId: session.activeOrganizationId,
+          safeDb,
+          threadId: body.threadId,
+          userId: user.id,
+          workspaceId,
         }),
       );
-    }
-
-    const refRegistry = createChatRefRegistry();
-    // Turn-scoped alongside the ref registry: records tool calls that failed
-    // with a server defect so every toolset built this turn refuses to
-    // re-execute the identical call (see `ChatToolDefectMemo`).
-    const toolDefectMemo = createChatToolDefectMemo();
-    // Narrower than the combined `apply-active-docx-edits` gate below:
-    // only the file overlay (`file-chat-overlay.tsx`) mounts the
-    // auto-run watcher that resolves the folio-agents `read_document` /
-    // `find_text` tools via `addToolResult`. Template Studio has no such
-    // watcher, so a tool call there would hang the session until reload.
-    // Computed once and reused for tool registration (validation +
-    // streaming) and for the matching prompt guidance below.
-    const hasActiveDocxFileClient = body.activeFile?.supportsDocxEdits === true;
-    // Per-turn DOCX-edit review-mode setting: which of the two mutually
-    // exclusive tools (`apply-active-docx-edits` manual /
-    // `edit_workspace_document` auto) `getChatTools` registers, and (for
-    // auto) which redline representation it applies with. Resolved once
-    // and reused for both the validation and streaming tool sets below,
-    // matching every other per-turn setting on this path.
-    const editApplyMode = body.editApplyMode ?? DEFAULT_CHAT_EDIT_APPLY_MODE;
-    const docxEditRepresentation =
-      body.docxEditRepresentation ?? DEFAULT_DOCX_EDIT_REPRESENTATION;
-    const activeFileEntity =
-      body.activeFile?.supportsDocxEdits === true && workspaceId !== null
-        ? yield* Result.await(
-            safeDb((tx) =>
-              tx.query.entities.findFirst({
-                where: {
-                  id: { eq: body.activeFile?.entityId },
-                  workspaceId: { eq: workspaceId },
-                },
-                columns: { currentVersionId: true },
-              }),
-            ),
-          )
-        : undefined;
-    // Server-authoritative version binding for approval-gated automatic DOCX
-    // edits. The model must echo this id in the tool input; a later approval
-    // request rebuilds the schema from the then-current version, so an old
-    // pending call fails validation instead of applying to a newer document.
-    const activeFileForTools =
-      body.activeFile === undefined
-        ? undefined
-        : {
-            ...body.activeFile,
-            ...(activeFileEntity?.currentVersionId === null ||
-            activeFileEntity?.currentVersionId === undefined
-              ? {}
-              : { currentVersionId: activeFileEntity.currentVersionId }),
-          };
-    const validationThreadState = yield* Result.await(
-      readThreadValidationState({
-        messageId: body.message.id,
-        organizationId: session.activeOrganizationId,
-        safeDb,
-        threadId: body.threadId,
-        userId: user.id,
-        workspaceId,
-      }),
-    );
-    const activeDraftContext = yield* Result.await(
-      validateActiveDraftContext({
-        activeDraft: body.activeDraft,
-        organizationId: session.activeOrganizationId,
-        safeDb,
-        userId: user.id,
-      }),
-    );
-    const validationActiveSkillContext = yield* Result.await(
-      resolveActiveChatSkillContext({
-        activeSkill: body.activeSkill,
-        memberRole,
-        organizationId: session.activeOrganizationId,
-        safeDb,
-        userId: user.id,
-      }),
-    );
-    // Lazy and memoized: connector discovery only runs once some caller
-    // actually needs the tools (validation only needs them when
-    // `messageNeedsExternalMcpValidation` is true; the streaming pass
-    // always needs them), and at most once per send no matter how many
-    // callers ask — `createLazyExternalMcpToolsLoader` caches the first
-    // call's promise, so a validation-triggered load is reused by the
-    // streaming pass instead of running discovery twice.
-    // The lifecycle owner tracks whether closing loaded connectors passed to
-    // the streaming response, so every earlier exit still closes them once.
-    const externalMcpToolsLoader = createLazyExternalMcpToolsLoader(
-      async () =>
-        await loadExternalMcpToolsForUser({
-          nullUnionStrategy: externalMcpNullUnionStrategy,
+      const activeDraftContext = yield* Result.await(
+        validateActiveDraftContext({
+          activeDraft: body.activeDraft,
           organizationId: session.activeOrganizationId,
           safeDb,
           userId: user.id,
         }),
-    );
-    const lifecycle = new ChatSendLifecycle({
-      externalMcpToolsLoader,
-      recordAuditEvent,
-      safeDb,
-      threadId: body.threadId,
-      userId: user.id,
-      workspaceId,
-    });
-
-    // The try/finally starts immediately after the loader is constructed
-    // (rather than just around the streaming pass) so that a throw from
-    // any of the awaited steps below — web-search provider load,
-    // tool-set construction, message validation — still closes
-    // `externalMcpToolsLoader` (a no-op if nothing was ever loaded)
-    // instead of leaking MCP clients. The streaming pass takes over connector
-    // ownership once it starts consuming the clients; until then this
-    // `finally` is the sole owner. `Result.gen`'s `yield*` short-circuit resumes the
-    // generator via `.return()`, which unwinds this `finally` like a normal
-    // early `return` would.
-    try {
-      const preparedIncomingMessageResult =
-        await prepareValidatedIncomingMessage({
-          authorization: {
-            accessibleWorkspaceIds,
-            memberRole,
-            pinServerValidatedWorkspaceId,
-            requestedContextMatterIds,
-            workspaceStatusById,
-          },
-          lifecycle,
-          persistence: { recordAuditEvent, safeDb, scopedDb },
-          prerequisites: {
-            activeDraftContext,
-            activeFileForTools,
-            validationThreadState,
-          },
-          request: {
-            body,
-            isClientConnectionAborted,
+      );
+      const validationActiveSkillContext = yield* Result.await(
+        resolveActiveChatSkillContext({
+          activeSkill: body.activeSkill,
+          memberRole,
+          organizationId: session.activeOrganizationId,
+          safeDb,
+          userId: user.id,
+        }),
+      );
+      // Lazy and memoized: connector discovery only runs once some caller
+      // actually needs the tools (validation only needs them when
+      // `messageNeedsExternalMcpValidation` is true; the streaming pass
+      // always needs them), and at most once per send no matter how many
+      // callers ask — `createLazyExternalMcpToolsLoader` caches the first
+      // call's promise, so a validation-triggered load is reused by the
+      // streaming pass instead of running discovery twice.
+      // The lifecycle owner tracks whether closing loaded connectors passed to
+      // the streaming response, so every earlier exit still closes them once.
+      const externalMcpToolsLoader = createLazyExternalMcpToolsLoader(
+        async () =>
+          await dependencies.loadExternalMcpTools({
+            nullUnionStrategy: externalMcpNullUnionStrategy,
             organizationId: session.activeOrganizationId,
-            resume,
+            safeDb,
             userId: user.id,
-            workspaceId,
-          },
-          tools: {
-            disabledNativeToolSlugs,
-            docxEditRepresentation,
-            editApplyMode,
-            externalMcpToolsLoader,
-            orgAIConfig,
-            refRegistry,
-            toolDefectMemo,
-            usageLane,
-            validationActiveSkillContext,
-          },
-        });
-      if (Result.isError(preparedIncomingMessageResult)) {
-        return Result.err(preparedIncomingMessageResult.error);
-      }
-      const {
-        chatModelOverride,
-        chatReasoningEffort,
-        effectiveContextMatterIds,
-        initialThreadTitle,
-        thirdPartyBoundary,
-        thread,
-        turnLane,
-        uploadedMessage,
-        webSearchProviders,
-      } = preparedIncomingMessageResult.value;
-
-      const acceptedTurnResult = await acceptIncomingTurn({
-        accessibleSet,
-        accessibleWorkspaceIds,
-        body,
-        effectiveContextMatterIds,
-        lifecycle,
-        organizationId: session.activeOrganizationId,
+          }),
+      );
+      const lifecycle = new ChatSendLifecycle({
+        externalMcpToolsLoader,
         recordAuditEvent,
         safeDb,
-        thread,
-        uploadedMessage,
-        userId: user.id,
-        validationThreadState,
-        workspaceId,
-      });
-      if (Result.isError(acceptedTurnResult)) {
-        return Result.err(acceptedTurnResult.error);
-      }
-      const {
-        dataScopeAfterIncomingMessage,
-        deleteMessageIdsBeforeLatest,
-        latestMessagePlan,
-        owningAssistantMessage,
-        parsedMessage,
-        replayTargetMessageId,
-        sandboxRun,
-        toolWorkspaceIds,
-        turnExecution,
-      } = acceptedTurnResult.value;
-
-      // The incoming message is durable now, so a disconnect must not run the
-      // pre-persistence rollback (which would delete files referenced by that
-      // message). It should still stop before connector discovery and any
-      // metered provider work.
-      if (isClientConnectionAborted()) {
-        yield* Result.await(lifecycle.interruptCurrentTurn());
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Client disconnected before stream started",
-          }),
-        );
-      }
-
-      const messagesForContextInput = await selectMessagesForContextInput({
-        messages: latestMessagePlan.messages,
-        safeDb,
-        skipCheckpoint: replayTargetMessageId !== undefined,
         threadId: body.threadId,
-      });
-
-      // Compaction can issue a metered provider request. The turn was claimed
-      // above, so a concurrent send is rejected before either request starts
-      // this work. Its terminal state remains explicit on every preflight exit.
-      const createMeteredAIAbortSignal = () =>
-        AbortSignal.timeout(CHAT_METERED_PROVIDER_TIMEOUT_MS);
-      if (isClientConnectionAborted()) {
-        yield* Result.await(lifecycle.interruptCurrentTurn());
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Client disconnected before AI work started",
-          }),
-        );
-      }
-
-      const messagesForContextResult = await compactMessagesForContext({
-        abortSignal: createMeteredAIAbortSignal(),
-        boundary: thirdPartyBoundary,
-        chatModelOverride,
-        messages: messagesForContextInput,
-        organizationId: session.activeOrganizationId,
-        orgAIConfig,
-        reasoningEffort: chatReasoningEffort,
-        safeDb,
-        tenantWorkspaceIds: accessibleWorkspaceIds,
-        threadId: body.threadId,
-        usageLane: turnLane.lane,
         userId: user.id,
         workspaceId,
+        rollbackSideEffects: dependencies.rollbackSideEffects,
       });
-      if (Result.isError(messagesForContextResult)) {
-        await lifecycle.failCurrentTurn("provider-error", true);
-        return Result.err(messagesForContextResult.error);
-      }
 
-      if (isClientConnectionAborted()) {
-        yield* Result.await(lifecycle.interruptCurrentTurn());
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Client disconnected before AI work started",
-          }),
-        );
-      }
-
-      const registeredDocxEditMode = resolveRegisteredDocxEditMode({
-        activeFile: activeFileForTools,
-        editApplyMode,
-        hasActiveDocxEditClient:
-          hasActiveDocxFileClient ||
-          body.activeDraft !== undefined ||
-          body.activeTemplate !== undefined,
-        memberRole: memberRole.role,
-        recordAuditEventAvailable: true,
-        requestWorkspaceId: workspaceId,
-        toolWorkspaceIds,
-        workspaceStatusById,
-      });
-      const chatContextResult = await prepareChatContext({
-        activeDecision: body.activeDecision,
-        activeDraft: body.activeDraft,
-        activeExternal: body.activeExternal,
-        activeFile: body.activeFile,
-        activeSkill: body.activeSkill,
-        activeTemplate: body.activeTemplate,
-        contextMatterIds: effectiveContextMatterIds,
-        memberRole,
-        latestMentions: parsedMessage.mentions,
-        latestUserMessageId: parsedMessage.message.id,
-        messageWindow: messagesForContextResult.value,
-        organizationId: session.activeOrganizationId,
-        safeDb,
-        sendMode: body.sendMode,
-        toolAvailability: {
-          docxEditMode: registeredDocxEditMode,
-          templateAuthoring: areTemplateAuthoringToolsRegistered(
-            memberRole.role,
-          ),
-          webResearch: areWebResearchToolsRegistered({
-            webSearchEnabled: thread.data.webSearchEnabled,
-            webSearchProviders,
-            disabledNativeToolSlugs,
-          }),
-          folioAgentDocTools: hasActiveDocxFileClient,
-          subagents: areSubagentToolsAvailableForTurn(body.toolScope),
-        },
-        userContext: body.userContext,
-        userId: user.id,
-        workspaceId,
-        refRegistry,
-      });
-      if (Result.isError(chatContextResult)) {
-        await lifecycle.failCurrentTurn(
-          "internal",
-          !(chatContextResult.error instanceof HandlerError) ||
-            chatContextResult.error.status >= 500,
-        );
-        return Result.err(chatContextResult.error);
-      }
-      const chatContext = chatContextResult.value;
-
-      if (isClientConnectionAborted()) {
-        yield* Result.await(lifecycle.interruptCurrentTurn());
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Client disconnected before AI work started",
-          }),
-        );
-      }
-
-      // Normal streaming needs external MCP tools. Agent runs reach tools only
-      // through their workspace-scoped Stella MCP binding, so loading per-user
-      // external connectors here would create unused clients.
-      const externalMcpToolsResult = shouldLoadExternalMcpToolsForStreaming(
-        body.runMode,
-      )
-        ? await Result.tryPromise({
-            try: async () => await externalMcpToolsLoader.getExternalMcpTools(),
-            catch: (cause) =>
-              new HandlerError({
-                status: 500,
-                message: "Failed to discover chat connectors",
-                cause,
-              }),
-          })
-        : Result.ok(undefined);
-      if (Result.isError(externalMcpToolsResult)) {
-        await lifecycle.failCurrentTurn("connector-discovery", true);
-        return Result.err(externalMcpToolsResult.error);
-      }
-      const externalMcpTools = externalMcpToolsResult.value;
-
-      // Streaming tools mirror the surface the user is on: only the
-      // DOCX file-overlay client knows how to satisfy
-      // apply-active-docx-edits (it queues into the review store and
-      // sends the output back via TanStack ChatClient.addToolResult).
-      // PDF/file overlays
-      // still send active-file context, but they must not expose the
-      // DOCX edit tool or the model can chase an impossible path. The
-      // folio-agents `read_document`/`find_text` tools are narrower
-      // still — `hasActiveDocxFileClient` only, since Template Studio
-      // mounts no watcher to resolve them.
-      const chatTools = getChatTools({
-        createAIAbortSignal: createMeteredAIAbortSignal,
-        organizationId: session.activeOrganizationId,
-        memberRole: memberRole.role,
-        orgAIConfig,
-        promptCachingEnabled,
-        usageLane: turnLane.lane,
-        pinServerValidatedWorkspaceId,
-        requestWorkspaceId: workspaceId,
-        refRegistry,
-        toolDefectMemo,
-        safeDb,
-        scopedDb,
-        threadId: body.threadId,
-        workspaceId,
-        thirdPartyBoundary,
-        excludedChatHistoryMessageIds: deleteMessageIdsBeforeLatest,
-        userId: user.id,
-        toolWorkspaceIds,
-        activeFile: activeFileForTools,
-        hasActiveDocxEditClient:
-          hasActiveDocxFileClient ||
-          body.activeDraft !== undefined ||
-          body.activeTemplate !== undefined,
-        hasActiveDocxFileClient,
-        editApplyMode,
-        docxEditRepresentation,
-        webSearchEnabled: thread.data.webSearchEnabled,
-        webSearchProviders,
-        externalTools: externalMcpTools?.tools ?? {},
-        disabledNativeToolSlugs,
-        skillMetadata: chatContext.skillMetadata,
-        activeSkillContext: chatContext.activeSkillContext,
-        recordAuditEvent: createAuditRecorder({
-          execution: {
-            // Every tool that receives this recorder is classified as a
-            // mutation and executes only after the current user approves it.
-            approval: {
-              status: "approved",
+      // The try/finally starts immediately after the loader is constructed
+      // (rather than just around the streaming pass) so that a throw from
+      // any of the awaited steps below — web-search provider load,
+      // tool-set construction, message validation — still closes
+      // `externalMcpToolsLoader` (a no-op if nothing was ever loaded)
+      // instead of leaking MCP clients. The streaming pass takes over connector
+      // ownership once it starts consuming the clients; until then this
+      // `finally` is the sole owner. `Result.gen`'s `yield*` short-circuit resumes the
+      // generator via `.return()`, which unwinds this `finally` like a normal
+      // early `return` would.
+      try {
+        const preparedIncomingMessageResult =
+          await prepareValidatedIncomingMessage({
+            dependencies: {
+              loadWebSearchProviders: dependencies.loadWebSearchProviders,
+              uploadMessageFiles: dependencies.uploadMessageFiles,
+            },
+            authorization: {
+              accessibleWorkspaceIds,
+              memberRole,
+              pinServerValidatedWorkspaceId,
+              requestedContextMatterIds,
+              workspaceStatusById,
+            },
+            lifecycle,
+            persistence: { recordAuditEvent, safeDb, scopedDb },
+            prerequisites: {
+              activeDraftContext,
+              activeFileForTools,
+              validationThreadState,
+            },
+            request: {
+              body,
+              isClientConnectionAborted,
+              organizationId: session.activeOrganizationId,
+              resume,
               userId: user.id,
+              workspaceId,
             },
-            performer: {
-              type: "agent",
-              id: "stella-assistant",
-              name: "Stella AI",
+            tools: {
+              disabledNativeToolSlugs,
+              docxEditRepresentation,
+              editApplyMode,
+              externalMcpToolsLoader,
+              orgAIConfig,
+              refRegistry,
+              toolDefectMemo,
+              usageLane,
+              validationActiveSkillContext,
             },
-            trigger: {
-              type: "user_dispatch",
-              userId: user.id,
-              source: "chat",
-              sourceId: body.threadId,
-            },
-            runId: parsedMessage.message.id,
+          });
+        if (Result.isError(preparedIncomingMessageResult)) {
+          return Result.err(preparedIncomingMessageResult.error);
+        }
+        const {
+          chatModelOverride,
+          chatReasoningEffort,
+          effectiveContextMatterIds,
+          initialThreadTitle,
+          thirdPartyBoundary,
+          thread,
+          turnLane,
+          uploadedMessage,
+          webSearchProviders,
+        } = preparedIncomingMessageResult.value;
+
+        const acceptedTurnResult = await acceptIncomingTurn({
+          accessibleSet,
+          accessibleWorkspaceIds,
+          body,
+          effectiveContextMatterIds,
+          lifecycle,
+          organizationId: session.activeOrganizationId,
+          recordAuditEvent,
+          safeDb,
+          thread,
+          uploadedMessage,
+          userId: user.id,
+          validationThreadState,
+          workspaceId,
+          indexThread: dependencies.indexThread,
+        });
+        if (Result.isError(acceptedTurnResult)) {
+          return Result.err(acceptedTurnResult.error);
+        }
+        const {
+          dataScopeAfterIncomingMessage,
+          deleteMessageIdsBeforeLatest,
+          latestMessagePlan,
+          owningAssistantMessage,
+          parsedMessage,
+          replayTargetMessageId,
+          sandboxRun,
+          toolWorkspaceIds,
+          turnExecution,
+        } = acceptedTurnResult.value;
+
+        // The incoming message is durable now, so a disconnect must not run the
+        // pre-persistence rollback (which would delete files referenced by that
+        // message). It should still stop before connector discovery and any
+        // metered provider work.
+        if (isClientConnectionAborted()) {
+          yield* Result.await(lifecycle.interruptCurrentTurn());
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Client disconnected before stream started",
+            }),
+          );
+        }
+
+        const messagesForContextInput = await selectMessagesForContextInput({
+          messages: latestMessagePlan.messages,
+          safeDb,
+          skipCheckpoint: replayTargetMessageId !== undefined,
+          threadId: body.threadId,
+        });
+
+        // Compaction can issue a metered provider request. The turn was claimed
+        // above, so a concurrent send is rejected before either request starts
+        // this work. Its terminal state remains explicit on every preflight exit.
+        const createMeteredAIAbortSignal = () =>
+          AbortSignal.timeout(CHAT_METERED_PROVIDER_TIMEOUT_MS);
+        if (isClientConnectionAborted()) {
+          yield* Result.await(lifecycle.interruptCurrentTurn());
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Client disconnected before AI work started",
+            }),
+          );
+        }
+
+        const messagesForContextResult = await compactMessagesForContext({
+          abortSignal: createMeteredAIAbortSignal(),
+          boundary: thirdPartyBoundary,
+          chatModelOverride,
+          messages: messagesForContextInput,
+          organizationId: session.activeOrganizationId,
+          orgAIConfig,
+          reasoningEffort: chatReasoningEffort,
+          safeDb,
+          tenantWorkspaceIds: accessibleWorkspaceIds,
+          threadId: body.threadId,
+          usageLane: turnLane.lane,
+          userId: user.id,
+          workspaceId,
+        });
+        if (Result.isError(messagesForContextResult)) {
+          await lifecycle.failCurrentTurn("provider-error", true);
+          return Result.err(messagesForContextResult.error);
+        }
+
+        if (isClientConnectionAborted()) {
+          yield* Result.await(lifecycle.interruptCurrentTurn());
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Client disconnected before AI work started",
+            }),
+          );
+        }
+
+        const registeredDocxEditMode = resolveRegisteredDocxEditMode({
+          activeFile: activeFileForTools,
+          editApplyMode,
+          hasActiveDocxEditClient:
+            hasActiveDocxFileClient ||
+            body.activeDraft !== undefined ||
+            body.activeTemplate !== undefined,
+          memberRole: memberRole.role,
+          recordAuditEventAvailable: true,
+          requestWorkspaceId: workspaceId,
+          toolWorkspaceIds,
+          workspaceStatusById,
+        });
+        const chatContextResult = await prepareChatContext({
+          activeDecision: body.activeDecision,
+          activeDraft: body.activeDraft,
+          activeExternal: body.activeExternal,
+          activeFile: body.activeFile,
+          activeSkill: body.activeSkill,
+          activeTemplate: body.activeTemplate,
+          contextMatterIds: effectiveContextMatterIds,
+          memberRole,
+          latestMentions: parsedMessage.mentions,
+          latestUserMessageId: parsedMessage.message.id,
+          messageWindow: messagesForContextResult.value,
+          organizationId: session.activeOrganizationId,
+          safeDb,
+          sendMode: body.sendMode,
+          toolAvailability: {
+            docxEditMode: registeredDocxEditMode,
+            templateAuthoring: areTemplateAuthoringToolsRegistered(
+              memberRole.role,
+            ),
+            webResearch: areWebResearchToolsRegistered({
+              webSearchEnabled: thread.data.webSearchEnabled,
+              webSearchProviders,
+              disabledNativeToolSlugs,
+            }),
+            folioAgentDocTools: hasActiveDocxFileClient,
+            subagents: areSubagentToolsAvailableForTurn(body.toolScope),
           },
-          ...(workspaceId === null ? {} : { workspaceId }),
-        }),
-        resolveMemorySourceWorkspaceIds: () =>
-          resolveMemorySourceWorkspaceIds({
-            accessibleWorkspaceIds: accessibleSet,
-            contextMatterIds: effectiveContextMatterIds,
-            dataWorkspaceIds: dataScopeAfterIncomingMessage,
-            registeredWorkspaceIds: refRegistry.getRegisteredWorkspaceIds(),
-            workspaceId,
-          }),
-        workspaceStatusById,
-      });
-      // A named scope narrows the streaming turn to its server-defined
-      // allowlist (validation above stays broad so persisted tool parts
-      // keep validating). The scope name is schema-validated; unknown
-      // names never reach this point.
-      const streamingTools =
-        body.toolScope === undefined
-          ? chatTools
-          : restrictChatToolsToScope(chatTools, body.toolScope);
+          userContext: body.userContext,
+          userId: user.id,
+          workspaceId,
+          refRegistry,
+        });
+        if (Result.isError(chatContextResult)) {
+          await lifecycle.failCurrentTurn(
+            "internal",
+            !(chatContextResult.error instanceof HandlerError) ||
+              chatContextResult.error.status >= 500,
+          );
+          return Result.err(chatContextResult.error);
+        }
+        const chatContext = chatContextResult.value;
 
-      const externalMcpSystemHint = buildExternalMcpSystemHint(
-        externalMcpTools === undefined ? [] : externalMcpTools.connectors,
-      );
-      // The "safe" half is whatever the prompt builder declared
-      // safe. The anonymized-mode hint is a fixed assembler-owned
-      // addition, so callers cannot brand arbitrary strings as safe.
-      // The external MCP catalog is organization/user-configured text,
-      // so it rides with the dynamic suffix and crosses the boundary in
-      // anonymized mode.
-      const systemSafe =
-        body.sendMode === CHAT_SEND_MODE.anonymized
-          ? appendAnonymizedModeHintToChatSafePrompt(chatContext.systemSafe)
-          : chatContext.systemSafe;
-      const systemUntrusted = extendChatUntrustedPromptSuffix(
-        chatContext.systemUntrusted,
-        [externalMcpSystemHint],
-      );
+        if (isClientConnectionAborted()) {
+          yield* Result.await(lifecycle.interruptCurrentTurn());
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Client disconnected before AI work started",
+            }),
+          );
+        }
 
-      // A normal chat hands loaded clients to the stream. Agent runs leave
-      // this false so the outer finally closes any validation-only load.
-      lifecycle.handOffConnectors(externalMcpTools !== undefined);
-      const response = yield* Result.await(
-        Result.tryPromise({
-          try: async () => {
-            try {
-              if (isClientConnectionAborted()) {
-                throw new HandlerError({
-                  status: 400,
-                  message: "Client disconnected before stream started",
-                });
-              }
-
-              // Connector discovery and prompt assembly can take meaningful
-              // time. Renew immediately before provider dispatch so the
-              // durable owner covers the entire provider timeout, rather than
-              // only the earlier preflight window.
-              const leaseRenewal = await renewChatTurnExecutionLease({
-                execution: turnExecution,
-                safeDb,
-              });
-              if (Result.isError(leaseRenewal)) {
-                throw new HandlerError({
+        // Normal streaming needs external MCP tools. Agent runs reach tools only
+        // through their workspace-scoped Stella MCP binding, so loading per-user
+        // external connectors here would create unused clients.
+        const externalMcpToolsResult = shouldLoadExternalMcpToolsForStreaming(
+          body.runMode,
+        )
+          ? await Result.tryPromise({
+              try: async () =>
+                await externalMcpToolsLoader.getExternalMcpTools(),
+              catch: (cause) =>
+                new HandlerError({
                   status: 500,
-                  message: "Failed to renew chat execution lease",
-                  cause: leaseRenewal.error,
-                });
-              }
-              if (!leaseRenewal.value) {
-                throw new HandlerError({
-                  status: 409,
-                  message: "Chat turn lost its durable execution owner",
-                });
-              }
-
-              // Snapshot the refs the registry already holds before streaming.
-              // Prompt-time pins (`contextMatterIds` → `toMatterRef`) are
-              // resolved during prompt construction; folding the WHOLE registry
-              // into thread scope at onFinish would over-broaden it to pinned-
-              // but-never-read matters, which could make the thread unreadable
-              // after that matter's access is revoked even though its content was
-              // never persisted. Only the delta minted DURING the stream (a
-              // matter/entity a tool or subagent actually read) should widen
-              // `data_workspace_ids`.
-              const workspaceIdsBeforeStream = new Set(
-                refRegistry.getRegisteredWorkspaceIds(),
-              );
-
-              const chatResponse = await streamChat({
-                abortSignal: createMeteredAIAbortSignal(),
-                runId: body.runId,
-                ...(parentRunId === undefined ? {} : { parentRunId }),
-                ...(resume === undefined ? {} : { resume }),
-                messages: chatContext.hydratedMessages,
-                latestMessageId: parsedMessage.message.id,
-                ...(owningAssistantMessage === undefined
-                  ? {}
-                  : { owningAssistantMessageId: owningAssistantMessage.id }),
-                onFinish: async ({ outcome, responseMessage }) => {
-                  const validatedToolParts = validateToolCallParts({
-                    allowPartialInput: outcome.type === "interrupted",
-                    message: responseMessage,
-                    tools: streamingTools,
-                  });
-                  if (Result.isError(validatedToolParts)) {
-                    throw new HandlerError({
-                      status: 500,
-                      message: "Generated chat tool parts are invalid",
-                      cause: validatedToolParts.error,
-                    });
-                  }
-                  const canonicalResponseMessage = toPersistableChatMessage({
-                    ...responseMessage,
-                    parts: validatedToolParts.value,
-                  });
-                  const resolved = resolveAssistantMessageRefs({
-                    accessibleWorkspaceIds: accessibleSet,
-                    messages: [canonicalResponseMessage],
-                    opaqueReadWorkspaceIds:
-                      body.runMode === CHAT_RUN_MODE.agent
-                        ? toolWorkspaceIds
-                        : [],
-                    refRegistry,
-                    workspaceIdsBeforeStream,
-                  });
-                  const resolvedResponseMessage = resolved.messages.at(0);
-                  if (!resolvedResponseMessage) {
-                    panic("Missing chat response message");
-                  }
-
-                  // Widen the thread's data scope to cover any
-                  // workspace-scoped content the assistant just
-                  // emitted (source-document parts from search and
-                  // workspace tools). Scope, message, and turn settlement are
-                  // written in one transaction below.
-                  //
-                  // If expansion fails (transient DB error, etc.), the whole
-                  // transaction fails. Storing workspace-
-                  // scoped content in `chat_messages` while the
-                  // owning thread's `data_workspace_ids` stays stale
-                  // would leave the new content readable after the
-                  // user loses access to those workspaces — the same
-                  // class of leak this whole change exists to close.
-                  //
-                  const persistResult = await finalizeAssistantTurn({
-                    acceptedSendMode: body.sendMode,
-                    dataScopeExpansion: {
-                      newWorkspaceIds: resolved.workspaceIds,
-                    },
-                    existingIds: latestMessagePlan.existingIds,
-                    execution: turnExecution,
-                    outcome,
-                    recordAuditEvent,
-                    responseMessage: resolvedResponseMessage,
-                    safeDb,
-                    threadId: body.threadId,
-                    userId: user.id,
-                    workspaceId,
-                  });
-
-                  if (Result.isError(persistResult)) {
-                    captureError(persistResult.error, {
-                      threadId: body.threadId,
-                    });
-                    await lifecycle.failCurrentTurn("persistence", true);
-                    throw new HandlerError({
-                      status: 500,
-                      message: "Failed to persist assistant turn",
-                      cause: persistResult.error,
-                    });
-                  } else {
-                    const { persistencePlan } = persistResult.value;
-                    const messagesAfterAssistantPersist =
-                      applyAssistantPersistencePlan({
-                        messages: latestMessagePlan.messages,
-                        persistencePlan,
-                      });
-                    if (
-                      outcome.type === "completed" &&
-                      messagesAfterAssistantPersist !== null &&
-                      body.sendMode !== CHAT_SEND_MODE.anonymized
-                    ) {
-                      await markChatCompactionDue({
-                        chatModelOverride,
-                        messages: messagesAfterAssistantPersist,
-                        organizationId: session.activeOrganizationId,
-                        orgAIConfig,
-                        reasoningEffort: chatReasoningEffort,
-                        safeDb,
-                        threadId: body.threadId,
-                      });
-                    }
-
-                    if (
-                      outcome.type === "completed" &&
-                      thread.type === "created" &&
-                      body.sendMode !== CHAT_SEND_MODE.anonymized
-                    ) {
-                      detached(
-                        generateThreadTitle({
-                          initialTitle: initialThreadTitle,
-                          messages: [
-                            parsedMessage.message,
-                            resolvedResponseMessage,
-                          ],
-                          organizationId: session.activeOrganizationId,
-                          orgAIConfig,
-                          promptCachingEnabled,
-                          recordAuditEvent,
-                          safeDb,
-                          threadId: body.threadId,
-                          threadWorkspaceId: workspaceId,
-                          userId: user.id,
-                        }),
-                        "send-message.generate-thread-title",
-                      );
-                    }
-                  }
-                },
-                orgAIConfig,
-                organizationId: session.activeOrganizationId,
-                devModelId: chatModelOverride,
-                reasoningEffort: chatReasoningEffort,
-                promptCacheKey: chatContext.promptCacheKey,
-                promptCachingEnabled,
-                runMode: body.runMode,
-                sandboxRun,
-                usageLane: turnLane.lane,
-                resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
-                resolveAssistantToolInputRefs: ({ input, toolName }) =>
-                  resolveRegistryToolInputRefs({
-                    input,
-                    refRegistry,
-                    toolName,
-                  }),
-                resolveAssistantToolOutputRefs: ({ output, toolName }) =>
-                  resolveRegistryToolOutputRefs({
-                    output,
-                    refRegistry,
-                    toolName,
-                  }),
-                resolveAssistantValueRefs:
-                  refRegistry.resolveAssistantValueRefs,
-                safeDb,
-                tenantWorkspaceIds: accessibleWorkspaceIds,
-                thirdPartyBoundary,
-                threadId: body.threadId,
-                tools: streamingTools,
-                externalMcpToolSource: externalMcpTools?.source,
-                systemSafe,
-                systemUntrusted,
-                userId: user.id,
-                workspaceId,
-              });
-
-              if (
-                externalMcpTools !== undefined &&
-                !isChatStreamResponse(chatResponse)
-              ) {
-                await externalMcpTools.close();
-                // streamChat can reject before it creates an SSE stream (for
-                // example an anonymization-boundary or attachment-modality
-                // refusal). No terminal middleware hook runs in that branch,
-                // so settle the claimed turn here instead of leaving it
-                // indefinitely running.
-                await lifecycle.failCurrentTurn(
-                  "internal",
-                  chatResponse.status >= 500,
-                );
-              } else {
-                lifecycle.markStreaming();
-              }
-
-              return chatResponse;
-            } catch (error) {
-              if (externalMcpTools !== undefined) {
-                await externalMcpTools.close();
-              }
-              await lifecycle.failCurrentTurn("internal", true);
-              throw error;
-            }
-          },
-          catch: (cause) =>
-            cause instanceof HandlerError
-              ? cause
-              : new HandlerError({
-                  status: 500,
-                  message: "Failed to start chat response",
+                  message: "Failed to discover chat connectors",
                   cause,
                 }),
-        }),
-      );
+            })
+          : Result.ok(undefined);
+        if (Result.isError(externalMcpToolsResult)) {
+          await lifecycle.failCurrentTurn("connector-discovery", true);
+          return Result.err(externalMcpToolsResult.error);
+        }
+        const externalMcpTools = externalMcpToolsResult.value;
 
-      return Result.ok(response);
-    } finally {
-      await lifecycle.cleanup();
-    }
-  },
-);
+        // Streaming tools mirror the surface the user is on: only the
+        // DOCX file-overlay client knows how to satisfy
+        // apply-active-docx-edits (it queues into the review store and
+        // sends the output back via TanStack ChatClient.addToolResult).
+        // PDF/file overlays
+        // still send active-file context, but they must not expose the
+        // DOCX edit tool or the model can chase an impossible path. The
+        // folio-agents `read_document`/`find_text` tools are narrower
+        // still — `hasActiveDocxFileClient` only, since Template Studio
+        // mounts no watcher to resolve them.
+        const chatTools = getChatTools({
+          createAIAbortSignal: createMeteredAIAbortSignal,
+          organizationId: session.activeOrganizationId,
+          memberRole: memberRole.role,
+          orgAIConfig,
+          promptCachingEnabled,
+          usageLane: turnLane.lane,
+          pinServerValidatedWorkspaceId,
+          requestWorkspaceId: workspaceId,
+          refRegistry,
+          toolDefectMemo,
+          safeDb,
+          scopedDb,
+          threadId: body.threadId,
+          workspaceId,
+          thirdPartyBoundary,
+          excludedChatHistoryMessageIds: deleteMessageIdsBeforeLatest,
+          userId: user.id,
+          toolWorkspaceIds,
+          activeFile: activeFileForTools,
+          hasActiveDocxEditClient:
+            hasActiveDocxFileClient ||
+            body.activeDraft !== undefined ||
+            body.activeTemplate !== undefined,
+          hasActiveDocxFileClient,
+          editApplyMode,
+          docxEditRepresentation,
+          webSearchEnabled: thread.data.webSearchEnabled,
+          webSearchProviders,
+          externalTools: externalMcpTools?.tools ?? {},
+          disabledNativeToolSlugs,
+          skillMetadata: chatContext.skillMetadata,
+          activeSkillContext: chatContext.activeSkillContext,
+          recordAuditEvent: createAuditRecorder({
+            execution: {
+              // Every tool that receives this recorder is classified as a
+              // mutation and executes only after the current user approves it.
+              approval: {
+                status: "approved",
+                userId: user.id,
+              },
+              performer: {
+                type: "agent",
+                id: "stella-assistant",
+                name: "Stella AI",
+              },
+              trigger: {
+                type: "user_dispatch",
+                userId: user.id,
+                source: "chat",
+                sourceId: body.threadId,
+              },
+              runId: parsedMessage.message.id,
+            },
+            ...(workspaceId === null ? {} : { workspaceId }),
+          }),
+          resolveMemorySourceWorkspaceIds: () =>
+            resolveMemorySourceWorkspaceIds({
+              accessibleWorkspaceIds: accessibleSet,
+              contextMatterIds: effectiveContextMatterIds,
+              dataWorkspaceIds: dataScopeAfterIncomingMessage,
+              registeredWorkspaceIds: refRegistry.getRegisteredWorkspaceIds(),
+              workspaceId,
+            }),
+          workspaceStatusById,
+        });
+        // A named scope narrows the streaming turn to its server-defined
+        // allowlist (validation above stays broad so persisted tool parts
+        // keep validating). The scope name is schema-validated; unknown
+        // names never reach this point.
+        const streamingTools =
+          body.toolScope === undefined
+            ? chatTools
+            : restrictChatToolsToScope(chatTools, body.toolScope);
+
+        const externalMcpSystemHint = buildExternalMcpSystemHint(
+          externalMcpTools === undefined ? [] : externalMcpTools.connectors,
+        );
+        // The "safe" half is whatever the prompt builder declared
+        // safe. The anonymized-mode hint is a fixed assembler-owned
+        // addition, so callers cannot brand arbitrary strings as safe.
+        // The external MCP catalog is organization/user-configured text,
+        // so it rides with the dynamic suffix and crosses the boundary in
+        // anonymized mode.
+        const systemSafe =
+          body.sendMode === CHAT_SEND_MODE.anonymized
+            ? appendAnonymizedModeHintToChatSafePrompt(chatContext.systemSafe)
+            : chatContext.systemSafe;
+        const systemUntrusted = extendChatUntrustedPromptSuffix(
+          chatContext.systemUntrusted,
+          [externalMcpSystemHint],
+        );
+
+        // A normal chat hands loaded clients to the stream. Agent runs leave
+        // this false so the outer finally closes any validation-only load.
+        lifecycle.handOffConnectors(externalMcpTools !== undefined);
+        const response = yield* Result.await(
+          Result.tryPromise({
+            try: async () => {
+              try {
+                if (isClientConnectionAborted()) {
+                  throw new HandlerError({
+                    status: 400,
+                    message: "Client disconnected before stream started",
+                  });
+                }
+
+                // Connector discovery and prompt assembly can take meaningful
+                // time. Renew immediately before provider dispatch so the
+                // durable owner covers the entire provider timeout, rather than
+                // only the earlier preflight window.
+                const leaseRenewal = await renewChatTurnExecutionLease({
+                  execution: turnExecution,
+                  safeDb,
+                });
+                if (Result.isError(leaseRenewal)) {
+                  throw new HandlerError({
+                    status: 500,
+                    message: "Failed to renew chat execution lease",
+                    cause: leaseRenewal.error,
+                  });
+                }
+                if (!leaseRenewal.value) {
+                  throw new HandlerError({
+                    status: 409,
+                    message: "Chat turn lost its durable execution owner",
+                  });
+                }
+
+                // Snapshot the refs the registry already holds before streaming.
+                // Prompt-time pins (`contextMatterIds` → `toMatterRef`) are
+                // resolved during prompt construction; folding the WHOLE registry
+                // into thread scope at onFinish would over-broaden it to pinned-
+                // but-never-read matters, which could make the thread unreadable
+                // after that matter's access is revoked even though its content was
+                // never persisted. Only the delta minted DURING the stream (a
+                // matter/entity a tool or subagent actually read) should widen
+                // `data_workspace_ids`.
+                const workspaceIdsBeforeStream = new Set(
+                  refRegistry.getRegisteredWorkspaceIds(),
+                );
+
+                const chatResponse = await dependencies.streamResponse({
+                  abortSignal: createMeteredAIAbortSignal(),
+                  runId: body.runId,
+                  ...(parentRunId === undefined ? {} : { parentRunId }),
+                  ...(resume === undefined ? {} : { resume }),
+                  messages: chatContext.hydratedMessages,
+                  latestMessageId: parsedMessage.message.id,
+                  ...(owningAssistantMessage === undefined
+                    ? {}
+                    : { owningAssistantMessageId: owningAssistantMessage.id }),
+                  onFinish: async ({ outcome, responseMessage }) => {
+                    const validatedToolParts = validateToolCallParts({
+                      allowPartialInput: outcome.type === "interrupted",
+                      message: responseMessage,
+                      tools: streamingTools,
+                    });
+                    if (Result.isError(validatedToolParts)) {
+                      throw new HandlerError({
+                        status: 500,
+                        message: "Generated chat tool parts are invalid",
+                        cause: validatedToolParts.error,
+                      });
+                    }
+                    const canonicalResponseMessage = toPersistableChatMessage({
+                      ...responseMessage,
+                      parts: validatedToolParts.value,
+                    });
+                    const resolved = resolveAssistantMessageRefs({
+                      accessibleWorkspaceIds: accessibleSet,
+                      messages: [canonicalResponseMessage],
+                      opaqueReadWorkspaceIds:
+                        body.runMode === CHAT_RUN_MODE.agent
+                          ? toolWorkspaceIds
+                          : [],
+                      refRegistry,
+                      workspaceIdsBeforeStream,
+                    });
+                    const resolvedResponseMessage = resolved.messages.at(0);
+                    if (!resolvedResponseMessage) {
+                      panic("Missing chat response message");
+                    }
+
+                    // Widen the thread's data scope to cover any
+                    // workspace-scoped content the assistant just
+                    // emitted (source-document parts from search and
+                    // workspace tools). Scope, message, and turn settlement are
+                    // written in one transaction below.
+                    //
+                    // If expansion fails (transient DB error, etc.), the whole
+                    // transaction fails. Storing workspace-
+                    // scoped content in `chat_messages` while the
+                    // owning thread's `data_workspace_ids` stays stale
+                    // would leave the new content readable after the
+                    // user loses access to those workspaces — the same
+                    // class of leak this whole change exists to close.
+                    //
+                    const persistResult = await finalizeAssistantTurn({
+                      acceptedSendMode: body.sendMode,
+                      dataScopeExpansion: {
+                        newWorkspaceIds: resolved.workspaceIds,
+                      },
+                      existingIds: latestMessagePlan.existingIds,
+                      execution: turnExecution,
+                      outcome,
+                      recordAuditEvent,
+                      responseMessage: resolvedResponseMessage,
+                      safeDb,
+                      threadId: body.threadId,
+                      userId: user.id,
+                      workspaceId,
+                      indexThread: dependencies.indexThread,
+                    });
+
+                    if (Result.isError(persistResult)) {
+                      captureError(persistResult.error, {
+                        threadId: body.threadId,
+                      });
+                      await lifecycle.failCurrentTurn("persistence", true);
+                      throw new HandlerError({
+                        status: 500,
+                        message: "Failed to persist assistant turn",
+                        cause: persistResult.error,
+                      });
+                    } else {
+                      const { persistencePlan } = persistResult.value;
+                      const messagesAfterAssistantPersist =
+                        applyAssistantPersistencePlan({
+                          messages: latestMessagePlan.messages,
+                          persistencePlan,
+                        });
+                      if (
+                        outcome.type === "completed" &&
+                        messagesAfterAssistantPersist !== null &&
+                        body.sendMode !== CHAT_SEND_MODE.anonymized
+                      ) {
+                        await markChatCompactionDue({
+                          chatModelOverride,
+                          messages: messagesAfterAssistantPersist,
+                          organizationId: session.activeOrganizationId,
+                          orgAIConfig,
+                          reasoningEffort: chatReasoningEffort,
+                          safeDb,
+                          threadId: body.threadId,
+                        });
+                      }
+
+                      if (
+                        outcome.type === "completed" &&
+                        thread.type === "created" &&
+                        body.sendMode !== CHAT_SEND_MODE.anonymized
+                      ) {
+                        detached(
+                          generateThreadTitle({
+                            initialTitle: initialThreadTitle,
+                            messages: [
+                              parsedMessage.message,
+                              resolvedResponseMessage,
+                            ],
+                            organizationId: session.activeOrganizationId,
+                            orgAIConfig,
+                            promptCachingEnabled,
+                            recordAuditEvent,
+                            safeDb,
+                            threadId: body.threadId,
+                            threadWorkspaceId: workspaceId,
+                            userId: user.id,
+                          }),
+                          "send-message.generate-thread-title",
+                        );
+                      }
+                    }
+                  },
+                  orgAIConfig,
+                  organizationId: session.activeOrganizationId,
+                  devModelId: chatModelOverride,
+                  reasoningEffort: chatReasoningEffort,
+                  promptCacheKey: chatContext.promptCacheKey,
+                  promptCachingEnabled,
+                  runMode: body.runMode,
+                  sandboxRun,
+                  usageLane: turnLane.lane,
+                  resolveAssistantTextRefs:
+                    refRegistry.resolveAssistantTextRefs,
+                  resolveAssistantToolInputRefs: ({ input, toolName }) =>
+                    resolveRegistryToolInputRefs({
+                      input,
+                      refRegistry,
+                      toolName,
+                    }),
+                  resolveAssistantToolOutputRefs: ({ output, toolName }) =>
+                    resolveRegistryToolOutputRefs({
+                      output,
+                      refRegistry,
+                      toolName,
+                    }),
+                  resolveAssistantValueRefs:
+                    refRegistry.resolveAssistantValueRefs,
+                  safeDb,
+                  tenantWorkspaceIds: accessibleWorkspaceIds,
+                  thirdPartyBoundary,
+                  threadId: body.threadId,
+                  tools: streamingTools,
+                  externalMcpToolSource: externalMcpTools?.source,
+                  systemSafe,
+                  systemUntrusted,
+                  userId: user.id,
+                  workspaceId,
+                });
+
+                if (
+                  externalMcpTools !== undefined &&
+                  !isChatStreamResponse(chatResponse)
+                ) {
+                  await externalMcpTools.close();
+                  // streamChat can reject before it creates an SSE stream (for
+                  // example an anonymization-boundary or attachment-modality
+                  // refusal). No terminal middleware hook runs in that branch,
+                  // so settle the claimed turn here instead of leaving it
+                  // indefinitely running.
+                  await lifecycle.failCurrentTurn(
+                    "internal",
+                    chatResponse.status >= 500,
+                  );
+                } else {
+                  lifecycle.markStreaming();
+                }
+
+                return chatResponse;
+              } catch (error) {
+                if (externalMcpTools !== undefined) {
+                  await externalMcpTools.close();
+                }
+                await lifecycle.failCurrentTurn("internal", true);
+                throw error;
+              }
+            },
+            catch: (cause) =>
+              cause instanceof HandlerError
+                ? cause
+                : new HandlerError({
+                    status: 500,
+                    message: "Failed to start chat response",
+                    cause,
+                  }),
+          }),
+        );
+
+        return Result.ok(response);
+      } finally {
+        await lifecycle.cleanup();
+      }
+    },
+  );
+
+const sendMessage = createSendMessage();
 
 export default sendMessage;
 

@@ -16,36 +16,21 @@ import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+import { createCopyToWorkspace } from "./copy-to-workspace";
+
 // Every copy is a real server-side copy inside a real store, so the keys the
 // copy wrote and the keys a rollback returned are read back from it.
 const fileBytes = new TextEncoder().encode("file content");
 
-// Spread the real module: the copy helper reads its search-index ownership
-// split from here. Only the durable extraction request itself is replaced.
-const realProcessExtraction =
-  await import("@/api/lib/search/process-extraction");
 const requestNativeExtractionRunsMock = mock(
   async ({ requests }: { requests: readonly unknown[] }) =>
     requests.map((_, index) =>
       toSafeId<"documentProcessingRun">(`run_${index}`),
     ),
 );
-void mock.module("@/api/lib/search/process-extraction", () => ({
-  ...realProcessExtraction,
-  requestNativeExtractionRun: mock(async () => null),
-  requestNativeExtractionRuns: requestNativeExtractionRunsMock,
-}));
-
 const enqueueDocumentProcessingRunMock = mock(
   async (_runId: SafeId<"documentProcessingRun">) => undefined,
 );
-const realDocumentProcessingEnqueue =
-  await import("@/api/lib/document-processing-enqueue");
-void mock.module("@/api/lib/document-processing-enqueue", () => ({
-  ...realDocumentProcessingEnqueue,
-  enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
-}));
-
 const enqueueEntitySearchRepairsMock = mock(
   async (_tx: unknown, _entityIds: readonly string[]) => undefined,
 );
@@ -53,53 +38,20 @@ const flushEntitySearchRepairsMock = mock(async () => ({
   failed: 0,
   repaired: 0,
 }));
-// The full export set, not just the two this suite asserts on: a partial
-// factory silently leaves the rest of the module real, so a consumer reaching
-// the queue through another entry point would open a transaction here.
-const idleRepairOutcome = async () => ({ failed: 0, repaired: 0 });
-void mock.module("@/api/lib/search/projection-repair-queue", () => ({
-  SEARCH_PROJECTION_REPAIR_BATCH_SIZE: 32,
-  drainSearchProjectionRepairQueue: idleRepairOutcome,
-  enqueueContactSearchRepairs: async () => undefined,
-  enqueueEntitySearchRepairs: enqueueEntitySearchRepairsMock,
-  enqueueWorkspaceSearchRepairs: async () => undefined,
-  flushContactSearchRepairs: idleRepairOutcome,
-  flushEntitySearchRepairs: flushEntitySearchRepairsMock,
-  flushWorkspaceSearchRepairs: idleRepairOutcome,
-}));
-
 const syncWorkspaceSearchActivityMock = mock(async () => {});
-void mock.module("@/api/lib/search/index-global", () => ({
-  rebuildSupplementalSearchIndex: mock(async () => undefined),
-  reindexWorkspacesForContact: mock(async () => undefined),
-  searchGlobal: mock(async () => ({
-    facets: { editor: [], mimeType: [], type: [], workspace: [] },
-    hits: [],
-    nextCursor: null,
-    totalCount: 0,
-  })),
-  searchGlobalFacet: mock(async () => []),
-  syncWorkspaceSearchActivity: syncWorkspaceSearchActivityMock,
-  upsertContactSearchDocument: mock(async () => undefined),
-  upsertWorkspaceSearchDocument: mock(async () => undefined),
-  upsertWorkspaceSearchDocuments: mock(async () => undefined),
-}));
 
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => undefined);
-const enqueueImageThumbnailMock = mock(async () => undefined);
-const enqueuePdfDerivativeMock = mock(async () => undefined);
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => undefined);
-const realFileDerivativeQueue = await import("@/api/lib/file-derivative-queue");
-void mock.module("@/api/lib/file-derivative-queue", () => ({
-  ...realFileDerivativeQueue,
-  enqueueImageThumbnail: enqueueImageThumbnailMock,
-  enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
-  enqueuePdfDerivative: enqueuePdfDerivativeMock,
-  enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
-  initFileDerivativeWorker: mock(() => undefined),
-}));
 
-const { default: copyToWorkspace } = await import("./copy-to-workspace");
+const copyToWorkspace = createCopyToWorkspace({
+  enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
+  enqueueEntitySearchRepairs: enqueueEntitySearchRepairsMock,
+  enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
+  enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
+  flushEntitySearchRepairs: flushEntitySearchRepairsMock,
+  requestNativeExtractionRuns: requestNativeExtractionRunsMock,
+  syncWorkspaceSearchActivity: syncWorkspaceSearchActivityMock,
+});
 
 const sourceWorkspaceId = toSafeId<"workspace">("source_workspace");
 const targetWorkspaceId = toSafeId<"workspace">("target_workspace");
@@ -234,9 +186,7 @@ beforeEach(() => {
   enqueueEntitySearchRepairsMock.mockClear();
   flushEntitySearchRepairsMock.mockClear();
   syncWorkspaceSearchActivityMock.mockClear();
-  enqueueImageThumbnailMock.mockClear();
   enqueueImageThumbnailOrMarkFailedMock.mockClear();
-  enqueuePdfDerivativeMock.mockClear();
   enqueuePdfDerivativeOrMarkFailedMock.mockClear();
 });
 

@@ -30,6 +30,7 @@ import { buildMcpContextFromChat } from "@/api/handlers/chat/tools/registry-adap
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { ensureActiveWorkspace } from "@/api/mcp/tool-utils";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -39,26 +40,25 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+import { removeWorkspaceMemberHandler } from "./workspace-members-remove";
+
 const pushSessionEventMock = mock(() => undefined);
 const closeSessionConnectionsMock = mock(() => undefined);
 const broadcastMock = mock(() => undefined);
-const broadcastToOrganizationMock = mock(() => undefined);
 const revokeWorkspaceSseAccessMock = mock(async () => undefined);
-const realSse = await import("@/api/lib/sse");
-
-void mock.module("@/api/lib/desktop-edit-session-notifications", () => ({
+const dependencies = {
+  broadcastWorkspaceResourceSetUpdated: (workspaceId, resourceType) =>
+    broadcastWorkspaceResourceSetUpdated(
+      workspaceId,
+      resourceType,
+      broadcastMock,
+    ),
   closeSessionConnections: closeSessionConnectionsMock,
   pushSessionEvent: pushSessionEventMock,
-}));
-void mock.module("@/api/lib/sse", () => ({
-  ...realSse,
-  broadcast: broadcastMock,
-  broadcastToOrganization: broadcastToOrganizationMock,
   revokeWorkspaceSseAccess: revokeWorkspaceSseAccessMock,
-}));
-
-const { removeWorkspaceMemberHandler } =
-  await import("./workspace-members-remove");
+} satisfies NonNullable<
+  Parameters<typeof removeWorkspaceMemberHandler>[0]["dependencies"]
+>;
 
 setDefaultTimeout(120_000);
 
@@ -150,6 +150,7 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
             userId: ids.userA1,
             actorUserId: ids.userA1,
             recordAuditEvent,
+            dependencies,
           }),
         );
 
@@ -312,6 +313,7 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
             userId: ids.userA1,
             actorUserId: ids.userA2,
             recordAuditEvent,
+            dependencies,
           }),
         );
         expect(result).toEqual(Result.ok({ id: ids.memberA1wsA2 }));

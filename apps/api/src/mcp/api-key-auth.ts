@@ -46,8 +46,17 @@ const rejectCredential = (): McpAuthenticationError =>
  */
 export const resolveMachineApiKeySession = async (
   credential: string,
+  {
+    verifyApiKey = getAuth().api.verifyApiKey,
+    resolveAuthorization = resolveMemberAuthorization,
+  }: {
+    verifyApiKey?: (
+      ...args: Parameters<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>
+    ) => ReturnType<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>;
+    resolveAuthorization?: typeof resolveMemberAuthorization;
+  } = {},
 ): Promise<McpSession> => {
-  const verification = await getAuth().api.verifyApiKey({
+  const verification = await verifyApiKey({
     body: {
       // Scoping to this configuration means a key minted under any other
       // configuration fails here rather than being accepted as a machine key.
@@ -99,7 +108,7 @@ export const resolveMachineApiKeySession = async (
   // Branding happens here, at the same boundary `resolveMcpSessionContext` uses:
   // these two ids arrive as plain strings (one parsed out of a metadata column,
   // one read off the key row) and only become ownership ids once they cross it.
-  const authorization = await resolveMemberAuthorization(
+  const authorization = await resolveAuthorization(
     brandActorSessionIdentity({ organizationId, userId }),
   );
 

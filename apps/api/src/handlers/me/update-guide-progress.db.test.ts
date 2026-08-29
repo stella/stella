@@ -4,7 +4,6 @@ import {
   beforeAll,
   describe,
   expect,
-  mock,
   setDefaultTimeout,
   test,
 } from "bun:test";
@@ -12,15 +11,17 @@ import { eq } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { user as authUser } from "@/api/db/auth-schema";
-import type updateGuideProgressDefinition from "@/api/handlers/me/update-guide-progress";
+import type { rootDb } from "@/api/db/root";
+import { createUpdateGuideProgressHandler } from "@/api/handlers/me/update-guide-progress";
 import { toSafeId } from "@/api/lib/branded-types";
+import { patchUserGuideProgress } from "@/api/lib/guide-progress";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(120_000);
 
-type UpdateGuideProgress = typeof updateGuideProgressDefinition;
+type UpdateGuideProgress = ReturnType<typeof createUpdateGuideProgressHandler>;
 type UpdateGuideProgressCtx = Parameters<UpdateGuideProgress["handler"]>[0];
 
 const userId = toSafeId<"user">(`guide-progress-${Bun.randomUUIDv7()}`);
@@ -37,12 +38,12 @@ beforeAll(async () => {
     const result = await testDb.execute(query);
     return result.rows;
   };
-  void mock.module("@/api/db/root", () => ({
-    rootDb: { execute: executeRootQuery },
-    rlsDb: testDb,
-  }));
-  ({ default: updateGuideProgress } =
-    await import("@/api/handlers/me/update-guide-progress"));
+  const database = asTestRaw<Pick<typeof rootDb, "execute">>({
+    execute: executeRootQuery,
+  });
+  updateGuideProgress = createUpdateGuideProgressHandler(
+    async (input) => await patchUserGuideProgress({ ...input, db: database }),
+  );
 
   await testDb.insert(authUser).values([
     {

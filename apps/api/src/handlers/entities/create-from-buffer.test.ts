@@ -14,44 +14,40 @@ import {
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
+import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const processExtractionMock = mock(async () => {});
-const enqueueImageThumbnailMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
-const enqueuePdfDerivativeMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 const broadcastMock = mock();
 let intentStatuses: string[] = [];
 
-const realSse = await import("@/api/lib/sse");
-
-void mock.module("@/api/lib/search/process-extraction", () => ({
+const createEntityFromBufferDependencies = {
+  broadcastWorkspaceResourceUpdated: (workspaceId, resource) => {
+    broadcastWorkspaceResourceUpdated(workspaceId, resource, (id, event) => {
+      broadcastMock(id, event);
+    });
+  },
+  enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
+  enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
   processExtraction: processExtractionMock,
   requestNativeExtractionRun: mock(async () => null),
-}));
+} satisfies CreateEntityFromBufferDependencies;
 
-const realFileDerivativeQueue = await import("@/api/lib/file-derivative-queue");
-void mock.module("@/api/lib/file-derivative-queue", () => ({
-  ...realFileDerivativeQueue,
-  enqueueImageThumbnail: enqueueImageThumbnailMock,
-  enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
-  enqueuePdfDerivative: enqueuePdfDerivativeMock,
-  enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
-  initFileDerivativeWorker: mock(() => undefined),
-}));
-
-void mock.module("@/api/lib/sse", () => ({
-  ...realSse,
-  broadcast: broadcastMock,
-}));
-
-const { createEntityFromBuffer } =
-  await import("@/api/lib/entities/create-from-buffer");
+const createEntityFromBufferForTest = async (
+  input: Omit<Parameters<typeof createEntityFromBuffer>[0], "dependencies">,
+) =>
+  await createEntityFromBuffer({
+    ...input,
+    dependencies: createEntityFromBufferDependencies,
+  });
 
 const organizationId = toSafeId<"organization">(
   "00000000-0000-0000-0000-000000000001",
@@ -150,7 +146,7 @@ describe("createEntityFromBuffer", () => {
   test("rejects oversized documents before database or object-storage work", async () => {
     const { getCallCount, scopedDb } = createScopedDbMock({});
 
-    const result = await createEntityFromBuffer({
+    const result = await createEntityFromBufferForTest({
       scopedDb,
       organizationId,
       workspaceId,
@@ -235,7 +231,7 @@ describe("createEntityFromBuffer", () => {
     const { scopedDb } = createScopedDbMock(withIntentPersistence(tx));
 
     const recordedAuditEvents: unknown[] = [];
-    const result = await createEntityFromBuffer({
+    const result = await createEntityFromBufferForTest({
       scopedDb,
       organizationId,
       workspaceId,
@@ -341,7 +337,7 @@ describe("createEntityFromBuffer", () => {
     );
     const recordAuditEvent = mock(async () => {});
 
-    const result = await createEntityFromBuffer({
+    const result = await createEntityFromBufferForTest({
       scopedDb,
       organizationId,
       workspaceId,
@@ -405,7 +401,7 @@ describe("createEntityFromBuffer", () => {
 
     const attempted = await Result.tryPromise({
       try: async () =>
-        await createEntityFromBuffer({
+        await createEntityFromBufferForTest({
           scopedDb,
           organizationId,
           workspaceId,
@@ -466,7 +462,7 @@ describe("createEntityFromBuffer", () => {
 
     const attempted = await Result.tryPromise({
       try: async () =>
-        await createEntityFromBuffer({
+        await createEntityFromBufferForTest({
           scopedDb,
           organizationId,
           workspaceId,
@@ -546,7 +542,7 @@ describe("createEntityFromBuffer", () => {
 
     const attempted = await Result.tryPromise({
       try: async () =>
-        await createEntityFromBuffer({
+        await createEntityFromBufferForTest({
           scopedDb,
           organizationId,
           workspaceId,

@@ -206,11 +206,17 @@ export const handleMcpToolCall = async ({
     // any handler failure.
     const response = await handler({ args, context: executionContext });
     return serializeToolResult(
-      await finalizeToolEgress({
-        context: executionContext,
-        mode,
-        response,
-      }),
+      await finalizeToolEgress(
+        {
+          context: executionContext,
+          mode,
+          response,
+        },
+        {
+          anonymizeTextFields:
+            executionContext.testDependencies?.anonymizeTextFields,
+        },
+      ),
     );
   } catch (error) {
     captureError(error, { source: "mcp", toolName });

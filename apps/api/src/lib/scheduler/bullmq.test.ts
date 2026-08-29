@@ -18,13 +18,7 @@ class MockQueue {
 // delete the module's other exports for later test files.
 const realBullmq = await import("bullmq");
 void mock.module("bullmq", () => ({ ...realBullmq, Queue: MockQueue }));
-const realRedisClient = await import("@/api/lib/redis-client");
-void mock.module("@/api/lib/redis-client", () => ({
-  ...realRedisClient,
-  createBullMqConnection: () => ({}),
-  createRedisClient: () => ({}),
-}));
-
+const { createBullMqConnection } = await import("@/api/lib/redis-client");
 const { createBullMqDispatchTask } = await import("@/api/lib/scheduler/bullmq");
 
 type ContextOptions = {
@@ -47,7 +41,9 @@ const context = ({
 describe("createBullMqDispatchTask idempotency", () => {
   test("deduplicates retries for the same scheduled occurrence", async () => {
     addCalls.length = 0;
-    const task = createBullMqDispatchTask();
+    const task = createBullMqDispatchTask({
+      createConnection: createBullMqConnection,
+    });
 
     await task(context());
     await task(context({ runId: toSafeId<"schedulerJobRun">("run_2") }));
@@ -66,7 +62,9 @@ describe("createBullMqDispatchTask idempotency", () => {
 
   test("uses a different jobId for a different scheduled occurrence", async () => {
     addCalls.length = 0;
-    const task = createBullMqDispatchTask();
+    const task = createBullMqDispatchTask({
+      createConnection: createBullMqConnection,
+    });
 
     await task(context());
     await task(context({ nextRunAt: new Date("2026-06-15T12:00:00.000Z") }));

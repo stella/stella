@@ -98,6 +98,7 @@ export type MachineApiKeyRow = {
 };
 
 type ListOptions = {
+  db?: Pick<typeof rootDb, "select">;
   cursor: MachineApiKeyCursor | null;
   limit: number;
   organizationId: SafeId<"organization">;
@@ -123,10 +124,11 @@ export const listOrganizationMachineApiKeys = async ({
   cursor,
   limit,
   organizationId,
+  db = rootDb,
 }: ListOptions): Promise<MachineApiKeyPageRow[]> => {
   let exactCursor = cursor;
   if (cursor?.timestamp.precision === "milliseconds") {
-    const [boundary] = await rootDb
+    const [boundary] = await db
       .select({
         createdAtCursor:
           machineApiKeyCursor.cursorValue.as("created_at_cursor"),
@@ -145,7 +147,7 @@ export const listOrganizationMachineApiKeys = async ({
     }
   }
 
-  return await rootDb
+  return await db
     .select({
       ...machineApiKeyColumns,
       createdAtCursor: machineApiKeyCursor.cursorValue.as("created_at_cursor"),

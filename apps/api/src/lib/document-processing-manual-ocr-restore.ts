@@ -44,7 +44,9 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
   sourceFileId,
   sourceSha256Hex,
   workspaceId,
+  db = rootDb,
 }: {
+  db?: Pick<typeof rootDb, "transaction">;
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
   fieldId: SafeId<"field">;
@@ -53,7 +55,7 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
   sourceSha256Hex: string;
   workspaceId: SafeId<"workspace">;
 }): Promise<void> => {
-  await rootDb.transaction(async (tx) => {
+  await db.transaction(async (tx) => {
     const currentRows = await tx
       .select({ id: entities.id })
       .from(entities)

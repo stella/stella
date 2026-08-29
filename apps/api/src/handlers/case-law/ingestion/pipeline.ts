@@ -137,6 +137,7 @@ type PipelineInput = {
    * while capping concurrent DB pressure.
    */
   dbSlot?: DbSlot;
+  corpus?: CaseLawCorpusDependencies;
 };
 
 type PipelineResult = {
@@ -253,14 +254,26 @@ type ProcessDecisionAttemptOptions = {
   observationOrder: bigint;
   contentionReconciliation: ContentionReconciliation;
   refresh: DecisionRefresh;
+  corpus: CaseLawCorpusDependencies;
+};
+
+export type CaseLawCorpusDependencies = {
+  mode: CorpusStorageMode;
+  write: typeof writeCorpusDocument;
+};
+
+const CASE_LAW_CORPUS_DEPENDENCIES: CaseLawCorpusDependencies = {
+  mode: corpusStorageMode,
+  write: writeCorpusDocument,
 };
 
 type ProcessDecisionOptions = Omit<
   ProcessDecisionAttemptOptions,
-  "contentionReconciliation" | "refresh"
+  "contentionReconciliation" | "corpus" | "refresh"
 > & {
   /** Defaults to `WHEN_SOURCE_CHANGED`, which is what a crawl wants. */
   refresh?: DecisionRefresh;
+  corpus?: CaseLawCorpusDependencies;
 };
 
 type SourceObservation = { order: bigint };
@@ -402,6 +415,7 @@ type SettleCaseLawCorpusMirrorTxOptions = {
   persistedSourceHash: string | null;
   observationOrder: bigint;
   mirrorCarriesDocument: boolean;
+  mode: CorpusStorageMode;
   /** Null when the payload carried no document and nothing was stored. */
   written: WriteCorpusResult | null;
   tx: Transaction;
@@ -419,6 +433,7 @@ const settleCaseLawCorpusMirrorTx = async ({
   persistedSourceHash,
   observationOrder,
   mirrorCarriesDocument,
+  mode,
   tx,
   written,
 }: SettleCaseLawCorpusMirrorTxOptions): Promise<boolean> => {
@@ -429,8 +444,7 @@ const settleCaseLawCorpusMirrorTx = async ({
       // Read off the storage mode rather than off the write plan: the plan
       // is derived from the mode, and a second derivation here is a mirror
       // that can go stale.
-      ...(corpusPayloadDisposition({ mode: corpusStorageMode, written }) ===
-      "trim"
+      ...(corpusPayloadDisposition({ mode, written }) === "trim"
         ? TRIMMED_CORPUS_PAYLOAD_COLUMNS
         : {}),
       ...corpusMirrorColumns({
@@ -612,6 +626,7 @@ const processDecisionAttempt = async ({
   observationOrder,
   contentionReconciliation,
   refresh,
+  corpus,
 }: ProcessDecisionAttemptOptions): Promise<ProcessResult> => {
   const result = sanitizeResult(input);
   const rejectedDecisionDate =
@@ -1048,6 +1063,7 @@ const processDecisionAttempt = async ({
             observationOrder,
             contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
             refresh,
+            corpus,
           });
         }
         return {
@@ -1158,6 +1174,7 @@ const processDecisionAttempt = async ({
             observationOrder,
             contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
             refresh,
+            corpus,
           });
         }
         return {
@@ -1398,7 +1415,7 @@ const processDecisionAttempt = async ({
     const corpusPlan: CorpusWritePlan =
       preserveStoredDocument && pendingMirrorPayload === null
         ? { type: "preserve-stored" }
-        : planCorpusWrite(corpusStorageMode);
+        : planCorpusWrite(corpus.mode);
 
     const postgresPayload = {
       fulltext: corpusPayload.text,
@@ -1960,6 +1977,7 @@ const processDecisionAttempt = async ({
         observationOrder,
         contentionReconciliation: CONTENTION_RECONCILIATION.RETRY,
         refresh,
+        corpus,
       });
     }
     throw rowWrite.error;
@@ -2044,6 +2062,7 @@ const processDecisionAttempt = async ({
             persistedSourceHash,
             observationOrder,
             mirrorCarriesDocument,
+            mode: corpus.mode,
             tx,
             written,
           }))
@@ -2064,7 +2083,7 @@ const processDecisionAttempt = async ({
           ),
         scopedDb,
         write: async ({ signal: uploadSignal }) =>
-          await writeCorpusDocument(
+          await corpus.write(
             {
               ...corpusPayload,
               // From the pre-write snapshot: the row update above moved the
@@ -2144,12 +2163,14 @@ const processDecisionAttempt = async ({
 
 export const processDecision = async ({
   refresh = DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+  corpus = CASE_LAW_CORPUS_DEPENDENCIES,
   ...options
 }: ProcessDecisionOptions): Promise<ProcessResult> =>
   await processDecisionAttempt({
     ...options,
     contentionReconciliation: CONTENTION_RECONCILIATION.INITIAL,
     refresh,
+    corpus,
   });
 
 /**
@@ -2167,6 +2188,7 @@ export const runIngestionPipeline = async ({
   maxPages: maxPagesOverride,
   maxDecisions,
   dbSlot,
+  corpus = CASE_LAW_CORPUS_DEPENDENCIES,
 }: PipelineInput): Promise<PipelineResult> => {
   const adapter = getAdapter(source.adapterKey);
 
@@ -2334,6 +2356,7 @@ export const runIngestionPipeline = async ({
             scopedDb,
             observedAt,
             observationOrder,
+            corpus,
           });
 
           if (outcome.inserted) {

@@ -11,7 +11,6 @@ import {
   beforeAll,
   describe,
   expect,
-  mock,
   setDefaultTimeout,
   test,
 } from "bun:test";
@@ -20,6 +19,10 @@ import { organization, user } from "@/api/db/auth-schema";
 import { entities, extractedContent, workspaces } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  FlowStepError,
+  loadInputDocuments,
+} from "@/api/lib/flows/flow-executor";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -30,41 +33,6 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 setDefaultTimeout(60_000);
 
 const testDb: TestDatabase = await getTestDb();
-
-// flow-executor imports the queue/AI/S3 boundaries at module load; stub the
-// queue and AI ones so importing it does not reach Redis or external
-// services. Object storage is the real `lib/s3` instead, pointed at an
-// in-process store (see the fake below), so the suite can assert that this
-// path reaches no object at all rather than trusting a stub to say so.
-void mock.module("@/api/db/root", () => ({ rootDb: testDb, rlsDb: testDb }));
-void mock.module("@/api/lib/flows/flow-run-queue", () => ({
-  FLOW_RUN_QUEUE_NAME: "flow-run",
-  enqueueFlowStep: mock(async () => {}),
-}));
-const realFlowRunEvents = await import("@/api/lib/flows/flow-run-events");
-void mock.module("@/api/lib/flows/flow-run-events", () => ({
-  ...realFlowRunEvents,
-  broadcastFlowRunUpdate: mock(() => undefined),
-}));
-void mock.module("@/api/lib/tanstack-ai-generate", () => ({
-  generateTanStackTextForRole: mock(async () => await Promise.resolve("")),
-}));
-void mock.module("@/api/lib/search/process-extraction", () => ({
-  processExtraction: mock(async () => {}),
-  requestNativeExtractionRun: mock(async () => null),
-}));
-const realFileDerivativeQueue = await import("@/api/lib/file-derivative-queue");
-void mock.module("@/api/lib/file-derivative-queue", () => ({
-  ...realFileDerivativeQueue,
-  enqueueImageThumbnail: mock(async () => {}),
-  enqueueImageThumbnailOrMarkFailed: mock(async () => {}),
-  enqueuePdfDerivative: mock(async () => {}),
-  enqueuePdfDerivativeOrMarkFailed: mock(async () => {}),
-  initFileDerivativeWorker: mock(() => undefined),
-}));
-
-const { loadInputDocuments, FlowStepError } =
-  await import("@/api/lib/flows/flow-executor");
 
 describe("loadInputDocuments", () => {
   const organizationId = mintAuthProviderId<"organization">();

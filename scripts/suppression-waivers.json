@@ -55,7 +55,7 @@
       "kind": "permanent",
       "rule": "no-body-ownership-ids/no-body-ownership-ids",
       "file": "apps/api/src/handlers/chat/send-message.ts",
-      "symbol": "sendMessage",
+      "symbol": "createSendMessage",
       "count": 1,
       "reason": "root handler; resolveChatScope performs targeted workspace authorization",
       "evidence": "apps/api/src/handlers/chat/chat-scope.test.ts"

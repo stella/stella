@@ -79,21 +79,16 @@ const createContext = (): McpRequestContext => {
     recordAuditEvent: noopRecorder,
     safeDb,
     scopedDb: emptyScopedDb,
+    testDependencies: { loadOrgSettingsForAuth: loadOrgSettingsMock },
     userId: toSafeId<"user">("user_1"),
   };
 };
 
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
-  orgAIConfigStatus: "ok",
+  orgAIConfigStatus: "ok" as const,
   promptCachingEnabled: false,
 }));
-const realLoader = await import("@/api/lib/ai-config-loader");
-void mock.module("@/api/lib/ai-config-loader", () => ({
-  ...realLoader,
-  loadOrgSettingsForAuth: loadOrgSettingsMock,
-}));
-
 const { handleMcpToolCall } = await import("@/api/mcp/tools");
 const capabilityCatalog = (
   await import("@/api/mcp/generated/capability-catalog.json")

@@ -3,25 +3,28 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import type { rootDb } from "@/api/db/root";
 import { toSafeId } from "@/api/lib/branded-types";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const executeMock = mock(
   async (_query: SQL): Promise<Record<string, unknown>[]> => [],
 );
 const upsertSearchDocumentMock = mock(async () => undefined);
 
-void mock.module("@/api/db/root", () => ({
-  rootDb: { execute: executeMock },
-}));
-
-void mock.module("@/api/lib/search/index-entity", () => ({
-  upsertSearchDocument: upsertSearchDocumentMock,
-}));
-
 const { repairSearchSemanticTimestamps } =
   await import("@/api/lib/scheduler/tasks/search-semantic-timestamps");
+
+const runRepair = async (
+  options: Parameters<typeof repairSearchSemanticTimestamps>[0],
+) =>
+  await repairSearchSemanticTimestamps({
+    ...options,
+    db: asTestRaw<Pick<typeof rootDb, "execute">>({ execute: executeMock }),
+    indexEntity: upsertSearchDocumentMock,
+  });
 
 let analytics: RecordingAnalytics;
 
@@ -46,7 +49,7 @@ test("rebuilds one bounded page and checkpoints after the projection", async () 
     ])
     .mockResolvedValueOnce([]);
 
-  const outcome = await repairSearchSemanticTimestamps({
+  const outcome = await runRepair({
     jobId: "search.repairSemanticTimestamps.v1",
     leaseToken: "runner#lease-1",
     payload: null,
@@ -93,7 +96,7 @@ test("checkpoints the last scanned row when a clean page needs no repair", async
     ])
     .mockResolvedValueOnce([]);
 
-  const outcome = await repairSearchSemanticTimestamps({
+  const outcome = await runRepair({
     jobId: "search.repairSemanticTimestamps.v1",
     leaseToken: "runner#lease-1",
     now: new Date("2026-07-29T00:05:00.000Z"),
@@ -132,7 +135,7 @@ test("durably marks verification dirty before rebuilding a mismatch", async () =
     .mockResolvedValueOnce([])
     .mockResolvedValueOnce([]);
 
-  const outcome = await repairSearchSemanticTimestamps({
+  const outcome = await runRepair({
     jobId: "search.repairSemanticTimestamps.v1",
     leaseToken: "runner#lease-1",
     now: new Date("2026-07-29T00:05:00.000Z"),
@@ -174,7 +177,7 @@ test("requires two full clean passes started after the quiet window", async () =
     .mockResolvedValueOnce([])
     .mockResolvedValueOnce([]);
 
-  const restartOutcome = await repairSearchSemanticTimestamps({
+  const restartOutcome = await runRepair({
     jobId: "search.repairSemanticTimestamps.v1",
     leaseToken: "runner#lease-1",
     now: new Date("2026-07-29T00:00:00.000Z"),
@@ -189,7 +192,7 @@ test("requires two full clean passes started after the quiet window", async () =
   expect(restartQuery.sql).toContain("SET payload = jsonb_build_object(");
   expect(restartQuery.sql).toContain("'pass'");
 
-  const earlyPassOutcome = await repairSearchSemanticTimestamps({
+  const earlyPassOutcome = await runRepair({
     jobId: "search.repairSemanticTimestamps.v1",
     leaseToken: "runner#lease-1",
     now: new Date("2026-07-29T00:20:00.000Z"),
@@ -209,7 +212,7 @@ test("requires two full clean passes started after the quiet window", async () =
   expect(earlyPassCheckpoint.params).toContain(0);
   expect(earlyPassCheckpoint.params).toContain("2026-07-29T00:20:00.000Z");
 
-  const firstCleanOutcome = await repairSearchSemanticTimestamps({
+  const firstCleanOutcome = await runRepair({
     jobId: "search.repairSemanticTimestamps.v1",
     leaseToken: "runner#lease-1",
     now: new Date("2026-07-29T00:21:00.000Z"),
@@ -228,7 +231,7 @@ test("requires two full clean passes started after the quiet window", async () =
   );
   expect(firstCleanCheckpoint.params).toContain(1);
 
-  const completeOutcome = await repairSearchSemanticTimestamps({
+  const completeOutcome = await runRepair({
     jobId: "search.repairSemanticTimestamps.v1",
     leaseToken: "runner#lease-1",
     now: new Date("2026-07-29T00:22:00.000Z"),
@@ -266,7 +269,7 @@ test("checkpoints past an unreadable entity and repairs the rest of the page", a
     new Error("content cannot decrypt"),
   );
 
-  const outcome = await repairSearchSemanticTimestamps({
+  const outcome = await runRepair({
     jobId: "search.repairSemanticTimestamps.v1",
     leaseToken: "runner#lease-1",
     payload: null,
@@ -300,7 +303,7 @@ test("does not touch durable state after cancellation", async () => {
   const controller = new AbortController();
   controller.abort();
 
-  const outcome = await repairSearchSemanticTimestamps({
+  const outcome = await runRepair({
     jobId: "search.repairSemanticTimestamps.v1",
     leaseToken: "runner#lease-1",
     payload: null,
@@ -340,7 +343,7 @@ test("does not checkpoint after cancellation during a bounded reindex", async ()
     await pendingUpsert;
   });
 
-  const outcomePromise = repairSearchSemanticTimestamps({
+  const outcomePromise = runRepair({
     jobId: "search.repairSemanticTimestamps.v1",
     leaseToken: "runner#lease-1",
     payload: null,

@@ -76,7 +76,36 @@ type CreateEntityVersionFromBufferInput = {
         result: Extract<WriteFileVersionResult, { status: "ok" }>,
       ) => Promise<void>)
     | undefined;
+  dependencies?: CreateEntityVersionFromBufferDependencies | undefined;
 };
+
+export type CreateEntityVersionFromBufferDependencies = {
+  allocateFileObject: typeof allocateFileObject;
+  createFileKey: typeof createFileKey;
+  writeFileVersion: typeof writeFileVersion;
+  processExtraction: typeof processExtraction;
+  requestNativeExtractionRun: typeof requestNativeExtractionRun;
+  enqueuePdfDerivativeOrMarkFailed: typeof enqueuePdfDerivativeOrMarkFailed;
+  enqueueImageThumbnailOrMarkFailed: typeof enqueueImageThumbnailOrMarkFailed;
+  computeVersionDiffStats: typeof computeVersionDiffStats;
+  createRootScopedDb: typeof createRootScopedDb;
+  broadcast: Parameters<typeof broadcastWorkspaceResourceUpdated>[2];
+};
+
+const CREATE_ENTITY_VERSION_FROM_BUFFER_DEPENDENCIES: CreateEntityVersionFromBufferDependencies =
+  {
+    allocateFileObject,
+    createFileKey,
+    writeFileVersion,
+    processExtraction,
+    requestNativeExtractionRun: async (options) =>
+      await requestNativeExtractionRun(options),
+    enqueuePdfDerivativeOrMarkFailed,
+    enqueueImageThumbnailOrMarkFailed,
+    computeVersionDiffStats,
+    createRootScopedDb,
+    broadcast: undefined,
+  };
 
 export type CreateEntityVersionFromBufferResult = Result<
   {
@@ -127,6 +156,7 @@ export const createEntityVersionFromBuffer = async ({
   writePolicy,
   scanWarnings,
   afterWrite,
+  dependencies = CREATE_ENTITY_VERSION_FROM_BUFFER_DEPENDENCIES,
 }: CreateEntityVersionFromBufferInput): Promise<CreateEntityVersionFromBufferResult> => {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   if (bytes.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
@@ -139,11 +169,11 @@ export const createEntityVersionFromBuffer = async ({
   }
 
   const fileName = sanitizeFilenamePreservingExtension(rawFileName);
-  const fileId = allocateFileObject();
+  const fileId = dependencies.allocateFileObject();
   const entityVersionId = createSafeId<"entityVersion">();
   const fieldId = createSafeId<"field">();
   const sha256Hex = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
-  const objectKey = createFileKey({
+  const objectKey = dependencies.createFileKey({
     organizationId,
     workspaceId,
     fileId,
@@ -222,7 +252,7 @@ export const createEntityVersionFromBuffer = async ({
     // object; a rolled-back intent remains recoverable by the bounded janitor.
     const transactionState = { durableReferencePrepared: false };
     const writeResult = await safeDb(async (tx) => {
-      const versionWriteResult = await writeFileVersion({
+      const versionWriteResult = await dependencies.writeFileVersion({
         tx,
         organizationId,
         workspaceId,
@@ -277,7 +307,7 @@ export const createEntityVersionFromBuffer = async ({
         // Durable extraction request, committed with the version that owns the
         // file. The post-commit call below only accelerates the queue handoff,
         // so it pins the same file property and resolves the same source.
-        await requestNativeExtractionRun({
+        await dependencies.requestNativeExtractionRun({
           entityId,
           filePropertyId: versionWriteResult.filePropertyId,
           tx,
@@ -328,49 +358,58 @@ export const createEntityVersionFromBuffer = async ({
     await stopIntentHeartbeat();
   }
 
-  processExtraction(entityId, {
-    filePropertyId: written.filePropertyId,
-  }).catch((error: unknown) => {
-    captureError(error, { entityId });
-  });
-  enqueuePdfDerivativeOrMarkFailed({
-    encrypted: false,
-    entityId,
-    fieldId,
-    mimeType,
-    organizationId,
-    userId,
-    workspaceId,
-  }).catch((error: unknown) => {
-    captureError(error, { entityId, fieldId, mimeType });
-  });
-  enqueueImageThumbnailOrMarkFailed({
-    encrypted: false,
-    entityId,
-    fieldId,
-    mimeType,
-    organizationId,
-    userId,
-    workspaceId,
-  }).catch((error: unknown) => {
-    captureError(error, { entityId, fieldId, mimeType });
-  });
-  computeVersionDiffStats({
-    versionId: entityVersionId,
-    entityId,
-    scopedDb: createRootScopedDb({
+  dependencies
+    .processExtraction(entityId, {
+      filePropertyId: written.filePropertyId,
+    })
+    .catch((error: unknown) => {
+      captureError(error, { entityId });
+    });
+  dependencies
+    .enqueuePdfDerivativeOrMarkFailed({
+      encrypted: false,
+      entityId,
+      fieldId,
+      mimeType,
       organizationId,
       userId,
-      workspaceIds: [workspaceId],
-    }),
-    workspaceId,
-    organizationId,
-  }).catch((error: unknown) => {
-    captureError(error, { versionId: entityVersionId });
-  });
+      workspaceId,
+    })
+    .catch((error: unknown) => {
+      captureError(error, { entityId, fieldId, mimeType });
+    });
+  dependencies
+    .enqueueImageThumbnailOrMarkFailed({
+      encrypted: false,
+      entityId,
+      fieldId,
+      mimeType,
+      organizationId,
+      userId,
+      workspaceId,
+    })
+    .catch((error: unknown) => {
+      captureError(error, { entityId, fieldId, mimeType });
+    });
+  dependencies
+    .computeVersionDiffStats({
+      versionId: entityVersionId,
+      entityId,
+      scopedDb: dependencies.createRootScopedDb({
+        organizationId,
+        userId,
+        workspaceIds: [workspaceId],
+      }),
+      workspaceId,
+      organizationId,
+    })
+    .catch((error: unknown) => {
+      captureError(error, { versionId: entityVersionId });
+    });
   broadcastWorkspaceResourceUpdated(
     workspaceId,
     resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
+    dependencies.broadcast,
   );
 
   return Result.ok({

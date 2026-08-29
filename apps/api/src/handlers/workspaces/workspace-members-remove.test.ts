@@ -13,19 +13,18 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+import {
+  createRemoveWorkspaceMember,
+  removeWorkspaceMemberHandler,
+} from "./workspace-members-remove";
+
 const revokeWorkspaceSseAccessMock = mock(async () => undefined);
-const realSse = await import("@/api/lib/sse");
-
-void mock.module("@/api/lib/sse", () => ({
-  ...realSse,
-  broadcast: mock(() => undefined),
-  broadcastSessionEvent: mock(() => undefined),
-  broadcastToOrganization: mock(() => undefined),
+const removeWorkspaceMember = createRemoveWorkspaceMember({
+  broadcastWorkspaceResourceSetUpdated: () => undefined,
+  closeSessionConnections: () => undefined,
+  pushSessionEvent: () => undefined,
   revokeWorkspaceSseAccess: revokeWorkspaceSseAccessMock,
-}));
-
-const { default: removeWorkspaceMember, removeWorkspaceMemberHandler } =
-  await import("./workspace-members-remove");
+});
 
 type RemoveMemberCtx = Parameters<typeof removeWorkspaceMember.handler>[0];
 

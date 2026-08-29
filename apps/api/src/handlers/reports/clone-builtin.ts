@@ -42,66 +42,79 @@ const config = {
   body: t.Object({ key: t.String({ minLength: 1 }) }),
 } satisfies HandlerConfig;
 
-const cloneBuiltinReportTemplate = createSafeHandler(
-  config,
-  async function* ({ safeDb, session, user, body, recordAuditEvent }) {
-    const builtin = getBuiltinReportTemplate(body.key);
-    if (!builtin) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: `Unknown built-in report template: ${body.key}`,
-        }),
+export type CloneBuiltinReportTemplateDependencies = {
+  createStoredTemplate: typeof createStoredTemplate;
+};
+
+const defaultCloneBuiltinReportTemplateDependencies = {
+  createStoredTemplate,
+} satisfies CloneBuiltinReportTemplateDependencies;
+
+export const createCloneBuiltinReportTemplate = (
+  dependencies: CloneBuiltinReportTemplateDependencies = defaultCloneBuiltinReportTemplateDependencies,
+) =>
+  createSafeHandler(
+    config,
+    async function* ({ safeDb, session, user, body, recordAuditEvent }) {
+      const builtin = getBuiltinReportTemplate(body.key);
+      if (!builtin) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: `Unknown built-in report template: ${body.key}`,
+          }),
+        );
+      }
+      // A spec built-in has no DOCX to copy into Template Studio.
+      if (!isCloneableBuiltin(builtin)) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: `Built-in report template "${body.key}" cannot be customized.`,
+          }),
+        );
+      }
+
+      const organizationId = session.activeOrganizationId;
+
+      // Name collision: the built-in ships with a fixed name, so a second clone
+      // would duplicate it. Append " (copy)" when a same-named template already
+      // exists (RLS scopes the lookup to the caller's organization). The table
+      // has no name-uniqueness constraint, so further clones are allowed to share
+      // the "(copy)" name rather than growing an unbounded numbering scheme.
+      const existing = yield* Result.await(
+        safeDb((tx) =>
+          tx.query.templates.findFirst({
+            where: { name: { eq: builtin.name } },
+            columns: { id: true },
+          }),
+        ),
       );
-    }
-    // A spec built-in has no DOCX to copy into Template Studio.
-    if (!isCloneableBuiltin(builtin)) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: `Built-in report template "${body.key}" cannot be customized.`,
-        }),
-      );
-    }
+      const name = existing ? `${builtin.name} (copy)` : builtin.name;
 
-    const organizationId = session.activeOrganizationId;
+      const buffer = await builtin.loadBuffer();
 
-    // Name collision: the built-in ships with a fixed name, so a second clone
-    // would duplicate it. Append " (copy)" when a same-named template already
-    // exists (RLS scopes the lookup to the caller's organization). The table
-    // has no name-uniqueness constraint, so further clones are allowed to share
-    // the "(copy)" name rather than growing an unbounded numbering scheme.
-    const existing = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.templates.findFirst({
-          where: { name: { eq: builtin.name } },
-          columns: { id: true },
-        }),
-      ),
-    );
-    const name = existing ? `${builtin.name} (copy)` : builtin.name;
+      const created = yield* dependencies.createStoredTemplate({
+        safeDb,
+        organizationId,
+        userId: user.id,
+        buffer,
+        name,
+        fileName: `${name}.docx`,
+        // Verbatim: the registry manifest is the fill contract; re-discovering it
+        // from the DOCX would drop the per-item `contracts.summary` AI field.
+        manifest: builtin.manifest,
+        kind: "report",
+        recordAuditEvent,
+      });
+      if (Result.isError(created)) {
+        return Result.err(created.error);
+      }
 
-    const buffer = await builtin.loadBuffer();
+      return Result.ok({ templateId: created.value.id });
+    },
+  );
 
-    const created = yield* createStoredTemplate({
-      safeDb,
-      organizationId,
-      userId: user.id,
-      buffer,
-      name,
-      fileName: `${name}.docx`,
-      // Verbatim: the registry manifest is the fill contract; re-discovering it
-      // from the DOCX would drop the per-item `contracts.summary` AI field.
-      manifest: builtin.manifest,
-      kind: "report",
-      recordAuditEvent,
-    });
-    if (Result.isError(created)) {
-      return Result.err(created.error);
-    }
-
-    return Result.ok({ templateId: created.value.id });
-  },
-);
+const cloneBuiltinReportTemplate = createCloneBuiltinReportTemplate();
 
 export default cloneBuiltinReportTemplate;

@@ -9,7 +9,11 @@ import { bufferObjectCleanupIntents, workspaces } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
+import type { CreateEntityVersionFromBufferDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
+import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import type { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3, FakeS3Method } from "@/api/tests/helpers/fake-s3";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -32,44 +36,7 @@ let intentStatuses: string[] = [];
  */
 let putsAtIntentReservation: number[] = [];
 
-const realSse = await import("@/api/lib/sse");
-
-void mock.module("@/api/lib/entity-versions/write-file-version", () => ({
-  writeFileVersion: writeFileVersionMock,
-}));
-const realFileObjectIds = await import("@/api/lib/files/file-object-ids");
-void mock.module("@/api/lib/files/file-object-ids", () => ({
-  ...realFileObjectIds,
-  allocateFileObject: () => "file_1",
-}));
-void mock.module("@/api/lib/files/utils", () => ({
-  createFileKey: () => "org_1/ws_1/file_1.docx",
-}));
-void mock.module("@/api/lib/search/process-extraction", () => ({
-  processExtraction: processExtractionMock,
-  requestNativeExtractionRun: requestNativeExtractionRunMock,
-}));
-const realFileDerivativeQueue = await import("@/api/lib/file-derivative-queue");
-void mock.module("@/api/lib/file-derivative-queue", () => ({
-  ...realFileDerivativeQueue,
-  enqueuePdfDerivativeOrMarkFailed: pdfDerivativeMock,
-  enqueueImageThumbnailOrMarkFailed: thumbnailDerivativeMock,
-}));
-void mock.module("@/api/lib/entity-versions/compute-version-diff", () => ({
-  computeVersionDiffStats: diffStatsMock,
-}));
-void mock.module("@/api/lib/root-scoped-db", () => ({
-  createRootScopedDb: () => mock(),
-}));
-void mock.module("@/api/lib/sse", () => ({
-  ...realSse,
-  broadcast: broadcastMock,
-  broadcastToOrganization: mock(),
-}));
-const { createEntityVersionFromBuffer } =
-  await import("@/api/lib/entity-versions/create-entity-version-from-buffer");
-
-/** The key `createFileKey` (mocked above) hands the writer for this input. */
+/** The key `createFileKey` hands the writer for this input. */
 const OBJECT_KEY = "org_1/ws_1/file_1.docx";
 const STORED_OBJECT_ID = `${envBase.S3_BUCKET}/${OBJECT_KEY}`;
 const DOCX_MIME_TYPE =
@@ -134,6 +101,21 @@ const safeDb = asTestRaw<SafeDb>(
     }),
 );
 const recordAuditEvent = asTestRaw<AuditRecorder>(async () => undefined);
+const dependencies = {
+  allocateFileObject,
+  createFileKey: () => OBJECT_KEY,
+  writeFileVersion: writeFileVersionMock,
+  processExtraction: processExtractionMock,
+  requestNativeExtractionRun: requestNativeExtractionRunMock,
+  enqueuePdfDerivativeOrMarkFailed: pdfDerivativeMock,
+  enqueueImageThumbnailOrMarkFailed: thumbnailDerivativeMock,
+  computeVersionDiffStats: diffStatsMock,
+  createRootScopedDb: () =>
+    asTestRaw<ReturnType<typeof createRootScopedDb>>(mock()),
+  broadcast: (workspaceId, event) => {
+    void broadcastMock(workspaceId, event);
+  },
+} satisfies CreateEntityVersionFromBufferDependencies;
 const baseInput = {
   safeDb,
   organizationId: toSafeId<"organization">("org_1"),
@@ -146,6 +128,7 @@ const baseInput = {
   mimeType: DOCX_MIME_TYPE,
   source: null,
   writePolicy: { type: "replace-current-file" as const },
+  dependencies,
 };
 
 describe("createEntityVersionFromBuffer", () => {
@@ -283,7 +266,7 @@ describe("createEntityVersionFromBuffer", () => {
       expect.objectContaining({
         workspaceId: "ws_1",
         entityId: "entity_1",
-        fileId: "file_1",
+        fileId: expect.any(String),
         fileName: "filled.docx",
         sizeBytes: Buffer.byteLength("filled docx"),
         source: null,

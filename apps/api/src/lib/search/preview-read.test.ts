@@ -2,12 +2,16 @@ import { beforeEach, describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { HIGHLIGHT_START, HIGHLIGHT_STOP } from "@/api/lib/search/highlight";
+import { readSearchPreview as readSearchPreviewWithDatabase } from "@/api/lib/search/preview";
 import {
   clearRootDbMocks,
   rootDbExecuteMock,
+  rootDbTestDouble,
 } from "@/api/tests/helpers/mock-root-db";
 
-const { readSearchPreview } = await import("@/api/lib/search/preview");
+const readSearchPreview = async (
+  input: Parameters<typeof readSearchPreviewWithDatabase>[0],
+) => await readSearchPreviewWithDatabase(input, rootDbTestDouble);
 
 const previewQuery = {
   query: "",

@@ -3,20 +3,21 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { AskExtraction } from "@/api/lib/document-review/review-extract";
+import { buildFindings } from "@/api/lib/document-review/review-grade";
 import type {
   Position,
   ResolvedTiers,
 } from "@/api/lib/workflow/playbook-positions";
-
-const realVerdictEngine = await import("@/api/lib/workflow/verdict-engine");
+import {
+  TIER_MATCH_BATCH_SIZE,
+  type gradeTierMatches,
+} from "@/api/lib/workflow/verdict-engine";
 
 let modelCallCount = 0;
 let abortAfterFirstCall: AbortController | null = null;
 let returnVerdicts = true;
 const gradeTierMatchesMock = mock(
-  async ({
-    items,
-  }: Parameters<typeof realVerdictEngine.gradeTierMatches>[0]) => {
+  async ({ items }: Parameters<typeof gradeTierMatches>[0]) => {
     modelCallCount += 1;
     if (modelCallCount === 1) {
       abortAfterFirstCall?.abort();
@@ -35,14 +36,6 @@ const gradeTierMatchesMock = mock(
     return await Promise.resolve(Result.ok(verdicts));
   },
 );
-
-void mock.module("@/api/lib/workflow/verdict-engine", () => ({
-  ...realVerdictEngine,
-  gradeTierMatches: gradeTierMatchesMock,
-}));
-
-const { buildFindings } =
-  await import("@/api/lib/document-review/review-grade");
 
 const ORGANIZATION_ID = toSafeId<"organization">(
   "11111111-1111-4111-8111-111111111111",
@@ -117,6 +110,7 @@ const buildArgs = (
   orgAIConfig: null,
   promptCachingEnabled: false,
   serviceTier: "standard" as const,
+  gradeTierMatches: gradeTierMatchesMock,
 });
 
 beforeEach(() => {
@@ -146,7 +140,7 @@ describe("document review grading", () => {
     const controller = new AbortController();
     abortAfterFirstCall = controller;
     const positions = Array.from(
-      { length: realVerdictEngine.TIER_MATCH_BATCH_SIZE + 1 },
+      { length: TIER_MATCH_BATCH_SIZE + 1 },
       (_, index) => position(index + 1),
     );
 

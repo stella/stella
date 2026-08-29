@@ -4,7 +4,6 @@ import {
   beforeEach,
   describe,
   expect,
-  mock,
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
@@ -19,6 +18,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import type { restoreManualOcrRunAfterProjectionLoss as RestoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
   setupRlsTestData,
@@ -40,7 +40,6 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
-  void mock.module("@/api/db/root", () => ({ rootDb: testDb, rlsDb: testDb }));
   ({ restoreManualOcrRunAfterProjectionLoss } =
     await import("@/api/lib/document-processing-manual-ocr-restore"));
 }, 120_000);
@@ -129,6 +128,11 @@ const restore = async ({
   sourceSha256Hex = SOURCE_SHA256_HEX,
 } = {}) =>
   await restoreManualOcrRunAfterProjectionLoss({
+    db: asTestRaw<
+      NonNullable<
+        Parameters<typeof restoreManualOcrRunAfterProjectionLoss>[0]["db"]
+      >
+    >(testDb),
     entityId: ids.entityA1,
     entityVersionId: ids.entityVersionA1,
     fieldId: ids.fieldA1,

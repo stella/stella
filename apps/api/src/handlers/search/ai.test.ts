@@ -3,6 +3,11 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
 
+import {
+  createSearchSummaryChatThread,
+  refineSearchOutputSchema,
+  searchSummaryOutputSchema,
+} from "@/api/handlers/search/ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -24,29 +29,11 @@ process.env["GOTENBERG_USERNAME"] ??= "test";
 process.env["GOTENBERG_PASSWORD"] ??= "test";
 
 const searchGlobalMock = mock();
-
-// The fire-and-forget chat reindex hook touches rootDb; stub it so the
-// summary-chat tests do not need a live database for the side effect.
-void mock.module("@/api/lib/search/index-chat", () => ({
-  upsertChatThreadSearchDocument: mock(async () => undefined),
-  backfillChatThreadSearchIndex: mock(async () => 0),
-}));
-
-// Mock index-global directly to prevent transitive db/root imports that
-// require a live database connection and cause flaky failures in CI.
-void mock.module("@/api/lib/search/index-global", () => ({
-  rebuildSupplementalSearchIndex: mock(async () => undefined),
-  reindexWorkspacesForContact: mock(async () => undefined),
-  searchGlobal: searchGlobalMock,
-  searchGlobalFacet: mock(async () => []),
-  syncWorkspaceSearchActivity: mock(async () => undefined),
-  upsertContactSearchDocument: mock(async () => undefined),
-  upsertWorkspaceSearchDocument: mock(async () => undefined),
-  upsertWorkspaceSearchDocuments: mock(async () => undefined),
-}));
+const upsertSearchDocumentMock = mock(async () => undefined);
 
 beforeEach(() => {
   searchGlobalMock.mockReset();
+  upsertSearchDocumentMock.mockClear();
   clearRootDbMocks();
 });
 
@@ -73,9 +60,6 @@ const entitySearchIdentity = (entityId: string) => {
 
 describe("search AI output schemas", () => {
   test("convert to JSON Schema for structured model output", async () => {
-    const { refineSearchOutputSchema, searchSummaryOutputSchema } =
-      await import("@/api/handlers/search/ai");
-
     expect(() => toJsonSchema(refineSearchOutputSchema)).not.toThrow();
     expect(() => toJsonSchema(searchSummaryOutputSchema)).not.toThrow();
   });
@@ -122,8 +106,6 @@ describe("search summary chat", () => {
       totalCount: 1,
     });
 
-    const { createSearchSummaryChatThread } =
-      await import("@/api/handlers/search/ai");
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
       body: {
@@ -138,6 +120,7 @@ describe("search summary chat", () => {
       organizationId,
       safeDb,
       search: searchGlobalMock,
+      upsertSearchDocument: upsertSearchDocumentMock,
       scopedDb,
       userId: toSafeId<"user">("user_1"),
       recordAuditEvent: noopAuditRecorder,
@@ -205,8 +188,6 @@ describe("search summary chat", () => {
       totalCount: 1,
     });
 
-    const { createSearchSummaryChatThread } =
-      await import("@/api/handlers/search/ai");
     await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
       body: {
@@ -222,6 +203,7 @@ describe("search summary chat", () => {
       organizationId,
       safeDb,
       search: searchGlobalMock,
+      upsertSearchDocument: upsertSearchDocumentMock,
       scopedDb,
       userId: toSafeId<"user">("user_1"),
       recordAuditEvent: noopAuditRecorder,
@@ -267,8 +249,6 @@ describe("search summary chat", () => {
       totalCount: 1,
     });
 
-    const { createSearchSummaryChatThread } =
-      await import("@/api/handlers/search/ai");
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
       body: {
@@ -282,6 +262,7 @@ describe("search summary chat", () => {
       organizationId,
       safeDb,
       search: searchGlobalMock,
+      upsertSearchDocument: upsertSearchDocumentMock,
       scopedDb,
       userId: toSafeId<"user">("user_1"),
       recordAuditEvent: noopAuditRecorder,
@@ -355,8 +336,6 @@ describe("search summary chat", () => {
       totalCount: 2,
     });
 
-    const { createSearchSummaryChatThread } =
-      await import("@/api/handlers/search/ai");
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [firstWorkspaceId, secondWorkspaceId],
       body: {
@@ -370,6 +349,7 @@ describe("search summary chat", () => {
       organizationId,
       safeDb,
       search: searchGlobalMock,
+      upsertSearchDocument: upsertSearchDocumentMock,
       scopedDb,
       userId: toSafeId<"user">("user_1"),
       recordAuditEvent: noopAuditRecorder,
@@ -435,8 +415,6 @@ describe("search summary chat", () => {
       totalCount: 1,
     });
 
-    const { createSearchSummaryChatThread } =
-      await import("@/api/handlers/search/ai");
     await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
       body: {
@@ -450,6 +428,7 @@ describe("search summary chat", () => {
       organizationId,
       safeDb,
       search: searchGlobalMock,
+      upsertSearchDocument: upsertSearchDocumentMock,
       scopedDb,
       userId: toSafeId<"user">("user_1"),
       recordAuditEvent: noopAuditRecorder,

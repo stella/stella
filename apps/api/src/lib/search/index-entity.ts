@@ -100,6 +100,7 @@ const extractFieldText = (content: FieldContent): string => {
 
 const buildSearchDocument = async (
   entityId: SafeId<"entity">,
+  database: Pick<typeof rootDb, "query" | "select">,
 ): Promise<BuiltSearchDocument | null> => {
   // The CAS tokens must be rendered to text by Postgres: a JS Date round-trip
   // truncates microseconds and the upsert's compare-at-full-precision guard
@@ -113,7 +114,7 @@ const buildSearchDocument = async (
   // landing in between can only make the fence miss, never let stale text
   // through. `extracted_content.entity_id` is the primary key, so the
   // correlated read is scalar by construction.
-  const [tokenRow] = await rootDb
+  const [tokenRow] = await database
     .select({
       semanticUpdatedAtToken: sql<TimestampCasToken>`
         COALESCE(${entities.updatedAt}, ${entities.createdAt})::text
@@ -131,7 +132,7 @@ const buildSearchDocument = async (
     return null;
   }
 
-  const entity = await rootDb.query.entities.findFirst({
+  const entity = await database.query.entities.findFirst({
     where: { id: { eq: entityId } },
     columns: {
       id: true,
@@ -176,7 +177,7 @@ const buildSearchDocument = async (
   const workspace = entity.workspace ?? panic("Entity has no workspace");
   const version =
     entity.currentVersion ?? panic("Entity has no currentVersion");
-  const latestVersion = await rootDb.query.entityVersions.findFirst({
+  const latestVersion = await database.query.entityVersions.findFirst({
     where: {
       entityId: { eq: entityId },
       workspaceId: { eq: entity.workspaceId },
@@ -283,8 +284,12 @@ const stripNulBytes = (text: string): string => text.replaceAll("\u0000", "");
 
 export const upsertSearchDocument = async (
   entityId: SafeId<"entity">,
+  {
+    database = rootDb,
+    syncActivity = syncWorkspaceSearchActivity,
+  }: IndexEntityDependencies = {},
 ): Promise<void> => {
-  const built = await buildSearchDocument(entityId);
+  const built = await buildSearchDocument(entityId, database);
   if (!built) {
     return;
   }
@@ -303,7 +308,7 @@ export const upsertSearchDocument = async (
   const observedSource = doc.extractedContentSource;
   const hasObservedSource = observedSource !== null;
 
-  await rootDb.transaction(async (tx) => {
+  await database.transaction(async (tx) => {
     // oxlint-disable-next-line require-search-scope/require-search-scope -- atomic INSERT SELECT fences one entity by explicit organization, workspace, entity, version, timestamp, and extracted-content provenance
     const indexed = await tx.execute<IndexedSearchDocument>(sql`
       INSERT INTO search_documents (
@@ -409,6 +414,11 @@ export const upsertSearchDocument = async (
       SET preview_generation = ${previewGeneration}::uuid
       WHERE entity_id = ${doc.entityId}
     `);
-    await syncWorkspaceSearchActivity(doc.workspaceId, tx);
+    await syncActivity(doc.workspaceId, tx);
   });
+};
+
+export type IndexEntityDependencies = {
+  database?: Pick<typeof rootDb, "query" | "select" | "transaction">;
+  syncActivity?: typeof syncWorkspaceSearchActivity;
 };

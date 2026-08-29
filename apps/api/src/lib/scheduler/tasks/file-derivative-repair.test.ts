@@ -13,7 +13,6 @@ import {
   beforeEach,
   describe,
   expect,
-  mock,
   test,
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -28,18 +27,23 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
+import {
+  FILE_DERIVATIVE_KIND,
+  requeueFileDerivative,
+} from "@/api/lib/file-derivative-queue";
+import type { RequeueFileDerivativeDependencies } from "@/api/lib/file-derivative-queue";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { logger } from "@/api/lib/observability/logger";
+import type { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 
 const { testDb, ids } = await getRlsFixture();
-
-void mock.module("@/api/db/root", () => ({ rootDb: testDb, rlsDb: testDb }));
 
 type QueuedJob = {
   data: { derivativeFileId?: string; fieldId: string };
@@ -79,21 +83,27 @@ class StubQueue {
   }
 }
 
-// Only the queue class and the connection factory are stubbed; the rest of
-// both modules stays real, because Bun's module mocks are process-global and
-// a partial replacement would break every other importer.
-const bullmqModule = await import("bullmq");
-void mock.module("bullmq", () => ({ ...bullmqModule, Queue: StubQueue }));
-const redisClientModule = await import("@/api/lib/redis-client");
-void mock.module("@/api/lib/redis-client", () => ({
-  ...redisClientModule,
-  createBullMqConnection: () => ({}),
-}));
-
-const { REPAIR_FILE_DERIVATIVES_TASK, repairFileDerivatives } =
+const { REPAIR_FILE_DERIVATIVES_TASK, createRepairFileDerivativesTask } =
   await import("@/api/lib/scheduler/tasks/file-derivative-repair");
-const { FILE_DERIVATIVE_KIND } =
-  await import("@/api/lib/file-derivative-queue");
+const requeueDependencies = {
+  createRootScopedDb: () =>
+    asTestRaw<ReturnType<typeof createRootScopedDb>>(
+      async (run: Parameters<ReturnType<typeof createRootScopedDb>>[0]) =>
+        await testDb.transaction(
+          async (tx) => await run(asTestRaw<Parameters<typeof run>[0]>(tx)),
+        ),
+    ),
+  getQueue: () =>
+    asTestRaw<
+      ReturnType<NonNullable<RequeueFileDerivativeDependencies["getQueue"]>>
+    >(new StubQueue()),
+  markFailed: async () => undefined,
+} satisfies RequeueFileDerivativeDependencies;
+const repairFileDerivatives = createRepairFileDerivativesTask({
+  db: testDb,
+  requeue: async (args) =>
+    await requeueFileDerivative(args, requeueDependencies),
+});
 
 const SCHEDULER_JOB_ID = "test.files.repairDerivatives";
 const LEASE_TOKEN = "test-lease";

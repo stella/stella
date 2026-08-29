@@ -28,6 +28,18 @@ const mcpStructuredErrorResult = (
   args: Parameters<typeof structuredErrorResult>[0],
 ): CallToolResult => serializeToolResult(structuredErrorResult(args));
 
+export type ExternalGatewayDependencies = {
+  loadActiveMcpConnectionsForUser: typeof loadActiveMcpConnectionsForUser;
+  proxyMcpToolCall: typeof proxyMcpToolCall;
+  refreshCachedMcpToolsForConnection: typeof refreshCachedMcpToolsForConnection;
+};
+
+const defaultDependencies: ExternalGatewayDependencies = {
+  loadActiveMcpConnectionsForUser,
+  proxyMcpToolCall,
+  refreshCachedMcpToolsForConnection,
+};
+
 type GatewayConnectionToolRow = {
   cachedTools: CachedMcpToolDefinition[] | null;
   connectorId: typeof mcpConnectors.$inferSelect.id;
@@ -65,19 +77,23 @@ export const gatewayLoadErrorResult = (
 
 export const listGatewayExternalMcpTools = async ({
   context,
+  dependencies = defaultDependencies,
 }: {
   context: McpRequestContext;
+  dependencies?: ExternalGatewayDependencies;
 }): Promise<ResolvedExternalMcpTool[]> => {
   let cachedRows = await loadCachedGatewayToolRows({ context });
   if (cachedRows.length === 0) {
     return [];
   }
 
-  if (await refreshMissingCachedTools({ context, rows: cachedRows })) {
+  if (
+    await refreshMissingCachedTools({ context, rows: cachedRows, dependencies })
+  ) {
     cachedRows = await loadCachedGatewayToolRows({ context });
   }
 
-  const connections = await loadActiveMcpConnectionsForUser({
+  const connections = await dependencies.loadActiveMcpConnectionsForUser({
     organizationId: context.organizationId,
     safeDb: context.safeDb,
     userId: context.userId,
@@ -113,11 +129,13 @@ export const listGatewayExternalMcpTools = async ({
 export const resolveGatewayExternalMcpTool = async ({
   context,
   toolName,
+  dependencies = defaultDependencies,
 }: {
   context: McpRequestContext;
   toolName: string;
+  dependencies?: ExternalGatewayDependencies;
 }): Promise<ResolvedExternalMcpTool | null> =>
-  (await listGatewayExternalMcpTools({ context })).find(
+  (await listGatewayExternalMcpTools({ context, dependencies })).find(
     ({ cachedTool }) => cachedTool.exposedName === toolName,
   ) ?? null;
 
@@ -125,14 +143,20 @@ export const callGatewayExternalMcpTool = async ({
   args,
   context,
   toolName,
+  dependencies = defaultDependencies,
 }: {
   args: Record<string, unknown>;
   context: McpRequestContext;
   toolName: string;
+  dependencies?: ExternalGatewayDependencies;
 }) => {
   let resolved: ResolvedExternalMcpTool | null;
   try {
-    resolved = await resolveGatewayExternalMcpTool({ context, toolName });
+    resolved = await resolveGatewayExternalMcpTool({
+      context,
+      toolName,
+      dependencies,
+    });
   } catch (error) {
     // A load fault means we cannot tell whether the tool exists: answer with a
     // retryable error, never a definitive `unknown_tool`.
@@ -172,7 +196,7 @@ export const callGatewayExternalMcpTool = async ({
 
   const startedAt = Date.now();
   try {
-    const result = await proxyMcpToolCall({
+    const result = await dependencies.proxyMcpToolCall({
       args,
       cachedTool: resolved.cachedTool,
       organizationId: context.organizationId,
@@ -284,9 +308,11 @@ const recordGatewayToolAudit = async ({
 const refreshMissingCachedTools = async ({
   context,
   rows,
+  dependencies,
 }: {
   context: McpRequestContext;
   rows: readonly GatewayConnectionToolRow[];
+  dependencies: ExternalGatewayDependencies;
 }): Promise<boolean> => {
   const missingRows = rows.filter((row) => row.cachedTools === null);
   if (missingRows.length === 0) {
@@ -296,7 +322,7 @@ const refreshMissingCachedTools = async ({
   await Promise.all(
     missingRows.map(
       async (row) =>
-        await refreshCachedMcpToolsForConnection({
+        await dependencies.refreshCachedMcpToolsForConnection({
           connectionId: row.userConnectionId,
           organizationId: context.organizationId,
           safeDb: context.safeDb,

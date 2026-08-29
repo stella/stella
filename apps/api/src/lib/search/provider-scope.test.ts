@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { createPgFtsProvider } from "@/api/lib/search/pg-fts-provider";
 import {
   clearRootDbMocks,
   rootDbExecuteMock,
+  rootDbTestDouble,
 } from "@/api/tests/helpers/mock-root-db";
 
-const { pgFtsProvider } = await import("@/api/lib/search/pg-fts-provider");
+const pgFtsProvider = createPgFtsProvider(rootDbTestDouble);
 
 const organizationId = toSafeId<"organization">("org_1");
 const workspaceId = toSafeId<"workspace">("ws_1");

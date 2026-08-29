@@ -36,73 +36,12 @@ const fingerprintTemplatePersistenceRequestMock = mock();
 const configureTemplateFieldsMock = mock();
 const loadOrgAIConfigMock = mock();
 const anonymizeTextFieldsMock = mock();
-const loadAnonymizationGazetteerEntriesMock = mock();
-const realAnonymizationBlacklist =
-  await import("@/api/lib/anonymization-blacklist");
-
-void mock.module("@/api/mcp/anonymization", () => ({
-  anonymizeTextFields: anonymizeTextFieldsMock,
-}));
-
-void mock.module("@/api/lib/anonymization-blacklist", () => ({
-  ...realAnonymizationBlacklist,
-  loadAnonymizationGazetteerEntries: loadAnonymizationGazetteerEntriesMock,
-}));
-
-// Stub every export this service has, not only the two the MCP tools use, so
-// the module mock stays complete when another test file that imports the other
-// fill helpers (e.g. the chat template tools) is run in the same process.
-void mock.module("@/api/lib/templates/template-fill-service", () => ({
-  describeStoredTemplate: describeStoredTemplateMock,
-  fillStoredTemplateWithText: fillStoredTemplateWithTextMock,
-  fillStoredTemplateWithTextStrict: fillStoredTemplateWithTextStrictMock,
-  fillStoredTemplate: mock(),
-  fillStoredTemplateDocx: fillStoredTemplateDocxMock,
-  fillTemplateDocx: mock(),
-  fillTemplateDocxStrict: mock(),
-}));
-
-void mock.module("@/api/mcp/template-persistence", () => ({
-  claimTemplatePersistenceRequest: claimTemplatePersistenceRequestMock,
-  fingerprintTemplatePersistenceRequest:
-    fingerprintTemplatePersistenceRequestMock,
-  persistFilledTemplateDocument: createEntityFromBufferMock,
-  persistFilledTemplateVersion: createEntityVersionFromBufferMock,
-  recordTemplatePersistenceReceipt: recordTemplatePersistenceReceiptMock,
-  releaseTemplatePersistenceClaim: releaseTemplatePersistenceClaimMock,
-}));
-
-void mock.module("@/api/lib/templates/create-template", () => ({
-  createStoredTemplate: createStoredTemplateMock,
-}));
-
-void mock.module("@/api/lib/templates/record-use", () => ({
-  recordTemplateFill: recordTemplateFillMock,
-  recordTemplateUse: recordTemplateUseMock,
-}));
-
-void mock.module(
-  "@/api/handlers/templates/configure-template-fields-service",
-  () => ({
-    configureTemplateFields: configureTemplateFieldsMock,
-  }),
-);
-
 // Stubbed so the fill handler never reaches the real (DB-backed) config
 // loader or AI model chain; a null config makes AI fields a no-op.
 // A null org AI config (the mock returns undefined) makes the real
 // ai-field-generator builders return undefined, so AI fields/conditions are a
 // no-op without mocking the generator module — which would bleed process-wide
 // into ai-field-generator.test.ts (Bun's mock.module is global).
-void mock.module("@/api/lib/ai-config-loader", () => ({
-  loadOrgAIConfig: loadOrgAIConfigMock,
-  loadOrgSettingsForAuth: mock(async () => ({
-    orgAIConfig: null,
-    orgAIConfigStatus: "ok",
-    promptCachingEnabled: false,
-  })),
-  loadPromptCachingPreference: mock(async () => false),
-}));
 
 const { getMcpToolDefinition, handleMcpToolCall, listMcpTools } =
   await import("@/api/mcp/tools");
@@ -210,6 +149,25 @@ const createContext = ({
   safeDb: toSafeDbMock(scopedDb),
   scopedDb,
   userId: toSafeId<"user">("user_1"),
+  testDependencies: {
+    describeStoredTemplate: describeStoredTemplateMock,
+    fillStoredTemplateDocx: fillStoredTemplateDocxMock,
+    fillStoredTemplateWithText: fillStoredTemplateWithTextMock,
+    fillStoredTemplateWithTextStrict: fillStoredTemplateWithTextStrictMock,
+    createStoredTemplate: createStoredTemplateMock,
+    recordTemplateFill: recordTemplateFillMock,
+    recordTemplateUse: recordTemplateUseMock,
+    claimTemplatePersistenceRequest: claimTemplatePersistenceRequestMock,
+    fingerprintTemplatePersistenceRequest:
+      fingerprintTemplatePersistenceRequestMock,
+    persistFilledTemplateDocument: createEntityFromBufferMock,
+    persistFilledTemplateVersion: createEntityVersionFromBufferMock,
+    recordTemplatePersistenceReceipt: recordTemplatePersistenceReceiptMock,
+    releaseTemplatePersistenceClaim: releaseTemplatePersistenceClaimMock,
+    configureTemplateFields: configureTemplateFieldsMock,
+    loadOrgAIConfig: loadOrgAIConfigMock,
+    anonymizeTextFields: anonymizeTextFieldsMock,
+  },
 });
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -267,8 +225,6 @@ describe("MCP template tools", () => {
     loadOrgAIConfigMock.mockReset();
     loadOrgAIConfigMock.mockResolvedValue(null);
     anonymizeTextFieldsMock.mockReset();
-    loadAnonymizationGazetteerEntriesMock.mockReset();
-    loadAnonymizationGazetteerEntriesMock.mockResolvedValue([]);
   });
 
   afterEach(() => {

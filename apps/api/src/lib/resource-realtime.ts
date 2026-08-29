@@ -19,8 +19,9 @@ import { broadcast, broadcastToOrganization } from "@/api/lib/sse";
 export const broadcastWorkspaceResourceUpdated = (
   workspaceId: SafeId<"workspace">,
   resource: ResourceRef,
+  broadcastEvent: typeof broadcast = broadcast,
 ): void => {
-  broadcast(workspaceId, resourceUpdatedRealtimeEvent(resource));
+  broadcastEvent(workspaceId, resourceUpdatedRealtimeEvent(resource));
 };
 
 export const broadcastWorkspaceResourceDeleted = (
@@ -40,8 +41,9 @@ export const broadcastWorkspaceResourceChanges = (
 export const broadcastWorkspaceResourceSetUpdated = (
   workspaceId: SafeId<"workspace">,
   resourceType: ResourceType,
+  broadcastEvent: typeof broadcast = broadcast,
 ): void => {
-  broadcast(workspaceId, resourceSetUpdatedRealtimeEvent(resourceType));
+  broadcastEvent(workspaceId, resourceSetUpdatedRealtimeEvent(resourceType));
 };
 
 /** Organization fan-out carries a public resource type, never a resource ID. */

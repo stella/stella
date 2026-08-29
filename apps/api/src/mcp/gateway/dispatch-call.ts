@@ -16,6 +16,20 @@ import { resolveSkillTool } from "@/api/mcp/gateway/skills";
 import type { InternalToolResult } from "@/api/mcp/tool-types";
 import { structuredErrorResult, toolDataResult } from "@/api/mcp/tool-utils";
 
+export type GatewayDispatchDependencies = {
+  callGatewayExternalMcpTool: typeof callGatewayExternalMcpTool;
+  gatewayLoadErrorResult: typeof gatewayLoadErrorResult;
+  recordSkillGatewayToolAudit: typeof recordSkillGatewayToolAudit;
+  resolveSkillTool: typeof resolveSkillTool;
+};
+
+const defaultDependencies: GatewayDispatchDependencies = {
+  callGatewayExternalMcpTool,
+  gatewayLoadErrorResult,
+  recordSkillGatewayToolAudit,
+  resolveSkillTool,
+};
+
 export type GatewayDispatchResult =
   | { type: "external_mcp"; result: CallToolResult }
   | { type: "internal"; result: InternalToolResult };
@@ -25,11 +39,13 @@ export const dispatchGatewayToolCall = async ({
   context,
   mode,
   toolName,
+  dependencies = defaultDependencies,
 }: {
   args: Record<string, unknown>;
   context: McpRequestContext;
   mode: McpMode;
   toolName: string;
+  dependencies?: GatewayDispatchDependencies;
 }): Promise<GatewayDispatchResult | null> => {
   if (mode !== "default") {
     return null;
@@ -38,7 +54,11 @@ export const dispatchGatewayToolCall = async ({
   if (isExternalMcpToolName(toolName)) {
     return {
       type: "external_mcp",
-      result: await callGatewayExternalMcpTool({ args, context, toolName }),
+      result: await dependencies.callGatewayExternalMcpTool({
+        args,
+        context,
+        toolName,
+      }),
     };
   }
 
@@ -49,11 +69,11 @@ export const dispatchGatewayToolCall = async ({
   const startedAt = Date.now();
   let skill: ResolvedSkillTool | null;
   try {
-    skill = await resolveSkillTool({ context, toolName });
+    skill = await dependencies.resolveSkillTool({ context, toolName });
   } catch (error) {
     // A load fault means we cannot tell whether the skill exists: answer with a
     // retryable error, never a definitive `unknown_tool`.
-    const loadError = gatewayLoadErrorResult(error);
+    const loadError = dependencies.gatewayLoadErrorResult(error);
     if (loadError) {
       return { type: "internal", result: loadError };
     }
@@ -70,7 +90,7 @@ export const dispatchGatewayToolCall = async ({
     };
   }
 
-  await recordSkillGatewayToolAudit({
+  await dependencies.recordSkillGatewayToolAudit({
     context,
     durationMs: Date.now() - startedAt,
     outcome: "success",

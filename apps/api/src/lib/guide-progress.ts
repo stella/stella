@@ -25,15 +25,17 @@ type UpdatedGuideProgressRow = {
 };
 
 export const patchUserGuideProgress = async ({
+  db,
   status,
   tourId,
   userId,
 }: {
+  db?: Pick<typeof rootDb, "execute">;
   status: GuideProgressStatus;
   tourId: GuideProgressTourId;
   userId: SafeId<"user">;
 }): Promise<string | null> => {
-  const rows = await rootDb.execute<UpdatedGuideProgressRow>(sql`
+  const rows = await (db ?? rootDb).execute<UpdatedGuideProgressRow>(sql`
     UPDATE "user"
     SET
       guide_progress = jsonb_set(

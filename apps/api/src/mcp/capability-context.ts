@@ -83,8 +83,9 @@ export const synthesizeCapabilityContext = async ({
   request: Request;
   workspaceId: SafeId<"workspace"> | undefined;
 }): Promise<SynthesizedCapabilityContext> => {
-  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
-    await loadOrgSettingsForAuth(context.organizationId);
+  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } = await (
+    context.testDependencies?.loadOrgSettingsForAuth ?? loadOrgSettingsForAuth
+  )(context.organizationId);
 
   const recordAuditEvent =
     workspaceId === undefined

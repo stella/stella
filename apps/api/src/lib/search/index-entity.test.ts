@@ -6,8 +6,11 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
+import { upsertSearchDocument as upsertSearchDocumentWithDependencies } from "@/api/lib/search/index-entity";
+import type { IndexEntityDependencies } from "@/api/lib/search/index-entity";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
@@ -104,25 +107,20 @@ const transactionMock = mock(
   ) => await runTransaction({ execute: executeMock }),
 );
 
-void mock.module("@/api/db/root", () => ({
-  rootDb: {
-    execute: executeMock,
-    query: {
-      entities: {
-        findFirst: findFirstMock,
-      },
-      entityVersions: {
-        findFirst: latestVersionFindFirstMock,
-      },
-    },
-    select: selectMock,
-    transaction: transactionMock,
+const database = asTestRaw<NonNullable<IndexEntityDependencies["database"]>>({
+  query: {
+    entities: { findFirst: findFirstMock },
+    entityVersions: { findFirst: latestVersionFindFirstMock },
   },
-}));
+  select: selectMock,
+  transaction: transactionMock,
+});
 
-void mock.module("@/api/lib/search/index-global", () => ({
-  syncWorkspaceSearchActivity: syncWorkspaceSearchActivityMock,
-}));
+const upsertSearchDocument = async (entityId: SafeId<"entity">) =>
+  await upsertSearchDocumentWithDependencies(entityId, {
+    database,
+    syncActivity: syncWorkspaceSearchActivityMock,
+  });
 
 let analytics: RecordingAnalytics;
 
@@ -147,9 +145,6 @@ afterEach(() => {
 });
 
 test("persists an entity's semantic updated timestamp when indexing", async () => {
-  const { upsertSearchDocument } =
-    await import("@/api/lib/search/index-entity");
-
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
   const query = executeMock.mock.calls.at(0)?.[0];
@@ -181,9 +176,6 @@ test("persists an entity's semantic updated timestamp when indexing", async () =
 });
 
 test("rejects an out-of-order projection against the authoritative entity", async () => {
-  const { upsertSearchDocument } =
-    await import("@/api/lib/search/index-entity");
-
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
   const query = executeMock.mock.calls.at(0)?.[0];
@@ -212,9 +204,6 @@ test("rejects an out-of-order projection against the authoritative entity", asyn
 
 test("does not advance matter activity when a stale projection is rejected", async () => {
   executeMock.mockResolvedValueOnce([]);
-  const { upsertSearchDocument } =
-    await import("@/api/lib/search/index-entity");
-
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
   expect(syncWorkspaceSearchActivityMock).not.toHaveBeenCalled();
@@ -223,9 +212,6 @@ test("does not advance matter activity when a stale projection is rejected", asy
 test("propagates workspace activity failures from the projection transaction", async () => {
   const activityFailure = new Error("workspace activity unavailable");
   syncWorkspaceSearchActivityMock.mockRejectedValueOnce(activityFailure);
-  const { upsertSearchDocument } =
-    await import("@/api/lib/search/index-entity");
-
   const rejection: unknown = await upsertSearchDocument(
     toSafeId<"entity">("entity_1"),
   ).then(
@@ -263,9 +249,6 @@ test("keeps the last complete projection when extracted content cannot decrypt",
       sourceSha256Hex: currentFileField.content.sha256Hex,
     },
   });
-  const { upsertSearchDocument } =
-    await import("@/api/lib/search/index-entity");
-
   const rejection: unknown = await upsertSearchDocument(
     toSafeId<"entity">("entity_1"),
   ).then(
@@ -310,9 +293,6 @@ test("excludes stale extracted text and fences its observed provenance", async (
       sourceSha256Hex: currentFileField.content.sha256Hex,
     },
   });
-  const { upsertSearchDocument } =
-    await import("@/api/lib/search/index-entity");
-
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
   const query = executeMock.mock.calls.at(0)?.[0];
@@ -362,9 +342,6 @@ test("strips NUL bytes from indexed title and text", async () => {
       sourceSha256Hex: currentFileField.content.sha256Hex,
     },
   });
-  const { upsertSearchDocument } =
-    await import("@/api/lib/search/index-entity");
-
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
   // Sweep every execution: the preview-passage writes bind derived text in
@@ -402,9 +379,6 @@ test("preserves pre-provenance extracted text until a fenced writer replaces it"
       sourceSha256Hex: null,
     },
   });
-  const { upsertSearchDocument } =
-    await import("@/api/lib/search/index-entity");
-
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
   // Indexed only if the projection decrypted the envelope under the entity's
@@ -447,9 +421,6 @@ test("excludes legacy extracted text after a deleted-version rollback", async ()
       sourceSha256Hex: null,
     },
   });
-  const { upsertSearchDocument } =
-    await import("@/api/lib/search/index-entity");
-
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
   expect(executeMock.mock.calls.length).toBeGreaterThan(0);

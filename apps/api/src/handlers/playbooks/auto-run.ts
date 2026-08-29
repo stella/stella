@@ -44,124 +44,145 @@ const config = {
 // approved snapshot a single run pins and opens the same durable per-document
 // runs; a per-playbook failure (e.g. the properties cap) skips that one and the
 // batch continues.
-const autoRunPlaybooks = createSafeHandler(
-  config,
-  async function* ({
-    safeDb,
-    scopedDb,
-    workspaceId,
-    session,
-    user,
-    recordAuditEvent,
-  }) {
-    const organizationId = session.activeOrganizationId;
+type AutoRunDependencies = {
+  loadLatestApprovedVersions: typeof loadLatestApprovedVersions;
+  openPlaybookRun: typeof openPlaybookRun;
+  resolveApplicablePlaybooks: typeof resolveApplicablePlaybooks;
+  startWorkflow: typeof startWorkflow;
+};
 
-    const txResult = yield* Result.await(
-      safeDb(async (tx) => {
-        const playbooks = await tx.query.playbookDefinitions.findMany({
-          where: { organizationId: { eq: organizationId } },
-          columns: {
-            id: true,
-            name: true,
-            positions: true,
-            scope: true,
-          },
-          limit: LIMITS.playbookDefinitionsCount,
-        });
+const DEFAULT_AUTO_RUN_DEPENDENCIES: AutoRunDependencies = {
+  loadLatestApprovedVersions,
+  openPlaybookRun,
+  resolveApplicablePlaybooks,
+  startWorkflow,
+};
 
-        const applicable = await resolveApplicablePlaybooks({
-          tx,
-          workspaceId,
-          organizationId,
-          playbooks,
-        });
+export const createAutoRunPlaybooks = (
+  dependencies: AutoRunDependencies = DEFAULT_AUTO_RUN_DEPENDENCIES,
+) =>
+  createSafeHandler(
+    config,
+    async function* ({
+      safeDb,
+      scopedDb,
+      workspaceId,
+      session,
+      user,
+      recordAuditEvent,
+    }) {
+      const organizationId = session.activeOrganizationId;
 
-        // One read for the whole batch: a pin per playbook resolved separately
-        // would grow the round-trips with the org's library.
-        const approvedVersions = await loadLatestApprovedVersions({
-          tx,
-          organizationId,
-          playbookDefinitionIds: applicable.map((playbook) => playbook.id),
-        });
+      const txResult = yield* Result.await(
+        safeDb(async (tx) => {
+          const playbooks = await tx.query.playbookDefinitions.findMany({
+            where: { organizationId: { eq: organizationId } },
+            columns: {
+              id: true,
+              name: true,
+              positions: true,
+              scope: true,
+            },
+            limit: LIMITS.playbookDefinitionsCount,
+          });
 
-        const materializedPropertyIds: SafeId<"property">[] = [];
-        let playbooksRun = 0;
-        let documentRunCount = 0;
-
-        for (const definition of applicable) {
-          // oxlint-disable-next-line no-await-in-loop -- one shared transaction: each run reads the cumulative property count to enforce the per-workspace cap, and a single tx cannot run writes in parallel
-          const opened = await openPlaybookRun({
+          const applicable = await dependencies.resolveApplicablePlaybooks({
             tx,
             workspaceId,
             organizationId,
-            userId: user.id,
-            definition,
-            latestApprovedVersion: approvedVersions.get(definition.id) ?? null,
-            projection: PLAYBOOK_RUN_PROJECTION.COLUMNS,
-            recordAuditEvent,
+            playbooks,
           });
-          // Skip a playbook that hit a per-run limit; the rest of the batch
-          // still materializes rather than failing the whole auto-run.
-          if (!opened.ok || opened.materializedPropertyIds.length === 0) {
-            continue;
+
+          // One read for the whole batch: a pin per playbook resolved separately
+          // would grow the round-trips with the org's library.
+          const approvedVersions =
+            await dependencies.loadLatestApprovedVersions({
+              tx,
+              organizationId,
+              playbookDefinitionIds: applicable.map((playbook) => playbook.id),
+            });
+
+          const materializedPropertyIds: SafeId<"property">[] = [];
+          let playbooksRun = 0;
+          let documentRunCount = 0;
+
+          for (const definition of applicable) {
+            // oxlint-disable-next-line no-await-in-loop -- one shared transaction: each run reads the cumulative property count to enforce the per-workspace cap, and a single tx cannot run writes in parallel
+            const opened = await dependencies.openPlaybookRun({
+              tx,
+              workspaceId,
+              organizationId,
+              userId: user.id,
+              definition,
+              latestApprovedVersion:
+                approvedVersions.get(definition.id) ?? null,
+              projection: PLAYBOOK_RUN_PROJECTION.COLUMNS,
+              recordAuditEvent,
+            });
+            // Skip a playbook that hit a per-run limit; the rest of the batch
+            // still materializes rather than failing the whole auto-run.
+            if (!opened.ok || opened.materializedPropertyIds.length === 0) {
+              continue;
+            }
+            materializedPropertyIds.push(...opened.materializedPropertyIds);
+            documentRunCount += opened.tableRuns.runs.length;
+            playbooksRun += 1;
           }
-          materializedPropertyIds.push(...opened.materializedPropertyIds);
-          documentRunCount += opened.tableRuns.runs.length;
-          playbooksRun += 1;
-        }
 
-        return { playbooksRun, materializedPropertyIds, documentRunCount };
-      }),
-    );
-
-    if (txResult.materializedPropertyIds.length === 0) {
-      return Result.ok({
-        playbooksRun: 0,
-        runPropertyCount: 0,
-        documentRunCount: 0,
-      });
-    }
-
-    const started = yield* Result.await(
-      Result.tryPromise({
-        try: async () =>
-          await startWorkflow({
-            workspaceId,
-            organizationId,
-            userId: user.id,
-            scopedDb,
-            propertyIds: txResult.materializedPropertyIds,
-          }),
-        catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Internal server error",
-            cause,
-          }),
-      }),
-    );
-    // Answering 200 on a start that never happened would leave the whole
-    // batch's columns with nothing to grade them. Nothing is unwound: the
-    // columns are upserted by playbook source id and left stale, so a retry
-    // maps back to the same ones instead of materializing a second set.
-    if (
-      playbookRunStartOutcome(started.status) ===
-      PLAYBOOK_RUN_START_OUTCOME.NOT_STARTED
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "Failed to start the review.",
+          return { playbooksRun, materializedPropertyIds, documentRunCount };
         }),
       );
-    }
 
-    return Result.ok({
-      playbooksRun: txResult.playbooksRun,
-      runPropertyCount: txResult.materializedPropertyIds.length,
-      documentRunCount: txResult.documentRunCount,
-    });
-  },
-);
+      if (txResult.materializedPropertyIds.length === 0) {
+        return Result.ok({
+          playbooksRun: 0,
+          runPropertyCount: 0,
+          documentRunCount: 0,
+        });
+      }
+
+      const started = yield* Result.await(
+        Result.tryPromise({
+          try: async () =>
+            await dependencies.startWorkflow({
+              workspaceId,
+              organizationId,
+              userId: user.id,
+              scopedDb,
+              propertyIds: txResult.materializedPropertyIds,
+            }),
+          catch: (cause) =>
+            new HandlerError({
+              status: 500,
+              message: "Internal server error",
+              cause,
+            }),
+        }),
+      );
+      // Answering 200 on a start that never happened would leave the whole
+      // batch's columns with nothing to grade them. Nothing is unwound: the
+      // columns are upserted by playbook source id and left stale, so a retry
+      // maps back to the same ones instead of materializing a second set.
+      if (
+        playbookRunStartOutcome(started.status) ===
+        PLAYBOOK_RUN_START_OUTCOME.NOT_STARTED
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 500,
+            message: "Failed to start the review.",
+          }),
+        );
+      }
+
+      return Result.ok({
+        playbooksRun: txResult.playbooksRun,
+        runPropertyCount: txResult.materializedPropertyIds.length,
+        documentRunCount: txResult.documentRunCount,
+      });
+    },
+  );
+
+const autoRunPlaybooks = createAutoRunPlaybooks();
 
 export default autoRunPlaybooks;

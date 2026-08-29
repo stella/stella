@@ -1028,7 +1028,10 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
     // validated atomically inside createTimeEntryHandler, which also emits the
     // create audit event.
     const created = await Result.gen(() =>
-      createTimeEntryHandler({
+      (
+        context.testDependencies?.createTimeEntryHandler ??
+        createTimeEntryHandler
+      )({
         safeDb: context.safeDb,
         organizationId: context.organizationId,
         workspaceId,

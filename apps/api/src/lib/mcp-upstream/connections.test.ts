@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
@@ -12,10 +12,9 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 // This suite pins the OAuth/token-refresh connection lifecycle in
 // `connections.ts` against faked crypto, OAuth, transport, and DB
 // collaborators. All external collaborators are injected either as
-// arguments (`safeDb`), replaced with `mock.module`, or routed into an
-// in-memory recorder (analytics), so no network, KMS, or Postgres access
-// happens. The point is to lock in the exact failure-normalization
-// contract the MCP gateway depends on.
+// arguments (`safeDb`), or routed into an in-memory recorder (analytics), so
+// no network, KMS, or Postgres access happens. The point is to lock in the
+// exact failure-normalization contract the MCP gateway depends on.
 
 type RefreshResult = Result<
   { access_token: string; refresh_token?: string },
@@ -44,7 +43,7 @@ const state = {
   transports: [] as CapturedTransport[],
 };
 
-void mock.module("@tanstack/ai-mcp", () => ({
+const connectionDependenciesTestDouble = {
   createMCPClient: async ({ transport }: { transport: CapturedTransport }) => {
     state.transports.push(transport);
     return {
@@ -54,35 +53,57 @@ void mock.module("@tanstack/ai-mcp", () => ({
       tools: async (defs?: unknown) => await state.toolsImpl(defs),
     };
   },
-}));
-
-void mock.module("@/api/lib/mcp-upstream/oauth", () => ({
   refreshOAuthToken: async () => {
     state.refreshCalls += 1;
     return state.refresh();
   },
-  // Deterministic future expiry; the value is only forwarded to the DB set.
   tokenExpiresAt: () => new Date(Date.now() + 3_600_000),
-}));
-
-void mock.module("@/api/lib/mcp-upstream/crypto", () => ({
   decryptMcpSecret: async ({ purpose }: { purpose: string }) =>
     `decrypted-${purpose}`,
   encryptMcpSecret: async () => {
     state.encryptCalls += 1;
     return { ciphertext: Buffer.from("cipher"), iv: Buffer.from("iv") };
   },
-}));
+};
 
-void mock.module("@/api/lib/safe-outbound-fetch", () => ({
+const {
+  createMcpClientForConnection: createMcpClientForConnectionImpl,
+  proxyMcpToolCall: proxyMcpToolCallImpl,
+} = await import("@/api/lib/mcp-upstream/connections");
+
+const connectionDependencies = asTestRaw<
+  NonNullable<
+    Parameters<typeof createMcpClientForConnectionImpl>[0]["dependencies"]
+  >
+>(connectionDependenciesTestDouble);
+const outboundFetch = asTestRaw<
+  NonNullable<
+    Parameters<typeof createMcpClientForConnectionImpl>[0]["outboundFetch"]
+  >
+>({
   safeOutboundFetchStream: async () =>
     Result.err(new Error("unused: transport is mocked at the client layer")),
   validateOutboundFetchTarget: async (url: string) =>
     Result.ok({ url: new URL(url) }),
-}));
+});
 
-const { createMcpClientForConnection, proxyMcpToolCall } =
-  await import("@/api/lib/mcp-upstream/connections");
+const createMcpClientForConnection = async (
+  options: Parameters<typeof createMcpClientForConnectionImpl>[0],
+) =>
+  await createMcpClientForConnectionImpl({
+    ...options,
+    dependencies: connectionDependencies,
+    outboundFetch,
+  });
+
+const proxyMcpToolCall = async (
+  options: Parameters<typeof proxyMcpToolCallImpl>[0],
+) =>
+  await proxyMcpToolCallImpl({
+    ...options,
+    dependencies: connectionDependencies,
+    outboundFetch,
+  });
 
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");

@@ -8,12 +8,14 @@
  */
 
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { envBase } from "@/api/env-base";
+import { createStoredStyleSet } from "@/api/handlers/style-sets/storage";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { STYLE_SET_PACKAGE_ABANDON_DELAY_MS } from "@/api/lib/style-set-package-cleanup-queue";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -23,17 +25,9 @@ type CleanupClaim = { delayMs?: number; s3Key: string; styleSetId: string };
 
 const claims: CleanupClaim[] = [];
 
-const cleanupQueueModule =
-  await import("@/api/lib/style-set-package-cleanup-queue");
-void mock.module("@/api/lib/style-set-package-cleanup-queue", () => ({
-  ...cleanupQueueModule,
-  enqueueStyleSetPackageCleanup: async (claim: CleanupClaim) => {
-    claims.push(claim);
-  },
-}));
-
-const { createStoredStyleSet } =
-  await import("@/api/handlers/style-sets/storage");
+const enqueueCleanup = async (claim: CleanupClaim) => {
+  claims.push(claim);
+};
 
 const bucket = envBase.S3_BUCKET;
 let fake: FakeS3;
@@ -64,6 +58,7 @@ const createRejectedStyleSet = async () =>
     name: "Kancelářské styly",
     buffer: Buffer.from("style set"),
     recordAuditEvent,
+    enqueueCleanup,
   });
 
 describe("style set package cleanup durability", () => {
@@ -82,9 +77,7 @@ describe("style set package cleanup durability", () => {
     expect(Result.isError(result)).toBe(true);
     expect(writtenKeys()).toHaveLength(1);
     expect(claims.map(({ s3Key }) => s3Key)).toEqual(writtenKeys());
-    expect(claims.at(0)?.delayMs).toBe(
-      cleanupQueueModule.STYLE_SET_PACKAGE_ABANDON_DELAY_MS,
-    );
+    expect(claims.at(0)?.delayMs).toBe(STYLE_SET_PACKAGE_ABANDON_DELAY_MS);
     // The inline cleanup ran: nothing the claim would have to collect later.
     expect(storedKeys()).toEqual([]);
   });

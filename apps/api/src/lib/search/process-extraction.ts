@@ -154,19 +154,22 @@ export type NativeExtractionProjectionOutcome =
   | "preserved"
   | "source_cancelled";
 
-export const persistNativeExtractionProjection = async ({
-  charCount,
-  ciphertext,
-  entityId,
-  entityVersionId,
-  fieldId,
-  iv,
-  organizationId,
-  sourceFileId,
-  sourceSha256Hex,
-  workspaceId,
-}: NativeExtractionProjectionOptions): Promise<NativeExtractionProjectionOutcome> =>
-  await rootDb.transaction(async (tx) => {
+export const persistNativeExtractionProjection = async (
+  {
+    charCount,
+    ciphertext,
+    entityId,
+    entityVersionId,
+    fieldId,
+    iv,
+    organizationId,
+    sourceFileId,
+    sourceSha256Hex,
+    workspaceId,
+  }: NativeExtractionProjectionOptions,
+  database: Pick<typeof rootDb, "transaction"> = rootDb,
+): Promise<NativeExtractionProjectionOutcome> =>
+  await database.transaction(async (tx) => {
     // Manual OCR request and projection transactions take this same lock first.
     // Keeping the conditional write in the next statement gives it a fresh
     // READ COMMITTED snapshot after any lock waiter ahead of us commits.
@@ -286,12 +289,20 @@ export const executeNativeExtraction = async ({
   lifecycleSignal,
   readSource = getS3ObjectWithSignal,
   run,
+  dependencies = EXECUTE_NATIVE_EXTRACTION_DEPENDENCIES,
 }: {
   fileField: Extract<FieldContent, { type: "file" }>;
   lifecycleSignal: AbortSignal;
   readSource?: (key: string, signal: AbortSignal) => Promise<ArrayBuffer>;
   run: NativeExtractionRun;
+  dependencies?: ExecuteNativeExtractionDependencies | undefined;
 }): Promise<NativeExtractionProjectionOutcome> => {
+  const {
+    extractText,
+    persistProjection,
+    requestAutomaticOcr,
+    restoreManualOcr,
+  } = dependencies;
   const source = pickExtractionSource(fileField);
   const key = createFileKey({
     organizationId: run.organizationId,
@@ -308,14 +319,10 @@ export const executeNativeExtraction = async ({
     },
   );
   lifecycleSignal.throwIfAborted();
-  const extraction = await extractFileTextResult(
-    buffer,
-    source.extractionMimeType,
-    {
-      signal: lifecycleSignal,
-      timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
-    },
-  );
+  const extraction = await extractText(buffer, source.extractionMimeType, {
+    signal: lifecycleSignal,
+    timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
+  });
   if (Result.isError(extraction)) {
     throw extraction.error;
   }
@@ -325,7 +332,7 @@ export const executeNativeExtraction = async ({
   const persistedText = text ?? "";
   const encrypted = await encryptContent(run.organizationId, persistedText);
   lifecycleSignal.throwIfAborted();
-  const persistenceOutcome = await persistNativeExtractionProjection({
+  const persistenceOutcome = await persistProjection({
     charCount: persistedText.length,
     ciphertext: encrypted.ciphertext,
     entityId: run.entityId,
@@ -342,7 +349,7 @@ export const executeNativeExtraction = async ({
   }
 
   if (source.extractionMimeType === PDF_MIME_TYPE) {
-    await restoreManualOcrRunAfterProjectionLoss({
+    await restoreManualOcr({
       entityId: run.entityId,
       entityVersionId: run.entityVersionId,
       fieldId: run.fieldId,
@@ -358,7 +365,7 @@ export const executeNativeExtraction = async ({
   }
 
   if (text === null && source.extractionMimeType === PDF_MIME_TYPE) {
-    await requestAutomaticDocumentOcr({
+    await requestAutomaticOcr({
       entityId: run.entityId,
       entityVersionId: run.entityVersionId,
       fieldId: run.fieldId,
@@ -371,6 +378,21 @@ export const executeNativeExtraction = async ({
   }
   return persistenceOutcome;
 };
+
+export type ExecuteNativeExtractionDependencies = {
+  extractText: typeof extractFileTextResult;
+  persistProjection: typeof persistNativeExtractionProjection;
+  requestAutomaticOcr: typeof requestAutomaticDocumentOcr;
+  restoreManualOcr: typeof restoreManualOcrRunAfterProjectionLoss;
+};
+
+const EXECUTE_NATIVE_EXTRACTION_DEPENDENCIES: ExecuteNativeExtractionDependencies =
+  {
+    extractText: extractFileTextResult,
+    persistProjection: persistNativeExtractionProjection,
+    requestAutomaticOcr: requestAutomaticDocumentOcr,
+    restoreManualOcr: restoreManualOcrRunAfterProjectionLoss,
+  };
 
 /**
  * The immutable source identity of a native-extraction run. Both request paths
@@ -612,8 +634,13 @@ export const processExtraction = async (
   options?: {
     filePropertyId?: SafeId<"property"> | undefined;
   },
+  {
+    database = rootDb,
+    enqueueRun = enqueueDocumentProcessingRun,
+    indexEntity = async (id) => await getSearchProvider().indexEntity(id),
+  }: ProcessExtractionDependencies = {},
 ): Promise<void> => {
-  const entity = await readExtractionEntity(rootDb, entityId);
+  const entity = await readExtractionEntity(database, entityId);
 
   if (!entity) {
     return;
@@ -625,24 +652,24 @@ export const processExtraction = async (
     options?.filePropertyId,
   );
   if (!source) {
-    await getSearchProvider().indexEntity(entityId);
+    await indexEntity(entityId);
     return;
   }
 
   const { entityVersionId, fieldId, fileField, organizationId, workspaceId } =
     source;
-  const inserted = await rootDb
+  const inserted = await database
     .insert(documentProcessingRuns)
     .values(nativeExtractionRunValues(source))
     .onConflictDoNothing({ target: NATIVE_EXTRACTION_SOURCE_TARGET })
     .returning({ id: documentProcessingRuns.id });
   const created = inserted.at(0);
   if (created) {
-    await enqueueDocumentProcessingRun(created.id);
+    await enqueueRun(created.id);
     return;
   }
   const existing = (
-    await rootDb
+    await database
       .select({
         id: documentProcessingRuns.id,
         status: documentProcessingRuns.status,
@@ -673,14 +700,14 @@ export const processExtraction = async (
     return;
   }
   if (existing.status === "queued") {
-    await enqueueDocumentProcessingRun(existing.id);
+    await enqueueRun(existing.id);
     return;
   }
   if (existing.status !== "succeeded") {
     return;
   }
 
-  const projection = await rootDb.query.extractedContent.findFirst({
+  const projection = await database.query.extractedContent.findFirst({
     where: {
       entityId: { eq: entityId },
       organizationId: { eq: organizationId },
@@ -695,14 +722,14 @@ export const processExtraction = async (
   if (projection) {
     // The durable extraction still matches; rebuild a projection that may
     // have been deliberately removed during version rollback.
-    await getSearchProvider().indexEntity(entityId);
+    await indexEntity(entityId);
     return;
   }
 
   // The unique run belongs to this immutable source, but its succeeded
   // projection was replaced by a later version. Requeue it conditionally so
   // rollback can reconstruct the promoted version without racing a worker.
-  const requeued = await rootDb
+  const requeued = await database
     .update(documentProcessingRuns)
     .set({
       claimedAt: null,
@@ -726,6 +753,12 @@ export const processExtraction = async (
     .returning({ id: documentProcessingRuns.id });
   const retry = requeued.at(0);
   if (retry) {
-    await enqueueDocumentProcessingRun(retry.id);
+    await enqueueRun(retry.id);
   }
+};
+
+export type ProcessExtractionDependencies = {
+  database?: Pick<typeof rootDb, "insert" | "query" | "select" | "update">;
+  enqueueRun?: typeof enqueueDocumentProcessingRun;
+  indexEntity?: (entityId: SafeId<"entity">) => Promise<void>;
 };

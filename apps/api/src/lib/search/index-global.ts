@@ -595,20 +595,23 @@ const buildSearchFilterFragments = ({
   };
 };
 
-export const searchGlobal = async ({
-  query,
-  organizationId,
-  userId,
-  accessibleWorkspaceIds,
-  selectedWorkspaceIds,
-  types,
-  editedByUserIds,
-  mimeTypes,
-  updatedFrom,
-  updatedTo,
-  cursor,
-  limit,
-}: GlobalSearchQuery): Promise<GlobalSearchResult> => {
+export const searchGlobal = async (
+  {
+    query,
+    organizationId,
+    userId,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds,
+    types,
+    editedByUserIds,
+    mimeTypes,
+    updatedFrom,
+    updatedTo,
+    cursor,
+    limit,
+  }: GlobalSearchQuery,
+  database: Pick<typeof rootDb, "execute"> = rootDb,
+): Promise<GlobalSearchResult> => {
   const parsedCursor = parseGlobalSearchCursor(cursor);
   const pagination = (() => {
     switch (parsedCursor.type) {
@@ -702,7 +705,7 @@ export const searchGlobal = async ({
   });
 
   const entityPromise = rowsWhen(hasSelectedEntityType(selected), () =>
-    rootDb.execute(sql`
+    database.execute(sql`
       SELECT
         sd.entity_id AS id,
         sd.workspace_id,
@@ -748,7 +751,7 @@ export const searchGlobal = async ({
   const matterPromise = rowsWhen(
     !restrictToEntities && shouldSearchType(selected, "matter"),
     () =>
-      rootDb.execute(sql`
+      database.execute(sql`
       SELECT
         wsd.workspace_id AS id,
         wsd.title,
@@ -785,7 +788,7 @@ export const searchGlobal = async ({
       accessibleWorkspaceIds.length > 0 &&
       shouldSearchType(selected, "contact"),
     () =>
-      rootDb.execute(sql`
+      database.execute(sql`
       SELECT
         csd.contact_id AS id,
         csd.contact_type,
@@ -814,7 +817,7 @@ export const searchGlobal = async ({
   const caseLawPromise = rowsWhen(
     !restrictToEntities && shouldSearchType(selected, "case-law"),
     () =>
-      rootDb.execute(sql`
+      database.execute(sql`
       SELECT
         clsd.decision_id AS id,
         d.case_number,
@@ -866,7 +869,7 @@ export const searchGlobal = async ({
   const chatPromise = rowsWhen(
     !restrictToEntities && shouldSearchType(selected, "chat"),
     () =>
-      rootDb.execute(sql`
+      database.execute(sql`
       SELECT
         t.id AS id,
         t.workspace_id,
@@ -915,7 +918,7 @@ export const searchGlobal = async ({
 
   const countPromises = [
     countWhen(isFirstPage && hasSelectedEntityType(selected), () =>
-      rootDb.execute(sql`
+      database.execute(sql`
         SELECT count(*)::int AS total
         FROM search_documents sd
         LEFT JOIN entities e
@@ -936,7 +939,7 @@ export const searchGlobal = async ({
         !restrictToEntities &&
         shouldSearchType(selected, "matter"),
       () =>
-        rootDb.execute(sql`
+        database.execute(sql`
         SELECT count(*)::int AS total
         FROM workspace_search_documents wsd
         WHERE wsd.organization_id = ${organizationId}
@@ -951,7 +954,7 @@ export const searchGlobal = async ({
         accessibleWorkspaceIds.length > 0 &&
         shouldSearchType(selected, "contact"),
       () =>
-        rootDb.execute(sql`
+        database.execute(sql`
         SELECT count(*)::int AS total
         FROM contact_search_documents csd
         WHERE csd.organization_id = ${organizationId}
@@ -964,12 +967,12 @@ export const searchGlobal = async ({
       isFirstPage &&
         !restrictToEntities &&
         shouldSearchType(selected, "case-law"),
-      () => rootDb.execute(caseLawCountQuery),
+      () => database.execute(caseLawCountQuery),
     ),
     countWhen(
       isFirstPage && !restrictToEntities && shouldSearchType(selected, "chat"),
       () =>
-        rootDb.execute(sql`
+        database.execute(sql`
         SELECT count(*)::int AS total
         FROM chat_thread_search_documents cst
         JOIN chat_threads t ON t.id = cst.thread_id
@@ -986,7 +989,7 @@ export const searchGlobal = async ({
   const entityTypeFacetPromise = rowsWhen(
     isFirstPage && hasSelectedEntityType(selected),
     () =>
-      rootDb.execute(sql`
+      database.execute(sql`
       SELECT sd.kind AS value, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -1021,7 +1024,7 @@ export const searchGlobal = async ({
   const matterTypeFacetCountPromise = countWhen(
     shouldCountAlternativeTypeFacet("matter"),
     () =>
-      rootDb.execute(sql`
+      database.execute(sql`
       SELECT count(*)::int AS total
       FROM workspace_search_documents wsd
       WHERE wsd.organization_id = ${organizationId}
@@ -1035,7 +1038,7 @@ export const searchGlobal = async ({
     shouldCountAlternativeTypeFacet("contact") &&
       accessibleWorkspaceIds.length > 0,
     () =>
-      rootDb.execute(sql`
+      database.execute(sql`
         SELECT count(*)::int AS total
         FROM contact_search_documents csd
         WHERE csd.organization_id = ${organizationId}
@@ -1047,13 +1050,13 @@ export const searchGlobal = async ({
 
   const caseLawTypeFacetCountPromise = countWhen(
     shouldCountAlternativeTypeFacet("case-law"),
-    () => rootDb.execute(caseLawCountQuery),
+    () => database.execute(caseLawCountQuery),
   );
 
   const chatTypeFacetCountPromise = countWhen(
     shouldCountAlternativeTypeFacet("chat"),
     () =>
-      rootDb.execute(sql`
+      database.execute(sql`
       SELECT count(*)::int AS total
       FROM chat_thread_search_documents cst
       JOIN chat_threads t ON t.id = cst.thread_id
@@ -1101,7 +1104,7 @@ export const searchGlobal = async ({
     isFirstPage &&
       (hasSelectedEntityType(selected) || shouldSearchType(selected, "matter")),
     () =>
-      rootDb.execute(sql`
+      database.execute(sql`
         SELECT value, label, count(*)::int AS count
         FROM (
           ${entityWorkspaceFacetQuery}
@@ -1119,7 +1122,7 @@ export const searchGlobal = async ({
   const editorFacetPromise = rowsWhen(
     isFirstPage && hasSelectedEntityType(selected),
     () =>
-      rootDb.execute(sql`
+      database.execute(sql`
       SELECT editor.id AS value, editor.name AS label, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -1143,7 +1146,7 @@ export const searchGlobal = async ({
   const mimeTypeFacetPromise = rowsWhen(
     isFirstPage && hasSelectedEntityType(selected),
     () =>
-      rootDb.execute(sql`
+      database.execute(sql`
       SELECT mime_type.value AS value, mime_type.value AS label, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -1305,20 +1308,23 @@ const labelLikeFilter = (column: SQL, search: string): SQL => {
   return sql`AND ${column} ILIKE ${pattern}`;
 };
 
-export const searchGlobalFacet = async ({
-  facet,
-  search,
-  query,
-  organizationId,
-  accessibleWorkspaceIds,
-  selectedWorkspaceIds,
-  types,
-  editedByUserIds,
-  mimeTypes,
-  updatedFrom,
-  updatedTo,
-  limit,
-}: GlobalFacetSearchQuery): Promise<{ buckets: FacetBucket[] }> => {
+export const searchGlobalFacet = async (
+  {
+    facet,
+    search,
+    query,
+    organizationId,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds,
+    types,
+    editedByUserIds,
+    mimeTypes,
+    updatedFrom,
+    updatedTo,
+    limit,
+  }: GlobalFacetSearchQuery,
+  database: Pick<typeof rootDb, "execute"> = rootDb,
+): Promise<{ buckets: FacetBucket[] }> => {
   const {
     selected,
     restrictToEntities,
@@ -1358,7 +1364,7 @@ export const searchGlobalFacet = async ({
     if (!hasSelectedEntityType(selected)) {
       return { buckets: [] };
     }
-    const rows = await rootDb.execute(sql`
+    const rows = await database.execute(sql`
       SELECT editor.id AS value, editor.name AS label, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -1384,7 +1390,7 @@ export const searchGlobalFacet = async ({
     if (!hasSelectedEntityType(selected)) {
       return { buckets: [] };
     }
-    const rows = await rootDb.execute(sql`
+    const rows = await database.execute(sql`
       SELECT mime_type.value AS value, mime_type.value AS label, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -1446,7 +1452,7 @@ export const searchGlobalFacet = async ({
     `
     : emptyWorkspaceFacetQuery;
 
-  const rows = await rootDb.execute(sql`
+  const rows = await database.execute(sql`
     SELECT value, label, count(*)::int AS count
     FROM (
       ${entityWorkspaceFacetQuery}

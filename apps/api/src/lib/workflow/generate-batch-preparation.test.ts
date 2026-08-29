@@ -1,11 +1,12 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { isMissingCorpusObjectError } from "@/api/lib/s3";
+import { generateBatch } from "@/api/lib/workflow/generate-batch";
 import type { GenerateBatchProps } from "@/api/lib/workflow/generate-batch-shared";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -27,16 +28,11 @@ const fileContent = {
   pdfFileId: null,
 } as const satisfies FieldContent;
 
-const realShared = await import("@/api/lib/workflow/generate-batch-shared");
-
-void mock.module("@/api/lib/workflow/generate-batch-shared", () => ({
-  ...realShared,
+const dependencies = {
   fetchInputFieldsForBatch: async () => [
     { id: fileFieldId, propertyId, content: fileContent },
   ],
-}));
-
-const { generateBatch } = await import("@/api/lib/workflow/generate-batch");
+};
 
 // The object the PDF path reaches for: the input file's own id under the
 // organization and workspace the batch runs in.
@@ -85,7 +81,7 @@ describe("workflow batch input preparation", () => {
       key: inputObjectKey,
     });
 
-    const result = await generateBatch(props);
+    const result = await generateBatch(props, dependencies);
 
     expect(Result.isError(result)).toBe(true);
     if (!Result.isError(result)) {

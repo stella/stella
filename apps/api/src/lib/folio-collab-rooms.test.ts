@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type QueryBuilder = {
   insert: () => QueryBuilder;
@@ -43,18 +44,14 @@ const scopedBuilder: QueryBuilder = {
   values: async () => [],
 };
 
-void mock.module("@/api/db/root", () => ({ rootDb: builder, rlsDb: {} }));
-void mock.module("@/api/lib/root-scoped-db", () => ({
-  createRootScopedDb:
-    () => async (callback: (tx: QueryBuilder) => Promise<unknown>) => {
-      scopedCalls += 1;
-      if (scopedFailure !== null && scopedCalls > scopedFailureAfterCalls) {
-        throw new Error(scopedFailure.message, { cause: scopedFailure });
-      }
-      return await callback(scopedBuilder);
-    },
-  createRootSafeDb: () => "SAFE_DB_SENTINEL",
-}));
+const createScopedDbTestDouble =
+  () => async (callback: (tx: QueryBuilder) => Promise<unknown>) => {
+    scopedCalls += 1;
+    if (scopedFailure !== null && scopedCalls > scopedFailureAfterCalls) {
+      throw new Error(scopedFailure.message, { cause: scopedFailure });
+    }
+    return await callback(scopedBuilder);
+  };
 // Object storage is the real `lib/s3`, pointed at an in-process store: the
 // keys, content types and deletes below are the ones the module actually put
 // on the wire, not a stub's record of the arguments it was handed.
@@ -72,6 +69,13 @@ const {
   storeFolioCollabSnapshot,
 } = await import("@/api/lib/folio-collab-rooms");
 const { DOCX_MIME_TYPE } = await import("@/api/mime-types");
+
+const createScopedDb = asTestRaw<
+  NonNullable<Parameters<typeof authorizeFolioCollabRoom>[0]["createScopedDb"]>
+>(createScopedDbTestDouble);
+const database = asTestRaw<
+  NonNullable<Parameters<typeof authorizeFolioCollabRoom>[0]["db"]>
+>({ select: () => builder });
 
 const roomId = toSafeId<"folioCollabRoom">("fcr_1");
 const entityId = toSafeId<"entity">("entity_1");
@@ -126,7 +130,12 @@ const validRow = (overrides: Row = {}): Row => ({
 
 const authorize = async (row: Row | null) => {
   nextRows = row === null ? [] : [row];
-  return await authorizeFolioCollabRoom({ roomId, token: "tok" });
+  return await authorizeFolioCollabRoom({
+    createScopedDb,
+    db: database,
+    roomId,
+    token: "tok",
+  });
 };
 
 describe("authorizeFolioCollabRoom", () => {

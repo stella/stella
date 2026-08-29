@@ -11,10 +11,21 @@ import {
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { markdownToStellaDocx } from "@/api/handlers/chat/tools/create-workspace-document-tools";
+import {
+  EDIT_WORKSPACE_DOCUMENT_TOOL_NAME,
+  createEditWorkspaceDocumentTools as createEditWorkspaceDocumentToolsWithDependencies,
+} from "@/api/handlers/chat/tools/edit-workspace-document-tools";
+import type { CreateEditWorkspaceDocumentToolsProps } from "@/api/handlers/chat/tools/edit-workspace-document-tools";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createEntityVersionFromBuffer as createEntityVersionFromBufferWithDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
+import type { CreateEntityVersionFromBufferDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
+import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import type { ScanResult } from "@/api/lib/file-scan/types";
+import { allocateFileObject } from "@/api/lib/files/file-object-ids";
+import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -26,41 +37,46 @@ const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 const computeVersionDiffStatsMock = mock(async () => {});
 const broadcastMock = mock(() => {});
+const requestNativeExtractionRunMock = mock(async () => null);
 let fileScanResult: ScanResult = { verdict: "pass", findings: [] };
 const scanFileMock = mock(async () => Result.ok(fileScanResult));
 
-const realSse = await import("@/api/lib/sse");
-void mock.module("@/api/lib/search/process-extraction", () => ({
-  processExtraction: processExtractionMock,
-  requestNativeExtractionRun: mock(async () => null),
-}));
-const realFileDerivativeQueue = await import("@/api/lib/file-derivative-queue");
-void mock.module("@/api/lib/file-derivative-queue", () => ({
-  ...realFileDerivativeQueue,
-  enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
-  enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
-}));
-void mock.module("@/api/lib/entity-versions/compute-version-diff", () => ({
-  computeVersionDiffStats: computeVersionDiffStatsMock,
-}));
-void mock.module("@/api/lib/sse", () => ({
-  ...realSse,
-  broadcast: broadcastMock,
-}));
-void mock.module("@/api/lib/file-scan/scan", () => ({
-  getScanWarnings: (scanResult: ScanResult) =>
-    scanResult.verdict === "warn"
-      ? scanResult.findings.flatMap((finding) =>
-          finding.severity === "warn" ? [finding.message] : [],
-        )
-      : null,
-  scanFile: scanFileMock,
-}));
+const getScanWarningsForTest = (scanResult: ScanResult) =>
+  scanResult.verdict === "warn"
+    ? scanResult.findings.flatMap((finding) =>
+        finding.severity === "warn" ? [finding.message] : [],
+      )
+    : null;
 
-const { EDIT_WORKSPACE_DOCUMENT_TOOL_NAME, createEditWorkspaceDocumentTools } =
-  await import("./edit-workspace-document-tools");
-const { createEntityVersionFromBuffer } =
-  await import("@/api/lib/entity-versions/create-entity-version-from-buffer");
+const createVersionDependencies = {
+  allocateFileObject,
+  createFileKey,
+  writeFileVersion,
+  processExtraction: processExtractionMock,
+  requestNativeExtractionRun: requestNativeExtractionRunMock,
+  enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
+  enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
+  computeVersionDiffStats: computeVersionDiffStatsMock,
+  createRootScopedDb,
+  broadcast: broadcastMock,
+} satisfies CreateEntityVersionFromBufferDependencies;
+
+const createEntityVersionFromBuffer: typeof createEntityVersionFromBufferWithDependencies =
+  async (input) =>
+    await createEntityVersionFromBufferWithDependencies({
+      ...input,
+      dependencies: createVersionDependencies,
+    });
+
+const createEditWorkspaceDocumentTools = (
+  props: CreateEditWorkspaceDocumentToolsProps,
+) =>
+  createEditWorkspaceDocumentToolsWithDependencies({
+    ...props,
+    createEntityVersionFromBuffer,
+    getScanWarnings: getScanWarningsForTest,
+    scanFile: scanFileMock,
+  });
 
 const organizationId = toSafeId<"organization">(
   "00000000-0000-0000-0000-000000000001",

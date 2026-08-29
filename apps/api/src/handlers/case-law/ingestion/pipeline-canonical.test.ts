@@ -9,10 +9,19 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import {
+  caseLawCanonicalPayload,
+  processDecision as processDecisionWithDependencies,
+  runIngestionPipeline as runIngestionPipelineWithDependencies,
+  sanitizeResult,
+} from "@/api/handlers/case-law/ingestion/pipeline";
+import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CorpusWriteOutcome } from "@/api/lib/legal-search/corpus-storage";
+import * as realCorpusStorage from "@/api/lib/legal-search/corpus-storage";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 
 /**
@@ -21,9 +30,6 @@ import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
  * exist before external I/O, and the row may only point at objects after the
  * fenced write succeeds.
  */
-
-const realEnvBase = await import("@/api/env-base");
-const realCorpusStorage = await import("@/api/lib/legal-search/corpus-storage");
 
 /** Ordered log of the side effects under test, across S3 and the DB. */
 const events: string[] = [];
@@ -63,27 +69,26 @@ const deleteCorpusDocumentMock = mock(
   },
 );
 
-void mock.module("@/api/env-base", () => ({
-  ...realEnvBase,
-  corpusStorageMode: "canonical",
-}));
+const corpusDependencies = {
+  mode: "canonical",
+  write: writeCorpusDocumentMock,
+} satisfies CaseLawCorpusDependencies;
 
-// Only the two I/O entry points are faked; the key derivation stays real so
-// the partial-write cleanup is exercised against the actual key layout.
-void mock.module("@/api/lib/legal-search/corpus-storage", () => ({
-  ...realCorpusStorage,
-  writeCorpusDocument: writeCorpusDocumentMock,
-  deleteCorpusDocument: deleteCorpusDocumentMock,
-}));
+const processDecision = async (
+  options: Parameters<typeof processDecisionWithDependencies>[0],
+) =>
+  await processDecisionWithDependencies({
+    ...options,
+    corpus: corpusDependencies,
+  });
 
-const { czNsAdapter } =
-  await import("@/api/handlers/case-law/ingestion/adapters/cz-ns");
-const {
-  caseLawCanonicalPayload,
-  processDecision,
-  runIngestionPipeline,
-  sanitizeResult,
-} = await import("@/api/handlers/case-law/ingestion/pipeline");
+const runIngestionPipeline = async (
+  options: Parameters<typeof runIngestionPipelineWithDependencies>[0],
+) =>
+  await runIngestionPipelineWithDependencies({
+    ...options,
+    corpus: corpusDependencies,
+  });
 
 const originalCzNsFetchPage = czNsAdapter.fetchPage;
 

@@ -13,18 +13,18 @@ import type {
   ContactPhone,
   FieldContent,
 } from "@/api/db/schema-validators";
-import { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
-import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
+import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   identifyOrganizationJurisdictions,
   normalizePracticeJurisdictions,
   upsertPracticeJurisdictions,
 } from "@/api/handlers/organization-settings/practice-jurisdictions";
-import { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
-import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
-import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
-import { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
+import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
+import type { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
+import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
+import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -106,6 +106,39 @@ import {
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+
+const defaultReadGatedDecisionWithDocument: typeof readGatedDecisionWithDocument =
+  async (input) =>
+    await (
+      await import("@/api/handlers/case-law/decisions/get-deferred-document")
+    ).readGatedDecisionWithDocument(input);
+const defaultSearchDecisionsHandler: typeof searchDecisionsHandler = async (
+  input,
+  database,
+) =>
+  await (
+    await import("@/api/handlers/case-law/decisions/search")
+  ).searchDecisionsHandler(input, database);
+const defaultReadWorkspaceHandler: typeof readWorkspaceHandler = async (
+  input,
+) =>
+  await (
+    await import("@/api/handlers/workspaces/get")
+  ).readWorkspaceHandler(input);
+const defaultReadOverviewHandler: typeof readOverviewHandler = async (input) =>
+  await (
+    await import("@/api/handlers/workspaces/read-overview")
+  ).readOverviewHandler(input);
+const defaultReadWorkspaceContactsHandler: typeof readWorkspaceContactsHandler =
+  async (input) =>
+    await (
+      await import("@/api/handlers/workspaces/workspace-contacts-read")
+    ).readWorkspaceContactsHandler(input);
+const defaultReadWorkspaceMembersHandler: typeof readWorkspaceMembersHandler =
+  async (input) =>
+    await (
+      await import("@/api/handlers/workspaces/workspace-members-read")
+    ).readWorkspaceMembersHandler(input);
 
 const MCP_CONTENT_MAX_CHARS = 8000;
 type StellaToolName =
@@ -953,20 +986,32 @@ const readMatterOverview: TypedMcpToolHandler<
   }
 
   const [workspace, overview, contacts, members] = await Promise.all([
-    readWorkspaceHandler({
+    (
+      context.testDependencies?.readWorkspaceHandler ??
+      defaultReadWorkspaceHandler
+    )({
       organizationId: context.organizationId,
       scopedDb: context.scopedDb,
       workspaceId,
     }),
-    readOverviewHandler({
+    (
+      context.testDependencies?.readOverviewHandler ??
+      defaultReadOverviewHandler
+    )({
       scopedDb: context.scopedDb,
       workspaceId,
     }),
-    readWorkspaceContactsHandler({
+    (
+      context.testDependencies?.readWorkspaceContactsHandler ??
+      defaultReadWorkspaceContactsHandler
+    )({
       scopedDb: context.scopedDb,
       workspaceId,
     }),
-    readWorkspaceMembersHandler({
+    (
+      context.testDependencies?.readWorkspaceMembersHandler ??
+      defaultReadWorkspaceMembersHandler
+    )({
       scopedDb: context.scopedDb,
       workspaceId,
     }),
@@ -1078,7 +1123,9 @@ const handleSearchAcrossMattersTool: TypedMcpToolHandler<
     });
   }
 
-  const result = await getSearchProvider().search({
+  const result = await (
+    context.testDependencies?.getSearchProvider ?? getSearchProvider
+  )().search({
     query,
     organizationId: context.organizationId,
     workspaceIds: context.accessibleWorkspaceIds,
@@ -1334,7 +1381,7 @@ const loadCurrentVersionDocxMarkdown = async ({
 
   const markdownResult = await Result.tryPromise({
     try: async () =>
-      await withTimeout(
+      await (context.testDependencies?.withTimeout ?? withTimeout)(
         async (signal) => {
           const buffer = await readS3ArrayBuffer(
             createFileKey({
@@ -1656,7 +1703,10 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     return dateTo;
   }
 
-  const result = await searchDecisionsHandler(
+  const result = await (
+    context.testDependencies?.searchDecisionsHandler ??
+    defaultSearchDecisionsHandler
+  )(
     {
       query,
       limit,
@@ -1754,7 +1804,7 @@ const decodeDecisionCursor = (
 
 const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>
-> = async ({ args }) => {
+> = async ({ args, context }) => {
   const decisionId = parseRequiredString(args, "decision_id");
   if (typeof decisionId !== "string") {
     return decisionId;
@@ -1777,7 +1827,10 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   // The same gate the public route applies, in the same shape: a
   // restricted decision does not exist for any caller, and the read that
   // answers shares the transaction that approved it.
-  const result = await readGatedDecisionWithDocument({
+  const result = await (
+    context.testDependencies?.readGatedDecisionWithDocument ??
+    defaultReadGatedDecisionWithDocument
+  )({
     caseLawDb: caseLawPublicReadDb,
     locator: { kind: "id", id: brandPersistedCaseLawDecisionId(decisionId) },
     citationsCursor: offsets.citations,

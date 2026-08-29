@@ -37,44 +37,20 @@ const scanFileMock = mock(async (_input: ScanFileInput) =>
     ],
   }),
 );
-const processExtractionMock = mock(async () => {});
-const enqueueImageThumbnailMock = mock(async () => {});
-const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
-const enqueuePdfDerivativeMock = mock(async () => {});
-const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 
-const realDeepLClient = await import("@/api/lib/deepl/client");
-void mock.module("@/api/lib/deepl/client", () => ({
-  ...realDeepLClient,
-  fetchTargetLanguages: mock(async () => []),
-  maskDeepLKey: (key: string) => `${key.slice(0, 8)}****************`,
-  resolveDeepLBaseUrl: () => "https://api.deepl.com",
-  translateDocument: translateDocumentMock,
-  translateTextBatch: mock(async () => []),
-  translateTextBatches: mock(async () => []),
-}));
-
-void mock.module("@/api/lib/file-scan/scan", () => ({
+const { createTranslateEntity } = await import("./translate");
+const translateEntity = createTranslateEntity({
+  createEntityFromBuffer: asTestRaw(async () =>
+    Result.ok({
+      entityId: toSafeId<"entity">("00000000-0000-0000-0000-000000000099"),
+      fieldId: toSafeId<"field">("00000000-0000-0000-0000-000000000098"),
+      fileName: "Translated.docx",
+    }),
+  ),
   getScanWarnings: () => null,
   scanFile: scanFileMock,
-}));
-
-void mock.module("@/api/lib/search/process-extraction", () => ({
-  processExtraction: processExtractionMock,
-  requestNativeExtractionRun: mock(async () => null),
-}));
-
-const realFileDerivativeQueue = await import("@/api/lib/file-derivative-queue");
-void mock.module("@/api/lib/file-derivative-queue", () => ({
-  ...realFileDerivativeQueue,
-  enqueueImageThumbnail: enqueueImageThumbnailMock,
-  enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
-  enqueuePdfDerivative: enqueuePdfDerivativeMock,
-  enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
-  initFileDerivativeWorker: mock(() => undefined),
-}));
-
-const translateEntity = (await import("./translate")).default;
+  translateDocument: translateDocumentMock,
+});
 
 type TranslateEntityCtx = Parameters<typeof translateEntity.handler>[0];
 
@@ -188,8 +164,6 @@ describe("translateEntity", () => {
     fake = startFakeS3();
     translateDocumentMock.mockClear();
     scanFileMock.mockClear();
-    processExtractionMock.mockClear();
-    enqueuePdfDerivativeOrMarkFailedMock.mockClear();
   });
 
   afterEach(() => {
@@ -228,8 +202,6 @@ describe("translateEntity", () => {
     expect(fake.requests.filter(({ method }) => method !== "GET")).toHaveLength(
       0,
     );
-    expect(processExtractionMock).not.toHaveBeenCalled();
-    expect(enqueuePdfDerivativeOrMarkFailedMock).not.toHaveBeenCalled();
     // A scan verdict is an expected outcome the caller is told about, not a
     // defect: nothing is reported as an exception.
     expect(analytics.exceptions()).toEqual([]);

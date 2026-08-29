@@ -11,15 +11,12 @@
  * expiry task, since it awaits its publish before stamping the notification
  * column and only then releases its lease.
  *
- * Its own file because it fixes the process-global REDIS_URL, as
- * `redis-outage.test.ts` does with a different value, and the publisher is a
- * module singleton created once per process: the two cannot share one. Mocking
- * the same module as that suite is what keeps them apart — the runner's
- * batcher never co-batches two files that mock the same module (see
- * `tests/module-mock-batching.ts`).
+ * Its own file because it owns a local peer that intentionally leaves one
+ * command pending until the publisher timeout expires.
  */
 
-import { afterAll, describe, expect, mock, test } from "bun:test";
+import { RedisClient } from "bun";
+import { afterAll, describe, expect, test } from "bun:test";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -43,16 +40,12 @@ const partitionedPeer = Bun.listen({
   },
 });
 
-const realEnv = await import("@/api/env-document-processing-worker");
-void mock.module("@/api/env-document-processing-worker", () => ({
-  envDocumentProcessingWorker: {
-    ...realEnv.envDocumentProcessingWorker,
-    REDIS_URL: `redis://127.0.0.1:${partitionedPeer.port}`,
-  },
-}));
-
-const { publishWorkspaceEvent, SSEBroadcastError } =
+const { createSseBroadcastPublisher, SSEBroadcastError } =
   await import("@/api/lib/sse-broadcast");
+const { publishWorkspaceEvent } = createSseBroadcastPublisher({
+  createClient: (options) =>
+    new RedisClient(`redis://127.0.0.1:${partitionedPeer.port}`, options),
+});
 const { resourceUpdatedRealtimeEvent } = await import("@stll/api-contract");
 const { brandPersistedWorkspaceId, brandPersistedEntityId } =
   await import("@/api/lib/safe-id-boundaries");

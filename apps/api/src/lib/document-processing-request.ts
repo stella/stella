@@ -86,6 +86,7 @@ export type PersistedDocumentProcessingRun = {
 };
 
 export type PersistManualOcrRunOptions = {
+  db?: Pick<typeof rootDb, "transaction">;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   source: ManualOcrSource;
@@ -99,8 +100,9 @@ export const persistManualOcrRun = async ({
   source,
   userId,
   workspaceId,
+  db = rootDb,
 }: PersistManualOcrRunOptions): Promise<PersistedDocumentProcessingRun | null> =>
-  await rootDb.transaction(async (tx) => {
+  await db.transaction(async (tx) => {
     // Re-check and lock the mutable entity under the root write. The scoped
     // validation above authorizes the request; this prevents a concurrent
     // version replacement from queuing OCR for a no-longer-current file.

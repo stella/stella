@@ -5,12 +5,25 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  containsRawUuid,
+  projectForChat,
+  REF_PROJECTION_FAILURE_MESSAGE,
+} from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+
+import { buildMcpContextFromChat } from "./mcp-chat-context";
+import { WRITE_TOOL_REF_FIELD_MAP } from "./ref-field-map";
+import { dehydrateRefs } from "./ref-mediation";
+import {
+  applyChatApprovalConfirmation,
+  runRegistryWriteTool,
+} from "./run-registry-write-tool";
 
 // The real capture path runs; only the sink is in memory, and installing per
 // test clears its repeat-suppression window.
@@ -23,23 +36,6 @@ beforeEach(() => {
 afterEach(() => {
   analytics.restore();
 });
-
-// Gate FEATURE_TIME_BILLING off (every other feature stays enabled) so the
-// feature-gate branch can be asserted directly.
-const realListTools = await import("@/api/mcp/gateway/list-tools");
-void mock.module("@/api/mcp/gateway/list-tools", () => ({
-  ...realListTools,
-  isMcpToolFeatureEnabled: (feature?: string) =>
-    feature !== "FEATURE_TIME_BILLING",
-}));
-
-const { buildMcpContextFromChat } = await import("./mcp-chat-context");
-const { dehydrateRefs } = await import("./ref-mediation");
-const { containsRawUuid, projectForChat, REF_PROJECTION_FAILURE_MESSAGE } =
-  await import("@/api/lib/chat/projection-schema");
-const { WRITE_TOOL_REF_FIELD_MAP } = await import("./ref-field-map");
-const { applyChatApprovalConfirmation, runRegistryWriteTool } =
-  await import("./run-registry-write-tool");
 
 const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const OTHER_WS_UUID = "4e919658-a448-5354-8e3a-e99911214d2c";
@@ -85,12 +81,18 @@ describe("runRegistryWriteTool (orchestration)", () => {
   });
 
   test("refuses a feature-gated tool whose deploy flag is off", async () => {
-    const result = await runRegistryWriteTool({
-      args: { time_entry_id: "te-1" },
-      context: buildContext(),
-      refRegistry: createChatRefRegistry(),
-      toolName: "delete_time_entry",
-    });
+    const result = await runRegistryWriteTool(
+      {
+        args: { time_entry_id: "te-1" },
+        context: buildContext(),
+        refRegistry: createChatRefRegistry(),
+        toolName: "delete_time_entry",
+      },
+      {
+        isMcpToolFeatureEnabled: (feature) =>
+          feature !== "FEATURE_TIME_BILLING",
+      },
+    );
 
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {

@@ -51,44 +51,51 @@ const config = {
   mcp: { type: "internal", reason: "native_tool_ui" },
 } satisfies HandlerConfig;
 
-const infosoudCourts = createSafeHandler(config, async function* () {
-  const result = yield* Result.await(
-    Result.tryPromise({
-      try: async () => {
-        const client = getInfoSoudClient();
-        // Shared cacheable load; deliberately detached from caller signals
-        // so in-flight dedup works: #getCachedOrLoad only shares an
-        // in-flight load when no signal is passed, so threading each
-        // request's own AbortSignal here would make every concurrent caller
-        // on a cold courts cache start its own redundant throttled fetch. A
-        // disconnected caller just abandons its await; the load keeps
-        // running and populates the 24h cache for every other caller.
-        //
-        // Sequential, not Promise.all: the shared client serializes every
-        // call through one politeness throttle, so both loads never run
-        // concurrently anyway. Promise.all would still enqueue the district
-        // load immediately, so a failure on the first load left the second
-        // queued and running against InfoSoud after this handler had already
-        // returned its error response.
-        const courts = await client.getCourts();
-        const districtCourts = await client.getDistrictCourts();
-        const courtMap = buildCourtMapFromEntries([
-          ...courts,
-          ...districtCourts,
-        ]);
+export const createInfosoudCourts = (
+  getClient: typeof getInfoSoudClient = getInfoSoudClient,
+) =>
+  createSafeHandler(config, async function* () {
+    const result = yield* Result.await(
+      Result.tryPromise({
+        try: async () => {
+          const client = getClient();
+          // Shared cacheable load; deliberately detached from caller signals
+          // so in-flight dedup works: #getCachedOrLoad only shares an
+          // in-flight load when no signal is passed, so threading each
+          // request's own AbortSignal here would make every concurrent caller
+          // on a cold courts cache start its own redundant throttled fetch. A
+          // disconnected caller just abandons its await; the load keeps
+          // running and populates the 24h cache for every other caller.
+          //
+          // Sequential, not Promise.all: the shared client serializes every
+          // call through one politeness throttle, so both loads never run
+          // concurrently anyway. Promise.all would still enqueue the district
+          // load immediately, so a failure on the first load left the second
+          // queued and running against InfoSoud after this handler had already
+          // returned its error response.
+          const courts = await client.getCourts();
+          const districtCourts = await client.getDistrictCourts();
+          const courtMap = buildCourtMapFromEntries([
+            ...courts,
+            ...districtCourts,
+          ]);
 
-        // Court names are always Czech (InfoSoud is the Czech court
-        // registry), independent of the viewer's UI locale.
-        const compareCourtNames = compareByLocale("cs-CZ");
-        return Object.entries(courtMap)
-          .map(([code, name]) => ({ code, name }))
-          .toSorted((left, right) => compareCourtNames(left.name, right.name));
-      },
-      catch: toInfoSoudCourtsError,
-    }),
-  );
+          // Court names are always Czech (InfoSoud is the Czech court
+          // registry), independent of the viewer's UI locale.
+          const compareCourtNames = compareByLocale("cs-CZ");
+          return Object.entries(courtMap)
+            .map(([code, name]) => ({ code, name }))
+            .toSorted((left, right) =>
+              compareCourtNames(left.name, right.name),
+            );
+        },
+        catch: toInfoSoudCourtsError,
+      }),
+    );
 
-  return Result.ok({ courts: result });
-});
+    return Result.ok({ courts: result });
+  });
+
+const infosoudCourts = createInfosoudCourts();
 
 export default infosoudCourts;
