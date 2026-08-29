@@ -2,6 +2,11 @@ import { HocuspocusProvider } from "@hocuspocus/provider";
 import { describe, expect, test } from "bun:test";
 import { applyUpdate, Doc } from "yjs";
 
+import {
+  FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
+  FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
+} from "@stll/api-contract/folio-collab";
+
 import { createCollabServer, REDIS_RETRY_CLOSE_CODE } from "./server";
 
 type FakeStellaApiOptions = {
@@ -279,12 +284,14 @@ const createFakeStellaApi = ({
 const createProvider = ({
   name,
   onClose,
+  onStateless,
   token,
   url,
   ydoc,
 }: {
   name: string;
   onClose?: (code: number) => void;
+  onStateless?: (payload: string) => void;
   token: string;
   url: string;
   ydoc: Doc;
@@ -293,6 +300,7 @@ const createProvider = ({
     document: ydoc,
     name,
     onClose: ({ event }) => onClose?.(event.code),
+    onStateless: ({ payload }) => onStateless?.(payload),
     token,
     url,
   });
@@ -578,6 +586,67 @@ describe("collaboration server", () => {
       secondProvider.destroy();
       firstDoc.destroy();
       secondDoc.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test("acknowledges a publication flush only after storing the current cut", async () => {
+    const fakeApi = createFakeStellaApi();
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 10_000,
+      maxDebounceMs: 10_000,
+      port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const document = new Doc();
+    const requestId = "00000000-0000-4000-8000-000000000099";
+    let acknowledged = false;
+    const provider = createProvider({
+      name: TEST_ROOM_NAME,
+      onStateless: (payload) => {
+        if (
+          payload ===
+          JSON.stringify({
+            requestId,
+            type: FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
+          })
+        ) {
+          acknowledged = true;
+        }
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc: document,
+    });
+
+    try {
+      await waitFor(
+        () => provider.isAuthenticated,
+        "Provider did not authenticate.",
+      );
+      document.getText("body").insert(0, "publish this cut");
+      provider.flushPendingUpdates();
+      provider.sendStateless(
+        JSON.stringify({
+          requestId,
+          type: FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
+        }),
+      );
+      await waitFor(
+        () => acknowledged,
+        "Collaboration server did not acknowledge the flush.",
+      );
+      expect(fakeApi.storeRequests()).toBe(1);
+      const snapshotBase64 = fakeApi.latestSnapshotBase64();
+      const restored = new Doc();
+      applyUpdate(restored, Buffer.from(snapshotBase64 ?? "", "base64"));
+      expect(getTextContent(restored, "body")).toBe("publish this cut");
+      restored.destroy();
+    } finally {
+      provider.destroy();
+      document.destroy();
       await collabServer.destroy();
       await fakeApi.destroy();
     }

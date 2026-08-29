@@ -2,6 +2,18 @@ import { toSafeId } from "./safe-id";
 import type { SafeId } from "./safe-id";
 
 export const FOLIO_COLLAB_REDIS_SCOPE = "collab";
+export const FOLIO_COLLAB_FLUSH_REQUEST_TYPE = "snapshot-flush-request";
+export const FOLIO_COLLAB_FLUSH_RESPONSE_TYPE = "snapshot-flush-response";
+
+export type FolioCollabFlushRequest = {
+  requestId: string;
+  type: typeof FOLIO_COLLAB_FLUSH_REQUEST_TYPE;
+};
+
+export type FolioCollabFlushResponse = {
+  requestId: string;
+  type: typeof FOLIO_COLLAB_FLUSH_RESPONSE_TYPE;
+};
 
 /**
  * Hocuspocus appends its document name to a static Redis prefix. Keeping the
