@@ -1,6 +1,6 @@
 ---
 name: conventions-testing
-description: "Apply when writing or reviewing tests."
+description: 'Apply when writing or reviewing tests.'
 ---
 
 # Testing Conventions
