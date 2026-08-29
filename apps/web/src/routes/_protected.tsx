@@ -362,8 +362,8 @@ function ProtectedComponent() {
               <DragAndDropLiveRegion />
               <WorkspaceShell
                 endDock={<WorkspaceInspectorSidePanel />}
-                navigation={<AppSidebar />}
-                topBar={<ProtectedContent />}
+                navigation={{ content: <AppSidebar />, mode: "responsive" }}
+                topBar={() => <ProtectedContent />}
               >
                 <Outlet />
               </WorkspaceShell>

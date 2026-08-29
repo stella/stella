@@ -9,8 +9,11 @@ describe("WorkspaceShell", () => {
     const markup = renderToStaticMarkup(
       <WorkspaceShell
         endDock={<aside data-test="end-dock">Inspector</aside>}
-        navigation={<nav data-test="navigation">Navigation</nav>}
-        topBar={<header data-test="top-bar">Header</header>}
+        navigation={{
+          content: <nav data-test="navigation">Navigation</nav>,
+          mode: "responsive",
+        }}
+        topBar={() => <header data-test="top-bar">Header</header>}
       >
         <article data-test="content">Content</article>
       </WorkspaceShell>,
@@ -24,6 +27,36 @@ describe("WorkspaceShell", () => {
     expect(markup).toContain("sticky top-0 z-20 shrink-0");
     expect(markup).toContain('data-slot="workspace-shell-content"');
     expect(markup).toContain("min-h-0 flex-1 overflow-auto overscroll-contain");
+  });
+
+  test("owns a controlled compact navigation without mounting its portal on desktop", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceShell
+        endDock={<aside>Inspector</aside>}
+        navigation={{
+          compact: {
+            content: <nav>Compact navigation</nav>,
+            label: "Open navigation",
+            onOpenChange: () => undefined,
+            open: true,
+            trigger: <button type="button">Menu</button>,
+          },
+          desktop: <nav data-test="desktop-navigation">Desktop</nav>,
+          mode: "shell-managed",
+        }}
+        topBar={({ compactNavigationTrigger }) => (
+          <header>{compactNavigationTrigger}Header</header>
+        )}
+      >
+        <article>Content</article>
+      </WorkspaceShell>,
+    );
+
+    expect(markup).toContain('data-test="desktop-navigation"');
+    expect(markup).toContain('aria-label="Open navigation"');
+    expect(markup).toContain("Menu");
+    expect(markup).not.toContain("Compact navigation");
+    expect(markup).not.toContain('data-slot="sheet-backdrop"');
   });
 });
 

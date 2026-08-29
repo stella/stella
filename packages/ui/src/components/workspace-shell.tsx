@@ -1,7 +1,11 @@
+"use client";
+
+import { useEffect } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { MessageSquarePlusIcon } from "lucide-react";
 
+import { useIsMobile } from "../hooks/use-mobile";
 import {
   InspectorRail,
   InspectorRailCell,
@@ -10,12 +14,44 @@ import {
   InspectorRailIconButton,
 } from "../inspector/chrome";
 import { cn } from "../lib/utils";
+import { Sheet, SheetPopup, SheetTitle, SheetTrigger } from "./sheet";
+
+type WorkspaceCompactNavigation = {
+  /** Navigation content rendered inside Stella's compact sheet. */
+  content: ReactElement;
+  /** Accessible name shared by the trigger and sheet. */
+  label: string;
+  /** Controlled sheet state owned by the host application. */
+  open: boolean;
+  /** Receives close gestures, Escape, backdrop presses, and viewport changes. */
+  onOpenChange: (open: boolean) => void;
+  /** Host-styled button; Stella supplies trigger behavior and accessibility. */
+  trigger: ReactElement;
+};
+
+type WorkspaceNavigation =
+  | {
+      /** The host already owns its complete responsive navigation behavior. */
+      content: ReactElement;
+      mode: "responsive";
+    }
+  | {
+      /** Stella owns the desktop/compact cutoff and compact navigation sheet. */
+      compact: WorkspaceCompactNavigation;
+      desktop: ReactElement;
+      mode: "shell-managed";
+    };
+
+type WorkspaceTopBarContext = {
+  /** Place this in compact chrome; null when navigation is host-responsive. */
+  compactNavigationTrigger: ReactElement | null;
+};
 
 type WorkspaceShellProps = {
-  /** Product navigation in Stella's inline-start application column. */
-  navigation: ReactElement;
-  /** Sticky route chrome above the sole scrolling content surface. */
-  topBar: ReactElement;
+  /** Product navigation with one explicit responsive ownership mode. */
+  navigation: WorkspaceNavigation;
+  /** Sticky route chrome; managed navigation exposes its compact trigger here. */
+  topBar: (context: WorkspaceTopBarContext) => ReactElement;
   /** Permanent inline-end rail or inspector dock. */
   endDock: ReactElement;
   /** Active route content. */
@@ -32,35 +68,89 @@ export const WorkspaceShell = ({
   endDock,
   navigation,
   topBar,
-}: WorkspaceShellProps) => (
-  <div
-    className="flex h-dvh min-h-0 w-full overflow-hidden"
-    data-slot="workspace-shell"
-  >
-    {navigation}
-    <main
-      className={cn(
-        "bg-background relative flex w-full min-w-0 flex-1 flex-col overflow-hidden",
-        "md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2",
-      )}
-      data-slot="workspace-shell-main"
+}: WorkspaceShellProps) => {
+  const isCompact = useIsMobile();
+  const compactNavigation =
+    navigation.mode === "shell-managed" ? navigation.compact : null;
+  const compactNavigationOpen = compactNavigation?.open ?? false;
+  const onCompactNavigationOpenChange = compactNavigation?.onOpenChange;
+
+  useEffect(() => {
+    if (!isCompact && compactNavigationOpen) {
+      onCompactNavigationOpenChange?.(false);
+    }
+  }, [compactNavigationOpen, isCompact, onCompactNavigationOpenChange]);
+
+  const compactNavigationTrigger =
+    compactNavigation === null ? null : (
+      <span className="contents md:hidden">
+        <SheetTrigger
+          aria-label={compactNavigation.label}
+          render={compactNavigation.trigger}
+        />
+      </span>
+    );
+
+  const frame = (
+    <div
+      className="flex h-dvh min-h-0 w-full overflow-hidden"
+      data-slot="workspace-shell"
     >
-      <div
-        className="bg-background sticky top-0 z-20 shrink-0"
-        data-slot="workspace-shell-top-bar"
+      {navigation.mode === "responsive"
+        ? navigation.content
+        : navigation.desktop}
+      <main
+        className={cn(
+          "bg-background relative flex w-full min-w-0 flex-1 flex-col overflow-hidden",
+          "md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2",
+        )}
+        data-slot="workspace-shell-main"
       >
-        {topBar}
-      </div>
-      <div
-        className="min-h-0 flex-1 overflow-auto overscroll-contain"
-        data-slot="workspace-shell-content"
-      >
-        {children}
-      </div>
-    </main>
-    {endDock}
-  </div>
-);
+        <div
+          className="bg-background sticky top-0 z-20 shrink-0"
+          data-slot="workspace-shell-top-bar"
+        >
+          {topBar({ compactNavigationTrigger })}
+        </div>
+        <div
+          className="min-h-0 flex-1 overflow-auto overscroll-contain"
+          data-slot="workspace-shell-content"
+        >
+          {children}
+        </div>
+      </main>
+      {endDock}
+    </div>
+  );
+
+  if (compactNavigation === null) {
+    return frame;
+  }
+
+  return (
+    <Sheet
+      open={isCompact && compactNavigation.open}
+      onOpenChange={compactNavigation.onOpenChange}
+    >
+      {frame}
+      {isCompact ? (
+        <SheetPopup
+          className="w-[min(20rem,100vw)]"
+          showCloseButton={false}
+          side="inline-start"
+        >
+          <SheetTitle className="sr-only">{compactNavigation.label}</SheetTitle>
+          <div
+            className="bg-background flex h-full min-h-0 flex-col overflow-y-auto [padding-inline:max(0.75rem,env(safe-area-inset-left))_max(0.75rem,env(safe-area-inset-right))] [padding-block:max(0.75rem,env(safe-area-inset-top))_max(0.75rem,env(safe-area-inset-bottom))]"
+            data-slot="workspace-compact-navigation"
+          >
+            {compactNavigation.content}
+          </div>
+        </SheetPopup>
+      ) : null}
+    </Sheet>
+  );
+};
 
 type WorkspaceEndRailChatAction =
   | {
@@ -131,7 +221,10 @@ export const WorkspaceEndRail = ({
 );
 
 export type {
+  WorkspaceCompactNavigation,
   WorkspaceEndRailChatAction,
   WorkspaceEndRailProps,
+  WorkspaceNavigation,
   WorkspaceShellProps,
+  WorkspaceTopBarContext,
 };
