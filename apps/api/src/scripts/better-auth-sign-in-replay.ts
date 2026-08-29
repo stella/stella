@@ -263,12 +263,20 @@ const run = async (
   // The runtime's only outbound calls during a sign-in are the provider's
   // token exchange and key discovery; both are served locally and every
   // other destination is refused, so the replay never leaves the process.
+  const requestUrl = (input: string | URL | Request) => {
+    if (typeof input === "string") {
+      return input;
+    }
+    if (input instanceof URL) {
+      return input.href;
+    }
+    return input.url;
+  };
   const localProviderFetch = async (
     input: string | URL | Request,
     init?: RequestInit,
   ): Promise<Response> => {
-    const request =
-      init === undefined ? new Request(input) : new Request(input, init);
+    const request = new Request(requestUrl(input), init ?? {});
     if (
       request.url.startsWith(`${MICROSOFT_AUTHORITY}/`) &&
       request.url.includes("/oauth2/v2.0/token")
