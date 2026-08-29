@@ -319,6 +319,7 @@
         "@stll/auth-model": "workspace:*",
         "@stll/calculations": "workspace:*",
         "@stll/catalogue": "workspace:*",
+        "@stll/chat": "workspace:*",
         "@stll/chat-limits": "workspace:*",
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
@@ -559,6 +560,32 @@
         "@stll/skills": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+      },
+    },
+    "packages/chat": {
+      "name": "@stll/chat",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/ai-catalog": "workspace:^",
+        "@stll/ui": "workspace:^",
+        "better-result": "catalog:",
+        "lucide-react": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/react": "catalog:react19",
+        "@types/react-dom": "catalog:react19",
+        "bun-types": "catalog:",
+        "react": "catalog:react19",
+        "react-dom": "catalog:react19",
+        "tailwindcss": "catalog:",
+        "tsdown": "catalog:",
+      },
+      "peerDependencies": {
+        "@base-ui/react": "^1.7.0",
+        "react": ">=19",
+        "react-dom": ">=19",
+        "tailwindcss": "^4.3.0",
       },
     },
     "packages/chat-limits": {
@@ -2389,6 +2416,8 @@
     "@stll/calculations": ["@stll/calculations@workspace:packages/calculations"],
 
     "@stll/catalogue": ["@stll/catalogue@workspace:packages/catalogue"],
+
+    "@stll/chat": ["@stll/chat@workspace:packages/chat"],
 
     "@stll/chat-limits": ["@stll/chat-limits@workspace:packages/chat-limits"],
 

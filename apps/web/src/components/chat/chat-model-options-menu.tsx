@@ -5,6 +5,7 @@ import { InfoIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import { groupReasoningEfforts } from "@stll/chat/model-selector";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   MenuCheckboxItem,
@@ -22,7 +23,6 @@ import {
   type ProviderValue,
 } from "@/components/ai-config-role-models.logic";
 import { AIProviderIcon } from "@/components/ai-provider-icons";
-import { groupReasoningEfforts } from "@/components/chat/chat-model-selector.logic";
 import {
   ComposerSubmenuSearch,
   useFocusSearchOnOpen,

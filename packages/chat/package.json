@@ -1,0 +1,71 @@
+{
+  "name": "@stll/chat",
+  "version": "0.0.0",
+  "description": "Typed React chat composer, message stream, model selector, and transport runtime primitives.",
+  "keywords": [
+    "ai",
+    "chat",
+    "react",
+    "streaming"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/chat",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/chat"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./composer": "./src/composer.tsx",
+    "./model-selector": "./src/model-selector.tsx",
+    "./runtime": "./src/runtime.ts",
+    "./stream": "./src/stream.tsx"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "tsdown",
+    "pack:dry-run": "bun pm pack --dry-run",
+    "test": "bun test src",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/chat",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/chat",
+    "format": "oxfmt .",
+    "prepack": "bun run build"
+  },
+  "dependencies": {
+    "@stll/ai-catalog": "workspace:^",
+    "@stll/ui": "workspace:^",
+    "better-result": "catalog:",
+    "lucide-react": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
+    "bun-types": "catalog:",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19",
+    "tailwindcss": "catalog:",
+    "tsdown": "catalog:"
+  },
+  "peerDependencies": {
+    "@base-ui/react": "^1.7.0",
+    "react": ">=19",
+    "react-dom": ">=19",
+    "tailwindcss": "^4.3.0"
+  }
+}

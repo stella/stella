@@ -23,6 +23,7 @@ const SHARED_NPM_PACKAGES = [
   "ai-catalog",
   "anonymize-chat",
   "business-registries",
+  "chat",
   "calculations",
   "country-codes",
   "conditions",

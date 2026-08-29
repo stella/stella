@@ -1,0 +1,6 @@
+{
+  "extends": "@stll/typescript-config/react-library.json",
+  "compilerOptions": { "types": ["bun-types"] },
+  "include": ["."],
+  "exclude": ["dist", "node_modules"]
+}

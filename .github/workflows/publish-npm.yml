@@ -24,6 +24,7 @@ on:
       - packages/business-registries/CHANGELOG.md
       - packages/ai-catalog/CHANGELOG.md
       - packages/anonymize-chat/CHANGELOG.md
+      - packages/chat/CHANGELOG.md
       - packages/country-codes/CHANGELOG.md
       - packages/conditions/CHANGELOG.md
       - packages/money/CHANGELOG.md
@@ -47,6 +48,7 @@ on:
           - ai-catalog
           - anonymize-chat
           - business-registries
+          - chat
           - country-codes
           - conditions
           - money
@@ -192,10 +194,10 @@ jobs:
           if [[ "$EVENT_NAME" == "workflow_run" ]]; then
             pkgs=(cli)
           elif [[ "$EVENT_NAME" == "push" ]]; then
-            pkgs=(auth-model ai-catalog anonymize-chat country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-model workspace-ui)
+            pkgs=(auth-model ai-catalog anonymize-chat chat country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-model workspace-ui)
           else
             case "$MANUAL_PACKAGE" in
-              all) pkgs=(auth-model ai-catalog anonymize-chat country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-model workspace-ui cli) ;;
+              all) pkgs=(auth-model ai-catalog anonymize-chat chat country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-model workspace-ui cli) ;;
               *) pkgs=("$MANUAL_PACKAGE") ;;
             esac
           fi
@@ -375,6 +377,15 @@ jobs:
         with:
           name: npm-tarball-docx-utils
           path: release-artifacts/docx-utils/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload chat tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'chat')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-chat
+          path: release-artifacts/chat/
           retention-days: 1
           if-no-files-found: error
 
