@@ -186,7 +186,7 @@ export const useAutocompleteStream = (
     };
 
     const dispatchSafe = (tr: Transaction) => {
-      if (!aliveRef.value) {
+      if (!aliveRef.value || view.isDestroyed) {
         return false;
       }
       view.dispatch(tr);
@@ -283,6 +283,9 @@ export const useAutocompleteStream = (
     // request and (re)schedules a new trigger.
     const originalDispatchTransaction = view.props.dispatchTransaction;
     const restoreDispatchTransaction = () => {
+      if (view.isDestroyed) {
+        return;
+      }
       if (originalDispatchTransaction) {
         view.setProps({ dispatchTransaction: originalDispatchTransaction });
         return;

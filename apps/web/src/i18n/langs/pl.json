@@ -1900,6 +1900,9 @@
     "contentControlDropdownNoOptions": "Brak opcji",
     "copy": "Kopiuj",
     "copyLink": "Kopiuj link",
+    "createVersion": "Utwórz wersję",
+    "createVersionFailedDescription": "Zmiany pozostają we wspólnym dokumencie. Spróbuj ponownie utworzyć wersję.",
+    "createVersionFailedTitle": "Nie udało się utworzyć wersji",
     "cut": "Wytnij",
     "decreaseIndent": "Zmniejsz wcięcie",
     "delete": "Usuń",
@@ -1912,6 +1915,7 @@
     "doneEditing": "Zakończ edycję",
     "doubleClickFooter": "Kliknij dwukrotnie, aby dodać stopkę",
     "doubleClickHeader": "Kliknij dwukrotnie, aby dodać nagłówek",
+    "downloadCheckpoint": "Pobierz punkt kontrolny",
     "editAuthRequired": "Odśwież Stellę i zaloguj się ponownie przed edycją tego dokumentu.",
     "editDownloadFailed": "Nie udało się pobrać dokumentu do edycji.",
     "editLink": "Edytuj link",
@@ -2009,6 +2013,10 @@
     "unlockForEditing": "Odblokuj, aby edytować",
     "unsupportedDocxEditDescription": "Ten plik DOCX zawiera struktury, których Folio nie może bezpiecznie przepisać. Aby nie uszkodzić pliku, pobierz go i edytuj w programie Word.",
     "unsupportedDocxEditTitle": "Edycja zablokowana",
+    "versionConflictDescription": "Poza tym pokojem współpracy istnieje nowsza wersja. Punkt kontrolny jest nienaruszony i można go pobrać.",
+    "versionConflictTitle": "Znaleziono nowszą wersję",
+    "versionCreatedDescription": "Utworzono wersję {versionNumber}. Wszyscy mogą kontynuować edycję.",
+    "versionCreatedTitle": "Wersja utworzona",
     "viewOnly": "Tylko do odczytu"
   },
   "guides": {

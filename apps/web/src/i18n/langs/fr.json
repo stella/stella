@@ -1900,6 +1900,9 @@
     "contentControlDropdownNoOptions": "Aucune option",
     "copy": "Copier",
     "copyLink": "Copier le lien",
+    "createVersion": "Créer une version",
+    "createVersionFailedDescription": "Vos modifications restent dans le document partagé. Réessayez de créer la version.",
+    "createVersionFailedTitle": "Impossible de créer la version",
     "cut": "Couper",
     "decreaseIndent": "Diminuer le retrait",
     "delete": "Supprimer",
@@ -1912,6 +1915,7 @@
     "doneEditing": "Terminer la modification",
     "doubleClickFooter": "Double-cliquez pour ajouter un pied de page",
     "doubleClickHeader": "Double-cliquez pour ajouter un en-tête",
+    "downloadCheckpoint": "Télécharger le point de contrôle",
     "editAuthRequired": "Actualisez stella et reconnectez-vous avant de modifier ce document.",
     "editDownloadFailed": "Impossible de télécharger le document pour modification.",
     "editLink": "Modifier le lien",
@@ -2009,6 +2013,10 @@
     "unlockForEditing": "Déverrouiller pour modifier",
     "unsupportedDocxEditDescription": "Ce fichier DOCX contient des structures que Folio ne peut pas réécrire sans risque. Pour éviter de corrompre le fichier, téléchargez-le et modifiez-le dans Word.",
     "unsupportedDocxEditTitle": "Modification bloquée",
+    "versionConflictDescription": "Une version plus récente existe en dehors de cet espace de collaboration. Votre point de contrôle est intact et peut être téléchargé.",
+    "versionConflictTitle": "Version plus récente détectée",
+    "versionCreatedDescription": "La version {versionNumber} a été créée. Tout le monde peut continuer à modifier le document.",
+    "versionCreatedTitle": "Version créée",
     "viewOnly": "Lecture seule"
   },
   "guides": {

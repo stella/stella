@@ -1900,6 +1900,9 @@
     "contentControlDropdownNoOptions": "Nav opciju",
     "copy": "Kopēt",
     "copyLink": "Kopēt saiti",
+    "createVersion": "Izveidot versiju",
+    "createVersionFailedDescription": "Jūsu izmaiņas paliek koplietotajā dokumentā. Mēģiniet izveidot versiju vēlreiz.",
+    "createVersionFailedTitle": "Neizdevās izveidot versiju",
     "cut": "Izgriezt",
     "decreaseIndent": "Samazināt atkāpi",
     "delete": "Dzēst",
@@ -1912,6 +1915,7 @@
     "doneEditing": "Pabeigt rediģēšanu",
     "doubleClickFooter": "Veiciet dubultklikšķi, lai pievienotu kājeni",
     "doubleClickHeader": "Veiciet dubultklikšķi, lai pievienotu galveni",
+    "downloadCheckpoint": "Lejupielādēt kontrolkopiju",
     "editAuthRequired": "Atsvaidziniet stella un pirms dokumenta rediģēšanas pierakstieties vēlreiz.",
     "editDownloadFailed": "Neizdevās lejupielādēt dokumentu rediģēšanai.",
     "editLink": "Rediģēt saiti",
@@ -2009,6 +2013,10 @@
     "unlockForEditing": "Atbloķēt rediģēšanai",
     "unsupportedDocxEditDescription": "Šajā DOCX failā ir struktūras, ko Folio nevar droši pārrakstīt. Lai nesabojātu failu, lejupielādējiet to un rediģējiet programmā Word.",
     "unsupportedDocxEditTitle": "Rediģēšana bloķēta",
+    "versionConflictDescription": "Ārpus šīs sadarbības telpas ir jaunāka versija. Kontrolkopija ir saglabāta un to var lejupielādēt.",
+    "versionConflictTitle": "Atrasta jaunāka versija",
+    "versionCreatedDescription": "Versija {versionNumber} ir izveidota. Visi var turpināt rediģēšanu.",
+    "versionCreatedTitle": "Versija izveidota",
     "viewOnly": "Tikai skatīšana"
   },
   "guides": {

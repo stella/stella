@@ -11,6 +11,7 @@ import {
   ChevronUpIcon,
 } from "lucide-react";
 
+import { useLatest } from "../hooks/use-latest";
 import { CONTROL_SIZE } from "../lib/control-size";
 import type { ControlSize } from "../lib/control-size";
 import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";
@@ -46,29 +47,56 @@ const renderSelectedDisplay =
 
 const Select = <Value, Multiple extends boolean | undefined = false>({
   children,
+  isItemEqualToValue,
   itemToStringLabel,
+  itemToStringValue,
   ...props
 }: SelectPrimitive.Root.Props<Value, Multiple>) => {
   const itemLabels = collectSelectItemLabels(children);
   const itemDisplays = collectSelectItemDisplays(children);
+  const itemLabelsRef = useLatest(itemLabels);
+  const isItemEqualToValueRef = useLatest(isItemEqualToValue);
+  const itemToStringLabelRef = useLatest(itemToStringLabel);
+  const itemToStringValueRef = useLatest(itemToStringValue);
+  const resolveItemLabel = React.useCallback(
+    (value: Value) => {
+      const formatter = itemToStringLabelRef.current;
+      if (formatter !== undefined) {
+        return formatter(value);
+      }
+      return itemLabelsRef.current.get(value) ?? String(value);
+    },
+    [itemLabelsRef, itemToStringLabelRef],
+  );
+  const resolveItemValue = React.useCallback(
+    (value: Value) => itemToStringValueRef.current?.(value) ?? String(value),
+    [itemToStringValueRef],
+  );
+  const compareItemValue = React.useCallback(
+    (itemValue: Value, selectedValue: Value) =>
+      isItemEqualToValueRef.current?.(itemValue, selectedValue) ??
+      Object.is(itemValue, selectedValue),
+    [isItemEqualToValueRef],
+  );
 
-  const root =
-    itemToStringLabel || itemLabels.size === 0 ? (
-      <SelectPrimitive.Root itemToStringLabel={itemToStringLabel} {...props}>
-        {children}
-      </SelectPrimitive.Root>
-    ) : (
-      <SelectPrimitive.Root
-        itemToStringLabel={(value) => {
-          const stringValue = String(value);
-
-          return itemLabels.get(value) ?? stringValue;
-        }}
-        {...props}
-      >
-        {children}
-      </SelectPrimitive.Root>
-    );
+  const root = (
+    <SelectPrimitive.Root
+      {...props}
+      isItemEqualToValue={
+        isItemEqualToValue === undefined ? undefined : compareItemValue
+      }
+      itemToStringLabel={
+        itemToStringLabel === undefined && itemLabels.size === 0
+          ? undefined
+          : resolveItemLabel
+      }
+      itemToStringValue={
+        itemToStringValue === undefined ? undefined : resolveItemValue
+      }
+    >
+      {children}
+    </SelectPrimitive.Root>
+  );
 
   return (
     <SelectItemDisplaysContext value={itemDisplays}>

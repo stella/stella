@@ -12,6 +12,7 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   CheckIcon,
   DownloadIcon,
+  GitCommitHorizontalIcon,
   LockOpenIcon,
   Maximize2Icon,
   Minimize2Icon,
@@ -80,6 +81,7 @@ import {
 } from "@/components/pdf/peek/peek-pdf-viewer";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import Tooltip from "@/components/tooltip";
+import { env } from "@/env";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import {
@@ -635,6 +637,10 @@ export const FileTabPanel = ({
     isNativeDocxDisplay,
     tab,
   });
+  const isCollaboratingNativeDocx =
+    isEditingNativeDocx &&
+    env.VITE_FEATURE_FOLIO_COLLAB &&
+    env.VITE_COLLAB_URL !== undefined;
   const desktopOpenButton =
     desktopEditTarget !== null ? (
       <DesktopOpenButton
@@ -949,14 +955,23 @@ export const FileTabPanel = ({
     if (isEditingNativeDocx) {
       return (
         <Button
-          className="transition-colors"
+          className={cn(
+            "transition-colors",
+            isCollaboratingNativeDocx && "min-h-11",
+          )}
           onClick={() => {
             docxActionsRef.current.get(tab.id)?.finalize();
           }}
           size="xs"
         >
-          <CheckIcon className="size-3.5" />
-          {t("common.save")}
+          {isCollaboratingNativeDocx ? (
+            <GitCommitHorizontalIcon className="size-3.5" />
+          ) : (
+            <CheckIcon className="size-3.5" />
+          )}
+          {isCollaboratingNativeDocx
+            ? t("folio.createVersion")
+            : t("common.save")}
         </Button>
       );
     }

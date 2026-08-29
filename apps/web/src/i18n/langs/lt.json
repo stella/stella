@@ -1900,6 +1900,9 @@
     "contentControlDropdownNoOptions": "Parinkčių nėra",
     "copy": "Kopijuoti",
     "copyLink": "Kopijuoti nuorodą",
+    "createVersion": "Kurti versiją",
+    "createVersionFailedDescription": "Jūsų pakeitimai lieka bendrame dokumente. Pabandykite sukurti versiją dar kartą.",
+    "createVersionFailedTitle": "Nepavyko sukurti versijos",
     "cut": "Iškirpti",
     "decreaseIndent": "Sumažinti įtrauką",
     "delete": "Ištrinti",
@@ -1912,6 +1915,7 @@
     "doneEditing": "Baigti redagavimą",
     "doubleClickFooter": "Spustelėkite du kartus, kad pridėtumėte poraštę",
     "doubleClickHeader": "Spustelėkite du kartus, kad pridėtumėte antraštę",
+    "downloadCheckpoint": "Atsisiųsti kontrolinę kopiją",
     "editAuthRequired": "Atnaujinkite stella ir prieš redaguodami dokumentą prisijunkite iš naujo.",
     "editDownloadFailed": "Nepavyko atsisiųsti dokumento redagavimui.",
     "editLink": "Redaguoti nuorodą",
@@ -2009,6 +2013,10 @@
     "unlockForEditing": "Atrakinti redagavimui",
     "unsupportedDocxEditDescription": "Šiame DOCX yra struktūrų, kurių Folio negali saugiai perrašyti. Kad failas nesugadintumėte, atsisiųskite jį ir redaguokite programoje Word.",
     "unsupportedDocxEditTitle": "Redagavimas užblokuotas",
+    "versionConflictDescription": "Už šio bendradarbiavimo kambario ribų yra naujesnė versija. Kontrolinė kopija išsaugota ir ją galima atsisiųsti.",
+    "versionConflictTitle": "Rasta naujesnė versija",
+    "versionCreatedDescription": "Sukurta {versionNumber} versija. Visi gali toliau redaguoti.",
+    "versionCreatedTitle": "Versija sukurta",
     "viewOnly": "Tik peržiūra"
   },
   "guides": {
