@@ -23,6 +23,7 @@ import { FetchBoundaryError } from "@stll/errors";
 
 import { isSecureCollabRedisUrl, isSecureStellaApiUrl } from "./env-schema";
 import { logCollabEvent } from "./log";
+import { collabRedisConnectionOptions } from "./redis-options";
 
 type CollabAuthContext = {
   roomId: string;
@@ -71,8 +72,16 @@ type CreateCollabServerBaseOptions = {
 
 type CreateCollabServerOptions = CreateCollabServerBaseOptions &
   (
-    | { mode: "redis"; redisUrl: string }
-    | { mode?: "single-process"; redisUrl?: never }
+    | {
+        mode: "redis";
+        redisTlsRejectUnauthorized?: boolean;
+        redisUrl: string;
+      }
+    | {
+        mode?: "single-process";
+        redisTlsRejectUnauthorized?: never;
+        redisUrl?: never;
+      }
   );
 
 const authorizeResponseSchema = v.strictObject({
@@ -289,7 +298,14 @@ export const createCollabServer = async (
     options.mode === "redis"
       ? new RedisExtension({
           awaitInitialSyncTimeout: REDIS_INITIAL_SYNC_TIMEOUT_MS,
-          createClient: () => new RedisClient(options.redisUrl),
+          createClient: () =>
+            new RedisClient(
+              options.redisUrl,
+              collabRedisConnectionOptions(
+                options.redisUrl,
+                options.redisTlsRejectUnauthorized,
+              ),
+            ),
           lockTimeout: REDIS_LOCK_TIMEOUT_MS,
           prefix: FOLIO_COLLAB_REDIS_SCOPE,
         })

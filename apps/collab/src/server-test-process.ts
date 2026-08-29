@@ -15,6 +15,7 @@ const collabServer = await createCollabServer({
   maxDebounceMs: 100,
   mode: "redis",
   port: 0,
+  redisTlsRejectUnauthorized: env.REDIS_TLS_REJECT_UNAUTHORIZED,
   redisUrl,
   serviceToken: env.STELLA_COLLAB_SERVICE_TOKEN,
 });

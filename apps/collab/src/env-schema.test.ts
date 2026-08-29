@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import {
   collabEnvInvariantViolation,
+  envCollabServerSchema,
   isSecureCollabRedisUrl,
   isSecureStellaApiUrl,
 } from "./env-schema";
@@ -25,6 +27,15 @@ describe("Stella API transport", () => {
 });
 
 describe("Redis transport", () => {
+  test("verifies TLS certificates unless the deployment opts out", () => {
+    expect(
+      v.parse(envCollabServerSchema.REDIS_TLS_REJECT_UNAUTHORIZED, undefined),
+    ).toBe(true);
+    expect(
+      v.parse(envCollabServerSchema.REDIS_TLS_REJECT_UNAUTHORIZED, "false"),
+    ).toBe(false);
+  });
+
   test.each([
     "rediss://redis.example.test:6379",
     "rediss://redis.example.test:6379/0",

@@ -80,4 +80,13 @@ export const envCollabServerSchema = {
   ),
   STELLA_COLLAB_REDIS_URL: v.optional(v.pipe(v.string(), v.url())),
   STELLA_COLLAB_SERVICE_TOKEN: v.pipe(v.string(), v.minLength(32)),
+  /**
+   * Whether a `rediss://` connection verifies the server certificate chain.
+   * Leave enabled unless a private endpoint presents a certificate with no
+   * trusted chain and the network is the peer-authentication boundary.
+   */
+  REDIS_TLS_REJECT_UNAUTHORIZED: v.optional(
+    v.pipe(v.string(), v.parseBoolean()),
+    "true",
+  ),
 };
