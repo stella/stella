@@ -82,7 +82,6 @@
   "apps/api/src/handlers/workspaces/workspace-members-remove.test.ts::@/api/lib/sse",
   "apps/api/src/lib/agent-audit-principal.test.ts::@/api/db/root",
   "apps/api/src/lib/ai-provider-probe.test.ts::@/api/lib/safe-outbound-fetch",
-  "apps/api/src/lib/analytics/capture.test.ts::@/api/lib/analytics/client",
   "apps/api/src/lib/bbox/ai-generate-b-boxes.test.ts::@/api/lib/tanstack-ai-generate",
   "apps/api/src/lib/bilingual/ai.test.ts::@/api/lib/tanstack-ai-generate",
   "apps/api/src/lib/document-processing-manual-ocr-restore.db.test.ts::@/api/db/root",

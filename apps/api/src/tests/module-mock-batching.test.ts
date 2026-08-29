@@ -247,34 +247,28 @@ describe("batchModuleMockTests", () => {
     );
   });
 
-  test("splits the real capture mocker/importer pairing", async () => {
-    // Read from source rather than restating the metadata: the pairing is only
-    // a regression pin while it reflects what those two files actually do.
-    const testPaths = [
-      "src/lib/chat/model-ingress-guard.test.ts",
-      "src/lib/analytics/capture.test.ts",
+  test("splits a mocker from a plain importer of the same module", () => {
+    // The shape behind the original regression: one file replaces a widely
+    // imported module, another only imports it. Co-locating them hands the
+    // importer the mock. No live test mocks the analytics capture module any
+    // more (they run the real one behind a recording sink), so the pairing is
+    // synthetic, and stays pinned regardless of which files happen to exist.
+    const tests = [
+      moduleMockTest({
+        mockedModules: ["src/lib/analytics/capture"],
+        testPath: "mocker.test.ts",
+      }),
+      moduleMockTest({
+        importedModules: ["src/lib/analytics/capture"],
+        mockedModules: [],
+        testPath: "importer.test.ts",
+      }),
     ];
-    const tests = await Promise.all(
-      testPaths.map(async (testPath) => ({
-        ...readModuleMockMetadata(
-          await Bun.file(path.join(API_ROOT, testPath)).text(),
-          testPath,
-        ),
-        testPath,
-      })),
-    );
 
-    const [mocker, importer] = tests;
-    if (mocker === undefined || importer === undefined) {
-      throw new TypeError("missing pairing fixture");
-    }
-    expect([...mocker.mockedModules]).toContain("src/lib/analytics/capture");
-    expect([...importer.importedModules]).toContain(
-      "src/lib/analytics/capture",
-    );
-    expect(batchModuleMockTests(tests, 3)).toEqual(
-      testPaths.map((testPath) => [testPath]),
-    );
+    expect(batchModuleMockTests(tests, 3)).toEqual([
+      ["mocker.test.ts"],
+      ["importer.test.ts"],
+    ]);
   });
 
   test("keeps every test exactly once while respecting the batch limit", () => {
