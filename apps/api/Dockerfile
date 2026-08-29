@@ -85,6 +85,12 @@ RUN bun build \
     --target bun \
     --outfile /app/better-auth-17-backfill.js \
     apps/api/src/scripts/better-auth-17-backfill.ts
+# Whole-database census (counts, digests, foreign-key orphans) recorded before
+# a migration rehearsal and compared after it.
+RUN bun build \
+    --target bun \
+    --outfile /app/database-census.js \
+    apps/api/src/scripts/database-census.ts
 # Dedicated durable document-processing worker. Deploy the same image with
 # command override ["bun", "/app/document-processing-worker.js"]. OCR runs
 # in-image through the isolated local ONNX worker.
@@ -192,6 +198,7 @@ COPY --chown=stella:stella --from=builder /app/backfill.js /app/backfill.js
 COPY --chown=stella:stella --from=builder /app/better-auth-migration-audit.js /app/better-auth-migration-audit.js
 COPY --chown=stella:stella --from=builder /app/better-auth-microsoft-identity-map.js /app/better-auth-microsoft-identity-map.js
 COPY --chown=stella:stella --from=builder /app/better-auth-17-backfill.js /app/better-auth-17-backfill.js
+COPY --chown=stella:stella --from=builder /app/database-census.js /app/database-census.js
 COPY --chown=stella:stella --from=builder /app/document-processing-worker.js /app/document-processing-worker.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
 # Bundled migration task entrypoint:
