@@ -64,6 +64,8 @@ const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const BASELINE_PATH = path.resolve(SCRIPTS_DIR, "ratchet-baseline.json");
 const BASELINE_REL = "scripts/ratchet-baseline.json";
 const WRITE_HINT = "bun scripts/ratchet.ts --write";
+const INTERNAL_MODULE_MOCK_LEDGER_REL =
+  "scripts/internal-module-mock-ledger.json";
 
 // Shared source globs + exclusions for the app-source metrics.
 const APP_SOURCE_GLOBS = [
@@ -1222,6 +1224,19 @@ const PER_RULE_SUPPRESSION_METRICS: readonly RatchetMetric[] =
     count: countTrackedRuleSuppressions(rule),
   }));
 
+// Grandfathered `mock.module` targets: one ledger line per
+// "<test file>::<workspace module>" pair. The rule
+// (.oxlint-plugins/no-internal-module-mock.ts) reports an unlisted pair and a
+// listed pair whose mock is gone; this budget is what stops a new pair from
+// being listed instead of fixed.
+const countInternalModuleMockLedgerEntries: FileCounter = (content) => {
+  const parsed: unknown = JSON.parse(content);
+  if (!Array.isArray(parsed)) {
+    panic("internal-module-mock ledger must be a JSON array");
+  }
+  return parsed.length;
+};
+
 const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     id: "as-casts",
@@ -1520,6 +1535,14 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["apps/api/src/db/schema/**/*.ts"],
     exclude: isExcludedSource,
     count: countWorkspaceOnlyRlsOnOrgTables,
+  },
+  {
+    id: "internal-module-mock-ledger-entries",
+    description:
+      "grandfathered mock.module targets of workspace modules, one per <test file>::<module> pair in scripts/internal-module-mock-ledger.json (each replaces a real dependency with a fabrication the mocked module's contract changes cannot fail)",
+    include: [INTERNAL_MODULE_MOCK_LEDGER_REL],
+    exclude: () => false,
+    count: countInternalModuleMockLedgerEntries,
   },
 ];
 
@@ -2390,6 +2413,19 @@ const WORKSPACE_ONLY_RLS_FIXTURE_LINES = [
   "// );",
 ];
 const SELF_TEST_WORKSPACE_ONLY_RLS = `${WORKSPACE_ONLY_RLS_FIXTURE_LINES.join("\n")}\n`;
+
+// Two pairs in one file and one in another: the count is the number of
+// ledger lines, not of files.
+const SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER = `${JSON.stringify(
+  [
+    "apps/api/src/handlers/alpha.test.ts::@/api/lib/s3",
+    "apps/api/src/handlers/alpha.test.ts::@/api/lib/s3-presign",
+    "packages/cli/src/login.test.ts::./browser-open.js",
+  ],
+  null,
+  2,
+)}\n`;
+const EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES = 3;
 // Expected: the two tables that declare organizationId AND spread wsPolicies().
 // Excluded: the workspace-only table with no organizationId column, the table
 // already on wsOrganizationPolicies, the org-only table, the table whose only
@@ -2708,6 +2744,11 @@ const runSelfTest = (): number => {
       "apps/api/src/handlers/case-law/decisions/public-subject.ts",
       SELF_TEST_AD_HOC_SUBJECT_GATE,
     );
+    writeFixture(
+      root,
+      INTERNAL_MODULE_MOCK_LEDGER_REL,
+      SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER,
+    );
     writeFixture(root, "apps/api/src/db/index.ts", "export const x = 1;\n");
     writeFixture(root, "apps/web/src/lib/index.tsx", "export const y = 2;\n");
     // Excluded companions: these must NOT be counted.
@@ -2731,6 +2772,18 @@ const runSelfTest = (): number => {
     }
     if ("apps/web/src/types.gen.ts" in asMetric.files) {
       failures.push("as-casts did not exclude a .gen.ts file");
+    }
+
+    const mockLedgerMetric = requireSnapshot(
+      snapshot,
+      "internal-module-mock-ledger-entries",
+    );
+    if (
+      mockLedgerMetric.count !== EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES
+    ) {
+      failures.push(
+        `internal-module-mock-ledger-entries counted ${mockLedgerMetric.count}, expected ${EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES}`,
+      );
     }
 
     const nullishMetric = requireSnapshot(snapshot, "nullish-array-fallback");
