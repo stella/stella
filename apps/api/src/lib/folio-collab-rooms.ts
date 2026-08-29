@@ -165,7 +165,6 @@ export type AuthorizedFolioCollabRoom = {
   tokenExpiresAt: Date;
   tokenId: SafeId<"folioCollabRoomToken">;
   userId: SafeId<"user">;
-  userImage: string | null;
   userName: string;
   workspaceId: SafeId<"workspace">;
 };
@@ -434,7 +433,6 @@ export const authorizeFolioCollabRoom = async ({
       tokenId: folioCollabRoomTokens.id,
       tokenGeneration: folioCollabRoomTokens.generation,
       userId: folioCollabRoomTokens.userId,
-      userImage: user.image,
       userName: user.name,
       workspaceId: folioCollabRooms.workspaceId,
       workspaceClientId: workspaces.clientId,
@@ -511,7 +509,6 @@ export const authorizeFolioCollabRoom = async ({
       tokenExpiresAt: row.expiresAt,
       tokenId: row.tokenId,
       userId: brandPersistedUserId(row.userId),
-      userImage: row.userImage,
       userName: row.userName,
       workspaceId: row.workspaceId,
     },

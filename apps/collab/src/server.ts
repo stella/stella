@@ -17,7 +17,6 @@ import {
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
   FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_REDIS_SCOPE,
-  folioCollabPresenceColor,
   parseFolioCollabRoomName,
 } from "@stll/api-contract/folio-collab";
 import { FetchBoundaryError } from "@stll/errors";
@@ -29,9 +28,7 @@ type CollabAuthContext = {
   roomId: string;
   tokenState: CollabRoomTokenState;
   userId: string;
-  userImage: string | null;
   userName: string;
-  workspaceId: string;
 };
 
 type CollabRoomTokenState = {
@@ -85,9 +82,7 @@ const authorizeResponseSchema = v.strictObject({
   roomName: v.string(),
   tokenExpiresAt: v.string(),
   userId: v.string(),
-  userImage: v.nullable(v.string()),
   userName: v.string(),
-  workspaceId: v.string(),
 });
 
 const refreshTokenResponseSchema = v.strictObject({
@@ -128,8 +123,20 @@ const REDIS_LOCK_TIMEOUT_MS = 30_000;
 const REDIS_INITIAL_SYNC_TIMEOUT_MS = 3000;
 const SHUTDOWN_DRAIN_TIMEOUT_MS = 10_000;
 const SNAPSHOT_REVISION_RETRY_LIMIT = 3;
+const FOLIO_COLLABORATOR_COLOR_SPACE = 16_777_215;
 const REDIS_RETRY_CLOSE_REASON = "Collaboration coordination unavailable";
 const ROOM_GENERATION_CLOSE_REASON = "Collaboration room generation changed";
+
+const presenceColorFromUserId = (userId: string) => {
+  let hash = 0;
+  for (const character of userId) {
+    hash =
+      (hash * 31 + (character.codePointAt(0) ?? 0)) %
+      FOLIO_COLLABORATOR_COLOR_SPACE;
+  }
+  const color = (hash * 2_654_435_761) % FOLIO_COLLABORATOR_COLOR_SPACE;
+  return `#${color.toString(16).padStart(6, "0")}`;
+};
 
 const readPresenceUserId = (state: unknown) => {
   if (state === null || typeof state !== "object" || !("user" in state)) {
@@ -791,9 +798,7 @@ export const createCollabServer = async (
           roomId: authorized.roomId,
           tokenState,
           userId: authorized.userId,
-          userImage: authorized.userImage,
           userName: authorized.userName,
-          workspaceId: authorized.workspaceId,
         };
       } catch (error) {
         clearRoomTokens(documentName);
@@ -843,9 +848,9 @@ export const createCollabServer = async (
           continue;
         }
         state["user"] = {
-          color: folioCollabPresenceColor(context.userId),
+          color: presenceColorFromUserId(context.userId),
           id: context.userId,
-          image: context.userImage,
+          image: null,
           name: context.userName,
         };
       }

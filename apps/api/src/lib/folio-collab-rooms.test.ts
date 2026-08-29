@@ -116,7 +116,6 @@ const validRow = (overrides: Row = {}): Row => ({
   tokenId: toSafeId<"folioCollabRoomToken">("fcrt_1"),
   tokenGeneration: 3,
   userId: "user_1",
-  userImage: "https://example.test/avatar.png",
   userName: "Authorized user",
   workspaceId,
   workspaceClientId: "client_1",

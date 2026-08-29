@@ -13,7 +13,6 @@ import {
   FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
   FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
-  folioCollabPresenceColor,
 } from "@stll/api-contract/folio-collab";
 import { FetchBoundaryError } from "@stll/errors";
 import type { DocxEditorCollaboration } from "@stll/folio-react";
@@ -22,12 +21,14 @@ import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
+import {
+  getApiRequestHeaders,
+  waitForSimulatedApiDelay,
+} from "@/lib/api-request-context";
+import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
-import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
-import { toSafeId } from "@/lib/safe-id";
 
 import { advanceFolioCollaborationMutationRevision } from "./folio-collaboration-mutations";
 
@@ -80,6 +81,8 @@ const SEED_DOCUMENT_DOWNLOAD_TIMEOUT_MS = 10_000;
 const COLLAB_FLUSH_TIMEOUT_MS = 10_000;
 const GENERATION_REJOIN_RETRY_DELAY_MS = 1000;
 const GENERATION_REJOIN_MAX_RETRY_DELAY_MS = 10_000;
+// Peers receive the server-derived color; the local cursor is never rendered.
+const LOCAL_AWARENESS_PLACEHOLDER_COLOR = "#000000";
 const flushResponseSchema = v.pipe(
   v.string(),
   v.parseJson(),
@@ -89,6 +92,52 @@ const flushResponseSchema = v.pipe(
     type: v.literal(FOLIO_COLLAB_FLUSH_RESPONSE_TYPE),
   }),
 );
+const joinResponseSchema = v.object({
+  generation: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  roomId: v.string(),
+  roomName: v.string(),
+  seedDownloadUrl: v.nullable(v.string()),
+  shouldSeed: v.boolean(),
+  token: v.string(),
+  tokenExpiresAt: v.string(),
+});
+const refreshResponseSchema = v.object({
+  canEdit: v.boolean(),
+  generation: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  token: v.string(),
+  tokenExpiresAt: v.string(),
+});
+
+type PostFolioCollabJsonOptions = {
+  body: Record<string, string>;
+  path: `/${string}`;
+};
+
+const postFolioCollabJson = async ({
+  body,
+  path,
+}: PostFolioCollabJsonOptions) => {
+  await waitForSimulatedApiDelay();
+  const response = await fetchWithTimeout(apiUrl(path), {
+    body: JSON.stringify(body),
+    credentials: "include",
+    headers: {
+      ...getApiRequestHeaders(),
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+    timeoutMs: COLLAB_FLUSH_TIMEOUT_MS,
+  });
+  if (!response.ok) {
+    throw new FetchBoundaryError({
+      message: "Collaboration API request failed.",
+      status: response.status,
+      statusText: response.statusText,
+      url: response.url,
+    });
+  }
+  return await response.json();
+};
 
 const waitForAbortableDelay = async (signal: AbortSignal, delayMs: number) => {
   const retrySignal = AbortSignal.any([signal, AbortSignal.timeout(delayMs)]);
@@ -207,7 +256,7 @@ export const useFolioCollaborationRoom = ({
       return null;
     }
     return {
-      color: folioCollabPresenceColor(userId),
+      color: LOCAL_AWARENESS_PLACEHOLDER_COLOR,
       id: userId,
       image: userImage,
       name: userName,
@@ -247,21 +296,16 @@ export const useFolioCollaborationRoom = ({
 
     detached(
       (async () => {
-        const { data, error: joinError } = await api
-          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          ["folio-collab-rooms"].join.post({
-            entityId: toSafeId<"entity">(entityId),
-            propertyId: toSafeId<"property">(propertyId),
-          });
+        const joinPath =
+          `/entities/${encodeURIComponent(workspaceId)}/folio-collab-rooms/join` satisfies `/${string}`;
+        const data = v.parse(
+          joinResponseSchema,
+          await postFolioCollabJson({
+            body: { entityId, propertyId },
+            path: joinPath,
+          }),
+        );
         if (isDisposed()) {
-          return;
-        }
-        if (joinError) {
-          setState({
-            status: "unavailable",
-            room: null,
-            message: userErrorMessage(joinError, getEditOpenFailedMessage()),
-          });
           return;
         }
 
@@ -294,15 +338,16 @@ export const useFolioCollaborationRoom = ({
           ) {
             return token;
           }
-          const refreshed = await api["folio-collab-rooms"][
-            "refresh-token"
-          ].post({ roomId, token });
-          if (refreshed.error) {
-            return null;
-          }
-          token = refreshed.data.token;
-          tokenExpiresAtMs = new Date(refreshed.data.tokenExpiresAt).getTime();
-          if (!refreshed.data.canEdit) {
+          const refreshed = v.parse(
+            refreshResponseSchema,
+            await postFolioCollabJson({
+              body: { roomId, token },
+              path: "/folio-collab-rooms/refresh-token",
+            }),
+          );
+          token = refreshed.token;
+          tokenExpiresAtMs = new Date(refreshed.tokenExpiresAt).getTime();
+          if (!refreshed.canEdit) {
             setConnectedState("readOnly");
           }
           return token;
@@ -337,24 +382,34 @@ export const useFolioCollaborationRoom = ({
             };
             const runAttempt = () => {
               const attempt = (async () => {
-                const rejoinResult = await Result.tryPromise(async () =>
-                  api
-                    .entities({
-                      workspaceId: toSafeId<"workspace">(workspaceId),
-                    })
-                    ["folio-collab-rooms"].join.post({
-                      entityId: toSafeId<"entity">(entityId),
-                      propertyId: toSafeId<"property">(propertyId),
-                    }),
-                );
+                const rejoinResult = await Result.tryPromise({
+                  try: async () =>
+                    v.parse(
+                      joinResponseSchema,
+                      await postFolioCollabJson({
+                        body: { entityId, propertyId },
+                        path: joinPath,
+                      }),
+                    ),
+                  catch: (cause) => cause,
+                });
                 if (isDisposed()) {
                   resolve();
                   return;
                 }
                 if (Result.isError(rejoinResult)) {
+                  const status =
+                    rejoinResult.error instanceof FetchBoundaryError
+                      ? rejoinResult.error.status
+                      : null;
                   if (!reportedFailure) {
                     reportedFailure = true;
                     getAnalytics().captureError(rejoinResult.error);
+                  }
+                  if (status === 403) {
+                    setConnectedState("readOnly");
+                    resolve();
+                    return;
                   }
                   await waitForRetry();
                   if (isDisposed()) {
@@ -365,28 +420,7 @@ export const useFolioCollaborationRoom = ({
                   return;
                 }
 
-                const { data: rejoined, error: rejoinError } =
-                  rejoinResult.value;
-                if (rejoinError) {
-                  const apiError = toAPIError(rejoinError);
-                  if (!reportedFailure) {
-                    reportedFailure = true;
-                    getAnalytics().captureError(apiError);
-                  }
-                  if (apiError.status === 403) {
-                    setConnectedState("readOnly");
-                    resolve();
-                    return;
-                  }
-                  setConnectedState("reconnecting");
-                  await waitForRetry();
-                  if (isDisposed()) {
-                    resolve();
-                  } else {
-                    runAttempt();
-                  }
-                  return;
-                }
+                const rejoined = rejoinResult.value;
                 if (
                   rejoined.roomId !== roomId ||
                   rejoined.roomName !== data.roomName

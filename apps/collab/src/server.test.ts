@@ -182,9 +182,7 @@ const createFakeStellaApi = ({
           roomName: requestedRoomName,
           tokenExpiresAt,
           userId: "user_test",
-          userImage: "https://example.test/authorized-avatar.png",
           userName: "Authorized user",
-          workspaceId: "workspace_test",
         });
       }
 
@@ -591,7 +589,7 @@ describe("collaboration server", () => {
       ).find((state) => hasAwarenessUserName(state, "Authorized user"));
       expect(authorizedPresence?.user).toMatchObject({
         id: "user_test",
-        image: "https://example.test/authorized-avatar.png",
+        image: null,
         name: "Authorized user",
       });
 
