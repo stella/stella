@@ -5,6 +5,7 @@ import { applyUpdate, Doc } from "yjs";
 import { createCollabServer, REDIS_RETRY_CLOSE_CODE } from "./server";
 
 type FakeStellaApiOptions = {
+  additionalRoomIds?: string[];
   canEdit?: boolean;
   generation?: number;
   initialSnapshotBase64?: string | null;
@@ -88,10 +89,13 @@ const farFutureTokenExpiresAt = () =>
 
 const TEST_ROOM_ID = "00000000-0000-4000-8000-000000000001";
 const TEST_ROOM_NAME = `{${TEST_ROOM_ID}}`;
+const SECOND_TEST_ROOM_ID = "00000000-0000-4000-8000-000000000002";
+const SECOND_TEST_ROOM_NAME = `{${SECOND_TEST_ROOM_ID}}`;
 const TEST_SERVICE_TOKEN = "test_collaboration_service_token_32_chars";
 const DOCKER_OPERATION_TIMEOUT_MS = 10_000;
 
 const createFakeStellaApi = ({
+  additionalRoomIds = [],
   canEdit = true,
   generation = 0,
   initialSnapshotBase64 = null,
@@ -101,7 +105,12 @@ const createFakeStellaApi = ({
   token = "collab_token_test",
   tokenExpiresAt = farFutureTokenExpiresAt(),
 }: FakeStellaApiOptions = {}): FakeStellaApi => {
-  let currentGeneration = generation;
+  const roomGenerations = new Map(
+    [roomId, ...additionalRoomIds].map((acceptedRoomId) => [
+      acceptedRoomId,
+      generation,
+    ]),
+  );
   let authorizeRequests = 0;
   const authorizeRequestBodies: Record<string, unknown>[] = [];
   const heartbeatRequestBodies: Record<string, unknown>[] = [];
@@ -123,14 +132,18 @@ const createFakeStellaApi = ({
         authorizeRequests += 1;
         authorizeRequestBodies.push(body);
         const requestToken = body["token"];
+        const requestedRoomName = body["roomName"];
+        const requestedRoomId = [...roomGenerations.keys()].find(
+          (acceptedRoomId) => `{${acceptedRoomId}}` === requestedRoomName,
+        );
         const tokenAuthorized =
           requestToken === token ||
           (replacementToken !== undefined && requestToken === replacementToken);
 
         if (
-          body["roomName"] !== TEST_ROOM_NAME ||
+          requestedRoomId === undefined ||
           !tokenAuthorized ||
-          tokenGeneration !== currentGeneration
+          tokenGeneration !== roomGenerations.get(requestedRoomId)
         ) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
@@ -144,9 +157,9 @@ const createFakeStellaApi = ({
 
         return Response.json({
           canEdit,
-          generation: currentGeneration,
-          roomId,
-          roomName: TEST_ROOM_NAME,
+          generation: roomGenerations.get(requestedRoomId),
+          roomId: requestedRoomId,
+          roomName: requestedRoomName,
           tokenExpiresAt,
           userId: "user_test",
           workspaceId: "workspace_test",
@@ -157,9 +170,9 @@ const createFakeStellaApi = ({
         refreshRequests += 1;
 
         if (
-          body["roomId"] !== roomId ||
+          !roomGenerations.has(String(body["roomId"])) ||
           body["token"] !== currentToken ||
-          tokenGeneration !== currentGeneration
+          tokenGeneration !== roomGenerations.get(String(body["roomId"]))
         ) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
@@ -167,7 +180,7 @@ const createFakeStellaApi = ({
         currentToken = refreshedToken;
         return Response.json({
           canEdit,
-          generation: currentGeneration,
+          generation: roomGenerations.get(String(body["roomId"])),
           token: refreshedToken,
           tokenExpiresAt: farFutureTokenExpiresAt(),
         });
@@ -175,7 +188,10 @@ const createFakeStellaApi = ({
 
       if (url.pathname === "/v1/folio-collab-rooms/heartbeat") {
         heartbeatRequestBodies.push(body);
-        if (body["roomId"] !== roomId || body["token"] !== currentToken) {
+        if (
+          !roomGenerations.has(String(body["roomId"])) ||
+          body["token"] !== currentToken
+        ) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
@@ -186,7 +202,7 @@ const createFakeStellaApi = ({
         loadRequestBodies.push(body);
         snapshotAuthorizationHeaders.push(request.headers.get("authorization"));
         if (
-          body["roomId"] !== roomId ||
+          !roomGenerations.has(String(body["roomId"])) ||
           request.headers.get("authorization") !==
             `Bearer ${TEST_SERVICE_TOKEN}`
         ) {
@@ -194,7 +210,7 @@ const createFakeStellaApi = ({
         }
 
         return Response.json({
-          generation: currentGeneration,
+          generation: roomGenerations.get(String(body["roomId"])),
           snapshotBase64: latestSnapshotBase64,
         });
       }
@@ -203,13 +219,14 @@ const createFakeStellaApi = ({
         storeRequestBodies.push(body);
         snapshotAuthorizationHeaders.push(request.headers.get("authorization"));
         if (
-          body["roomId"] !== roomId ||
+          !roomGenerations.has(String(body["roomId"])) ||
           request.headers.get("authorization") !==
             `Bearer ${TEST_SERVICE_TOKEN}`
         ) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
+        const currentGeneration = roomGenerations.get(String(body["roomId"]));
         if (body["expectedGeneration"] !== currentGeneration) {
           return Response.json(
             { message: "Snapshot generation changed." },
@@ -250,7 +267,7 @@ const createFakeStellaApi = ({
     loadRequestBodies: () => loadRequestBodies,
     refreshRequests: () => refreshRequests,
     setGeneration: (nextGeneration) => {
-      currentGeneration = nextGeneration;
+      roomGenerations.set(roomId, nextGeneration);
     },
     snapshotAuthorizationHeaders: () => snapshotAuthorizationHeaders,
     storeRequestBodies: () => storeRequestBodies,
@@ -567,7 +584,9 @@ describe("collaboration server", () => {
   });
 
   test("rejects a stale snapshot generation without publishing old room state", async () => {
-    const fakeApi = createFakeStellaApi();
+    const fakeApi = createFakeStellaApi({
+      additionalRoomIds: [SECOND_TEST_ROOM_ID],
+    });
     const collabServer = await createCollabServer({
       apiUrl: fakeApi.url,
       debounceMs: 20,
@@ -578,6 +597,7 @@ describe("collaboration server", () => {
     });
     const ydoc = new Doc();
     const closeCodes: number[] = [];
+    const secondRoomCloseCodes: number[] = [];
     const provider = createProvider({
       name: TEST_ROOM_NAME,
       onClose: (code) => {
@@ -587,12 +607,24 @@ describe("collaboration server", () => {
       url: collabServer.websocketUrl,
       ydoc,
     });
+    const secondRoomDoc = new Doc();
+    const secondRoomProvider = createProvider({
+      name: SECOND_TEST_ROOM_NAME,
+      onClose: (code) => {
+        secondRoomCloseCodes.push(code);
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc: secondRoomDoc,
+    });
 
     try {
       await waitFor(
         () =>
-          provider.isAuthenticated && fakeApi.loadRequestBodies().length > 0,
-        "Provider did not load the initial room generation.",
+          provider.isAuthenticated &&
+          secondRoomProvider.isAuthenticated &&
+          fakeApi.loadRequestBodies().length >= 2,
+        "Providers did not load their initial room generations.",
       );
       fakeApi.setGeneration(1);
 
@@ -604,6 +636,8 @@ describe("collaboration server", () => {
       );
       await Bun.sleep(100);
       expect(closeCodes).toContain(REDIS_RETRY_CLOSE_CODE);
+      expect(secondRoomCloseCodes).not.toContain(REDIS_RETRY_CLOSE_CODE);
+      expect(secondRoomProvider.isAuthenticated).toBeTrue();
       provider.destroy();
       await Bun.sleep(100);
       expect(fakeApi.storeRequests()).toBe(0);
@@ -614,10 +648,16 @@ describe("collaboration server", () => {
           roomId: TEST_ROOM_ID,
         });
       }
-      expect(fakeApi.loadRequestBodies()).toHaveLength(1);
+      expect(
+        fakeApi
+          .loadRequestBodies()
+          .filter((body) => body["roomId"] === TEST_ROOM_ID),
+      ).toHaveLength(1);
     } finally {
       provider.destroy();
+      secondRoomProvider.destroy();
       ydoc.destroy();
+      secondRoomDoc.destroy();
       await collabServer.destroy();
       await fakeApi.destroy();
     }

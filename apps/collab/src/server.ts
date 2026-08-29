@@ -48,6 +48,12 @@ type ManagedWebSocketLike = WebSocketLike & {
   markClosed: () => void;
 };
 
+type ManagedConnection = {
+  roomConnectionCounts: Map<string, number>;
+  socket: ManagedWebSocketLike;
+  socketIds: Set<string>;
+};
+
 type CreateCollabServerBaseOptions = {
   apiUrl: string;
   serviceToken: string;
@@ -221,10 +227,22 @@ export const createCollabServer = async (
   let redisReady = mode === "single-process";
   let redisUnavailableLogged = false;
   let shuttingDown = false;
-  const managedSockets = new Set<ManagedWebSocketLike>();
+  const managedConnections = new Set<ManagedConnection>();
+  const managedConnectionsByRequest = new Map<Request, ManagedConnection>();
+  const managedConnectionsBySocketId = new Map<string, ManagedConnection>();
   const closeManagedConnectionsForRetry = (reason: string) => {
-    for (const socket of managedSockets) {
+    for (const { socket } of managedConnections) {
       socket.close(REDIS_RETRY_CLOSE_CODE, reason);
+    }
+  };
+  const closeManagedRoomConnectionsForRetry = (
+    roomName: string,
+    reason: string,
+  ) => {
+    for (const { roomConnectionCounts, socket } of managedConnections) {
+      if (roomConnectionCounts.has(roomName)) {
+        socket.close(REDIS_RETRY_CLOSE_CODE, reason);
+      }
     }
   };
   const redisExtension =
@@ -567,7 +585,13 @@ export const createCollabServer = async (
     },
     extensions: redisExtension === null ? [] : [redisExtension],
     maxDebounce: maxDebounceMs,
-    async onAuthenticate({ connectionConfig, documentName, token }) {
+    async onAuthenticate({
+      connectionConfig,
+      documentName,
+      request,
+      socketId,
+      token,
+    }) {
       const requestedRoomId = parseFolioCollabRoomName(documentName);
       if (requestedRoomId === null) {
         panic("Collaboration room name is invalid.");
@@ -602,6 +626,16 @@ export const createCollabServer = async (
         });
         await ensureRoomHeartbeat(tokenState);
         connectionConfig.readOnly = !authorized.canEdit;
+        const managedConnection = managedConnectionsByRequest.get(request);
+        if (managedConnection === undefined) {
+          panic("Collaboration socket ownership is missing.");
+        }
+        managedConnection.roomConnectionCounts.set(
+          documentName,
+          (managedConnection.roomConnectionCounts.get(documentName) ?? 0) + 1,
+        );
+        managedConnection.socketIds.add(socketId);
+        managedConnectionsBySocketId.set(socketId, managedConnection);
 
         return {
           roomId: authorized.roomId,
@@ -613,6 +647,23 @@ export const createCollabServer = async (
         clearRoomTokens(documentName);
         throw error;
       }
+    },
+    async onDisconnect({ documentName, socketId }) {
+      await Promise.resolve();
+      const managedConnection = managedConnectionsBySocketId.get(socketId);
+      const connectionCount =
+        managedConnection?.roomConnectionCounts.get(documentName);
+      if (managedConnection === undefined || connectionCount === undefined) {
+        return;
+      }
+      if (connectionCount === 1) {
+        managedConnection.roomConnectionCounts.delete(documentName);
+        return;
+      }
+      managedConnection.roomConnectionCounts.set(
+        documentName,
+        connectionCount - 1,
+      );
     },
     async onLoadDocument({ context, document, documentName }) {
       cancelRoomCleanup(documentName);
@@ -665,7 +716,10 @@ export const createCollabServer = async (
         if (!(error instanceof FetchBoundaryError) || error.status !== 409) {
           throw error;
         }
-        closeManagedConnectionsForRetry(ROOM_GENERATION_CLOSE_REASON);
+        closeManagedRoomConnectionsForRetry(
+          documentName,
+          ROOM_GENERATION_CLOSE_REASON,
+        );
         clearRoomTokens(documentName);
         logCollabEvent({
           event: "snapshot_generation_conflict",
@@ -684,7 +738,11 @@ export const createCollabServer = async (
 
   const clientConnections = new Map<
     Peer,
-    { connection: HocuspocusClientConnection; socket: ManagedWebSocketLike }
+    {
+      connection: HocuspocusClientConnection;
+      managedConnection: ManagedConnection;
+      socket: ManagedWebSocketLike;
+    }
   >();
 
   const webSocketAdapter = crossws({
@@ -700,7 +758,11 @@ export const createCollabServer = async (
           code: event.code ?? 1000,
           reason: event.reason ?? "",
         });
-        managedSockets.delete(client.socket);
+        managedConnections.delete(client.managedConnection);
+        managedConnectionsByRequest.delete(peer.request);
+        for (const socketId of client.managedConnection.socketIds) {
+          managedConnectionsBySocketId.delete(socketId);
+        }
         clientConnections.delete(peer);
       },
       message(peer, message) {
@@ -715,9 +777,15 @@ export const createCollabServer = async (
         }
 
         const socket = createManagedWebSocket(peer);
+        const managedConnection: ManagedConnection = {
+          roomConnectionCounts: new Map(),
+          socket,
+          socketIds: new Set(),
+        };
+        managedConnections.add(managedConnection);
+        managedConnectionsByRequest.set(peer.request, managedConnection);
         const connection = hocuspocus.handleConnection(socket, peer.request);
-        managedSockets.add(socket);
-        clientConnections.set(peer, { connection, socket });
+        clientConnections.set(peer, { connection, managedConnection, socket });
       },
     },
   });
