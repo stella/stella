@@ -12,6 +12,7 @@ import type { FolioCollabTokenPermissions } from "@/api/db/schema";
 import {
   bufferObjectCleanupIntents,
   desktopEditSessions,
+  folioCollabContributions,
   folioCollabRooms,
   folioCollabRoomTokens,
   workspaceMembers,
@@ -25,6 +26,7 @@ import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-sessi
 import { createFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import {
+  FOLIO_COLLAB_CONTRIBUTOR_MAX_COUNT,
   FOLIO_COLLAB_SNAPSHOT_MAX_BASE64_LENGTH,
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
   FOLIO_COLLAB_TOKEN_TTL_MS,
@@ -232,6 +234,66 @@ export const issueFolioCollabToken = async ({
   });
 
   return { token, tokenExpiresAt };
+};
+
+export const recordFolioCollabContribution = async ({
+  roomId,
+  tx,
+  userId,
+  workspaceId,
+}: {
+  roomId: SafeId<"folioCollabRoom">;
+  tx: Transaction;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+}) => {
+  const rooms = await tx
+    .select({
+      baseVersionId: folioCollabRooms.baseVersionId,
+      entityId: folioCollabRooms.entityId,
+    })
+    .from(folioCollabRooms)
+    .where(
+      and(
+        eq(folioCollabRooms.id, roomId),
+        eq(folioCollabRooms.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  const room = rooms.at(0);
+  if (!room) {
+    return false;
+  }
+
+  const contributionCount = await tx.$count(
+    folioCollabContributions,
+    and(
+      eq(folioCollabContributions.roomId, roomId),
+      eq(folioCollabContributions.workspaceId, workspaceId),
+    ),
+  );
+  if (contributionCount >= FOLIO_COLLAB_CONTRIBUTOR_MAX_COUNT) {
+    return false;
+  }
+
+  await tx
+    .insert(folioCollabContributions)
+    .values({
+      entityId: room.entityId,
+      id: createSafeId<"folioCollabContribution">(),
+      roomId,
+      sinceVersionId: room.baseVersionId,
+      userId,
+      workspaceId,
+    })
+    .onConflictDoNothing({
+      target: [
+        folioCollabContributions.roomId,
+        folioCollabContributions.userId,
+      ],
+    });
+  return true;
 };
 
 export const refreshFolioCollabToken = async ({

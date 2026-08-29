@@ -1,7 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
-import { folioCollabRooms, folioCollabRoomTokens } from "@/api/db/schema";
+import {
+  folioCollabContributions,
+  folioCollabPublications,
+  folioCollabRooms,
+  folioCollabRoomTokens,
+} from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   getRlsFixture,
@@ -70,6 +75,46 @@ beforeAll(async () => {
       workspaceId: ids.wsB1,
     },
   ]);
+  await testDb.insert(folioCollabContributions).values([
+    {
+      entityId: ids.entityA1,
+      id: createSafeId<"folioCollabContribution">(),
+      roomId: roomA,
+      sinceVersionId: ids.entityVersionA1,
+      userId: ids.userA1,
+      workspaceId: ids.wsA1,
+    },
+    {
+      entityId: ids.entityB1,
+      id: createSafeId<"folioCollabContribution">(),
+      roomId: roomB,
+      sinceVersionId: ids.entityVersionB1,
+      userId: ids.userB1,
+      workspaceId: ids.wsB1,
+    },
+  ]);
+  await testDb.insert(folioCollabPublications).values([
+    {
+      checkpointSha256Hex: "c".repeat(64),
+      entityId: ids.entityA1,
+      entityVersionId: ids.entityVersionA1,
+      generation: 0,
+      id: createSafeId<"folioCollabPublication">(),
+      idempotencyKey: "00000000-0000-4000-8000-00000000000a",
+      roomId: roomA,
+      workspaceId: ids.wsA1,
+    },
+    {
+      checkpointSha256Hex: "d".repeat(64),
+      entityId: ids.entityB1,
+      entityVersionId: ids.entityVersionB1,
+      generation: 0,
+      id: createSafeId<"folioCollabPublication">(),
+      idempotencyKey: "00000000-0000-4000-8000-00000000000b",
+      roomId: roomB,
+      workspaceId: ids.wsB1,
+    },
+  ]);
 });
 
 afterAll(async () => {
@@ -85,6 +130,12 @@ describe("folio collaboration room RLS", () => {
       [ids.wsA1],
       ids.orgA,
       async (tx) => ({
+        contributions: await tx
+          .select({ roomId: folioCollabContributions.roomId })
+          .from(folioCollabContributions),
+        publications: await tx
+          .select({ roomId: folioCollabPublications.roomId })
+          .from(folioCollabPublications),
         rooms: await tx
           .select({ id: folioCollabRooms.id })
           .from(folioCollabRooms),
@@ -96,6 +147,8 @@ describe("folio collaboration room RLS", () => {
     );
 
     expect(result).toEqual({
+      contributions: [{ roomId: roomA }],
+      publications: [{ roomId: roomA }],
       rooms: [{ id: roomA }],
       tokens: [{ roomId: roomA }],
     });
@@ -115,5 +168,30 @@ describe("folio collaboration room RLS", () => {
     );
 
     expect(updated).toEqual([]);
+  });
+
+  test("publication idempotency keys cannot create a second version identity", async () => {
+    const duplicate = await testDb
+      .insert(folioCollabPublications)
+      .values({
+        checkpointSha256Hex: "e".repeat(64),
+        entityId: ids.entityB1,
+        entityVersionId: ids.entityVersionB1,
+        generation: 0,
+        id: createSafeId<"folioCollabPublication">(),
+        idempotencyKey: "00000000-0000-4000-8000-00000000000a",
+        roomId: roomB,
+        workspaceId: ids.wsB1,
+      })
+      .execute()
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+    expect(duplicate).toBeInstanceOf(Error);
+    expect(String(duplicate)).toContain(
+      'Failed query: insert into "folio_collab_publications"',
+    );
   });
 });

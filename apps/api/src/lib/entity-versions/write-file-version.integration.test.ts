@@ -92,6 +92,11 @@ const createEmptyEntity = async (kind: "document" | "folder") => {
 
 type WriteTestFileOptions = {
   scanWarnings?: string[];
+  versionMetadata?: {
+    collaborationContributorUserIds?: string[];
+    description?: string;
+    label?: string;
+  };
   writePolicy?: FileVersionWritePolicy;
 };
 
@@ -119,6 +124,7 @@ const writeTestFile = async (
           "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         source: null,
         scanWarnings: options.scanWarnings,
+        versionMetadata: options.versionMetadata,
         writePolicy: options.writePolicy ?? { type: "replace-current-file" },
       }),
   );
@@ -258,6 +264,55 @@ describe("first file version persistence", () => {
         eq(entityVersions.entityId, entityId),
       ),
     ).toBe(2);
+  });
+
+  test("publishes collaboration metadata through the targeted canonical writer", async () => {
+    const entityId = await createEmptyEntity("document");
+    const initialWrite = await writeTestFile(entityId);
+    if (Result.isError(initialWrite)) {
+      throw initialWrite.error;
+    }
+    if (initialWrite.value.status !== "ok") {
+      throw new Error(`Initial write failed: ${initialWrite.value.status}`);
+    }
+
+    const published = await writeTestFile(entityId, {
+      versionMetadata: {
+        collaborationContributorUserIds: [ids.userA1, ids.userA2],
+        description: "Negotiated together",
+        label: "Shared draft",
+      },
+      writePolicy: {
+        type: "collaboration-room-publish",
+        expectedCurrentVersionId: initialWrite.value.entityVersionId,
+        filePropertyId,
+      },
+    });
+    if (Result.isError(published)) {
+      throw published.error;
+    }
+    expect(published.value.status).toBe("ok");
+    if (published.value.status !== "ok") {
+      return;
+    }
+
+    const version = await testDb.query.entityVersions.findFirst({
+      where: { id: { eq: published.value.entityVersionId } },
+      columns: {
+        collaborationContributorUserIds: true,
+        description: true,
+        label: true,
+      },
+      with: { fields: { columns: { propertyId: true } } },
+    });
+    expect(version).toMatchObject({
+      collaborationContributorUserIds: [ids.userA1, ids.userA2],
+      description: "Negotiated together",
+      label: "Shared draft",
+    });
+    expect(
+      version?.fields.some((field) => field.propertyId === filePropertyId),
+    ).toBeTrue();
   });
 
   test("rejects a document-property write against a historical field", async () => {

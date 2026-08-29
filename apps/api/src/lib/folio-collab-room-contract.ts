@@ -28,3 +28,4 @@ export const FOLIO_COLLAB_SNAPSHOT_MAX_BASE64_LENGTH =
 
 /** Materialized checkpoints obey the canonical document upload ceiling. */
 export const FOLIO_COLLAB_CHECKPOINT_MAX_BYTES = FILE_SIZE_LIMIT_BYTES.document;
+export const FOLIO_COLLAB_CONTRIBUTOR_MAX_COUNT = 50;

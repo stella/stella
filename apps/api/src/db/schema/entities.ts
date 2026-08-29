@@ -1,6 +1,7 @@
 import { DESKTOP_EDIT_FILE_TYPES } from "@/api/lib/desktop-edit-file-types";
 import {
   FOLIO_COLLAB_CHECKPOINT_MAX_BYTES,
+  FOLIO_COLLAB_CONTRIBUTOR_MAX_COUNT,
   FOLIO_COLLAB_ROOM_SEED_STATES,
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
 } from "@/api/lib/folio-collab-room-contract";
@@ -461,6 +462,9 @@ export const entityVersions = p.pgTable(
      * slice. Null on legacy rows and creation paths not yet threaded.
      */
     source: jsonb("source").$type<DocumentSource | null>(),
+    collaborationContributorUserIds: jsonb(
+      "collaboration_contributor_user_ids",
+    ).$type<string[] | null>(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     /**
      * Chain-of-custody tombstone. A non-null `deletedAt` hides the version
@@ -479,6 +483,10 @@ export const entityVersions = p.pgTable(
     p
       .uniqueIndex("entity_versions_entity_number_uidx")
       .on(table.entityId, table.versionNumber),
+    p.check(
+      "entity_versions_collaboration_contributors_check",
+      sql`${table.collaborationContributorUserIds} IS NULL OR (jsonb_typeof(${table.collaborationContributorUserIds}) = 'array' AND jsonb_array_length(${table.collaborationContributorUserIds}) <= ${FOLIO_COLLAB_CONTRIBUTOR_MAX_COUNT})`,
+    ),
     p.index("entity_versions_entity_id_idx").on(table.entityId),
     p
       .index("entity_versions_stamp_idx")
@@ -875,6 +883,105 @@ export const folioCollabRoomTokens = p.pgTable(
       "folio_collab_room_tokens_generation_check",
       sql`${table.generation} >= 0`,
     ),
+    ...wsPolicies(),
+  ],
+);
+
+// Contribution rows are capped per room and reset after every publication;
+// deleting the durable room cascades any unpublished remainder.
+export const folioCollabContributions = p.pgTable(
+  "folio_collab_contributions",
+  {
+    id: pUuid<"folioCollabContribution">().primaryKey(),
+    roomId: safeUuid<"folioCollabRoom">("room_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    entityId: safeUuid<"entity">("entity_id").notNull(),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    sinceVersionId: safeUuid<"entityVersion">("since_version_id").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p
+      .uniqueIndex("folio_collab_contributions_room_user_uidx")
+      .on(table.roomId, table.userId),
+    p
+      .index("folio_collab_contributions_workspace_room_idx")
+      .on(table.workspaceId, table.roomId),
+    p
+      .foreignKey({
+        columns: [table.roomId, table.workspaceId],
+        foreignColumns: [folioCollabRooms.id, folioCollabRooms.workspaceId],
+        name: "folio_collab_contributions_room_workspace_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.sinceVersionId, table.entityId, table.workspaceId],
+        foreignColumns: [
+          entityVersions.id,
+          entityVersions.entityId,
+          entityVersions.workspaceId,
+        ],
+        name: "folio_collab_contributions_version_entity_workspace_fk",
+      })
+      .onDelete("cascade"),
+    ...wsPolicies(),
+  ],
+);
+
+// Publications are the durable idempotency ledger for immutable versions.
+// Their lifetime intentionally matches the room/version history they protect.
+export const folioCollabPublications = p.pgTable(
+  "folio_collab_publications",
+  {
+    id: pUuid<"folioCollabPublication">().primaryKey(),
+    roomId: safeUuid<"folioCollabRoom">("room_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    entityId: safeUuid<"entity">("entity_id").notNull(),
+    entityVersionId: safeUuid<"entityVersion">("entity_version_id").notNull(),
+    idempotencyKey: p.varchar("idempotency_key", { length: 128 }).notNull(),
+    generation: p.bigint("generation", { mode: "number" }).notNull(),
+    checkpointSha256Hex: p
+      .varchar("checkpoint_sha256_hex", { length: 64 })
+      .notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .uniqueIndex("folio_collab_publications_idempotency_uidx")
+      .on(table.idempotencyKey),
+    p
+      .index("folio_collab_publications_workspace_room_idx")
+      .on(table.workspaceId, table.roomId),
+    p.check(
+      "folio_collab_publications_generation_check",
+      sql`${table.generation} >= 0`,
+    ),
+    p
+      .foreignKey({
+        columns: [table.roomId, table.workspaceId],
+        foreignColumns: [folioCollabRooms.id, folioCollabRooms.workspaceId],
+        name: "folio_collab_publications_room_workspace_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.entityVersionId, table.entityId, table.workspaceId],
+        foreignColumns: [
+          entityVersions.id,
+          entityVersions.entityId,
+          entityVersions.workspaceId,
+        ],
+        name: "folio_collab_publications_version_entity_workspace_fk",
+      })
+      .onDelete("cascade"),
     ...wsPolicies(),
   ],
 );

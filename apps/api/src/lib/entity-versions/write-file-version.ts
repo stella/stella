@@ -41,6 +41,11 @@ export type FileVersionWritePolicy =
       expectedCurrentVersionId: SafeId<"entityVersion">;
       filePropertyId: SafeId<"property">;
       replacedFileFieldId: SafeId<"field">;
+    }
+  | {
+      type: "collaboration-room-publish";
+      expectedCurrentVersionId: SafeId<"entityVersion">;
+      filePropertyId: SafeId<"property">;
     };
 
 export type WriteFileVersionResult =
@@ -79,6 +84,13 @@ type WriteFileVersionInput = {
   sha256Hex: string;
   source: DocumentSource | null;
   scanWarnings?: string[] | undefined;
+  versionMetadata?:
+    | {
+        collaborationContributorUserIds?: string[] | undefined;
+        description?: string | undefined;
+        label?: string | undefined;
+      }
+    | undefined;
   writePolicy: FileVersionWritePolicy;
   afterWrite?:
     | ((
@@ -154,6 +166,7 @@ export const writeFileVersion = async ({
   sha256Hex,
   source,
   scanWarnings,
+  versionMetadata,
   writePolicy,
   afterWrite,
 }: WriteFileVersionInput): Promise<WriteFileVersionResult> => {
@@ -181,6 +194,15 @@ export const writeFileVersion = async ({
       ) {
         return { status: "edit-session-open" };
       }
+      break;
+    }
+    case "collaboration-room-publish": {
+      await lockDocxEditTarget({
+        entityId,
+        propertyId: writePolicy.filePropertyId,
+        tx,
+        workspaceId,
+      });
       break;
     }
     default: {
@@ -237,19 +259,22 @@ export const writeFileVersion = async ({
     return { status: "current-version-not-found" };
   }
 
-  const fileField =
-    writePolicy.type === "automatic-docx-edit"
-      ? currentVersion.fields.find(
-          (candidate) =>
-            candidate.id === writePolicy.replacedFileFieldId &&
-            candidate.propertyId === writePolicy.filePropertyId &&
-            candidate.content.type === "file" &&
-            candidate.content.mimeType === DOCX_MIME_TYPE,
-        )
-      : currentVersion.fields.find(
-          (candidate) => candidate.content.type === "file",
-        );
-  if (writePolicy.type === "automatic-docx-edit" && !fileField) {
+  const targetsFileProperty =
+    writePolicy.type === "automatic-docx-edit" ||
+    writePolicy.type === "collaboration-room-publish";
+  const fileField = targetsFileProperty
+    ? currentVersion.fields.find(
+        (candidate) =>
+          candidate.propertyId === writePolicy.filePropertyId &&
+          (writePolicy.type !== "automatic-docx-edit" ||
+            candidate.id === writePolicy.replacedFileFieldId) &&
+          candidate.content.type === "file" &&
+          candidate.content.mimeType === DOCX_MIME_TYPE,
+      )
+    : currentVersion.fields.find(
+        (candidate) => candidate.content.type === "file",
+      );
+  if (targetsFileProperty && !fileField) {
     return { status: "target-file-not-found" };
   }
   const systemFileProperty = fileField
@@ -306,9 +331,13 @@ export const writeFileVersion = async ({
   });
 
   await tx.insert(entityVersions).values({
+    collaborationContributorUserIds:
+      versionMetadata?.collaborationContributorUserIds,
     createdBy: userId,
+    description: versionMetadata?.description,
     entityId,
     id: entityVersionId,
+    label: versionMetadata?.label,
     stamp: stamp.stamp,
     verificationCode: stamp.verificationCode,
     versionNumber,
