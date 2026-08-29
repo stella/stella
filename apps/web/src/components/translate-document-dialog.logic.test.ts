@@ -164,20 +164,22 @@ describe("document translation output handoff", () => {
     let navigated = false;
     let closed = false;
 
-    expect(
-      openDocumentTranslationOutput({
-        closeDialog: () => {
-          closed = true;
-        },
-        prepareDestination: async () => {
-          throw new Error("destination unavailable");
-        },
-        navigate: async () => {
-          navigated = true;
-        },
-      }),
-    ).rejects.toThrow("destination unavailable");
+    const rejection = await openDocumentTranslationOutput({
+      closeDialog: () => {
+        closed = true;
+      },
+      prepareDestination: async () => {
+        throw new Error("destination unavailable");
+      },
+      navigate: async () => {
+        navigated = true;
+      },
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
 
+    expect(rejection).toMatchObject({ message: "destination unavailable" });
     expect(navigated).toBeFalse();
     expect(closed).toBeFalse();
   });

@@ -1,8 +1,10 @@
 import { panic, Result } from "better-result";
 
+import { BILINGUAL_LIMITS } from "@/api/lib/bilingual/contract";
+
 /** Eight rows stay below the formatted prompt's 200k serialized-character cap
  *  even at the per-row input limit, while keeping target context ordered. */
-export const DOCUMENT_TRANSLATION_BATCH_SIZE = 8;
+export const DOCUMENT_TRANSLATION_BATCH_SIZE = BILINGUAL_LIMITS.batchSize;
 
 type RunBilingualTranslationBatchesOptions<TItem, TError> = {
   items: readonly TItem[];
