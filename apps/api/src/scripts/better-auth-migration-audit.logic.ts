@@ -1056,6 +1056,11 @@ type OAuthPolicyProjection =
   };
 
 const OAUTH_POLICY_PAGE_SIZE = 1000;
+// A client registered without an application type is treated by the provider
+// as a web client; the audit and backfill project the same default so the
+// stored policy matches the provider's own reading of the row.
+export const DEFAULT_OAUTH_APPLICATION_TYPE = "web";
+
 const OAUTH_PROTOCOL_SCOPES = new Set([
   "email",
   "offline_access",
@@ -1147,7 +1152,8 @@ const readProjectedOAuthPolicy = async (
     for (const row of queried.value) {
       const clientId = isRecord(row) ? requiredString(row["clientId"]) : null;
       const applicationType = isRecord(row)
-        ? requiredString(row["applicationType"])
+        ? (requiredString(row["applicationType"]) ??
+          DEFAULT_OAUTH_APPLICATION_TYPE)
         : null;
       const scopes = isRecord(row) ? optionalStringArray(row["scopes"]) : null;
       const grantTypes = isRecord(row)

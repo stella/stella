@@ -102,6 +102,16 @@ test("pre-migration audit is repeatable and rejects ownership corruption and an 
         updatedAt: new Date(),
         userId,
       });
+      // A dynamically registered client that never declared its type must
+      // project as a valid policy row.
+      await transaction.insert(oauthClient).values({
+        id: `audit-untyped-client-row-${suffix}`,
+        clientId: `audit-untyped-client-${suffix}`,
+        public: true,
+        redirectUris: [`https://untyped-${suffix}.example.invalid/callback`],
+        tokenEndpointAuthMethod: "none",
+        type: null,
+      });
 
       const auditDatabase = {
         execute: async (statement: Parameters<typeof transaction.execute>[0]) =>
