@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { PgDialect, PgTable, getTableConfig } from "drizzle-orm/pg-core";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
@@ -17,6 +18,62 @@ const {
   caseLawDecisions,
   caseLawPolarityRules,
 } = schema;
+
+const MIGRATIONS_DIR = path.join(import.meta.dir, "../../../drizzle");
+const NAMED_CHECK = /CONSTRAINT\s+"(?<name>[a-z_0-9]+)"\s+CHECK\s*\(/giu;
+
+/**
+ * The text inside the parenthesis opening at `open`, matched by depth.
+ *
+ * An IN list read with `[^)]+` stops at the first `)`, which is the wrong
+ * place whenever a value or a cast puts one inside the list. Reading the
+ * whole balanced group is what lets one parser serve both the rendered
+ * schema and the migration files.
+ */
+const balancedGroup = (sql: string, open: number): string => {
+  let depth = 0;
+  for (let index = open; index < sql.length; index += 1) {
+    if (sql[index] === "(") {
+      depth += 1;
+    } else if (sql[index] === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        return sql.slice(open + 1, index);
+      }
+    }
+  }
+  throw new Error(`Unbalanced parenthesis at offset ${String(open)}`);
+};
+
+/** The quoted literals of the first `IN (...)` list, or null when there is none. */
+const inListValues = (sql: string): string[] | null => {
+  const opener = /\bIN\s*\(/iu.exec(sql);
+  if (!opener) {
+    return null;
+  }
+
+  return balancedGroup(sql, opener.index + opener[0].length - 1)
+    .split(",")
+    .map((value) => value.trim().replace(/^'|'$/gu, ""));
+};
+
+/**
+ * A schema CHECK as the database reads it: rendered, with the dialect's bound
+ * parameters put back. A constant interpolated as a value arrives as `$1`
+ * rather than its literal, and a placeholder compares equal to nothing.
+ */
+const renderCheck = (check: { value: SQL }): string => {
+  const query = new PgDialect().sqlToQuery(check.value);
+  return query.sql.replace(/\$(\d+)/gu, (placeholder, index: string) => {
+    const bound = query.params[Number(index) - 1];
+    // Only a scalar can be a member of an IN list. Anything else is left as
+    // the placeholder, which matches no migration value and so is reported
+    // rather than stringified into a comparison that cannot mean anything.
+    return typeof bound === "string" || typeof bound === "number"
+      ? String(bound)
+      : placeholder;
+  });
+};
 
 /**
  * Allowed values of a CHECK constraint's IN list, read off the statement the
@@ -34,15 +91,63 @@ const extractCheckValues = (
     throw new Error(`CHECK constraint "${constraintName}" not found`);
   }
 
-  const rendered = new PgDialect().sqlToQuery(check.value).sql;
-  const inList = /IN\s*\((?<inList>[^)]+)\)/iu.exec(rendered)?.groups?.[
-    "inList"
-  ];
-  if (inList === undefined) {
+  const values = inListValues(renderCheck(check));
+  if (values === null) {
     throw new Error(`Could not parse IN list from "${constraintName}"`);
   }
 
-  return inList.split(",").map((v) => v.trim().replace(/^'|'$/gu, ""));
+  return values;
+};
+
+/**
+ * Every named CHECK constraint the committed migrations define with an IN
+ * list, as the last migration to define it leaves it.
+ *
+ * Production is built from these files, not from the schema: `db:push` is
+ * local-only. So the schema is where a constraint is declared and this is
+ * what the database actually enforces, and the two are bound by nothing but
+ * a hand-written migration.
+ */
+const migrationCheckValues = (): Map<
+  string,
+  { migration: string; values: string[] }
+> => {
+  const constraints = new Map<
+    string,
+    { migration: string; values: string[] }
+  >();
+  const migrations = readdirSync(MIGRATIONS_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .toSorted();
+
+  for (const migration of migrations) {
+    let sql: string;
+    try {
+      sql = readFileSync(
+        path.join(MIGRATIONS_DIR, migration, "migration.sql"),
+        "utf-8",
+      );
+    } catch {
+      continue;
+    }
+
+    for (const match of sql.matchAll(NAMED_CHECK)) {
+      const name = match.groups?.["name"];
+      if (name === undefined) {
+        continue;
+      }
+
+      const values = inListValues(
+        balancedGroup(sql, match.index + match[0].length - 1),
+      );
+      if (values) {
+        constraints.set(name, { migration, values });
+      }
+    }
+  }
+
+  return constraints;
 };
 
 /**
@@ -284,5 +389,49 @@ describe("schema invariants", () => {
     expect(migration).toContain(
       `processor_version = ${String(SCOPED_NATIVE_EXTRACTION_ENQUEUE.processorVersion)}`,
     );
+  });
+
+  test("every CHECK constraint's values are enforced by the migrations", () => {
+    // The schema builds each of these lists from the canonical const, so it
+    // is right by construction and a mirror test against the const passes
+    // whatever the database does. Production is migrated, never pushed: what
+    // the database enforces is the last migration to name the constraint, and
+    // nothing binds the two but somebody remembering to write one. A value
+    // added to the const without a migration is not a rejected value, it is a
+    // rejected statement — the whole write fails, taking with it every row it
+    // touched — and that has to fail here rather than in production.
+    const migrations = migrationCheckValues();
+    const declared: { table: string; name: string; values: string[] }[] = [];
+
+    for (const value of Object.values(schema)) {
+      if (!isPgTable(value)) {
+        continue;
+      }
+      const config = getTableConfig(value);
+      for (const check of config.checks) {
+        const values = inListValues(renderCheck(check));
+        if (values) {
+          declared.push({ table: config.name, name: check.name, values });
+        }
+      }
+    }
+
+    // Guards the parser rather than the schema: a rendering change that stops
+    // producing IN lists would empty the set and pass every assertion below.
+    expect(declared.length).toBeGreaterThan(100);
+
+    const unenforced = declared.filter(
+      ({ name, values }) =>
+        JSON.stringify(migrations.get(name)?.values.toSorted()) !==
+        JSON.stringify(values.toSorted()),
+    );
+
+    expect(
+      unenforced.map(({ table, name, values }) => ({
+        constraint: `${table}.${name}`,
+        schema: values.toSorted(),
+        migration: migrations.get(name)?.values.toSorted() ?? null,
+      })),
+    ).toEqual([]);
   });
 });
