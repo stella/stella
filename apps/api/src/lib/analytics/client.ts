@@ -31,3 +31,16 @@ export const getAnalytics = (): Analytics => {
 
   return analytics;
 };
+
+/**
+ * Test seam: hand every caller of `getAnalytics()` this implementation, so a
+ * test records what the real capture path emits (event, fingerprint,
+ * throttling) instead of replacing the module that emits it.
+ */
+export const setAnalyticsForTesting = (replacement: Analytics): void => {
+  analytics = replacement;
+};
+
+export const resetAnalyticsForTesting = (): void => {
+  analytics = null;
+};

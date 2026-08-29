@@ -73,6 +73,26 @@ export const sanitizeLogAttributes = (
   return safeAttributes;
 };
 
+export type LogRecord = {
+  readonly severityText: string;
+  readonly message: string;
+  readonly attributes: LoggerAttributes | undefined;
+};
+
+// Test seam: when set, every sanitized record goes here instead of to the
+// OTel pipeline and the process streams, so a test reads what the real
+// logger would have emitted (after attribute sanitization) without replacing
+// the module.
+let recordSink: ((record: LogRecord) => void) | null = null;
+
+export const setLogSinkForTesting = (sink: (record: LogRecord) => void) => {
+  recordSink = sink;
+};
+
+export const resetLogSinkForTesting = (): void => {
+  recordSink = null;
+};
+
 const emit = ({
   attributes,
   message,
@@ -85,6 +105,10 @@ const emit = ({
   severityText: string;
 }): void => {
   const safeAttributes = sanitizeLogAttributes(attributes);
+  if (recordSink !== null) {
+    recordSink({ severityText, message, attributes: safeAttributes });
+    return;
+  }
   const record = {
     severityNumber,
     severityText,
@@ -187,6 +211,10 @@ const emitRequest = ({
     ...(requestId === undefined ? {} : { "request.id": requestId }),
   };
 
+  if (recordSink !== null) {
+    recordSink({ severityText: severity, message, attributes: safeAttributes });
+    return;
+  }
   otelLogger.emit({
     attributes: safeAttributes,
     body: message,
