@@ -8,7 +8,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 
 import { useLatest } from "@stll/ui/use-latest";
@@ -85,6 +85,10 @@ type EditSessionReleaseContext = {
   entityId: string;
   propertyId: string;
 };
+
+class EditSessionReleaseError extends TaggedError("EditSessionReleaseError")<{
+  message: string;
+}> {}
 
 const releaseEditSession = async ({
   workspaceId,
@@ -428,7 +432,12 @@ export const useEditSession = ({
     debouncedCheckpoint.cancel();
 
     const context = releaseContextRef.current;
-    await releaseEditSession(context);
+    const released = await releaseEditSession(context);
+    if (!released) {
+      throw new EditSessionReleaseError({
+        message: "The desktop edit session could not be released.",
+      });
+    }
 
     sessionRef.current = null;
     setIsDirty(false);

@@ -805,7 +805,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       return;
     }
 
-    await cancelDesktopSession();
+    const cancelResult = await Result.tryPromise(
+      async () => await cancelDesktopSession(),
+    );
+    if (Result.isError(cancelResult)) {
+      stellaToast.error(t("folio.networkError"));
+      throw cancelResult.error;
+    }
   }, [
     cancelCollaboration,
     cancelDesktopSession,

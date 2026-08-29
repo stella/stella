@@ -193,6 +193,9 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     shouldThrow: false,
   });
   const pdfRouteJustification = pdfRouteMatch?.search.justification ?? null;
+  const routeOwnedEditingFieldId = pdfRouteMatch?.search.editing
+    ? (pdfRouteMatch.search.field ?? null)
+    : null;
 
   // A revive suggestion for a route-owned view is only meaningful
   // while its owner route stays presented — leaving the route takes
@@ -592,7 +595,9 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 
         {pdfTabs.map((tab) => (
           <CurrentFileFieldSync
-            isFieldIdPinned={editingDocxTabId === tab.id}
+            isFieldIdPinned={
+              editingDocxTabId === tab.id || routeOwnedEditingFieldId === tab.id
+            }
             isActive={!minimized && tab.id === activeId}
             key={`${tab.workspaceId}:${tab.entityId}:${tab.propertyId ?? tab.id}`}
             tab={tab}
