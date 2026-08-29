@@ -61,14 +61,12 @@ pub(super) fn build_signature_data(
     stella_anonymize_core::assemble::parse_data_file(
       "signature-detection.json",
     )?;
-  let mut labels = language_keyed_terms(&data.labels, None);
-  for label in language_keyed_terms(&data.person_value_labels, selected) {
-    if !labels.contains(&label) {
-      labels.push(label);
-    }
-  }
   Ok(BindingSignatureData {
-    labels,
+    labels: language_keyed_terms(&data.labels, None),
+    person_value_labels: language_keyed_terms(
+      &data.person_value_labels,
+      selected,
+    ),
     person_list_labels: language_keyed_terms(
       &data.person_list_labels,
       selected,
@@ -102,6 +100,7 @@ mod tests {
 
   use serde::Deserialize;
   use serde_json::Value;
+  use stella_anonymize_core::assemble::PipelineConfig;
   use stella_anonymize_core::{OperatorConfig, PreparedEngine};
 
   use super::{build_signature_data, form_field_labels};
@@ -199,6 +198,41 @@ mod tests {
       .collect()
   }
 
+  fn detected_trigger_people(text: &str, language: &str) -> Vec<String> {
+    let config: PipelineConfig = serde_json::from_value(serde_json::json!({
+      "threshold": 0.3,
+      "enableTriggerPhrases": true,
+      "enableRegex": true,
+      "language": language,
+      "enableLegalForms": true,
+      "enableNameCorpus": false,
+      "enableDenyList": false,
+      "enableGazetteer": false,
+      "enableCountries": false,
+      "enableConfidenceBoost": false,
+      "enableCoreference": false,
+      "enableZoneClassification": false,
+      "labels": ["person"],
+      "workspaceId": "person-value-label-test"
+    }))
+    .unwrap();
+    let binding =
+      crate::assemble_static_search_config(&config, None, &[]).unwrap();
+    let prepared = PreparedEngine::new(
+      prepared_search_config_from_binding(binding).unwrap(),
+    )
+    .unwrap();
+    prepared
+      .detect_static_entities(text)
+      .unwrap()
+      .entities
+      .trigger()
+      .iter()
+      .filter(|entity| entity.label == "person")
+      .map(|entity| entity.text.clone())
+      .collect()
+  }
+
   #[test]
   fn scoped_packages_keep_cross_locale_signing_software_stamps() {
     let data = build_signature_data(Some(&[String::from("cs")])).unwrap();
@@ -212,8 +246,20 @@ mod tests {
     assert!(data.form_field_labels.iter().any(|label| label == "jméno"));
     assert!(!data.form_field_labels.iter().any(|label| label == "name"));
     assert!(data.labels.iter().any(|label| label == "name"));
-    assert!(data.labels.iter().any(|label| label == "jméno"));
-    assert!(!data.labels.iter().any(|label| label == "nombre"));
+    assert!(!data.labels.iter().any(|label| label == "jméno"));
+    assert!(
+      data
+        .person_value_labels
+        .iter()
+        .any(|label| label == "jméno")
+    );
+    assert!(!data.person_value_labels.iter().any(|label| label == "name"));
+    assert!(
+      !data
+        .person_value_labels
+        .iter()
+        .any(|label| label == "nombre")
+    );
   }
 
   #[test]
@@ -228,6 +274,30 @@ mod tests {
         build_signature_data(None).unwrap(),
       ),
       vec![String::from("Jan Novák")]
+    );
+
+    assert!(detected_people("zastoupen name: Main Street", "cs").is_empty());
+    assert!(
+      detected_trigger_people("zastoupen name: Main Street", "cs").is_empty()
+    );
+    assert_eq!(
+      detected_trigger_people("zastoupen Jméno: Jan Novák", "cs"),
+      vec![String::from("Jan Novák")]
+    );
+    assert!(
+      detected_trigger_people("represented by seller: Acme Trading", "en",)
+        .is_empty()
+    );
+
+    let mut signature =
+      build_signature_data(Some(&[String::from("en")])).unwrap();
+    signature.labels.push(String::from("seller"));
+    assert!(
+      detected_people_with_signature_data(
+        "represented by seller: Acme Trading",
+        signature,
+      )
+      .is_empty()
     );
   }
 

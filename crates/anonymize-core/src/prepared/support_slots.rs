@@ -264,6 +264,7 @@ fn signature_data_len(data: Option<&SignatureData>) -> usize {
   data.map_or(0, |data| {
     [
       data.labels.len(),
+      data.person_value_labels.len(),
       data.person_list_labels.len(),
       data.witness_phrases.len(),
       data.name_particles.len(),

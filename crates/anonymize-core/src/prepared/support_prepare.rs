@@ -290,6 +290,7 @@ mod tests {
 
     assert!(input.signature.as_ref().is_some_and(|signature| {
       signature.labels == ["name", "buyer", "seller"]
+        && signature.person_value_labels.is_empty()
     }));
   }
 }

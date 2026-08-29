@@ -425,6 +425,7 @@ fn name_corpus_data_from_binding(
 fn signature_data_from_binding(data: BindingSignatureData) -> SignatureData {
   SignatureData {
     labels: data.labels,
+    person_value_labels: data.person_value_labels,
     person_list_labels: data.person_list_labels,
     witness_phrases: data.witness_phrases,
     name_particles: data.name_particles,

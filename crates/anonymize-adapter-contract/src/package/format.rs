@@ -9,8 +9,8 @@ use crate::error::{Result, invalid_prepared_search_package};
 
 use super::PackageCompression;
 
-pub(crate) const BINDING_PACKAGE_SCHEMA_VERSION: u32 = 11;
-pub(crate) const CORE_PACKAGE_SCHEMA_VERSION: u32 = 11;
+pub(crate) const BINDING_PACKAGE_SCHEMA_VERSION: u32 = 12;
+pub(crate) const CORE_PACKAGE_SCHEMA_VERSION: u32 = 12;
 
 pub(crate) const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG2";
 pub(crate) const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] =

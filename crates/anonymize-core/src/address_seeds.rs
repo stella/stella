@@ -823,6 +823,7 @@ impl PreparedAddressSeedData {
     let end = unit_token_end(full_text, start);
     full_text.get(start..end).is_some_and(|token| {
       matches_unit_abbreviation(token, &self.unit_abbreviations)
+        && plausible_unit_value_follows(full_text, end)
     })
   }
 
@@ -2020,6 +2021,56 @@ fn skip_unit_separators(full_text: &str, offset: usize) -> usize {
   cursor
 }
 
+fn plausible_unit_value_follows(full_text: &str, offset: usize) -> bool {
+  let mut cursor = offset;
+  while let Some((index, ch)) = next_char(full_text, cursor) {
+    if !ch.is_whitespace() && ch != ',' {
+      break;
+    }
+    cursor = index.saturating_add(ch.len_utf8());
+  }
+  if full_text
+    .get(offset..cursor)
+    .is_none_or(has_paragraph_break)
+  {
+    return false;
+  }
+  if full_text
+    .get(cursor..)
+    .is_some_and(|tail| tail.starts_with('#'))
+  {
+    cursor = cursor.saturating_add(1);
+    while let Some((index, ch)) = next_char(full_text, cursor) {
+      if !matches!(ch, ' ' | '\t') {
+        break;
+      }
+      cursor = index.saturating_add(ch.len_utf8());
+    }
+  }
+
+  let value_end = full_text
+    .get(cursor..)
+    .map(|tail| {
+      tail
+        .chars()
+        .take_while(|ch| ch.is_alphanumeric() || matches!(ch, '-' | '/'))
+        .map(char::len_utf8)
+        .sum::<usize>()
+    })
+    .map_or(cursor, |len| cursor.saturating_add(len));
+  let Some(value) = full_text.get(cursor..value_end) else {
+    return false;
+  };
+  if is_house_number_word(value) {
+    return true;
+  }
+  let mut chars = value.chars();
+  let count = chars.clone().count();
+  count <= 3
+    && count > 0
+    && chars.all(|ch| ch.is_alphabetic() && ch.is_uppercase())
+}
+
 fn is_house_number_word(word: &str) -> bool {
   !word.is_empty()
     && word.len() <= 13
@@ -2138,7 +2189,14 @@ fn cluster_seeds(
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct NonAddressEntityIndex {
-  spans: SpanIndex<bool>,
+  spans: SpanIndex<NonAddressEntitySpan>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct NonAddressEntitySpan {
+  start: usize,
+  end: usize,
+  is_date: bool,
 }
 
 impl NonAddressEntityIndex {
@@ -2148,7 +2206,14 @@ impl NonAddressEntityIndex {
         existing_entities
           .iter()
           .filter(|entity| non_address_label(&entity.label))
-          .map(|entity| (entity.start, entity.end, date_label(&entity.label))),
+          .filter_map(|entity| {
+            let span = NonAddressEntitySpan {
+              start: usize::try_from(entity.start).ok()?,
+              end: usize::try_from(entity.end).ok()?,
+              is_date: date_label(&entity.label),
+            };
+            Some((entity.start, entity.end, span))
+          }),
       ),
     }
   }
@@ -2176,6 +2241,53 @@ impl NonAddressEntityIndex {
     self.spans.any_overlapping(entity.start, entity.end)
   }
 
+  fn residual_gap_has_prose(
+    &self,
+    full_text: &str,
+    gap_start: usize,
+    gap_end: usize,
+  ) -> bool {
+    let Some((query_start, query_end)) = u32::try_from(gap_start)
+      .ok()
+      .zip(u32::try_from(gap_end).ok())
+    else {
+      return false;
+    };
+    let mut cursor = gap_start;
+    let mut prose_words = 0usize;
+    let mut saw_entity = false;
+    let visit =
+      self
+        .spans
+        .try_for_each_intersecting(query_start, query_end, |span| {
+          saw_entity = true;
+          let residual_end = span.start.min(gap_end);
+          if cursor < residual_end {
+            let Some(residual) = full_text.get(cursor..residual_end) else {
+              return Ok::<_, ()>(());
+            };
+            prose_words =
+              prose_words.saturating_add(prose_word_count(residual));
+            if prose_words > MAX_PROSE_WORDS_BETWEEN_SEEDS {
+              return Err(());
+            }
+          }
+          cursor = cursor.max(span.end.min(gap_end));
+          Ok(())
+        });
+    if visit.is_err() {
+      return true;
+    }
+    if !saw_entity || cursor >= gap_end {
+      return false;
+    }
+    let Some(residual) = full_text.get(cursor..gap_end) else {
+      return false;
+    };
+    prose_words.saturating_add(prose_word_count(residual))
+      > MAX_PROSE_WORDS_BETWEEN_SEEDS
+  }
+
   fn nearest_left(
     &self,
     full_text: &str,
@@ -2194,8 +2306,8 @@ impl NonAddressEntityIndex {
     }
     self
       .spans
-      .find_ending_at_or_before(start_offset, |end, is_date| {
-        !*is_date
+      .find_ending_at_or_before(start_offset, |end, span| {
+        !span.is_date
           || !usize::try_from(end)
             .is_ok_and(|end| date_can_prefix_street_name(full_text, end, start))
       })
@@ -2319,6 +2431,8 @@ fn cluster_separation(
     has_paragraph_break(gap)
       || has_prose_wrap_after_weak_cluster(gap, join.cluster)
       || (join.guards_against_prose() && has_prose_run(gap))
+      || (!join.guards_against_prose()
+        && entity_index.residual_gap_has_prose(full_text, gap_start, gap_end))
   });
   if has_text_barrier {
     return ClusterSeparation::TextBarrier;
@@ -2336,11 +2450,14 @@ fn cluster_separation(
 /// Springfield"). Only applied before a street word opens the address; see
 /// `ClusterJoin::guards_against_prose`.
 fn has_prose_run(gap: &str) -> bool {
+  prose_word_count(gap) > MAX_PROSE_WORDS_BETWEEN_SEEDS
+}
+
+fn prose_word_count(gap: &str) -> usize {
   gap
     .split(|ch: char| !ch.is_alphanumeric() && !matches!(ch, '-' | '\'' | '’'))
     .filter(|word| is_prose_word(word))
-    .nth(MAX_PROSE_WORDS_BETWEEN_SEEDS)
-    .is_some()
+    .count()
 }
 
 /// House numbers, postal codes, capitalized name words, and the connectives

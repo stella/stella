@@ -160,6 +160,8 @@ pub struct BindingSignatureData {
   #[serde(default)]
   pub labels: Vec<String>,
   #[serde(default)]
+  pub person_value_labels: Vec<String>,
+  #[serde(default)]
   pub person_list_labels: Vec<String>,
   #[serde(default)]
   pub witness_phrases: Vec<String>,

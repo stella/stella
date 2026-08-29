@@ -16,6 +16,9 @@ enum CandidateContext {
 pub struct SignatureData {
   #[serde(default)]
   pub labels: Vec<String>,
+  /// Language-scoped labels whose values are known to be person names.
+  #[serde(default)]
+  pub person_value_labels: Vec<String>,
   /// Language-scoped labels that introduce people in legal notice blocks.
   #[serde(default)]
   pub person_list_labels: Vec<String>,
@@ -45,6 +48,7 @@ pub struct SignatureData {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PreparedSignatureData {
   labels: Vec<String>,
+  person_value_labels: Vec<String>,
   person_list_labels: Vec<String>,
   witness_phrases: Vec<String>,
   form_field_labels: Vec<String>,
@@ -69,6 +73,7 @@ impl PreparedSignatureData {
     form_field_labels.dedup();
     Self {
       labels: non_empty_lowercase(data.labels),
+      person_value_labels: non_empty_lowercase(data.person_value_labels),
       person_list_labels: non_empty_lowercase(data.person_list_labels),
       witness_phrases: non_empty_lowercase(data.witness_phrases),
       form_field_labels,
@@ -106,7 +111,7 @@ impl PreparedSignatureData {
   /// signature fields.
   #[must_use]
   pub(crate) fn person_value_labels(&self) -> &[String] {
-    &self.labels
+    &self.person_value_labels
   }
 }
 
@@ -677,7 +682,7 @@ fn label_end_at(
   }
   let tail = line.get(start..)?;
   for (label, requires_list_structure) in data
-    .labels
+    .person_value_labels
     .iter()
     .map(|label| (label, false))
     .chain(data.person_list_labels.iter().map(|label| (label, true)))
@@ -1031,6 +1036,7 @@ mod tests {
   fn test_data() -> PreparedSignatureData {
     PreparedSignatureData::new(SignatureData {
       labels: vec![String::from("name")],
+      person_value_labels: vec![String::from("name")],
       person_list_labels: vec![
         String::from("attention"),
         String::from("do rąk własnych"),

@@ -306,6 +306,7 @@ export type NativeHotwordRuleData = {
 
 export type NativeSignatureData = {
   labels: string[];
+  person_value_labels: string[];
   person_list_labels: string[];
   witness_phrases: string[];
   name_particles: string[];

@@ -3,11 +3,11 @@
   "changes": [
     {
       "type": "array",
-      "path": ["signature_data", "labels"],
+      "path": ["signature_data", "person_value_labels"],
       "segments": [
-        { "type": "copy", "start": 0, "end": 2 },
-        { "type": "copy", "start": 5, "end": 6 },
-        { "type": "copy", "start": 8, "end": 10 }
+        { "type": "copy", "start": 2, "end": 3 },
+        { "type": "copy", "start": 4, "end": 5 },
+        { "type": "copy", "start": 7, "end": 9 }
       ]
     },
     {

@@ -732,13 +732,13 @@ mod tests {
 
   #[test]
   fn prepared_package_schema_versions_track_the_current_payload_shape() {
-    assert_eq!(BINDING_PACKAGE_SCHEMA_VERSION, 11);
-    assert_eq!(CORE_PACKAGE_SCHEMA_VERSION, 11);
+    assert_eq!(BINDING_PACKAGE_SCHEMA_VERSION, 12);
+    assert_eq!(CORE_PACKAGE_SCHEMA_VERSION, 12);
   }
 
   #[test]
   fn prepared_package_readers_reject_previous_schema_payloads() {
-    const PREVIOUS_SCHEMA_VERSION: u32 = 10;
+    const PREVIOUS_SCHEMA_VERSION: u32 = 11;
     let binding_payload = prepared_search_package_payload_to_bytes(
       &package_test_config(),
       b"artifacts",

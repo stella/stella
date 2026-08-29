@@ -3,8 +3,8 @@
   "changes": [
     {
       "type": "array",
-      "path": ["signature_data", "labels"],
-      "segments": [{ "type": "copy", "start": 0, "end": 4 }]
+      "path": ["signature_data", "person_value_labels"],
+      "segments": [{ "type": "copy", "start": 0, "end": 2 }]
     },
     {
       "type": "array",

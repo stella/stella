@@ -15,11 +15,11 @@
     "regex_artifact_policy": "omit"
   },
   "signature_data": {
-    "labels": [
-      "by",
-      "name",
+    "labels": ["by", "name"],
+    "person_value_labels": [
       "jméno",
       "příjmení",
+      "name",
       "nombre",
       "nom",
       "nome",
