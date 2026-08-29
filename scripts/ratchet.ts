@@ -2233,6 +2233,7 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "require-detached-label-shape/require-detached-label-shape": 0,
   "no-awaited-builder-union/no-awaited-builder-union": 0,
   "no-vacuous-throw-assertion/no-vacuous-throw-assertion": 0,
+  "no-internal-module-mock/no-internal-module-mock": 0,
 } as const satisfies Record<TrackedRule, number>;
 
 const TS_SUPPRESSION_FIXTURE_LINES = [

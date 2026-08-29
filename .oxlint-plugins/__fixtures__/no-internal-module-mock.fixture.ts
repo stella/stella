@@ -1,16 +1,19 @@
 // Passive regression fixture for
 // `no-internal-module-mock/no-internal-module-mock`.
 
-import { mock as bunMock, mock } from "bun:test";
-
 const captureTarget = "@/api/lib/analytics/capture";
 
 // MUST flag: a workspace alias names one of this repository's own modules,
 // so the fabricated factory replaces a contract the test should exercise.
-// oxlint-disable-next-line no-internal-module-mock/no-internal-module-mock -- fixture: workspace alias target
+// Written above the import on purpose: imports are hoisted, so source order
+// must not hide the binding.
+// oxlint-disable-next-line no-internal-module-mock/no-internal-module-mock -- fixture: workspace alias target, call precedes its import
 void mock.module("@/api/lib/analytics/capture", () => ({
   capture: () => "captured",
 }));
+
+// oxlint-disable-next-line import/first -- fixture: the import deliberately follows its first use
+import { mock as bunMock, mock } from "bun:test";
 
 // MUST flag: a relative specifier is a workspace module too.
 // oxlint-disable-next-line no-internal-module-mock/no-internal-module-mock -- fixture: relative target

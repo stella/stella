@@ -221,8 +221,15 @@ export default eslintCompatPlugin({
             seen = new Set();
             bindings = [];
           },
-          ImportDeclaration(node) {
-            bindings.push(...readMockBindings(node));
+          // Imports are hoisted, so a call written above its import still
+          // binds to it; collect every binding before any call is visited.
+          Program(node) {
+            if (!Array.isArray(node.body)) {
+              return;
+            }
+            for (const statement of node.body) {
+              bindings.push(...readMockBindings(statement));
+            }
           },
           CallExpression(node) {
             if (!isModuleMockCallee(node.callee, bindings)) {

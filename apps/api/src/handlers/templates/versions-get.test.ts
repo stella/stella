@@ -144,8 +144,12 @@ describe("template version download", () => {
       },
     ]);
     // The audit row must describe the grant that was actually issued.
+    const audited = events.at(0);
+    if (audited === undefined || Array.isArray(audited)) {
+      throw new TypeError("expected exactly one audit event");
+    }
     expect(grant.searchParams.get("X-Amz-Expires")).toBe(
-      String(events[0]?.metadata?.["expiresInSeconds"]),
+      String(audited.metadata?.["expiresInSeconds"]),
     );
   });
 

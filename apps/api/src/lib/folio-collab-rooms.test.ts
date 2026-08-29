@@ -317,7 +317,7 @@ describe("folio collaboration room snapshot generation", () => {
       fake.requests
         .filter(({ method }) => method === "DELETE")
         .map(({ key }) => key),
-    ).toEqual([writtenKey]);
+    ).toEqual(written.map(({ key }) => key));
     // The room pointer never published, so the store must hold nothing.
     expect([...fake.objects.keys()]).toEqual([]);
   });

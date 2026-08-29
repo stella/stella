@@ -223,7 +223,8 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
       if (source === undefined) {
         return errorResponse("NoSuchKey", 404, copySourceKey);
       }
-      objects.set(id, source);
+      // Snapshot, as S3 does: the copy must not alias the source's bytes.
+      objects.set(id, { ...source, bytes: source.bytes.slice() });
       return new Response(
         `${XML_HEADER}<CopyObjectResult><ETag>&quot;fake&quot;</ETag><LastModified>2026-01-01T00:00:00.000Z</LastModified></CopyObjectResult>`,
         { status: 200, headers: { "content-type": "application/xml" } },
@@ -273,8 +274,12 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     },
     put: (bucket, key, bytes, contentType) => {
       objects.set(objectId(bucket, key), {
+        // Snapshot the caller's buffer so a later mutation cannot rewrite
+        // a stored object.
         bytes:
-          typeof bytes === "string" ? new TextEncoder().encode(bytes) : bytes,
+          typeof bytes === "string"
+            ? new TextEncoder().encode(bytes)
+            : bytes.slice(),
         contentType: contentType ?? null,
       });
     },

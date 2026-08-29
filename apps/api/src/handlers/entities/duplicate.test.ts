@@ -137,7 +137,7 @@ test("reserves a copy destination before an ambiguous S3 failure", async () => {
   const attempted = fake.requests.filter(({ method }) => method === "COPY");
   expect(attempted).toHaveLength(1);
   // The reserved key is the key the copy actually addressed, not a guess.
-  expect(copiedS3Keys).toEqual([attempted.at(0)?.key]);
+  expect(copiedS3Keys).toEqual(attempted.map(({ key }) => key));
   expect(attempted.at(0)?.copySourceKey).toBe(sourceKey);
 });
 
