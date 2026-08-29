@@ -843,10 +843,19 @@ describe("Anthropic extended-thinking budgets", () => {
             }),
           };
 
-          const budget =
-            modelOptions.thinking?.type === "enabled"
-              ? modelOptions.thinking.budget_tokens
-              : 0;
+          let budget = 0;
+          if (modelOptions.thinking?.type === "enabled") {
+            const currentThinking: object = modelOptions.thinking;
+            if (
+              !("budget_tokens" in currentThinking) ||
+              typeof currentThinking["budget_tokens"] !== "number"
+            ) {
+              throw new TypeError(
+                "Expected enabled Anthropic thinking to carry a token budget",
+              );
+            }
+            budget = currentThinking["budget_tokens"];
+          }
           expect(merged["max_tokens"]).toBeGreaterThan(budget);
         }
       }

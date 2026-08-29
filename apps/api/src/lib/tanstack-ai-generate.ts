@@ -7,6 +7,7 @@ import type {
   SystemPrompt,
 } from "@tanstack/ai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import type { ModelRole, ReasoningEffort } from "@stll/ai-catalog";
@@ -744,7 +745,22 @@ type AnthropicThinkingOption = Extract<
  */
 const anthropicThinkingReservation = (
   thinking: AnthropicThinkingOption,
-): number => (thinking?.type === "enabled" ? thinking.budget_tokens : 0);
+): number => {
+  if (thinking?.type !== "enabled") {
+    return 0;
+  }
+  // The SDK deprecates this field for newer adaptive-thinking models, but its
+  // enabled branch still requires it for older models. Widen before checking
+  // the external option shape so using that supported branch needs no waiver.
+  const enabledThinking: object = thinking;
+  if (
+    !("budget_tokens" in enabledThinking) ||
+    typeof enabledThinking["budget_tokens"] !== "number"
+  ) {
+    return panic("Enabled Anthropic thinking requires a numeric token budget");
+  }
+  return enabledThinking["budget_tokens"];
+};
 
 export const mergeGenerationOptions = ({
   caching,
