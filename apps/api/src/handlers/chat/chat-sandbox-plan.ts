@@ -49,7 +49,7 @@ export const resolveChatSandboxPlan = async (
     logger.warn("agent-sandbox: enabled but engine config incomplete", {
       missingImage: !image,
       missingHarnessModel: !harnessModel,
-      missingHarnessApiKey: !harnessApiKey,
+      missingHarnessKey: !harnessApiKey,
       missingMcpUrl: !mcpUrl,
       missingDockerNetwork: !networkMode,
     });

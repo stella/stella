@@ -472,7 +472,7 @@ export const createPagePaginatedFetch = <TResponse>(
             logger.warn("case_law.ingestion.page_unparseable_retry", {
               adapterKey: opts.adapterKey,
               page,
-              contentType,
+              mediaType: contentType,
             });
             const retryResponse = await fetchWithRetry(url, init, {
               maxRetries: 1,

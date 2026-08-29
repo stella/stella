@@ -1,6 +1,8 @@
 import "@/api/lib/observability/otel";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
 
+import { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } from "@/api/lib/observability/log-attribute-policy";
+
 const otelLogger = logs.getLogger("stella.api");
 // Denylist of attribute-key substrings whose values may carry document
 // content, client-identifying text, PII, or credentials, none of which
@@ -13,8 +15,9 @@ const otelLogger = logs.getLogger("stella.api");
 // `prompt` is likewise narrowed with a negative lookahead so prompt CONTENT
 // keys (`prompt`, `promptText`, `systemPrompt`) are redacted while usage
 // metrics (`promptTokens`, `prompt_tokens`, `promptTokenCount`) survive.
-const SENSITIVE_ATTRIBUTE_KEY_PATTERN =
-  /(?:body|content|email|fileName|message|name|title|password|secret|credential|authorization|cookie|bearer|api[_-]?key|prompt(?!_?token)|snippet|subject|phone)/iu;
+// The pattern itself lives in `log-attribute-policy.ts` so the lint rule that
+// rejects such keys at the call site can pin the same one.
+const SENSITIVE_ATTRIBUTE_KEY_PATTERN = SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN;
 
 type LoggerAttributeValue = boolean | number | string;
 

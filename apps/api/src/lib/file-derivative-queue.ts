@@ -274,7 +274,7 @@ export const initFileDerivativeWorker = () => {
       entityId: job?.data.entityId ?? "",
       "error.type": errorTag(error),
       fieldId: job?.data.fieldId ?? "",
-      jobName: job?.name ?? "",
+      job: job?.name ?? "",
       workspaceId: job?.data.workspaceId ?? "",
     });
   });
