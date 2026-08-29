@@ -3,7 +3,6 @@ import {
   beforeAll,
   describe,
   expect,
-  mock,
   setDefaultTimeout,
   test,
 } from "bun:test";
@@ -11,7 +10,11 @@ import { eq, inArray } from "drizzle-orm";
 
 import { pendingUploads } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { envBase } from "@/api/env-base";
 import { createSafeId, toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { legacyTmpUploadKey } from "@/api/lib/uploads/runtime";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -20,21 +23,9 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-const deleteObjectMock = mock(async () => undefined);
-
-const realS3 = await import("@/api/lib/s3");
-
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  getS3: () => ({
-    delete: deleteObjectMock,
-  }),
-  readS3ArrayBuffer: async () => new ArrayBuffer(0),
-}));
-
-const { default: abortUpload } = await import("./delete");
-const { default: finalizeUpload } = await import("./update");
-const { default: presignUpload } = await import("./create");
+import presignUpload from "./create";
+import abortUpload from "./delete";
+import finalizeUpload from "./update";
 
 setDefaultTimeout(120_000);
 
@@ -44,10 +35,15 @@ type FinalizeCtx = Parameters<typeof finalizeUpload.handler>[0];
 
 let testDb: TestDatabase;
 let ids: TestIds;
+// The URL is signed by the real presigner and the bytes are PUT to the real
+// store, so the key the API mints is the key the object lands under and the
+// abort cleanup is observable in the store rather than on a spy.
+let fake: FakeS3;
 
 const seededUploadIds: SafeId<"pendingUpload">[] = [];
 
 beforeAll(async () => {
+  fake = startFakeS3();
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
@@ -55,6 +51,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
+    fake.stop();
     if (seededUploadIds.length > 0) {
       await testDb
         .delete(pendingUploads)
@@ -141,6 +138,25 @@ describe("presigned upload mutation flow", () => {
       workspaceId: ids.wsA1,
     });
 
+    // Step 2 of the flow, against the real store: the client PUTs the bytes
+    // to the URL the API signed, with the headers it committed to.
+    const grant = readPresignedUpload(presignResult);
+    const staged = await fetch(grant.url, {
+      method: "PUT",
+      body: new TextEncoder().encode("twelve bytes"),
+      headers: grant.headers,
+    });
+    expect(staged.status).toBe(200);
+    const stagedKey = new URL(grant.url).pathname.slice(
+      `/${envBase.S3_BUCKET}/`.length,
+    );
+    expect(fake.objects.get(`${envBase.S3_BUCKET}/${stagedKey}`)).toMatchObject(
+      { contentType: "application/pdf" },
+    );
+    // A pre-scoped-signing row would have staged under the legacy key; the
+    // abort has to reclaim that slot too.
+    fake.put(envBase.S3_BUCKET, legacyTmpUploadKey(uploadId), "stale bytes");
+
     const abortResult = await abortUpload.handler(
       asTestRaw<AbortCtx>(
         createContext({
@@ -162,6 +178,10 @@ describe("presigned upload mutation flow", () => {
       rejectReason: "Aborted by client",
       status: "rejected",
     });
+    // Both staging slots the upload could occupy are back.
+    expect(
+      [...fake.objects.keys()].filter((key) => key.includes(uploadId)),
+    ).toEqual([]);
 
     const finalizeResult = await finalizeUpload.handler(
       asTestRaw<FinalizeCtx>(
@@ -281,4 +301,29 @@ const getUploadId = (result: unknown): SafeId<"pendingUpload"> => {
   }
 
   throw new Error("Expected presign result to include an uploadId.");
+};
+
+type PresignedUpload = {
+  url: string;
+  headers: Record<string, string>;
+};
+
+const isHeaderRecord = (value: unknown): value is Record<string, string> =>
+  typeof value === "object" &&
+  value !== null &&
+  Object.values(value).every((header) => typeof header === "string");
+
+const readPresignedUpload = (result: unknown): PresignedUpload => {
+  if (
+    typeof result === "object" &&
+    result !== null &&
+    "url" in result &&
+    typeof result.url === "string" &&
+    "headers" in result &&
+    isHeaderRecord(result.headers)
+  ) {
+    return { url: result.url, headers: result.headers };
+  }
+
+  throw new Error("Expected presign result to include a url and headers.");
 };

@@ -1,11 +1,12 @@
 import { panic, Result } from "better-result";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import JSZip from "jszip";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { envBase } from "@/api/env-base";
 import {
   TEXT_CSV_MIME_TYPE,
   TEXT_MARKDOWN_MIME_TYPE,
@@ -24,16 +25,28 @@ import {
   PDF_MIME_TYPE,
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+import {
+  canHydrateFilePartAsPlainText,
+  hydrateFilePart,
+  uploadMessageFiles,
+  uploadUserFile,
+} from "./upload-files";
 
 const fileBytes = new TextEncoder().encode("Jan Novak,Acme");
 const IMAGE_PNG_MIME_TYPE = "image/png";
-const arrayBufferMock = mock(async () =>
-  fileBytes.buffer.slice(
-    fileBytes.byteOffset,
-    fileBytes.byteOffset + fileBytes.byteLength,
-  ),
-);
+const bucket = envBase.S3_BUCKET;
+/** The key every `hydrateFilePart` case in this suite reads from. */
+const ATTACHMENT_KEY = "user/file";
+let fake: FakeS3;
+
+const requestKeys = (method: "DELETE" | "GET" | "PUT"): string[] =>
+  fake.requests.flatMap((request) =>
+    request.method === method ? [request.key] : [],
+  );
 
 /** Minimal DOCX with a heading and a body paragraph, for extraction tests. */
 const makeDocxBytes = async (): Promise<Uint8Array> => {
@@ -54,44 +67,18 @@ const makeDocxBytes = async (): Promise<Uint8Array> => {
   <Default Extension="xml" ContentType="application/xml"/>
 </Types>`,
   );
-  // Copy into a fresh ArrayBuffer-backed view so `.buffer` is an ArrayBuffer
-  // (not ArrayBufferLike) for the S3 arrayBuffer mock's return type.
   return new Uint8Array(await zip.generateAsync({ type: "uint8array" }));
 };
-const fileMock = mock(() => ({ arrayBuffer: arrayBufferMock }));
-const writeMock = mock(async () => undefined);
-const s3DeleteMock = mock(async () => undefined);
 const workspaceId = toSafeId<"workspace">("workspace_1");
-
-// Spread the real module so only `getS3` is overridden: `mock.module` is
-// process-global and never auto-restored, so a partial mock would delete the
-// other s3 exports (e.g. `getCorpusS3`) for every later test file in the run.
-const realS3 = await import("@/api/lib/s3");
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  deleteS3ObjectWithSignal: s3DeleteMock,
-  getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
-  putS3ObjectWithSignal: writeMock,
-  readS3ArrayBuffer: arrayBufferMock,
-  readCorpusS3Bytes: () => {
-    throw new Error("Unexpected corpus object read in this suite");
-  },
-  writeS3ObjectWithRetry: writeMock,
-}));
-
-const {
-  canHydrateFilePartAsPlainText,
-  hydrateFilePart,
-  uploadMessageFiles,
-  uploadUserFile,
-} = await import("./upload-files");
 
 describe("chat attachment hydration", () => {
   beforeEach(() => {
-    arrayBufferMock.mockClear();
-    fileMock.mockClear();
-    s3DeleteMock.mockClear();
-    writeMock.mockClear();
+    fake = startFakeS3();
+    fake.put(bucket, ATTACHMENT_KEY, fileBytes, TEXT_CSV_MIME_TYPE);
+  });
+
+  afterEach(() => {
+    fake.stop();
   });
 
   test("classifies extractable document and text attachments", () => {
@@ -109,7 +96,7 @@ describe("chat attachment hydration", () => {
       fileName: "contacts.csv",
       mimeType: TEXT_CSV_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.anonymized,
-      s3Key: "user/file",
+      s3Key: ATTACHMENT_KEY,
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -134,7 +121,7 @@ describe("chat attachment hydration", () => {
       fileName: "scan.pdf",
       mimeType: PDF_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.anonymized,
-      s3Key: "user/file",
+      s3Key: ATTACHMENT_KEY,
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -142,7 +129,7 @@ describe("chat attachment hydration", () => {
       throw result.error;
     }
     expect(result.value.type).toBe("blocked");
-    expect(arrayBufferMock).not.toHaveBeenCalled();
+    expect(requestKeys("GET")).toEqual([]);
   });
 
   test("hydrates non-extractable attachments as raw override when the user allows it", async () => {
@@ -151,7 +138,7 @@ describe("chat attachment hydration", () => {
       fileName: "scan.pdf",
       mimeType: PDF_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.rawOverride,
-      s3Key: "user/file",
+      s3Key: ATTACHMENT_KEY,
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -178,7 +165,7 @@ describe("chat attachment hydration", () => {
       fileName: "scan.png",
       mimeType: IMAGE_PNG_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.rawOverride,
-      s3Key: "user/file",
+      s3Key: ATTACHMENT_KEY,
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -206,19 +193,14 @@ describe("chat attachment hydration", () => {
   test.each([CHAT_SEND_MODE.rawOverride, CHAT_SEND_MODE.anonymized])(
     "extracts DOCX to text and never ships raw bytes (%s mode)",
     async (sendMode) => {
-      const docxBytes = await makeDocxBytes();
-      arrayBufferMock.mockImplementationOnce(async () => {
-        const arrayBuffer = new ArrayBuffer(docxBytes.byteLength);
-        new Uint8Array(arrayBuffer).set(docxBytes);
-        return arrayBuffer;
-      });
+      fake.put(bucket, ATTACHMENT_KEY, await makeDocxBytes(), DOCX_MIME_TYPE);
 
       const result = await hydrateFilePart({
         extractedText: null,
         fileName: "draft.docx",
         mimeType: DOCX_MIME_TYPE,
         sendMode,
-        s3Key: "user/file",
+        s3Key: ATTACHMENT_KEY,
       });
 
       expect(Result.isOk(result)).toBe(true);
@@ -245,17 +227,26 @@ describe("chat attachment hydration", () => {
   test.each([CHAT_SEND_MODE.rawOverride, CHAT_SEND_MODE.anonymized])(
     "extracts XLSX to text and never ships raw bytes (%s mode)",
     async (sendMode) => {
-      const xlsx = await Bun.file(
-        new URL("../../lib/search/__fixtures__/schedule.xlsx", import.meta.url),
-      ).arrayBuffer();
-      arrayBufferMock.mockImplementationOnce(async () => xlsx);
+      fake.put(
+        bucket,
+        ATTACHMENT_KEY,
+        new Uint8Array(
+          await Bun.file(
+            new URL(
+              "../../lib/search/__fixtures__/schedule.xlsx",
+              import.meta.url,
+            ),
+          ).arrayBuffer(),
+        ),
+        XLSX_MIME_TYPE,
+      );
 
       const result = await hydrateFilePart({
         extractedText: null,
         fileName: "schedule.xlsx",
         mimeType: XLSX_MIME_TYPE,
         sendMode,
-        s3Key: "user/file",
+        s3Key: ATTACHMENT_KEY,
       });
 
       expect(Result.isOk(result)).toBe(true);
@@ -320,11 +311,12 @@ describe("chat attachment hydration", () => {
       fileName: "schedule.xlsx",
       mimeType: XLSX_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.rawOverride,
-      s3Key: "user/file",
+      s3Key: ATTACHMENT_KEY,
     });
 
     expect(Result.isOk(hydrateResult)).toBe(true);
-    expect(arrayBufferMock).not.toHaveBeenCalled();
+    // The cached text answered the hydration: the workbook was never fetched.
+    expect(requestKeys("GET")).toEqual([]);
   });
 
   test("cleans up already uploaded files when a later attachment fails", async () => {
@@ -372,8 +364,11 @@ describe("chat attachment hydration", () => {
     });
 
     expect(Result.isError(result)).toBe(true);
-    expect(writeMock).toHaveBeenCalledTimes(1);
-    expect(s3DeleteMock).toHaveBeenCalledTimes(1);
+    // The first attachment landed and was then rolled back out of the store,
+    // leaving only the seeded fixture behind.
+    expect(requestKeys("PUT")).toHaveLength(1);
+    expect(requestKeys("DELETE")).toEqual(requestKeys("PUT"));
+    expect([...fake.objects.keys()]).toEqual([`${bucket}/${ATTACHMENT_KEY}`]);
     expect(whereMock).toHaveBeenCalledTimes(1);
     expect(recordAuditEvent).toHaveBeenCalledWith(
       testTx,
@@ -411,8 +406,9 @@ describe("chat attachment hydration", () => {
       panic("Expected the database save to fail");
     }
     expect(result.error).toBe(databaseError);
-    expect(writeMock).toHaveBeenCalledTimes(1);
-    expect(s3DeleteMock).toHaveBeenCalledTimes(1);
+    expect(requestKeys("PUT")).toHaveLength(1);
+    expect(requestKeys("DELETE")).toEqual(requestKeys("PUT"));
+    expect([...fake.objects.keys()]).toEqual([`${bucket}/${ATTACHMENT_KEY}`]);
     expect(recordAuditEvent).not.toHaveBeenCalled();
   });
 
@@ -446,6 +442,14 @@ describe("chat attachment hydration", () => {
     });
 
     expect(Result.isOk(result)).toBe(true);
+    // The bytes reached the store under the key the row names, typed with the
+    // declared MIME type so the object is served as text, not as a download.
+    const stored = fake.objects.get(`${bucket}/${requestKeys("PUT").at(0)}`);
+    expect(stored?.bytes).toEqual(
+      new TextEncoder().encode("confidential text"),
+    );
+    // Bun's client appends a charset to text media types.
+    expect(stored?.contentType).toContain(TEXT_PLAIN_MIME_TYPE);
     const storedName = values.mock.calls.at(0)?.at(0)?.fileName;
     expect(storedName).toBe(sanitizeFilename(hostileName));
     expect(storedName).not.toBe(hostileName);

@@ -1,66 +1,39 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-const realS3 = await import("@/api/lib/s3");
-
-const putCorpusObjectMock = mock(
-  async (
-    _key: string,
-    _bytes: Uint8Array,
-    _mimeType: string,
-    signal: AbortSignal,
-  ): Promise<void> => {
-    await new Promise<never>((_resolve, reject) => {
-      signal.addEventListener(
-        "abort",
-        () =>
-          reject(
-            signal.reason instanceof Error
-              ? signal.reason
-              : new DOMException("Aborted", "AbortError"),
-          ),
-        { once: true },
-      );
-    });
-  },
-);
-const deleteCorpusObjectMock = mock(
-  async (_key: string, signal: AbortSignal): Promise<void> => {
-    await new Promise<never>((_resolve, reject) => {
-      signal.addEventListener(
-        "abort",
-        () =>
-          reject(
-            signal.reason instanceof Error
-              ? signal.reason
-              : new DOMException("Aborted", "AbortError"),
-          ),
-        { once: true },
-      );
-    });
-  },
-);
-
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  deleteCorpusS3ObjectWithSignal: deleteCorpusObjectMock,
-  putCorpusS3ObjectWithSignal: putCorpusObjectMock,
-}));
-
-const {
+import { envBase } from "@/api/env-base";
+import {
   corpusContentHash,
   corpusKeys,
   deleteCorpusDocument,
   writeCorpusDocument,
-} = await import("@/api/lib/legal-search/corpus-storage");
-const { EMPTY_AST } = await import("@/api/lib/legal-search/document-types");
+} from "@/api/lib/legal-search/corpus-storage";
+import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3, FakeS3Method } from "@/api/tests/helpers/fake-s3";
 
-const waitForCallCount = async (
-  callCount: () => number,
+const corpusBucket = envBase.LEGAL_CORPUS_S3_BUCKET ?? envBase.S3_BUCKET;
+
+/**
+ * How long the store holds a served response. Long enough that three
+ * requests are provably in flight at once, short enough that a test which
+ * waits out a straggler stays fast.
+ */
+const HOLD_MS = 150;
+
+const errorName = (error: unknown): string =>
+  error instanceof Error ? error.name : String(error);
+
+const waitForRequests = async (
+  fake: FakeS3,
+  method: FakeS3Method,
   expected: number,
 ): Promise<void> => {
   await new Promise<void>((resolve) => {
     const check = () => {
-      if (callCount() >= expected) {
+      if (
+        fake.requests.filter((request) => request.method === method).length >=
+        expected
+      ) {
         resolve();
         return;
       }
@@ -70,214 +43,171 @@ const waitForCallCount = async (
   });
 };
 
+const keysUnder = (fake: FakeS3): string[] =>
+  [...fake.objects.keys()]
+    .map((id) => id.slice(corpusBucket.length + 1))
+    .toSorted();
+
+const documentId = "decision-1";
+const jurisdiction = "SVK";
+const payload = { text: "decision text", sections: null, ast: null };
+const writtenKeys = corpusKeys({
+  documentId,
+  jurisdiction,
+  contentHash: corpusContentHash(payload),
+});
+
 const writeRejection = async (signal: AbortSignal): Promise<unknown> =>
   await writeCorpusDocument(
-    {
-      documentId: "decision-1",
-      jurisdiction: "SVK",
-      text: "decision text",
-      sections: null,
-      ast: null,
-      stored: null,
-    },
+    { documentId, jurisdiction, ...payload, stored: null },
     { signal },
   ).then(
     () => null,
     (error: unknown) => error,
   );
 
+const deletedKeys = {
+  textKey: "corpus/text",
+  sectionsKey: "corpus/sections",
+  astKey: "corpus/ast",
+};
+
+// The store holds every served response, so the group's three requests are
+// genuinely in flight when the test cancels or rejects one of them.
 describe("corpus object cancellation", () => {
+  let fake: FakeS3;
+
+  beforeEach(() => {
+    fake = startFakeS3({ delayMs: HOLD_MS });
+  });
+
+  afterEach(() => {
+    fake.stop();
+  });
+
   test("does not start a corpus PUT for an already-cancelled owner", async () => {
     const controller = new AbortController();
     controller.abort();
 
     const rejection = await writeRejection(controller.signal);
 
-    expect(rejection).toMatchObject({ name: "AbortError" });
-    expect(putCorpusObjectMock).not.toHaveBeenCalled();
+    expect(errorName(rejection)).toBe("AbortError");
+    expect(fake.requests).toHaveLength(0);
   });
 
   test("passes caller cancellation to every in-flight corpus PUT", async () => {
     const controller = new AbortController();
     const pending = writeRejection(controller.signal);
 
-    await waitForCallCount(() => putCorpusObjectMock.mock.calls.length, 3);
-    const signals = putCorpusObjectMock.mock.calls.map((call) => call[3]);
+    await waitForRequests(fake, "PUT", 3);
     controller.abort();
 
     const rejection = await pending;
 
-    expect(rejection).toMatchObject({ name: "AbortError" });
-    expect(signals).toHaveLength(3);
-    expect(signals.every((signal) => signal.aborted)).toBe(true);
+    expect(errorName(rejection)).toBe("AbortError");
+    // Cancellation reached the requests themselves: all three were in flight
+    // and none of them landed an object.
+    expect(keysUnder(fake)).toEqual([]);
+    // Nor does one land once the hold on the cancelled requests expires.
+    await Bun.sleep(HOLD_MS * 2);
+    expect(keysUnder(fake)).toEqual([]);
   });
 
-  test("waits for aborted sibling PUTs before reporting a write failure", async () => {
-    const writeFailure = new Error("text write failed");
-    const allWritesStarted = Promise.withResolvers<undefined>();
-    const siblingsAborted = Promise.withResolvers<undefined>();
-    const releaseSiblings = Promise.withResolvers<undefined>();
-    let started = 0;
-    let abortedSiblings = 0;
+  test("reports a rejected corpus PUT rather than the siblings it cancelled", async () => {
+    fake.failNext({
+      method: "PUT",
+      code: "AccessDenied",
+      status: 403,
+      key: writtenKeys.textKey,
+    });
 
-    putCorpusObjectMock.mockImplementation(
-      async (
-        key: string,
-        _bytes: Uint8Array,
-        _mimeType: string,
-        signal: AbortSignal,
-      ): Promise<void> => {
-        started += 1;
-        if (started === 3) {
-          allWritesStarted.resolve(undefined);
-        }
-        await allWritesStarted.promise;
+    const rejection = await writeRejection(new AbortController().signal);
 
-        if (key.endsWith("/text.zst")) {
-          throw writeFailure;
-        }
-
-        await new Promise<never>((_resolve, reject) => {
-          signal.addEventListener(
-            "abort",
-            () => {
-              abortedSiblings += 1;
-              if (abortedSiblings === 2) {
-                siblingsAborted.resolve(undefined);
-              }
-              const rejectAfterRelease = async () => {
-                await releaseSiblings.promise;
-                reject(
-                  signal.reason instanceof Error
-                    ? signal.reason
-                    : new DOMException("Aborted", "AbortError"),
-                );
-              };
-              void rejectAfterRelease();
-            },
-            { once: true },
-          );
-        });
-      },
-    );
-
-    const pending = writeRejection(new AbortController().signal);
-    await siblingsAborted.promise;
-
-    const earlyState = await Promise.race([
-      pending.then(() => "returned" as const),
-      Bun.sleep(1).then(() => "pending" as const),
-    ]);
-    expect(earlyState).toBe("pending");
-
-    releaseSiblings.resolve(undefined);
-    expect(await pending).toBe(writeFailure);
+    // The denial is the diagnosable failure; an AbortError would name only
+    // the cleanup the write performed on itself.
+    expect(errorName(rejection)).toBe("AccessDenied");
+    // A sibling PUT that outlived the failure would recreate an object under
+    // keys the caller has already given up on, so nothing may land after the
+    // write returns either.
+    expect(keysUnder(fake)).toEqual([]);
+    await Bun.sleep(HOLD_MS * 2);
+    expect(keysUnder(fake)).toEqual([]);
   });
 
   test("passes caller cancellation to every in-flight corpus DELETE", async () => {
+    for (const key of Object.values(deletedKeys)) {
+      fake.put(corpusBucket, key, "payload");
+    }
     const controller = new AbortController();
-    const pending = deleteCorpusDocument(
-      {
-        textKey: "corpus/text",
-        sectionsKey: "corpus/sections",
-        astKey: "corpus/ast",
-      },
-      { signal: controller.signal },
-    ).then(
-      () => null,
-      (error: unknown) => error,
-    );
-
-    await waitForCallCount(() => deleteCorpusObjectMock.mock.calls.length, 3);
-    const signals = deleteCorpusObjectMock.mock.calls.map((call) => call[1]);
-    controller.abort();
-
-    const rejection = await pending;
-
-    expect(rejection).toMatchObject({ name: "AbortError" });
-    expect(signals.every((signal) => signal.aborted)).toBe(true);
-  });
-
-  test("waits for aborted sibling DELETEs before reporting a delete failure", async () => {
-    deleteCorpusObjectMock.mockClear();
-    const deleteFailure = new Error("text delete failed");
-    const allDeletesStarted = Promise.withResolvers<undefined>();
-    const siblingsAborted = Promise.withResolvers<undefined>();
-    const releaseSiblings = Promise.withResolvers<undefined>();
-    let started = 0;
-    let abortedSiblings = 0;
-
-    deleteCorpusObjectMock.mockImplementation(
-      async (key: string, signal: AbortSignal): Promise<void> => {
-        started += 1;
-        if (started === 3) {
-          allDeletesStarted.resolve(undefined);
-        }
-        await allDeletesStarted.promise;
-
-        if (key.endsWith("/text")) {
-          throw deleteFailure;
-        }
-
-        await new Promise<never>((_resolve, reject) => {
-          signal.addEventListener(
-            "abort",
-            () => {
-              abortedSiblings += 1;
-              if (abortedSiblings === 2) {
-                siblingsAborted.resolve(undefined);
-              }
-              const rejectAfterRelease = async () => {
-                await releaseSiblings.promise;
-                reject(
-                  signal.reason instanceof Error
-                    ? signal.reason
-                    : new DOMException("Aborted", "AbortError"),
-                );
-              };
-              void rejectAfterRelease();
-            },
-            { once: true },
-          );
-        });
-      },
-    );
-
-    const pending = deleteCorpusDocument({
-      textKey: "corpus/text",
-      sectionsKey: "corpus/sections",
-      astKey: "corpus/ast",
+    const pending = deleteCorpusDocument(deletedKeys, {
+      signal: controller.signal,
     }).then(
       () => null,
       (error: unknown) => error,
     );
-    await siblingsAborted.promise;
 
-    const earlyState = await Promise.race([
-      pending.then(() => "returned" as const),
-      Bun.sleep(1).then(() => "pending" as const),
+    await waitForRequests(fake, "DELETE", 3);
+    controller.abort();
+
+    const rejection = await pending;
+
+    expect(errorName(rejection)).toBe("AbortError");
+    // A cancelled erasure removes nothing: the caller retries the whole set.
+    expect(keysUnder(fake)).toEqual([
+      deletedKeys.astKey,
+      deletedKeys.sectionsKey,
+      deletedKeys.textKey,
     ]);
-    expect(earlyState).toBe("pending");
+  });
 
-    releaseSiblings.resolve(undefined);
-    expect(await pending).toBe(deleteFailure);
+  test("reports a rejected corpus DELETE rather than the siblings it cancelled", async () => {
+    for (const key of Object.values(deletedKeys)) {
+      fake.put(corpusBucket, key, "payload");
+    }
+    fake.failNext({
+      method: "DELETE",
+      code: "AccessDenied",
+      status: 403,
+      key: deletedKeys.textKey,
+    });
+
+    const rejection = await deleteCorpusDocument(deletedKeys).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(errorName(rejection)).toBe("AccessDenied");
+    // The erasure failed as a whole, so no sibling delete may apply late and
+    // leave the caller with a half-erased document it was never told about.
+    await Bun.sleep(HOLD_MS * 2);
+    expect(keysUnder(fake)).toEqual([
+      deletedKeys.astKey,
+      deletedKeys.sectionsKey,
+      deletedKeys.textKey,
+    ]);
   });
 });
 
 describe("corpus write redundancy refusal", () => {
-  const documentId = "7f9b1c34-52ad-4c8e-b1f0-6a2d9e4c8b21";
-  const jurisdiction = "SVK";
-  const payload = {
+  let fake: FakeS3;
+  const redundancyDocumentId = "7f9b1c34-52ad-4c8e-b1f0-6a2d9e4c8b21";
+  const redundancyPayload = {
     text: "Rozsudok v mene Slovenskej republiky. Súd rozhodol o veci samej.",
     sections: null,
     ast: null,
   };
 
-  test("an empty payload issues no corpus PUTs", async () => {
-    putCorpusObjectMock.mockClear();
+  beforeEach(() => {
+    fake = startFakeS3();
+  });
 
+  afterEach(() => {
+    fake.stop();
+  });
+
+  test("an empty payload issues no corpus PUTs", async () => {
     const outcome = await writeCorpusDocument({
-      documentId,
+      documentId: redundancyDocumentId,
       jurisdiction,
       // The metadata-first shape: no text, no sections, the empty-AST
       // placeholder an adapter without a document emits.
@@ -296,52 +226,74 @@ describe("corpus write redundancy refusal", () => {
         ast: EMPTY_AST,
       }),
     });
-    expect(putCorpusObjectMock).not.toHaveBeenCalled();
+    expect(fake.requests).toHaveLength(0);
   });
 
   test("a payload the row already records issues no corpus PUTs", async () => {
-    putCorpusObjectMock.mockClear();
-    const contentHash = corpusContentHash(payload);
+    const contentHash = corpusContentHash(redundancyPayload);
     const stored = {
-      ...corpusKeys({ documentId, jurisdiction, contentHash }),
+      ...corpusKeys({
+        documentId: redundancyDocumentId,
+        jurisdiction,
+        contentHash,
+      }),
       contentHash,
     };
 
     const outcome = await writeCorpusDocument({
-      documentId,
+      documentId: redundancyDocumentId,
       jurisdiction,
-      ...payload,
+      ...redundancyPayload,
       stored,
     });
 
     expect(outcome).toEqual({ type: "skipped-unchanged", written: stored });
-    expect(putCorpusObjectMock).not.toHaveBeenCalled();
+    expect(fake.requests).toHaveLength(0);
   });
 
   test("a changed payload still issues all three PUTs", async () => {
-    putCorpusObjectMock.mockClear();
-    putCorpusObjectMock.mockImplementation(async () => {
-      await Promise.resolve();
-    });
-    const previousHash = corpusContentHash(payload);
+    const previousHash = corpusContentHash(redundancyPayload);
     const stored = {
-      ...corpusKeys({ documentId, jurisdiction, contentHash: previousHash }),
+      ...corpusKeys({
+        documentId: redundancyDocumentId,
+        jurisdiction,
+        contentHash: previousHash,
+      }),
       contentHash: previousHash,
     };
-    const changed = { ...payload, text: `${payload.text} Opravené znenie.` };
+    const changed = {
+      ...redundancyPayload,
+      text: `${redundancyPayload.text} Opravené znenie.`,
+    };
     expect(corpusContentHash(changed)).not.toBe(previousHash);
 
     const outcome = await writeCorpusDocument({
-      documentId,
+      documentId: redundancyDocumentId,
       jurisdiction,
       ...changed,
       stored,
     });
 
+    const changedKeys = corpusKeys({
+      documentId: redundancyDocumentId,
+      jurisdiction,
+      contentHash: corpusContentHash(changed),
+    });
     expect(outcome).toMatchObject({
       type: "written",
       written: { contentHash: corpusContentHash(changed) },
     });
-    expect(putCorpusObjectMock).toHaveBeenCalledTimes(3);
+    // The three payload objects landed under the new content hash, each
+    // stored as a zstd frame.
+    expect(keysUnder(fake)).toEqual(
+      [
+        changedKeys.astKey,
+        changedKeys.sectionsKey,
+        changedKeys.textKey,
+      ].toSorted(),
+    );
+    expect(
+      fake.objects.get(`${corpusBucket}/${changedKeys.textKey}`)?.contentType,
+    ).toBe("application/zstd");
   });
 });

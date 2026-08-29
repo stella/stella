@@ -1,23 +1,11 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
+import {
+  decryptSharepointSecret,
+  encryptSharepointSecret,
+} from "@/api/handlers/sharepoint/crypto";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-// Pin a faithful in-memory passthrough for the per-org envelope so these
-// binding assertions exercise crypto.ts's real logic (mirrors the MCP
-// crypto test; sibling suites mock this module globally). Dynamic import
-// AFTER the mock so the binding takes effect.
-void mock.module("@/api/lib/content-encryption", () => ({
-  encryptContent: (_organizationId: unknown, plaintext: string) => ({
-    ciphertext: Buffer.from(plaintext, "utf-8"),
-    iv: Buffer.alloc(12),
-  }),
-  decryptContent: (_organizationId: unknown, ciphertext: Buffer) =>
-    ciphertext.toString("utf-8"),
-}));
-
-const { decryptSharepointSecret, encryptSharepointSecret } =
-  await import("@/api/handlers/sharepoint/crypto");
 
 const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> => {
   try {
@@ -118,5 +106,42 @@ describe("encryptSharepointSecret / decryptSharepointSecret", () => {
     });
 
     expect(await rejectionOf(decrypt)).toBeInstanceOf(HandlerError);
+  });
+
+  test("stores ciphertext rather than the plaintext envelope", async () => {
+    const { ciphertext, iv } = await encryptSharepointSecret({
+      organizationId,
+      purpose: "sharepoint_access_token",
+      secret,
+      userId,
+    });
+
+    expect(ciphertext.toString("utf-8")).not.toContain(secret);
+    expect(ciphertext.toString("utf-8")).not.toContain(
+      "sharepoint_access_token",
+    );
+    // A zero IV is the no-op plaintext envelope; real AES-GCM never mints one.
+    expect(iv.every((byte) => byte === 0)).toBe(false);
+  });
+
+  test("rejects an organization mismatch (per-org key separation)", async () => {
+    const { ciphertext, iv } = await encryptSharepointSecret({
+      organizationId,
+      purpose: "sharepoint_access_token",
+      secret,
+      userId,
+    });
+
+    const decrypt = decryptSharepointSecret({
+      ciphertext,
+      iv,
+      organizationId: toSafeId<"organization">(
+        "0191d14d-9a63-7d2e-a021-06053e542c9a",
+      ),
+      purpose: "sharepoint_access_token",
+      userId,
+    });
+
+    expect(await rejectionOf(decrypt)).not.toBeNull();
   });
 });

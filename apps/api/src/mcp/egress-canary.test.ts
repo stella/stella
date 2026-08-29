@@ -2,6 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { encryptContent } from "@/api/lib/content-encryption";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { AnonymizingMcpToolName } from "@/api/mcp/static-tool-definitions";
 import { isMcpEgressPlan, type McpEgressPlan } from "@/api/mcp/tool-types";
@@ -69,8 +70,6 @@ const anonymizeTextFieldsMock = mock(
 
 const loadAnonymizationGazetteerEntriesMock = mock(async () => []);
 
-const decryptContentMock = mock(async () => "");
-
 type SearchProviderHit = {
   entityId: string;
   headline?: string | null;
@@ -96,7 +95,6 @@ const describeStoredTemplateMock = mock();
 
 const realAnonymizationBlacklist =
   await import("@/api/lib/anonymization-blacklist");
-const realContentEncryption = await import("@/api/lib/content-encryption");
 const realTemplateFillService =
   await import("@/api/lib/templates/template-fill-service");
 
@@ -107,11 +105,6 @@ void mock.module("@/api/mcp/anonymization", () => ({
 void mock.module("@/api/lib/anonymization-blacklist", () => ({
   ...realAnonymizationBlacklist,
   loadAnonymizationGazetteerEntries: loadAnonymizationGazetteerEntriesMock,
-}));
-
-void mock.module("@/api/lib/content-encryption", () => ({
-  ...realContentEncryption,
-  decryptContent: decryptContentMock,
 }));
 
 void mock.module("@/api/lib/search/provider", () => ({
@@ -236,9 +229,20 @@ const createEntriesAndUserNamesSelect = ({
   };
 };
 
+/** The organization `buildContext` scopes a canary run to by default. */
+const CANARY_ORGANIZATION_ID = toSafeId<"organization">("org_1");
+
+/**
+ * Extracted content reaches the handlers as a real per-org AES-GCM envelope,
+ * so a seed is encrypted with the same key the handler decrypts with instead
+ * of stubbing the cipher.
+ */
+const seedExtractedContent = async (seed: string) =>
+  await encryptContent(CANARY_ORGANIZATION_ID, seed);
+
 const buildContext = ({
   memberRole = "owner",
-  organizationId = "org_1",
+  organizationId = CANARY_ORGANIZATION_ID,
   tx = {},
   workspaceIds = ["ws_1"],
 }: {
@@ -315,7 +319,6 @@ beforeEach(() => {
   anonymizeTextFieldsMock.mockClear();
   loadAnonymizationGazetteerEntriesMock.mockReset();
   loadAnonymizationGazetteerEntriesMock.mockResolvedValue([]);
-  decryptContentMock.mockReset();
   searchProviderSearchMock.mockReset();
   searchProviderSearchMock.mockResolvedValue({
     hits: [],
@@ -408,15 +411,15 @@ describe("MCP anonymization canary corpus", () => {
   fetchCanary("compat fetch anonymizes title and text", async (tool) => {
     const titleSeed = mkSeed(tool, 0);
     const textSeed = mkSeed(tool, 1);
-    decryptContentMock.mockResolvedValue(textSeed);
+    const extracted = await seedExtractedContent(textSeed);
     const tx = {
       query: {
         entities: { findFirst: async () => null },
         extractedContent: {
           findFirst: async () => ({
             charCount: textSeed.length,
-            ciphertext: "cipher",
-            iv: "iv",
+            ciphertext: extracted.ciphertext,
+            iv: extracted.iv,
             entity: { name: titleSeed, workspaceId: "ws_1" },
           }),
         },
@@ -620,7 +623,7 @@ describe("MCP anonymization canary corpus", () => {
     async (tool) => {
       const nameSeed = mkSeed(tool, 0);
       const textSeed = mkSeed(tool, 1);
-      decryptContentMock.mockResolvedValue(textSeed);
+      const extracted = await seedExtractedContent(textSeed);
       const tx = {
         query: {
           entities: {
@@ -653,9 +656,9 @@ describe("MCP anonymization canary corpus", () => {
           },
           extractedContent: {
             findFirst: async () => ({
-              ciphertext: "cipher",
+              ciphertext: extracted.ciphertext,
               extractedAt: new Date("2026-01-02T00:00:00.000Z"),
-              iv: "iv",
+              iv: extracted.iv,
               sourceEntityVersionId: "ver_current",
               sourceFieldId: "field_current",
               sourceFileId: "file_current",

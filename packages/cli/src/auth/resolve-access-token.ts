@@ -31,6 +31,7 @@ export type ResolveAccessTokenOptions = {
   readonly configDir: string;
   readonly serverUrl: string;
   readonly now?: number;
+  readonly env?: { readonly STELLA_API_KEY: string | undefined };
 };
 
 /**
@@ -59,6 +60,7 @@ export const resolveAccessToken = async ({
   configDir,
   serverUrl,
   now = Date.now(),
+  env = { STELLA_API_KEY },
 }: ResolveAccessTokenOptions): Promise<ResolveAccessTokenResult> => {
   // Precedence: `STELLA_API_KEY` beats any stored credential, and when it is set
   // there is no fallback to disk — not even if the key turns out to be invalid.
@@ -73,8 +75,8 @@ export const resolveAccessToken = async ({
   // Machine keys carry their own expiry server-side and have no refresh token,
   // so there is deliberately no freshness check or rotation here: an expired key
   // is rejected by the server and must be rotated by an org admin.
-  if (STELLA_API_KEY !== undefined && STELLA_API_KEY !== "") {
-    return { status: "ok", token: STELLA_API_KEY };
+  if (env.STELLA_API_KEY !== undefined && env.STELLA_API_KEY !== "") {
+    return { status: "ok", token: env.STELLA_API_KEY };
   }
 
   const credentialFile = await readCredentialFile(configDir);

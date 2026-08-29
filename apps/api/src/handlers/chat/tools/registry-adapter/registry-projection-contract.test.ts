@@ -18,6 +18,7 @@ import type { RegistryLookupResponse } from "@/api/lib/business-registries/dispa
 import { deriveRefMediationEntry } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { encryptContent } from "@/api/lib/content-encryption";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -72,7 +73,6 @@ const readWorkspaceContactsHandlerMock = mock();
 const readWorkspaceMembersHandlerMock = mock();
 const describeStoredTemplateMock = mock();
 const searchProviderSearchMock = mock();
-const decryptContentMock = mock(async () => "decrypted text");
 const searchDecisionsHandlerMock = mock();
 const readGatedDecisionWithDocumentMock = mock();
 const withRedistributableSubjectMock = mock();
@@ -80,7 +80,6 @@ const searchConsolidatedLegislationMock = mock();
 const getLawTextBlockMock = mock();
 const executeRegistryLookupMock = mock();
 
-const realContentEncryption = await import("@/api/lib/content-encryption");
 const realTemplateFillService =
   await import("@/api/lib/templates/template-fill-service");
 const realCaseLawSearch =
@@ -109,10 +108,6 @@ void mock.module("@/api/lib/templates/template-fill-service", () => ({
 }));
 void mock.module("@/api/lib/search/provider", () => ({
   getSearchProvider: () => ({ search: searchProviderSearchMock }),
-}));
-void mock.module("@/api/lib/content-encryption", () => ({
-  ...realContentEncryption,
-  decryptContent: decryptContentMock,
 }));
 void mock.module("@/api/handlers/case-law/decisions/search", () => ({
   ...realCaseLawSearch,
@@ -162,6 +157,17 @@ const uid = (n: number): string =>
 
 /** The one accessible workspace every workspace-scoped fixture lives in. */
 const WS = uid(1);
+
+/** The organization every fixture context is scoped to. */
+const ORGANIZATION_ID = toSafeId<"organization">("org_1");
+
+/**
+ * Extracted content is stored as a real per-org AES-GCM envelope, so the
+ * fixture is encrypted with the same key the projection decrypts with rather
+ * than stubbing the cipher.
+ */
+const EXTRACTED_TEXT = "decrypted text";
+const extractedEnvelope = await encryptContent(ORGANIZATION_ID, EXTRACTED_TEXT);
 
 // --- DB doubles ---------------------------------------------------------------
 
@@ -229,7 +235,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
   );
   return buildMcpContextFromChat({
     memberRole: "owner",
-    organizationId: toSafeId<"organization">("org_1"),
+    organizationId: ORGANIZATION_ID,
     safeDb: toSafeDbMock(scopedDb),
     scopedDb,
     toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -283,6 +289,12 @@ type ContractCall = {
   setup?: () => void;
   /** Declared outputRef paths this call exercises: each must resolve to ≥1 ref. */
   expectRefPaths: readonly string[];
+  /**
+   * Literals the projected payload must carry. Pins content the handler has to
+   * derive rather than copy (decrypted extracted text), so a fixture that
+   * silently stops reaching the real value fails instead of passing vacuously.
+   */
+  expectPayloadContains?: readonly string[];
 };
 
 /**
@@ -332,7 +344,7 @@ const CONTRACT_CORPUS = {
       setup: () => {
         readWorkspaceHandlerMock.mockResolvedValue({
           id: toSafeId<"workspace">(WS),
-          organizationId: toSafeId<"organization">("org_1"),
+          organizationId: ORGANIZATION_ID,
           name: "Acme retainer",
           reference: "REF-1",
           clientId: toSafeId<"contact">(uid(61)),
@@ -384,7 +396,7 @@ const CONTRACT_CORPUS = {
         readWorkspaceContactsHandlerMock.mockResolvedValue([
           {
             id: toSafeId<"workspaceContact">(uid(6)),
-            organizationId: toSafeId<"organization">("org_1"),
+            organizationId: ORGANIZATION_ID,
             workspaceId: toSafeId<"workspace">(WS),
             contactId: toSafeId<"contact">(uid(7)),
             // Not "client": that relationship lives on `workspaces.clientId`,
@@ -526,10 +538,10 @@ const CONTRACT_CORPUS = {
           },
           extractedContent: {
             findFirst: async () => ({
-              charCount: 14,
-              ciphertext: "cipher",
+              charCount: EXTRACTED_TEXT.length,
+              ciphertext: extractedEnvelope.ciphertext,
               extractedAt: new Date("2026-01-02"),
-              iv: "iv",
+              iv: extractedEnvelope.iv,
               sourceEntityVersionId: uid(60),
               sourceFieldId: uid(61),
               sourceFileId: uid(63),
@@ -540,6 +552,8 @@ const CONTRACT_CORPUS = {
         },
       }),
       expectRefPaths: ["workspaceId", "entityId"],
+      // Reached only by really decrypting the fixture envelope above.
+      expectPayloadContains: [EXTRACTED_TEXT],
     },
   ],
   read_contact: [
@@ -1456,8 +1470,6 @@ beforeEach(() => {
   for (const handlerMock of ALL_MOCKS) {
     handlerMock.mockReset();
   }
-  decryptContentMock.mockReset();
-  decryptContentMock.mockResolvedValue("decrypted text");
   withRedistributableSubjectMock.mockReset();
   // The gate's own behaviour is covered by `public-subject.db.test.ts`; here
   // it stands in as "this id passed the gate" so the projection is reachable
@@ -1522,6 +1534,16 @@ describe("registry projection contract", () => {
         }
 
         const payload = result.value;
+        if (call.expectPayloadContains) {
+          const serialized = JSON.stringify(payload);
+          for (const literal of call.expectPayloadContains) {
+            expect(
+              serialized,
+              `${toolName} (${call.mode}): expected "${literal}" in the ` +
+                "projected payload",
+            ).toContain(literal);
+          }
+        }
         for (const path of call.expectRefPaths) {
           const values = readPathValues(payload, path);
           expect(

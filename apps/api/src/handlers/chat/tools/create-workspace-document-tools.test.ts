@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { docxToMarkdown, inspectDocxPackage } from "@stll/folio-core/server";
 
@@ -9,36 +9,18 @@ import {
   fields,
   pendingUploads,
 } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-const s3WriteMock = mock(async () => {});
-const s3DeleteMock = mock(async () => {});
 const processExtractionMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
-
-const realS3 = await import("@/api/lib/s3");
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  deleteS3ObjectWithSignal: s3DeleteMock,
-  getS3: () => ({
-    write: s3WriteMock,
-    delete: s3DeleteMock,
-  }),
-  putS3ObjectWithSignal: s3WriteMock,
-  // `mock.module` replaces the module, so every named export a consumer
-  // imports must exist here or the import fails at link time. This suite
-  // reads no object; throwing surfaces one that appears later.
-  readS3ArrayBuffer: () => {
-    throw new Error("Unexpected S3 object read in this suite");
-  },
-  readCorpusS3Bytes: () => {
-    throw new Error("Unexpected corpus object read in this suite");
-  },
-}));
 
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
@@ -66,6 +48,9 @@ const workspaceId = toSafeId<"workspace">(
 );
 const userId = toSafeId<"user">("00000000-0000-0000-0000-000000000003");
 const propertyId = toSafeId<"property">("00000000-0000-0000-0000-000000000004");
+
+const bucket = envBase.S3_BUCKET;
+let fake: FakeS3;
 
 const markdown = `# Title Heading
 
@@ -149,8 +134,11 @@ describe("markdownToStellaDocx", () => {
 
 describe("createCreateWorkspaceDocumentTools", () => {
   beforeEach(() => {
-    s3WriteMock.mockClear();
-    s3DeleteMock.mockClear();
+    fake = startFakeS3();
+  });
+
+  afterEach(() => {
+    fake.stop();
   });
 
   const buildTx = () => {
@@ -254,7 +242,18 @@ describe("createCreateWorkspaceDocumentTools", () => {
     );
 
     expect(getInsertedFileName()).toBe("Loan Agreement.docx");
-    expect(s3WriteMock).toHaveBeenCalledTimes(1);
+    // Exactly one object landed, tenant-scoped and typed as a DOCX, and it is
+    // the rendered document rather than an empty placeholder.
+    expect(fake.requests.map(({ method }) => method)).toEqual(["PUT"]);
+    const [storedKey = "", stored] = [...fake.objects.entries()].at(0) ?? [];
+    expect(storedKey).toStartWith(
+      `${bucket}/${organizationId}/${workspaceId}/`,
+    );
+    expect(storedKey).toEndWith(".docx");
+    expect(stored?.contentType).toBe(DOCX_MIME_TYPE);
+    expect(await docxToMarkdown(stored?.bytes ?? new Uint8Array())).toContain(
+      "# Title Heading",
+    );
     expect(recordedAuditEvents).toHaveLength(1);
     expect(result).toEqual({
       success: true,

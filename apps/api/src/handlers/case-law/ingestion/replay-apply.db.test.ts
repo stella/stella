@@ -1,4 +1,11 @@
-import { afterAll, beforeAll, beforeEach, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  test,
+} from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -11,6 +18,7 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
@@ -23,6 +31,9 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // A writing replay, through the same `processDecision` a crawl feeds.
 //
@@ -31,39 +42,23 @@ import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 // projection's staleness marker, and a second run over an unchanged payload
 // reaches a fixed point instead of rewriting the row again.
 //
-// The object store is the one thing that cannot be stood up in-process, so
-// the raw-payload upload is recorded rather than performed. Its key matters:
-// the pipeline writes that key onto the row, so an upload keyed on anything
-// other than the payload's own hash would move the row's pointer.
+// The raw-payload upload runs against an in-process object store, so the
+// object itself is the assertion. Its key matters: the pipeline writes that
+// key onto the row, so an upload keyed on anything other than the payload's
+// own hash would move the row's pointer at the object it names.
 
-const uploads: { key: string; contentType: string }[] = [];
+let fake: FakeS3;
 
 beforeEach(() => {
-  uploads.length = 0;
+  fake = startFakeS3();
 });
 
-// The real module is spread back in: `mock.module` is process-global, so a
-// partial mock would delete the other exports for every later test file.
-const realS3 = await import("@/api/lib/s3");
-
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  writeS3ObjectWithRetry: async ({
-    key,
-    contentType,
-  }: {
-    key: string;
-    contentType: string;
-  }) => {
-    uploads.push({ key, contentType });
-    await Promise.resolve();
-  },
-}));
+afterEach(() => {
+  fake.stop();
+});
 
 const connect = (client: Awaited<ReturnType<typeof createTestPglite>>) =>
   drizzle({ client, relations: { ...relations, ...authRelationsPart } });
-
-const { createTestPglite } = await import("@/api/tests/pglite-test-db");
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof connect>;
@@ -187,15 +182,20 @@ test("a writing replay goes through the pipeline, and replaying again converges"
   }
   expect(first.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
 
-  // The payload the replay read is uploaded under its own content hash, and
-  // under the media type the row recorded. A re-parse that returned no
-  // payload would otherwise clear the row's pointer to it.
+  // The payload the replay read landed under its own content hash, byte for
+  // byte, and under the media type the row recorded. A re-parse that returned
+  // no payload would otherwise clear the row's pointer to it.
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(STORED_PAYLOAD);
   const contentAddressedKey = `case-law/raw/${sourceId}/${hasher.digest("hex")}`;
-  expect(uploads).toEqual([
-    { key: contentAddressedKey, contentType: "application/xhtml+xml" },
-  ]);
+  const stored = fake.objects.get(
+    `${envBase.S3_BUCKET}/${contentAddressedKey}`,
+  );
+  expect(new TextDecoder().decode(stored?.bytes)).toBe(STORED_PAYLOAD);
+  // The charset parameter is the client's; the media type is the row's, and
+  // it is what a later read of this object reports.
+  expect(stored?.contentType).toMatch(/^application\/xhtml\+xml\b/u);
+  expect(fake.objects.size).toBe(1);
 
   // The pipeline's own write: payload, source hash, the raw-payload pointer
   // and the search projection's staleness marker.
@@ -242,8 +242,11 @@ test("a writing replay goes through the pipeline, and replaying again converges"
     sourceRawS3Key: contentAddressedKey,
     observationOrder: 2n,
   });
-  // A converged replay re-reads the payload but has nothing to store.
-  expect(uploads).toHaveLength(1);
+  // A converged replay re-reads the payload but has nothing to store: the
+  // key the row already records names an object with these exact bytes.
+  expect(fake.requests.filter(({ method }) => method === "PUT")).toHaveLength(
+    1,
+  );
 
   // Citation extraction ran on the re-parsed text: the reason a replay goes
   // through the pipeline instead of writing the payload columns itself.

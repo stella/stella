@@ -1,26 +1,11 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-// Sibling test files (mcp/tools.test, entities/translate.test) mock
-// @/api/lib/content-encryption globally, and bun's mock.module persists
-// across the shared test process. Pin a faithful in-memory passthrough so
-// these envelope-binding assertions exercise crypto.ts's real logic on a
-// stable encrypt/decrypt instead of inheriting a leaked stub. Import crypto
-// dynamically AFTER the mock so it binds to the passthrough (static imports
-// hoist above this line).
-void mock.module("@/api/lib/content-encryption", () => ({
-  encryptContent: (_organizationId: unknown, plaintext: string) => ({
-    ciphertext: Buffer.from(plaintext, "utf-8"),
-    iv: Buffer.alloc(12),
-  }),
-  decryptContent: (_organizationId: unknown, ciphertext: Buffer) =>
-    ciphertext.toString("utf-8"),
-}));
-
-const { decryptMcpSecret, encryptMcpSecret } =
-  await import("@/api/lib/mcp-upstream/crypto");
+import {
+  decryptMcpSecret,
+  encryptMcpSecret,
+} from "@/api/lib/mcp-upstream/crypto";
 
 const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> => {
   try {
@@ -217,5 +202,43 @@ describe("encryptMcpSecret / decryptMcpSecret", () => {
     });
 
     expect(String(decrypted)).toBe(secret);
+  });
+
+  test("stores ciphertext rather than the plaintext envelope", async () => {
+    const { ciphertext, iv } = await encryptMcpSecret({
+      connectorId,
+      organizationId,
+      purpose,
+      secret,
+      userId,
+    });
+
+    expect(ciphertext.toString("utf-8")).not.toContain(secret);
+    expect(ciphertext.toString("utf-8")).not.toContain(connectorId);
+    // A zero IV is the no-op plaintext envelope; real AES-GCM never mints one.
+    expect(iv.every((byte) => byte === 0)).toBe(false);
+  });
+
+  test("rejects an organization mismatch (per-org key separation)", async () => {
+    const { ciphertext, iv } = await encryptMcpSecret({
+      connectorId,
+      organizationId,
+      purpose,
+      secret,
+      userId,
+    });
+
+    const decrypt = decryptMcpSecret({
+      ciphertext,
+      connectorId,
+      iv,
+      organizationId: toSafeId<"organization">(
+        "0191d14d-9a63-7d2e-a021-06053e542c88",
+      ),
+      purpose,
+      userId,
+    });
+
+    expect(await rejectionOf(decrypt)).not.toBeNull();
   });
 });

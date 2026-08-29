@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
-
-process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
-process.env["S3_BUCKET"] ??= "test";
-process.env["S3_REGION"] ??= "us-east-1";
+import { createFileKey } from "@/api/lib/file-key";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 
 type QueryBuilder = {
   insert: () => QueryBuilder;
@@ -22,8 +22,6 @@ let scopedRows: Record<string, unknown>[][] = [];
 let scopedFailure: Error | null = null;
 let scopedFailureAfterCalls = 0;
 let scopedCalls = 0;
-const deletedStorageKeys: string[] = [];
-const writtenStorageKeys: string[] = [];
 const builder: QueryBuilder = {
   insert: () => builder,
   select: () => builder,
@@ -57,17 +55,10 @@ void mock.module("@/api/lib/root-scoped-db", () => ({
     },
   createRootSafeDb: () => "SAFE_DB_SENTINEL",
 }));
-const realS3 = await import("@/api/lib/s3");
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  deleteS3ObjectWithSignal: async (key: string) => {
-    deletedStorageKeys.push(key);
-  },
-  readS3ObjectIfPresent: async () => null,
-  writeS3ObjectWithRetry: async ({ key }: { key: string }) => {
-    writtenStorageKeys.push(key);
-  },
-}));
+// Object storage is the real `lib/s3`, pointed at an in-process store: the
+// keys, content types and deletes below are the ones the module actually put
+// on the wire, not a stub's record of the arguments it was handed.
+let fake: FakeS3;
 
 const {
   authorizeFolioCollabRoom,
@@ -92,13 +83,24 @@ const secondUserId = toSafeId<"user">("user_2");
 const yjsSnapshotFileId = toSafeId<"userFile">("file_yjs");
 const docxCheckpointFileId = toSafeId<"userFile">("file_docx");
 
+beforeEach(() => {
+  fake = startFakeS3();
+});
+
 afterEach(() => {
-  deletedStorageKeys.length = 0;
+  fake.stop();
   scopedFailure = null;
   scopedFailureAfterCalls = 0;
   scopedCalls = 0;
-  writtenStorageKeys.length = 0;
 });
+
+const snapshotKey = (fileId: string) =>
+  createFileKey({
+    fileId,
+    mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+    organizationId,
+    workspaceId,
+  });
 
 type Row = Record<string, unknown>;
 
@@ -222,6 +224,7 @@ describe("folio collaboration room snapshot generation", () => {
       return;
     }
 
+    const nextSnapshotFileId = toSafeId<"userFile">("file_yjs_next");
     scopedRows = [
       [
         {
@@ -233,25 +236,30 @@ describe("folio collaboration room snapshot generation", () => {
       [
         {
           generation: 3,
-          yjsSnapshotFileId: toSafeId<"userFile">("file_yjs_next"),
+          yjsSnapshotFileId: nextSnapshotFileId,
           yjsSnapshotUpdatedAt: new Date(),
         },
       ],
     ];
-    const snapshotObjects: (ArrayBuffer | null)[] = [
-      null,
-      new TextEncoder().encode("next").buffer,
-    ];
+    // Only the replacement object exists: the concurrent store published a
+    // new pointer and removed the object the first pointer named.
+    fake.put(
+      envBase.S3_BUCKET,
+      snapshotKey(nextSnapshotFileId),
+      "next",
+      FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+    );
 
-    expect(
-      await loadFolioCollabSnapshot(
-        authorized.value,
-        async () => snapshotObjects.shift() ?? null,
-      ),
-    ).toEqual({
+    expect(await loadFolioCollabSnapshot(authorized.value)).toEqual({
       generation: 3,
       snapshotBase64: "bmV4dA==",
     });
+    // The store confirming the first key is gone is what sends the read back
+    // to the pointer; the second read must ask for the replacement key.
+    expect(fake.requests.map(({ method, key }) => `${method} ${key}`)).toEqual([
+      `GET ${snapshotKey(yjsSnapshotFileId)}`,
+      `GET ${snapshotKey(nextSnapshotFileId)}`,
+    ]);
   });
 
   test("rejects a store from a stale generation", () => {
@@ -288,7 +296,7 @@ describe("folio collaboration room snapshot generation", () => {
     scopedFailure = new Error("snapshot transaction failed");
     scopedFailureAfterCalls = 1;
 
-    expect(
+    await expect(
       storeFolioCollabSnapshot({
         authority: { type: "participant", userId: firstUserId },
         expectedGeneration: 3,
@@ -296,8 +304,22 @@ describe("folio collaboration room snapshot generation", () => {
         value: authorized.value,
       }),
     ).rejects.toThrow("snapshot transaction failed");
-    expect(writtenStorageKeys).toHaveLength(1);
-    expect(deletedStorageKeys).toEqual(writtenStorageKeys);
+
+    const written = fake.requests.filter(({ method }) => method === "PUT");
+    const writtenKey = written.at(0)?.key;
+    expect(written).toHaveLength(1);
+    // Tenant-scoped key under the snapshot's own media type: a key without
+    // the organization and workspace prefix would place one tenant's
+    // snapshot inside another's.
+    expect(writtenKey).toMatch(/^org_1\/ws_1\/[^/]+\.bin$/u);
+    expect(written.at(0)?.contentType).toBe(FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE);
+    expect(
+      fake.requests
+        .filter(({ method }) => method === "DELETE")
+        .map(({ key }) => key),
+    ).toEqual([writtenKey]);
+    // The room pointer never published, so the store must hold nothing.
+    expect([...fake.objects.keys()]).toEqual([]);
   });
 
   test("accepts a generation-fenced store from the collaboration service", () => {

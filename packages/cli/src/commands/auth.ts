@@ -130,7 +130,10 @@ export const runWhoami = async ({
   serverFlag: string | undefined;
   apiKey: string | undefined;
 }): Promise<Error | undefined> => {
-  const serverUrlResult = await resolveServerUrl(configDir, serverFlag);
+  const serverUrlResult = await resolveServerUrl({
+    configDir,
+    flagValue: serverFlag,
+  });
   if (Result.isError(serverUrlResult)) {
     return new Error(serverUrlResult.error.message);
   }
@@ -209,10 +212,10 @@ const whoamiCommand = buildCommand<ServerOrgFlags, [], Context>({
 const logoutCommand = buildCommand<ServerOrgFlags, [], Context>({
   docs: { brief: "Remove a stored stella credential" },
   func: async function func(this: Context, flags) {
-    const serverUrlResult = await resolveServerUrl(
-      this.configDir,
-      flags.server,
-    );
+    const serverUrlResult = await resolveServerUrl({
+      configDir: this.configDir,
+      flagValue: flags.server,
+    });
     if (Result.isError(serverUrlResult)) {
       return new Error(serverUrlResult.error.message);
     }
@@ -249,10 +252,10 @@ const switchCommand = buildCommand<SwitchFlags, [], Context>({
       "Switch the default organization for a server (no re-auth if already signed in)",
   },
   func: async function func(this: Context, flags) {
-    const serverUrlResult = await resolveServerUrl(
-      this.configDir,
-      flags.server,
-    );
+    const serverUrlResult = await resolveServerUrl({
+      configDir: this.configDir,
+      flagValue: flags.server,
+    });
     if (Result.isError(serverUrlResult)) {
       return new Error(serverUrlResult.error.message);
     }

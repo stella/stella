@@ -1,11 +1,12 @@
 import { Result } from "better-result";
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import type { DocumentAst, Inline } from "@/api/handlers/case-law/document-ast";
 import {
   EMPTY_AST,
@@ -25,6 +26,8 @@ import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 
 const concatInlineText = (inlines: Inline[]): string => {
   let out = "";
@@ -71,7 +74,6 @@ const astMetadata = {
 };
 
 const originalCzNsFetchPage = czNsAdapter.fetchPage;
-const realS3 = await import("@/api/lib/s3");
 
 const testSourceLease = (
   source: typeof caseLawSources.$inferSelect,
@@ -828,26 +830,32 @@ describe("processDecision — decision date on an existing row", () => {
 });
 
 describe("processDecision — source raw upload failure", () => {
+  let fake: FakeS3;
+
+  beforeEach(() => {
+    fake = startFakeS3();
+  });
+
+  afterEach(() => {
+    fake.stop();
+  });
+
+  /** The key the raw payload is content-addressed under. */
+  const rawKey = (sourceId: string, payload: string): string =>
+    `case-law/raw/${sourceId}/${new Bun.CryptoHasher("sha256").update(payload).digest("hex")}`;
+
   test("reports a new decision's failed raw upload as retryable, not thrown", async () => {
     // A thrown failure is caught by the decision loop, counted as skipped,
     // and lets the page's cursor advance; a forward-only traversal then
     // never returns to the decision and its raw source is lost. Only a
     // retryable outcome reaches the page-level cursor hold.
-    await mock.module("@/api/lib/s3", () => ({
-      ...realS3,
-      writeS3ObjectWithRetry: () => {
-        throw new Error("an unexpected error has occurred");
-      },
-      // `mock.module` replaces the module, so every named export a consumer
-      // imports must exist here or the import fails at link time. This suite
-      // reads no object; throwing surfaces one that appears later.
-      readS3ArrayBuffer: () => {
-        throw new Error("Unexpected S3 object read in this suite");
-      },
-      readCorpusS3Bytes: () => {
-        throw new Error("Unexpected corpus object read in this suite");
-      },
-    }));
+    //
+    // The store rejects the write the way it rejects a denied one in
+    // production: `AccessDenied` is terminal, so the retry inside
+    // `writeS3ObjectWithRetry` does not turn this into three attempts.
+    fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
+    const sourceId = createSafeId<"caseLawSource">();
+    const sourceRaw = "<html></html>";
 
     const scopedDb: ScopedDb = async (callback) => {
       const tx = {
@@ -889,10 +897,10 @@ describe("processDecision — source raw upload failure", () => {
         metadata: {},
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
-        sourceRaw: "<html></html>",
+        sourceRaw,
       },
       observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
+      sourceId,
       scopedDb,
       observedAt: new Date("2026-08-03T00:00:00.000Z"),
     });
@@ -906,6 +914,17 @@ describe("processDecision — source raw upload failure", () => {
     // attributable apart from a corpus-write failure, so pin it: asserting
     // only the status would pass on the corpus-write reason too.
     expect(outcome.reason).toBe("source-raw-write");
+    // The rejected write was the payload's own content-addressed key in the
+    // case-law partition, and nothing landed: the held cursor is the only
+    // record of this decision, so the retry has the whole upload to redo.
+    const writes = fake.requests.filter(({ method }) => method === "PUT");
+    expect(writes).toHaveLength(1);
+    expect(writes.at(0)?.bucket).toBe(envBase.S3_BUCKET);
+    expect(writes.at(0)?.key).toBe(rawKey(sourceId, sourceRaw));
+    // The charset parameter is the client's; the media type is the
+    // pipeline's, and it is what a re-parse reads the object back as.
+    expect(writes.at(0)?.contentType).toMatch(/^text\/plain\b/u);
+    expect(fake.objects.size).toBe(0);
   });
 
   test("logs the failure's system fields, not just its message", async () => {
@@ -913,7 +932,9 @@ describe("processDecision — source raw upload failure", () => {
     // message, so `error.detail` alone cannot tell an access denial
     // from a timeout. `errorSystemFields` carries the discriminating
     // `code`/`errno`/`syscall`, which is what makes a held cursor
-    // diagnosable from the log.
+    // diagnosable from the log. The code comes from the store's own
+    // rejection through the real client, so this also pins that the
+    // client still surfaces it where `errorSystemFields` looks.
     const logged: Record<string, unknown>[] = [];
     await mock.module("@/api/lib/observability/logger", () => ({
       logger: {
@@ -924,14 +945,7 @@ describe("processDecision — source raw upload failure", () => {
         info: () => undefined,
       },
     }));
-    await mock.module("@/api/lib/s3", () => ({
-      ...realS3,
-      writeS3ObjectWithRetry: () => {
-        throw Object.assign(new Error("an unexpected error has occurred"), {
-          code: "AccessDenied",
-        });
-      },
-    }));
+    fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
 
     const scopedDb: ScopedDb = async (callback) => {
       const tx = {

@@ -1,16 +1,20 @@
 import { Result } from "better-result";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { FieldContent } from "@/api/db/schema-validators";
+import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
+import { decryptContent } from "@/api/lib/content-encryption";
 import {
   EXTRACTION_WORKER_ERROR_CODE,
   ExtractionWorkerError,
 } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 
 // `processExtraction` reads through the `rootDb` module-level singleton
 // directly (no injected `safeDb`), so the query call is captured by mocking
@@ -71,25 +75,18 @@ const updateReturningMock = mock(async () => [{ id: runId }]);
 const updateWhereMock = mock(() => ({ returning: updateReturningMock }));
 const updateSetMock = mock(() => ({ where: updateWhereMock }));
 const updateMock = mock(() => ({ set: updateSetMock }));
-const getS3ObjectWithSignalMock = mock(
-  async (_key: string, _signal: AbortSignal) => new ArrayBuffer(8),
-);
-const s3DeleteMock = mock(async () => undefined);
-const s3WriteMock = mock(async () => undefined);
 const extractFileTextResultMock = mock(
-  async (): Promise<Result<string | null, ExtractionWorkerError>> =>
+  async (
+    _buffer: ArrayBuffer,
+    _mimeType: string,
+    _options: { signal: AbortSignal; timeoutMs: number },
+  ): Promise<Result<string | null, ExtractionWorkerError>> =>
     Result.ok("native text"),
 );
-const encryptContentMock = mock(async () => ({
-  ciphertext: Buffer.from("ciphertext"),
-  iv: Buffer.from("iv"),
-}));
 const requestAutomaticDocumentOcrMock = mock(async () => undefined);
 const restoreManualOcrRunAfterProjectionLossMock = mock(async () => undefined);
 const enqueueDocumentProcessingRunMock = mock(async () => undefined);
 const indexEntityMock = mock(async () => undefined);
-
-const realS3 = await import("@/api/lib/s3");
 
 void mock.module("@/api/db/root", () => ({
   rootDb: {
@@ -104,10 +101,6 @@ void mock.module("@/api/db/root", () => ({
     update: updateMock,
   },
 }));
-void mock.module("@/api/lib/content-encryption", () => ({
-  decryptContent: async () => "Extracted text",
-  encryptContent: encryptContentMock,
-}));
 void mock.module("@/api/lib/document-processing-automatic-request", () => ({
   requestAutomaticDocumentOcr: requestAutomaticDocumentOcrMock,
 }));
@@ -117,21 +110,6 @@ void mock.module("@/api/lib/document-processing-manual-ocr-restore", () => ({
 }));
 void mock.module("@/api/lib/document-processing-enqueue", () => ({
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
-}));
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  deleteS3ObjectWithSignal: s3DeleteMock,
-  getS3ObjectWithSignal: getS3ObjectWithSignalMock,
-  putS3ObjectWithSignal: s3WriteMock,
-  // `mock.module` replaces the module, so every named export a consumer
-  // imports must exist here or the import fails at link time. This suite
-  // reads no object; throwing surfaces one that appears later.
-  readS3ArrayBuffer: () => {
-    throw new Error("Unexpected S3 object read in this suite");
-  },
-  readCorpusS3Bytes: () => {
-    throw new Error("Unexpected corpus object read in this suite");
-  },
 }));
 // `canExtractMimeType` is exported by extractable-mime-types, and that is the
 // module `process-extraction` imports it from, so the override has to land
@@ -167,7 +145,61 @@ const {
   requiresDurableNativeExtraction,
 } = await import("@/api/lib/search/process-extraction");
 
+// The bytes the extraction is expected to hand the extractor, and the keys
+// they are stored under. Written out rather than derived through
+// `createFileKey`, so the test states the key independently of the code that
+// builds it.
+const SOURCE_BYTES = "source document bytes";
+const sourceKey = (extension: string): string =>
+  `${organizationId}/${workspaceId}/${fileContent.id}.${extension}`;
+
+let fake: FakeS3;
+
+const seedSource = (extension: string): string => {
+  const key = sourceKey(extension);
+  fake.put(envBase.S3_BUCKET, key, SOURCE_BYTES, "application/octet-stream");
+  return key;
+};
+
+const objectReadKeys = (): string[] =>
+  fake.requests
+    .filter(({ method }) => method === "GET" || method === "HEAD")
+    .map(({ key }) => key);
+
+type PersistedProjection = {
+  /** What a reader recovers: the bound envelope, decrypted under the org key. */
+  text: string;
+  ciphertext: Buffer;
+  iv: Buffer;
+};
+
+/**
+ * The projection the write statement carries. The two `bytea` parameters are
+ * the ciphertext and IV, in that order; everything else the statement binds is
+ * an id, a count or a hash.
+ */
+const persistedProjection = async (): Promise<PersistedProjection> => {
+  const writeQuery = executeMock.mock.calls.at(1)?.[0];
+  if (writeQuery === undefined) {
+    throw new Error("no projection write statement was executed");
+  }
+  const buffers = new PgDialect()
+    .sqlToQuery(writeQuery)
+    .params.filter((param) => Buffer.isBuffer(param));
+  const ciphertext = buffers.at(0);
+  const iv = buffers.at(1);
+  if (ciphertext === undefined || iv === undefined) {
+    throw new Error("the projection write bound no ciphertext and IV");
+  }
+  return {
+    text: await decryptContent(organizationId, ciphertext, iv),
+    ciphertext,
+    iv,
+  };
+};
+
 beforeEach(() => {
+  fake = startFakeS3();
   findFirstResult = null;
   findFirstMock.mockClear();
   executeMock.mockReset();
@@ -190,20 +222,18 @@ beforeEach(() => {
   updateWhereMock.mockClear();
   updateReturningMock.mockReset();
   updateReturningMock.mockImplementation(async () => [{ id: runId }]);
-  getS3ObjectWithSignalMock.mockClear();
   extractFileTextResultMock.mockReset();
   extractFileTextResultMock.mockImplementation(async () =>
     Result.ok("native text"),
   );
-  encryptContentMock.mockReset();
-  encryptContentMock.mockImplementation(async () => ({
-    ciphertext: Buffer.from("ciphertext"),
-    iv: Buffer.from("iv"),
-  }));
   requestAutomaticDocumentOcrMock.mockClear();
   restoreManualOcrRunAfterProjectionLossMock.mockClear();
   enqueueDocumentProcessingRunMock.mockClear();
   indexEntityMock.mockClear();
+});
+
+afterEach(() => {
+  fake.stop();
 });
 
 describe("processExtraction", () => {
@@ -322,6 +352,7 @@ describe("processExtraction", () => {
       Result.err(workerError),
     );
     const lifecycleSignal = new AbortController().signal;
+    const key = seedSource("pdf");
 
     const rejection: unknown = await executeNativeExtraction({
       fileField: fileContent,
@@ -341,6 +372,9 @@ describe("processExtraction", () => {
     );
 
     expect(rejection).toBe(workerError);
+    // The extractor is handed the object the run's file identity names, read
+    // from storage rather than handed in by the test.
+    expect(objectReadKeys()).toEqual([key]);
     expect(extractFileTextResultMock).toHaveBeenCalledWith(
       expect.any(ArrayBuffer),
       fileContent.mimeType,
@@ -349,7 +383,12 @@ describe("processExtraction", () => {
         timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
       },
     );
-    expect(encryptContentMock).not.toHaveBeenCalled();
+    const extracted = extractFileTextResultMock.mock.calls.at(0)?.[0];
+    expect(
+      extracted === undefined ? null : new TextDecoder().decode(extracted),
+    ).toBe(SOURCE_BYTES);
+    // A sandbox failure is terminal: nothing is encrypted and nothing is
+    // written, so no projection statement runs at all.
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
     expect(executeMock).not.toHaveBeenCalled();
   });
@@ -363,6 +402,7 @@ describe("processExtraction", () => {
     extractFileTextResultMock.mockImplementationOnce(async () =>
       Result.ok(null),
     );
+    const key = seedSource("docx");
 
     const outcome = await executeNativeExtraction({
       fileField: docxContent,
@@ -379,7 +419,12 @@ describe("processExtraction", () => {
     });
 
     expect(outcome).toBe("persisted");
-    expect(encryptContentMock).toHaveBeenCalledWith(organizationId, "");
+    expect(objectReadKeys()).toEqual([key]);
+    // A document with no text still stores an encrypted empty string, not a
+    // plaintext one: the column shape is the same as any other projection's.
+    const projection = await persistedProjection();
+    expect(projection.text).toBe("");
+    expect(projection.iv.every((byte) => byte === 0)).toBe(false);
     expect(executeMock).toHaveBeenCalledTimes(2);
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
     expect(restoreManualOcrRunAfterProjectionLossMock).not.toHaveBeenCalled();
@@ -407,7 +452,9 @@ describe("processExtraction", () => {
       `${organizationId}/${workspaceId}/${fileContent.id}.pdf`,
       expect.any(AbortSignal),
     );
-    expect(getS3ObjectWithSignalMock).not.toHaveBeenCalled();
+    // The provided scope replaces the default reader outright: the store sees
+    // no request at all.
+    expect(fake.requests).toEqual([]);
   });
 
   test("propagates lifecycle cancellation to the caller-provided storage reader", async () => {
@@ -453,11 +500,14 @@ describe("processExtraction", () => {
     expect(observedSignals).toHaveLength(1);
     expect(observedSignals.at(0)?.aborted).toBe(true);
     expect(rejection).not.toBeNull();
-    expect(getS3ObjectWithSignalMock).not.toHaveBeenCalled();
-    expect(encryptContentMock).not.toHaveBeenCalled();
+    expect(fake.requests).toEqual([]);
+    // A cancelled read never reaches encryption or the projection write.
+    expect(executeMock).not.toHaveBeenCalled();
   });
 
   test("restores manual OCR after native PDF extraction without automatic eligibility", async () => {
+    const key = seedSource("pdf");
+
     const outcome = await executeNativeExtraction({
       fileField: fileContent,
       lifecycleSignal: new AbortController().signal,
@@ -473,6 +523,14 @@ describe("processExtraction", () => {
     });
 
     expect(outcome).toBe("persisted");
+    expect(objectReadKeys()).toEqual([key]);
+    // The extracted text reaches the projection as ciphertext only a reader
+    // holding the organization's key can turn back into the document: the
+    // stored bytes are not the text, and the IV is not the plaintext envelope.
+    const projection = await persistedProjection();
+    expect(projection.text).toBe("native text");
+    expect(projection.ciphertext.toString("utf-8")).not.toBe("native text");
+    expect(projection.iv.every((byte) => byte === 0)).toBe(false);
     expect(restoreManualOcrRunAfterProjectionLossMock).toHaveBeenCalledWith(
       expect.objectContaining({
         entityId,
@@ -492,6 +550,9 @@ describe("processExtraction", () => {
     extractFileTextResultMock.mockImplementationOnce(async () =>
       Result.ok(null),
     );
+    // Stored under the declared generic type; only the extraction type is
+    // resolved from the filename.
+    const key = seedSource("bin");
 
     const outcome = await executeNativeExtraction({
       fileField: extensionResolvedPdf,
@@ -508,6 +569,7 @@ describe("processExtraction", () => {
     });
 
     expect(outcome).toBe("persisted");
+    expect(objectReadKeys()).toEqual([key]);
     expect(restoreManualOcrRunAfterProjectionLossMock).toHaveBeenCalled();
     expect(requestAutomaticDocumentOcrMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -637,6 +699,7 @@ describe("processExtraction", () => {
     extractFileTextResultMock.mockImplementationOnce(async () =>
       Result.ok(null),
     );
+    seedSource("pdf");
 
     const outcome = await executeNativeExtraction({
       fileField: fileContent,

@@ -5,7 +5,6 @@ import {
   beforeEach,
   describe,
   expect,
-  mock,
   test,
 } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -15,6 +14,9 @@ import { PassThrough } from "node:stream";
 
 import { LOGIN_TIMEOUT_MS } from "./constants.js";
 import { readCredentialFile } from "./credential-store.js";
+import { login } from "./login.js";
+import type { LoginBoundaries } from "./login.js";
+import { startLoopbackListener } from "./loopback-listener.js";
 
 // `login()` is the orchestrator: it wires PKCE + discovery + registration +
 // (loopback | manual) callback + token exchange + credential persistence. The
@@ -24,43 +26,29 @@ import { readCredentialFile } from "./credential-store.js";
 // failure propagates, and that the persisted credential carries exactly what
 // later commands need (scopes, org, refresh token).
 //
-// Two seams are mocked. The loopback listener is delegated to the real
+// Two boundaries are injected. The loopback listener is delegated to the real
 // implementation or forced to `undefined` (headless) per test; the browser
 // opener never spawns a real browser and instead drives the callback the way a
 // real browser redirect would.
 
-const realLoopback = await import("./loopback-listener.js");
-// Capture the genuine function *value* before mocking: reading it back off the
-// namespace inside the factory would resolve to the mock itself (infinite
-// recursion), since `mock.module` rebinds the live namespace.
-const realStartLoopbackListener = realLoopback.startLoopbackListener;
-
 let loopbackMode: "real" | "headless" = "real";
-void mock.module("./loopback-listener.js", () => ({
-  ...realLoopback,
-  startLoopbackListener: async () =>
-    loopbackMode === "headless" ? undefined : await realStartLoopbackListener(),
-}));
-
-// Module mocks live for the whole process; spread the real module so only the
-// spawning function is replaced and never let this file actually launch a
-// browser.
-const realBrowser = await import("./browser-open.js");
 let onBrowserOpen: (authorizeUrl: string) => void | Promise<void> = () => {};
 // Simulated launch outcome. `failed` models a machine with no usable browser
 // (headless server, SSH, container) where the opener exits nonzero or fails to
 // spawn; `unknown` models an opener that never settled within its timeout, as a
 // slow desktop portal or a long-lived `xdg-open` does.
 let browserLaunchStatus: "opened" | "failed" | "unknown" = "opened";
-void mock.module("./browser-open.js", () => ({
-  ...realBrowser,
-  openInBrowser: async (url: string) => {
+
+// Typed against the real functions, so a signature change in either boundary
+// fails here instead of being absorbed by a fabricated module.
+const boundaries: LoginBoundaries = {
+  openInBrowser: async (url) => {
     await onBrowserOpen(url);
     return { status: browserLaunchStatus };
   },
-}));
-
-const { login } = await import("./login.js");
+  startLoopbackListener: async () =>
+    loopbackMode === "headless" ? undefined : await startLoopbackListener(),
+};
 
 const base64url = (value: object): string =>
   Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -201,16 +189,10 @@ describe("login orchestration", () => {
     await rm(configDir, { force: true, recursive: true });
   });
 
-  // `mock.module` is process-wide: `bun test src` runs every CLI test file in
-  // one process, so leaving `./loopback-listener.js` and `./browser-open.js`
-  // mocked after this file finishes would leak the fake listener/opener into
-  // any later file that imports either module. Restore the real modules once
-  // this file's tests are done, not just the local toggles.
   afterAll(() => {
     loopbackMode = "real";
     onBrowserOpen = () => {};
     browserLaunchStatus = "opened";
-    mock.restore();
   });
 
   test("loopback happy path persists a credential with org, scopes, and refresh token", async () => {
@@ -226,6 +208,7 @@ describe("login orchestration", () => {
       const result = await login(
         makeProcess(),
         baseOptions(configDir, provider.url),
+        boundaries,
       );
 
       expect(Result.isOk(result)).toBe(true);
@@ -260,6 +243,7 @@ describe("login orchestration", () => {
       const result = await login(
         makeProcess("manual-code-xyz\n"),
         baseOptions(configDir, provider.url),
+        boundaries,
       );
 
       expect(Result.isOk(result)).toBe(true);
@@ -284,6 +268,7 @@ describe("login orchestration", () => {
       const result = await login(
         makeProcess("manual-code-xyz\n"),
         baseOptions(configDir, provider.url),
+        boundaries,
       );
 
       expect(Result.isOk(result)).toBe(true);
@@ -309,6 +294,7 @@ describe("login orchestration", () => {
       const result = await login(
         makeProcess(),
         baseOptions(configDir, provider.url),
+        boundaries,
       );
 
       expect(Result.isOk(result)).toBe(true);
@@ -326,6 +312,7 @@ describe("login orchestration", () => {
       const result = await login(
         makeProcess(),
         baseOptions(configDir, provider.url),
+        boundaries,
       );
 
       expect(Result.isError(result)).toBe(true);
@@ -356,6 +343,7 @@ describe("login orchestration", () => {
       const result = await login(
         makeProcess(),
         baseOptions(configDir, provider.url),
+        boundaries,
       );
 
       expect(Result.isError(result)).toBe(true);
@@ -388,6 +376,7 @@ describe("login orchestration", () => {
       const result = await login(
         makeProcess(),
         baseOptions(configDir, provider.url),
+        boundaries,
       );
 
       expect(Result.isError(result)).toBe(true);
@@ -413,6 +402,7 @@ describe("login orchestration", () => {
       const result = await login(
         makeProcess(),
         baseOptions(configDir, provider.url),
+        boundaries,
       );
 
       expect(Result.isError(result)).toBe(true);
