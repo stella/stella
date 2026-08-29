@@ -1,7 +1,24 @@
 {
-  "_comment": "Signature-block detection terms, organized by concept and language. `und` is reserved for structural markers or name/legal tokens that are not tied to the document language. `signatureStampPhrases` are the fixed strings PDF signing software stamps onto a page; a person span must never extend across one. `personListLabels`, `personListLabelOmissions`, and `contactFieldLabels` form the reviewed coverage matrix for every manifest language. Labels are native legal notice or procurement conventions, not translated guesses. A person-list label activates only beside a semicolon-delimited list or a configured contact field.",
+  "_comment": "Signature-block detection terms, organized by concept and language. `und` is reserved for structural markers or name/legal tokens that are not tied to the document language. `signatureStampPhrases` are the fixed strings PDF signing software stamps onto a page; a person span must never extend across one. `personListLabels`, `personListLabelOmissions`, and `contactFieldLabels` form the reviewed coverage matrix for every manifest language. Labels are native legal notice or procurement conventions, not translated guesses. A person-list label activates only beside a semicolon-delimited list or a configured contact field. `personValueLabels` contains only labels whose value is a person's name; broader `formFieldLabels` also contains organization, role, date, address, and tax fields and must not be used to introduce a person.",
   "labels": {
     "en": ["by", "name"]
+  },
+  "personValueLabels": {
+    "cs": ["jméno", "příjmení"],
+    "de": ["name"],
+    "en": ["name"],
+    "es": ["nombre"],
+    "fr": ["nom"],
+    "it": ["nome"],
+    "nl": ["naam"],
+    "pl": ["imię", "nazwisko"],
+    "pt": ["nome"],
+    "sk": ["meno", "priezvisko"]
+  },
+  "personValueLabelOmissions": {
+    "hu": "Reviewed Hungarian notice fixtures use named recipients but do not establish a safe generic name-field label.",
+    "ro": "Reviewed Romanian notice fixtures use named recipients but do not establish a safe generic name-field label.",
+    "sv": "Reviewed Swedish government forms do not establish a name-field label narrow enough to introduce only person values."
   },
   "personListLabels": {
     "cs": ["k rukám"],

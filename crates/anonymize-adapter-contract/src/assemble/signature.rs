@@ -20,6 +20,8 @@ struct SignatureDetection {
   #[serde(default)]
   labels: OrderedMap<Value>,
   #[serde(default)]
+  person_value_labels: OrderedMap<Value>,
+  #[serde(default)]
   person_list_labels: OrderedMap<Value>,
   #[serde(default)]
   witness_phrases: OrderedMap<Value>,
@@ -59,8 +61,14 @@ pub(super) fn build_signature_data(
     stella_anonymize_core::assemble::parse_data_file(
       "signature-detection.json",
     )?;
+  let mut labels = language_keyed_terms(&data.labels, None);
+  for label in language_keyed_terms(&data.person_value_labels, selected) {
+    if !labels.contains(&label) {
+      labels.push(label);
+    }
+  }
   Ok(BindingSignatureData {
-    labels: language_keyed_terms(&data.labels, None),
+    labels,
     person_list_labels: language_keyed_terms(
       &data.person_list_labels,
       selected,
@@ -98,7 +106,8 @@ mod tests {
 
   use super::{build_signature_data, form_field_labels};
   use crate::{
-    BindingPreparedSearchConfig, prepared_search_config_from_binding,
+    BindingPreparedSearchConfig, BindingSignatureData,
+    prepared_search_config_from_binding,
   };
 
   #[derive(Deserialize)]
@@ -126,6 +135,9 @@ mod tests {
   #[derive(Deserialize)]
   #[serde(rename_all = "camelCase")]
   struct NoticeCoverage {
+    person_value_labels: stella_anonymize_core::assemble::OrderedMap<Value>,
+    person_value_label_omissions:
+      stella_anonymize_core::assemble::OrderedMap<Value>,
     person_list_labels: stella_anonymize_core::assemble::OrderedMap<Value>,
     person_list_label_omissions:
       stella_anonymize_core::assemble::OrderedMap<Value>,
@@ -140,6 +152,17 @@ mod tests {
     languages: stella_anonymize_core::assemble::OrderedMap<Value>,
   }
 
+  fn language_or_base_value<'a>(
+    terms: &'a stella_anonymize_core::assemble::OrderedMap<Value>,
+    language: &str,
+  ) -> Option<&'a Value> {
+    terms.get(language).or_else(|| {
+      language
+        .split_once('-')
+        .and_then(|(base, _)| terms.get(base))
+    })
+  }
+
   fn notice_fixtures() -> NoticeFixtures {
     serde_json::from_str(include_str!(
       "../../tests/fixtures/signature-notices.json"
@@ -148,8 +171,16 @@ mod tests {
   }
 
   fn detected_people(text: &str, language: &str) -> Vec<String> {
-    let signature_data =
-      build_signature_data(Some(&[language.to_owned()])).unwrap();
+    detected_people_with_signature_data(
+      text,
+      build_signature_data(Some(&[language.to_owned()])).unwrap(),
+    )
+  }
+
+  fn detected_people_with_signature_data(
+    text: &str,
+    signature_data: BindingSignatureData,
+  ) -> Vec<String> {
     let config =
       prepared_search_config_from_binding(BindingPreparedSearchConfig {
         allowed_labels: vec![String::from("person")],
@@ -181,6 +212,23 @@ mod tests {
     assert!(data.form_field_labels.iter().any(|label| label == "jméno"));
     assert!(!data.form_field_labels.iter().any(|label| label == "name"));
     assert!(data.labels.iter().any(|label| label == "name"));
+    assert!(data.labels.iter().any(|label| label == "jméno"));
+    assert!(!data.labels.iter().any(|label| label == "nombre"));
+  }
+
+  #[test]
+  fn scoped_person_value_labels_drive_production_trigger_detection() {
+    assert_eq!(
+      detected_people("zastoupen Jméno: Jan Novák", "cs"),
+      vec![String::from("Jan Novák")]
+    );
+    assert_eq!(
+      detected_people_with_signature_data(
+        "zastoupen Jméno: Jan Novák",
+        build_signature_data(None).unwrap(),
+      ),
+      vec![String::from("Jan Novák")]
+    );
   }
 
   #[test]
@@ -240,6 +288,18 @@ mod tests {
         .unwrap();
 
     for (language, _) in &manifest.languages {
+      let has_person_value_label =
+        language_or_base_value(&data.person_value_labels, language)
+          .and_then(Value::as_array)
+          .is_some_and(|labels| !labels.is_empty());
+      let has_person_value_omission =
+        language_or_base_value(&data.person_value_label_omissions, language)
+          .and_then(Value::as_str)
+          .is_some_and(|rationale| !rationale.trim().is_empty());
+      assert_ne!(
+        has_person_value_label, has_person_value_omission,
+        "{language} must have either reviewed person-value labels or one omission rationale"
+      );
       let has_person_label = data
         .person_list_labels
         .get(language)

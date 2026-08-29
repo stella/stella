@@ -2390,18 +2390,28 @@ fn has_prose_wrap_after_weak_cluster(
 }
 
 fn has_paragraph_break(text: &str) -> bool {
-  let mut saw_newline = false;
+  let mut line_breaks = 0usize;
+  let mut previous_was_carriage_return = false;
   for ch in text.chars() {
-    if ch == '\n' {
-      if saw_newline {
+    if ch == '\u{2029}' {
+      return true;
+    }
+    if ch == '\n' && previous_was_carriage_return {
+      previous_was_carriage_return = false;
+      continue;
+    }
+    if matches!(ch, '\r' | '\n' | '\u{2028}') {
+      line_breaks = line_breaks.saturating_add(1);
+      if line_breaks >= 2 {
         return true;
       }
-      saw_newline = true;
+      previous_was_carriage_return = ch == '\r';
       continue;
     }
     if !ch.is_whitespace() {
-      saw_newline = false;
+      line_breaks = 0;
     }
+    previous_was_carriage_return = false;
   }
   false
 }

@@ -3,6 +3,11 @@
   "changes": [
     {
       "type": "array",
+      "path": ["signature_data", "labels"],
+      "segments": [{ "type": "copy", "start": 0, "end": 4 }]
+    },
+    {
+      "type": "array",
       "path": ["address_seed_data", "boundary_words"],
       "segments": [
         {

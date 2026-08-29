@@ -15,7 +15,20 @@
     "regex_artifact_policy": "omit"
   },
   "signature_data": {
-    "labels": ["by", "name"],
+    "labels": [
+      "by",
+      "name",
+      "jméno",
+      "příjmení",
+      "nombre",
+      "nom",
+      "nome",
+      "naam",
+      "imię",
+      "nazwisko",
+      "meno",
+      "priezvisko"
+    ],
     "person_list_labels": [
       "k rukám",
       "zu händen von",

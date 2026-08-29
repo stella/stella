@@ -339,7 +339,6 @@ fn paragraph_barriers_keep_unrelated_address_evidence_separate() {
       &OperatorConfig::default(),
     )
     .expect("static redaction should succeed");
-
   let addresses = address_texts(&result);
   assert!(
     !addresses.contains(&"123 Main Street"),
@@ -349,6 +348,21 @@ fn paragraph_barriers_keep_unrelated_address_evidence_separate() {
     addresses.contains(&"Paris 75002"),
     "self-contained city and postal code were dropped: {addresses:?}",
   );
+
+  for separator in ["\n\n", "\r\n\r\n", "\u{2028}\u{2028}", "\u{2029}"] {
+    let text = format!(
+      "The filing mentions 123 Main Street.{separator}1:23-cv-04567{separator}Paris 75002."
+    );
+    let result = prepared
+      .redact_static_entities(&text, &OperatorConfig::default())
+      .expect("static redaction should succeed");
+
+    let addresses = address_texts(&result);
+    assert!(
+      !addresses.contains(&"123 Main Street"),
+      "unrelated street borrowed evidence across {separator:?}: {addresses:?}",
+    );
+  }
 }
 
 #[test]
