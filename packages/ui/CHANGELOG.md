@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.11.1
+
+### Patch Changes
+
+- [#2589](https://github.com/stella/stella/pull/2589) [`1e696fb`](https://github.com/stella/stella/commit/1e696fbccf05cd26b899c161952c81ae323c4b80) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep Select's derived label callback stable across parent renders.
+
 ## 0.11.0
 
 ### Minor Changes
