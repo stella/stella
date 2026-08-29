@@ -13,6 +13,8 @@
     "format": "oxfmt -c ../../.oxfmtrc.json .",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/desktop",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/desktop",
+    "rpc:check": "cargo test --manifest-path src-tauri/Cargo.toml --locked types::rpc_codegen_tests::generated_desktop_rpc_bindings_are_current -- --exact",
+    "rpc:generate": "cargo test --manifest-path src-tauri/Cargo.toml --locked types::rpc_codegen_tests::generate_desktop_rpc_bindings -- --ignored --exact",
     "test": "bun test --pass-with-no-tests",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.test.json"
   },

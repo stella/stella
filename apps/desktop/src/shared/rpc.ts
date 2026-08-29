@@ -2,126 +2,28 @@ import {
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
   isDesktopEditFileType,
 } from "@stll/api-contract";
-import type { DesktopEditFileType } from "@stll/api-contract";
+
+import type { AppSnapshot } from "./rpc.gen";
 
 export const DEFAULT_STELLA_DESKTOP_BRIDGE_PORT = 45_901;
 export const DOCX_MIME_TYPE = DESKTOP_EDIT_FILE_TYPE_CONFIG.docx.mimeType;
 export const XLSX_MIME_TYPE = DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx.mimeType;
 export const PPTX_MIME_TYPE = DESKTOP_EDIT_FILE_TYPE_CONFIG.pptx.mimeType;
 export { DESKTOP_EDIT_FILE_TYPE_CONFIG as DESKTOP_EDIT_FILE_TYPES };
-export type { DesktopEditFileType } from "@stll/api-contract";
-
-export type SessionStatus =
-  | "opening"
-  | "ready"
-  | "syncing"
-  | "finalizing"
-  | "error";
-
-export type SessionSnapshot = {
-  baseVersionNumber: number;
-  entityId: string;
-  fileType: DesktopEditFileType;
-  fileName: string;
-  filePath: string;
-  id: string;
-  lastError: string | null;
-  lastCheckpointAt: string | null;
-  pendingFinalize: boolean;
-  propertyId: string;
-  status: SessionStatus;
-  takeoverDetected: boolean;
-  workspaceId: string;
-};
-
-export type DesktopNotificationPreferences = {
-  documentReady: boolean;
-  revisionCreated: boolean;
-  syncIssues: boolean;
-};
-
-export type LinkedAccountSnapshot = {
-  email: string;
-  name: string | null;
-  verifiedAt: string;
-};
-
-export type OpenFileRemoteSession = {
-  baseVersionNumber: number;
-  downloadUrl: string;
-  fileType: DesktopEditFileType;
-  fileName: string;
-  lastCheckpointAt: string | null;
-  resumedFromCheckpoint: boolean;
-  sessionId: string;
-  sessionToken: string;
-  tookOverExistingSession: boolean;
-};
-
-export type DesktopUpdateSnapshot = {
-  baseUrl: string | null;
-  channel: string | null;
-  currentHash: string | null;
-  currentVersion: string | null;
-  lastCheckedAt: string | null;
-  latestHash: string | null;
-  latestVersion: string | null;
-  status:
-    | "idle"
-    | "checking"
-    | "available"
-    | "downloading"
-    | "ready"
-    | "applying"
-    | "up_to_date"
-    | "error"
-    | "disabled";
-  statusMessage: string;
-  updateAvailable: boolean;
-  updateReady: boolean;
-};
-
-export type TrustedSelfHostConnection = {
-  apiBaseUrl: string;
-  trustedAt: string;
-  webOrigin: string;
-};
-
-export type AppSnapshot = {
-  bridgePort: number;
-  /**
-   * Monotonic bridge contract revision. Web code gates on a minimum
-   * revision and required capability instead of coupling to the
-   * desktop's literal app version.
-   */
-  bridgeVersion: number;
-  /**
-   * Versioned contracts advertised by the desktop. Breaking semantics
-   * receive a new capability id.
-   */
-  capabilities: string[];
-  linkedAccount: LinkedAccountSnapshot | null;
-  notificationPreferences: DesktopNotificationPreferences;
-  runningSince: string;
-  sessions: SessionSnapshot[];
-  trustedSelfHostConnections: TrustedSelfHostConnection[];
-  update: DesktopUpdateSnapshot;
-};
-
-export type OpenFileRequest = {
-  apiBaseUrl: string;
-  entityId: string;
-  linkedAccount: LinkedAccountSnapshot | null;
-  propertyId: string;
-  remoteSession: OpenFileRemoteSession;
-  workspaceId: string;
-};
-
-export type OpenFileResponse = {
-  alreadyOpen: boolean;
-  filePath: string;
-  sessionId: string;
-};
+export type {
+  AppSnapshot,
+  DesktopEditFileType,
+  DesktopNotificationPreferences,
+  DesktopUpdateSnapshot,
+  DesktopUpdateStatus,
+  LinkedAccountSnapshot,
+  OpenFileRemoteSession,
+  OpenFileRequest,
+  OpenFileResponse,
+  SessionSnapshot,
+  SessionStatus,
+  TrustedSelfHostConnection,
+} from "./rpc.gen";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

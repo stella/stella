@@ -127,3 +127,4 @@ winsafe = { version = "0.0.28", features = ["kernel", "user", "version"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
+ts-rs = "12.0.1"

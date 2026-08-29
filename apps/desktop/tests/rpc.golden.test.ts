@@ -18,11 +18,9 @@ import {
 
 // Golden-fixture contract for the desktop bridge RPC surface.
 //
-// `rpc.ts` (TypeScript) and `src-tauri/src/types.rs` (Rust serde) each
-// own a copy of every message that crosses the web <-> desktop bridge.
-// The bug class this suite guards against is silent drift between those
-// two definitions: a field renamed on one side, a `rename_all` dropped,
-// an optional made required, a new field added to one side only.
+// Rust serde DTOs generate the TypeScript declarations for every message
+// crossing the web <-> desktop bridge. These fixtures protect the stable wire
+// representation independently of that generation path.
 //
 // The fixtures under `apps/desktop/fixtures/rpc/*.json` are the single
 // shared source of truth. This test asserts the TypeScript side:
@@ -36,9 +34,9 @@ import {
 //   4. the shipped `isAppSnapshot` runtime guard accepts the canonical
 //      snapshot and rejects structurally broken variants.
 //
-// The Rust counterpart (`types.rs` `mod fixture_tests`) deserializes the
-// same files via serde, so a change on either side that is not mirrored
-// in the fixtures fails one of the two suites.
+// The Rust counterpart (`types.rs` `mod fixture_tests`) round-trips the same
+// files through serde. The separate codegen test compares exact generated
+// bytes, so neither wire drift nor a stale declaration can land silently.
 
 const FIXTURE_DIR = path.join(import.meta.dir, "../fixtures/rpc");
 
@@ -48,13 +46,15 @@ const readFixture = (name: string): unknown =>
 // Fixtures are hand-authored JSON objects (never arrays or primitives); this
 // guard narrows the parsed `unknown` before mutating tests spread/drop keys,
 // rather than asserting the shape blind.
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 const readFixtureRecord = (name: string): Record<string, unknown> => {
   const parsed = readFixture(name);
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+  if (!isRecord(parsed)) {
     throw new TypeError(`fixture ${name} is not a JSON object`);
   }
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- narrowed above: plain JSON object, not null/array
-  return parsed as Record<string, unknown>;
+  return parsed;
 };
 
 const collectKeys = (value: unknown, keys: string[] = []): string[] => {
@@ -80,7 +80,7 @@ const CAMEL_CASE = /^[a-z][a-zA-Z0-9]*$/u;
 // runtime `toEqual` is the on-disk half.
 const appSnapshot = {
   bridgePort: 45_901,
-  bridgeVersion: 9,
+  bridgeVersion: 10,
   capabilities: ["office-edit.v1", "self-host.connect"],
   linkedAccount: {
     email: "counsel@example.com",
@@ -195,6 +195,11 @@ const openDocxResponse = {
   sessionId: "e8400e29-1d4a-4716-8a3a-2c83de7ab2e6",
 } as const satisfies OpenFileResponse;
 
+const openHandoffRequest = {
+  ...openDocxRequest,
+  handoffId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+} as const satisfies OpenFileRequest;
+
 const openXlsxRequest = {
   apiBaseUrl: "https://api.example.com",
   entityId: "11111111-1111-4111-8111-111111111111",
@@ -278,6 +283,11 @@ const cases: { expected: unknown; file: string; name: string }[] = [
     expected: openDocxResponse,
     file: "open-docx-response.json",
     name: "OpenFileResponse",
+  },
+  {
+    expected: openHandoffRequest,
+    file: "open-handoff-request.json",
+    name: "OpenFileRequest (handoff)",
   },
   {
     expected: openXlsxRequest,
