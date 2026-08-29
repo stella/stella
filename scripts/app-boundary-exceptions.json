@@ -450,6 +450,24 @@
     "target": "apps/api"
   },
   {
+    "kind": "tsconfig-include",
+    "source": "packages/catalogue/scripts/tsconfig.json",
+    "specifier": "../../../apps/web/scripts/**/*.ts",
+    "target": "apps/web"
+  },
+  {
+    "kind": "tsconfig-include",
+    "source": "packages/skills/scripts/tsconfig.json",
+    "specifier": "../../../apps/web/scripts/**/*.ts",
+    "target": "apps/web"
+  },
+  {
+    "kind": "tsconfig-include",
+    "source": "packages/template-packs/scripts/tsconfig.json",
+    "specifier": "../../../apps/web/scripts/**/*.ts",
+    "target": "apps/web"
+  },
+  {
     "kind": "tsconfig-path",
     "source": "apps/legal-atlas-runner/tsconfig.json",
     "specifier": "@/api/* -> ../api/src/*",

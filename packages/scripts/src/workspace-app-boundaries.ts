@@ -11,6 +11,7 @@ const DEPENDENCY_FIELDS = [
   "optionalDependencies",
 ] as const;
 const SOURCE_FILE_EXTENSIONS = new Set([
+  ".astro",
   ".cjs",
   ".cts",
   ".js",
@@ -31,6 +32,7 @@ const SKIPPED_SCAN_DIRS = new Set([
   "target",
 ]);
 const LEDGER_EDGE_FIELDS = new Set(["kind", "source", "specifier", "target"]);
+const NO_TYPESCRIPT_INPUTS_DIAGNOSTIC_CODE = 18_003;
 
 type AppBoundaryEdgeKind =
   | "manifest-dependency"
@@ -59,6 +61,11 @@ type Workspace = {
 type PathAlias = {
   pattern: string;
   targets: string[];
+};
+
+type AppBoundaryCollection = {
+  edges: AppBoundaryEdge[];
+  issues: AppBoundaryIssue[];
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -187,7 +194,8 @@ const appForAlias = (
 ): Workspace | null => {
   const mostSpecificAliases = aliases.toSorted(
     (a, b) =>
-      b.pattern.replace("*", "").length - a.pattern.replace("*", "").length,
+      b.pattern.replaceAll("*", "").length -
+      a.pattern.replaceAll("*", "").length,
   );
   for (const { pattern, targets } of mostSpecificAliases) {
     const wildcard = wildcardMatch(pattern, specifier);
@@ -196,7 +204,7 @@ const appForAlias = (
     }
     for (const target of targets) {
       const resolvedTarget = target.includes("*")
-        ? target.replace("*", () => wildcard)
+        ? target.replaceAll("*", () => wildcard)
         : target;
       const app = appForPath(resolvedTarget, apps);
       if (app !== null) {
@@ -226,54 +234,71 @@ const readDependencyNames = (packageJson: unknown): string[] => {
 
 const readTsconfig = (
   tsconfigPath: string,
-): { aliases: PathAlias[]; includes: string[] } => {
-  const readResult = ts.readConfigFile(tsconfigPath, (fileName) =>
-    ts.sys.readFile(fileName),
+): { aliases: PathAlias[]; diagnostics: string[]; includes: string[] } => {
+  const unrecoverableDiagnostics: ts.Diagnostic[] = [];
+  const parsed = ts.getParsedCommandLineOfConfigFile(
+    tsconfigPath,
+    {},
+    {
+      ...ts.sys,
+      onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
+        unrecoverableDiagnostics.push(diagnostic);
+      },
+    },
   );
-  if (readResult.error !== undefined || !isRecord(readResult.config)) {
-    return { aliases: [], includes: [] };
+  const diagnostics = [...unrecoverableDiagnostics, ...(parsed?.errors ?? [])]
+    .filter(({ code }) => code !== NO_TYPESCRIPT_INPUTS_DIAGNOSTIC_CODE)
+    .map((diagnostic) =>
+      ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+    )
+    .filter((message, index, messages) => messages.indexOf(message) === index);
+  if (parsed === undefined || diagnostics.length > 0) {
+    return {
+      aliases: [],
+      diagnostics:
+        diagnostics.length > 0
+          ? diagnostics
+          : ["TypeScript could not parse this configuration"],
+      includes: [],
+    };
   }
 
-  const compilerOptions = isRecord(readResult.config["compilerOptions"])
-    ? readResult.config["compilerOptions"]
-    : null;
-  const paths = isRecord(compilerOptions?.["paths"])
-    ? compilerOptions["paths"]
-    : {};
-  const baseUrl = compilerOptions?.["baseUrl"];
-  const baseDirectory =
-    typeof baseUrl === "string"
-      ? path.resolve(path.dirname(tsconfigPath), baseUrl)
-      : path.dirname(tsconfigPath);
+  const paths = parsed.options.paths ?? {};
+  const pathsBasePath =
+    "pathsBasePath" in parsed.options &&
+    typeof parsed.options["pathsBasePath"] === "string"
+      ? parsed.options["pathsBasePath"]
+      : null;
+  const baseDirectory = pathsBasePath ?? path.dirname(tsconfigPath);
   const aliases = Object.entries(paths).flatMap(([pattern, targets]) => {
-    if (!Array.isArray(targets)) {
-      return [];
-    }
-    const resolvedTargets = targets.flatMap((target) =>
-      typeof target === "string" ? [path.resolve(baseDirectory, target)] : [],
+    const resolvedTargets = targets.map((target) =>
+      path.resolve(baseDirectory, target),
     );
     return resolvedTargets.length === 0
       ? []
       : [{ pattern, targets: resolvedTargets }];
   });
-  const includes = Array.isArray(readResult.config["include"])
-    ? readResult.config["include"].filter(
-        (include): include is string => typeof include === "string",
-      )
-    : [];
-  return { aliases, includes };
+  const raw: unknown = parsed.raw;
+  const includes =
+    isRecord(raw) && Array.isArray(raw["include"])
+      ? raw["include"].filter(
+          (include): include is string => typeof include === "string",
+        )
+      : [];
+  return { aliases, diagnostics: [], includes };
 };
 
 const edgeKey = (edge: AppBoundaryEdge) =>
   `${edge.kind}\u0000${edge.source}\u0000${edge.specifier}\u0000${edge.target}`;
 
-export const collectAppBoundaryEdges = (rootDir: string): AppBoundaryEdge[] => {
+const collectAppBoundaryResult = (rootDir: string): AppBoundaryCollection => {
   const workspaces = readWorkspaces(rootDir);
   const apps = workspaces.filter(({ directory }) =>
     directory.startsWith("apps/"),
   );
   const repositoryFiles = listRepositoryFiles(rootDir);
   const edges: AppBoundaryEdge[] = [];
+  const issues: AppBoundaryIssue[] = [];
 
   for (const workspace of workspaces) {
     const workspaceFiles =
@@ -301,12 +326,18 @@ export const collectAppBoundaryEdges = (rootDir: string): AppBoundaryEdge[] => {
         filePath.endsWith(".json"),
     )) {
       const config = readTsconfig(tsconfigPath);
-      aliases.push(...config.aliases);
       const source = toPosixPath(path.relative(rootDir, tsconfigPath));
+      for (const diagnostic of config.diagnostics) {
+        issues.push({
+          message: `invalid TypeScript configuration: ${diagnostic}`,
+          path: source,
+        });
+      }
+      aliases.push(...config.aliases);
 
       for (const { pattern, targets } of config.aliases) {
         for (const targetPath of targets) {
-          const target = appForPath(targetPath.replace("*", ""), apps);
+          const target = appForPath(targetPath.replaceAll("*", ""), apps);
           if (target === null || target.directory === workspace.directory) {
             continue;
           }
@@ -366,10 +397,16 @@ export const collectAppBoundaryEdges = (rootDir: string): AppBoundaryEdge[] => {
     }
   }
 
-  return [
-    ...new Map(edges.map((edge) => [edgeKey(edge), edge])).values(),
-  ].toSorted((a, b) => edgeKey(a).localeCompare(edgeKey(b)));
+  return {
+    edges: [
+      ...new Map(edges.map((edge) => [edgeKey(edge), edge])).values(),
+    ].toSorted((a, b) => edgeKey(a).localeCompare(edgeKey(b))),
+    issues,
+  };
 };
+
+export const collectAppBoundaryEdges = (rootDir: string): AppBoundaryEdge[] =>
+  collectAppBoundaryResult(rootDir).edges;
 
 const parseEdgeKind = (value: unknown): AppBoundaryEdgeKind | null => {
   switch (value) {
@@ -383,35 +420,22 @@ const parseEdgeKind = (value: unknown): AppBoundaryEdgeKind | null => {
   }
 };
 
-const readExceptions = (
-  rootDir: string,
-): { exceptions: AppBoundaryEdge[]; issues: AppBoundaryIssue[] } => {
-  const ledgerPath = path.resolve(rootDir, APP_BOUNDARY_LEDGER_PATH);
-  if (!existsSync(ledgerPath)) {
-    return { exceptions: [], issues: [] };
-  }
+type ExceptionsReadResult = {
+  exceptions: AppBoundaryEdge[];
+  issues: AppBoundaryIssue[];
+};
 
-  let value: unknown;
-  try {
-    value = JSON.parse(readFileSync(ledgerPath, "utf-8"));
-  } catch {
-    return {
-      exceptions: [],
-      issues: [
-        {
-          message: "app-boundary ledger must contain valid JSON",
-          path: APP_BOUNDARY_LEDGER_PATH,
-        },
-      ],
-    };
-  }
+const parseExceptions = (
+  value: unknown,
+  issuePath: string,
+): ExceptionsReadResult => {
   if (!Array.isArray(value)) {
     return {
       exceptions: [],
       issues: [
         {
           message: "app-boundary ledger must be a JSON array",
-          path: APP_BOUNDARY_LEDGER_PATH,
+          path: issuePath,
         },
       ],
     };
@@ -434,7 +458,7 @@ const readExceptions = (
       issues.push({
         message:
           "app-boundary exception must define a valid kind, source, specifier, and target",
-        path: `${APP_BOUNDARY_LEDGER_PATH}:${index + 1}`,
+        path: `${issuePath}:${index + 1}`,
       });
       continue;
     }
@@ -448,7 +472,7 @@ const readExceptions = (
     if (seenKeys.has(key)) {
       issues.push({
         message: "app-boundary exception must not be duplicated",
-        path: `${APP_BOUNDARY_LEDGER_PATH}:${index + 1}`,
+        path: `${issuePath}:${index + 1}`,
       });
       continue;
     }
@@ -456,6 +480,137 @@ const readExceptions = (
     exceptions.push(exception);
   }
   return { exceptions, issues };
+};
+
+const readExceptions = (rootDir: string): ExceptionsReadResult => {
+  const ledgerPath = path.resolve(rootDir, APP_BOUNDARY_LEDGER_PATH);
+  if (!existsSync(ledgerPath)) {
+    return { exceptions: [], issues: [] };
+  }
+
+  let value: unknown;
+  try {
+    value = JSON.parse(readFileSync(ledgerPath, "utf-8"));
+  } catch {
+    return {
+      exceptions: [],
+      issues: [
+        {
+          message: "app-boundary ledger must contain valid JSON",
+          path: APP_BOUNDARY_LEDGER_PATH,
+        },
+      ],
+    };
+  }
+  return parseExceptions(value, APP_BOUNDARY_LEDGER_PATH);
+};
+
+const gitOutput = (rootDir: string, arguments_: readonly string[]): string =>
+  execFileSync("git", arguments_, {
+    cwd: rootDir,
+    encoding: "utf-8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
+
+const readBaselineExceptions = (
+  rootDir: string,
+): ExceptionsReadResult | null => {
+  try {
+    if (gitOutput(rootDir, ["rev-parse", "--is-inside-work-tree"]) !== "true") {
+      return null;
+    }
+  } catch {
+    // Source archives have no Git history. Scanning still works through the
+    // filesystem fallback; the ratchet is enforced in repository checkouts.
+    return null;
+  }
+
+  const configuredBase = process.env["GITHUB_BASE_REF"];
+  const baseCandidates = [
+    configuredBase === undefined ? null : `origin/${configuredBase}`,
+    "origin/main",
+    "main",
+  ].filter((candidate): candidate is string => candidate !== null);
+  const baseRevision = baseCandidates.find((candidate) => {
+    try {
+      gitOutput(rootDir, ["rev-parse", "--verify", candidate]);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  if (baseRevision === undefined) {
+    return {
+      exceptions: [],
+      issues: [
+        {
+          message: "app-boundary ledger baseline branch is unavailable",
+          path: APP_BOUNDARY_LEDGER_PATH,
+        },
+      ],
+    };
+  }
+
+  let mergeBase: string;
+  try {
+    mergeBase = gitOutput(rootDir, ["merge-base", "HEAD", baseRevision]);
+  } catch {
+    return {
+      exceptions: [],
+      issues: [
+        {
+          message: "app-boundary ledger merge base is unavailable",
+          path: APP_BOUNDARY_LEDGER_PATH,
+        },
+      ],
+    };
+  }
+
+  try {
+    gitOutput(rootDir, [
+      "cat-file",
+      "-e",
+      `${mergeBase}:${APP_BOUNDARY_LEDGER_PATH}`,
+    ]);
+  } catch {
+    // The first rollout establishes the reviewed debt baseline. Once the
+    // ledger exists on main, every later branch is compared to it.
+    return null;
+  }
+
+  let baselineText: string;
+  try {
+    baselineText = gitOutput(rootDir, [
+      "show",
+      `${mergeBase}:${APP_BOUNDARY_LEDGER_PATH}`,
+    ]);
+  } catch {
+    return {
+      exceptions: [],
+      issues: [
+        {
+          message: "base app-boundary ledger could not be read",
+          path: APP_BOUNDARY_LEDGER_PATH,
+        },
+      ],
+    };
+  }
+
+  let baselineValue: unknown;
+  try {
+    baselineValue = JSON.parse(baselineText);
+  } catch {
+    return {
+      exceptions: [],
+      issues: [
+        {
+          message: "base app-boundary ledger must contain valid JSON",
+          path: APP_BOUNDARY_LEDGER_PATH,
+        },
+      ],
+    };
+  }
+  return parseExceptions(baselineValue, APP_BOUNDARY_LEDGER_PATH);
 };
 
 const violationMessage = (edge: AppBoundaryEdge): string => {
@@ -484,10 +639,30 @@ const violationMessage = (edge: AppBoundaryEdge): string => {
 export const validateWorkspaceAppBoundaries = (
   rootDir: string,
 ): AppBoundaryIssue[] => {
-  const observed = collectAppBoundaryEdges(rootDir);
-  const { exceptions, issues } = readExceptions(rootDir);
+  const { edges: observed, issues: collectionIssues } =
+    collectAppBoundaryResult(rootDir);
+  const { exceptions, issues: exceptionIssues } = readExceptions(rootDir);
+  const baseline = readBaselineExceptions(rootDir);
+  const issues = [
+    ...collectionIssues,
+    ...exceptionIssues,
+    ...(baseline?.issues ?? []),
+  ];
   const observedKeys = new Set(observed.map(edgeKey));
   const exceptionKeys = new Set(exceptions.map(edgeKey));
+  const baselineKeys = new Set(baseline?.exceptions.map(edgeKey));
+
+  if (baseline?.issues.length === 0) {
+    for (const edge of exceptions) {
+      if (!baselineKeys.has(edgeKey(edge))) {
+        issues.push({
+          message:
+            "new app-boundary exceptions are forbidden; the ledger may only shrink",
+          path: `${APP_BOUNDARY_LEDGER_PATH}:${edge.source} -> ${edge.specifier}`,
+        });
+      }
+    }
+  }
 
   for (const edge of observed) {
     if (!exceptionKeys.has(edgeKey(edge))) {
