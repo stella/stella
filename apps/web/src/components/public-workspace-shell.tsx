@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import {
@@ -11,10 +11,10 @@ import {
 import { CircleUserRoundIcon, PanelLeftIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { ApplicationShell } from "@stll/ui/application-shell";
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
+import { WorkspaceShell } from "@stll/ui/workspace-shell";
 
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { PublicInspectorRail } from "@/components/public-inspector-rail";
@@ -84,8 +84,8 @@ type PublicWorkspaceShellProps = {
    * surface that supplies one owns the whole right column, sign-in
    * affordances included.
    */
-  inspector?: ReactNode;
-  topBar: ReactNode;
+  inspector?: ReactElement | undefined;
+  topBar: ReactElement;
 };
 
 /**
@@ -106,18 +106,26 @@ export const PublicWorkspaceShell = ({
   const requestAuth = (redirectTo: string) => {
     setAuthRedirectTo(redirectTo);
   };
+  const navigate = useNavigate();
+  const openChat = () => {
+    if (!authStatus.isAuthenticated) {
+      requestAuth("/chat/new");
+      return;
+    }
 
-  const defaultInspector = authStatus.isAuthenticated ? null : (
-    <PublicInspectorRail requestSignIn={requestAuth} />
-  );
+    navigate({ to: "/chat/new" }).catch((error: unknown) => {
+      getAnalytics().captureError(error);
+    });
+  };
+
+  const defaultInspector = <PublicInspectorRail onActivate={openChat} />;
 
   const shell = (
     <PublicSignInRequestContext value={requestAuth}>
       <SidebarProvider>
-        <ApplicationShell
-          header={topBar}
-          inspector={inspector ?? defaultInspector}
-          sidebar={
+        <WorkspaceShell
+          endDock={inspector ?? defaultInspector}
+          navigation={
             authStatus.isAuthenticated ? (
               <Suspense
                 fallback={
@@ -136,9 +144,10 @@ export const PublicWorkspaceShell = ({
               />
             )
           }
+          topBar={topBar}
         >
           <Outlet />
-        </ApplicationShell>
+        </WorkspaceShell>
         {authRedirectTo !== null && (
           <Suspense fallback={null}>
             <SignInDialog

@@ -2,18 +2,13 @@ import { useRef } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  FileTextIcon,
-  MessageSquareIcon,
-  MessageSquarePlusIcon,
-  PanelRightIcon,
-} from "lucide-react";
+import { FileTextIcon, MessageSquareIcon, PanelRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { InspectorRailTab } from "@stll/ui/inspector";
-import { ScrollArea } from "@stll/ui/scroll-area";
+import { InspectorRailIconButton, InspectorRailTab } from "@stll/ui/inspector";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
+import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 
 import { DocumentIcon } from "@/components/document-icon";
 import { ExternalSourceLogo } from "@/components/inspector/external-reference-panel";
@@ -37,11 +32,7 @@ import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import {
-  SIDE_RAIL_CONTAINER_CLASS,
-  SIDE_RAIL_ICON_BUTTON_SIZE,
-  TOOLBAR_ROW_HEIGHT,
-} from "@/lib/consts";
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 
@@ -92,39 +83,32 @@ export const InspectorRail = ({
     });
   };
 
+  const toggleLabel = (() => {
+    if (tabs.length === 0) {
+      return t("inspector.openChat");
+    }
+    if (minimized) {
+      return t("inspector.showPane");
+    }
+    return t("inspector.hidePane");
+  })();
+
   return (
-    <div className={SIDE_RAIL_CONTAINER_CLASS}>
-      <div
-        className={cn(
-          "flex w-full shrink-0 items-center justify-center border-b",
-          TOOLBAR_ROW_HEIGHT,
-        )}
-      >
+    <WorkspaceEndRail
+      chatAction={{
+        label: t("chat.newChat"),
+        onActivate: openContextChat,
+        status: "enabled",
+      }}
+      className="h-full"
+      label={t("inspector.title")}
+      overlay={railContextMenu.element}
+      topAction={
         <Tooltip
-          content={(() => {
-            if (tabs.length === 0) {
-              return t("inspector.openChat");
-            }
-            if (minimized) {
-              return t("inspector.showPane");
-            }
-            return t("inspector.hidePane");
-          })()}
+          content={toggleLabel}
           render={
-            <button
-              aria-label={(() => {
-                if (tabs.length === 0) {
-                  return t("inspector.openChat");
-                }
-                if (minimized) {
-                  return t("inspector.showPane");
-                }
-                return t("inspector.hidePane");
-              })()}
-              className={cn(
-                "text-muted-foreground hover:bg-accent hover:text-foreground flex items-center justify-center rounded-md transition-colors",
-                SIDE_RAIL_ICON_BUTTON_SIZE,
-              )}
+            <InspectorRailIconButton
+              aria-label={toggleLabel}
               onClick={() => {
                 if (tabs.length === 0) {
                   openContextChat();
@@ -132,64 +116,37 @@ export const InspectorRail = ({
                 }
                 onSetMinimized(!minimized);
               }}
-              type="button"
             />
           }
           side="left"
         >
           <PanelRightIcon className="size-4" />
         </Tooltip>
-      </div>
-      <ScrollArea className="flex-1">
-        <div
-          className="flex h-full flex-col"
-          onContextMenu={(event) => {
-            event.preventDefault();
-            railContextMenu.openAt(event);
-          }}
-        >
-          {tabs.map((tab) => (
-            <VerticalTab
-              active={tab.id === activeId}
-              key={tab.id}
-              onActivate={() => {
-                onActivateTab(tab.id);
-              }}
-              onClose={() => {
-                onCloseTab(tab.id);
-              }}
-              tab={tab}
-            />
-          ))}
-          <SuggestedReviveTab />
-        </div>
-      </ScrollArea>
-      {railContextMenu.element}
+      }
+    >
       <div
-        className={cn(
-          "flex w-full shrink-0 items-center justify-center border-t",
-          TOOLBAR_ROW_HEIGHT,
-        )}
+        className="flex min-h-full flex-col"
+        onContextMenu={(event) => {
+          event.preventDefault();
+          railContextMenu.openAt(event);
+        }}
       >
-        <Tooltip
-          content={t("chat.newChat")}
-          render={
-            <button
-              aria-label={t("chat.newChat")}
-              className={cn(
-                "text-muted-foreground hover:bg-accent hover:text-foreground flex items-center justify-center rounded-md transition-colors",
-                SIDE_RAIL_ICON_BUTTON_SIZE,
-              )}
-              onClick={openContextChat}
-              type="button"
-            />
-          }
-          side="left"
-        >
-          <MessageSquarePlusIcon className="size-4" />
-        </Tooltip>
+        {tabs.map((tab) => (
+          <VerticalTab
+            active={tab.id === activeId}
+            key={tab.id}
+            onActivate={() => {
+              onActivateTab(tab.id);
+            }}
+            onClose={() => {
+              onCloseTab(tab.id);
+            }}
+            tab={tab}
+          />
+        ))}
+        <SuggestedReviveTab />
       </div>
-    </div>
+    </WorkspaceEndRail>
   );
 };
 
