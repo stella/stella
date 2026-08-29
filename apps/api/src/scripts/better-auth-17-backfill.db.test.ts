@@ -45,6 +45,7 @@ test("the Better Auth bridge backfill is exact, bounded, and reaches a fixed poi
       const microsoftIssuer =
         "https://login.microsoftonline.com/3a893563-0d4e-4309-9a31-b6e4e9f64479/v2.0";
       const clientId = `backfill-client-${suffix}`;
+      const untypedClientId = `backfill-untyped-client-${suffix}`;
 
       // The shared test schema represents the final 1.7 state. Relax only the
       // final constraint inside this rollback-only transaction to recreate the
@@ -73,6 +74,16 @@ test("the Better Auth bridge backfill is exact, bounded, and reaches a fixed poi
         redirectUris: ["https://client.example.invalid/callback"],
         scopes: ["openid", "offline_access", "stella:read"],
         type: "web",
+      });
+      // A dynamically registered client that never declared its type.
+      await transaction.insert(oauthClient).values({
+        clientId: untypedClientId,
+        grantTypes: ["authorization_code", "refresh_token"],
+        id: `backfill-untyped-client-row-${suffix}`,
+        public: true,
+        redirectUris: ["https://untyped.example.invalid/callback"],
+        scopes: ["openid", "offline_access", "stella:read"],
+        type: null,
       });
 
       const backfillDatabase = {
@@ -160,6 +171,15 @@ test("the Better Auth bridge backfill is exact, bounded, and reaches a fixed poi
             ({ identifier }) => identifier,
           ).toSorted(),
         },
+      ]);
+      const untypedClientPolicy = await transaction.execute(sql`
+        SELECT application_type AS "applicationType",
+               client_credentials_scopes AS "clientCredentialsScopes"
+          FROM oauth_client
+         WHERE client_id = ${untypedClientId}
+      `);
+      expect(untypedClientPolicy.rows).toEqual([
+        { applicationType: "web", clientCredentialsScopes: [] },
       ]);
 
       await transaction
