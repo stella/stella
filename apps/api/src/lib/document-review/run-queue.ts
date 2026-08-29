@@ -282,7 +282,7 @@ export const initDocumentReviewRunWorker = () => {
       logger.error("document_review_run.failed", {
         runId,
         "error.type": errorTag(error),
-        queueName,
+        queue: queueName,
         workspaceId,
       });
     });
@@ -290,7 +290,7 @@ export const initDocumentReviewRunWorker = () => {
     worker.on(
       "error",
       createQueueWorkerErrorLogger("document_review_run.worker_error", {
-        queueName,
+        queue: queueName,
       }),
     );
     return worker;

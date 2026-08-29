@@ -154,7 +154,6 @@
   "apps/api/src/lib/mcp-upstream/connections.test.ts::@/api/lib/mcp-upstream/crypto",
   "apps/api/src/lib/mcp-upstream/connections.test.ts::@/api/lib/mcp-upstream/oauth",
   "apps/api/src/lib/mcp-upstream/connections.test.ts::@/api/lib/safe-outbound-fetch",
-  "apps/api/src/lib/queue-worker-error-log.test.ts::@/api/lib/observability/logger",
   "apps/api/src/lib/rate-limit/redis-context.cold-start.test.ts::@/api/env-document-processing-worker",
   "apps/api/src/lib/redis-outage.test.ts::@/api/env-document-processing-worker",
   "apps/api/src/lib/scheduler/bullmq.test.ts::@/api/lib/redis-client",

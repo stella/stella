@@ -3,30 +3,13 @@ import {
   beforeEach,
   describe,
   expect,
-  mock,
   setSystemTime,
   test,
 } from "bun:test";
 
-type LoggedCall = { event: string; attributes: Record<string, unknown> };
-
-const logged: LoggedCall[] = [];
-
-// Spread the real module: mock.module is process-global, so a partial mock
-// would delete the logger's other exports for every later test file.
-const realLogger = await import("@/api/lib/observability/logger");
-void mock.module("@/api/lib/observability/logger", () => ({
-  ...realLogger,
-  logger: {
-    ...realLogger.logger,
-    error: (event: string, attributes?: Record<string, unknown>) => {
-      logged.push({ event, attributes: attributes ?? {} });
-    },
-  },
-}));
-
-const { createQueueWorkerErrorLogger } =
-  await import("@/api/lib/queue-worker-error-log");
+import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 const withCode = (code: string): Error =>
   Object.assign(new Error("Connection closed"), { code });
@@ -36,12 +19,15 @@ const POLL_BLIP = "ERR_REDIS_INVALID_RESPONSE";
 const START = new Date("2026-08-27T17:54:00.000Z");
 
 describe("createQueueWorkerErrorLogger", () => {
+  let logs: RecordingLogger;
+
   beforeEach(() => {
-    logged.length = 0;
+    logs = installRecordingLogger();
     setSystemTime(START);
   });
 
   afterEach(() => {
+    logs.restore();
     setSystemTime();
   });
 
@@ -51,11 +37,14 @@ describe("createQueueWorkerErrorLogger", () => {
     log(withCode("ECONNREFUSED"));
     log(withCode("ECONNREFUSED"));
 
-    expect(logged).toHaveLength(2);
-    expect(logged[0]?.event).toBe("file_derivative.worker_error");
+    const errors = logs.at("ERROR");
+    expect(errors).toHaveLength(2);
+    expect(errors.at(0)?.message).toBe("file_derivative.worker_error");
     // A defect carries no tally: it was not suppressed, so there is nothing
     // to count.
-    expect(logged[0]?.attributes["occurrencesSinceLastLog"]).toBeUndefined();
+    expect(
+      errors.at(0)?.attributes?.["occurrencesSinceLastLog"],
+    ).toBeUndefined();
   });
 
   test.each([TRANSIENT, POLL_BLIP])(
@@ -68,22 +57,28 @@ describe("createQueueWorkerErrorLogger", () => {
         log(withCode(code));
       }
 
-      expect(logged).toHaveLength(1);
-      expect(logged[0]?.attributes["occurrencesSinceLastLog"]).toBe("1");
+      expect(logs.at("ERROR")).toHaveLength(1);
+      expect(
+        logs.at("ERROR").at(0)?.attributes?.["occurrencesSinceLastLog"],
+      ).toBe("1");
 
       setSystemTime(new Date(START.getTime() + 60_000));
       log(withCode(code));
 
-      expect(logged).toHaveLength(2);
+      expect(logs.at("ERROR")).toHaveLength(2);
       // The 49,999 swallowed above plus this one, and the count restarts from
       // the previous line rather than accumulating.
-      expect(logged[1]?.attributes["occurrencesSinceLastLog"]).toBe("50000");
+      expect(
+        logs.at("ERROR").at(1)?.attributes?.["occurrencesSinceLastLog"],
+      ).toBe("50000");
 
       setSystemTime(new Date(START.getTime() + 120_000));
       log(withCode(code));
 
-      expect(logged).toHaveLength(3);
-      expect(logged[2]?.attributes["occurrencesSinceLastLog"]).toBe("1");
+      expect(logs.at("ERROR")).toHaveLength(3);
+      expect(
+        logs.at("ERROR").at(2)?.attributes?.["occurrencesSinceLastLog"],
+      ).toBe("1");
     },
   );
 
@@ -91,8 +86,10 @@ describe("createQueueWorkerErrorLogger", () => {
     const log = createQueueWorkerErrorLogger("file_derivative.worker_error");
 
     log(withCode(TRANSIENT));
-    expect(logged).toHaveLength(1);
-    expect(logged[0]?.attributes["occurrencesSinceLastLog"]).toBe("1");
+    expect(logs.at("ERROR")).toHaveLength(1);
+    expect(
+      logs.at("ERROR").at(0)?.attributes?.["occurrencesSinceLastLog"],
+    ).toBe("1");
 
     // Land the burst just short of the boundary so the trailing flush is
     // scheduled a few ms out and a real timer can run it inside the test.
@@ -103,12 +100,14 @@ describe("createQueueWorkerErrorLogger", () => {
 
     // Nothing more arrives: without the trailing flush these 50,000 would be
     // stranded and the episode would read as a single occurrence.
-    expect(logged).toHaveLength(1);
+    expect(logs.at("ERROR")).toHaveLength(1);
 
     await Bun.sleep(50);
 
-    expect(logged).toHaveLength(2);
-    expect(logged[1]?.attributes["occurrencesSinceLastLog"]).toBe("50000");
+    expect(logs.at("ERROR")).toHaveLength(2);
+    expect(
+      logs.at("ERROR").at(1)?.attributes?.["occurrencesSinceLastLog"],
+    ).toBe("50000");
   });
 
   test("does not flush an interval that recorded nothing", async () => {
@@ -119,28 +118,37 @@ describe("createQueueWorkerErrorLogger", () => {
     log(withCode(TRANSIENT));
 
     await Bun.sleep(50);
-    expect(logged).toHaveLength(2);
+    expect(logs.at("ERROR")).toHaveLength(2);
 
     // The flush already drained the count, so no further line is owed.
     await Bun.sleep(50);
-    expect(logged).toHaveLength(2);
+    expect(logs.at("ERROR")).toHaveLength(2);
   });
 
   test("keeps severity and the connection fields on a suppressed report", () => {
     const log = createQueueWorkerErrorLogger(
       "document_review_run.worker_error",
       {
-        queueName: "document-review-run",
+        // Named `queue`, not `queueName`: the logger's PII denylist drops any
+        // key matching /name/i, so the latter never reaches the sink.
+        queue: "document-review-run",
       },
     );
 
     log(withCode(TRANSIENT));
 
-    expect(logged).toHaveLength(1);
-    expect(logged[0]?.attributes).toMatchObject({
-      "error.code": TRANSIENT,
-      queueName: "document-review-run",
+    expect(logs.records).toHaveLength(1);
+    expect(logs.records.at(0)).toMatchObject({
+      severityText: "ERROR",
+      message: "document_review_run.worker_error",
+      attributes: {
+        "error.code": TRANSIENT,
+        queue: "document-review-run",
+      },
     });
+    expect(
+      logs.records.at(0)?.attributes?.["log.attributes_dropped"],
+    ).toBeUndefined();
   });
 
   test("does not let one worker's interval silence another's first report", () => {
@@ -150,7 +158,7 @@ describe("createQueueWorkerErrorLogger", () => {
     first(withCode(TRANSIENT));
     second(withCode(TRANSIENT));
 
-    expect(logged.map((entry) => entry.event)).toEqual([
+    expect(logs.at("ERROR").map((record) => record.message)).toEqual([
       "flow.worker_error",
       "bilingual_run.worker_error",
     ]);
@@ -165,7 +173,10 @@ describe("createQueueWorkerErrorLogger", () => {
 
     // Two transients inside one interval yield one line; the defect is never
     // withheld, because only the codes classified as transient are counted.
-    expect(logged).toHaveLength(2);
-    expect(logged[1]?.attributes["occurrencesSinceLastLog"]).toBeUndefined();
+    const errors = logs.at("ERROR");
+    expect(errors).toHaveLength(2);
+    expect(
+      errors.at(1)?.attributes?.["occurrencesSinceLastLog"],
+    ).toBeUndefined();
   });
 });
