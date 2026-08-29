@@ -503,7 +503,9 @@ export const TranslateDocumentDialog = (
                   total: String(run.total),
                 })}
               </p>
-              {run.status === "completed" && run.outputEntityId ? (
+              {run.status === "completed" &&
+              run.outputEntityId &&
+              run.outputFieldId ? (
                 <Button
                   onClick={() => {
                     detached(openOutput(run), "translate-document-dialog.open");
