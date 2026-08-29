@@ -61,15 +61,15 @@
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.0",
-    "@changesets/cli": "^3.0.0",
+    "@changesets/cli": "^3.0.1",
     "@stll/anonymize-data": "workspace:*",
     "@stll/oxlint-config": "0.6.0",
     "@stll/typescript-config": "0.6.0",
     "@typescript/native": "npm:typescript@7.0.2",
     "lefthook": "^2.1.10",
-    "oxfmt": "^0.63.0",
+    "oxfmt": "^0.64.0",
     "oxlint": "1.78.0",
     "oxlint-tsgolint": "7.0.2001",
-    "turbo": "^2.10.10"
+    "turbo": "^2.10.11"
   }
 }
