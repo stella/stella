@@ -189,6 +189,9 @@ test.describe("lockless DOCX collaboration", () => {
         collaboratorPage.keyboard.insertText(whilePublishingToken),
       ]);
       expect((await publishResponse).ok()).toBe(true);
+      await expect(page.getByText("Version created").first()).toBeVisible({
+        timeout: 45_000,
+      });
 
       await expect
         .poll(async () => await readDocumentText(page))

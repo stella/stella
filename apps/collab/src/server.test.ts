@@ -7,7 +7,11 @@ import {
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
 } from "@stll/api-contract/folio-collab";
 
-import { createCollabServer, REDIS_RETRY_CLOSE_CODE } from "./server";
+import {
+  createCollabServer,
+  REDIS_RETRY_CLOSE_CODE,
+  ROOM_GENERATION_RETRY_CLOSE_CODE,
+} from "./server";
 
 type FakeStellaApiOptions = {
   additionalRoomIds?: string[];
@@ -704,8 +708,11 @@ describe("collaboration server", () => {
         "Server did not reject the stale room generation.",
       );
       await Bun.sleep(100);
-      expect(closeCodes).toContain(REDIS_RETRY_CLOSE_CODE);
-      expect(secondRoomCloseCodes).not.toContain(REDIS_RETRY_CLOSE_CODE);
+      expect(closeCodes).toContain(ROOM_GENERATION_RETRY_CLOSE_CODE);
+      expect(closeCodes).not.toContain(REDIS_RETRY_CLOSE_CODE);
+      expect(secondRoomCloseCodes).not.toContain(
+        ROOM_GENERATION_RETRY_CLOSE_CODE,
+      );
       expect(secondRoomProvider.isAuthenticated).toBeTrue();
       provider.destroy();
       await Bun.sleep(100);

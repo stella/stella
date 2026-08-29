@@ -55,44 +55,21 @@ const Select = <Value, Multiple extends boolean | undefined = false>({
   const itemLabels = collectSelectItemLabels(children);
   const itemDisplays = collectSelectItemDisplays(children);
   const itemLabelsRef = useLatest(itemLabels);
-  const isItemEqualToValueRef = useLatest(isItemEqualToValue);
-  const itemToStringLabelRef = useLatest(itemToStringLabel);
-  const itemToStringValueRef = useLatest(itemToStringValue);
   const resolveItemLabel = React.useCallback(
-    (value: Value) => {
-      const formatter = itemToStringLabelRef.current;
-      if (formatter !== undefined) {
-        return formatter(value);
-      }
-      return itemLabelsRef.current.get(value) ?? String(value);
-    },
-    [itemLabelsRef, itemToStringLabelRef],
-  );
-  const resolveItemValue = React.useCallback(
-    (value: Value) => itemToStringValueRef.current?.(value) ?? String(value),
-    [itemToStringValueRef],
-  );
-  const compareItemValue = React.useCallback(
-    (itemValue: Value, selectedValue: Value) =>
-      isItemEqualToValueRef.current?.(itemValue, selectedValue) ??
-      Object.is(itemValue, selectedValue),
-    [isItemEqualToValueRef],
+    (value: Value) => itemLabelsRef.current.get(value) ?? String(value),
+    [itemLabelsRef],
   );
 
   const root = (
     <SelectPrimitive.Root
       {...props}
-      isItemEqualToValue={
-        isItemEqualToValue === undefined ? undefined : compareItemValue
-      }
+      isItemEqualToValue={isItemEqualToValue}
       itemToStringLabel={
         itemToStringLabel === undefined && itemLabels.size === 0
           ? undefined
-          : resolveItemLabel
+          : (itemToStringLabel ?? resolveItemLabel)
       }
-      itemToStringValue={
-        itemToStringValue === undefined ? undefined : resolveItemValue
-      }
+      itemToStringValue={itemToStringValue}
     >
       {children}
     </SelectPrimitive.Root>

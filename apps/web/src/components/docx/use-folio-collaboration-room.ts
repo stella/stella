@@ -63,6 +63,7 @@ type UseFolioCollaborationRoomOptions = {
 const FOLIO_COLLAB_TOKEN_REFRESH_LEEWAY_MS = 5 * 60 * 1000;
 const SEED_DOCUMENT_DOWNLOAD_TIMEOUT_MS = 10_000;
 const RETRYABLE_COLLAB_CLOSE_CODE = 4503;
+const ROOM_GENERATION_RETRY_CLOSE_CODE = 4504;
 const COLLAB_FLUSH_TIMEOUT_MS = 10_000;
 const flushResponseSchema = v.pipe(
   v.string(),
@@ -177,6 +178,7 @@ export const useFolioCollaborationRoom = ({
     let hasConnected = false;
     let provider: HocuspocusProvider | null = null;
     let activeRoom: FolioCollaborationRoom | null = null;
+    let generationRejoinPromise: Promise<void> | null = null;
     const pendingFlushes = new Map<
       string,
       {
@@ -257,6 +259,89 @@ export const useFolioCollaborationRoom = ({
           return token;
         };
 
+        const startGenerationRejoin = () => {
+          if (
+            disposed ||
+            provider === null ||
+            activeRoom === null ||
+            generationRejoinPromise !== null
+          ) {
+            return;
+          }
+
+          provider.disconnect();
+          setConnectedState("reconnecting");
+          generationRejoinPromise = (async () => {
+            const { data: rejoined, error: rejoinError } = await api
+              .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+              ["folio-collab-rooms"].join.post({
+                entityId: toSafeId<"entity">(entityId),
+                propertyId: toSafeId<"property">(propertyId),
+              });
+            if (disposed) {
+              return;
+            }
+            if (rejoinError) {
+              setState({
+                status: "unavailable",
+                room: null,
+                message: userErrorMessage(
+                  rejoinError,
+                  t("folio.editOpenFailed"),
+                ),
+              });
+              return;
+            }
+            if (
+              rejoined.roomId !== roomId ||
+              rejoined.roomName !== data.roomName
+            ) {
+              panic("Collaboration room identity changed during rejoin.");
+            }
+
+            token = rejoined.token;
+            tokenExpiresAtMs = new Date(rejoined.tokenExpiresAt).getTime();
+            const currentRoom = activeRoom;
+            if (currentRoom === null) {
+              return;
+            }
+            activeRoom = {
+              collaboration: {
+                awareness: currentRoom.collaboration.awareness,
+                plugins: currentRoom.collaboration.plugins,
+                shouldSeed: false,
+                yXmlFragment: currentRoom.collaboration.yXmlFragment,
+              },
+              flushSnapshot: currentRoom.flushSnapshot,
+              generation: rejoined.generation,
+              roomId: currentRoom.roomId,
+              seedDocumentBuffer: null,
+            };
+            setConnectedState("reconnecting");
+            provider?.connect();
+          })()
+            .catch((error: unknown) => {
+              if (disposed) {
+                return;
+              }
+              setState({
+                status: "unavailable",
+                room: null,
+                message: userErrorFromThrown(
+                  error,
+                  t("errors.actionFailed"),
+                ),
+              });
+            })
+            .finally(() => {
+              generationRejoinPromise = null;
+            });
+          detached(
+            generationRejoinPromise,
+            "use-folio-collaboration-room.generation-rejoin",
+          );
+        };
+
         const ydoc = new yjs.Doc();
         const yXmlFragment = ydoc.get("prosemirror", yjs.XmlFragment);
         provider = new hocuspocus.HocuspocusProvider({
@@ -271,7 +356,7 @@ export const useFolioCollaborationRoom = ({
             setConnectedState(provider?.isSynced ? "synced" : "connecting");
           },
           onAuthenticationFailed: () => {
-            if (!disposed) {
+            if (!disposed && generationRejoinPromise === null) {
               setState({
                 status: "unavailable",
                 room: null,
@@ -280,6 +365,10 @@ export const useFolioCollaborationRoom = ({
             }
           },
           onClose: ({ event }) => {
+            if (event.code === ROOM_GENERATION_RETRY_CLOSE_CODE) {
+              startGenerationRejoin();
+              return;
+            }
             if (event.code === RETRYABLE_COLLAB_CLOSE_CODE || hasConnected) {
               setConnectedState("reconnecting");
             }

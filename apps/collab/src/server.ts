@@ -118,6 +118,7 @@ const REDIS_LOCK_TIMEOUT_MS = 30_000;
 const REDIS_INITIAL_SYNC_TIMEOUT_MS = 3000;
 const SHUTDOWN_DRAIN_TIMEOUT_MS = 10_000;
 export const REDIS_RETRY_CLOSE_CODE = 4503;
+export const ROOM_GENERATION_RETRY_CLOSE_CODE = 4504;
 const REDIS_RETRY_CLOSE_REASON = "Collaboration coordination unavailable";
 const ROOM_GENERATION_CLOSE_REASON = "Collaboration room generation changed";
 
@@ -246,13 +247,14 @@ export const createCollabServer = async (
       socket.close(REDIS_RETRY_CLOSE_CODE, reason);
     }
   };
-  const closeManagedRoomConnectionsForRetry = (
+  const closeManagedRoomConnections = (
     roomName: string,
+    code: number,
     reason: string,
   ) => {
     for (const { roomConnectionCounts, socket } of managedConnections) {
       if (roomConnectionCounts.has(roomName)) {
-        socket.close(REDIS_RETRY_CLOSE_CODE, reason);
+        socket.close(code, reason);
       }
     }
   };
@@ -601,8 +603,9 @@ export const createCollabServer = async (
       if (!(error instanceof FetchBoundaryError) || error.status !== 409) {
         throw error;
       }
-      closeManagedRoomConnectionsForRetry(
+      closeManagedRoomConnections(
         document.name,
+        ROOM_GENERATION_RETRY_CLOSE_CODE,
         ROOM_GENERATION_CLOSE_REASON,
       );
       clearRoomTokens(document.name);

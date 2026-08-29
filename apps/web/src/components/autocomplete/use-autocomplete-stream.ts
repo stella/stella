@@ -17,6 +17,8 @@ import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { fetchWithTimeout } from "@/lib/fetch";
 
+import { requestAutocompleteStream } from "./use-autocomplete-stream.logic";
+
 export type UseAutocompleteStreamOptions = {
   enabled: boolean;
   debounceMs?: number;
@@ -219,26 +221,30 @@ export const useAutocompleteStream = (
       inflight = controller;
       const requestId = crypto.randomUUID();
 
-      dispatchSafe(
-        startAutocompleteSuggestion(view.state.tr, anchor, requestId),
-      );
-
       try {
-        const response = await fetchWithTimeout(
-          apiUrl("/ai-autocomplete/stream"),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              prefix,
-              suffix: suffix.length > 0 ? suffix : undefined,
-              language,
+        const response = await requestAutocompleteStream({
+          controller,
+          dispatchStart: () =>
+            dispatchSafe(
+              startAutocompleteSuggestion(view.state.tr, anchor, requestId),
+            ),
+          fetchResponse: async () =>
+            await fetchWithTimeout(apiUrl("/ai-autocomplete/stream"), {
+              method: "POST",
+              credentials: "include",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                prefix,
+                suffix: suffix.length > 0 ? suffix : undefined,
+                language,
+              }),
+              signal: controller.signal,
+              timeoutMs: 15_000,
             }),
-            signal: controller.signal,
-            timeoutMs: 15_000,
-          },
-        );
+        });
+        if (response === null) {
+          return;
+        }
         if (!response.ok || response.body === null) {
           dispatchSafe(clearAutocompleteSuggestion(view.state.tr));
           return;

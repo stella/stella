@@ -94,6 +94,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { fileOptions } from "@/lib/files/queries";
 import { folioUIComponents } from "@/lib/folio-ui-components";
+import { getDisplayName } from "@/lib/get-display-name";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 import "@/components/pdf/peek/peek-docx.css";
@@ -252,6 +253,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const pendingCollaborationPublicationRef =
     useRef<PendingCollaborationPublication | null>(null);
+  const isPublishingCollaborationVersionRef = useRef(false);
   const queryClient = useQueryClient();
   const [
     isPublishingCollaborationVersion,
@@ -716,6 +718,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
 
   useExternalSyncEffect(() => {
     onCollaborationPublishableChange?.(canPublishCollaborationVersion);
+    return () => onCollaborationPublishableChange?.(false);
   }, [canPublishCollaborationVersion, onCollaborationPublishableChange]);
 
   if (previewFileQuery.error) {
@@ -1228,12 +1231,18 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     if (
       collaborationSession === null ||
       collaborationState.status !== "synced" ||
-      isPublishingCollaborationVersion
+      isPublishingCollaborationVersion ||
+      isPublishingCollaborationVersionRef.current
     ) {
       return;
     }
 
+    isPublishingCollaborationVersionRef.current = true;
     setIsPublishingCollaborationVersion(true);
+    const finishPublishing = () => {
+      isPublishingCollaborationVersionRef.current = false;
+      setIsPublishingCollaborationVersion(false);
+    };
     let pendingPublication = pendingCollaborationPublicationRef.current;
     if (pendingPublication === null) {
       const flushResult = await Result.tryPromise(
@@ -1241,7 +1250,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       );
       if (Result.isError(flushResult)) {
         getAnalytics().captureError(flushResult.error);
-        setIsPublishingCollaborationVersion(false);
+        finishPublishing();
         stellaToast.add({
           description: t("folio.createVersionFailedDescription"),
           title: t("folio.createVersionFailedTitle"),
@@ -1259,7 +1268,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       );
       if (Result.isError(checkpointResult)) {
         getAnalytics().captureError(checkpointResult.error);
-        setIsPublishingCollaborationVersion(false);
+        finishPublishing();
         stellaToast.add({
           description: t("folio.createVersionFailedDescription"),
           title: t("folio.createVersionFailedTitle"),
@@ -1269,7 +1278,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       }
       if (checkpointResult.value.error) {
         getAnalytics().captureError(toAPIError(checkpointResult.value.error));
-        setIsPublishingCollaborationVersion(false);
+        finishPublishing();
         stellaToast.add({
           description: t("folio.createVersionFailedDescription"),
           title: t("folio.createVersionFailedTitle"),
@@ -1298,7 +1307,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           roomId: toSafeId<"folioCollabRoom">(pendingPublication.roomId),
         }),
     );
-    setIsPublishingCollaborationVersion(false);
+    finishPublishing();
     if (Result.isError(publishResult)) {
       getAnalytics().captureError(publishResult.error);
       stellaToast.add({
@@ -2002,7 +2011,9 @@ const useDocxBrowserCollaboration = ({
           color: colorFromStableId(currentUser.id),
           id: currentUser.id,
           image: currentUser.image ?? null,
-          name: currentUser.name ?? currentUser.email,
+          name:
+            getDisplayName(currentUser.name, currentUser.email) ??
+            currentUser.email,
         }
       : null,
     workspaceId,
@@ -2195,13 +2206,12 @@ const CollaborationPresence = ({
   }, [awareness]);
 
   return (
-    <div className="flex min-h-11 items-center -space-x-2 px-2" role="list">
+    <ul className="flex min-h-11 items-center -space-x-2 px-2">
       {users.map((user) => (
-        <span
+        <li
           aria-label={user.name}
           className="border-background rounded-full border-2"
           key={user.id}
-          role="listitem"
           title={user.name}
         >
           <UserIdentityAvatar
@@ -2209,9 +2219,9 @@ const CollaborationPresence = ({
             image={user.image}
             name={user.name}
           />
-        </span>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 };
 
