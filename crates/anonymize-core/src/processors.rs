@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
+use std::collections::{BTreeMap, BTreeSet, HashSet, btree_map::Entry};
 
 use smallvec::SmallVec;
 
@@ -769,6 +769,50 @@ struct RawDenyListMatch {
   text: String,
 }
 
+/// Spans of deny-list hits that carry surname evidence, built once per
+/// document. Single-name context checks ask about one span, so the backing
+/// set stays private and callers get only that bounded query.
+#[derive(Debug, Default)]
+struct SurnameEvidenceIndex {
+  spans: HashSet<(u32, u32)>,
+  /// Structural work counters: one visit per hit at build, one probe per
+  /// query. Together they pin the total work at hits + queries.
+  #[cfg(test)]
+  build_visits: usize,
+  #[cfg(test)]
+  probes: std::cell::Cell<usize>,
+}
+
+impl SurnameEvidenceIndex {
+  fn build(hits: &[RawDenyListMatch]) -> Self {
+    let mut spans = HashSet::new();
+    #[cfg(test)]
+    let mut build_visits = 0usize;
+    for hit in hits {
+      #[cfg(test)]
+      {
+        build_visits = build_visits.saturating_add(1);
+      }
+      if hit.has_surname_evidence {
+        spans.insert((hit.start, hit.end));
+      }
+    }
+    Self {
+      spans,
+      #[cfg(test)]
+      build_visits,
+      #[cfg(test)]
+      probes: std::cell::Cell::new(0),
+    }
+  }
+
+  fn covers(&self, start: u32, end: u32) -> bool {
+    #[cfg(test)]
+    self.probes.set(self.probes.get().saturating_add(1));
+    self.spans.contains(&(start, end))
+  }
+}
+
 fn sources_include(sources: StringGroup<'_>, expected: &str) -> bool {
   sources.iter().any(|source| source == expected)
 }
@@ -908,7 +952,7 @@ pub(crate) fn process_deny_list_matches_with_field_labels(
     &mut results,
     data,
     &mut name_hits,
-    &matches,
+    &SurnameEvidenceIndex::build(&matches),
     person_field_labels,
     document,
   )?;
@@ -1367,7 +1411,7 @@ fn append_person_name_hits(
   results: &mut Vec<PipelineEntity>,
   data: &DenyListMatchData,
   name_hits: &mut [RawDenyListMatch],
-  evidence_hits: &[RawDenyListMatch],
+  surname_evidence: &SurnameEvidenceIndex,
   person_field_labels: &[String],
   document: &ResolutionDocument<'_>,
 ) -> Result<()> {
@@ -1442,7 +1486,7 @@ fn append_person_name_hits(
         offsets: &offsets,
         first_name_span: first.start..last.end,
         filters,
-        evidence_hits,
+        surname_evidence,
       })?
     } else {
       SingleNameContext::None
@@ -2022,7 +2066,7 @@ struct SingleNameHitContextOptions<'a> {
   offsets: &'a ByteOffsets<'a>,
   first_name_span: std::ops::Range<u32>,
   filters: &'a DenyListFilterData,
-  evidence_hits: &'a [RawDenyListMatch],
+  surname_evidence: &'a SurnameEvidenceIndex,
 }
 
 fn single_name_hit_context(
@@ -2033,7 +2077,7 @@ fn single_name_hit_context(
     offsets,
     first_name_span,
     filters,
-    evidence_hits,
+    surname_evidence,
   } = options;
   let tail = slice_from(full_text, offsets, first_name_span.end)?;
   let (rest, next_start, separator) =
@@ -2066,7 +2110,7 @@ fn single_name_hit_context(
   if second.is_uppercase()
     && remaining_is_upper
     && surname_context_separator_is_supported(separator)
-    && deny_list_has_surname(evidence_hits, next_start, next_end)
+    && surname_evidence.covers(next_start, next_end)
   {
     return Ok(SingleNameContext::KnownUppercaseSurname { end: next_end });
   }
@@ -2187,6 +2231,9 @@ fn surname_context_separator_is_supported(separator: &str) -> bool {
   (1..=4).contains(&count) && line_breaks <= 1
 }
 
+/// Reference model for [`SurnameEvidenceIndex`]: the straightforward scan the
+/// index replaces. Kept as the equivalence oracle for the index tests.
+#[cfg(test)]
 fn deny_list_has_surname(
   evidence_hits: &[RawDenyListMatch],
   start: u32,
@@ -3132,6 +3179,8 @@ const fn fuzzy_distance(found: &SearchMatch) -> Option<u32> {
 #[cfg(test)]
 mod tests {
   #![allow(clippy::indexing_slicing, clippy::unwrap_used)]
+
+  use web_time::Instant;
 
   use super::*;
 
@@ -4308,5 +4357,142 @@ mod tests {
   fn bare_single_letter_is_not_a_middle_initial() {
     assert!(!is_middle_initial_token("A"));
     assert!(is_middle_initial_token("A."));
+  }
+
+  fn surname_evidence_fixture(count: u32) -> Vec<RawDenyListMatch> {
+    (0..count)
+      .map(|index| {
+        let start = index.saturating_mul(16);
+        RawDenyListMatch {
+          pattern: 0,
+          start,
+          end: start.saturating_add(9),
+          labels: vec![String::from("person")],
+          custom_labels: Vec::new(),
+          has_person_name_source: true,
+          has_city_head_name_source: false,
+          has_surname_evidence: index.is_multiple_of(3),
+          text: String::from("PRIKLADNY"),
+        }
+      })
+      .collect()
+  }
+
+  #[test]
+  fn surname_evidence_index_matches_the_reference_scan() {
+    let hits = surname_evidence_fixture(64);
+    let index = SurnameEvidenceIndex::build(&hits);
+    for start in 0..u32::try_from(hits.len()).unwrap().saturating_mul(16) {
+      for width in [0_u32, 8, 9, 10] {
+        let end = start.saturating_add(width);
+        assert_eq!(
+          index.covers(start, end),
+          deny_list_has_surname(&hits, start, end),
+          "span {start}..{end} disagrees with the reference scan"
+        );
+      }
+    }
+  }
+
+  /// The index must cost one visit per hit to build and one probe per query,
+  /// never a scan per candidate. Doubling the hit count must not change the
+  /// per-query probe count.
+  #[test]
+  fn surname_evidence_index_work_stays_linear_in_hits_and_queries() {
+    for count in [64_u32, 1_024] {
+      let hits = surname_evidence_fixture(count);
+      let index = SurnameEvidenceIndex::build(&hits);
+      assert_eq!(index.build_visits, hits.len());
+
+      for hit in &hits {
+        index.covers(hit.start, hit.end);
+      }
+      assert_eq!(index.probes.get(), hits.len());
+    }
+  }
+
+  #[test]
+  fn surname_evidence_index_holds_only_spans_carrying_evidence() {
+    let hits = surname_evidence_fixture(9);
+    let index = SurnameEvidenceIndex::build(&hits);
+    assert_eq!(index.spans.len(), 3);
+  }
+
+  fn uppercase_surname_deny_list_sample(
+    target_bytes: usize,
+  ) -> (usize, std::time::Duration) {
+    const FIXTURE: &str = "Ctibor PRIKLADNY podepsal smlouvu.\n";
+    const SURNAME_BYTES: u32 = 9;
+    let repeats = target_bytes.div_ceil(FIXTURE.len());
+    let full_text = FIXTURE.repeat(repeats);
+    let stride = u32::try_from(FIXTURE.len()).unwrap();
+    let mut matches = Vec::with_capacity(repeats.saturating_mul(2));
+    for index in 0..u32::try_from(repeats).unwrap() {
+      let base = index.saturating_mul(stride);
+      matches.push(SearchMatch::Literal {
+        pattern: 0,
+        start: base,
+        end: base.saturating_add(6),
+      });
+      let surname_start = base.saturating_add(7);
+      matches.push(SearchMatch::Literal {
+        pattern: 1,
+        start: surname_start,
+        end: surname_start.saturating_add(SURNAME_BYTES),
+      });
+    }
+    let mut data = DenyListMatchData {
+      labels: vec![vec![String::from("person")], vec![String::from("person")]]
+        .into(),
+      custom_labels: vec![vec![], vec![]].into(),
+      originals: vec![String::from("Ctibor"), String::from("Prikladny")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![
+        vec![String::from("first-name")],
+        vec![String::from("surname")],
+      ]
+      .into(),
+      filters: Some(DenyListFilterData::default()),
+    };
+    data.compact_runtime_patterns();
+
+    let mut best = std::time::Duration::MAX;
+    for _ in 0..3 {
+      let start = Instant::now();
+      let entities = process_deny_list_matches(
+        &matches,
+        PatternSlice { start: 0, end: 2 },
+        &full_text,
+        &data,
+      )
+      .unwrap();
+      best = best.min(start.elapsed());
+      assert_eq!(entities.len(), repeats);
+    }
+    (full_text.len(), best)
+  }
+
+  #[test]
+  #[ignore = "release-mode scaling regression check"]
+  fn uppercase_surname_context_scales_with_deny_list_hit_count() {
+    let small = uppercase_surname_deny_list_sample(64 * 1024);
+    let large = uppercase_surname_deny_list_sample(1024 * 1024);
+    let samples = [small, large];
+    assert!(
+      large
+        .1
+        .as_nanos()
+        .saturating_mul(u128::try_from(small.0).unwrap_or(u128::MAX))
+        <= small
+          .1
+          .as_nanos()
+          .saturating_mul(u128::try_from(large.0).unwrap_or(u128::MAX))
+          .saturating_mul(3),
+      "uppercase surname context time per byte regressed: {samples:?}"
+    );
+    assert!(
+      large.1 <= std::time::Duration::from_secs(1),
+      "uppercase surname context exceeded 1 s at 1 MiB: {samples:?}"
+    );
   }
 }

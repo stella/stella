@@ -12,7 +12,7 @@ use crate::session::{
 use crate::types::{
   Entity, EntityKind, MaskConfig, MaskDirection, Operator, OperatorConfig,
   OperatorEntry, OperatorType, PlaceholderMap, RedactionEntry,
-  RedactionReplacement, RedactionResult, Result,
+  RedactionReplacement, RedactionResult, Result, validate_redaction_text,
 };
 
 pub fn redact_text(
@@ -20,6 +20,7 @@ pub fn redact_text(
   entities: &[Entity],
   config: &OperatorConfig,
 ) -> Result<RedactionResult> {
+  validate_redaction_text(full_text)?;
   redact_text_inner(RedactTextOptions {
     full_text,
     entities,
@@ -50,6 +51,7 @@ pub fn redact_text_with_session(
     session,
     observed_at,
   } = params;
+  validate_redaction_text(full_text)?;
   session.ensure_active(observed_at)?;
   redact_text_inner(RedactTextOptions {
     full_text,

@@ -76,8 +76,11 @@ pub enum BindingFacadeError {
   Serialization(#[from] serde_json::Error),
 }
 
-/// Maximum UTF-8 text bytes accepted by one caller-assisted operation or plan.
-pub const CALLER_DETECTION_TEXT_MAX_BYTES: usize = 64 * 1024 * 1024;
+/// Caller-assisted operations and plans share the engine's redaction text
+/// bound. Redaction itself is bounded by the engine, not restated here, so
+/// oversized input yields one error on every runtime.
+pub const CALLER_DETECTION_TEXT_MAX_BYTES: usize =
+  stella_anonymize_core::REDACTION_TEXT_MAX_BYTES;
 /// Maximum encoded bytes accepted by one caller-detection JSON request.
 pub const CALLER_DETECTION_REQUEST_JSON_MAX_BYTES: usize = 16 * 1024 * 1024;
 /// Maximum number of caller-assisted inputs accepted by one atomic session plan.
@@ -426,6 +429,7 @@ pub fn redact_diagnostics_stream_json(
   operators: &OperatorConfig,
   mut on_batch: impl FnMut(String) -> std::result::Result<(), String>,
 ) -> Result<String> {
+  stella_anonymize_core::validate_redaction_text(full_text)?;
   if !prepare_diagnostics.events.is_empty() {
     on_batch(prepare_diagnostics_json(prepare_diagnostics)?).map_err(
       |error| BindingFacadeError::Core(diagnostics_observer_error(&error)),
@@ -1002,6 +1006,72 @@ pub type Result<T> = std::result::Result<T, BindingFacadeError>;
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  /// One condition, one normalized error. The engine owns the text bound and
+  /// the facade forwards it unchanged, so a runtime calling the engine
+  /// directly and a runtime going through the facade report the same thing.
+  #[test]
+  fn oversized_text_surfaces_the_engine_error_unchanged() {
+    let max_bytes = stella_anonymize_core::REDACTION_TEXT_MAX_BYTES;
+    let oversized = "a".repeat(max_bytes.saturating_add(1));
+    let describe = |result: std::result::Result<(), BindingFacadeError>| {
+      result
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default()
+    };
+
+    let engine_message = describe(
+      stella_anonymize_core::validate_redaction_text(&oversized)
+        .map_err(BindingFacadeError::from),
+    );
+
+    assert_eq!(
+      engine_message,
+      format!(
+        "Text contains {} bytes; the maximum is {max_bytes}",
+        oversized.len()
+      )
+    );
+    assert!(
+      stella_anonymize_core::validate_redaction_text(
+        oversized.get(..max_bytes).unwrap_or_default()
+      )
+      .is_ok()
+    );
+  }
+
+  #[test]
+  fn oversized_text_is_rejected_before_streaming_prepare_diagnostics()
+  -> Result<()> {
+    let prepared = PreparedEngine::new_with_diagnostics(
+      stella_anonymize_core::PreparedEngineConfig::default(),
+    )?;
+    assert!(!prepared.diagnostics.events.is_empty());
+    let oversized =
+      "a".repeat(stella_anonymize_core::REDACTION_TEXT_MAX_BYTES + 1);
+    let mut batch_count = 0usize;
+
+    let result = redact_diagnostics_stream_json(
+      &prepared.prepared,
+      &prepared.diagnostics,
+      &oversized,
+      &OperatorConfig::default(),
+      |_| {
+        batch_count = batch_count.saturating_add(1);
+        Ok(())
+      },
+    );
+
+    assert!(matches!(
+      result,
+      Err(BindingFacadeError::Core(
+        CoreError::TextLimitExceeded { .. }
+      ))
+    ));
+    assert_eq!(batch_count, 0);
+    Ok(())
+  }
 
   #[test]
   fn archive_key_validation_is_runtime_neutral() {

@@ -105,7 +105,8 @@ pub use triggers::{
 pub use types::{
   Entity, EntityKind, Error, MaskConfig, MaskDirection, Operator,
   OperatorConfig, OperatorEntry, OperatorType, PlaceholderEntry,
-  PlaceholderMap, RedactionEntry, RedactionReplacement, RedactionResult,
-  Result, SearchEngine, SearchMatch,
+  PlaceholderMap, REDACTION_TEXT_MAX_BYTES, RedactionEntry,
+  RedactionReplacement, RedactionResult, Result, SearchEngine, SearchMatch,
+  validate_redaction_text,
 };
 pub use zones::{ZoneData, ZonePatternData, ZoneSigningClauseData};

@@ -95,6 +95,27 @@ pub enum Error {
     expected: usize,
     actual: usize,
   },
+  TextLimitExceeded {
+    actual_bytes: usize,
+    max_bytes: usize,
+  },
+}
+
+/// Maximum UTF-8 text bytes accepted by one redaction pass.
+///
+/// The engine owns this bound so no binding, adapter, or facade can reach a
+/// redaction pass without it.
+pub const REDACTION_TEXT_MAX_BYTES: usize = 64 * 1024 * 1024;
+
+/// Bounds untrusted text before a redaction pass.
+pub const fn validate_redaction_text(full_text: &str) -> Result<()> {
+  if full_text.len() > REDACTION_TEXT_MAX_BYTES {
+    return Err(Error::TextLimitExceeded {
+      actual_bytes: full_text.len(),
+      max_bytes: REDACTION_TEXT_MAX_BYTES,
+    });
+  }
+  Ok(())
 }
 
 impl fmt::Display for Error {
@@ -180,6 +201,13 @@ impl fmt::Display for Error {
           "Static data field '{field}' is invalid: {reason}"
         )
       }
+      Self::TextLimitExceeded {
+        actual_bytes,
+        max_bytes,
+      } => write!(
+        formatter,
+        "Text contains {actual_bytes} bytes; the maximum is {max_bytes}"
+      ),
       Self::StaticDataLengthMismatch {
         field,
         expected,

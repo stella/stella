@@ -17,11 +17,12 @@ use stella_anonymize_core::{
   LiteralSearchOptions, MagnitudeSuffixData, MonetaryData, OperatorConfig,
   PatternSlice, PreparedEngine, PreparedEngineArtifacts, PreparedEngineConfig,
   PreparedEngineSlices, PreparedSessionCallerRedactionOptions,
-  PreparedSessionRedactionOptions, RedactionSession, RegexMatchMeta,
-  RegexSearchOptions, SearchOptions, SearchPattern, SessionId,
+  PreparedSessionRedactionOptions, REDACTION_TEXT_MAX_BYTES, RedactionSession,
+  RegexMatchMeta, RegexSearchOptions, SearchOptions, SearchPattern, SessionId,
   SessionLifecycle, SessionTimestamp, SignatureData, SourceDetail, TriggerData,
   TriggerRule, TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
-  ZoneData, ZonePatternData, ZoneSigningClauseData,
+  ZoneData, ZonePatternData, ZoneSigningClauseData, redact_text,
+  redact_text_with_session,
 };
 use support::prepared_config;
 
@@ -4179,6 +4180,70 @@ fn prepared_engine_splits_embedded_legal_form_lists() {
     .collect::<Vec<_>>();
 
   assert_eq!(texts, vec!["Acme LLC", "Beta Inc."]);
+}
+
+/// Shared core boundaries reject oversized text before any public primitive or
+/// prepared-engine redaction pass can process it.
+#[test]
+fn redaction_entry_points_share_the_engine_text_bound() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    threshold: 0.5,
+    allowed_labels: vec![String::from("person")],
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+  let operators = OperatorConfig::default();
+  let at_limit = "a".repeat(REDACTION_TEXT_MAX_BYTES);
+  let mut oversized = at_limit.clone();
+  oversized.push('a');
+  let mut session =
+    RedactionSession::new(SessionId::new("bounded-session").unwrap());
+
+  assert!(
+    prepared
+      .redact_static_entities(&at_limit, &operators)
+      .is_ok()
+  );
+  for result in [
+    redact_text(&oversized, &[], &operators).map(|_| ()),
+    redact_text_with_session(
+      stella_anonymize_core::RedactTextWithSessionParams {
+        full_text: &oversized,
+        entities: &[],
+        config: &operators,
+        session: &mut session,
+        observed_at: None,
+      },
+    )
+    .map(|_| ()),
+    prepared
+      .redact_static_entities(&oversized, &operators)
+      .map(|_| ()),
+    prepared
+      .redact_static_entities_with_diagnostics(&oversized, &operators)
+      .map(|_| ()),
+    prepared
+      .redact_static_entities_with_summary_diagnostics(&oversized, &operators)
+      .map(|_| ()),
+    prepared
+      .redact_static_entities_with_session(
+        &oversized,
+        PreparedSessionRedactionOptions {
+          operators: &operators,
+          session: &mut session,
+          observed_at: None,
+        },
+      )
+      .map(|_| ()),
+  ] {
+    assert!(matches!(
+      result,
+      Err(Error::TextLimitExceeded {
+        max_bytes: REDACTION_TEXT_MAX_BYTES,
+        ..
+      })
+    ));
+  }
 }
 
 #[test]

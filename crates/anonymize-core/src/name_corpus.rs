@@ -281,10 +281,16 @@ impl PreparedNameCorpusData {
     }
 
     let classify_start = Instant::now();
+    let mut lines = AllCapsLineCache::default();
     let token_windows = if mode == NameCorpusMode::Supplemental {
-      self.classify_supplemental_windows(full_text, &words, &seed_indexes)
+      self.classify_supplemental_windows(
+        full_text,
+        &words,
+        &seed_indexes,
+        &mut lines,
+      )
     } else {
-      vec![self.classify_tokens(full_text, &words)]
+      vec![self.classify_tokens(full_text, &words, &mut lines)]
     };
     profile.classify_elapsed_us = elapsed_us(classify_start);
     profile.token_count = token_windows.iter().map(Vec::len).sum();
@@ -304,6 +310,7 @@ impl PreparedNameCorpusData {
     &self,
     full_text: &'a str,
     words: &[WordSegment<'a>],
+    lines: &mut AllCapsLineCache,
   ) -> Vec<ClassifiedToken<'a>> {
     let mut tokens = Vec::with_capacity(words.len());
     let mut word_index = 0usize;
@@ -322,7 +329,7 @@ impl PreparedNameCorpusData {
         word_index = word_index.saturating_add(consumed);
         continue;
       }
-      tokens.push(self.classify_token(word, full_text));
+      tokens.push(self.classify_token(word, full_text, lines));
       word_index = word_index.saturating_add(1);
     }
     tokens
@@ -333,15 +340,18 @@ impl PreparedNameCorpusData {
     full_text: &'a str,
     words: &[WordSegment<'a>],
     seed_indexes: &[usize],
+    lines: &mut AllCapsLineCache,
   ) -> Vec<Vec<ClassifiedToken<'a>>> {
-    supplemental_seed_windows(seed_indexes, words.len())
-      .into_iter()
-      .filter_map(|window| {
-        words
-          .get(window)
-          .map(|window_words| self.classify_tokens(full_text, window_words))
-      })
-      .collect()
+    // Windows are ascending and disjoint, so they share one line cache; a
+    // per-window cache would reclassify a line once per window on it.
+    let mut windows = Vec::new();
+    for window in supplemental_seed_windows(seed_indexes, words.len()) {
+      let Some(window_words) = words.get(window) else {
+        continue;
+      };
+      windows.push(self.classify_tokens(full_text, window_words, lines));
+    }
+    windows
   }
 
   fn detect_token_chains(
@@ -405,6 +415,7 @@ impl PreparedNameCorpusData {
     &self,
     word: &WordSegment<'a>,
     full_text: &str,
+    lines: &mut AllCapsLineCache,
   ) -> ClassifiedToken<'a> {
     let text = word.text;
     let lower = text.to_lowercase();
@@ -455,9 +466,7 @@ impl PreparedNameCorpusData {
       if non_western && !self.is_first_name_token(&title_cased) {
         return classified(word, TokenKind::Name, true);
       }
-      if is_all_caps_context_line(full_text, word.start)
-        && is_all_caps_line_name_shaped(full_text, word.start)
-      {
+      if lines.shape(full_text, word.start).is_name_line() {
         if self.is_first_name_token(&title_cased) {
           return classified(word, TokenKind::Name, non_western);
         }
@@ -1026,8 +1035,53 @@ fn is_sentence_start(text: &str, pos: usize) -> bool {
   true
 }
 
-fn is_all_caps_context_line(full_text: &str, start: usize) -> bool {
-  let line = current_line(full_text, start);
+/// All-caps verdicts for one line. Both are properties of the whole line, so
+/// every token on that line shares one answer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct AllCapsLineShape {
+  is_context: bool,
+  is_name_shaped: bool,
+}
+
+impl AllCapsLineShape {
+  const fn is_name_line(self) -> bool {
+    self.is_context && self.is_name_shaped
+  }
+}
+
+/// Line classification is computed once per line. Tokens reach the cache in
+/// ascending offset order, so one slot keeps classification linear in the
+/// input length instead of re-scanning the line for every token on it.
+#[derive(Debug, Default)]
+struct AllCapsLineCache {
+  line: Option<(Range<usize>, AllCapsLineShape)>,
+  #[cfg(test)]
+  computed_lines: usize,
+}
+
+impl AllCapsLineCache {
+  fn shape(&mut self, full_text: &str, start: usize) -> AllCapsLineShape {
+    if let Some((range, shape)) = &self.line
+      && range.contains(&start)
+    {
+      return *shape;
+    }
+    let range = current_line_range(full_text, start);
+    let line = full_text.get(range.clone()).unwrap_or_default();
+    let shape = AllCapsLineShape {
+      is_context: is_all_caps_context_line(line),
+      is_name_shaped: is_all_caps_line_name_shaped(line),
+    };
+    #[cfg(test)]
+    {
+      self.computed_lines = self.computed_lines.saturating_add(1);
+    }
+    self.line = Some((range, shape));
+    shape
+  }
+}
+
+fn is_all_caps_context_line(line: &str) -> bool {
   let mut letters = 0usize;
   let mut upper = 0usize;
   for ch in line.chars() {
@@ -1048,16 +1102,38 @@ fn is_all_caps_context_line(full_text: &str, start: usize) -> bool {
   upper / letters >= ALL_CAPS_NAME_LINE_RATIO
 }
 
-fn is_all_caps_line_name_shaped(full_text: &str, start: usize) -> bool {
-  let line = current_line(full_text, start);
-  if line.chars().any(|ch| ch.is_ascii_digit()) {
+fn is_all_caps_line_name_shaped(line: &str) -> bool {
+  let tokens = count_words_capped(line, ALL_CAPS_NAME_LINE_MAX_TOKENS);
+  if tokens == 0 || tokens > ALL_CAPS_NAME_LINE_MAX_TOKENS {
     return false;
   }
-  let tokens = segment_words(line).len();
-  tokens > 0 && tokens <= ALL_CAPS_NAME_LINE_MAX_TOKENS
+  !line.chars().any(|ch| ch.is_ascii_digit())
 }
 
-fn current_line(full_text: &str, start: usize) -> &str {
+/// Counts word segments, stopping once the count passes `cap`. Callers only
+/// compare the count against `cap`, so a long line never pays for full
+/// segmentation.
+fn count_words_capped(text: &str, cap: usize) -> usize {
+  let mut count = 0usize;
+  let mut in_word = false;
+  for ch in text.chars() {
+    if !is_word_char(ch) {
+      in_word = false;
+      continue;
+    }
+    if in_word {
+      continue;
+    }
+    in_word = true;
+    count = count.saturating_add(1);
+    if count > cap {
+      return count;
+    }
+  }
+  count
+}
+
+fn current_line_range(full_text: &str, start: usize) -> Range<usize> {
   let line_start = full_text
     .get(..start)
     .and_then(|head| head.rfind('\n').map(|index| index.saturating_add(1)))
@@ -1066,7 +1142,7 @@ fn current_line(full_text: &str, start: usize) -> &str {
     .get(start..)
     .and_then(|tail| tail.find('\n').map(|index| start.saturating_add(index)))
     .unwrap_or(full_text.len());
-  full_text.get(line_start..line_end).unwrap_or_default()
+  line_start..line_end
 }
 
 fn line_before(full_text: &str, start: usize) -> &str {
@@ -1152,6 +1228,22 @@ mod tests {
     assert!(
       (entities[0].score - HIGH_CONFIDENCE_NAME_SCORE).abs() < f64::EPSILON
     );
+  }
+
+  #[test]
+  fn full_mode_recovers_short_all_caps_name_line() {
+    let data = PreparedNameCorpusData::new(NameCorpusData {
+      first_names: vec![String::from("Elon")],
+      surnames: vec![String::from("Musk")],
+      ..NameCorpusData::default()
+    });
+
+    let entities = data
+      .detect("SIGNED BY:\nELON R. MUSK", NameCorpusMode::Full, &[])
+      .expect("all-caps name-corpus detection should succeed");
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "ELON R. MUSK");
   }
 
   #[test]
@@ -1319,5 +1411,125 @@ mod tests {
 
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].text, "Priya Ramanathan");
+  }
+
+  /// `RAHUL` seeds a supplemental window; `SMITH` is a corpus surname, so it
+  /// only joins the chain when the line itself is name shaped.
+  fn all_caps_corpus() -> PreparedNameCorpusData {
+    PreparedNameCorpusData::new(NameCorpusData {
+      non_western_names: vec![String::from("Rahul")],
+      surnames: vec![String::from("Smith")],
+      ..NameCorpusData::default()
+    })
+  }
+
+  #[test]
+  fn all_caps_line_name_shape_respects_the_token_cap() {
+    assert!(is_all_caps_line_name_shaped("RAHUL SMITH"));
+    assert!(is_all_caps_line_name_shaped(
+      "RAHUL SMITH RAHUL SMITH RAHUL SMI"
+    ));
+    assert!(!is_all_caps_line_name_shaped(&"RAHUL SMITH ".repeat(4)));
+    assert!(!is_all_caps_line_name_shaped("RAHUL SMITH 42"));
+    assert!(!is_all_caps_line_name_shaped(""));
+  }
+
+  #[test]
+  fn all_caps_name_line_is_detected() {
+    let entities = all_caps_corpus()
+      .detect_supplemental("Signed:\nRAHUL SMITH\nWitness present.", &[])
+      .expect("name detection should succeed");
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "RAHUL SMITH");
+  }
+
+  #[test]
+  fn all_caps_line_above_the_token_cap_drops_the_corpus_surname() {
+    let line = "RAHUL SMITH ".repeat(4);
+    let entities = all_caps_corpus()
+      .detect_supplemental(&line, &[])
+      .expect("name detection should succeed");
+
+    assert!(
+      entities.iter().all(|entity| !entity.text.contains("SMITH")),
+      "{entities:?}"
+    );
+  }
+
+  #[test]
+  fn capped_word_count_agrees_with_segmentation_below_the_cap() {
+    for text in [
+      "",
+      "   ",
+      "RAHUL",
+      "RAHUL SMITH",
+      "  RAHUL  SMITH  ",
+      "RAHUL-SMITH, MD",
+      "O'BRIEN SMITH RAHUL",
+    ] {
+      let capped = count_words_capped(text, ALL_CAPS_NAME_LINE_MAX_TOKENS);
+      assert!(capped <= ALL_CAPS_NAME_LINE_MAX_TOKENS);
+      assert_eq!(capped, segment_words(text).len(), "{text:?}");
+    }
+  }
+
+  #[test]
+  fn capped_word_count_stops_once_the_cap_is_passed() {
+    let line = "RAHUL ".repeat(100_000);
+    assert_eq!(
+      count_words_capped(&line, ALL_CAPS_NAME_LINE_MAX_TOKENS),
+      ALL_CAPS_NAME_LINE_MAX_TOKENS.saturating_add(1)
+    );
+  }
+
+  #[test]
+  fn line_classification_is_computed_once_per_line() {
+    let full_text = "RAHUL SMITH RAHUL SMITH\nRAHUL SMITH\nRAHUL";
+    let words = segment_words(full_text);
+    let mut lines = AllCapsLineCache::default();
+    let shapes = words
+      .iter()
+      .map(|word| lines.shape(full_text, word.start))
+      .collect::<Vec<_>>();
+
+    assert_eq!(shapes.len(), 7);
+    assert_eq!(lines.computed_lines, 3);
+    for (index, shape) in shapes.iter().enumerate() {
+      let expected = {
+        let range = current_line_range(full_text, words[index].start);
+        let line = full_text.get(range).unwrap_or_default();
+        AllCapsLineShape {
+          is_context: is_all_caps_context_line(line),
+          is_name_shaped: is_all_caps_line_name_shaped(line),
+        }
+      };
+      assert_eq!(*shape, expected, "token {index}");
+    }
+  }
+
+  #[test]
+  #[ignore = "release-mode scaling regression check"]
+  fn single_line_all_caps_redaction_stays_within_budget() {
+    const TARGET_BYTES: usize = 250 * 1024;
+    let fixture = "RAHUL SMITH ";
+    let full_text = fixture.repeat(TARGET_BYTES.div_ceil(fixture.len()));
+    let data = all_caps_corpus();
+
+    let start = Instant::now();
+    let entities = data
+      .detect_supplemental(&full_text, &[])
+      .expect("name detection should succeed");
+    let elapsed = start.elapsed();
+
+    assert!(
+      entities.iter().all(|entity| !entity.text.contains("SMITH")),
+      "the single long line is not name shaped"
+    );
+    assert!(
+      elapsed <= std::time::Duration::from_secs(2),
+      "single-line all-caps detection took {elapsed:?} at {} bytes",
+      full_text.len()
+    );
   }
 }

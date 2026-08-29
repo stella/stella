@@ -6,6 +6,7 @@ use crate::resolution::{CallerDetection, PipelineEntity};
 use crate::session::{RedactionSession, SessionTimestamp};
 use crate::types::{
   Entity, EntityKind, OperatorConfig, RedactionResult, Result,
+  validate_redaction_text,
 };
 
 use super::PreparedEngine;
@@ -54,6 +55,9 @@ impl PreparedEngine {
     event_stream: &mut DiagnosticEventStream<'_>,
     result_stream: &mut StaticRedactionResultStream<'_>,
   ) -> Result<StaticRedactionResult> {
+    // Every public redaction entry point funnels through here, so the text
+    // bound cannot be bypassed by a binding that calls the engine directly.
+    validate_redaction_text(full_text)?;
     let StaticRedactionContext {
       session,
       observed_at,
