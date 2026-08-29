@@ -97,7 +97,7 @@ describe("delete-version chain-of-custody guard", () => {
     );
   });
 
-  test("locks each session kind before the entity row (finalize's order)", () => {
+  test("locks edit owners before the entity row (finalize's order)", () => {
     // Lock-order hierarchy (issue #1139): docx-edit advisory lock ->
     // edit-session rows -> entities row. This handler takes no advisory lock,
     // but it MUST lock the sessions it cancels BEFORE the entity row so it
@@ -121,21 +121,16 @@ describe("delete-version chain-of-custody guard", () => {
     };
 
     const desktopSessionLock = lockIndexFor(".from(desktopEditSessions)");
-    const legacyCollabSessionLock = lockIndexFor(
-      ".from(legacyFolioCollabSessions)",
-    );
     const collabRoomLock = lockIndexFor(".from(folioCollabRooms)");
     const entityLock = lockIndexFor(".from(entities)");
 
     // Every lock is actually acquired (its .from(...) is followed by FOR UPDATE).
     expect(desktopSessionLock).toBeGreaterThan(-1);
-    expect(legacyCollabSessionLock).toBeGreaterThan(-1);
     expect(collabRoomLock).toBeGreaterThan(-1);
     expect(entityLock).toBeGreaterThan(-1);
 
-    // Both session kinds are locked before the entity row.
+    // Every edit owner is locked before the entity row.
     expect(desktopSessionLock).toBeLessThan(entityLock);
-    expect(legacyCollabSessionLock).toBeLessThan(entityLock);
     expect(collabRoomLock).toBeLessThan(entityLock);
   });
 
@@ -160,10 +155,9 @@ describe("delete-version chain-of-custody guard", () => {
       .map((segment) => /^(\w+)/u.exec(segment)?.[1])
       .filter((name): name is string => name !== undefined);
 
-    // Sanity: every current and rollout-only edit owner is discovered.
+    // Sanity: every current edit owner is discovered.
     expect(sessionTables).toContain("desktopEditSessions");
     expect(sessionTables).toContain("folioCollabRooms");
-    expect(sessionTables).toContain("legacyFolioCollabSessions");
 
     const deleteVersionSource = readFileSync(
       nodePath.join(import.meta.dir, "delete-version.ts"),
@@ -172,13 +166,11 @@ describe("delete-version chain-of-custody guard", () => {
     const dispositionByTable = new Map([
       ["desktopEditSessions", "cancel"],
       ["folioCollabRooms", "block"],
-      ["legacyFolioCollabSessions", "cancel"],
     ]);
     expect(sessionTables.toSorted()).toEqual(
       [...dispositionByTable.keys()].toSorted(),
     );
     expect(deleteVersionSource).toContain("update(desktopEditSessions)");
-    expect(deleteVersionSource).toContain("update(legacyFolioCollabSessions)");
     expect(deleteVersionSource).toContain("if (collabRooms.at(0))");
   });
 

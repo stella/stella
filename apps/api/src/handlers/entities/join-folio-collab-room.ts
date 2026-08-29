@@ -80,6 +80,7 @@ const canStillEditWorkspace = async ({
       organizationRole: member.role,
       workspaceClientId: workspaces.clientId,
       workspaceMemberId: workspaceMembers.id,
+      workspaceStatus: workspaces.status,
     })
     .from(member)
     .innerJoin(
@@ -102,7 +103,11 @@ const canStillEditWorkspace = async ({
     .limit(1);
 
   const membership = memberships.at(0);
-  if (!membership || !isMemberRole(membership.organizationRole)) {
+  if (
+    !membership ||
+    membership.workspaceStatus !== "active" ||
+    !isMemberRole(membership.organizationRole)
+  ) {
     return false;
   }
 
@@ -215,6 +220,16 @@ export const joinFolioCollabRoomHandler = async function* ({
 }: JoinFolioCollabRoomProps) {
   const joined = yield* Result.await(
     safeDb(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
+      );
+      await tx
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId))
+        .limit(1)
+        .for("update");
+
       await lockDocxEditTarget({
         entityId,
         propertyId,

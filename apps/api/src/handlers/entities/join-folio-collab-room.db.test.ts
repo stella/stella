@@ -6,12 +6,16 @@ import {
   expect,
   test,
 } from "bun:test";
-import { and, eq, inArray, lt } from "drizzle-orm";
+import { and, eq, inArray, lt, sql } from "drizzle-orm";
 
 import { folioCollabRooms, folioCollabRoomTokens } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { cleanupExpiredFolioCollabRoomTokens } from "@/api/lib/folio-collab-rooms";
+import { FOLIO_COLLAB_SEED_CLAIM_STALE_MS } from "@/api/lib/folio-collab-room-contract";
+import {
+  cleanupExpiredFolioCollabRoomTokens,
+  folioCollabSeedClaimLeaseOnHeartbeat,
+} from "@/api/lib/folio-collab-rooms";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -20,8 +24,8 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import {
-  claimFolioCollabRoomSeed,
   decideFolioCollabSeedClaim,
+  folioCollabSeedClaimPredicate,
 } from "./join-folio-collab-room";
 
 let testDb: TestDatabase;
@@ -93,18 +97,26 @@ const claimConcurrently = async ({
   await Promise.all(
     [ids.userA1, ids.userA2].map(
       async (userId) =>
-        await testDb.transaction(
-          async (tx) =>
-            await claimFolioCollabRoomSeed({
-              expectedGeneration,
-              expectedSeedState,
-              now: new Date(),
-              roomId,
-              tx,
-              userId,
-              workspaceId: ids.wsA1,
-            }),
-        ),
+        await testDb.transaction(async (tx) => {
+          const claimed = await tx
+            .update(folioCollabRooms)
+            .set({
+              generation: sql`${folioCollabRooms.generation} + 1`,
+              seedClaimedAt: new Date(),
+              seedClaimedBy: userId,
+              seedState: "claimed",
+            })
+            .where(
+              folioCollabSeedClaimPredicate({
+                expectedGeneration,
+                expectedSeedState,
+                roomId,
+                workspaceId: ids.wsA1,
+              }),
+            )
+            .returning({ generation: folioCollabRooms.generation });
+          return claimed.at(0) ?? null;
+        }),
     ),
   );
 
@@ -162,7 +174,7 @@ describe("folio collaboration room seed generation CAS", () => {
   });
 
   test("stale-claim recovery also has one generation winner", async () => {
-    const staleAt = new Date(Date.now() - 60_000);
+    const staleAt = new Date(Date.now() - FOLIO_COLLAB_SEED_CLAIM_STALE_MS - 1);
     const roomId = await insertRoom({
       generation: 1,
       seedClaimedAt: staleAt,
@@ -195,6 +207,51 @@ describe("folio collaboration room seed generation CAS", () => {
         seedState: "seeded",
       }),
     ).toBe("seeded");
+  });
+
+  test("only the connected seed claimant renews its recovery lease", async () => {
+    const claimedAt = new Date("2026-01-01T00:00:00.000Z");
+    const touchedAt = new Date("2026-01-01T00:01:00.000Z");
+    const roomId = await insertRoom({
+      generation: 1,
+      seedClaimedAt: claimedAt,
+      seedClaimedBy: ids.userA1,
+      seedState: "claimed",
+    });
+
+    const expectLeaseAfterHeartbeat = async ({
+      expectedClaimedAt,
+      userId,
+    }: {
+      expectedClaimedAt: Date;
+      userId: SafeId<"user">;
+    }) => {
+      await testDb
+        .update(folioCollabRooms)
+        .set({
+          seedClaimedAt: folioCollabSeedClaimLeaseOnHeartbeat({
+            touchedAt,
+            userId,
+          }),
+        })
+        .where(eq(folioCollabRooms.id, roomId));
+      const rooms = await testDb
+        .select({ seedClaimedAt: folioCollabRooms.seedClaimedAt })
+        .from(folioCollabRooms)
+        .where(eq(folioCollabRooms.id, roomId))
+        .limit(1);
+
+      expect(rooms.at(0)?.seedClaimedAt).toEqual(expectedClaimedAt);
+    };
+
+    await expectLeaseAfterHeartbeat({
+      expectedClaimedAt: claimedAt,
+      userId: ids.userA2,
+    });
+    await expectLeaseAfterHeartbeat({
+      expectedClaimedAt: touchedAt,
+      userId: ids.userA1,
+    });
   });
 });
 

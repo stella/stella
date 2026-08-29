@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, ne } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -9,8 +9,8 @@ import {
   documentProcessingRuns,
   entities,
   entityVersions,
+  fields,
   folioCollabRooms,
-  legacyFolioCollabSessions,
   searchDocuments,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -20,6 +20,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -73,17 +74,42 @@ export const deleteEntityVersionHandler = async function* ({
   // and current version the first already changed.
   //
   // Canonical docx-edit lock order (issue #1139): docx-edit advisory lock ->
-  // desktop_edit_session rows -> entities row. This handler takes no advisory
-  // lock, but it MUST lock the sessions it will cancel BEFORE the entity row so
-  // it agrees with finalize-desktop-edit-session (which locks the session row,
-  // then the entity row). Locking the entity first here and the sessions second
-  // would invert finalize's order and risk an ABBA deadlock.
+  // desktop_edit_session rows -> entities row. Acquire every target lock for
+  // this version in stable order before checking room ownership. A concurrent
+  // first join must therefore publish its room before this handler decides
+  // whether the version can be tombstoned.
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
+      const targetProperties = await tx
+        .select({ propertyId: fields.propertyId })
+        .from(fields)
+        .innerJoin(
+          entityVersions,
+          eq(fields.entityVersionId, entityVersions.id),
+        )
+        .where(
+          and(
+            eq(entityVersions.id, params.versionId),
+            eq(entityVersions.entityId, params.entityId),
+            eq(entityVersions.workspaceId, workspaceId),
+          ),
+        )
+        .orderBy(asc(fields.propertyId))
+        .limit(LIMITS.propertiesCount);
+      for (const { propertyId } of targetProperties) {
+        // oxlint-disable-next-line no-await-in-loop -- advisory locks must be acquired sequentially in the stable property order above
+        await lockDocxEditTarget({
+          entityId: params.entityId,
+          propertyId,
+          tx,
+          workspaceId,
+        });
+      }
+
       // Lock every edit owner anchored to this version first, establishing the
-      // edit-state -> entity order. Desktop and rollout-only legacy sessions
-      // can be cancelled below; durable collaboration rooms must instead block
-      // the tombstone so their shared working state never loses its base.
+      // edit-state -> entity order. Desktop sessions can be cancelled below;
+      // durable collaboration rooms must instead block the tombstone so their
+      // shared working state never loses its base.
       await tx
         .select({ id: desktopEditSessions.id })
         .from(desktopEditSessions)
@@ -92,17 +118,6 @@ export const deleteEntityVersionHandler = async function* ({
             eq(desktopEditSessions.baseVersionId, params.versionId),
             eq(desktopEditSessions.workspaceId, workspaceId),
             eq(desktopEditSessions.status, "open"),
-          ),
-        )
-        .for("update");
-      await tx
-        .select({ id: legacyFolioCollabSessions.id })
-        .from(legacyFolioCollabSessions)
-        .where(
-          and(
-            eq(legacyFolioCollabSessions.baseVersionId, params.versionId),
-            eq(legacyFolioCollabSessions.workspaceId, workspaceId),
-            eq(legacyFolioCollabSessions.status, "open"),
           ),
         )
         .for("update");
@@ -289,10 +304,9 @@ export const deleteEntityVersionHandler = async function* ({
           ),
         );
 
-      // Withdraw desktop and rollout-only legacy sessions in the same
-      // transaction so none can resume from the tombstoned version. Durable
-      // collaboration rooms were rejected above because they have no
-      // participant-owned close transition.
+      // Withdraw desktop sessions in the same transaction so none can resume
+      // from the tombstoned version. Durable collaboration rooms were rejected
+      // above because they have no participant-owned close transition.
       const cancelledSessions = await tx
         .update(desktopEditSessions)
         .set({ status: "cancelled", closedAt: new Date() })
@@ -304,17 +318,6 @@ export const deleteEntityVersionHandler = async function* ({
           ),
         )
         .returning({ id: desktopEditSessions.id });
-      const cancelledLegacyCollabSessions = await tx
-        .update(legacyFolioCollabSessions)
-        .set({ status: "cancelled", closedAt: new Date() })
-        .where(
-          and(
-            eq(legacyFolioCollabSessions.baseVersionId, params.versionId),
-            eq(legacyFolioCollabSessions.workspaceId, workspaceId),
-            eq(legacyFolioCollabSessions.status, "open"),
-          ),
-        )
-        .returning({ id: legacyFolioCollabSessions.id });
       const events: AuditEvent[] = [
         {
           action: AUDIT_ACTION.DELETE,
@@ -351,18 +354,6 @@ export const deleteEntityVersionHandler = async function* ({
           resourceId: session.id,
           changes: { status: { old: "open", new: "cancelled" } },
           metadata: { reason: "base_version_tombstoned" },
-        });
-      }
-      for (const session of cancelledLegacyCollabSessions) {
-        events.push({
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,
-          resourceId: session.id,
-          changes: { status: { old: "open", new: "cancelled" } },
-          metadata: {
-            reason: "base_version_tombstoned",
-            transport: "legacy_session",
-          },
         });
       }
       await recordAuditEvent(tx, events);

@@ -42,6 +42,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 const FOLIO_COLLAB_TOKEN_PART_LENGTH = 32;
 const FOLIO_COLLAB_TOKEN_CLEANUP_BATCH_SIZE = 100;
 const FOLIO_COLLAB_SNAPSHOT_CLEANUP_GRACE_MS = 60_000;
+const FOLIO_COLLAB_SNAPSHOT_WRITE_RECOVERY_DELAY_MS = 2 * 60 * 1000;
 const FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS = 10_000;
 
 export {
@@ -261,6 +262,7 @@ type FolioCollabRoomDecisionInput = {
   tokenGeneration: number;
   workspaceClientId: string | null;
   workspaceMemberId: string | null;
+  workspaceStatus: (typeof workspaces.$inferSelect)["status"];
 };
 
 export const canUseFolioCollabWorkspace = ({
@@ -286,6 +288,7 @@ export const decideFolioCollabRoomAuthorization = ({
   tokenGeneration,
   workspaceClientId,
   workspaceMemberId,
+  workspaceStatus,
 }: FolioCollabRoomDecisionInput):
   | { status: "authorized"; canEdit: boolean }
   | { status: "generation-conflict" }
@@ -297,6 +300,10 @@ export const decideFolioCollabRoomAuthorization = ({
 
   if (tokenGeneration !== actualGeneration) {
     return { status: "generation-conflict" };
+  }
+
+  if (workspaceStatus !== "active") {
+    return { status: "workspace-access-revoked" };
   }
 
   const role = organizationRole;
@@ -342,6 +349,7 @@ export const authorizeFolioCollabRoom = async ({
       workspaceId: folioCollabRooms.workspaceId,
       workspaceClientId: workspaces.clientId,
       workspaceMemberId: workspaceMembers.id,
+      workspaceStatus: workspaces.status,
     })
     .from(folioCollabRoomTokens)
     .innerJoin(
@@ -388,6 +396,7 @@ export const authorizeFolioCollabRoom = async ({
     tokenGeneration: row.tokenGeneration,
     workspaceClientId: row.workspaceClientId,
     workspaceMemberId: row.workspaceMemberId,
+    workspaceStatus: row.workspaceStatus,
   });
   if (decision.status !== "authorized") {
     return decision;
@@ -419,13 +428,42 @@ export const authorizeFolioCollabRoom = async ({
 type TouchFolioCollabRoomResult =
   | { status: "active"; activeAt: Date }
   | { status: "desktop-conflict" }
-  | { status: "room-missing" };
+  | { status: "room-missing" }
+  | { status: "workspace-inactive" };
+
+export const folioCollabSeedClaimLeaseOnHeartbeat = ({
+  touchedAt,
+  userId,
+}: {
+  touchedAt: Date;
+  userId: SafeId<"user">;
+}) => sql`CASE
+  WHEN ${folioCollabRooms.seedState} = 'claimed'
+    AND ${folioCollabRooms.seedClaimedBy} = ${userId}
+  THEN ${touchedAt}
+  ELSE ${folioCollabRooms.seedClaimedAt}
+END`;
 
 export const touchFolioCollabRoom = async (
   value: AuthorizedFolioCollabRoom,
 ): Promise<TouchFolioCollabRoomResult> => {
   const touchedAt = new Date();
   return await value.scopedDb(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${value.workspaceId}))`,
+    );
+    const workspaceRows = await tx
+      .select({ status: workspaces.status })
+      .from(workspaces)
+      .where(eq(workspaces.id, value.workspaceId))
+      .limit(1)
+      .for("update");
+    if (workspaceRows.at(0)?.status !== "active") {
+      return {
+        status: "workspace-inactive",
+      } satisfies TouchFolioCollabRoomResult;
+    }
+
     await lockDocxEditTarget({
       entityId: value.entityId,
       propertyId: value.propertyId,
@@ -453,7 +491,13 @@ export const touchFolioCollabRoom = async (
 
     const updated = await tx
       .update(folioCollabRooms)
-      .set({ lastActivityAt: touchedAt })
+      .set({
+        lastActivityAt: touchedAt,
+        seedClaimedAt: folioCollabSeedClaimLeaseOnHeartbeat({
+          touchedAt,
+          userId: value.userId,
+        }),
+      })
       .where(
         and(
           eq(folioCollabRooms.id, value.roomId),
@@ -543,7 +587,8 @@ export type StoreFolioCollabSnapshotResult =
   | { status: "stored"; storedAt: Date; sizeBytes: number }
   | { status: "generation-conflict"; actualGeneration: number }
   | { status: "room-missing" }
-  | { status: "seed-owner-conflict" };
+  | { status: "seed-owner-conflict" }
+  | { status: "workspace-inactive" };
 
 type SnapshotStoreDecisionInput = {
   actualGeneration: number;
@@ -585,11 +630,25 @@ export const storeFolioCollabSnapshot = async ({
   value: AuthorizedFolioCollabRoom;
 }): Promise<StoreFolioCollabSnapshotResult> => {
   const nextSnapshotFileId = createSafeId<"userFile">();
+  const nextCleanupIntentId = createSafeId<"pendingUpload">();
   const nextKey = createFileKey({
     fileId: nextSnapshotFileId,
     mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
     organizationId: value.organizationId,
     workspaceId: value.workspaceId,
+  });
+  await value.scopedDb(async (tx) => {
+    // Reserve cleanup ownership before the object can exist. A process crash
+    // after PUT therefore leaves a durable exact-key tombstone for recovery.
+    await tx.insert(bufferObjectCleanupIntents).values({
+      id: nextCleanupIntentId,
+      nextAttemptAt: new Date(
+        Date.now() + FOLIO_COLLAB_SNAPSHOT_WRITE_RECOVERY_DELAY_MS,
+      ),
+      objectKey: nextKey,
+      organizationId: value.organizationId,
+      workspaceId: value.workspaceId,
+    });
   });
   await writeS3ObjectWithRetry({
     contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
@@ -612,6 +671,19 @@ export const storeFolioCollabSnapshot = async ({
   const transactionResult = await Result.tryPromise({
     try: async () =>
       await value.scopedDb(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${value.workspaceId}))`,
+        );
+        const workspaceRows = await tx
+          .select({ status: workspaces.status })
+          .from(workspaces)
+          .where(eq(workspaces.id, value.workspaceId))
+          .limit(1)
+          .for("update");
+        if (workspaceRows.at(0)?.status !== "active") {
+          return { status: "workspace-inactive" } as const;
+        }
+
         const rooms = await tx
           .select({
             generation: folioCollabRooms.generation,
@@ -700,6 +772,12 @@ export const storeFolioCollabSnapshot = async ({
             workspaceId: value.workspaceId,
           });
         }
+
+        // The room pointer now owns this immutable object. Retire the crash
+        // recovery tombstone in the same transaction that published it.
+        await tx
+          .delete(bufferObjectCleanupIntents)
+          .where(eq(bufferObjectCleanupIntents.id, nextCleanupIntentId));
 
         return {
           status: "stored",

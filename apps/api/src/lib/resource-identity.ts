@@ -160,8 +160,6 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   flowRunStep: { type: "non_resource", reason: "subresource" },
   folioCollabRoom: { type: "non_resource", reason: "collaboration" },
   folioCollabRoomToken: { type: "non_resource", reason: "credential" },
-  folioCollabSession: { type: "non_resource", reason: "collaboration" },
-  folioCollabSessionToken: { type: "non_resource", reason: "credential" },
   folder: { type: "alias", resourceType: RESOURCE_TYPE.ENTITY },
   infoSoudTrackedCase: { type: "non_resource", reason: "workflow" },
   invoice: { type: "resource", resourceType: RESOURCE_TYPE.INVOICE },

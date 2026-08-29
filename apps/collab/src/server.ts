@@ -20,12 +20,17 @@ type CollabAuthContext = {
 type CollabRoomTokenState = {
   canEdit: boolean;
   generation: number;
-  heartbeatTimer: ReturnType<typeof setTimeout> | null;
   refreshInFlight: Promise<string> | null;
   refreshTimer: ReturnType<typeof setTimeout> | null;
   roomId: string;
   token: string;
   tokenExpiresAtMs: number;
+};
+
+type CollabRoomHeartbeatState = {
+  inFlight: Promise<void> | null;
+  timer: ReturnType<typeof setTimeout> | null;
+  tokenState: CollabRoomTokenState;
 };
 
 type ManagedWebSocketLike = WebSocketLike & {
@@ -170,6 +175,7 @@ export const createCollabServer = async ({
   }
 
   const tokenStates = new Map<string, CollabRoomTokenState>();
+  const roomHeartbeatStates = new Map<string, CollabRoomHeartbeatState>();
 
   const clearRoomTokenRefresh = (state: CollabRoomTokenState) => {
     if (!state.refreshTimer) {
@@ -180,21 +186,24 @@ export const createCollabServer = async ({
     state.refreshTimer = null;
   };
 
-  const clearRoomHeartbeat = (state: CollabRoomTokenState) => {
-    if (!state.heartbeatTimer) {
+  const clearRoomHeartbeat = (roomId: string) => {
+    const state = roomHeartbeatStates.get(roomId);
+    if (!state) {
       return;
     }
 
-    clearTimeout(state.heartbeatTimer);
-    state.heartbeatTimer = null;
+    if (state.timer) {
+      clearTimeout(state.timer);
+    }
+    roomHeartbeatStates.delete(roomId);
   };
 
   const clearRoomTokens = (roomId: string) => {
+    clearRoomHeartbeat(roomId);
     for (const [token, state] of tokenStates) {
       if (state.roomId !== roomId) {
         continue;
       }
-      clearRoomHeartbeat(state);
       clearRoomTokenRefresh(state);
       tokenStates.delete(token);
     }
@@ -249,7 +258,6 @@ export const createCollabServer = async ({
     const state: CollabRoomTokenState = {
       canEdit,
       generation,
-      heartbeatTimer: null,
       refreshInFlight: null,
       refreshTimer: null,
       roomId,
@@ -333,22 +341,57 @@ export const createCollabServer = async ({
     });
   };
 
-  const scheduleRoomHeartbeat = (state: CollabRoomTokenState) => {
-    clearRoomHeartbeat(state);
-    state.heartbeatTimer = setTimeout(() => {
-      state.heartbeatTimer = null;
-      void heartbeatRoom(state)
+  const scheduleRoomHeartbeat = (roomId: string) => {
+    const state = roomHeartbeatStates.get(roomId);
+    if (!state || state.timer) {
+      return;
+    }
+
+    state.timer = setTimeout(() => {
+      state.timer = null;
+      const request = heartbeatRoom(state.tokenState);
+      state.inFlight = request;
+      void request
         .then(() => {
-          if (tokenStates.get(state.token) === state) {
-            scheduleRoomHeartbeat(state);
+          if (roomHeartbeatStates.get(roomId) === state) {
+            state.inFlight = null;
+            scheduleRoomHeartbeat(roomId);
           }
           return undefined;
         })
         .catch(() => {
-          hocuspocus.closeConnections(state.roomId);
-          clearRoomTokens(state.roomId);
+          hocuspocus.closeConnections(roomId);
+          clearRoomTokens(roomId);
         });
     }, ROOM_ACTIVITY_HEARTBEAT_INTERVAL_MS);
+  };
+
+  const ensureRoomHeartbeat = async (tokenState: CollabRoomTokenState) => {
+    const existing = roomHeartbeatStates.get(tokenState.roomId);
+    if (existing) {
+      existing.tokenState = tokenState;
+      if (existing.inFlight) {
+        await existing.inFlight;
+      }
+      return;
+    }
+
+    const state: CollabRoomHeartbeatState = {
+      inFlight: null,
+      timer: null,
+      tokenState,
+    };
+    roomHeartbeatStates.set(tokenState.roomId, state);
+    const request = heartbeatRoom(tokenState);
+    state.inFlight = request;
+    try {
+      await request;
+      state.inFlight = null;
+      scheduleRoomHeartbeat(tokenState.roomId);
+    } catch (error) {
+      clearRoomHeartbeat(tokenState.roomId);
+      throw error;
+    }
   };
 
   const hocuspocus = new Hocuspocus<CollabAuthContext>({
@@ -380,8 +423,7 @@ export const createCollabServer = async ({
         token,
         tokenExpiresAt: authorized.tokenExpiresAt,
       });
-      await heartbeatRoom(tokenState);
-      scheduleRoomHeartbeat(tokenState);
+      await ensureRoomHeartbeat(tokenState);
       connectionConfig.readOnly = !authorized.canEdit;
 
       return {
@@ -496,8 +538,10 @@ export const createCollabServer = async ({
   });
 
   const destroy = async () => {
+    for (const roomId of roomHeartbeatStates.keys()) {
+      clearRoomHeartbeat(roomId);
+    }
     for (const state of tokenStates.values()) {
-      clearRoomHeartbeat(state);
       clearRoomTokenRefresh(state);
     }
     tokenStates.clear();

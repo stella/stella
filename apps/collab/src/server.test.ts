@@ -306,7 +306,6 @@ describe("collaboration server", () => {
       ]);
       expect(fakeApi.heartbeatRequestBodies()).toEqual([
         { roomId: "folio_collab_room_test", token: "collab_token_test" },
-        { roomId: "folio_collab_room_test", token: "collab_token_test" },
       ]);
       await waitFor(
         () => fakeApi.loadRequestBodies().length === 1,

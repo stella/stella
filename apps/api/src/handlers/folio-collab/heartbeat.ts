@@ -34,6 +34,14 @@ const heartbeatFolioCollabRoom = createSafeTokenHandler(
         }),
       );
     }
+    if (heartbeat.status === "workspace-inactive") {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          message: "Collaborative edit access revoked.",
+        }),
+      );
+    }
 
     return Result.ok({ activeAt: heartbeat.activeAt.toISOString() });
   },

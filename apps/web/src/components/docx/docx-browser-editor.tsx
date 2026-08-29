@@ -1110,7 +1110,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     markDirty();
     clearQueuedChangeCheckpoint();
     if (isCollaborativeEditing) {
-      setAutosaveStatus("synced");
+      setAutosaveStatus("pending");
       return;
     }
 

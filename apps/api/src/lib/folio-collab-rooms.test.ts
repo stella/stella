@@ -7,41 +7,50 @@ process.env["S3_BUCKET"] ??= "test";
 process.env["S3_REGION"] ??= "us-east-1";
 
 type QueryBuilder = {
+  insert: () => QueryBuilder;
   select: () => QueryBuilder;
   from: () => QueryBuilder;
   innerJoin: () => QueryBuilder;
   leftJoin: () => QueryBuilder;
   where: () => QueryBuilder;
   limit: () => Promise<Record<string, unknown>[]>;
+  values: () => Promise<Record<string, unknown>[]>;
 };
 
 let nextRows: Record<string, unknown>[] = [];
 let scopedRows: Record<string, unknown>[][] = [];
 let scopedFailure: Error | null = null;
+let scopedFailureAfterCalls = 0;
+let scopedCalls = 0;
 const deletedStorageKeys: string[] = [];
 const writtenStorageKeys: string[] = [];
 const builder: QueryBuilder = {
+  insert: () => builder,
   select: () => builder,
   from: () => builder,
   innerJoin: () => builder,
   leftJoin: () => builder,
   where: () => builder,
   limit: async () => nextRows,
+  values: async () => [],
 };
 const scopedBuilder: QueryBuilder = {
+  insert: () => scopedBuilder,
   select: () => scopedBuilder,
   from: () => scopedBuilder,
   innerJoin: () => scopedBuilder,
   leftJoin: () => scopedBuilder,
   where: () => scopedBuilder,
   limit: async () => scopedRows.shift() ?? [],
+  values: async () => [],
 };
 
 void mock.module("@/api/db/root", () => ({ rootDb: builder, rlsDb: {} }));
 void mock.module("@/api/lib/root-scoped-db", () => ({
   createRootScopedDb:
     () => async (callback: (tx: QueryBuilder) => Promise<unknown>) => {
-      if (scopedFailure !== null) {
+      scopedCalls += 1;
+      if (scopedFailure !== null && scopedCalls > scopedFailureAfterCalls) {
         throw new Error(scopedFailure.message, { cause: scopedFailure });
       }
       return await callback(scopedBuilder);
@@ -84,6 +93,8 @@ const docxCheckpointFileId = toSafeId<"userFile">("file_docx");
 afterEach(() => {
   deletedStorageKeys.length = 0;
   scopedFailure = null;
+  scopedFailureAfterCalls = 0;
+  scopedCalls = 0;
   writtenStorageKeys.length = 0;
 });
 
@@ -104,6 +115,7 @@ const validRow = (overrides: Row = {}): Row => ({
   workspaceId,
   workspaceClientId: "client_1",
   workspaceMemberId: null,
+  workspaceStatus: "active",
   ...overrides,
 });
 
@@ -177,8 +189,15 @@ describe("authorizeFolioCollabRoom", () => {
         tokenGeneration: 3,
         workspaceClientId: "client_1",
         workspaceMemberId: null,
+        workspaceStatus: "active",
       }),
     ).toEqual({ status: "authorized", canEdit: false });
+  });
+
+  test("rejects collaboration in an archived workspace", async () => {
+    expect(await authorize(validRow({ workspaceStatus: "archived" }))).toEqual({
+      status: "workspace-access-revoked",
+    });
   });
 });
 
@@ -265,6 +284,7 @@ describe("folio collaboration room snapshot generation", () => {
     }
 
     scopedFailure = new Error("snapshot transaction failed");
+    scopedFailureAfterCalls = 1;
 
     expect(
       storeFolioCollabSnapshot({
@@ -279,6 +299,21 @@ describe("folio collaboration room snapshot generation", () => {
 });
 
 describe("folio collaboration room stored files", () => {
+  test("reserves cleanup before a snapshot write and retires it after publication", async () => {
+    const source = await Bun.file(
+      new URL("folio-collab-rooms.ts", import.meta.url),
+    ).text();
+    const reserve = source.indexOf(".insert(bufferObjectCleanupIntents)");
+    const write = source.indexOf("await writeS3ObjectWithRetry");
+    const publish = source.indexOf(".update(folioCollabRooms)", write);
+    const retire = source.indexOf(".delete(bufferObjectCleanupIntents)");
+
+    expect(reserve).toBeGreaterThan(-1);
+    expect(write).toBeGreaterThan(reserve);
+    expect(publish).toBeGreaterThan(write);
+    expect(retire).toBeGreaterThan(publish);
+  });
+
   test("collects only blobs that were durably written", () => {
     const writtenAt = new Date("2026-01-01T00:00:00.000Z");
 

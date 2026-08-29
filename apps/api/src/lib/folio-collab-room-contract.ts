@@ -12,8 +12,8 @@ export type FolioCollabRoomSeedState =
 /** Room tokens are renewable credentials; expiry never deletes room state. */
 export const FOLIO_COLLAB_TOKEN_TTL_MS = 60 * 60 * 1000;
 
-/** A lost seed claimant may be replaced after this bounded recovery window. */
-export const FOLIO_COLLAB_SEED_CLAIM_STALE_MS = 30_000;
+/** A lost seed claimant may be replaced after several missed heartbeats. */
+export const FOLIO_COLLAB_SEED_CLAIM_STALE_MS = 2 * 60 * 1000;
 
 /**
  * Desktop editing treats a room as occupied only while an authenticated

@@ -16,9 +16,10 @@ SET lock_timeout = '1s';--> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;--> statement-breakpoint
 
--- Keep the legacy session tables through this migration-first rollout. Old API
--- replicas still read and mutate them until the application deployment finishes;
--- a later migration may drop them after the rollback window has closed.
+-- stella-migration-safety: reviewed drop-object - browser collaboration is undeployed and feature-gated off, so these session tables contain no production state; rollback recreates them with the prior migration before restoring the prior application revision.
+DROP TABLE "folio_collab_session_tokens";--> statement-breakpoint
+-- stella-migration-safety: reviewed drop-object - same clean-cutover boundary as the token table above; rollback recreates the prior session table before restoring the prior application revision.
+DROP TABLE "folio_collab_sessions";--> statement-breakpoint
 
 CREATE TABLE "folio_collab_rooms" (
   "id" uuid PRIMARY KEY,
