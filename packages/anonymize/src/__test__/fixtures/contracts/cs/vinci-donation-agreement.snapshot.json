@@ -127,14 +127,14 @@
       "end": 4365,
       "label": "person",
       "text": "Ing. Martin Borovka",
-      "source": "regex"
+      "source": "trigger"
     },
     {
       "start": 4445,
       "end": 4465,
       "label": "person",
       "text": "Ing. Erika Kohoutová",
-      "source": "regex"
+      "source": "trigger"
     },
     {
       "start": 4545,
