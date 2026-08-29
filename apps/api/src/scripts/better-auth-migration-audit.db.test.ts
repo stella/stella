@@ -397,6 +397,28 @@ test("post phases require resource links, final constraints, and the exact basel
          WHERE id = ${microsoftAccountRowId}
       `);
 
+      // The backfill's second pass re-runs the pre-migration audit over rows
+      // it has already rewritten; the projection must be a fixed point.
+      const preMigrationAfterBackfill = await runBetterAuthMigrationAudit({
+        baseline: null,
+        database: auditDatabase,
+        expectedOAuthResources: TEST_OAUTH_RESOURCES,
+        mode: BETTER_AUTH_AUDIT_MODES.PRE_MIGRATION,
+        trustedIdentityMap,
+      });
+      if (preMigrationAfterBackfill.status === "error") {
+        throw preMigrationAfterBackfill.error;
+      }
+      expect(
+        checkStatus(
+          preMigrationAfterBackfill,
+          BETTER_AUTH_AUDIT_CHECKS.ACCOUNT_IDENTITY_MAPPING_COMPLETE,
+        ),
+      ).toBe("passed");
+      expect(
+        preMigrationAfterBackfill.value.baseline.accountIdentityProjection,
+      ).toEqual(preMigration.value.baseline.accountIdentityProjection);
+
       const postBackfill = await runBetterAuthMigrationAudit({
         baseline: preMigration.value.baseline,
         database: auditDatabase,
