@@ -290,11 +290,16 @@ impl<'a> StaticDetectorContext<'a> {
       return Ok(Vec::new());
     };
     let empty_title_tokens = BTreeSet::new();
+    let person_value_labels = self
+      .signature_data()?
+      .map(PreparedSignatureData::person_value_labels)
+      .unwrap_or_default();
     process_trigger_matches(
       self.regex_matches()?,
       self.triggers_slice()?,
       self.full_text()?,
       data,
+      person_value_labels,
       self.title_tokens()?.unwrap_or(&empty_title_tokens),
       diagnostics,
     )

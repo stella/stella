@@ -4184,7 +4184,13 @@ mod tests {
       )
       .unwrap();
 
-      assert!(!entities.is_empty(), "text {text:?}");
+      assert!(
+        entities
+          .iter()
+          .any(|entity| entity.label == PERSON_LABEL
+            && entity.text == "John Smith"),
+        "text {text:?}; entities: {entities:?}",
+      );
     }
   }
 

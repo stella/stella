@@ -261,19 +261,13 @@ fn keeps_date_like_street_name_in_address_seed_span() {
   assert!(!result.redaction.redacted_text.contains("May 15 Street"));
 }
 
-/// A barrier entity between two halves of an address splits the seed cluster.
-/// Each half is then judged on its own, and a street with no city beside it
-/// carries only one kind of evidence, so it used to be dropped. Standalone
-/// street detection is off here, matching the shipped default, so the run
-/// evidence is what has to keep the street.
-#[test]
-fn keeps_both_halves_of_an_address_split_by_a_case_number() {
+fn barrier_address_engine() -> PreparedEngine {
   let literal = |pattern: &str| SearchPattern::LiteralWithOptions {
     pattern: String::from(pattern),
     case_insensitive: Some(true),
     whole_words: Some(true),
   };
-  let prepared = PreparedEngine::new(prepared_config! {
+  PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"\d:\d{2}-cv-\d{5}",
     ))],
@@ -303,7 +297,17 @@ fn keeps_both_halves_of_an_address_split_by_a_case_number() {
     address_seed_data: Some(AddressSeedData::default()),
     ..empty_config(PreparedEngineSlices::default())
   })
-  .expect("address seed data should prepare");
+  .expect("address seed data should prepare")
+}
+
+/// A barrier entity between two halves of an address splits the seed cluster.
+/// Each half is then judged on its own, and a street with no city beside it
+/// carries only one kind of evidence, so it used to be dropped. Standalone
+/// street detection is off here, matching the shipped default, so the run
+/// evidence is what has to keep the street.
+#[test]
+fn keeps_both_halves_of_an_address_split_by_a_case_number() {
+  let prepared = barrier_address_engine();
 
   let result = prepared
     .redact_static_entities(
@@ -324,6 +328,27 @@ fn keeps_both_halves_of_an_address_split_by_a_case_number() {
   assert!(!result.redaction.redacted_text.contains("Main Street"));
   // The barrier still keeps the case number out of the address span.
   assert!(!result.redaction.redacted_text.contains("1:23-cv-04567"));
+}
+
+#[test]
+fn paragraph_barriers_keep_unrelated_address_evidence_separate() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "The filing mentions 123 Main Street.\n\nParis 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(
+    !addresses.contains(&"123 Main Street"),
+    "unrelated street borrowed evidence across a paragraph: {addresses:?}",
+  );
+  assert!(
+    addresses.contains(&"Paris 75002"),
+    "self-contained city and postal code were dropped: {addresses:?}",
+  );
 }
 
 #[test]
@@ -430,23 +455,25 @@ fn preserves_unit_abbreviation_inside_address_seed_span() {
   })
   .expect("address seed data should prepare");
 
-  let suffix = "á".repeat(97);
-  let full_text = format!(
-    "Notices go to 10 Main Street, Springfield 12345 Apt. 5 {suffix}. Thank you."
-  );
-  let result = prepared
-    .redact_static_entities(&full_text, &OperatorConfig::default())
-    .expect("static redaction should succeed");
-  let expected = format!("10 Main Street, Springfield 12345 Apt. 5 {suffix}");
+  for designator in ["Apt.", "Apt"] {
+    let suffix = "á".repeat(97);
+    let full_text = format!(
+      "Notices go to 10 Main Street, Springfield 12345 {designator} 5 {suffix}. Thank you."
+    );
+    let result = prepared
+      .redact_static_entities(&full_text, &OperatorConfig::default())
+      .expect("static redaction should succeed");
+    let expected =
+      format!("10 Main Street, Springfield 12345 {designator} 5 {suffix}");
 
-  assert!(
-    address_texts(&result).contains(&expected.as_str()),
-    "resolved address entities: {:?}; address seed entities: {:?}",
-    result.resolved_entities,
-    result.detections.entities.address_seed(),
-  );
-  assert!(!result.redaction.redacted_text.contains("Apt. 5"));
-  assert!(!result.redaction.redacted_text.contains(&suffix));
+    assert!(
+      address_texts(&result).contains(&expected.as_str()),
+      "resolved address entities: {:?}; address seed entities: {:?}",
+      result.resolved_entities,
+      result.detections.entities.address_seed(),
+    );
+    assert!(!result.redaction.redacted_text.contains(&suffix));
+  }
 }
 
 /// Fixture for the city-anchored / standalone street cases: "Paris" as a

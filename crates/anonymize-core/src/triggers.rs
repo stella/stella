@@ -326,6 +326,7 @@ pub(crate) fn process_trigger_matches(
   slice: PatternSlice,
   full_text: &str,
   data: &PreparedTriggerData,
+  person_value_labels: &[String],
   title_tokens: &BTreeSet<String>,
   mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
 ) -> Result<Vec<PipelineEntity>> {
@@ -382,7 +383,7 @@ pub(crate) fn process_trigger_matches(
     // judge the remainder.
     if rule.label == crate::labels::PERSON_LABEL {
       while let Some(value_start) =
-        leading_field_label_value_start(&value.text, &data.person_field_labels)
+        leading_field_label_value_start(&value.text, person_value_labels)
       {
         let Some(rest) = value.text.get(value_start..).map(str::to_owned)
         else {
@@ -2958,6 +2959,7 @@ mod tests {
       PatternSlice { start: 0, end: 2 },
       text,
       &data,
+      &[],
       &BTreeSet::new(),
       None,
     )
@@ -2991,6 +2993,7 @@ mod tests {
       PatternSlice { start: 0, end: 2 },
       text,
       &data,
+      &[],
       &BTreeSet::new(),
       None,
     )
@@ -3030,6 +3033,7 @@ mod tests {
       PatternSlice { start: 0, end: 2 },
       text,
       &data,
+      &[],
       &BTreeSet::new(),
       None,
     )
@@ -3071,6 +3075,7 @@ mod tests {
       PatternSlice { start: 0, end: 2 },
       text,
       &data,
+      &[],
       &BTreeSet::new(),
       None,
     )
@@ -3118,6 +3123,7 @@ mod tests {
         PatternSlice { start: 0, end: 2 },
         &text,
         &data,
+        &[],
         &BTreeSet::new(),
         None,
       )
@@ -3168,6 +3174,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       &data,
+      &[],
       &BTreeSet::new(),
       None,
     )
@@ -3243,6 +3250,7 @@ mod tests {
       slice,
       text,
       &data,
+      &[],
       &BTreeSet::new(),
       None,
     )
@@ -3297,6 +3305,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       &text,
       &data,
+      &[],
       &BTreeSet::new(),
       None,
     )
@@ -3343,6 +3352,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       &data,
+      &[],
       &BTreeSet::new(),
       None,
     )
@@ -3393,6 +3403,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       &data,
+      &[],
       &BTreeSet::new(),
       None,
     )
@@ -3474,6 +3485,7 @@ mod tests {
         PatternSlice { start: 0, end: 1 },
         text,
         &data,
+        &[],
         &BTreeSet::new(),
         None,
       )
@@ -3510,9 +3522,12 @@ mod tests {
         String::from("Name"),
         String::from("Title"),
         String::from("Jméno"),
+        String::from("Address"),
+        String::from("Date"),
       ],
     })
     .unwrap();
+    let person_value_labels = [String::from("Name"), String::from("Jméno")];
 
     for (text, expected) in [
       (
@@ -3520,7 +3535,7 @@ mod tests {
         "Jane Roe",
       ),
       (
-        "the seller, represented by Title： Jane Roe, signed",
+        "the seller, represented by Name： Jane Roe, signed",
         "Jane Roe",
       ),
       (
@@ -3540,6 +3555,7 @@ mod tests {
         PatternSlice { start: 0, end: 1 },
         text,
         &data,
+        &person_value_labels,
         &BTreeSet::new(),
         None,
       )
@@ -3552,6 +3568,30 @@ mod tests {
         u32::try_from(text.find(expected).unwrap()).unwrap(),
         "{text}"
       );
+    }
+
+    for text in [
+      "the seller, represented by Address: Main Street, signed",
+      "the seller, represented by Date: August Twenty, signed",
+    ] {
+      let start = text.find(trigger).unwrap();
+      let end = start.saturating_add(trigger.len());
+      let entities = process_trigger_matches(
+        &[SearchMatch::Literal {
+          pattern: 0,
+          start: u32::try_from(start).unwrap(),
+          end: u32::try_from(end).unwrap(),
+        }],
+        PatternSlice { start: 0, end: 1 },
+        text,
+        &data,
+        &person_value_labels,
+        &BTreeSet::new(),
+        None,
+      )
+      .unwrap();
+
+      assert!(entities.is_empty(), "{text}");
     }
   }
 
@@ -3612,6 +3652,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       data,
+      &[],
       &title_tokens,
       None,
     )
@@ -3751,6 +3792,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       &text,
       &data,
+      &[],
       &BTreeSet::new(),
       None,
     )
@@ -3806,6 +3848,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       data,
+      &[],
       &BTreeSet::new(),
       None,
     )
@@ -4088,6 +4131,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       &data,
+      &[],
       &BTreeSet::new(),
       None,
     )
@@ -4139,6 +4183,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       &text,
       &data,
+      &[],
       &BTreeSet::new(),
       None,
     )
@@ -4193,6 +4238,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       &data,
+      &[],
       &BTreeSet::new(),
       None,
     )
@@ -4243,6 +4289,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       &data,
+      &[],
       &BTreeSet::new(),
       None,
     )

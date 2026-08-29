@@ -11,6 +11,7 @@ static_detector_rules! {
     inputs: &[
       DetectorInput::RegexMatches,
       DetectorInput::FullText,
+      DetectorInput::SignatureData,
       DetectorInput::TitleTokens,
     ];
     scales: &[DetectorInput::RegexMatches, DetectorInput::FullText];

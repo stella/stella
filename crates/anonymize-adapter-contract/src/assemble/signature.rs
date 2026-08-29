@@ -1,11 +1,10 @@
 //! `signature_data`: ports `buildNativeSignatureData`
 //! (`build-unified-search.ts`).
 //!
-//! Existing detection fields include all languages for captured parity. The
-//! Generic form labels are scoped to configured content languages so an
-//! unrelated language's label cannot truncate a surname. PDF signing software
-//! stamps are language-neutral because tools commonly emit English text inside
-//! otherwise non-English documents.
+//! Person-introducing and generic form labels are scoped to configured content
+//! languages so an unrelated language's label cannot start or truncate a name.
+//! PDF signing software stamps are language-neutral because tools commonly emit
+//! English text inside otherwise non-English documents.
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -60,7 +59,7 @@ pub(super) fn build_signature_data(
       "signature-detection.json",
     )?;
   Ok(BindingSignatureData {
-    labels: language_keyed_terms(&data.labels, None),
+    labels: language_keyed_terms(&data.labels, selected),
     person_list_labels: language_keyed_terms(
       &data.person_list_labels,
       selected,
@@ -180,6 +179,14 @@ mod tests {
     );
     assert!(data.form_field_labels.iter().any(|label| label == "jméno"));
     assert!(!data.form_field_labels.iter().any(|label| label == "name"));
+    assert!(!data.labels.iter().any(|label| label == "name"));
+    assert!(
+      build_signature_data(Some(&[String::from("en")]))
+        .unwrap()
+        .labels
+        .iter()
+        .any(|label| label == "name")
+    );
   }
 
   #[test]

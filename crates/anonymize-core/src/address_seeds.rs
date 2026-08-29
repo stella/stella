@@ -373,6 +373,7 @@ impl PreparedAddressSeedData {
 
     let cluster_start = Instant::now();
     let clusters = cluster_seeds(&seeds, full_text, &entity_index);
+    let runs = run_evidence(&clusters);
     profile.cluster_elapsed_us = elapsed_us(cluster_start);
     profile.cluster_count = clusters.len();
 
@@ -384,7 +385,6 @@ impl PreparedAddressSeedData {
     }
     let mut boundary_starts = None;
     let mut results = Vec::new();
-    let runs = run_evidence(&clusters);
 
     for cluster in clusters {
       let (score, growth) = match score_cluster(&cluster) {
@@ -1061,7 +1061,8 @@ struct SeedCluster {
   end: usize,
   /// Clusters separated only by a barrier entity share a run: they were one
   /// candidate address before a case number, date, or person split them. A
-  /// distance gap starts a new run, because those seeds are unrelated.
+  /// textual barrier or distance gap starts a new run, because those seeds are
+  /// unrelated.
   run: usize,
 }
 
@@ -2094,8 +2095,8 @@ fn cluster_seeds(
       seed.start,
       ADDRESS_CLUSTER_MAX_GAP,
     );
-    let barrier = within_window
-      && has_cluster_barrier(
+    let separation = if within_window {
+      cluster_separation(
         full_text,
         current.end,
         seed.start,
@@ -2104,16 +2105,24 @@ fn cluster_seeds(
           seed,
         },
         entity_index,
-      );
-    if within_window && !barrier {
-      current.seeds.push(seed.clone());
-      current.end = current.end.max(seed.end);
-      continue;
-    }
-    // Only a distance gap breaks the run. A barrier split keeps it, so the
-    // fragments can still vouch for each other as address evidence.
-    if !within_window {
-      run = run.saturating_add(1);
+      )
+    } else {
+      ClusterSeparation::DistanceGap
+    };
+    match separation {
+      ClusterSeparation::None => {
+        current.seeds.push(seed.clone());
+        current.end = current.end.max(seed.end);
+        continue;
+      }
+      // A non-address entity deliberately splits the output span without
+      // making the address evidence on either side unrelated.
+      ClusterSeparation::EntityBarrier => {}
+      // Paragraphs, prose, and distance gaps separate unrelated candidates;
+      // they must not let weak address fragments vouch for each other.
+      ClusterSeparation::TextBarrier | ClusterSeparation::DistanceGap => {
+        run = run.saturating_add(1);
+      }
     }
     clusters.push(current);
     current = SeedCluster {
@@ -2271,6 +2280,14 @@ struct ClusterJoin<'a> {
   seed: &'a Seed,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ClusterSeparation {
+  None,
+  EntityBarrier,
+  TextBarrier,
+  DistanceGap,
+}
+
 impl ClusterJoin<'_> {
   /// Once a street word is in the cluster, everything up to the destination
   /// is street-name material: "10 rue de la paix et de la liberté, Paris"
@@ -2291,18 +2308,25 @@ impl ClusterJoin<'_> {
   }
 }
 
-fn has_cluster_barrier(
+fn cluster_separation(
   full_text: &str,
   gap_start: usize,
   gap_end: usize,
   join: ClusterJoin<'_>,
   entity_index: &NonAddressEntityIndex,
-) -> bool {
-  full_text.get(gap_start..gap_end).is_some_and(|gap| {
+) -> ClusterSeparation {
+  let has_text_barrier = full_text.get(gap_start..gap_end).is_some_and(|gap| {
     has_paragraph_break(gap)
       || has_prose_wrap_after_weak_cluster(gap, join.cluster)
       || (join.guards_against_prose() && has_prose_run(gap))
-  }) || entity_index.has_barrier(gap_start, gap_end)
+  });
+  if has_text_barrier {
+    return ClusterSeparation::TextBarrier;
+  }
+  if entity_index.has_barrier(gap_start, gap_end) {
+    return ClusterSeparation::EntityBarrier;
+  }
+  ClusterSeparation::None
 }
 
 /// Two ordinary words in the gap mean the seeds sit in a sentence rather than

@@ -20,7 +20,7 @@ use stella_anonymize_core::assemble::{
 };
 
 use super::AssembleContext;
-use super::language::language_config_matches;
+use super::language::{language_config_matches, language_keyed_terms};
 use crate::{
   BindingAddressContextData, BindingAddressSeedData,
   BindingStandaloneStreetData,
@@ -260,7 +260,10 @@ pub(super) fn build_address_seed_data(
   Ok(Some(BindingAddressSeedData {
     boundary_words: shared.boundary_words.clone(),
     br_cep_cue_words: shared.br_cep_cue_words.clone(),
-    unit_abbreviations: flatten_dictionaries(&[&unit_abbreviations]),
+    unit_abbreviations: language_keyed_terms(
+      &unit_abbreviations,
+      ctx.content_languages.as_deref(),
+    ),
     standalone_street: build_standalone_street_data(ctx)?,
   }))
 }
@@ -408,33 +411,6 @@ fn extend_deduplicated(words: &mut Vec<String>, additions: Vec<String>) {
   }
 }
 
-/// Mirrors `flattenDictionaries`/`flattenDictionary`: concatenate the array
-/// values of each config (all keys, not just language keys), dropping empty
-/// strings and deduping by a lowercase key in first-occurrence order.
-fn flatten_dictionaries(configs: &[&OrderedMap<Value>]) -> Vec<String> {
-  let mut seen = HashSet::new();
-  let mut words = Vec::new();
-  for config in configs {
-    for (_key, value) in *config {
-      let Some(items) = value.as_array() else {
-        continue;
-      };
-      for item in items {
-        let Some(word) = item.as_str() else {
-          continue;
-        };
-        if word.is_empty() {
-          continue;
-        }
-        if seen.insert(word.to_lowercase()) {
-          words.push(word.to_string());
-        }
-      }
-    }
-  }
-  words
-}
-
 /// Mirrors `loadBrCueWords`: the `pt-br` arrays of `address-street-types` then
 /// `address-boundaries`, deduped by lowercase in first-occurrence order.
 fn build_br_cue_words(
@@ -472,8 +448,9 @@ mod tests {
   };
 
   use super::{
-    AssembleContext, Conjunctions, build_address_shared_data,
-    build_standalone_street_data, flatten_dictionaries,
+    AssembleContext, Conjunctions, build_address_seed_data,
+    build_address_shared_data, build_standalone_street_data,
+    language_record_values,
   };
 
   fn config(languages: Vec<String>) -> PipelineConfig {
@@ -527,6 +504,40 @@ mod tests {
         .map(|data| data.street_type_words)
         .unwrap_or_default(),
     )
+  }
+
+  fn unit_abbreviations(
+    languages: &[&str],
+  ) -> Result<Vec<String>, AssembleError> {
+    let config = config(
+      languages
+        .iter()
+        .map(|language| (*language).to_owned())
+        .collect(),
+    );
+    let context = AssembleContext {
+      config: &config,
+      dictionaries: None,
+      content_languages: config.languages.clone(),
+      allowed_labels: None,
+    };
+    let shared = build_address_shared_data(&context)?;
+    Ok(
+      build_address_seed_data(&context, &shared)?
+        .map(|data| data.unit_abbreviations)
+        .unwrap_or_default(),
+    )
+  }
+
+  #[test]
+  fn unit_abbreviations_follow_language_scope() -> Result<(), AssembleError> {
+    assert!(
+      unit_abbreviations(&["en"])?
+        .iter()
+        .any(|word| word == "apt.")
+    );
+    assert!(unit_abbreviations(&["de"])?.is_empty());
+    Ok(())
   }
 
   #[test]
@@ -648,7 +659,7 @@ mod tests {
     boundaries: &[String],
   ) -> Result<(), AssembleError> {
     let conjunctions: Conjunctions = parse_data_file("conjunctions.json")?;
-    for conjunction in flatten_dictionaries(&[&conjunctions.coordinating]) {
+    for conjunction in language_record_values(&conjunctions.coordinating) {
       assert!(!boundaries.iter().any(|word| word == &conjunction));
     }
     Ok(())

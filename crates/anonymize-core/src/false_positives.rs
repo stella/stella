@@ -311,12 +311,7 @@ fn should_reject_entity(
       return Ok(true);
     }
   }
-  // The boilerplate heuristic reads line shape, and contracts are routinely
-  // set in all caps, so a party named in an all-caps clause looks like a
-  // heading. A legal-form suffix is positive evidence of a company and
-  // outweighs that, as it already does for the length cap.
   if entity.label == ORGANIZATION_LABEL
-    && entity.source != DetectionSource::LegalForm
     && is_all_caps_candidate(text)
     && is_all_caps_boilerplate_line(document, offsets, entity)?
   {
@@ -720,7 +715,13 @@ fn is_all_caps_boilerplate_line(
   if starts_with_section_heading_prefix(context.line) {
     return Ok(true);
   }
-  if outside_entity_letters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS {
+  // Contracts routinely set party clauses in all caps. A legal-form suffix is
+  // positive organization evidence, so it outweighs only the surrounding
+  // prose heuristic; explicit section prefixes and long heading-shaped entity
+  // text remain rejected.
+  if entity.source != DetectionSource::LegalForm
+    && outside_entity_letters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS
+  {
     return Ok(true);
   }
   Ok(
@@ -2195,6 +2196,28 @@ mod tests {
     .unwrap();
 
     assert_eq!(entities.len(), 1);
+  }
+
+  #[test]
+  fn rejects_legal_form_organizations_in_numbered_all_caps_headings() {
+    let text = "17. FORMATION OF LIMITED LIABILITY COMPANY\n";
+    let entity_text = "LIMITED LIABILITY COMPANY";
+    let start = text.find(entity_text).unwrap();
+    let entities = filter_entity_false_positives(
+      vec![PipelineEntity::detected(
+        u32::try_from(start).unwrap(),
+        u32::try_from(start.saturating_add(entity_text.len())).unwrap(),
+        ORGANIZATION_LABEL,
+        entity_text,
+        0.8,
+        DetectionSource::LegalForm,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
   }
 
   #[test]

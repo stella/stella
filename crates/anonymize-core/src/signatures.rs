@@ -100,6 +100,14 @@ impl PreparedSignatureData {
   pub(crate) fn form_field_labels(&self) -> &[String] {
     &self.form_field_labels
   }
+
+  /// Labels that positively introduce a person value (`Name: Jane Roe`).
+  /// Unlike `form_field_labels`, these do not include address, date, tax, or
+  /// signature fields.
+  #[must_use]
+  pub(crate) fn person_value_labels(&self) -> &[String] {
+    &self.labels
+  }
 }
 
 /// Lowercased vocabulary marking where a person span must stop.

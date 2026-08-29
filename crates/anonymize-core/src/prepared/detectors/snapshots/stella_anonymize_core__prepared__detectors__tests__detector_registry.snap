@@ -82,6 +82,7 @@ modules:
         inputs:
           - RegexMatches
           - FullText
+          - SignatureData
           - TitleTokens
         dependencies: []
         support_resources:
