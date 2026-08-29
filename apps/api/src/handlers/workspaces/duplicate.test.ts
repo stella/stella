@@ -1,5 +1,4 @@
-import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { member } from "@/api/db/auth-schema";
 import {
@@ -14,50 +13,18 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
+import { envBase } from "@/api/env-base";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createFileKey } from "@/api/lib/file-key";
+import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { LIMITS } from "@/api/lib/limits";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
-
-const s3FileMock = mock((key: string) => ({ key }));
-// Typed by their first argument so a test can read back the object keys the
-// duplicate wrote and the keys the cleanup returned.
-const s3WriteMock = mock(async (_key: string) => undefined);
-const s3DeleteMock = mock(async (_key: string) => undefined);
-const copyObjectMock = mock<
-  (sourceKey: string, targetKey: string) => Promise<Result<void, unknown>>
->(async () => Result.ok(undefined));
-
-// Spread the real module: mock.module is process-global; a partial mock would delete s3's other exports for later test files.
-const realS3 = await import("@/api/lib/s3");
-
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  deleteS3ObjectWithSignal: s3DeleteMock,
-  getS3: () => ({
-    delete: s3DeleteMock,
-    file: s3FileMock,
-    write: s3WriteMock,
-  }),
-  putS3ObjectWithSignal: s3WriteMock,
-  // `mock.module` replaces the module, so every named export a consumer
-  // imports must exist here or the import fails at link time. This suite
-  // reads no object; throwing surfaces one that appears later.
-  readS3ArrayBuffer: () => {
-    throw new Error("Unexpected S3 object read in this suite");
-  },
-  readCorpusS3Bytes: () => {
-    throw new Error("Unexpected corpus object read in this suite");
-  },
-}));
-
-const realS3Presign = await import("@/api/lib/s3-presign");
-void mock.module("@/api/lib/s3-presign", () => ({
-  ...realS3Presign,
-  copyObject: copyObjectMock,
-}));
 
 // Spread the real module: the handler reads its search-index ownership split
 // from here, and that split is what these tests exercise. Only the durable
@@ -143,6 +110,62 @@ const isInsertedEntity = (
   typeof value.id === "string" &&
   "name" in value &&
   typeof value.name === "string";
+
+// Every file copy is a real server-side copy inside a real store, so the keys
+// the duplicate wrote and the keys its cleanup returned are read back from it.
+const sourceBytes = new TextEncoder().encode("evidence bytes");
+const sourceOrganizationId = toSafeId<"organization">("org_test123");
+const sourceWorkspaceId = toSafeId<"workspace">("ws_source123");
+
+let fake: FakeS3;
+
+const objectKey = (
+  workspaceId: SafeId<"workspace">,
+  fileId: string,
+  mimeType: string,
+): string =>
+  `${envBase.S3_BUCKET}/${createFileKey({
+    organizationId: sourceOrganizationId,
+    workspaceId,
+    fileId,
+    mimeType,
+  })}`;
+
+const seedSourceObject = (fileId: string, mimeType: string): string => {
+  const key = objectKey(sourceWorkspaceId, fileId, mimeType);
+  fake.put(
+    envBase.S3_BUCKET,
+    key.slice(`${envBase.S3_BUCKET}/`.length),
+    sourceBytes,
+    mimeType,
+  );
+  return key;
+};
+
+const requestKeys = (method: "COPY" | "DELETE" | "GET"): string[] =>
+  fake.requests
+    .filter((request) => request.method === method)
+    .map(({ key }) => key);
+
+const readDuplicatedWorkspaceId = (result: unknown): SafeId<"workspace"> => {
+  if (
+    typeof result === "object" &&
+    result !== null &&
+    "workspaceId" in result &&
+    typeof result.workspaceId === "string"
+  ) {
+    return toSafeId<"workspace">(result.workspaceId);
+  }
+  throw new Error("Expected the duplicate to return a workspace id");
+};
+
+beforeEach(() => {
+  fake = startFakeS3();
+});
+
+afterEach(() => {
+  fake.stop();
+});
 
 const createContext = ({
   includeContent = false,
@@ -419,10 +442,6 @@ describe("duplicateWorkspace", () => {
   });
 
   test("copies and remaps image thumbnail refs when duplicating content", async () => {
-    copyObjectMock.mockClear();
-    s3FileMock.mockClear();
-    s3WriteMock.mockClear();
-    s3DeleteMock.mockClear();
     requestNativeExtractionRunsMock.mockClear();
     enqueueDocumentProcessingRunMock.mockClear();
     syncWorkspaceSearchActivityMock.mockClear();
@@ -448,6 +467,11 @@ describe("duplicateWorkspace", () => {
       thumbnailDerivative: { status: "ready" },
       thumbnailFileId: "source-thumbnail-id",
     };
+    const sourceKeys = [
+      seedSourceObject(imageContent.id, imageContent.mimeType),
+      seedSourceObject("source-pdf-id", PDF_MIME_TYPE),
+      seedSourceObject("source-thumbnail-id", THUMBNAIL_MIME_TYPE),
+    ];
     let nextMatterSequence = 0;
 
     const tx = {
@@ -595,7 +619,7 @@ describe("duplicateWorkspace", () => {
     );
 
     expect(result).toEqual({ workspaceId: expect.any(String) });
-    expect(copyObjectMock).toHaveBeenCalledTimes(3);
+    const duplicatedWorkspaceId = readDuplicatedWorkspaceId(result);
     expect(insertedFields).toHaveLength(1);
 
     const copiedContent = insertedFields.at(0)?.content;
@@ -611,6 +635,32 @@ describe("duplicateWorkspace", () => {
     );
     expect(copiedContent.placeholder).toBe(imageContent.placeholder);
     expect(copiedContent.thumbnailDerivative).toEqual({ status: "ready" });
+
+    // The duplicate owns the file, its PDF rendition, and its thumbnail: each
+    // remapped id addresses an object of its own holding the source bytes,
+    // and the source objects are untouched.
+    expect(new Set(fake.objects.keys())).toEqual(
+      new Set([
+        ...sourceKeys,
+        objectKey(
+          duplicatedWorkspaceId,
+          copiedContent.id,
+          copiedContent.mimeType,
+        ),
+        objectKey(
+          duplicatedWorkspaceId,
+          copiedContent.pdfFileId ?? "",
+          PDF_MIME_TYPE,
+        ),
+        objectKey(
+          duplicatedWorkspaceId,
+          copiedContent.thumbnailFileId ?? "",
+          THUMBNAIL_MIME_TYPE,
+        ),
+      ]),
+    );
+    // The bytes never travel through the API task.
+    expect(requestKeys("GET")).toEqual([]);
   });
 
   test("marks the copies extraction will not index, inside the transaction", async () => {
@@ -635,6 +685,8 @@ describe("duplicateWorkspace", () => {
       pdfFileId: "source-pdf-id",
       pdfDerivative: { status: "ready" },
     };
+    seedSourceObject("source-file-id", "image/png");
+    seedSourceObject("source-pdf-id", PDF_MIME_TYPE);
     const taskContent: FieldContent = {
       type: "text",
       version: 1,
@@ -806,8 +858,7 @@ describe("duplicateWorkspace", () => {
   });
 
   test("returns every object copied for an aborted duplicate", async () => {
-    copyObjectMock.mockClear();
-    s3DeleteMock.mockClear();
+    const sourceKey = seedSourceObject("source-file-id", "image/png");
     enqueueEntitySearchRepairsMock.mockClear();
     enqueueWorkspaceSearchRepairsMock.mockClear();
 
@@ -910,20 +961,18 @@ describe("duplicateWorkspace", () => {
 
     // No row survives the abort, so every object copied for it is an orphan
     // and all of them go back.
-    const copiedKeys = copyObjectMock.mock.calls.map(
-      ([_sourceKey, targetKey]) => targetKey,
-    );
-    const deletedKeys = s3DeleteMock.mock.calls.map(([key]) => key);
+    const copiedKeys = requestKeys("COPY");
+    const deletedKeys = requestKeys("DELETE");
     expect(copiedKeys).toHaveLength(1);
     expect(new Set(deletedKeys)).toEqual(new Set(copiedKeys));
+    // The store is back to the source object alone.
+    expect([...fake.objects.keys()]).toEqual([sourceKey]);
 
     expect(enqueueEntitySearchRepairsMock).not.toHaveBeenCalled();
     expect(enqueueWorkspaceSearchRepairsMock).not.toHaveBeenCalled();
   });
 
   test("rejects an oversized source before the duplicate writes anything", async () => {
-    copyObjectMock.mockClear();
-
     const { safeDb, scopedDb } = createScopedDbMock({
       query: {
         workspaces: {
@@ -974,6 +1023,6 @@ describe("duplicateWorkspace", () => {
       code: 400,
       response: { message: "Entities limit reached" },
     });
-    expect(copyObjectMock).not.toHaveBeenCalled();
+    expect(requestKeys("COPY")).toEqual([]);
   });
 });

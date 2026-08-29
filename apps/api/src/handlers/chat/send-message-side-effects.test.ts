@@ -1,25 +1,21 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { sql, type SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { envBase } from "@/api/env-base";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-const s3Delete = mock(async () => undefined);
-const realS3 = await import("@/api/lib/s3");
+import { rollbackUnpersistedChatSideEffects } from "./send-message-side-effects";
 
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  deleteS3ObjectWithSignal: s3Delete,
-  getS3: () => ({ delete: s3Delete }),
-}));
-
-const { rollbackUnpersistedChatSideEffects } =
-  await import("./send-message-side-effects");
+const bucket = envBase.S3_BUCKET;
+let fake: FakeS3;
 
 const threadId = toSafeId<"chatThread">("00000000-0000-0000-0000-000000000001");
 const userId = toSafeId<"user">("00000000-0000-0000-0000-000000000002");
@@ -47,6 +43,14 @@ const threadData: ChatThreadState["data"] = {
 };
 
 describe("send-message side-effect rollback", () => {
+  beforeEach(() => {
+    fake = startFakeS3();
+  });
+
+  afterEach(() => {
+    fake.stop();
+  });
+
   test("deletes a created thread while its ownership marker matches", async () => {
     const where = mock((condition: SQL) => ({
       returning: async () => {
@@ -130,7 +134,6 @@ describe("send-message side-effect rollback", () => {
   });
 
   test("removes uploaded attachments without deleting an existing thread", async () => {
-    s3Delete.mockClear();
     const deleteRowsWhere = mock(async () => undefined);
     const deleteRows = mock(() => ({ where: deleteRowsWhere }));
     const recordAuditEvent = mock(async () => undefined);
@@ -140,6 +143,7 @@ describe("send-message side-effect rollback", () => {
       s3Key: "chat/thread/attachment.txt",
       thumbnailS3Key: null,
     };
+    fake.put(bucket, uploadedFile.s3Key, "attachment body");
 
     const result = await rollbackUnpersistedChatSideEffects({
       recordAuditEvent,
@@ -151,10 +155,11 @@ describe("send-message side-effect rollback", () => {
     });
 
     expect(Result.isOk(result)).toBe(true);
-    expect(s3Delete).toHaveBeenCalledWith(
-      uploadedFile.s3Key,
-      expect.any(AbortSignal),
-    );
+    // The attachment is gone from the store, under the key the row named.
+    expect(fake.objects.size).toBe(0);
+    expect(
+      fake.requests.filter(({ method }) => method === "DELETE"),
+    ).toMatchObject([{ bucket, key: uploadedFile.s3Key }]);
     expect(deleteRows).toHaveBeenCalledTimes(1);
     expect(deleteRowsWhere).toHaveBeenCalledTimes(1);
     expect(recordAuditEvent).toHaveBeenCalledWith(expect.anything(), [

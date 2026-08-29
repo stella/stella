@@ -1,57 +1,22 @@
-import { Result } from "better-result";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { documentCounters, entities, fields } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
+import { envBase } from "@/api/env-base";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createFileKey } from "@/api/lib/file-key";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-// S3 mocks
+// Every copy is a real server-side copy inside a real store, so the keys the
+// copy wrote and the keys a rollback returned are read back from it.
 const fileBytes = new TextEncoder().encode("file content");
-const arrayBufferMock = mock(async () =>
-  fileBytes.buffer.slice(
-    fileBytes.byteOffset,
-    fileBytes.byteOffset + fileBytes.byteLength,
-  ),
-);
-const fileMock = mock(() => ({ arrayBuffer: arrayBufferMock }));
-// Typed by their first argument so a test can read back the object keys the
-// copy wrote and the keys the rollback returned.
-const writeMock = mock(async (_key: string) => undefined);
-const s3DeleteMock = mock(async (_key: string) => undefined);
-const copyObjectMock = mock<
-  (sourceKey: string, targetKey: string) => Promise<Result<void, unknown>>
->(async () => Result.ok(undefined));
-
-// Spread the real module: mock.module is process-global; a partial mock would delete s3's other exports for later test files.
-const realS3 = await import("@/api/lib/s3");
-
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  deleteS3ObjectWithSignal: s3DeleteMock,
-  getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
-  putS3ObjectWithSignal: writeMock,
-  // `mock.module` replaces the module, so every named export a consumer
-  // imports must exist here or the import fails at link time. This suite
-  // reads no object; throwing surfaces one that appears later.
-  readS3ArrayBuffer: () => {
-    throw new Error("Unexpected S3 object read in this suite");
-  },
-  readCorpusS3Bytes: () => {
-    throw new Error("Unexpected corpus object read in this suite");
-  },
-}));
-
-const realS3Presign = await import("@/api/lib/s3-presign");
-void mock.module("@/api/lib/s3-presign", () => ({
-  ...realS3Presign,
-  copyObject: copyObjectMock,
-}));
 
 // Spread the real module: the copy helper reads its search-index ownership
 // split from here. Only the durable extraction request itself is replaced.
@@ -170,12 +135,15 @@ const targetClassifierPropertyId = toSafeId<"property">(
 const filePropertyContent: PropertyContent = { version: 1, type: "file" };
 const textPropertyContent: PropertyContent = { version: 1, type: "text" };
 
+const sourceFileId = "file-uuid-1";
+const sourceFileMimeType = "application/pdf";
+
 const fileContent: FieldContent = {
   type: "file",
   version: 1,
-  id: "file-uuid-1",
+  id: sourceFileId,
   fileName: "Document.pdf",
-  mimeType: "application/pdf",
+  mimeType: sourceFileMimeType,
   sizeBytes: 1024,
   encrypted: false,
   sha256Hex: "a".repeat(64),
@@ -233,12 +201,36 @@ const isInsertedField = (value: unknown): value is InsertedField =>
   "propertyId" in value &&
   "content" in value;
 
+let fake: FakeS3;
+
+const sourceObjectKey = (fileId: string, mimeType: string): string =>
+  createFileKey({
+    organizationId,
+    workspaceId: sourceWorkspaceId,
+    fileId,
+    mimeType,
+  });
+
+const seedSourceObject = (fileId: string, mimeType: string): string => {
+  const key = sourceObjectKey(fileId, mimeType);
+  fake.put(envBase.S3_BUCKET, key, fileBytes, mimeType);
+  return key;
+};
+
+const objectKeysInStore = (): string[] => [...fake.objects.keys()];
+
+const requestKeys = (method: "COPY" | "DELETE" | "GET"): string[] =>
+  fake.requests
+    .filter((request) => request.method === method)
+    .map(({ key }) => key);
+
+afterEach(() => {
+  fake.stop();
+});
+
 beforeEach(() => {
-  arrayBufferMock.mockClear();
-  fileMock.mockClear();
-  copyObjectMock.mockClear();
-  writeMock.mockClear();
-  s3DeleteMock.mockClear();
+  fake = startFakeS3();
+  seedSourceObject(sourceFileId, sourceFileMimeType);
   captureErrorMock.mockClear();
   requestNativeExtractionRunsMock.mockClear();
   enqueueDocumentProcessingRunMock.mockClear();
@@ -458,8 +450,24 @@ describe("copy-to-workspace", () => {
     expect(copiedField?.propertyId).toBe(targetFilePropertyId);
     expect(copiedField?.content.type).toBe("file");
 
-    // S3 file was copied
-    expect(copyObjectMock).toHaveBeenCalled();
+    // The copy owns its own object in the target workspace, and the field
+    // points at it: the key derived from the persisted file id holds the
+    // source bytes.
+    if (copiedField?.content.type !== "file") {
+      throw new Error("Expected the copied field to be a file field");
+    }
+    const copiedKey = createFileKey({
+      organizationId,
+      workspaceId: targetWorkspaceId,
+      fileId: copiedField.content.id,
+      mimeType: copiedField.content.mimeType,
+    });
+    expect(fake.objects.get(`${envBase.S3_BUCKET}/${copiedKey}`)).toEqual({
+      bytes: fileBytes,
+      contentType: sourceFileMimeType,
+    });
+    // The bytes never travel through the API task.
+    expect(requestKeys("GET")).toEqual([]);
 
     // The extraction run that reads the copied PDF indexes it, so the copy
     // carries no mark of its own; marking it too would index it twice.
@@ -587,7 +595,7 @@ describe("copy-to-workspace", () => {
     expect(insertedFields).toHaveLength(1);
     expect(insertedFields.at(0)?.propertyId).toBe(targetClassifierPropertyId);
     expect(insertedFields.at(0)?.content).toEqual(classifierFieldContent);
-    expect(fileMock).not.toHaveBeenCalled();
+    expect(requestKeys("GET")).toEqual([]);
   });
 
   test("maps legacy classifier fields before backfill has tagged either side", async () => {
@@ -1174,8 +1182,12 @@ describe("copy-to-workspace", () => {
     );
 
     expect(insertedFields).toHaveLength(0);
-    expect(fileMock).not.toHaveBeenCalled();
-    expect(copyObjectMock).not.toHaveBeenCalled();
+    expect(requestKeys("GET")).toEqual([]);
+    expect(requestKeys("COPY")).toEqual([]);
+    // The source object is still the only one in the store.
+    expect(objectKeysInStore()).toEqual([
+      `${envBase.S3_BUCKET}/${sourceObjectKey(sourceFileId, sourceFileMimeType)}`,
+    ]);
   });
 
   test("keeps move success when source file cleanup lookup fails", async () => {
@@ -1291,8 +1303,14 @@ describe("copy-to-workspace", () => {
       entityIds: expect.any(Array),
     });
     expect(deletedEntityCount).toBe(1);
-    expect(copyObjectMock).toHaveBeenCalledTimes(1);
-    expect(s3DeleteMock).not.toHaveBeenCalled();
+    const movedKeys = requestKeys("COPY");
+    expect(movedKeys).toHaveLength(1);
+    // The move succeeded, so the copy stays: a failed source-cleanup lookup
+    // must not take the object the target workspace now owns.
+    expect(requestKeys("DELETE")).toEqual([]);
+    expect(fake.objects.has(`${envBase.S3_BUCKET}/${movedKeys.at(0)}`)).toBe(
+      true,
+    );
     expect(captureErrorMock).toHaveBeenCalledTimes(1);
   });
 
@@ -1407,6 +1425,7 @@ describe("copy-to-workspace", () => {
     let nextDocumentSequence = 0;
 
     const originalFileId = "original-file-uuid";
+    seedSourceObject(originalFileId, "image/png");
     const sourceEntity = {
       id: documentId,
       kind: "document" as const,
@@ -1601,12 +1620,14 @@ describe("copy-to-workspace", () => {
 
     // No row survives the abort, so every object copied for it is an orphan
     // and all of them go back.
-    const copiedKeys = copyObjectMock.mock.calls.map(
-      ([_sourceKey, targetKey]) => targetKey,
-    );
-    const deletedKeys = s3DeleteMock.mock.calls.map(([key]) => key);
+    const copiedKeys = requestKeys("COPY");
+    const deletedKeys = requestKeys("DELETE");
     expect(copiedKeys).toHaveLength(1);
     expect(new Set(deletedKeys)).toEqual(new Set(copiedKeys));
+    // The store is back to the source object alone.
+    expect(objectKeysInStore()).toEqual([
+      `${envBase.S3_BUCKET}/${sourceObjectKey(sourceFileId, sourceFileMimeType)}`,
+    ]);
 
     // Nothing is indexed for copies that no longer exist.
     expect(enqueueEntitySearchRepairsMock).not.toHaveBeenCalled();

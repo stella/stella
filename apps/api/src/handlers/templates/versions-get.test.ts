@@ -1,16 +1,48 @@
-import { describe, expect, mock, test } from "bun:test";
+import { S3Client as AwsS3Client } from "@aws-sdk/client-s3";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  resetAwsS3ClientForTesting,
+  setScopedS3ClientFactoryForTesting,
+  setScopedSigningEnabledForTesting,
+} from "@/api/lib/s3-presign";
+import type { S3SigningScope } from "@/api/lib/s3-presign";
 
-void mock.module("@/api/lib/s3-presign", () => ({
-  presignDownloadUrl: async () => "https://storage.example/signed-version",
-}));
+import { getTemplateVersionHandler } from "./versions";
 
-const { getTemplateVersionHandler } = await import("./versions");
+// The real presigner runs; only the STS-backed tenant session is replaced by
+// a client with static test credentials. Signing is local, so the URL the
+// handler returns is the genuine grant: its expiry, key, and disposition can
+// be read back and checked against the audit row instead of trusted.
+const signingClient = new AwsS3Client({
+  credentials: {
+    accessKeyId: "test-access-key",
+    secretAccessKey: "test-secret-key",
+  },
+  region: "us-east-1",
+});
+const scopeRequests: {
+  actions: readonly string[];
+  scope: S3SigningScope;
+}[] = [];
+
+beforeEach(() => {
+  scopeRequests.length = 0;
+  setScopedSigningEnabledForTesting(() => true);
+  setScopedS3ClientFactoryForTesting(async (scope, actions) => {
+    scopeRequests.push({ actions, scope });
+    return { client: signingClient, expiresAt: Date.now() + 60 * 60 * 1000 };
+  });
+});
+
+afterEach(() => {
+  resetAwsS3ClientForTesting();
+});
 
 const organizationId = toSafeId<"organization">("org_1");
 const templateId = toSafeId<"template">("tpl_1");
@@ -78,10 +110,23 @@ describe("template version download", () => {
 
     const result = await getTemplateVersionHandler(props);
 
-    expect(result).toMatchObject({
-      id: versionId,
-      downloadUrl: "https://storage.example/signed-version",
-    });
+    expect(result).toMatchObject({ id: versionId });
+    if (!("downloadUrl" in result)) {
+      throw new TypeError("expected a found version");
+    }
+    const grant = new URL(result.downloadUrl);
+    // The grant is signed inside the template's tenant, never with the
+    // unscoped bucket credentials.
+    expect(scopeRequests).toEqual([
+      {
+        actions: ["s3:GetObject"],
+        scope: { organizationId, workspaceId: null },
+      },
+    ]);
+    expect(grant.pathname.endsWith(`/${s3Key}`)).toBe(true);
+    expect(grant.searchParams.get("response-content-disposition")).toContain(
+      "agreement.docx",
+    );
     expect(getTransactionCount()).toBe(1);
     expect(events).toEqual([
       {
@@ -98,6 +143,14 @@ describe("template version download", () => {
         },
       },
     ]);
+    // The audit row must describe the grant that was actually issued.
+    const audited = events.at(0);
+    if (audited === undefined || Array.isArray(audited)) {
+      throw new TypeError("expected exactly one audit event");
+    }
+    expect(grant.searchParams.get("X-Amz-Expires")).toBe(
+      String(audited.metadata?.["expiresInSeconds"]),
+    );
   });
 
   test("returns 404 without auditing when the template is missing", async () => {

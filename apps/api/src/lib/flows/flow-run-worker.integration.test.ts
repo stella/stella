@@ -5,9 +5,10 @@
  * database, driven the same way the BullMQ worker drives it — one
  * `executeFlowStep` call per queued job.
  *
- * Only genuine external I/O is stubbed: the AI provider call, S3, the
+ * Only genuine external I/O is stubbed: the AI provider call, the
  * derivative/extraction queues, SSE broadcast, and the BullMQ queue itself
- * (so the test never needs a live Redis). Everything else — the run/step
+ * (so the test never needs a live Redis). Object storage runs the real
+ * `lib/s3.ts` against an in-process store. Everything else — the run/step
  * transitions, RLS-scoped reads and writes, the DOCX compiler, and entity
  * creation — is the real production code.
  */
@@ -27,16 +28,22 @@ import { asc, eq } from "drizzle-orm";
 import { organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  fields,
   flowDefinitions,
   flowRunSteps,
   properties,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { envBase } from "@/api/env-base";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createFileKey } from "@/api/lib/files/utils";
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -100,25 +107,6 @@ void mock.module("@/api/lib/tanstack-ai-generate", () => ({
   generateTanStackTextForRole: generateTanStackTextForRoleMock,
 }));
 
-const s3WriteMock = mock(async () => {});
-const s3DeleteMock = mock(async () => {});
-const realS3 = await import("@/api/lib/s3");
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  deleteS3ObjectWithSignal: s3DeleteMock,
-  getS3: () => ({ write: s3WriteMock, delete: s3DeleteMock }),
-  putS3ObjectWithSignal: s3WriteMock,
-  // `mock.module` replaces the module, so every named export a consumer
-  // imports must exist here or the import fails at link time. This suite
-  // reads no object; throwing surfaces one that appears later.
-  readS3ArrayBuffer: () => {
-    throw new Error("Unexpected S3 object read in this suite");
-  },
-  readCorpusS3Bytes: () => {
-    throw new Error("Unexpected corpus object read in this suite");
-  },
-}));
-
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: mock(async () => {}),
   requestNativeExtractionRun: mock(async () => null),
@@ -163,8 +151,10 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
   let organizationId: SafeId<"organization">;
   let userId: SafeId<"user">;
   let workspaceId: SafeId<"workspace">;
+  let fake: FakeS3;
 
   beforeAll(async () => {
+    fake = startFakeS3();
     organizationId = mintAuthProviderId<"organization">();
     userId = mintAuthProviderId<"user">();
     workspaceId = createSafeId<"workspace">();
@@ -198,6 +188,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
   });
 
   afterAll(async () => {
+    fake.stop();
     await releaseTestDb();
   });
 
@@ -321,10 +312,49 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
 
     const documentEntity = await testDb.query.entities.findFirst({
       where: { id: { eq: toSafeId<"entity">(createOutput.entityId) } },
-      columns: { id: true, name: true },
+      columns: { id: true, name: true, currentVersionId: true },
     });
     expect(documentEntity?.name).toBe("Flow Test Memo.docx");
-    expect(s3WriteMock).toHaveBeenCalledTimes(1);
+
+    // The row and the object must agree: the file field names the object the
+    // step published, and the bytes under that key hash to what the row
+    // recorded. A key or payload the row does not describe is a document the
+    // reader cannot open.
+    const currentVersionId = documentEntity?.currentVersionId ?? null;
+    if (currentVersionId === null) {
+      throw new Error("expected the created document to have a version");
+    }
+    const fileContent = (
+      await testDb
+        .select({ content: fields.content })
+        .from(fields)
+        .where(eq(fields.entityVersionId, currentVersionId))
+    ).at(0)?.content;
+    if (fileContent?.type !== "file") {
+      throw new Error(
+        `expected a file field, got ${JSON.stringify(fileContent)}`,
+      );
+    }
+
+    const documentKey = createFileKey({
+      organizationId,
+      workspaceId,
+      fileId: fileContent.id,
+      mimeType: DOCX_MIME_TYPE,
+    });
+    expect(
+      fake.requests
+        .filter((request) => request.method === "PUT")
+        .map((request) => request.key),
+    ).toEqual([documentKey]);
+    const stored = fake.objects.get(`${envBase.S3_BUCKET}/${documentKey}`);
+    if (stored === undefined) {
+      throw new Error(`no object was stored at ${documentKey}`);
+    }
+    expect(stored.contentType).toBe(DOCX_MIME_TYPE);
+    expect(
+      new Bun.CryptoHasher("sha256").update(stored.bytes).digest("hex"),
+    ).toBe(fileContent.sha256Hex);
   });
 
   test("rejecting the review gate cancels the run instead of creating a document", async () => {

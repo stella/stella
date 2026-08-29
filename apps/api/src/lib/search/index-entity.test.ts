@@ -4,6 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { encryptContent } from "@/api/lib/content-encryption";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
@@ -39,8 +40,19 @@ const executeMock = mock(async (_query: SQL) => [
 const syncWorkspaceSearchActivityMock = mock(
   async (_workspaceId: unknown, _db: unknown) => undefined,
 );
-const decryptContentMock = mock(async () => "Extracted text");
 const captureErrorMock = mock(() => undefined);
+const organizationId = toSafeId<"organization">("org_1");
+// Extracted content is stored as a real per-org AES-GCM envelope; fixtures
+// encrypt with the same key the projection decrypts with, so a plaintext
+// regression in the storage path shows up as a missing or leaked term below.
+const encryptedFor = async (text: string) =>
+  await encryptContent(organizationId, text);
+const stringParamsOfExecutedQueries = () =>
+  executeMock.mock.calls.flatMap(([executedQuery]) =>
+    new PgDialect()
+      .sqlToQuery(executedQuery)
+      .params.filter((param): param is string => typeof param === "string"),
+  );
 const currentFileField = {
   content: {
     encrypted: false,
@@ -79,7 +91,7 @@ const entityRow = {
   metadata: null,
   name: "Closing memo",
   updatedAt: semanticUpdatedAt,
-  workspace: { organizationId: toSafeId<"organization">("org_1") },
+  workspace: { organizationId },
   workspaceId: toSafeId<"workspace">("ws_1"),
 };
 const findFirstMock = mock(async () => entityRow);
@@ -113,14 +125,6 @@ void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
 }));
 
-void mock.module("@/api/lib/content-encryption", () => ({
-  decryptContent: decryptContentMock,
-  encryptContent: async () => ({
-    ciphertext: Buffer.from("ciphertext"),
-    iv: Buffer.from("iv"),
-  }),
-}));
-
 void mock.module("@/api/lib/search/index-global", () => ({
   syncWorkspaceSearchActivity: syncWorkspaceSearchActivityMock,
 }));
@@ -136,8 +140,6 @@ beforeEach(() => {
   findFirstMock.mockResolvedValue(entityRow);
   latestVersionId = entityRow.currentVersion.id;
   latestVersionFindFirstMock.mockClear();
-  decryptContentMock.mockClear();
-  decryptContentMock.mockResolvedValue("Extracted text");
   captureErrorMock.mockClear();
   syncWorkspaceSearchActivityMock.mockClear();
   transactionMock.mockClear();
@@ -236,7 +238,12 @@ test("propagates workspace activity failures from the projection transaction", a
 });
 
 test("keeps the last complete projection when extracted content cannot decrypt", async () => {
-  const decryptionFailure = new Error("key unavailable");
+  // An envelope minted for a different organization: the same failure a
+  // rotated CONTENT_ENCRYPTION_KEY produces, without stubbing the cipher.
+  const foreign = await encryptContent(
+    toSafeId<"organization">("org_2"),
+    "Extracted text",
+  );
   findFirstMock.mockResolvedValueOnce({
     ...entityRow,
     currentVersion: {
@@ -245,9 +252,9 @@ test("keeps the last complete projection when extracted content cannot decrypt",
       id: entityRow.currentVersion.id,
     },
     extractedContent: {
-      ciphertext: Buffer.from("ciphertext"),
+      ciphertext: foreign.ciphertext,
       extractedAt,
-      iv: Buffer.from("iv"),
+      iv: foreign.iv,
       language: "en",
       sourceEntityVersionId: entityRow.currentVersion.id,
       sourceFieldId: currentFileField.id,
@@ -255,7 +262,6 @@ test("keeps the last complete projection when extracted content cannot decrypt",
       sourceSha256Hex: currentFileField.content.sha256Hex,
     },
   });
-  decryptContentMock.mockRejectedValueOnce(decryptionFailure);
   const { upsertSearchDocument } =
     await import("@/api/lib/search/index-entity");
 
@@ -266,8 +272,8 @@ test("keeps the last complete projection when extracted content cannot decrypt",
     (error: unknown) => error,
   );
 
-  expect(rejection).toBe(decryptionFailure);
-  expect(captureErrorMock).toHaveBeenCalledWith(decryptionFailure, {
+  expect(rejection).toBeInstanceOf(DOMException);
+  expect(captureErrorMock).toHaveBeenCalledWith(rejection, {
     entityId: toSafeId<"entity">("entity_1"),
   });
   expect(executeMock).not.toHaveBeenCalled();
@@ -278,6 +284,8 @@ test("excludes stale extracted text and fences its observed provenance", async (
   const staleVersionId = toSafeId<"entityVersion">(
     "019864b8-48d0-7f37-94d5-948e3bcf3f48",
   );
+  const staleText = "stale-extracted-marker";
+  const stale = await encryptedFor(staleText);
   findFirstMock.mockResolvedValueOnce({
     ...entityRow,
     currentVersion: {
@@ -286,9 +294,9 @@ test("excludes stale extracted text and fences its observed provenance", async (
       id: entityRow.currentVersion.id,
     },
     extractedContent: {
-      ciphertext: Buffer.from("stale ciphertext"),
+      ciphertext: stale.ciphertext,
       extractedAt,
-      iv: Buffer.from("stale iv"),
+      iv: stale.iv,
       language: "en",
       sourceEntityVersionId: staleVersionId,
       sourceFieldId: currentFileField.id,
@@ -301,12 +309,14 @@ test("excludes stale extracted text and fences its observed provenance", async (
 
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
-  expect(decryptContentMock).not.toHaveBeenCalled();
   const query = executeMock.mock.calls.at(0)?.[0];
   expect(query).toBeDefined();
   if (!query) {
     return;
   }
+  expect(
+    stringParamsOfExecutedQueries().some((param) => param.includes(staleText)),
+  ).toBe(false);
   const compiled = new PgDialect().sqlToQuery(query);
   expect(compiled.sql).toContain("EXISTS");
   expect(compiled.sql).toContain("ec.source_entity_version_id");
@@ -326,6 +336,7 @@ test("excludes stale extracted text and fences its observed provenance", async (
 // which preserves it, so the projection write must strip it or the entity
 // becomes permanently unindexable (every repair retry fails the same way).
 test("strips NUL bytes from indexed title and text", async () => {
+  const nulBearing = await encryptedFor("Extracted\u0000 text\u0000");
   findFirstMock.mockResolvedValueOnce({
     ...entityRow,
     name: "Closing\u0000 memo",
@@ -335,9 +346,9 @@ test("strips NUL bytes from indexed title and text", async () => {
       id: entityRow.currentVersion.id,
     },
     extractedContent: {
-      ciphertext: Buffer.from("ciphertext"),
+      ciphertext: nulBearing.ciphertext,
       extractedAt,
-      iv: Buffer.from("iv"),
+      iv: nulBearing.iv,
       language: "en",
       sourceEntityVersionId: entityRow.currentVersion.id,
       sourceFieldId: currentFileField.id,
@@ -345,7 +356,6 @@ test("strips NUL bytes from indexed title and text", async () => {
       sourceSha256Hex: currentFileField.content.sha256Hex,
     },
   });
-  decryptContentMock.mockResolvedValueOnce("Extracted\u0000 text\u0000");
   const { upsertSearchDocument } =
     await import("@/api/lib/search/index-entity");
 
@@ -355,11 +365,7 @@ test("strips NUL bytes from indexed title and text", async () => {
   // later queries, and a NUL surviving into any of them poisons the entity
   // just the same.
   expect(executeMock.mock.calls.length).toBeGreaterThan(0);
-  const stringParams = executeMock.mock.calls.flatMap(([executedQuery]) =>
-    new PgDialect()
-      .sqlToQuery(executedQuery)
-      .params.filter((param): param is string => typeof param === "string"),
-  );
+  const stringParams = stringParamsOfExecutedQueries();
   expect(stringParams.some((param) => param.includes("Extracted text"))).toBe(
     true,
   );
@@ -370,6 +376,8 @@ test("strips NUL bytes from indexed title and text", async () => {
 });
 
 test("preserves pre-provenance extracted text until a fenced writer replaces it", async () => {
+  const legacyText = "legacy-extracted-marker";
+  const legacy = await encryptedFor(legacyText);
   findFirstMock.mockResolvedValueOnce({
     ...entityRow,
     currentVersion: {
@@ -378,9 +386,9 @@ test("preserves pre-provenance extracted text until a fenced writer replaces it"
       id: entityRow.currentVersion.id,
     },
     extractedContent: {
-      ciphertext: Buffer.from("legacy ciphertext"),
+      ciphertext: legacy.ciphertext,
       extractedAt,
-      iv: Buffer.from("legacy iv"),
+      iv: legacy.iv,
       language: "cs",
       sourceEntityVersionId: null,
       sourceFieldId: null,
@@ -393,11 +401,11 @@ test("preserves pre-provenance extracted text until a fenced writer replaces it"
 
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
-  expect(decryptContentMock).toHaveBeenCalledWith(
-    toSafeId<"organization">("org_1"),
-    Buffer.from("legacy ciphertext"),
-    Buffer.from("legacy iv"),
-  );
+  // Indexed only if the projection decrypted the envelope under the entity's
+  // own organization key.
+  expect(
+    stringParamsOfExecutedQueries().some((param) => param.includes(legacyText)),
+  ).toBe(true);
   const query = executeMock.mock.calls.at(0)?.[0];
   expect(query).toBeDefined();
   if (!query) {
@@ -412,6 +420,8 @@ test("preserves pre-provenance extracted text until a fenced writer replaces it"
 });
 
 test("excludes legacy extracted text after a deleted-version rollback", async () => {
+  const withdrawnText = "withdrawn-extracted-marker";
+  const withdrawn = await encryptedFor(withdrawnText);
   latestVersionId = toSafeId<"entityVersion">("withdrawn_version");
   findFirstMock.mockResolvedValueOnce({
     ...entityRow,
@@ -421,9 +431,9 @@ test("excludes legacy extracted text after a deleted-version rollback", async ()
       id: entityRow.currentVersion.id,
     },
     extractedContent: {
-      ciphertext: Buffer.from("withdrawn text"),
+      ciphertext: withdrawn.ciphertext,
       extractedAt,
-      iv: Buffer.from("legacy iv"),
+      iv: withdrawn.iv,
       language: "cs",
       sourceEntityVersionId: null,
       sourceFieldId: null,
@@ -436,7 +446,12 @@ test("excludes legacy extracted text after a deleted-version rollback", async ()
 
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
-  expect(decryptContentMock).not.toHaveBeenCalled();
+  expect(executeMock.mock.calls.length).toBeGreaterThan(0);
+  expect(
+    stringParamsOfExecutedQueries().some((param) =>
+      param.includes(withdrawnText),
+    ),
+  ).toBe(false);
   expect(latestVersionFindFirstMock).toHaveBeenCalledWith(
     expect.objectContaining({
       orderBy: { versionNumber: "desc", id: "desc" },

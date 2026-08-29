@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -12,13 +12,14 @@ import {
   pendingUploads,
   workspaces,
 } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-const s3WriteMock = mock(async () => {});
-const s3DeleteMock = mock(async () => {});
 const processExtractionMock = mock(async () => {});
 const enqueueImageThumbnailMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
@@ -27,28 +28,7 @@ const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 const broadcastMock = mock();
 let intentStatuses: string[] = [];
 
-// Spread the real module: mock.module is process-global; a partial mock would delete s3's other exports for later test files.
-const realS3 = await import("@/api/lib/s3");
 const realSse = await import("@/api/lib/sse");
-
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  deleteS3ObjectWithSignal: s3DeleteMock,
-  getS3: () => ({
-    write: s3WriteMock,
-    delete: s3DeleteMock,
-  }),
-  putS3ObjectWithSignal: s3WriteMock,
-  // `mock.module` replaces the module, so every named export a consumer
-  // imports must exist here or the import fails at link time. This suite
-  // reads no object; throwing surfaces one that appears later.
-  readS3ArrayBuffer: () => {
-    throw new Error("Unexpected S3 object read in this suite");
-  },
-  readCorpusS3Bytes: () => {
-    throw new Error("Unexpected corpus object read in this suite");
-  },
-}));
 
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
@@ -86,6 +66,17 @@ const sourceEntityId = toSafeId<"entity">(
   "00000000-0000-0000-0000-000000000006",
 );
 const sourceFieldId = toSafeId<"field">("00000000-0000-0000-0000-000000000007");
+
+// The writer runs against a real store, so "the bytes were published" and
+// "the bytes were reclaimed" are read back from it instead of from a spy.
+let fake: FakeS3;
+
+const objectKeysInStore = (): string[] => [...fake.objects.keys()];
+
+const requestKeys = (method: "DELETE" | "PUT"): string[] =>
+  fake.requests
+    .filter((request) => request.method === method)
+    .map(({ key }) => key);
 
 type IntentPersistenceBase = {
   [key: string]: unknown;
@@ -144,15 +135,16 @@ const withIntentPersistence = (base: IntentPersistenceBase) => {
 
 describe("createEntityFromBuffer", () => {
   beforeEach(() => {
-    s3WriteMock.mockReset();
-    s3WriteMock.mockResolvedValue(undefined);
-    s3DeleteMock.mockReset();
-    s3DeleteMock.mockResolvedValue(undefined);
+    fake = startFakeS3();
     processExtractionMock.mockClear();
     enqueueImageThumbnailOrMarkFailedMock.mockClear();
     enqueuePdfDerivativeOrMarkFailedMock.mockClear();
     broadcastMock.mockClear();
     intentStatuses = [];
+  });
+
+  afterEach(() => {
+    fake.stop();
   });
 
   test("rejects oversized documents before database or object-storage work", async () => {
@@ -180,8 +172,8 @@ describe("createEntityFromBuffer", () => {
       );
     }
     expect(getCallCount()).toBe(0);
-    expect(s3WriteMock).not.toHaveBeenCalled();
-    expect(s3DeleteMock).not.toHaveBeenCalled();
+    // The size gate runs before any object-storage request at all.
+    expect(fake.requests).toEqual([]);
   });
 
   test("writes an entity create audit log with the DB insert", async () => {
@@ -312,6 +304,15 @@ describe("createEntityFromBuffer", () => {
       type: "resource.updated",
       resource: { type: "entity", id: expect.any(String) },
     });
+    // The committed entity keeps exactly one published object, stored under
+    // the declared type.
+    const publishedKey = objectKeysInStore().at(0);
+    expect(objectKeysInStore()).toHaveLength(1);
+    expect(fake.objects.get(publishedKey ?? "")).toEqual({
+      bytes: new TextEncoder().encode("pdf bytes"),
+      contentType: "application/pdf",
+    });
+    expect(requestKeys("DELETE")).toEqual([]);
   });
 
   test("locks and rechecks the parent in the insert transaction", async () => {
@@ -364,8 +365,11 @@ describe("createEntityFromBuffer", () => {
     }
     expect(getCallCount()).toBe(4);
     expect(locks).toEqual(["share", "update"]);
-    expect(s3WriteMock).toHaveBeenCalledTimes(1);
-    expect(s3DeleteMock).toHaveBeenCalledTimes(1);
+    // The rejected parent leaves nothing behind: the published object is
+    // reclaimed under the same key it was written to.
+    expect(requestKeys("PUT")).toHaveLength(1);
+    expect(requestKeys("DELETE")).toEqual(requestKeys("PUT"));
+    expect(objectKeysInStore()).toEqual([]);
     expect(recordAuditEvent).not.toHaveBeenCalled();
   });
 
@@ -423,7 +427,8 @@ describe("createEntityFromBuffer", () => {
     if (Result.isError(attempted) && attempted.error instanceof Error) {
       expect(attempted.error.message).toBe("audit failed");
     }
-    expect(s3DeleteMock).toHaveBeenCalledTimes(1);
+    expect(requestKeys("DELETE")).toEqual(requestKeys("PUT"));
+    expect(objectKeysInStore()).toEqual([]);
     expect(processExtractionMock).not.toHaveBeenCalled();
     expect(broadcastMock).not.toHaveBeenCalled();
   });
@@ -457,7 +462,7 @@ describe("createEntityFromBuffer", () => {
       }),
     };
     const { scopedDb } = createScopedDbMock(withIntentPersistence(tx));
-    s3DeleteMock.mockRejectedValue(new Error("object deletion timed out"));
+    fake.failNext({ method: "DELETE", code: "AccessDenied", status: 403 });
 
     const attempted = await Result.tryPromise({
       try: async () =>
@@ -483,7 +488,12 @@ describe("createEntityFromBuffer", () => {
     if (Result.isError(attempted) && attempted.error instanceof Error) {
       expect(attempted.error.message).toBe("audit failed");
     }
-    expect(s3DeleteMock).toHaveBeenCalledTimes(1);
+    // The store rejected the cleanup, so the bytes are still published and
+    // the intent has to stay for the bounded reconciler to finish the job.
+    expect(requestKeys("DELETE")).toEqual(requestKeys("PUT"));
+    expect(objectKeysInStore()).toEqual(
+      requestKeys("PUT").map((key) => `${envBase.S3_BUCKET}/${key}`),
+    );
     expect(intentStatuses).toEqual(["scanning"]);
     expect(processExtractionMock).not.toHaveBeenCalled();
   });
@@ -556,7 +566,11 @@ describe("createEntityFromBuffer", () => {
       expect(attempted.error).toBe(commitError);
     }
     expect(intentStatuses).toEqual(["scanning", "finalized"]);
-    expect(s3DeleteMock).not.toHaveBeenCalled();
+    // An ambiguous commit must never take the bytes the entity may reference.
+    expect(requestKeys("DELETE")).toEqual([]);
+    expect(objectKeysInStore()).toEqual(
+      requestKeys("PUT").map((key) => `${envBase.S3_BUCKET}/${key}`),
+    );
     expect(processExtractionMock).not.toHaveBeenCalled();
     expect(broadcastMock).not.toHaveBeenCalled();
   });

@@ -133,7 +133,10 @@ const resolvePreamble = async (): Promise<{
   token: string | undefined;
 }> => {
   const configDir = defaultConfigDir();
-  const serverUrlResult = await resolveServerUrl(configDir, undefined);
+  const serverUrlResult = await resolveServerUrl({
+    configDir,
+    flagValue: undefined,
+  });
   const serverUrl = Result.isOk(serverUrlResult)
     ? serverUrlResult.value
     : undefined;

@@ -4,7 +4,6 @@ import {
   beforeAll,
   describe,
   expect,
-  mock,
   setDefaultTimeout,
   test,
 } from "bun:test";
@@ -15,6 +14,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { SafeDb } from "@/api/db/safe-db";
 import { userFiles } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import { envBase } from "@/api/env-base";
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatMessage } from "@/api/handlers/chat/types";
@@ -23,6 +23,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { XLSX_MIME_TYPE } from "@/api/mime-types";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -30,6 +32,8 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+import { hydrateMessages } from "./stream-chat";
 
 // Evidence for the `no-raw-filename-write` waiver in `hydrateMessages`: the
 // filename handed to the provider-bound part is the stored `user_files` value,
@@ -42,28 +46,18 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 setDefaultTimeout(120_000);
 
 const attachmentBytes = new TextEncoder().encode("Attachment body");
-const xlsxBuffer = await Bun.file(
-  new URL("../../lib/search/__fixtures__/schedule.xlsx", import.meta.url),
-).arrayBuffer();
-const readS3ArrayBufferMock = mock(async (s3Key: string) =>
-  s3Key.endsWith(".xlsx")
-    ? xlsxBuffer
-    : attachmentBytes.buffer.slice(
-        attachmentBytes.byteOffset,
-        attachmentBytes.byteOffset + attachmentBytes.byteLength,
-      ),
+const xlsxBytes = new Uint8Array(
+  await Bun.file(
+    new URL("../../lib/search/__fixtures__/schedule.xlsx", import.meta.url),
+  ).arrayBuffer(),
 );
 
-// Spread the real module so only the object read is overridden: `mock.module`
-// is process-global and never auto-restored, so a partial mock would delete the
-// other s3 exports for every later test file in the run.
-const realS3 = await import("@/api/lib/s3");
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  readS3ArrayBuffer: readS3ArrayBufferMock,
-}));
+const bucket = envBase.S3_BUCKET;
+let fake: FakeS3;
 
-const { hydrateMessages } = await import("./stream-chat");
+/** How many objects hydration has fetched from the store so far. */
+const objectReadCount = (): number =>
+  fake.requests.filter(({ method }) => method === "GET").length;
 
 /** A name that must never survive to a provider payload unsanitized. */
 const HOSTILE_NAME = '../../etc/passwd";rm -rf /';
@@ -95,6 +89,7 @@ const attachmentMessage = (
   });
 
 beforeAll(async () => {
+  fake = startFakeS3();
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
@@ -118,7 +113,7 @@ beforeAll(async () => {
       userId: ids.userA1,
       fileName: "schedule.xlsx",
       mimeType: XLSX_MIME_TYPE,
-      sizeBytes: xlsxBuffer.byteLength,
+      sizeBytes: xlsxBytes.byteLength,
       sha256Hex: "c".repeat(64),
       s3Key: `chat/${ids.userA1}/${ownXlsxFileId}.xlsx`,
       threadId: ids.chatThreadWorkspaceA1,
@@ -128,7 +123,7 @@ beforeAll(async () => {
       userId: ids.userA1,
       fileName: "second-schedule.xlsx",
       mimeType: XLSX_MIME_TYPE,
-      sizeBytes: xlsxBuffer.byteLength,
+      sizeBytes: xlsxBytes.byteLength,
       sha256Hex: "d".repeat(64),
       s3Key: `chat/${ids.userA1}/${secondOwnXlsxFileId}.xlsx`,
       threadId: ids.chatThreadWorkspaceA1,
@@ -144,6 +139,13 @@ beforeAll(async () => {
       threadId: ids.chatThreadWorkspaceB1,
     },
   ]);
+
+  // Every row above is hydrated from its own stored object, so the store holds
+  // exactly what `user_files.s3_key` names.
+  fake.put(bucket, `chat/${ids.userA1}/${ownFileId}`, attachmentBytes);
+  fake.put(bucket, `chat/${ids.userA1}/${ownXlsxFileId}.xlsx`, xlsxBytes);
+  fake.put(bucket, `chat/${ids.userA1}/${secondOwnXlsxFileId}.xlsx`, xlsxBytes);
+  fake.put(bucket, `chat/${ids.userB1}/${foreignFileId}`, attachmentBytes);
 });
 
 afterAll(async () => {
@@ -157,6 +159,7 @@ afterAll(async () => {
         foreignFileId,
       ]),
     );
+  fake.stop();
   await releaseRlsFixture();
 });
 
@@ -235,12 +238,11 @@ describe("chat attachment hydration provenance", () => {
       expect(extractedText).toContain("Acme s.r.o.");
     }
 
-    const readsAfterFirstHydration = readS3ArrayBufferMock.mock.calls.length;
+    const readsAfterFirstHydration = objectReadCount();
     const secondHydration = textOf(await hydrate(message));
     expect(secondHydration).toContain("Acme s.r.o.");
-    expect(readS3ArrayBufferMock).toHaveBeenCalledTimes(
-      readsAfterFirstHydration,
-    );
+    // The cached text served the second hydration: no workbook was refetched.
+    expect(objectReadCount()).toBe(readsAfterFirstHydration);
   });
 
   test("another user's file id hydrates nothing", async () => {

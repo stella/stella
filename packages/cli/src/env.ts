@@ -3,6 +3,11 @@
 // `env.ts`-named module; see `oxlint.config.ts`). Both variables are
 // optional: the CLI never hard-requires an env var to start (self-hosting
 // first-class — `--server`/`credentials.json` always work without either).
+//
+// The server-URL and API-key names are the ones `stella auth` documents, so
+// they are read through the constants those messages print, never retyped.
+
+import { API_KEY_ENV_VAR, SERVER_URL_ENV_VAR } from "./auth/constants.js";
 
 /** XDG base-directory override for `~/.config/stella`; see `auth/config-dir.ts`. */
 export const XDG_CONFIG_HOME: string | undefined =
@@ -10,14 +15,14 @@ export const XDG_CONFIG_HOME: string | undefined =
 
 /** Default `--server` origin when neither the flag nor a saved config exists; see `auth/server-resolution.ts`. */
 export const STELLA_SERVER_URL: string | undefined =
-  process.env["STELLA_SERVER_URL"];
+  process.env[SERVER_URL_ENV_VAR];
 
 /**
  * Machine (CI / agent) credential. When set, it is used verbatim as the bearer
  * token for every command and the stored `credentials.json` is not consulted at
  * all; see `auth/resolve-access-token.ts` for the precedence rationale.
  */
-export const STELLA_API_KEY: string | undefined = process.env["STELLA_API_KEY"];
+export const STELLA_API_KEY: string | undefined = process.env[API_KEY_ENV_VAR];
 
 /** XDG cache base for the per-origin registry cache; see `registry-cache.ts`. */
 export const XDG_CACHE_HOME: string | undefined = process.env["XDG_CACHE_HOME"];

@@ -1,33 +1,23 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { envBase } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 
-// ── In-memory S3 ─────────────────────────────────────────
-// The diff endpoint loads version snapshots straight from S3;
-// the mock serves the buffers this test "saved" per version key.
+import { loadTemplateVersionDiffSources } from "./versions";
 
-const s3Objects = new Map<string, Buffer>();
+// ── Object store ─────────────────────────────────────────
+// The diff endpoint loads version snapshots straight from S3, so each
+// snapshot is seeded under the version key its stub row names and the
+// real reader fetches it back over the wire.
 
-// Spread the real module so other exports stay intact for
-// transitive importers; only `getS3` is replaced.
-const realS3 = await import("@/api/lib/s3");
-
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  readS3ArrayBuffer: async (key: string) => {
-    const buf = s3Objects.get(key);
-    if (!buf) {
-      throw new Error(`Missing S3 object: ${key}`);
-    }
-    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-  },
-}));
-
-const { loadTemplateVersionDiffSources } = await import("./versions");
+let fake: FakeS3;
+const bucket = envBase.S3_BUCKET;
 
 // ── DOCX fixtures ────────────────────────────────────────
 
@@ -126,16 +116,26 @@ const organizationId = toSafeId<"organization">("org_1");
 const templateId = toSafeId<"template">("tpl_1");
 
 describe("template version diff", () => {
+  beforeEach(() => {
+    fake = startFakeS3();
+  });
+
+  afterEach(() => {
+    fake.stop();
+  });
+
   test("two saves differing only inside a table produce a non-empty diff", async () => {
     // Regression: a field marker added inside a w:tbl between two
     // saves must show up in the diff; extraction previously read
     // only direct body children, so every version extracted to the
     // same text and the UI rendered "No changes".
-    s3Objects.set(
+    fake.put(
+      bucket,
       "org_1/templates/tpl_1/v1.docx",
       await makeDocx(P("Agreement") + TABLE("KRS no. pending")),
     );
-    s3Objects.set(
+    fake.put(
+      bucket,
       "org_1/templates/tpl_1/v2.docx",
       await makeDocx(P("Agreement") + TABLE("KRS no. {{krs_number}}")),
     );
@@ -177,7 +177,8 @@ describe("template version diff", () => {
   });
 
   test("first version diffs against the empty document", async () => {
-    s3Objects.set(
+    fake.put(
+      bucket,
       "org_1/templates/tpl_1/v1.docx",
       await makeDocx(P("Agreement") + TABLE("KRS no. pending")),
     );

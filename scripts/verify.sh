@@ -112,6 +112,14 @@ run_ratchet_guard() {
   bun scripts/ratchet.ts --check
 }
 
+run_module_mock_ledger_guard() {
+  # The grandfathered module-mock ledger may only lose members: every line
+  # must already exist on the base branch, so a new mock cannot be listed in
+  # place of a removed one (the ratchet caps only the length).
+  bun scripts/check-internal-module-mock-ledger.ts --self-test || return 1
+  bun scripts/check-internal-module-mock-ledger.ts --base "$base_ref"
+}
+
 run_suppression_waiver_guard() {
   # Every suppression of a security-tier lint rule (tenancy, authorization,
   # credential, audit) must have an entry in scripts/suppression-waivers.json,
@@ -249,6 +257,7 @@ run_step "React Compiler bailout guard" bun scripts/rc-bailouts.ts --check
 run_step "Oxlint override union guard" bun test \
   scripts/oxlint-override-union.test.ts
 run_step "Ratchet guard" run_ratchet_guard
+run_step "Module-mock ledger membership" run_module_mock_ledger_guard
 run_step "Suppression waiver ledger" run_suppression_waiver_guard
 run_step "Crawl posture guard" run_crawl_posture_guard
 run_step "Documentation source policy rule self-test" bun test \

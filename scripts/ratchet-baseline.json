@@ -240,10 +240,13 @@
     "count": 0,
     "files": {}
   },
+  "no-internal-module-mock-suppressions": {
+    "count": 0,
+    "files": {}
+  },
   "lint-suppression-directives": {
-    "count": 742,
+    "count": 741,
     "files": {
-      "apps/api/scripts/ai-provider-canary-config.ts": 1,
       "apps/api/scripts/ai-provider-canary.ts": 4,
       "apps/api/scripts/backfill-image-thumbnails.ts": 9,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -306,6 +309,7 @@
       "apps/api/src/handlers/contacts/import-validate.ts": 1,
       "apps/api/src/handlers/contacts/update.ts": 1,
       "apps/api/src/handlers/entities/copy-utils.ts": 2,
+      "apps/api/src/handlers/entities/delete-version.ts": 1,
       "apps/api/src/handlers/entities/zip-archive.ts": 1,
       "apps/api/src/handlers/external-preview/preview.ts": 2,
       "apps/api/src/handlers/fields/mark-column-flag.ts": 1,
@@ -460,7 +464,6 @@
       "apps/web/src/components/docx/docx-browser-editor.tsx": 5,
       "apps/web/src/components/docx/docx-edit-mode.logic.ts": 3,
       "apps/web/src/components/docx/use-docx-block-scroll.ts": 1,
-      "apps/web/src/components/docx/use-folio-collaboration-session.ts": 1,
       "apps/web/src/components/inspector/anonymization-facet.tsx": 1,
       "apps/web/src/components/inspector/external-reference-panel.tsx": 8,
       "apps/web/src/components/inspector/inspector-broadcast.ts": 1,
@@ -630,5 +633,11 @@
   "workspace-only-rls-on-org-tables": {
     "count": 0,
     "files": {}
+  },
+  "internal-module-mock-ledger-entries": {
+    "count": 246,
+    "files": {
+      "scripts/internal-module-mock-ledger.json": 246
+    }
   }
 }

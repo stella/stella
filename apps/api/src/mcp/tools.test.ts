@@ -1,17 +1,31 @@
 import { Result } from "better-result";
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 import JSZip from "jszip";
 
 import { env } from "@/api/env";
+import { envBase } from "@/api/env-base";
 // Imported for the double below: only the resolver is replaced, and the rest
 // of the module keeps its real behaviour rather than being dropped.
 import * as publicSubject from "@/api/handlers/case-law/decisions/public-subject";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { encryptContent } from "@/api/lib/content-encryption";
+import type { EncryptedContent } from "@/api/lib/content-encryption";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { createFileKey } from "@/api/lib/file-key";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -55,28 +69,38 @@ const makeDocxBytes = async () => {
   );
 };
 
-const s3ArrayBufferMock = mock(async () => await makeDocxBytes());
-const s3FileMock = mock(() => ({ arrayBuffer: s3ArrayBufferMock }));
-const s3DeleteMock = mock(async () => undefined);
-const s3WriteMock = mock(async () => undefined);
+const ORGANIZATION_ID = toSafeId<"organization">("org_1");
 
-const realS3 = await import("@/api/lib/s3");
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  deleteS3ObjectWithSignal: s3DeleteMock,
-  getS3ObjectWithSignal: async () => await s3ArrayBufferMock(),
-  getS3: () => ({ file: s3FileMock }),
-  putS3ObjectWithSignal: s3WriteMock,
-  resolveS3Credentials: async () => ({
-    accessKeyId: "test-access-key",
-    secretAccessKey: "test-secret-key",
-  }),
-  // The DOCX conversion tests exercise the safe read helper directly.
-  readS3ArrayBuffer: s3ArrayBufferMock,
-  readCorpusS3Bytes: () => {
-    throw new Error("Unexpected corpus object read in this suite");
-  },
-}));
+/**
+ * The object store the tools really read through: `startFakeS3` points
+ * `lib/s3` at an in-process S3, so the key derivation, the presigned read and
+ * the DOCX conversion are all part of what these tests prove. A DOCX branch
+ * seeds the one key it expects to be read; a test that must not reach the
+ * store asserts on `fake.requests` instead.
+ */
+let fake: FakeS3;
+
+/** Object reads that reached the store, in order. */
+const objectReadKeys = (): string[] =>
+  fake.requests.filter(({ method }) => method === "GET").map(({ key }) => key);
+
+const docxKey = (fileId: string, workspaceId = "ws_1"): string =>
+  createFileKey({
+    organizationId: ORGANIZATION_ID,
+    workspaceId: toSafeId<"workspace">(workspaceId),
+    fileId,
+    mimeType: DOCX_MIME_TYPE,
+  });
+
+/** Put the DOCX fixture where the tool will look for that file's bytes. */
+const seedDocxFile = async (fileId: string, workspaceId = "ws_1") => {
+  fake.put(
+    envBase.S3_BUCKET,
+    docxKey(fileId, workspaceId),
+    new Uint8Array(await makeDocxBytes()),
+    DOCX_MIME_TYPE,
+  );
+};
 
 // Default passthrough: just await the wrapped operation, so every existing
 // test exercises the real S3-read-and-convert logic unchanged. Individual
@@ -91,7 +115,6 @@ void mock.module("@/api/lib/with-timeout", () => ({
 
 const anonymizeTextFieldsMock = mock();
 const loadAnonymizationGazetteerEntriesMock = mock();
-const decryptContentMock = mock();
 const captureErrorMock = mock();
 const searchAcrossMattersExecute = mock();
 const readContentAcrossMattersExecute = mock();
@@ -208,11 +231,6 @@ void mock.module("@/api/lib/analytics/capture", () => ({
   ...realCapture,
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
-}));
-
-void mock.module("@/api/lib/content-encryption", () => ({
-  decryptContent: decryptContentMock,
-  encryptContent: mock(),
 }));
 
 void mock.module("@/api/lib/search/provider", () => ({
@@ -430,7 +448,7 @@ const createSelectBuilder = (rows: unknown[]) => {
 
 type ExtractedContentRow = {
   charCount: number;
-  ciphertext: string;
+  ciphertext: Buffer;
   entityId: string;
   extractedAt: Date;
   entity: {
@@ -438,7 +456,7 @@ type ExtractedContentRow = {
     name: string;
     workspaceId: string;
   };
-  iv: string;
+  iv: Buffer;
   sourceEntityVersionId: string | null;
   sourceFieldId: string | null;
   sourceFileId: string | null;
@@ -525,8 +543,21 @@ type MockMcpTransaction = {
   select: () => ReturnType<typeof createSelectBuilder>;
 };
 
+/**
+ * The projection ships real AES-GCM ciphertext, encrypted under the same
+ * organization the request context carries, so the tools run the production
+ * `decryptContent`. Tests that need different text pass their own
+ * `encryptContent(ORGANIZATION_ID, ...)` envelope.
+ */
+const DEFAULT_EXTRACTED_TEXT = "Full document text";
+const DEFAULT_EXTRACTED_CONTENT = await encryptContent(
+  ORGANIZATION_ID,
+  DEFAULT_EXTRACTED_TEXT,
+);
+
 const createExtractedContentRow = ({
   charCount = 321,
+  encrypted = DEFAULT_EXTRACTED_CONTENT,
   entityId = "entity_1",
   name = "Share Purchase Agreement",
   workspaceId = "ws_1",
@@ -536,6 +567,7 @@ const createExtractedContentRow = ({
   sourceSha256Hex = null,
 }: {
   charCount?: number;
+  encrypted?: EncryptedContent;
   entityId?: string;
   name?: string;
   workspaceId?: string;
@@ -545,7 +577,7 @@ const createExtractedContentRow = ({
   sourceSha256Hex?: string | null;
 } = {}): ExtractedContentRow => ({
   charCount,
-  ciphertext: "ciphertext",
+  ciphertext: encrypted.ciphertext,
   entityId,
   extractedAt: new Date("2026-01-02T00:00:00.000Z"),
   entity: {
@@ -553,7 +585,7 @@ const createExtractedContentRow = ({
     name,
     workspaceId,
   },
-  iv: "iv",
+  iv: encrypted.iv,
   sourceEntityVersionId,
   sourceFieldId,
   sourceFileId,
@@ -763,8 +795,6 @@ describe("OpenAI-compatible MCP tools", () => {
     searchProviderSearchMock.mockClear();
     readContentAcrossMattersExecute.mockReset();
     readContactExecute.mockReset();
-    decryptContentMock.mockReset();
-    decryptContentMock.mockResolvedValue("Full document text");
     searchDecisionsHandlerMock.mockReset();
     readDecisionHandlerMock.mockReset();
     readGatedDecisionMock.mockReset();
@@ -782,9 +812,12 @@ describe("OpenAI-compatible MCP tools", () => {
         read: (subject: { id: string }) => Promise<unknown>,
       ) => await read({ id: locator.id }),
     );
-    s3FileMock.mockClear();
-    s3ArrayBufferMock.mockClear();
     withTimeoutMock.mockClear();
+    fake = startFakeS3();
+  });
+
+  afterEach(() => {
+    fake.stop();
   });
 
   afterAll(() => {
@@ -1114,9 +1147,13 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("fetch pages long document text via the returned cursor", async () => {
     const longText = "x".repeat(8000) + "y".repeat(1000);
-    decryptContentMock.mockResolvedValue(longText);
     const context = createContext({
-      scopedDb: createScopedDb([], createExtractedContentRow()),
+      scopedDb: createScopedDb(
+        [],
+        createExtractedContentRow({
+          encrypted: await encryptContent(ORGANIZATION_ID, longText),
+        }),
+      ),
     });
 
     const first = asTestRaw<{
@@ -1776,6 +1813,7 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("read_content_across_matters returns folio Markdown when the current version holds a DOCX file", async () => {
+    await seedDocxFile("file_1");
     const context = createContext({
       accessibleWorkspaceIds: ["ws_1", "ws_3"],
       scopedDb: createScopedDb([], createExtractedContentRow(), [
@@ -1811,9 +1849,13 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(text).toContain("| Acme s.r.o. | Seller |");
     expect(text).toContain("Signed below.");
     expect(text).not.toContain("Full document text");
+    // The bytes came from the current version's own file key, not from any
+    // other object the store happens to hold.
+    expect(objectReadKeys()).toEqual([docxKey("file_1")]);
   });
 
   test("read_content_across_matters reads a fresh DOCX before asynchronous extraction exists", async () => {
+    await seedDocxFile("file_1");
     const context = createContext({
       accessibleWorkspaceIds: ["ws_1", "ws_3"],
       scopedDb: createScopedDb(
@@ -1881,10 +1923,10 @@ describe("OpenAI-compatible MCP tools", () => {
       hint: "Call read_document to inspect contentState and searchIndexState, then follow the returned action or retry when processing completes.",
       retryable: true,
     });
-    expect(decryptContentMock).not.toHaveBeenCalled();
   });
 
   test("read_content_across_matters reads one current DOCX while extraction still names the previous version", async () => {
+    await seedDocxFile("file_current");
     const stale = createExtractedContentRow({
       sourceEntityVersionId: "entity_version_old",
       sourceFieldId: "field_old",
@@ -1909,10 +1951,14 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "read_content_across_matters",
     });
 
+    // The current file's markdown is served; the stale projection's plaintext
+    // never reaches the payload.
     expect(parseToolPayload(result)).toMatchObject({
       text: expect.stringContaining("# Agreement"),
     });
-    expect(decryptContentMock).not.toHaveBeenCalled();
+    expect(parseToolPayload(result)).not.toMatchObject({
+      text: expect.stringContaining(DEFAULT_EXTRACTED_TEXT),
+    });
   });
 
   test("read_content_across_matters does not guess between current files while extraction names the previous version", async () => {
@@ -1953,8 +1999,8 @@ describe("OpenAI-compatible MCP tools", () => {
       hint: "Call read_document to inspect contentState and searchIndexState, then follow the returned action or retry when processing completes.",
       retryable: true,
     });
-    expect(s3ArrayBufferMock).not.toHaveBeenCalled();
-    expect(decryptContentMock).not.toHaveBeenCalled();
+    // Neither candidate DOCX is read: the tool refuses rather than picking one.
+    expect(objectReadKeys()).toEqual([]);
   });
 
   test("read_content_across_matters rejects legacy text after a version rollback", async () => {
@@ -1992,13 +2038,15 @@ describe("OpenAI-compatible MCP tools", () => {
       hint: "Call read_document to inspect contentState and searchIndexState, then follow the returned action or retry when processing completes.",
       retryable: true,
     });
-    expect(decryptContentMock).not.toHaveBeenCalled();
   });
 
   test("read_content_across_matters selects the SAME file the extraction pipeline indexed, not just any DOCX field", async () => {
     // The persisted source is a non-DOCX system document; an auxiliary field
     // happens to hold a DOCX. The markdown branch must not scan for another
     // DOCX and return a different document than the plaintext projection.
+    // The auxiliary DOCX is seeded, so reading it would succeed: the tool
+    // leaves it alone by choice, not because the store lacks it.
+    await seedDocxFile("file_auxiliary");
     const context = createContext({
       accessibleWorkspaceIds: ["ws_1", "ws_3"],
       scopedDb: createScopedDb(
@@ -2040,13 +2088,11 @@ describe("OpenAI-compatible MCP tools", () => {
       throw new Error("Expected payload.text to be a string");
     }
     expect(payload["text"]).not.toContain("# Agreement");
-    // Guards the read helper the handler actually calls. `getS3().file()` is
-    // no longer on this path at all, so asserting against it would hold even
-    // if the auxiliary DOCX were read.
-    expect(s3ArrayBufferMock).not.toHaveBeenCalled();
+    expect(objectReadKeys()).toEqual([]);
   });
 
   test("read_content_across_matters follows a persisted non-first DOCX source", async () => {
+    await seedDocxFile("file_selected");
     const context = createContext({
       accessibleWorkspaceIds: ["ws_1", "ws_3"],
       scopedDb: createScopedDb(
@@ -2085,13 +2131,14 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(parseToolPayload(result)).toMatchObject({
       text: expect.stringContaining("# Agreement"),
     });
-    expect(s3ArrayBufferMock).toHaveBeenCalledTimes(1);
+    // The persisted source field selects the second file, not the first.
+    expect(objectReadKeys()).toEqual([docxKey("file_selected")]);
   });
 
   test("read_content_across_matters falls back to plaintext when docx-to-markdown conversion fails", async () => {
-    s3ArrayBufferMock.mockImplementationOnce(async () => {
-      throw new Error("S3 read failed");
-    });
+    // The object exists; the store rejects the read.
+    await seedDocxFile("file_1");
+    fake.failNext({ method: "GET", code: "InternalError", status: 500 });
     const context = createContext({
       accessibleWorkspaceIds: ["ws_1", "ws_3"],
       scopedDb: createScopedDb([], createExtractedContentRow(), [
@@ -2115,9 +2162,8 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("read_content_across_matters returns a retryable error instead of switching representation when a paginated DOCX conversion fails", async () => {
-    s3ArrayBufferMock.mockImplementationOnce(async () => {
-      throw new Error("S3 read failed");
-    });
+    await seedDocxFile("file_1");
+    fake.failNext({ method: "GET", code: "InternalError", status: 500 });
     const context = createContext({
       accessibleWorkspaceIds: ["ws_1", "ws_3"],
       scopedDb: createScopedDb([], createExtractedContentRow(), [
@@ -2386,7 +2432,6 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("fetch anonymizes title and text in anonymized mode", async () => {
-    decryptContentMock.mockResolvedValueOnce("John Smith signed the agreement");
     anonymizeTextFieldsMock.mockResolvedValue({
       entityCount: 2,
       fields: ["[PERSON_1] SPA", "[PERSON_1] signed the agreement"],
@@ -2398,6 +2443,10 @@ describe("OpenAI-compatible MCP tools", () => {
         scopedDb: createScopedDb(
           [],
           createExtractedContentRow({
+            encrypted: await encryptContent(
+              ORGANIZATION_ID,
+              "John Smith signed the agreement",
+            ),
             name: "John Smith SPA",
           }),
         ),
@@ -2424,7 +2473,6 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("fetch preserves empty anonymized output instead of leaking original content", async () => {
-    decryptContentMock.mockResolvedValueOnce("John Smith");
     anonymizeTextFieldsMock.mockResolvedValue({
       entityCount: 1,
       fields: ["", ""],
@@ -2437,6 +2485,7 @@ describe("OpenAI-compatible MCP tools", () => {
           [],
           createExtractedContentRow({
             charCount: 42,
+            encrypted: await encryptContent(ORGANIZATION_ID, "John Smith"),
             name: "John Smith",
           }),
         ),
@@ -2463,7 +2512,6 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("fetch uses generic placeholders when anonymized fields are unexpectedly missing", async () => {
-    decryptContentMock.mockResolvedValueOnce("John Smith");
     anonymizeTextFieldsMock.mockResolvedValue({
       entityCount: 1,
       fields: [],
@@ -2476,6 +2524,7 @@ describe("OpenAI-compatible MCP tools", () => {
           [],
           createExtractedContentRow({
             charCount: 42,
+            encrypted: await encryptContent(ORGANIZATION_ID, "John Smith"),
             name: "John Smith",
           }),
         ),

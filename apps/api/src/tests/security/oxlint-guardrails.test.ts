@@ -492,7 +492,10 @@ describe("custom oxlint guardrails", () => {
       "apps/api/src/handlers/uploads/presigned-upload.integration.test.ts",
     );
 
-    expect(uploadIntegrationSource).toContain('mock.module("@/api/lib/s3"');
+    // The suite runs the real store and presigner behind the fake S3 seam,
+    // so neither module may be replaced.
+    expect(uploadIntegrationSource).toContain("startFakeS3(");
+    expect(uploadIntegrationSource).not.toContain('mock.module("@/api/lib/s3"');
     expect(uploadIntegrationSource).not.toContain(
       'mock.module("@/api/lib/s3-presign"',
     );

@@ -195,6 +195,12 @@ export const TRACKED_SUPPRESSION_RULES = [
     guards:
       "throw assertions that pin no error, so any unrelated failure keeps them green",
   },
+  {
+    rule: "no-internal-module-mock/no-internal-module-mock",
+    tier: "test-integrity",
+    guards:
+      "module mocks of workspace modules, which keep a test green after the mocked contract changes",
+  },
 ] as const satisfies readonly TrackedSuppressionRule[];
 
 export type TrackedRule = (typeof TRACKED_SUPPRESSION_RULES)[number]["rule"];

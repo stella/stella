@@ -71,6 +71,9 @@ export const CLIENT_NAME = "stella-cli";
 /** `--server` resolution: env var name, checked between the flag and the config file. */
 export const SERVER_URL_ENV_VAR = "STELLA_SERVER_URL";
 
+/** Machine credential; see `auth/resolve-access-token.ts`. */
+export const API_KEY_ENV_VAR = "STELLA_API_KEY";
+
 /** How long the CLI waits for the browser round-trip before giving up. */
 export const LOGIN_TIMEOUT_MS: number = 5 * 60 * 1000;
 

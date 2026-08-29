@@ -54,6 +54,11 @@ delete process.env["PUBLIC_LAW_DATABASE_POOL_MAX"];
 delete process.env["CASE_LAW_DATABASE_URL"];
 delete process.env["CASE_LAW_DATABASE_POOL_MAX"];
 
+// A fixed key so suites run the real AES-GCM content encryption instead of a
+// module mock; the value is test-only and derives per-organization keys the
+// same way production does.
+process.env["CONTENT_ENCRYPTION_KEY"] ??= "0123456789abcdef".repeat(4);
+
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["BETTER_AUTH_SECRET"] ??= "x".repeat(32);
 process.env["BETTER_AUTH_URL"] ??= "http://localhost:3001";

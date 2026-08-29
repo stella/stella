@@ -12,16 +12,27 @@ import { ServerUrlNotConfiguredError } from "./errors.js";
 
 const normalizeServerUrl = (input: string): string => input.replace(/\/$/u, "");
 
-export const resolveServerUrl = async (
-  configDir: string,
-  flagValue: string | undefined,
-): Promise<Result<string, ServerUrlNotConfiguredError>> => {
+type ResolveServerUrlOptions = {
+  readonly configDir: string;
+  readonly flagValue: string | undefined;
+  // The env tier is injected so a test owns it explicitly instead of
+  // replacing the environment module for the whole process.
+  readonly env?: { readonly STELLA_SERVER_URL: string | undefined };
+};
+
+export const resolveServerUrl = async ({
+  configDir,
+  flagValue,
+  env = { STELLA_SERVER_URL },
+}: ResolveServerUrlOptions): Promise<
+  Result<string, ServerUrlNotConfiguredError>
+> => {
   if (flagValue) {
     return Result.ok(normalizeServerUrl(flagValue));
   }
 
-  if (STELLA_SERVER_URL) {
-    return Result.ok(normalizeServerUrl(STELLA_SERVER_URL));
+  if (env.STELLA_SERVER_URL) {
+    return Result.ok(normalizeServerUrl(env.STELLA_SERVER_URL));
   }
 
   const config = await readCliConfig(configDir);

@@ -1,19 +1,20 @@
 import { Result } from "better-result";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { bufferObjectCleanupIntents, workspaces } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import type { FakeS3, FakeS3Method } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const writeFileVersionMock = mock();
-const s3WriteMock = mock();
-const s3DeleteMock = mock();
 const processExtractionMock = mock();
 const requestNativeExtractionRunMock = mock();
 const pdfDerivativeMock = mock();
@@ -22,8 +23,13 @@ const diffStatsMock = mock();
 const broadcastMock = mock();
 let persistenceEvents: string[] = [];
 let intentStatuses: string[] = [];
+/**
+ * How many objects the store had received when the durable intent row was
+ * inserted. The intent is what reclaims an orphaned object, so it must be
+ * durable before anything is published.
+ */
+let putsAtIntentReservation: number[] = [];
 
-const realS3 = await import("@/api/lib/s3");
 const realSse = await import("@/api/lib/sse");
 
 void mock.module("@/api/lib/entity-versions/write-file-version", () => ({
@@ -36,20 +42,6 @@ void mock.module("@/api/lib/files/file-object-ids", () => ({
 }));
 void mock.module("@/api/lib/files/utils", () => ({
   createFileKey: () => "org_1/ws_1/file_1.docx",
-}));
-void mock.module("@/api/lib/s3", () => ({
-  ...realS3,
-  deleteS3ObjectWithSignal: s3DeleteMock,
-  putS3ObjectWithSignal: s3WriteMock,
-  // `mock.module` replaces the module, so every named export a consumer
-  // imports must exist here or the import fails at link time. This suite
-  // reads no object; throwing surfaces one that appears later.
-  readS3ArrayBuffer: () => {
-    throw new Error("Unexpected S3 object read in this suite");
-  },
-  readCorpusS3Bytes: () => {
-    throw new Error("Unexpected corpus object read in this suite");
-  },
 }));
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
@@ -82,6 +74,19 @@ void mock.module("@/api/lib/analytics/capture", () => ({
 const { createEntityVersionFromBuffer } =
   await import("@/api/lib/entity-versions/create-entity-version-from-buffer");
 
+/** The key `createFileKey` (mocked above) hands the writer for this input. */
+const OBJECT_KEY = "org_1/ws_1/file_1.docx";
+const STORED_OBJECT_ID = `${envBase.S3_BUCKET}/${OBJECT_KEY}`;
+const DOCX_MIME_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+let fake: FakeS3;
+
+const requestedKeys = (method: FakeS3Method): string[] =>
+  fake.requests
+    .filter((request) => request.method === method)
+    .map((request) => request.key);
+
 const createTestTransaction = (): Transaction =>
   asTestRaw<Transaction>({
     delete: (table: unknown) => {
@@ -93,6 +98,7 @@ const createTestTransaction = (): Transaction =>
     insert: () => ({
       values: (values: { id: string; status?: string }) => {
         persistenceEvents.push("intent-reserved");
+        putsAtIntentReservation.push(requestedKeys("PUT").length);
         if (values.status) {
           intentStatuses.push(values.status);
         }
@@ -142,18 +148,16 @@ const baseInput = {
   recordAuditEvent,
   buffer: Buffer.from("filled docx"),
   fileName: "filled.docx",
-  mimeType:
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  mimeType: DOCX_MIME_TYPE,
   source: null,
   writePolicy: { type: "replace-current-file" as const },
 };
 
 describe("createEntityVersionFromBuffer", () => {
   beforeEach(() => {
+    fake = startFakeS3();
     for (const fn of [
       writeFileVersionMock,
-      s3WriteMock,
-      s3DeleteMock,
       processExtractionMock,
       requestNativeExtractionRunMock,
       pdfDerivativeMock,
@@ -163,11 +167,6 @@ describe("createEntityVersionFromBuffer", () => {
     ]) {
       fn.mockReset();
     }
-    s3WriteMock.mockResolvedValue(undefined);
-    s3WriteMock.mockImplementation(async () => {
-      persistenceEvents.push("s3-written");
-    });
-    s3DeleteMock.mockResolvedValue(undefined);
     processExtractionMock.mockResolvedValue(undefined);
     requestNativeExtractionRunMock.mockResolvedValue(null);
     pdfDerivativeMock.mockResolvedValue(undefined);
@@ -175,6 +174,11 @@ describe("createEntityVersionFromBuffer", () => {
     diffStatsMock.mockResolvedValue(undefined);
     persistenceEvents = [];
     intentStatuses = [];
+    putsAtIntentReservation = [];
+  });
+
+  afterEach(() => {
+    fake.stop();
   });
 
   test("rejects oversized documents before object storage or the transaction", async () => {
@@ -192,14 +196,14 @@ describe("createEntityVersionFromBuffer", () => {
         }),
       );
     }
-    expect(s3WriteMock).not.toHaveBeenCalled();
+    // Nothing reached object storage: the ceiling is checked before the
+    // durable intent and before any request.
+    expect(fake.requests).toEqual([]);
     expect(writeFileVersionMock).not.toHaveBeenCalled();
-    expect(s3DeleteMock).not.toHaveBeenCalled();
   });
 
   test("keeps recovery after deleting an ambiguous initial write", async () => {
-    const writeError = new Error("object storage timed out");
-    s3WriteMock.mockRejectedValue(writeError);
+    fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
 
     const attempted = await Result.tryPromise({
       try: async () => await createEntityVersionFromBuffer(baseInput),
@@ -208,20 +212,23 @@ describe("createEntityVersionFromBuffer", () => {
 
     expect(Result.isError(attempted)).toBe(true);
     if (Result.isError(attempted)) {
-      expect(attempted.error).toBe(writeError);
+      // The store's own rejection reaches the caller: it is what tells a
+      // retry apart from a refusal.
+      expect(attempted.error instanceof Error ? attempted.error.name : "").toBe(
+        "AccessDenied",
+      );
     }
-    expect(s3DeleteMock).toHaveBeenCalledWith(
-      "org_1/ws_1/file_1.docx",
-      expect.any(AbortSignal),
-    );
+    // A publication the failure may have raced is deleted, so no orphan
+    // survives under the reserved key.
+    expect(requestedKeys("DELETE")).toEqual([OBJECT_KEY]);
+    expect(fake.objects.has(STORED_OBJECT_ID)).toBe(false);
     expect(writeFileVersionMock).not.toHaveBeenCalled();
     expect(intentStatuses).toEqual(["scanning"]);
   });
 
   test("keeps the durable intent recoverable when ambiguous-write cleanup fails", async () => {
-    const writeError = new Error("object storage timed out");
-    s3WriteMock.mockRejectedValue(writeError);
-    s3DeleteMock.mockRejectedValue(new Error("object deletion timed out"));
+    fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
+    fake.failNext({ method: "DELETE", code: "AccessDenied", status: 403 });
 
     const attempted = await Result.tryPromise({
       try: async () => await createEntityVersionFromBuffer(baseInput),
@@ -230,12 +237,15 @@ describe("createEntityVersionFromBuffer", () => {
 
     expect(Result.isError(attempted)).toBe(true);
     if (Result.isError(attempted)) {
-      expect(attempted.error).toBe(writeError);
+      // The write failure, not the cleanup's: the caller is told why the
+      // version did not happen.
+      expect(attempted.error instanceof Error ? attempted.error.name : "").toBe(
+        "AccessDenied",
+      );
     }
-    expect(s3DeleteMock).toHaveBeenCalledWith(
-      "org_1/ws_1/file_1.docx",
-      expect.any(AbortSignal),
-    );
+    expect(requestedKeys("DELETE")).toEqual([OBJECT_KEY]);
+    // Cleanup was refused, so the intent stays claimable by the sweeper
+    // instead of being abandoned with an object possibly still out there.
     expect(intentStatuses).toEqual(["scanning"]);
   });
 
@@ -255,14 +265,16 @@ describe("createEntityVersionFromBuffer", () => {
     const result = await createEntityVersionFromBuffer(baseInput);
 
     expect(Result.isOk(result)).toBe(true);
-    expect(s3WriteMock).toHaveBeenCalledTimes(1);
-    expect(s3WriteMock).toHaveBeenCalledWith(
-      "org_1/ws_1/file_1.docx",
-      expect.any(Uint8Array),
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      expect.any(AbortSignal),
-    );
-    expect(persistenceEvents).toEqual(["intent-reserved", "s3-written"]);
+    // The bytes the caller handed over are what the reserved key now holds,
+    // under the document's own media type.
+    expect(requestedKeys("PUT")).toEqual([OBJECT_KEY]);
+    const stored = fake.objects.get(STORED_OBJECT_ID);
+    expect(new TextDecoder().decode(stored?.bytes)).toBe("filled docx");
+    expect(stored?.contentType).toBe(DOCX_MIME_TYPE);
+    // Ordering: the intent that can reclaim the object is durable before the
+    // object exists.
+    expect(persistenceEvents).toEqual(["intent-reserved"]);
+    expect(putsAtIntentReservation).toEqual([0]);
     expect(writeFileVersionMock).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: "ws_1",
@@ -273,7 +285,7 @@ describe("createEntityVersionFromBuffer", () => {
         source: null,
       }),
     );
-    expect(s3DeleteMock).not.toHaveBeenCalled();
+    expect(requestedKeys("DELETE")).toEqual([]);
     // The durable request is written inside the version transaction, pinned to
     // the same file property the post-commit acceleration resolves.
     expect(requestNativeExtractionRunMock).toHaveBeenCalledWith({
@@ -299,10 +311,9 @@ describe("createEntityVersionFromBuffer", () => {
     if (Result.isError(result)) {
       expect(result.error.code).toBe("entity-read-only");
     }
-    expect(s3DeleteMock).toHaveBeenCalledWith(
-      "org_1/ws_1/file_1.docx",
-      expect.any(AbortSignal),
-    );
+    // The rejected version leaves no object behind.
+    expect(requestedKeys("DELETE")).toEqual([OBJECT_KEY]);
+    expect(fake.objects.has(STORED_OBJECT_ID)).toBe(false);
     expect(requestNativeExtractionRunMock).not.toHaveBeenCalled();
     expect(processExtractionMock).not.toHaveBeenCalled();
   });
@@ -321,10 +332,8 @@ describe("createEntityVersionFromBuffer", () => {
         expect(attempted.error.message).toBe("db unavailable");
       }
     }
-    expect(s3DeleteMock).toHaveBeenCalledWith(
-      "org_1/ws_1/file_1.docx",
-      expect.any(AbortSignal),
-    );
+    expect(requestedKeys("DELETE")).toEqual([OBJECT_KEY]);
+    expect(fake.objects.has(STORED_OBJECT_ID)).toBe(false);
   });
 
   test("preserves the object when the commit acknowledgement is ambiguous", async () => {
@@ -362,7 +371,10 @@ describe("createEntityVersionFromBuffer", () => {
     if (Result.isError(attempted)) {
       expect(attempted.error).toBe(commitError);
     }
-    expect(s3DeleteMock).not.toHaveBeenCalled();
+    // The commit may be durable, so the object a committed row would point at
+    // survives untouched.
+    expect(requestedKeys("DELETE")).toEqual([]);
+    expect(fake.objects.has(STORED_OBJECT_ID)).toBe(true);
     // The extraction request rode along with the version write, so an
     // acknowledgement lost after that commit still leaves a queued run.
     expect(requestNativeExtractionRunMock).toHaveBeenCalledTimes(1);
@@ -397,10 +409,8 @@ describe("createEntityVersionFromBuffer", () => {
     if (Result.isError(attempted) && attempted.error instanceof Error) {
       expect(attempted.error.message).toBe("audit failed");
     }
-    expect(s3DeleteMock).toHaveBeenCalledWith(
-      "org_1/ws_1/file_1.docx",
-      expect.any(AbortSignal),
-    );
+    expect(requestedKeys("DELETE")).toEqual([OBJECT_KEY]);
+    expect(fake.objects.has(STORED_OBJECT_ID)).toBe(false);
     expect(processExtractionMock).not.toHaveBeenCalled();
   });
 });

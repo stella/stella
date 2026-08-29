@@ -59,12 +59,26 @@ export type LoginSuccess = {
   readonly hasRefreshToken: boolean;
 };
 
-type Io = {
+// The process boundaries `login` crosses. The browser opener and loopback
+// listener are injectable so a test never spawns a browser or depends on a
+// free port, without replacing either module for the whole test process.
+export type LoginBoundaries = {
+  readonly openInBrowser: typeof openInBrowser;
+  readonly startLoopbackListener: typeof startLoopbackListener;
+};
+
+const defaultLoginBoundaries: LoginBoundaries = {
+  openInBrowser,
+  startLoopbackListener,
+};
+
+type Io = LoginBoundaries & {
   readonly print: (line: string) => void;
   readonly promptLine: (question: string) => Promise<string>;
 };
 
-const buildIo = (process: NodeJS.Process): Io => ({
+const buildIo = (process: NodeJS.Process, boundaries: LoginBoundaries): Io => ({
+  ...boundaries,
   print: (line) => {
     process.stdout.write(`${line}\n`);
   },
@@ -183,7 +197,7 @@ const awaitAuthorizationCode = async (
   // Awaiting is safe (and required to react to a failed launch): the loopback
   // listener is already bound by the time we get here, so a redirect that
   // arrives while the opener is still settling is queued, not missed.
-  const launch = await openInBrowser(authorizeUrl);
+  const launch = await io.openInBrowser(authorizeUrl);
 
   if (!listener) {
     io.print(
@@ -244,12 +258,16 @@ const awaitAuthorizationCode = async (
 export const login = async (
   process: NodeJS.Process,
   options: LoginOptions,
+  boundaries: LoginBoundaries = defaultLoginBoundaries,
 ): Promise<Result<LoginSuccess, CliAuthError>> =>
   await Result.gen(async function* loginGen() {
-    const io = buildIo(process);
+    const io = buildIo(process, boundaries);
 
     const serverUrl = yield* Result.await(
-      resolveServerUrl(options.configDir, options.serverFlag),
+      resolveServerUrl({
+        configDir: options.configDir,
+        flagValue: options.serverFlag,
+      }),
     );
     const metadata = yield* Result.await(
       discoverAuthorizationServerMetadata(serverUrl),
@@ -283,7 +301,7 @@ export const login = async (
     // will actually be redirected back to (the listener's ephemeral port, or
     // the portless default if binding failed), and it must stay identical
     // through to the token exchange.
-    const listener = await startLoopbackListener();
+    const listener = await io.startLoopbackListener();
     const redirectUri = listener?.redirectUri ?? LOOPBACK_REDIRECT_URI;
 
     const authorizeUrl = buildAuthorizeUrl({

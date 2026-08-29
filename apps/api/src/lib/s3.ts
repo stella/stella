@@ -226,6 +226,10 @@ const fetchImdsCredentials = async ({
   }
 };
 
+// Set only by `configureS3ForTesting`; production always uses the env.
+let _endpointOverride: string | null = null;
+const s3Endpoint = (): string => _endpointOverride ?? envBase.S3_ENDPOINT;
+
 const buildS3Client = (
   bucket: string,
   creds?: OptionalS3Credentials | null,
@@ -233,7 +237,7 @@ const buildS3Client = (
   new S3Client({
     acl: "private",
     bucket,
-    endpoint: envBase.S3_ENDPOINT,
+    endpoint: s3Endpoint(),
     region: envBase.S3_REGION,
     ...(creds
       ? {
@@ -258,8 +262,8 @@ const buildAbortableS3Client = (
 ): AwsS3Client =>
   new AwsS3Client({
     region: envBase.S3_REGION,
-    endpoint: envBase.S3_ENDPOINT,
-    forcePathStyle: isPathStyleRequired(envBase.S3_ENDPOINT),
+    endpoint: s3Endpoint(),
+    forcePathStyle: isPathStyleRequired(s3Endpoint()),
     ...(creds
       ? {
           credentials: {
@@ -1112,3 +1116,35 @@ export const presignDownloadUrl = (
     method: "GET",
     contentDisposition: contentDisposition(options.fileName),
   });
+
+/**
+ * Test seam: point every client this module hands out at `endpoint`, an
+ * in-process store speaking the S3 wire protocol (see
+ * `tests/helpers/fake-s3.ts`). The helpers above then run unchanged, so a
+ * test exercises the real request shapes, error-code parsing, retries, and
+ * bounds instead of a fabricated module.
+ */
+export const configureS3ForTesting = ({
+  endpoint,
+}: {
+  endpoint: string;
+}): void => {
+  _endpointOverride = endpoint;
+  const credentials = staticCredentialsFromEnv();
+  _client = buildS3Client(envBase.S3_BUCKET, credentials);
+  _abortableClient = buildAbortableS3Client(credentials);
+  _corpusClient = buildS3Client(corpusBucket(), credentials);
+  _abortableCorpusClient = buildAbortableS3Client(credentials);
+  _clientCreatedAt = Date.now();
+  _corpusClientCreatedAt = Date.now();
+};
+
+export const resetS3ForTesting = (): void => {
+  _endpointOverride = null;
+  _client = null;
+  _abortableClient = null;
+  _corpusClient = null;
+  _abortableCorpusClient = null;
+  _clientCreatedAt = 0;
+  _corpusClientCreatedAt = 0;
+};

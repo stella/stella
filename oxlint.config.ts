@@ -794,6 +794,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-query-key-factory.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
+    "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/no-static-devtools-import.ts",
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
@@ -2769,6 +2770,23 @@ export default defineConfig({
       ],
       rules: {
         "no-vacuous-throw-assertion/no-vacuous-throw-assertion": "error",
+      },
+    },
+    {
+      // Module mocks of workspace modules test a fabricated dependency graph.
+      // Scoped to test files and test helpers, where `mock.module` lives;
+      // existing pairs are grandfathered in
+      // scripts/internal-module-mock-ledger.json.
+      files: [
+        "**/*.test.{ts,tsx}",
+        "**/*.property.test.{ts,tsx}",
+        "**/*.spec.{ts,tsx}",
+        "**/__tests__/**/*.{ts,tsx}",
+        "apps/*/src/tests/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-internal-module-mock.fixture.ts",
+      ],
+      rules: {
+        "no-internal-module-mock/no-internal-module-mock": "error",
       },
     },
     {
