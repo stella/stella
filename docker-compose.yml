@@ -1,3 +1,5 @@
+x-quickwit09-index-root-uri: &quickwit09-index-root-uri s3://stella-quickwit-09/indexes
+
 services:
   postgres:
     profiles: [dev]
@@ -56,13 +58,17 @@ services:
     depends_on:
       rustfs:
         condition: service_healthy
+    environment:
+      QUICKWIT09_INDEX_ROOT_URI: *quickwit09-index-root-uri
     entrypoint: >
       /bin/sh -c "
+      quickwit09_bucket=$${QUICKWIT09_INDEX_ROOT_URI#s3://} &&
+      quickwit09_bucket=$${quickwit09_bucket%%/*} &&
       mc alias set rustfs http://rustfs:9000 stella-rustfs-dev stella-rustfs-dev-secret &&
       mc mb rustfs/stella --ignore-existing &&
       mc mb rustfs/stella-legal-corpus --ignore-existing &&
       mc mb rustfs/stella-quickwit --ignore-existing &&
-      mc mb rustfs/stella-quickwit-09 --ignore-existing
+      mc mb rustfs/$${quickwit09_bucket} --ignore-existing
       "
 
   valkey:
@@ -156,7 +162,7 @@ services:
     environment:
       QW_CLUSTER_ID: stella-local-q09
       QW_METASTORE_URI: postgres://postgres:postgres@postgres:5432/stella_quickwit_09
-      QW_DEFAULT_INDEX_ROOT_URI: s3://stella-quickwit-09/indexes
+      QW_DEFAULT_INDEX_ROOT_URI: *quickwit09-index-root-uri
       AWS_ACCESS_KEY_ID: stella-rustfs-dev
       AWS_SECRET_ACCESS_KEY: stella-rustfs-dev-secret
       AWS_REGION: us-east-1

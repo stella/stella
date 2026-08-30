@@ -242,6 +242,8 @@ run_step "Desktop Rust change detector self-test" bash \
   scripts/detect-tauri-rust-changes.test.sh
 run_step "Self-host production contract self-test" bun test \
   scripts/selfhost-contract.test.ts
+run_step "Local Quickwit generation contract" bun test \
+  scripts/quickwit-compose-contract.test.ts
 run_step "Self-host production contract" bun run selfhost:check
 run_step "Railway template shape" bun run check:railway-template
 run_step "i18n" bun run i18n:check

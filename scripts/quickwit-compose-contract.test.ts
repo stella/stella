@@ -47,11 +47,13 @@ describe("local Quickwit generations", () => {
       throw new TypeError("Compose must be an object");
     }
     const services = recordField(compose, "services");
+    const rustfsSetup = recordField(services, "rustfs-setup");
     const q08 = recordField(services, "quickwit");
     const q09 = recordField(services, "quickwit09");
     const q09Setup = recordField(services, "quickwit09-postgres-setup");
     const q08Environment = recordField(q08, "environment");
     const q09Environment = recordField(q09, "environment");
+    const rustfsSetupEnvironment = recordField(rustfsSetup, "environment");
 
     expect(stringField(q08, "image")).toStartWith(
       "quickwit/quickwit:0.8.2@sha256:",
@@ -67,6 +69,12 @@ describe("local Quickwit generations", () => {
     );
     expect(stringField(q09Environment, "QW_DEFAULT_INDEX_ROOT_URI")).not.toBe(
       stringField(q08Environment, "QW_DEFAULT_INDEX_ROOT_URI"),
+    );
+    expect(stringField(q09Environment, "QW_DEFAULT_INDEX_ROOT_URI")).toBe(
+      stringField(rustfsSetupEnvironment, "QUICKWIT09_INDEX_ROOT_URI"),
+    );
+    expect(stringField(rustfsSetup, "entrypoint")).toContain(
+      "quickwit09_bucket=$${QUICKWIT09_INDEX_ROOT_URI#s3://}",
     );
     expect(stringArrayField(q09, "ports")).not.toEqual(
       stringArrayField(q08, "ports"),
