@@ -10,7 +10,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 type Row = Record<string, unknown>;
 type QueuedRows = Row[] | (() => Row[]);
 
-type QueryBuilder = Promise<Row[]> & {
+type QueryBuilder = {
   for: () => QueryBuilder;
   from: () => QueryBuilder;
   innerJoin: () => QueryBuilder;
