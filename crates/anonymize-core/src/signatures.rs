@@ -149,13 +149,11 @@ pub(crate) struct DetectSignaturesArgs<'a> {
 
 #[must_use]
 pub(crate) fn detect_signatures(
-  args: DetectSignaturesArgs<'_>,
+  args: &DetectSignaturesArgs<'_>,
 ) -> Vec<PipelineEntity> {
-  let DetectSignaturesArgs {
-    full_text,
-    data,
-    name_corpus,
-  } = args;
+  let full_text = args.full_text;
+  let data = args.data;
+  let name_corpus = args.name_corpus;
   let mut results = Vec::new();
   detect_slash_s(full_text, data, &mut results);
   detect_labelled_names(DetectLabelledNamesArgs {
@@ -1124,7 +1122,7 @@ mod tests {
   };
 
   fn detect(text: &str) -> Vec<crate::resolution::PipelineEntity> {
-    detect_signatures(DetectSignaturesArgs {
+    detect_signatures(&DetectSignaturesArgs {
       full_text: text,
       data: &test_data(),
       name_corpus: None,
@@ -1186,7 +1184,7 @@ mod tests {
     });
 
     assert_eq!(
-      detect_signatures(DetectSignaturesArgs {
+      detect_signatures(&DetectSignaturesArgs {
         full_text: "Seller: Imani Nwosu",
         data: &data,
         name_corpus: Some(&names),
@@ -1197,7 +1195,7 @@ mod tests {
       ["Imani Nwosu"]
     );
     assert_eq!(
-      detect_signatures(DetectSignaturesArgs {
+      detect_signatures(&DetectSignaturesArgs {
         full_text: "Borrower:\nZofia Wrona",
         data: &data,
         name_corpus: Some(&names),
@@ -1208,7 +1206,7 @@ mod tests {
       ["Zofia Wrona"]
     );
     assert!(
-      detect_signatures(DetectSignaturesArgs {
+      detect_signatures(&DetectSignaturesArgs {
         full_text: "Seller: Acme Trading",
         data: &data,
         name_corpus: Some(&names),
@@ -1229,7 +1227,7 @@ mod tests {
     );
 
     assert_eq!(
-      detect_signatures(DetectSignaturesArgs {
+      detect_signatures(&DetectSignaturesArgs {
         full_text: "By: Q. Z. Mercer",
         data: &data,
         name_corpus: None,
@@ -1240,7 +1238,7 @@ mod tests {
       ["Q. Z. Mercer"]
     );
     assert!(
-      detect_signatures(DetectSignaturesArgs {
+      detect_signatures(&DetectSignaturesArgs {
         full_text: "Name: Main Street",
         data: &data,
         name_corpus: None,

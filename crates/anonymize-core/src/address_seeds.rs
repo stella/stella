@@ -2483,7 +2483,7 @@ struct ProseMeasure {
 }
 
 impl ProseMeasure {
-  fn add(&mut self, other: Self) {
+  const fn add(&mut self, other: Self) {
     self.text_units = self.text_units.saturating_add(other.text_units);
     self.words = self.words.saturating_add(other.words);
   }

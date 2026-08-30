@@ -317,7 +317,7 @@ impl<'a> StaticDetectorContext<'a> {
     let full_text = self.full_text()?;
     let name_corpus = self.name_corpus_data()?;
     Ok(self.signature_data()?.map_or_else(Vec::new, |data| {
-      detect_signatures(DetectSignaturesArgs {
+      detect_signatures(&DetectSignaturesArgs {
         full_text,
         data,
         name_corpus,
