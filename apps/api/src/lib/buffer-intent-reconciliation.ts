@@ -307,6 +307,14 @@ const UNRETIRED_OBJECT_WRITER_SETTLEMENT_STATUS = {
   (typeof BUFFER_OBJECT_CLEANUP_INTENT_STATUS)[keyof typeof BUFFER_OBJECT_CLEANUP_INTENT_STATUS]
 >;
 
+// Lifecycle teardown and stale-write recovery may preempt publication by
+// moving a live writer to recovery. The authenticated writer still owns final
+// settlement, but publication locking remains restricted to WRITING above.
+const OBJECT_WRITER_SETTLEMENT_SOURCE_STATUSES = [
+  BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
+  BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
+] as const;
+
 export const settleObjectCleanupIntentsAfterWriterInTransaction = async ({
   intentIds,
   objectState,
@@ -327,9 +335,9 @@ export const settleObjectCleanupIntentsAfterWriterInTransaction = async ({
       .where(
         and(
           inArray(bufferObjectCleanupIntents.id, uniqueIntentIds),
-          eq(
+          inArray(
             bufferObjectCleanupIntents.status,
-            BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
+            OBJECT_WRITER_SETTLEMENT_SOURCE_STATUSES,
           ),
         ),
       )
@@ -359,9 +367,9 @@ export const settleObjectCleanupIntentsAfterWriterInTransaction = async ({
     .where(
       and(
         inArray(bufferObjectCleanupIntents.id, uniqueIntentIds),
-        eq(
+        inArray(
           bufferObjectCleanupIntents.status,
-          BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
+          OBJECT_WRITER_SETTLEMENT_SOURCE_STATUSES,
         ),
       ),
     )
