@@ -4,7 +4,8 @@ use std::fmt::Write as _;
 use crate::resolution::{DetectionSource, PipelineEntity};
 
 use crate::labels::PERSON_LABEL;
-use crate::name_corpus::{PreparedNameCorpusData, contains_first_name_token};
+use crate::name_corpus::PreparedNameCorpusData;
+use crate::types::{Error, Result};
 const MAX_NAME_LEN: usize = 60;
 const MAX_WITNESS_SCAN_UNITS: usize = 600;
 const MAX_PARTY_ROLE_NAME_EVIDENCE_BYTES: usize = 8 * 1024 * 1024;
@@ -29,7 +30,7 @@ impl PartyRoleEvidence<'_> {
           ));
     }
     self.first_names.is_some_and(|first_names| {
-      contains_first_name_token(candidate, first_names)
+      starts_with_first_name_token(candidate, first_names)
     }) || starts_with_sorted_name_token(candidate, self.party_role_name_tokens)
   }
 }
@@ -99,15 +100,10 @@ pub(crate) struct PreparedSignatureData {
 }
 
 impl PreparedSignatureData {
-  #[allow(
-    clippy::expect_used,
-    reason = "prepared config validation proves the front-coded evidence is valid"
-  )]
-  #[must_use]
   pub(crate) fn new(
     data: SignatureData,
     party_role_labels: Vec<String>,
-  ) -> Self {
+  ) -> Result<Self> {
     let mut contact_field_labels =
       non_empty_lowercase(data.contact_field_labels);
     contact_field_labels.sort_unstable();
@@ -122,15 +118,19 @@ impl PreparedSignatureData {
       .filter(|label| SIGNATURE_ONLY_PERSON_LABELS.contains(&label.as_str()))
       .cloned()
       .collect();
-    Self {
+    let party_role_name_tokens = decode_party_role_name_evidence(
+      &data.party_role_name_evidence,
+    )
+    .map_err(|reason| Error::InvalidStaticData {
+      field: "signature_data.party_role_name_evidence",
+      reason,
+    })?;
+    Ok(Self {
       labels,
       person_value_labels: non_empty_lowercase(data.person_value_labels),
       signature_only_person_labels,
       party_role_labels: non_empty_lowercase(party_role_labels),
-      party_role_name_tokens: decode_party_role_name_evidence(
-        &data.party_role_name_evidence,
-      )
-      .expect("party-role name evidence is validated before preparation"),
+      party_role_name_tokens,
       person_list_labels: non_empty_lowercase(data.person_list_labels),
       witness_phrases: non_empty_lowercase(data.witness_phrases),
       form_field_labels,
@@ -144,7 +144,7 @@ impl PreparedSignatureData {
       ),
       organization_suffixes: non_empty_lowercase(data.organization_suffixes),
       image_stub_prefixes: non_empty_lowercase(data.image_stub_prefixes),
-    }
+    })
   }
 
   /// Vocabulary that terminates a person span. Owned here because it is
@@ -176,17 +176,43 @@ impl PreparedSignatureData {
 /// payload. The prepared package compresses this shared-prefix representation
 /// further without duplicating the source dictionary as a string array.
 #[doc(hidden)]
-#[allow(
-  clippy::expect_used,
-  reason = "writing formatted text into a String is infallible"
-)]
+/// Error returned when compact party-role name evidence cannot be encoded.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum PartyRoleNameEvidenceEncodeError {
+  /// The source dictionary exceeds the supported entry count.
+  TokenLimit,
+  /// The encoded evidence exceeds the supported payload size.
+  ByteLimit,
+  /// A token could not be represented by the front-coded format.
+  Encoding,
+}
+
+impl std::fmt::Display for PartyRoleNameEvidenceEncodeError {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::TokenLimit => {
+        formatter.write_str("source evidence exceeds token limit")
+      }
+      Self::ByteLimit => {
+        formatter.write_str("encoded evidence exceeds byte limit")
+      }
+      Self::Encoding => {
+        formatter.write_str("party-role name evidence encoding failed")
+      }
+    }
+  }
+}
+
+impl std::error::Error for PartyRoleNameEvidenceEncodeError {}
+
 pub fn encode_party_role_name_evidence(
   source_tokens: impl IntoIterator<Item = String>,
-) -> std::result::Result<String, String> {
+) -> std::result::Result<String, PartyRoleNameEvidenceEncodeError> {
   let mut normalized = Vec::new();
   for token in source_tokens {
     if normalized.len() >= MAX_PARTY_ROLE_NAME_EVIDENCE_TOKENS {
-      return Err(String::from("source evidence exceeds token limit"));
+      return Err(PartyRoleNameEvidenceEncodeError::TokenLimit);
     }
     let token = token.to_lowercase();
     if !token.is_empty() {
@@ -211,11 +237,11 @@ pub fn encode_party_role_name_evidence(
     }
     let suffix = token
       .get(prefix_len..)
-      .ok_or_else(|| String::from("invalid encoded token prefix boundary"))?;
+      .ok_or(PartyRoleNameEvidenceEncodeError::Encoding)?;
     write!(encoded, "{prefix_len:x},{:x}:{suffix}", suffix.len())
-      .expect("String formatting is infallible");
+      .map_err(|_| PartyRoleNameEvidenceEncodeError::Encoding)?;
     if encoded.len() > MAX_PARTY_ROLE_NAME_EVIDENCE_BYTES {
-      return Err(String::from("encoded evidence exceeds byte limit"));
+      return Err(PartyRoleNameEvidenceEncodeError::ByteLimit);
     }
     previous = token;
   }
@@ -228,9 +254,23 @@ fn contains_sorted_name_token(text: &str, names: &[String]) -> bool {
 }
 
 fn starts_with_sorted_name_token(text: &str, names: &[String]) -> bool {
-  crate::name_corpus::segmented_word_texts(text)
-    .next()
-    .is_some_and(|word| names.binary_search(&word.to_lowercase()).is_ok())
+  let Some(first_token) = text.split_whitespace().next() else {
+    return false;
+  };
+  names.binary_search(&first_token.to_lowercase()).is_ok()
+    || crate::name_corpus::segmented_word_texts(first_token)
+      .next()
+      .is_some_and(|word| names.binary_search(&word.to_lowercase()).is_ok())
+}
+
+fn starts_with_first_name_token(text: &str, names: &BTreeSet<String>) -> bool {
+  let Some(first_token) = text.split_whitespace().next() else {
+    return false;
+  };
+  names.contains(&first_token.to_lowercase())
+    || crate::name_corpus::segmented_word_texts(first_token)
+      .next()
+      .is_some_and(|word| names.contains(&word.to_lowercase()))
 }
 
 pub(crate) fn decode_party_role_name_evidence(
@@ -281,7 +321,10 @@ pub(crate) fn decode_party_role_name_evidence(
     {
       return Err(String::from("invalid front-coded token bounds"));
     }
-    let mut token = previous.get(..prefix_len).unwrap_or_default().to_owned();
+    let mut token = previous
+      .get(..prefix_len)
+      .ok_or_else(|| String::from("invalid decoded token prefix boundary"))?
+      .to_owned();
     token.push_str(
       encoded
         .get(suffix_start..suffix_end)
@@ -674,7 +717,8 @@ fn try_emit(
   }
   if !(is_name_shape(&candidate, data)
     || matches!(context, CandidateContext::PersonValueField)
-      && is_single_name_token(&candidate))
+      && (is_single_name_token(&candidate)
+        || is_particle_led_name_shape(&candidate, data)))
   {
     return false;
   }
@@ -777,6 +821,26 @@ fn is_single_name_token(text: &str) -> bool {
   (3..=MAX_NAME_LEN).contains(&text_len)
     && !text.chars().any(char::is_whitespace)
     && is_cap_token(text)
+}
+
+fn is_particle_led_name_shape(
+  text: &str,
+  data: &PreparedSignatureData,
+) -> bool {
+  let text_len = text.chars().map(char::len_utf16).sum::<usize>();
+  if !(3..=MAX_NAME_LEN).contains(&text_len) {
+    return false;
+  }
+  let mut tokens = text.split([' ', '\t']).filter(|token| !token.is_empty());
+  let Some(first) = tokens.next() else {
+    return false;
+  };
+  let remaining = tokens.collect::<Vec<_>>();
+  is_name_particle(first, data)
+    && remaining.iter().any(|token| is_cap_token(token))
+    && remaining
+      .iter()
+      .all(|token| is_name_particle(token, data) || is_cap_token(token))
 }
 
 fn is_cap_token(token: &str) -> bool {
@@ -1347,6 +1411,32 @@ mod tests {
     detect_signatures,
   };
 
+  #[allow(
+    clippy::panic,
+    reason = "this test helper must fail immediately when a fixture violates the constructor contract"
+  )]
+  fn prepared_signature_data(
+    data: SignatureData,
+    party_role_labels: Vec<String>,
+  ) -> PreparedSignatureData {
+    let Ok(prepared) = PreparedSignatureData::new(data, party_role_labels)
+    else {
+      panic!("test signature data must be valid");
+    };
+    prepared
+  }
+
+  #[allow(
+    clippy::panic,
+    reason = "this test helper must fail immediately when fixed evidence exceeds encoder bounds"
+  )]
+  fn encoded_name_evidence(source: impl IntoIterator<Item = String>) -> String {
+    let Ok(encoded) = super::encode_party_role_name_evidence(source) else {
+      panic!("test party-role evidence must be encodable");
+    };
+    encoded
+  }
+
   fn detect(text: &str) -> Vec<crate::resolution::PipelineEntity> {
     detect_signatures(&DetectSignaturesArgs {
       full_text: text,
@@ -1357,7 +1447,7 @@ mod tests {
   }
 
   fn test_data() -> PreparedSignatureData {
-    PreparedSignatureData::new(
+    prepared_signature_data(
       SignatureData {
         labels: vec![String::from("name")],
         person_value_labels: vec![String::from("name")],
@@ -1398,7 +1488,7 @@ mod tests {
 
   #[test]
   fn party_role_fields_use_their_scoped_role_vocabulary() {
-    let data = PreparedSignatureData::new(
+    let data = prepared_signature_data(
       SignatureData {
         person_value_labels: vec![String::from("name")],
         ..SignatureData::default()
@@ -1444,7 +1534,17 @@ mod tests {
       })
       .is_empty()
     );
+  }
 
+  #[test]
+  fn party_role_fields_require_leading_configured_first_names_without_corpus() {
+    let data = prepared_signature_data(
+      SignatureData {
+        person_value_labels: vec![String::from("name")],
+        ..SignatureData::default()
+      },
+      vec![String::from("seller")],
+    );
     let first_names = BTreeSet::from([String::from("imani")]);
     assert_eq!(
       detect_signatures(&DetectSignaturesArgs {
@@ -1472,6 +1572,19 @@ mod tests {
       .collect::<Vec<_>>(),
       ["Jean-Paul Smith"]
     );
+    let compound_first_names = BTreeSet::from([String::from("arnoud-jan")]);
+    assert_eq!(
+      detect_signatures(&DetectSignaturesArgs {
+        full_text: "Seller: Arnoud-Jan Smith",
+        data: &data,
+        first_names: Some(&compound_first_names),
+        name_corpus: None,
+      })
+      .into_iter()
+      .map(|entity| entity.text)
+      .collect::<Vec<_>>(),
+      ["Arnoud-Jan Smith"]
+    );
     assert!(
       detect_signatures(&DetectSignaturesArgs {
         full_text: "Seller: Acme Trading",
@@ -1481,17 +1594,26 @@ mod tests {
       })
       .is_empty()
     );
+    assert!(
+      detect_signatures(&DetectSignaturesArgs {
+        full_text: "Seller: Acme Imani",
+        data: &data,
+        first_names: Some(&first_names),
+        name_corpus: None,
+      })
+      .is_empty()
+    );
   }
 
   #[test]
-  fn party_role_fields_use_cross_locale_evidence_without_corpus()
-  -> std::result::Result<(), String> {
-    let data = PreparedSignatureData::new(
+  fn party_role_fields_use_cross_locale_evidence_without_corpus() {
+    let data = prepared_signature_data(
       SignatureData {
-        party_role_name_evidence: super::encode_party_role_name_evidence([
+        party_role_name_evidence: encoded_name_evidence([
           String::from("Imani"),
           String::from("Zofia"),
-        ])?,
+          String::from("Arnoud-Jan"),
+        ]),
         ..SignatureData::default()
       },
       vec![String::from("seller")],
@@ -1518,12 +1640,62 @@ mod tests {
       })
       .is_empty()
     );
-    Ok(())
+    assert_eq!(
+      detect_signatures(&DetectSignaturesArgs {
+        full_text: "Seller: Arnoud-Jan Smith",
+        data: &data,
+        first_names: None,
+        name_corpus: None,
+      })
+      .into_iter()
+      .map(|entity| entity.text)
+      .collect::<Vec<_>>(),
+      ["Arnoud-Jan Smith"]
+    );
+  }
+
+  #[test]
+  fn party_role_name_evidence_round_trips_normalized_unicode() {
+    let source = ["Élodie", "Arnoud-Jan", "İpek", "Élodie", ""]
+      .into_iter()
+      .map(String::from)
+      .collect::<Vec<_>>();
+    let encoded = encoded_name_evidence(source);
+
+    assert_eq!(
+      super::decode_party_role_name_evidence(&encoded),
+      Ok(vec![
+        String::from("arnoud-jan"),
+        String::from("i\u{307}pek"),
+        String::from("élodie"),
+      ])
+    );
+  }
+
+  #[test]
+  fn party_role_name_evidence_enforces_source_and_payload_bounds() {
+    let token_limit_result =
+      super::encode_party_role_name_evidence(std::iter::repeat_n(
+        String::from("name"),
+        super::MAX_PARTY_ROLE_NAME_EVIDENCE_TOKENS.saturating_add(1),
+      ));
+    assert_eq!(
+      token_limit_result,
+      Err(super::PartyRoleNameEvidenceEncodeError::TokenLimit)
+    );
+
+    let byte_limit_result = super::encode_party_role_name_evidence([
+      "x".repeat(super::MAX_PARTY_ROLE_NAME_EVIDENCE_BYTES.saturating_add(1))
+    ]);
+    assert_eq!(
+      byte_limit_result,
+      Err(super::PartyRoleNameEvidenceEncodeError::ByteLimit)
+    );
   }
 
   #[test]
   fn legacy_by_label_remains_signature_only() {
-    let data = PreparedSignatureData::new(
+    let data = prepared_signature_data(
       SignatureData {
         labels: vec![String::from("by"), String::from("name")],
         person_value_labels: vec![String::from("jméno")],
@@ -1656,8 +1828,8 @@ mod tests {
   }
 
   #[test]
-  fn person_value_fields_accept_split_single_token_names() {
-    let data = PreparedSignatureData::new(
+  fn person_value_fields_accept_split_and_particle_led_names() {
+    let data = prepared_signature_data(
       SignatureData {
         person_value_labels: vec![
           String::from("jméno"),
@@ -1667,12 +1839,13 @@ mod tests {
           String::from("jméno"),
           String::from("příjmení"),
         ],
+        name_particles: vec![String::from("de")],
         ..SignatureData::default()
       },
       Vec::new(),
     );
     let entities = detect_signatures(&DetectSignaturesArgs {
-      full_text: "Jméno: Jan Příjmení: Novák",
+      full_text: "Jméno: Jan Příjmení: de Vries",
       data: &data,
       first_names: None,
       name_corpus: None,
@@ -1683,8 +1856,20 @@ mod tests {
         .iter()
         .map(|entity| entity.text.as_str())
         .collect::<Vec<_>>(),
-      vec!["Jan", "Novák"]
+      vec!["Jan", "de Vries"]
     );
+    for text in ["Příjmení: de der", "Příjmení: van der Meer"] {
+      assert!(
+        detect_signatures(&DetectSignaturesArgs {
+          full_text: text,
+          data: &data,
+          first_names: None,
+          name_corpus: None,
+        })
+        .is_empty(),
+        "unexpected person field match for {text:?}",
+      );
+    }
   }
 
   #[test]

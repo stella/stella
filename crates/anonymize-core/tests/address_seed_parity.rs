@@ -367,7 +367,30 @@ fn entity_barriers_do_not_hide_residual_prose_between_address_seeds() {
 
   let addresses = address_texts(&result);
   assert!(!addresses.contains(&"123 Main Street"));
-  assert!(addresses.contains(&"Paris 75002"));
+  assert!(
+    addresses.contains(&"Paris 75002"),
+    "resolved addresses: {addresses:?}",
+  );
+}
+
+#[test]
+fn uppercase_residual_prose_separates_address_evidence() {
+  let prepared = barrier_address_engine();
+  for prose in [
+    "was transferred to",
+    "Was Transferred To",
+    "WAS TRANSFERRED TO",
+  ] {
+    let text =
+      format!("123 Main Street, Case No. 1:23-cv-04567, {prose} Paris 75002.");
+    let result = prepared
+      .redact_static_entities(&text, &OperatorConfig::default())
+      .expect("static redaction should succeed");
+
+    let addresses = address_texts(&result);
+    assert!(!addresses.contains(&"123 Main Street"), "prose {prose:?}");
+    assert_eq!(addresses, ["Paris 75002"], "prose {prose:?}");
+  }
 }
 
 #[test]

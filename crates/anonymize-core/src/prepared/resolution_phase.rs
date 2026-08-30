@@ -105,14 +105,7 @@ impl PreparedEngine {
     let sanitize_timer = PhaseTimer::start();
     let sanitized_entities =
       sanitize_entities_with_document(consistent, resolution_document)?;
-    let false_positive_filters =
-      self.data.false_positive_filters.as_ref().or_else(|| {
-        self
-          .data
-          .deny_list
-          .as_ref()
-          .and_then(|data| data.filters.as_ref())
-      });
+    let false_positive_filters = self.data.effective_false_positive_filters();
     let mut resolved_entities = filter_entities_for_config(
       filter_entity_false_positives(FilterEntityFalsePositivesArgs {
         entities: sanitized_entities,

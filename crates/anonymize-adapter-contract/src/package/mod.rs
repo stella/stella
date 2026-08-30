@@ -738,7 +738,7 @@ mod tests {
 
   #[test]
   fn prepared_package_readers_reject_previous_schema_payloads() {
-    const PREVIOUS_SCHEMA_VERSION: u32 = 11;
+    const PREVIOUS_RELEASED_SCHEMA_VERSION: u32 = 11;
     let binding_payload = prepared_search_package_payload_to_bytes(
       &package_test_config(),
       b"artifacts",
@@ -746,7 +746,7 @@ mod tests {
     .unwrap();
     let binding = prepared_search_package_raw_payload_to_bytes(
       PREPARED_SEARCH_PACKAGE_HEADER,
-      PREVIOUS_SCHEMA_VERSION,
+      PREVIOUS_RELEASED_SCHEMA_VERSION,
       &binding_payload,
     );
     assert_invalid_package_reason(
@@ -761,7 +761,7 @@ mod tests {
         .unwrap();
     let core_package = prepared_search_package_raw_payload_to_bytes(
       PREPARED_SEARCH_CORE_PACKAGE_HEADER,
-      PREVIOUS_SCHEMA_VERSION,
+      PREVIOUS_RELEASED_SCHEMA_VERSION,
       &core_payload,
     );
     assert_invalid_package_reason(

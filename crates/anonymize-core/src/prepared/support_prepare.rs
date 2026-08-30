@@ -131,10 +131,10 @@ pub(super) fn prepare_support_data(
     let names =
       scope.spawn(|| Ok(prepare_timed_name_corpus_data(input.name_corpus)));
     let signature = scope.spawn(|| {
-      Ok(prepare_timed_signature_data(
+      prepare_timed_signature_data(
         input.signature,
         input.signature_party_role_labels,
-      ))
+      )
     });
 
     Ok(ParallelPreparedSupportData {

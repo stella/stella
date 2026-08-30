@@ -749,9 +749,16 @@ fn is_all_caps_boilerplate_line(
     .chars()
     .next_back()
     .is_some_and(|ch| matches!(ch, '.' | '!' | '?' | '。' | '！' | '？'));
+  let trailing_letters = context
+    .after
+    .chars()
+    .filter(|ch| ch.is_alphabetic())
+    .count();
+  let has_bounded_clause_tail = has_sentence_terminal
+    && (1..=ALL_CAPS_LINE_PROSE_EXTRA_LETTERS).contains(&trailing_letters);
   let legal_form_heading = entity.source == DetectionSource::LegalForm
     && !has_caption_delimiter
-    && !has_sentence_terminal;
+    && !has_bounded_clause_tail;
   if outside_entity_letters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS
     && (entity.source != DetectionSource::LegalForm || legal_form_heading)
   {
@@ -2284,22 +2291,25 @@ mod tests {
 
   #[test]
   fn rejects_mid_line_legal_forms_in_unnumbered_all_caps_headings() {
-    let text =
-      "REGISTRATION OF LIMITED LIABILITY COMPANY REQUIREMENTS AND PROCEDURES\n";
-    let entity_text = "LIMITED LIABILITY COMPANY";
-    let entities = filter_entity_false_positives(
-      vec![entity(
-        text,
-        entity_text,
-        ORGANIZATION_LABEL,
-        DetectionSource::LegalForm,
-      )],
-      text,
-      Some(&DenyListFilterData::default()),
-    )
-    .unwrap();
+    for terminal in ["", ".", "。"] {
+      let text = format!(
+        "REGISTRATION OF LIMITED LIABILITY COMPANY REQUIREMENTS AND PROCEDURES{terminal}\n"
+      );
+      let entity_text = "LIMITED LIABILITY COMPANY";
+      let entities = filter_entity_false_positives(
+        vec![entity(
+          &text,
+          entity_text,
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        &text,
+        Some(&DenyListFilterData::default()),
+      )
+      .unwrap();
 
-    assert!(entities.is_empty());
+      assert!(entities.is_empty(), "terminal {terminal:?}");
+    }
   }
 
   #[test]

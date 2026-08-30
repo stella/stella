@@ -505,8 +505,7 @@ impl<'a> StaticDetectorContext<'a> {
       self
         .engine
         .data
-        .false_positive_filters
-        .as_ref()
+        .effective_false_positive_filters()
         .map(|filters| &filters.title_tokens),
     )
   }
@@ -517,8 +516,7 @@ impl<'a> StaticDetectorContext<'a> {
       self
         .engine
         .data
-        .false_positive_filters
-        .as_ref()
+        .effective_false_positive_filters()
         .map(|filters| &filters.first_names),
     )
   }

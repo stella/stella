@@ -875,15 +875,23 @@ impl PreparedAddressSeedData {
       entity_index,
       cluster_starts_with_street_type_word(cluster),
     );
-    let left_pos = match growth {
-      SpanGrowth::StreetNameOnly => {
+    let seed_bounded_left = cluster.left_growth
+      == ClusterLeftGrowth::SeedBounded
+      && !cluster
+        .seeds
+        .iter()
+        .any(|seed| seed.kind == SeedType::StreetWord);
+    let left_pos = match (seed_bounded_left, growth) {
+      (true, _) => cluster.start,
+      (_, SpanGrowth::StreetNameOnly) => {
         expand_standalone_street_left(full_text, cluster.start, left_bound)
       }
-      SpanGrowth::None
-      | SpanGrowth::ToAddressBoundary
-      | SpanGrowth::ToUnitValue(_) => {
-        expand_left(full_text, cluster.start, left_bound)
-      }
+      (
+        _,
+        SpanGrowth::None
+        | SpanGrowth::ToAddressBoundary
+        | SpanGrowth::ToUnitValue(_),
+      ) => expand_left(full_text, cluster.start, left_bound),
     };
     let end = match growth {
       SpanGrowth::None => cluster.end,
@@ -1102,6 +1110,13 @@ struct SeedCluster {
   /// textual barrier or distance gap starts a new run, because those seeds are
   /// unrelated.
   run: usize,
+  left_growth: ClusterLeftGrowth,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ClusterLeftGrowth {
+  AddressContext,
+  SeedBounded,
 }
 
 impl SeedCluster {
@@ -2221,6 +2236,7 @@ fn cluster_seeds(
     start: first.start,
     end: first.end,
     run,
+    left_growth: ClusterLeftGrowth::AddressContext,
   };
   for seed in seeds.iter().skip(1) {
     let within_window = within_text_window(
@@ -2265,6 +2281,14 @@ fn cluster_seeds(
       start: seed.start,
       end: seed.end,
       run,
+      left_growth: match separation {
+        ClusterSeparation::TextBarrier | ClusterSeparation::DistanceGap => {
+          ClusterLeftGrowth::SeedBounded
+        }
+        ClusterSeparation::None | ClusterSeparation::EntityBarrier => {
+          ClusterLeftGrowth::AddressContext
+        }
+      },
     };
   }
   clusters.push(current);
@@ -2351,7 +2375,10 @@ impl NonAddressEntityIndex {
             let Some(residual) = full_text.get(cursor..residual_end) else {
               return Ok::<_, ()>(());
             };
-            prose.add(prose_measure(residual, directional_abbreviations));
+            prose.add(residual_before_entity_prose_measure(
+              residual,
+              directional_abbreviations,
+            ));
             if prose.exceeds_gap_limit() {
               return Err(());
             }
@@ -2368,7 +2395,7 @@ impl NonAddressEntityIndex {
     let Some(residual) = full_text.get(cursor..gap_end) else {
       return false;
     };
-    prose.add(prose_measure(residual, directional_abbreviations));
+    prose.add(residual_prose_measure(residual, directional_abbreviations));
     prose.exceeds_gap_limit()
   }
 
@@ -2588,6 +2615,55 @@ fn prose_measure(
   measure
 }
 
+/// Entity contents have already been removed from these slices. Count the
+/// remaining bounded text independently of casing so headings and uppercase
+/// prose cannot vouch for address fragments on both sides of the entity.
+fn residual_prose_measure(
+  gap: &str,
+  directional_abbreviations: &BTreeSet<String>,
+) -> ProseMeasure {
+  let mut measure = ProseMeasure {
+    sentence_boundary: has_sentence_boundary(gap, directional_abbreviations),
+    ..ProseMeasure::default()
+  };
+  for word in gap
+    .split(|ch: char| !ch.is_alphanumeric() && !matches!(ch, '-' | '\'' | '’'))
+    .filter(|word| is_residual_prose_word(word, directional_abbreviations))
+  {
+    measure.words = measure.words.saturating_add(1);
+    measure.text_units = measure
+      .text_units
+      .saturating_add(word.chars().map(char::len_utf16).sum::<usize>());
+  }
+  measure
+}
+
+fn residual_before_entity_prose_measure(
+  gap: &str,
+  directional_abbreviations: &BTreeSet<String>,
+) -> ProseMeasure {
+  let trimmed = gap.trim_end();
+  let label_start = trimmed
+    .rfind([',', ';', '\n', '\r'])
+    .map_or(0, |index| index.saturating_add(1));
+  let Some(label) = trimmed.get(label_start..).map(str::trim) else {
+    return residual_prose_measure(gap, directional_abbreviations);
+  };
+  let label_words = label
+    .split_whitespace()
+    .filter(|word| word.chars().any(char::is_alphabetic))
+    .count();
+  let label_units = label.chars().map(char::len_utf16).sum::<usize>();
+  if label.ends_with('.') && (1..=3).contains(&label_words) && label_units <= 16
+  {
+    let Some(prefix) = gap.get(..label_start) else {
+      return residual_prose_measure(gap, directional_abbreviations);
+    };
+    return residual_prose_measure(prefix, directional_abbreviations);
+  }
+  residual_prose_measure(gap, directional_abbreviations)
+}
+
 fn has_sentence_boundary(
   text: &str,
   directional_abbreviations: &BTreeSet<String>,
@@ -2646,6 +2722,19 @@ fn is_prose_word(word: &str) -> bool {
   };
   !first.is_uppercase()
     && !first.is_ascii_digit()
+    && !is_street_particle(word)
+    && !is_in_name_connector(word)
+}
+
+fn is_residual_prose_word(
+  word: &str,
+  directional_abbreviations: &BTreeSet<String>,
+) -> bool {
+  let Some(first) = word.chars().next() else {
+    return false;
+  };
+  !first.is_ascii_digit()
+    && !directional_abbreviations.contains(word)
     && !is_street_particle(word)
     && !is_in_name_connector(word)
 }

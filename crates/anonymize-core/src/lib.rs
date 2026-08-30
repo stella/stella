@@ -99,7 +99,9 @@ pub use session_archive::{
 };
 #[doc(hidden)]
 pub use signatures::encode_party_role_name_evidence;
-pub use signatures::{PersonSpanTerminators, SignatureData};
+pub use signatures::{
+  PartyRoleNameEvidenceEncodeError, PersonSpanTerminators, SignatureData,
+};
 pub use triggers::{
   PERSON_OR_ORGANIZATION_TRIGGER_LABEL, TriggerData, TriggerRule,
   TriggerStrategy, TriggerValidation,

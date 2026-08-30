@@ -15,10 +15,11 @@ use stella_anonymize_core::{
   DiagnosticEventKind, DiagnosticStage, EntityKind, Error, FuzzySearchOptions,
   GazetteerMatchData, HotwordRule, HotwordRuleData, LegalFormData,
   LiteralSearchOptions, MagnitudeSuffixData, MonetaryData, OperatorConfig,
-  PatternSlice, PreparedEngine, PreparedEngineArtifacts, PreparedEngineConfig,
-  PreparedEngineSlices, PreparedSessionCallerRedactionOptions,
-  PreparedSessionRedactionOptions, REDACTION_TEXT_MAX_BYTES, RedactionSession,
-  RegexMatchMeta, RegexSearchOptions, SearchOptions, SearchPattern, SessionId,
+  PERSON_OR_ORGANIZATION_TRIGGER_LABEL, PatternSlice, PreparedEngine,
+  PreparedEngineArtifacts, PreparedEngineConfig, PreparedEngineSlices,
+  PreparedSessionCallerRedactionOptions, PreparedSessionRedactionOptions,
+  REDACTION_TEXT_MAX_BYTES, RedactionSession, RegexMatchMeta,
+  RegexSearchOptions, SearchOptions, SearchPattern, SessionId,
   SessionLifecycle, SessionTimestamp, SignatureData, SourceDetail, TriggerData,
   TriggerRule, TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
   ZoneData, ZonePatternData, ZoneSigningClauseData, redact_text,
@@ -2637,6 +2638,106 @@ fn notice_person_list_outranks_an_overlapping_address_candidate() {
       .collect::<Vec<_>>(),
     vec![("Steven Patch", "person"), ("Spencer Ho", "person")]
   );
+}
+
+#[derive(Clone, Copy)]
+enum FilterPlacement {
+  TopLevel,
+  NestedDenyList,
+}
+
+fn signature_filter_engine(placement: FilterPlacement) -> PreparedEngine {
+  let filters = DenyListFilterData {
+    first_names: BTreeSet::from([String::from("imani")]),
+    title_tokens: BTreeSet::from([String::from("ing")]),
+    ..DenyListFilterData::default()
+  };
+  let (deny_list_data, false_positive_filters) = match placement {
+    FilterPlacement::TopLevel => (None, Some(filters)),
+    FilterPlacement::NestedDenyList => (
+      Some(DenyListMatchData {
+        labels: Vec::<Vec<String>>::new().into(),
+        custom_labels: Vec::<Vec<String>>::new().into(),
+        originals: Vec::new(),
+        pattern_meta: stella_anonymize_core::DenyListPatternMetaSet::default(),
+        sources: Vec::<Vec<String>>::new().into(),
+        filters: Some(filters),
+      }),
+      None,
+    ),
+  };
+  PreparedEngine::new(prepared_config! {
+    regex_patterns: vec![SearchPattern::LiteralWithOptions {
+      pattern: String::from("zhotovitel"),
+      case_insensitive: Some(true),
+      whole_words: Some(true),
+    }],
+    allowed_labels: vec![String::from("person")],
+    slices: PreparedEngineSlices {
+      triggers: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    },
+    deny_list_data: deny_list_data,
+    false_positive_filters: false_positive_filters,
+    legal_form_data: Some(LegalFormData {
+      role_heads: vec![String::from("seller")],
+      ..LegalFormData::default()
+    }),
+    signature_data: Some(SignatureData::default()),
+    trigger_data: Some(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("zhotovitel"),
+        label: String::from(PERSON_OR_ORGANIZATION_TRIGGER_LABEL),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: Vec::new(),
+          max_length: None,
+        },
+        validations: vec![TriggerValidation::StartsUppercase],
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
+    }),
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap()
+}
+
+#[test]
+fn nested_deny_list_filters_match_top_level_detector_inputs() {
+  let top_level = signature_filter_engine(FilterPlacement::TopLevel);
+  let nested = signature_filter_engine(FilterPlacement::NestedDenyList);
+
+  for (text, expected) in [
+    ("Seller: Imani Nwosu", "Imani Nwosu"),
+    ("Zhotovitel: Ing. Jan Henig,", "Ing. Jan Henig"),
+  ] {
+    let resolved = |engine: &PreparedEngine| {
+      engine
+        .redact_static_entities(text, &OperatorConfig::default())
+        .unwrap()
+        .resolved_entities
+        .into_iter()
+        .map(|entity| (entity.text, entity.label))
+        .collect::<Vec<_>>()
+    };
+    let top_level_entities = resolved(&top_level);
+    let nested_entities = resolved(&nested);
+
+    assert_eq!(nested_entities, top_level_entities, "input {text:?}");
+    assert_eq!(
+      nested_entities,
+      [(String::from(expected), String::from("person"))],
+      "input {text:?}",
+    );
+  }
 }
 
 #[test]

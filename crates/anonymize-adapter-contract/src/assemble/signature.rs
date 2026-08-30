@@ -116,9 +116,9 @@ fn cross_locale_party_role_first_names(
       .flatten()
       .cloned(),
   )
-  .map_err(|message| AssembleError::InvalidDictionaryData {
+  .map_err(|error| AssembleError::InvalidDictionaryData {
     field: "firstNames",
-    message,
+    message: error.to_string(),
   })
 }
 

@@ -53,6 +53,19 @@ pub(super) struct PreparedStaticData {
   pub(super) anchored: PreparedAnchoredData,
 }
 
+impl PreparedStaticData {
+  pub(super) fn effective_false_positive_filters(
+    &self,
+  ) -> Option<&DenyListFilterData> {
+    self.false_positive_filters.as_ref().or_else(|| {
+      self
+        .deny_list
+        .as_ref()
+        .and_then(|data| data.filters.as_ref())
+    })
+  }
+}
+
 pub(super) struct PreparedAnchoredData {
   search: Option<PreparedAnchoredSearch>,
   dates: Option<PreparedDateData>,
