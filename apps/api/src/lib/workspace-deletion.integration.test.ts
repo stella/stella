@@ -4,7 +4,6 @@ import { eq, inArray } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { createSafeDb } from "@/api/db/scoped";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   aiMemories,
@@ -27,6 +26,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { createSafeDb } from "@/api/db/scoped";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";

@@ -404,9 +404,8 @@ describe("chat attachment hydration", () => {
     const cleanupIntentId = toSafeId<"pendingUpload">(
       "11111111-1111-4111-8111-111111111114",
     );
-    const settleObjectCleanupIntentsAfterWriter = mock(async () =>
-      Result.ok(undefined),
-    );
+    const settleIntents = mock(async () => Result.ok(undefined));
+    const cleanupIntentRow = { id: cleanupIntentId, status: "writing" };
     const testTx = asTestRaw<Transaction>({
       insert: () => ({
         values: async () => {
@@ -416,7 +415,7 @@ describe("chat attachment hydration", () => {
       select: () => ({
         from: () => ({
           where: () => ({
-            for: async () => [{ id: cleanupIntentId, status: "writing" }],
+            for: async () => [cleanupIntentRow],
           }),
         }),
       }),
@@ -432,7 +431,7 @@ describe("chat attachment hydration", () => {
       dependencies: {
         reserveChatObjectCleanupIntent: async () =>
           Result.ok([cleanupIntentId]),
-        settleObjectCleanupIntentsAfterWriter,
+        settleObjectCleanupIntentsAfterWriter: settleIntents,
       },
       file: {
         bytes: new TextEncoder().encode("confidential text"),
@@ -455,7 +454,7 @@ describe("chat attachment hydration", () => {
     expect(requestKeys("DELETE")).toEqual(requestKeys("PUT"));
     expect([...fake.objects.keys()]).toEqual([`${bucket}/${ATTACHMENT_KEY}`]);
     expect(recordAuditEvent).not.toHaveBeenCalled();
-    expect(settleObjectCleanupIntentsAfterWriter).toHaveBeenCalledWith({
+    expect(settleIntents).toHaveBeenCalledWith({
       intentIds: [cleanupIntentId],
       objectState: "object-deleted",
       safeDb,
@@ -481,9 +480,7 @@ describe("chat attachment hydration", () => {
       }
       return Result.ok([thumbnailCleanupIntentId]);
     });
-    const settleObjectCleanupIntentsAfterWriter = mock(async () =>
-      Result.ok(undefined),
-    );
+    const settleIntents = mock(async () => Result.ok(undefined));
     let putCount = 0;
     const putS3ObjectWithSignal = mock(async () => {
       putCount += 1;
@@ -491,6 +488,10 @@ describe("chat attachment hydration", () => {
         throw thumbnailWriteError;
       }
     });
+    const sourceIntentRow = {
+      id: sourceCleanupIntentId,
+      status: "writing",
+    };
     const testTx = asTestRaw<Transaction>({
       insert: () => ({
         values: async () => {
@@ -500,9 +501,7 @@ describe("chat attachment hydration", () => {
       select: () => ({
         from: () => ({
           where: () => ({
-            for: async () => [
-              { id: sourceCleanupIntentId, status: "writing" },
-            ],
+            for: async () => [sourceIntentRow],
           }),
         }),
       }),
@@ -528,7 +527,7 @@ describe("chat attachment hydration", () => {
           }),
         putS3ObjectWithSignal,
         reserveChatObjectCleanupIntent,
-        settleObjectCleanupIntentsAfterWriter,
+        settleObjectCleanupIntentsAfterWriter: settleIntents,
       },
       file: {
         bytes: imageBytes,
@@ -546,12 +545,12 @@ describe("chat attachment hydration", () => {
 
     expect(Result.isError(result)).toBe(true);
     expect(putS3ObjectWithSignal).toHaveBeenCalledTimes(2);
-    expect(settleObjectCleanupIntentsAfterWriter).toHaveBeenCalledWith({
+    expect(settleIntents).toHaveBeenCalledWith({
       intentIds: [thumbnailCleanupIntentId],
       objectState: "write-uncertain",
       safeDb,
     });
-    expect(settleObjectCleanupIntentsAfterWriter).not.toHaveBeenCalledWith({
+    expect(settleIntents).not.toHaveBeenCalledWith({
       intentIds: [thumbnailCleanupIntentId],
       objectState: "object-deleted",
       safeDb,
