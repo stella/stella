@@ -104,7 +104,7 @@ test.describe("workspace file drop", () => {
     });
 
     await expect(
-      page.getByRole("button", { exact: true, name: "simple.docx" }),
+      shellContent.getByRole("button", { name: /^simple\.docx\b/u }),
     ).toBeVisible({ timeout: 60_000 });
   });
 });
