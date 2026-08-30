@@ -525,7 +525,9 @@ const readBaselineExceptions = (
     return null;
   }
 
-  const configuredBase = process.env["GITHUB_BASE_REF"];
+  // Actions defines GITHUB_BASE_REF as an empty string outside pull
+  // requests; only a non-empty value marks a pull-request context.
+  const configuredBase = process.env["GITHUB_BASE_REF"] || undefined;
   const baseCandidates = [
     configuredBase === undefined ? null : `origin/${configuredBase}`,
     "origin/main",
