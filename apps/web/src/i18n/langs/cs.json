@@ -435,13 +435,11 @@
       "yearTitle": "{year}: {count, plural, one {# citace} few {# citace} other {# citací}}"
     },
     "columns": {
-      "caseNumber": "Spisová značka",
-      "court": "Soud"
+      "caseNumber": "Spisová značka"
     },
     "decisionNotFound": "Rozhodnutí nenalezeno",
     "emptyState": "Žádná rozhodnutí nenalezena. Nastavte zdroj a spusťte synchronizaci pro import judikatury.",
     "filters": {
-      "court": "Soud",
       "searchPlaceholder": "Hledat podle spisové značky..."
     },
     "loadingMore": "Načítání dalších...",
@@ -1053,6 +1051,7 @@
     "copy": "Kopírovat",
     "copyLink": "Kopírovat odkaz",
     "country": "Stát",
+    "court": "Soud",
     "createCategory": "Nová kategorie",
     "createdAt": "Vytvořeno {date}",
     "currency": "Měna",

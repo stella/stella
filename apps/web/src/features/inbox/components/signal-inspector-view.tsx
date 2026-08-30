@@ -178,7 +178,7 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
     case SIGNAL_KIND.HEARING_CHANGED:
       return (
         <dl className="flex flex-col gap-2 text-sm">
-          <Row label={t("caseLaw.columns.court")}>
+          <Row label={t("common.court")}>
             <UserText>{evidence.courtName}</UserText>
           </Row>
           <Row label={t("caseLaw.columns.caseNumber")}>

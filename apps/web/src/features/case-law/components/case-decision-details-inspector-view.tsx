@@ -43,7 +43,7 @@ export const CaseDecisionDetailsInspectorView = ({
           {decision !== undefined && (
             <>
               <dl className="text-muted-foreground mb-1 grid grid-cols-[9rem_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs">
-                <Row label={t("caseLaw.columns.court")}>{decision.court}</Row>
+                <Row label={t("common.court")}>{decision.court}</Row>
                 {decided !== null && (
                   <Row label={t("common.date")}>
                     {format.dateTime(decided, {

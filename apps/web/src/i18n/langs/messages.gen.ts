@@ -439,12 +439,10 @@ type Messages = {
     };
     "columns": {
       "caseNumber": "Case number";
-      "court": "Court";
     };
     "decisionNotFound": "Decision not found";
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.";
     "filters": {
-      "court": "Court";
       "searchPlaceholder": "Search by case number...";
     };
     "loadingMore": "Loading more...";
@@ -1056,6 +1054,7 @@ type Messages = {
     "copy": "Copy";
     "copyLink": "Copy link";
     "country": "Country";
+    "court": "Court";
     "createCategory": "New category";
     "createdAt": "Created at {date}";
     "currency": "Currency";

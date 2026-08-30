@@ -435,13 +435,11 @@
       "yearTitle": "{year}: {count, plural, zero {لا استشهادات} one {استشهاد واحد} two {استشهادان} few {# استشهادات} many {# استشهادًا} other {# استشهاد}}"
     },
     "columns": {
-      "caseNumber": "رقم القضية",
-      "court": "المحكمة"
+      "caseNumber": "رقم القضية"
     },
     "decisionNotFound": "لم يُعثر على القرار",
     "emptyState": "لم يُعثر على أي قرارات. اضبط مصدرًا وشغّل مزامنة لاستيراد الاجتهاد القضائي.",
     "filters": {
-      "court": "المحكمة",
       "searchPlaceholder": "البحث برقم القضية..."
     },
     "loadingMore": "جارٍ تحميل المزيد...",
@@ -1053,6 +1051,7 @@
     "copy": "نسخ",
     "copyLink": "نسخ الرابط",
     "country": "الدولة",
+    "court": "محكمة",
     "createCategory": "فئة جديدة",
     "createdAt": "أُنشئ في {date}",
     "currency": "العملة",

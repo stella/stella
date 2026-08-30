@@ -97,6 +97,30 @@ describe("legacy work obligation mapping", () => {
     });
   });
 
+  // `infosoud` is the court-registry agenda source; before `court` existed it
+  // fell through to `manual`, which read as if a person had typed the deadline.
+  test("derives court provenance from a court-registry agenda source", () => {
+    const task = {
+      id: createSafeId<"entity">(),
+      workspaceId: createSafeId<"workspace">(),
+      agendaKind: "deadline",
+      agendaSource: "infosoud",
+      status: "open",
+      dueDate: "2026-02-01",
+      createdBy: mintAuthProviderId<"user">(),
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: null,
+      assigneeUserIds: [],
+    };
+
+    expect(legacyWorkObligationValues(task)).toMatchObject({
+      sourceType: WORK_OBLIGATION_SOURCE.COURT,
+    });
+    expect(
+      legacyWorkObligationValues({ ...task, agendaSource: "something-else" }),
+    ).toMatchObject({ sourceType: WORK_OBLIGATION_SOURCE.MANUAL });
+  });
+
   test("stamps derived work with one created event at insertion time", () => {
     const entityId = createSafeId<"entity">();
     const workspaceId = createSafeId<"workspace">();

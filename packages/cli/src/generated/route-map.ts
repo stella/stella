@@ -41591,6 +41591,10 @@ export const generatedRouteMap: RouteNode = {
                               type: "string",
                             },
                             {
+                              const: "court",
+                              type: "string",
+                            },
+                            {
                               const: "import",
                               type: "string",
                             },

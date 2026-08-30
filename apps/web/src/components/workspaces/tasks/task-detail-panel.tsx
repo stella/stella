@@ -519,6 +519,8 @@ const TaskDetailPanelContent = ({
         return tCommon("email");
       case "document":
         return tCommon("document");
+      case "court":
+        return tCommon("court");
       case "import":
         return tCommon("import");
       case "api":

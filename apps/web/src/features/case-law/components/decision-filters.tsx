@@ -199,7 +199,7 @@ export const DecisionFilters = ({
           value={filters.court ?? ""}
         >
           <SelectTrigger className="w-56">
-            <SelectValue placeholder={t("caseLaw.filters.court")} />
+            <SelectValue placeholder={t("common.court")} />
           </SelectTrigger>
           <SelectPopup>
             <SelectItem value="">{t("common.all")}</SelectItem>
@@ -214,7 +214,7 @@ export const DecisionFilters = ({
         <Input
           className="max-w-48"
           onChange={(e) => handleCourtInputChange(e.currentTarget.value)}
-          placeholder={t("caseLaw.filters.court")}
+          placeholder={t("common.court")}
           value={localCourt}
         />
       )}

@@ -435,13 +435,11 @@
       "yearTitle": "{year}: {count, plural, one {# citata} few {# citatos} many {# citatos} other {# citatų}}"
     },
     "columns": {
-      "caseNumber": "Bylos numeris",
-      "court": "Teismas"
+      "caseNumber": "Bylos numeris"
     },
     "decisionNotFound": "Sprendimas nerastas",
     "emptyState": "Sprendimų nerasta. Sukonfigūruokite šaltinį ir paleiskite sinchronizavimą, kad importuotumėte teismų praktiką.",
     "filters": {
-      "court": "Teismas",
       "searchPlaceholder": "Ieškoti pagal bylos numerį..."
     },
     "loadingMore": "Kraunama daugiau...",
@@ -1053,6 +1051,7 @@
     "copy": "Kopijuoti",
     "copyLink": "Kopijuoti nuorodą",
     "country": "Valstybė",
+    "court": "Teismas",
     "createCategory": "Nauja kategorija",
     "createdAt": "Sukurta {date}",
     "currency": "Valiuta",

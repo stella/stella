@@ -435,13 +435,11 @@
       "yearTitle": "{year}: {count, plural, zero {# atsauču} one {# atsauce} other {# atsauces}}"
     },
     "columns": {
-      "caseNumber": "Lietas numurs",
-      "court": "Tiesa"
+      "caseNumber": "Lietas numurs"
     },
     "decisionNotFound": "Lēmums nav atrasts",
     "emptyState": "Lēmumi nav atrasti. Konfigurējiet avotu un palaidiet sinhronizāciju, lai importētu tiesu praksi.",
     "filters": {
-      "court": "Tiesa",
       "searchPlaceholder": "Meklēt pēc lietas numura..."
     },
     "loadingMore": "Ielādē vairāk...",
@@ -1053,6 +1051,7 @@
     "copy": "Kopēt",
     "copyLink": "Kopēt saiti",
     "country": "Valsts",
+    "court": "Tiesa",
     "createCategory": "Jauna kategorija",
     "createdAt": "Izveidots {date}",
     "currency": "Valūta",

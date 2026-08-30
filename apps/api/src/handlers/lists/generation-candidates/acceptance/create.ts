@@ -9,6 +9,7 @@ import {
   legalListGenerationCandidateSources,
   legalListGenerationRuns,
   legalListItemSources,
+  WORK_OBLIGATION_SOURCE,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -17,6 +18,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
+import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 
 const bodySchema = t.Object({
   listId: tSafeId("legalList"),
@@ -37,6 +39,12 @@ const config = {
   mcp: { type: "capability", reason: "workflow_orchestration" },
   body: bodySchema,
 } satisfies HandlerConfig;
+
+/** Candidate source ids are unique uuids, so byte order is a total order. */
+const byCandidateSourceId = (
+  left: { id: string },
+  right: { id: string },
+): number => (left.id < right.id ? -1 : 1);
 
 type AcceptanceDependencies = {
   createTaskEntityHandler: typeof createTaskEntityHandler;
@@ -306,6 +314,25 @@ export const createAcceptGenerationCandidate = (
       }
       const entityOwnership: AcceptanceEntityOwnership =
         existingItemResult.value ? "adopted" : "created-here";
+
+      // The row the model proposed cites documents in the matter, and the
+      // governed obligation records where its deadline came from. Ordering by
+      // id matches the candidate-sources index, so replaying an acceptance
+      // attributes the obligation to the same document every time. Only an
+      // actionable row gets an obligation at all, so only it carries
+      // provenance; the sources are copied onto every accepted row regardless.
+      const firstSource = claimed.candidate.sources
+        .toSorted(byCandidateSourceId)
+        .at(0);
+      const workObligationSource =
+        firstSource && isWorkObligationEligible(claimed.candidate.itemType)
+          ? {
+              type: WORK_OBLIGATION_SOURCE.DOCUMENT,
+              description: null,
+              entityId: firstSource.sourceEntityId,
+            }
+          : undefined;
+
       const taskResult = existingItemResult.value
         ? Result.ok({ entityId: existingItemResult.value.entityId })
         : await Result.gen(() =>
@@ -330,6 +357,7 @@ export const createAcceptGenerationCandidate = (
                 }),
                 ...(body.sectionId && { listSectionId: body.sectionId }),
               },
+              ...(workObligationSource ? { workObligationSource } : {}),
             }),
           );
       if (taskResult.isErr()) {

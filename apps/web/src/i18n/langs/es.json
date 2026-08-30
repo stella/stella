@@ -435,13 +435,11 @@
       "yearTitle": "{year}: {count, plural, one {# cita} other {# citas}}"
     },
     "columns": {
-      "caseNumber": "Número de expediente",
-      "court": "Tribunal"
+      "caseNumber": "Número de expediente"
     },
     "decisionNotFound": "Resolución no encontrada",
     "emptyState": "No se encontraron resoluciones. Configure una fuente y ejecute una sincronización para importar jurisprudencia.",
     "filters": {
-      "court": "Tribunal",
       "searchPlaceholder": "Buscar por número de expediente..."
     },
     "loadingMore": "Cargando más...",
@@ -1053,6 +1051,7 @@
     "copy": "Copiar",
     "copyLink": "Copiar enlace",
     "country": "País",
+    "court": "Tribunal",
     "createCategory": "Nueva categoría",
     "createdAt": "Creado el {date}",
     "currency": "Moneda",
