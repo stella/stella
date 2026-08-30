@@ -2,7 +2,11 @@ import * as React from "react";
 import { useRef } from "react";
 
 import { useForm } from "@tanstack/react-form";
-import { useMutation } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   createFileRoute,
   Navigate,
@@ -32,10 +36,10 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { optionalArray } from "@/lib/arrays";
 import { authClient } from "@/lib/auth";
+import { refreshAuthQueries } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -185,19 +189,22 @@ type OrganizationListProps = {
 };
 
 const completeOrganizationFlow = async ({
-  invalidateSession,
   isOauthPostLogin,
   navigate,
+  queryClient,
   redirectTo,
   status,
 }: {
-  invalidateSession: ReturnType<typeof useInvalidateSession>;
   isOauthPostLogin: boolean;
   navigate: ReturnType<typeof useNavigate>;
+  queryClient: QueryClient;
   redirectTo: string;
   status: "created" | "selected";
 }) => {
-  await invalidateSession.mutateAsync();
+  // This route redirects once the refreshed session exposes an active
+  // organization. Refresh the auth caches without invalidating the current
+  // route; self-invalidation can leave that redirect transition pending.
+  await refreshAuthQueries(queryClient);
 
   if (!isOauthPostLogin) {
     await navigate({ to: redirectTo, replace: true });
@@ -228,7 +235,7 @@ const OrganizationList = ({
   const redirectTo = Route.useSearch({ select: (s) => s.redirectTo ?? "/" });
   const analytics = useAnalytics();
   const navigate = useNavigate();
-  const invalidateSession = useInvalidateSession();
+  const queryClient = useQueryClient();
 
   const { isPending: isSelectPending, mutate: selectOrg } = useMutation({
     mutationFn: async (organizationId: string) => {
@@ -248,9 +255,9 @@ const OrganizationList = ({
       }
 
       await completeOrganizationFlow({
-        invalidateSession,
         isOauthPostLogin,
         navigate,
+        queryClient,
         redirectTo,
         status: "selected",
       });
@@ -324,7 +331,7 @@ const CreateOrganizationForm = ({
   const redirectTo = Route.useSearch({ select: (s) => s.redirectTo ?? "/" });
   const analytics = useAnalytics();
   const navigate = useNavigate();
-  const invalidateSession = useInvalidateSession();
+  const queryClient = useQueryClient();
 
   const form = useForm({
     defaultValues: { name: "", slug: "" },
@@ -392,9 +399,9 @@ const CreateOrganizationForm = ({
 
       try {
         await completeOrganizationFlow({
-          invalidateSession,
           isOauthPostLogin,
           navigate,
+          queryClient,
           redirectTo,
           status: "created",
         });
