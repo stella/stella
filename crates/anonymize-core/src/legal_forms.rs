@@ -96,9 +96,10 @@ impl PreparedRolePhraseIndex {
   }
 
   fn contains_sequence(&self, words: &[String]) -> bool {
-    words.iter().enumerate().any(|(start, _)| {
-      self.longest_prefix(&words[start..]).is_some()
-    })
+    words
+      .iter()
+      .enumerate()
+      .any(|(start, _)| self.longest_prefix(&words[start..]).is_some())
   }
 
   fn longest_prefix(&self, words: &[String]) -> Option<usize> {
@@ -3149,9 +3150,8 @@ mod tests {
 
   use super::{
     Candidate, CandidateContainmentIndex, LegalFormData, PreparedLegalFormData,
-    PreparedRolePhraseIndex,
-    crosses_sentence_end, drop_overlapping, ends_with_list_suffix,
-    extend_backward, is_roman_legal_suffix,
+    PreparedRolePhraseIndex, crosses_sentence_end, drop_overlapping,
+    ends_with_list_suffix, extend_backward, is_roman_legal_suffix,
     previous_nonempty_line_has_organization_cue, process_legal_form_matches,
     split_embedded_legal_form_list, trim_embedded_legal_form_list_prefix,
     trim_leading_clause, trim_role_head,
