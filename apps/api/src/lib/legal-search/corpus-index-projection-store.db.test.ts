@@ -298,6 +298,10 @@ test("a subject-scoped erasure cannot apply another erased decision", async () =
     updatedAt: INITIAL_RUNNABLE_AT,
   });
   await db
+    .update(caseLawDecisions)
+    .set({ projectionEpoch: 2n })
+    .where(eq(caseLawDecisions.id, DECISION_ID));
+  await db
     .update(corpusIndexProjectionStates)
     .set({
       desiredAction: "erase",
@@ -569,6 +573,10 @@ test("subject-scoped replacement cannot retire another applied revision", async 
   await db.execute(
     sql`ALTER TABLE corpus_index_projection_intents ENABLE TRIGGER corpus_index_projection_intents_insert_guard`,
   );
+  await db
+    .update(caseLawDecisions)
+    .set({ projectionEpoch: 2n })
+    .where(eq(caseLawDecisions.id, DECISION_ID));
   await db
     .update(corpusIndexProjectionStates)
     .set({
