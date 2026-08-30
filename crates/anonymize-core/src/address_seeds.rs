@@ -810,10 +810,10 @@ impl PreparedAddressSeedData {
     if !cluster.has_expandable_address_context() {
       return SpanGrowth::None;
     }
-    if cluster.ends_at_city()
-      && !self.unit_component_follows(full_text, cluster.end)
-    {
-      return SpanGrowth::None;
+    if cluster.ends_at_city() {
+      return self
+        .unit_component_end(full_text, cluster.end)
+        .map_or(SpanGrowth::None, SpanGrowth::ToUnitValue);
     }
     SpanGrowth::ToAddressBoundary
   }
@@ -822,21 +822,27 @@ impl PreparedAddressSeedData {
   /// cluster's right edge. The abbreviation may straddle that edge, because a
   /// deny-list city span can already cover its word while the closing dot
   /// stays outside ("... Paris Apt" | ". 5").
-  fn unit_component_follows(&self, full_text: &str, end: usize) -> bool {
+  fn unit_component_end(&self, full_text: &str, end: usize) -> Option<usize> {
     [
       unit_token_start(full_text, end),
       skip_unit_separators(full_text, end),
     ]
     .into_iter()
-    .any(|start| self.unit_abbreviation_at(full_text, start))
+    .filter_map(|start| self.unit_abbreviation_end(full_text, start))
+    .max()
   }
 
-  fn unit_abbreviation_at(&self, full_text: &str, start: usize) -> bool {
+  fn unit_abbreviation_end(
+    &self,
+    full_text: &str,
+    start: usize,
+  ) -> Option<usize> {
     let end = unit_token_end(full_text, start);
-    full_text.get(start..end).is_some_and(|token| {
-      matches_unit_abbreviation(token, &self.unit_abbreviations)
-        && plausible_unit_value_follows(full_text, end)
-    })
+    let token = full_text.get(start..end)?;
+    if !matches_unit_abbreviation(token, &self.unit_abbreviations) {
+      return None;
+    }
+    plausible_unit_value_end(full_text, end)
   }
 
   fn expand_cluster(
@@ -857,7 +863,9 @@ impl PreparedAddressSeedData {
       SpanGrowth::StreetNameOnly => {
         expand_standalone_street_left(full_text, cluster.start, left_bound)
       }
-      SpanGrowth::None | SpanGrowth::ToAddressBoundary => {
+      SpanGrowth::None
+      | SpanGrowth::ToAddressBoundary
+      | SpanGrowth::ToUnitValue(_) => {
         expand_left(full_text, cluster.start, left_bound)
       }
     };
@@ -866,6 +874,7 @@ impl PreparedAddressSeedData {
       SpanGrowth::StreetNameOnly => {
         expand_standalone_street_right(full_text, cluster.end)
       }
+      SpanGrowth::ToUnitValue(value_end) => value_end.max(cluster.end),
       SpanGrowth::ToAddressBoundary => self
         .expand_right(full_text, cluster, entity_index, boundary_starts)
         .max(cluster.end),
@@ -1111,6 +1120,8 @@ enum SpanGrowth {
   /// Street-name material only: a standalone street has no destination to
   /// bound its right edge.
   StreetNameOnly,
+  /// A city followed by a unit component: stop at the validated unit value.
+  ToUnitValue(usize),
   /// Full address context: grow to the next address boundary.
   ToAddressBoundary,
 }
@@ -2033,7 +2044,7 @@ fn skip_unit_separators(full_text: &str, offset: usize) -> usize {
   cursor
 }
 
-fn plausible_unit_value_follows(full_text: &str, offset: usize) -> bool {
+fn plausible_unit_value_end(full_text: &str, offset: usize) -> Option<usize> {
   let mut cursor = offset;
   while let Some((index, ch)) = next_char(full_text, cursor) {
     if !ch.is_whitespace() && ch != ',' {
@@ -2045,7 +2056,7 @@ fn plausible_unit_value_follows(full_text: &str, offset: usize) -> bool {
     .get(offset..cursor)
     .is_none_or(has_paragraph_break)
   {
-    return false;
+    return None;
   }
   if full_text
     .get(cursor..)
@@ -2071,28 +2082,39 @@ fn plausible_unit_value_follows(full_text: &str, offset: usize) -> bool {
     })
     .map_or(cursor, |len| cursor.saturating_add(len));
   let Some(value) = full_text.get(cursor..value_end) else {
-    return false;
+    return None;
   };
+  is_plausible_unit_value(value).then_some(value_end)
+}
+
+fn is_plausible_unit_value(value: &str) -> bool {
   if is_house_number_word(value) {
     return true;
   }
-  let mut chars = value.chars();
-  let count = chars.clone().count();
-  if count == 0 || count > MAX_ALPHANUMERIC_UNIT_VALUE_CHARS {
+  let mut alphanumeric_count = 0usize;
+  let mut uppercase_count = 0usize;
+  let mut digit_count = 0usize;
+  for segment in value.split(['-', '/']) {
+    if segment.is_empty() {
+      return false;
+    }
+    for ch in segment.chars() {
+      if ch.is_alphabetic() && ch.is_uppercase() {
+        uppercase_count = uppercase_count.saturating_add(1);
+      } else if ch.is_ascii_digit() {
+        digit_count = digit_count.saturating_add(1);
+      } else {
+        return false;
+      }
+      alphanumeric_count = alphanumeric_count.saturating_add(1);
+    }
+  }
+  if alphanumeric_count == 0
+    || alphanumeric_count > MAX_ALPHANUMERIC_UNIT_VALUE_CHARS
+  {
     return false;
   }
-  let uppercase_letters = chars
-    .clone()
-    .all(|ch| ch.is_alphabetic() && ch.is_uppercase());
-  if uppercase_letters {
-    return count <= MAX_ALPHA_UNIT_VALUE_CHARS;
-  }
-  chars
-    .all(|ch| (ch.is_alphabetic() && ch.is_uppercase()) || ch.is_ascii_digit())
-    && value
-      .chars()
-      .any(|ch| ch.is_alphabetic() && ch.is_uppercase())
-    && value.chars().any(|ch| ch.is_ascii_digit())
+  digit_count > 0 || uppercase_count <= MAX_ALPHA_UNIT_VALUE_CHARS
 }
 
 fn is_house_number_word(word: &str) -> bool {

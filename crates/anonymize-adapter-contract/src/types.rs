@@ -159,7 +159,6 @@ pub struct BindingTriggerData {
 pub struct BindingSignatureData {
   #[serde(default)]
   pub labels: Vec<String>,
-  #[serde(default)]
   pub person_value_labels: Vec<String>,
   #[serde(default)]
   pub person_list_labels: Vec<String>,
@@ -675,4 +674,38 @@ pub struct BindingTaggedOperator {
   #[serde(alias = "charactersToMask")]
   pub characters_to_mask: u32,
   pub direction: String,
+}
+
+#[cfg(test)]
+mod tests {
+  use serde_json::json;
+
+  use super::BindingPreparedSearchConfig;
+
+  #[test]
+  fn direct_prepared_config_requires_person_value_labels() {
+    let missing = json!({
+      "signature_data": {
+        "form_field_labels": [],
+        "image_stub_prefixes": [],
+        "signature_stamp_phrases": []
+      }
+    });
+    assert!(
+      serde_json::from_value::<BindingPreparedSearchConfig>(missing).is_err()
+    );
+
+    let explicitly_empty = json!({
+      "signature_data": {
+        "form_field_labels": [],
+        "image_stub_prefixes": [],
+        "person_value_labels": [],
+        "signature_stamp_phrases": []
+      }
+    });
+    assert!(
+      serde_json::from_value::<BindingPreparedSearchConfig>(explicitly_empty)
+        .is_ok()
+    );
+  }
 }

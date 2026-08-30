@@ -760,6 +760,9 @@ fn address_span_keeps_a_unit_component_that_follows_the_city() {
     ("Apt. PH1", "10 Main Street, Springfield Apt. PH1"),
     ("Apt A12", "10 Main Street, Springfield Apt A12"),
     ("Apt Ä1", "10 Main Street, Springfield Apt Ä1"),
+    ("Apt. A-12", "10 Main Street, Springfield Apt. A-12"),
+    ("Apt. PH-1", "10 Main Street, Springfield Apt. PH-1"),
+    ("Apt. 12-B", "10 Main Street, Springfield Apt. 12-B"),
     ("Apt.\u{2028}5", "10 Main Street, Springfield Apt.\u{2028}5"),
   ] {
     let text = format!("Notices go to 10 Main Street, Springfield {unit}.");
@@ -780,6 +783,26 @@ fn address_span_requires_a_value_after_an_ambiguous_unit_alias() {
       "Notices go to 10 Main Street, Springfield unit tests failed."
     ),
     vec![String::from("10 Main Street, Springfield")],
+  );
+  assert_eq!(
+    street_addresses(
+      &prepared,
+      "Notices go to 10 Main Street, Springfield unit ph-1 tests failed."
+    ),
+    vec![String::from("10 Main Street, Springfield")],
+  );
+}
+
+#[test]
+fn address_span_stops_after_an_ambiguous_unit_value() {
+  let prepared = street_engine(None);
+
+  assert_eq!(
+    street_addresses(
+      &prepared,
+      "Notices go to 10 Main Street, Springfield unit 5 tests failed."
+    ),
+    vec![String::from("10 Main Street, Springfield unit 5")],
   );
 }
 
