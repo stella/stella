@@ -97,10 +97,12 @@ test("share-locks an active workspace before reserving a writer intent", async (
     select: () => ({
       from: () => ({
         where: () => ({
-          for: (strength: unknown) => {
-            locks.push(strength);
-            return { limit: async () => [{ status: "active" }] };
-          },
+          limit: () => ({
+            for: async (strength: unknown) => {
+              locks.push(strength);
+              return [{ status: "active" }];
+            },
+          }),
         }),
       }),
     }),
@@ -116,7 +118,7 @@ test("rejects a writer reservation after workspace deletion seals", async () => 
     select: () => ({
       from: () => ({
         where: () => ({
-          for: () => ({ limit: async () => [{ status: "deleting" }] }),
+          limit: () => ({ for: async () => [{ status: "deleting" }] }),
         }),
       }),
     }),
