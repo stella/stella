@@ -5,7 +5,7 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- without blocking writes. Drizzle wraps pending migrations in a transaction;
 -- split it for PostgreSQL's concurrent index protocol, then reopen it for the
 -- migration ledger write.
-SET statement_timeout = '30min';--> statement-breakpoint
+SET statement_timeout = 0;--> statement-breakpoint
 SET lock_timeout = '1s';--> statement-breakpoint
 -- squawk-ignore transaction-nesting
 COMMIT;
