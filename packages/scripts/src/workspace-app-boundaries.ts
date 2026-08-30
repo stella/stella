@@ -540,15 +540,11 @@ const readBaselineExceptions = (
     }
   });
   if (baseRevision === undefined) {
-    return {
-      exceptions: [],
-      issues: [
-        {
-          message: "app-boundary ledger baseline branch is unavailable",
-          path: APP_BOUNDARY_LEDGER_PATH,
-        },
-      ],
-    };
+    // A checkout without a main ref (single-commit deploy clones, tag
+    // checkouts) has the same information as a source archive: no baseline
+    // to ratchet against. The ledger's absolute rules still apply through
+    // the filesystem path; the ratchet is enforced where the refs exist.
+    return null;
   }
 
   let mergeBase: string;
