@@ -45,10 +45,12 @@ const signIn = async (api: APIRequestContext, email: string) => {
 
 const createOrganizationSelectionSession = async ({
   email,
-  organizations,
+  primaryOrganization,
+  secondaryOrganization,
 }: {
   email: string;
-  organizations: { name: string; slug: string }[];
+  primaryOrganization: { name: string; slug: string };
+  secondaryOrganization: { name: string; slug: string };
 }) => {
   const requestOptions = {
     extraHTTPHeaders: { origin: new URL(WEB_BASE_URL).origin },
@@ -61,13 +63,22 @@ const createOrganizationSelectionSession = async ({
     // memberships so the route shows its picker instead of auto-selecting the
     // sole organization.
     const storageStateWithoutActiveOrganization = await loginApi.storageState();
-    for (const organization of organizations) {
-      const createResponse = await loginApi.post(
-        `${API_BASE_URL}/api/auth/organization/create`,
-        { data: organization },
-      );
-      expect(createResponse.ok(), await createResponse.text()).toBe(true);
-    }
+    const primaryCreateResponse = await loginApi.post(
+      `${API_BASE_URL}/api/auth/organization/create`,
+      { data: primaryOrganization },
+    );
+    expect(
+      primaryCreateResponse.ok(),
+      await primaryCreateResponse.text(),
+    ).toBe(true);
+    const secondaryCreateResponse = await loginApi.post(
+      `${API_BASE_URL}/api/auth/organization/create`,
+      { data: secondaryOrganization },
+    );
+    expect(
+      secondaryCreateResponse.ok(),
+      await secondaryCreateResponse.text(),
+    ).toBe(true);
     return storageStateWithoutActiveOrganization;
   } finally {
     await loginApi.dispose();
@@ -81,16 +92,14 @@ test("selecting an organization completes login and renders the destination", as
   const organizationName = `Northbridge Legal ${testToken}`;
   const storageState = await createOrganizationSelectionSession({
     email: `organization-login-${testToken}@stella.dev`,
-    organizations: [
-      {
-        name: organizationName,
-        slug: `northbridge-legal-${testToken}`,
-      },
-      {
-        name: `Northbridge Support ${testToken}`,
-        slug: `northbridge-support-${testToken}`,
-      },
-    ],
+    primaryOrganization: {
+      name: organizationName,
+      slug: `northbridge-legal-${testToken}`,
+    },
+    secondaryOrganization: {
+      name: `Northbridge Support ${testToken}`,
+      slug: `northbridge-support-${testToken}`,
+    },
   });
   await page.context().clearCookies();
   await page.context().addCookies(storageState.cookies);
