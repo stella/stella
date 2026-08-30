@@ -1,7 +1,7 @@
 import {
   bufferObjectCleanupIntents as cleanupIntents,
 } from "@/api/db/schema";
-import * as schema from "@/api/db/schema/entities";
+import * as schema from "../../apps/api/src/db/schema.ts";
 
 declare const tx: {
   insert: (table: unknown) => {
