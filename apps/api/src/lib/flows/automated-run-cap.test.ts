@@ -132,7 +132,11 @@ describe("insertAutomatedFlowRunWithinCap", () => {
       triggerSource: FILE_UPLOAD_SOURCE,
       inputEntityIds: [],
     });
-    return await insertAutomatedFlowRunWithinCap({ definitionId, rows });
+    return await insertAutomatedFlowRunWithinCap({
+      database: capDatabase,
+      definitionId,
+      rows,
+    });
   };
 
   const countRunsForDefinition = async (
