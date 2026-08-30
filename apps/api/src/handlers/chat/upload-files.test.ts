@@ -512,11 +512,8 @@ describe("chat attachment hydration", () => {
         () => databaseError,
       );
 
-    const imageBytes = new Uint8Array(
-      Buffer.from(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
-        "base64",
-      ),
+    const imageBytes = Uint8Array.fromBase64(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
     );
     const result = await uploadUserFile({
       dependencies: {
