@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
+import type { BilingualRow } from "@stll/folio-core/server";
+
 import {
   checkTranslationConsistency,
   defaultDisposition,
   detectGlossaryCandidates,
+  flattenBilingualRows,
+  hasSeparateTableTarget,
   ruleDisposition,
 } from "@/api/lib/bilingual/rows";
 import type { BilingualUnit } from "@/api/lib/bilingual/rows";
@@ -15,6 +19,54 @@ const unit = (sourceText: string, inTable = false): BilingualUnit => ({
   inTable,
   sourceParaId: "p",
   sourceText,
+});
+
+describe("flattenBilingualRows", () => {
+  test("targets the cloned paragraph only for stacked table rows", () => {
+    const rows = [
+      {
+        kind: "table",
+        layout: "inline",
+        rowId: "inline-source",
+        paragraphs: [{ paraId: "inline-source", sourceText: "Inline label" }],
+      },
+      {
+        kind: "table",
+        layout: "stacked",
+        rowId: "stacked-target",
+        paragraphs: [
+          {
+            sourceParaId: "stacked-source",
+            targetParaId: "stacked-target",
+            sourceText: "Stacked label",
+          },
+        ],
+      },
+    ] as const satisfies BilingualRow[];
+
+    const { dropped, units } = flattenBilingualRows(rows);
+
+    expect(dropped).toBe(0);
+    expect(units).toMatchObject([
+      {
+        rowId: "inline-source",
+        sourceParaId: "inline-source",
+        sourceText: "Inline label",
+      },
+      {
+        rowId: "stacked-target",
+        sourceParaId: "stacked-source",
+        sourceText: "Stacked label",
+      },
+    ]);
+    const inline = units.at(0);
+    const stacked = units.at(1);
+    if (!inline || !stacked) {
+      throw new Error("bilingual table fixtures were not flattened");
+    }
+    expect(hasSeparateTableTarget(inline)).toBe(false);
+    expect(hasSeparateTableTarget(stacked)).toBe(true);
+  });
 });
 
 describe("ruleDisposition", () => {

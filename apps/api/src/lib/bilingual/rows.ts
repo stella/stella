@@ -31,6 +31,15 @@ export type DispositionedUnit = BilingualUnit & {
   dispositionOrigin: BilingualDispositionOrigin;
 };
 
+/** Stacked table rows keep distinct source and target paragraphs. Folio's
+ * inline table layout addresses the source paragraph itself. */
+export const hasSeparateTableTarget = (
+  unit: Pick<BilingualUnit, "inTable" | "rowId" | "sourceParaId">,
+): boolean =>
+  unit.inTable &&
+  unit.sourceParaId !== null &&
+  unit.sourceParaId !== unit.rowId;
+
 /** Flatten folio's manifest into units; rows without a usable handle or text
  *  beyond the limit are dropped, which the caller reports as a warning. */
 export const flattenBilingualRows = (
@@ -49,17 +58,41 @@ export const flattenBilingualRows = (
   };
   for (const row of rows) {
     if (row.kind === "table") {
-      for (const paragraph of row.paragraphs) {
-        if (!paragraph.paraId || paragraph.sourceText.trim() === "") {
-          continue;
+      switch (row.layout) {
+        case "inline": {
+          for (const paragraph of row.paragraphs) {
+            if (!paragraph.paraId || paragraph.sourceText.trim() === "") {
+              continue;
+            }
+            push({
+              rowId: paragraph.paraId,
+              kind: "table",
+              inTable: true,
+              sourceParaId: paragraph.paraId,
+              sourceText: paragraph.sourceText,
+            });
+          }
+          break;
         }
-        push({
-          rowId: paragraph.paraId,
-          kind: "table",
-          inTable: true,
-          sourceParaId: paragraph.paraId,
-          sourceText: paragraph.sourceText,
-        });
+        case "stacked": {
+          for (const paragraph of row.paragraphs) {
+            if (paragraph.sourceText.trim() === "") {
+              continue;
+            }
+            push({
+              rowId: paragraph.targetParaId,
+              kind: "table",
+              inTable: true,
+              sourceParaId: paragraph.sourceParaId ?? null,
+              sourceText: paragraph.sourceText,
+            });
+          }
+          break;
+        }
+        default: {
+          const exhaustive: never = row;
+          return exhaustive;
+        }
       }
       continue;
     }

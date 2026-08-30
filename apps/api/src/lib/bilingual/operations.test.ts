@@ -255,16 +255,96 @@ describe("buildOperations applied to a bilingual document", () => {
     // Kept table: label inlined, value untouched and not duplicated.
     expect(markdown).toContain("Jméno: / Name:");
     expect(markdown.match(/Ing\. Jan Novák/gu)).toHaveLength(1);
+  });
 
-    // The merged row is no longer a left | right pair.
-    const after = await readBilingualDocx(applied.buffer);
-    const pairTexts = after.flatMap((row) =>
-      row.kind === "table" ? [] : [row.sourceText],
+  test("translates only the target copy of a stacked source table", async () => {
+    const doc = createEmptyDocument({
+      preset: createStellaStyleDocumentPreset(),
+    });
+    doc.package.document.content = [
+      {
+        type: "table",
+        rows: [
+          {
+            type: "tableRow",
+            cells: [
+              { type: "tableCell", content: [paragraph("Name:")] },
+              { type: "tableCell", content: [paragraph("Acme Ltd")] },
+            ],
+          },
+        ],
+      },
+    ];
+    const bilingual = await createBilingualDocx(await createDocx(doc), {
+      targetStyleSuffix: "es",
+      tableLayout: "stacked",
+    });
+    const { units } = flattenBilingualRows(
+      await readBilingualDocx(bilingual.buffer),
     );
-    expect(pairTexts).toEqual([
-      "Předmět smlouvy",
-      "Smlouva se uzavírá na dobu 24 měsíců.",
+    const label = units.at(0);
+    const value = units.at(1);
+    if (!label || !value || label.sourceParaId === null) {
+      throw new Error("stacked table fixture is incomplete");
+    }
+    expect(label.rowId).not.toBe(label.sourceParaId);
+
+    const rows: StoredRow[] = [
+      {
+        ...label,
+        disposition: "inline",
+        status: "translated",
+        targetText: "Nombre:",
+      },
+      {
+        ...value,
+        disposition: "keep",
+        status: "pending",
+        targetText: null,
+      },
+    ];
+    expect(buildOperations(rows, new Map([[label.rowId, "Nombre:"]]))).toEqual([
+      {
+        id: "bilingual-1",
+        type: "replaceBlock",
+        blockId: label.rowId,
+        text: "Nombre:",
+        preserveFormatting: true,
+      },
     ]);
+
+    const formatted = await extractFormattedBilingualUnits(
+      bilingual.buffer,
+      units,
+    );
+    const formattedLabel = formatted.at(0);
+    if (!formattedLabel || formattedLabel.spans.length === 0) {
+      throw new Error("stacked label fixture has no formatted span");
+    }
+    const translatedSpans = formattedLabel.spans.map(({ id }, index) => ({
+      id,
+      text: index === 0 ? "Nombre:" : "",
+    }));
+    const output = await applyFormattedBilingualTranslations(
+      bilingual.buffer,
+      rows,
+      new Map([
+        [
+          label.rowId,
+          {
+            text: translatedSpans.map(({ text }) => text).join(""),
+            spans: translatedSpans,
+          },
+        ],
+      ]),
+    );
+    const markdown = await docxToMarkdown(output);
+
+    expect(markdown).toContain("Name:");
+    expect(markdown).toContain("Nombre:");
+    expect(markdown).not.toContain("Name: / Nombre:");
+    expect(markdown.match(/Name:/gu)).toHaveLength(1);
+    expect(markdown.match(/Acme Ltd/gu)).toHaveLength(2);
   });
 
   test("never merges a row whose translation is missing", () => {

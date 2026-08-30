@@ -3,6 +3,7 @@ import * as slimdom from "slimdom";
 
 import type { StoredRow } from "@/api/lib/bilingual/operations";
 import type { BilingualUnit } from "@/api/lib/bilingual/rows";
+import { hasSeparateTableTarget } from "@/api/lib/bilingual/rows";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 
 const DOCUMENT_PART = "word/document.xml";
@@ -303,6 +304,10 @@ const applyRow = (
     return;
   }
   if (row.inTable) {
+    if (hasSeparateTableTarget(row)) {
+      replaceText(row.rowId, target, translation);
+      return;
+    }
     const translated = target.cloneNode(true);
     if (!isElement(translated)) {
       return fail(

@@ -35,6 +35,7 @@ import type {
 import {
   BILINGUAL_LIMITS,
   BILINGUAL_ROW_DISPOSITION,
+  BILINGUAL_TABLE_LAYOUT,
 } from "@/api/lib/bilingual/contract";
 import {
   applyFormattedBilingualTranslations,
@@ -826,6 +827,7 @@ const translateBilingualWithAI = async (
       await createBilingualDocx(source, {
         targetStyleSuffix: run.targetLang,
         borders: "none",
+        tableLayout: BILINGUAL_TABLE_LAYOUT,
       }),
     catch: (cause) => cause,
   });
