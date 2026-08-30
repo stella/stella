@@ -27,6 +27,12 @@ const tanStackProviderError = (status: number) =>
     message: `provider responded ${status}`,
   }) satisfies Record<string, unknown>;
 
+const tanStackRunError = (code: number) =>
+  ({
+    code: String(code),
+    message: `provider responded ${code}`,
+  }) satisfies Record<string, unknown>;
+
 const providerErrorBody = (code: number, status: string) =>
   ({
     error: {
@@ -86,6 +92,63 @@ describe("classifyAIError", () => {
     expect(classifyAIError(error)).toBe("unknown");
   });
 
+  test("maps a provider 401 to provider_credentials_rejected", () => {
+    expect(classifyAIError(apiCallError(401))).toBe(
+      "provider_credentials_rejected",
+    );
+    expect(classifyAIError(tanStackProviderError(401))).toBe(
+      "provider_credentials_rejected",
+    );
+    expect(classifyAIError(tanStackRunError(401))).toBe(
+      "provider_credentials_rejected",
+    );
+    expect(classifyAIError({ code: "invalid_api_key" })).toBe(
+      "provider_credentials_rejected",
+    );
+    expect(
+      classifyAIError({
+        error: { type: "authentication_error" },
+        type: "error",
+      }),
+    ).toBe("provider_credentials_rejected");
+    expect(classifyAIError(providerErrorBody(401, "UNAUTHENTICATED"))).toBe(
+      "provider_credentials_rejected",
+    );
+  });
+
+  test("finds a rejected-credentials 401 through wrapped causes", () => {
+    const error = new Error("stream failed", {
+      cause: apiCallError(401),
+    });
+
+    expect(classifyAIError(error)).toBe("provider_credentials_rejected");
+  });
+
+  test("reads a 401 this service raised itself as its own refusal", () => {
+    // `HandlerError` carries a `status` of its own, so its 401 reaches the
+    // classifier looking like a provider status. Naming it would replace the
+    // handler's curated copy with the provider's.
+    const refusal = new HandlerError({
+      status: 401,
+      message: "refused with 401",
+    });
+
+    expect(classifyAIError(refusal)).toBe("unknown");
+    expect(isAnticipatedAIFailure(refusal, classifyAIError(refusal))).toBe(
+      true,
+    );
+  });
+
+  test("keeps a provider 401 wrapped in TanStack's transport wrapper", () => {
+    const error = new HandlerError({
+      cause: apiCallError(401),
+      message: "generation failed",
+      status: 502,
+    });
+
+    expect(classifyAIError(error)).toBe("provider_credentials_rejected");
+  });
+
   test("still maps other status codes to their existing kinds", () => {
     expect(classifyAIError(apiCallError(429))).toBe("quota_exhausted");
     expect(classifyAIError(apiCallError(402))).toBe("provider_billing");
@@ -139,6 +202,7 @@ describe("classifyAIError", () => {
     expect(
       classifyAIError({ error: { code: 14, message: "unavailable" } }),
     ).toBe("unknown");
+    expect(classifyAIError({ code: "model_not_found" })).toBe("unknown");
   });
 });
 

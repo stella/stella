@@ -24,6 +24,17 @@ export type { AIErrorKind };
 const HTTP_STATUS_MIN = 100;
 const HTTP_STATUS_MAX = 599;
 const HTTP_SERVER_ERROR_MIN = 500;
+const HTTP_STATUS_STRING_PATTERN = /^[1-5]\d{2}$/u;
+
+// TanStack preserves these provider-owned response-body values when an adapter
+// cannot preserve the numeric status itself (notably OpenAI's 401 response).
+const PROVIDER_CREDENTIAL_REJECTION_MARKERS = new Set([
+  "authentication_error",
+  "invalid_api_key",
+]);
+
+const hasProviderCredentialRejectionMarker = (value: unknown): boolean =>
+  typeof value === "string" && PROVIDER_CREDENTIAL_REJECTION_MARKERS.has(value);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object";
@@ -33,6 +44,14 @@ const isHttpStatus = (value: unknown): value is number =>
   Number.isInteger(value) &&
   value >= HTTP_STATUS_MIN &&
   value <= HTTP_STATUS_MAX;
+
+const httpStatusFromString = (value: unknown): number | null => {
+  if (typeof value !== "string" || !HTTP_STATUS_STRING_PATTERN.test(value)) {
+    return null;
+  }
+  const status = Number(value);
+  return isHttpStatus(status) ? status : null;
+};
 
 const providerStatusCode = (error: unknown): number | null => {
   if (!isRecord(error)) {
@@ -51,6 +70,15 @@ const providerStatusCode = (error: unknown): number | null => {
   const status = error["status"];
   if (isHttpStatus(status)) {
     return status;
+  }
+
+  // TanStack's RUN_ERROR contract carries `code` as a string. Its adapters
+  // normalize a provider's numeric HTTP status to this field before the
+  // exception crosses the stream boundary. Accept exactly a three-digit HTTP
+  // code here; symbolic provider codes still need an explicit classification.
+  const codeStatus = httpStatusFromString(error["code"]);
+  if (codeStatus !== null) {
+    return codeStatus;
   }
 
   // A provider response body nests the status one level down, as
@@ -73,10 +101,29 @@ const providerStatusCode = (error: unknown): number | null => {
   return null;
 };
 
-const isApiCallError = (error: unknown): boolean =>
-  error !== null &&
-  typeof error === "object" &&
-  providerStatusCode(error) !== null;
+const isProviderCredentialRejection = (error: unknown): boolean => {
+  if (!isRecord(error)) {
+    return false;
+  }
+
+  if (
+    hasProviderCredentialRejectionMarker(error["code"]) ||
+    hasProviderCredentialRejectionMarker(error["type"])
+  ) {
+    return true;
+  }
+
+  const body = error["error"];
+  return (
+    isRecord(body) &&
+    (hasProviderCredentialRejectionMarker(body["code"]) ||
+      hasProviderCredentialRejectionMarker(body["type"]))
+  );
+};
+
+const isProviderError = (error: unknown): boolean =>
+  isRecord(error) &&
+  (providerStatusCode(error) !== null || isProviderCredentialRejection(error));
 
 const errorCause = (error: unknown): unknown => {
   if (!isRecord(error)) {
@@ -128,7 +175,7 @@ const classifyAIErrorInternal = (
       return causeKind;
     }
   }
-  if (isApiCallError(error)) {
+  if (isProviderError(error)) {
     const statusCode = providerStatusCode(error);
     if (statusCode === 429) {
       return "quota_exhausted";
@@ -139,6 +186,23 @@ const classifyAIErrorInternal = (
     // classifier.
     if (statusCode === 402) {
       return "provider_billing";
+    }
+    // A provider 401 means it rejected the credentials it was called with:
+    // the configured key is missing, revoked, or expired. Like a retired
+    // model, that is a config problem an administrator has to fix, so
+    // retrying won't help.
+    //
+    // Only a provider status or explicit provider-owned credential marker
+    // counts: `HandlerError` carries a `status` of its own, and this service
+    // raises its own 401 refusals, whose curated copy this would otherwise
+    // replace. A provider 403 stays unmapped because it is ambiguous
+    // (permission, region, or account state) where a 401 is not.
+    if (
+      (statusCode === 401 ||
+        (statusCode === null && isProviderCredentialRejection(error))) &&
+      !HandlerError.is(error)
+    ) {
+      return "provider_credentials_rejected";
     }
     // A 404 on a generate/stream call means the provider no longer
     // serves the configured model (retired or renamed upstream) — a
@@ -168,13 +232,15 @@ export const classifyAIError = (error: unknown): AIErrorKind =>
 /**
  * The provider HTTP status a failure carries, as fingerprint fields.
  *
- * `classifyAIError` names a failure from this status and returns `unknown`
- * when it maps none, so the status is what separates "the provider answered
- * with a status this code does not map" from "the failure carried no status
- * at all". A failure sink needs that distinction: an adapter forwards the
- * provider's structured error body as a plain object rather than an `Error`,
- * and `errorFingerprint` reduces any non-`Error` to a bare `UnknownError`,
- * leaving the two indistinguishable in the log.
+ * `classifyAIError` names most provider failures from this status. Some
+ * adapters preserve only an explicit provider-owned credential marker; those
+ * are named without inventing a status. For an unknown failure, the status is
+ * what separates "the provider answered with a status this code does not map"
+ * from "the failure carried no status at all". A failure sink needs that
+ * distinction: an adapter forwards the provider's structured error body as a
+ * plain object rather than an `Error`, and `errorFingerprint` reduces any
+ * non-`Error` to a bare `UnknownError`, leaving the two indistinguishable in
+ * the log.
  *
  * The walk mirrors `classifyAIError`'s: a status reached only through a
  * wrapper's `cause` is the same evidence, and reading just the outer error
@@ -217,11 +283,11 @@ const isChatTerminalError = (error: unknown): boolean =>
  * 500: the AI stack raises those itself, with curated user-facing copy, for a
  * configuration state the caller can act on (no key for the role, 403; a
  * provider or model that does not serve it, 400). They are invisible to
- * `classifyAIError`, which names failures from the provider's HTTP status;
- * `HandlerError` carries a `status` of its own, so a 403 reaches the
- * classifier looking like a provider error, matches none of the mapped
- * statuses, and falls through to `unknown`: "a shape this code does not
- * anticipate", the exact opposite of what it is.
+ * `classifyAIError`, which names failures from provider HTTP statuses and
+ * explicit provider-owned markers; `HandlerError` carries a `status` of its
+ * own, so a 403 reaches the classifier looking like a provider error, matches
+ * none of the mapped statuses, and falls through to `unknown`: "a shape this
+ * code does not anticipate", the exact opposite of what it is.
  *
  * A `ChatTerminalError` is invisible to the classifier for the same reason,
  * and carries no status at all to fall back on: the chat stream constructs it
@@ -272,6 +338,13 @@ export const aiHandlerError = (
         status: 402,
         message:
           "The AI provider reported a billing or credit problem. An administrator should check the provider account.",
+        cause: error,
+      });
+    case "provider_credentials_rejected":
+      return new HandlerError({
+        status: 502,
+        message:
+          "The AI provider rejected the configured credentials. An administrator should check the provider API key in organization settings.",
         cause: error,
       });
     case "model_unavailable":

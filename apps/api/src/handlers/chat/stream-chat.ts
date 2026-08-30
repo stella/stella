@@ -1365,8 +1365,14 @@ type RunErrorChunk = Extract<StreamChunk, { type: EventType.RUN_ERROR }>;
 const runErrorMessage = (chunk: RunErrorChunk): string =>
   chunk.message || "AI stream error";
 
-const errorFromRunErrorChunk = (chunk: RunErrorChunk): Error => {
-  const error = new Error(runErrorMessage(chunk));
+const errorFromRunErrorChunk = (
+  chunk: RunErrorChunk,
+  cause?: unknown,
+): Error => {
+  const error =
+    cause === undefined
+      ? new Error(runErrorMessage(chunk))
+      : new Error(runErrorMessage(chunk), { cause });
   const code = chunk.code;
   if (code !== undefined) {
     Object.assign(error, { code });
@@ -1400,18 +1406,22 @@ const providerErrorBody = (
   return isErrorBodyRecord(parsed.value) ? parsed.value : undefined;
 };
 
-const errorForRunErrorChunk = (chunk: RunErrorChunk): unknown => {
+const providerDetailFromRunErrorChunk = (chunk: RunErrorChunk): unknown => {
   const rawEvent: unknown = chunk.rawEvent;
-  return (
-    rawEvent ??
-    providerErrorBody(runErrorMessage(chunk)) ??
-    errorFromRunErrorChunk(chunk)
-  );
+  return rawEvent ?? providerErrorBody(runErrorMessage(chunk));
 };
 
+const errorForRunErrorChunk = (chunk: RunErrorChunk): unknown =>
+  providerDetailFromRunErrorChunk(chunk) ?? errorFromRunErrorChunk(chunk);
+
 const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind => {
-  const error = errorForRunErrorChunk(chunk);
-  return classifyAIError(error);
+  const providerDetail = providerDetailFromRunErrorChunk(chunk);
+  // Keep the stream's code on the outer error and the structured provider
+  // body as its cause. The classifier understands both shapes and walks the
+  // cause; choosing either one would discard evidence the adapter preserved.
+  // Reporting still receives the original provider detail above, so this
+  // synthetic wrapper cannot replace its established telemetry fingerprint.
+  return classifyAIError(errorFromRunErrorChunk(chunk, providerDetail));
 };
 
 // Classified kinds (quota, billing, retired model, provider outage) are
@@ -1432,7 +1442,7 @@ const reportStreamFailure = (error: unknown, kind: AIErrorKind): void => {
 
 const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
   const error = errorForRunErrorChunk(chunk);
-  const kind = classifyAIError(error);
+  const kind = classifyRunErrorChunk(chunk);
   reportStreamFailure(error, kind);
   return {
     ...chunk,

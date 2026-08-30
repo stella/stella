@@ -28,6 +28,7 @@ export const documentTranslationProviderErrorCode = (
     case "loop_detected":
     case "model_unavailable":
     case "provider_billing":
+    case "provider_credentials_rejected":
     case "quota_exhausted":
     case "unknown":
       return "translation_failed";
