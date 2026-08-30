@@ -84,7 +84,7 @@ const PRIORITY_LABEL_KEY = {
 } as const satisfies Record<EntityPriority, TranslationKey>;
 
 const MY_WORK_QUEUE_LABEL = {
-  inbox: "tasks.queue.inbox",
+  to_acknowledge: "tasks.queue.toAcknowledge",
   upcoming: "tasks.queue.upcoming",
   at_risk: "tasks.queue.atRisk",
   completed: "tasks.queue.completed",
@@ -138,7 +138,7 @@ export const MyWorkView = ({ organizationId }: { organizationId: string }) => {
   const queryClient = useQueryClient();
   // The queues partition the work, so the landing tab is the one asking the
   // owner for an answer, not the widest one.
-  const [queue, setQueue] = useState<MyWorkQueue>("inbox");
+  const [queue, setQueue] = useState<MyWorkQueue>("to_acknowledge");
   const asOf = localISODate();
   const {
     data,

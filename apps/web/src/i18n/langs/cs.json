@@ -3735,7 +3735,7 @@
     "queue": {
       "atRisk": "Ohrožené",
       "completed": "Dokončené",
-      "inbox": "Schránka",
+      "toAcknowledge": "K potvrzení",
       "upcoming": "Nadcházející"
     },
     "reopenWork": "Znovu otevřít práci",

@@ -3735,7 +3735,7 @@
     "queue": {
       "atRisk": "En riesgo",
       "completed": "Completado",
-      "inbox": "Bandeja de entrada",
+      "toAcknowledge": "Por confirmar",
       "upcoming": "Próximo"
     },
     "reopenWork": "Reabrir trabajo",

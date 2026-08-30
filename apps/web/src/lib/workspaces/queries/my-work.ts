@@ -5,7 +5,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 
 export const MY_WORK_QUEUES = [
-  "inbox",
+  "to_acknowledge",
   "upcoming",
   "at_risk",
   "completed",
@@ -13,7 +13,7 @@ export const MY_WORK_QUEUES = [
 export type MyWorkQueue = (typeof MY_WORK_QUEUES)[number];
 
 // Exported so task surfaces that mutate a task invalidate the same root the
-// inbox queues are keyed on instead of retyping it.
+// work queues are keyed on instead of retyping it.
 export const myWorkKeys = {
   all: ["my-work"] as const,
   queue: (queue: MyWorkQueue, asOf: string) =>

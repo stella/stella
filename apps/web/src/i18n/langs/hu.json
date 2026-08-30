@@ -3735,7 +3735,7 @@
     "queue": {
       "atRisk": "Veszélyben",
       "completed": "Befejezett",
-      "inbox": "Beérkezett",
+      "toAcknowledge": "Megerősítendő",
       "upcoming": "Közelgő"
     },
     "reopenWork": "Munka újranyitása",

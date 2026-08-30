@@ -538,11 +538,11 @@ const isolationCases: IsolationCase[] = [
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
       await runHandler(listMyWork, workspaceA, {
         user: { id: testIds.userB1 },
-        query: { queue: "inbox", limit: 100, asOf: "2026-08-24" },
+        query: { queue: "to_acknowledge", limit: 100, asOf: "2026-08-24" },
       }),
     runBPositive: async ({ workspaceB }) =>
       await runHandler(listMyWork, workspaceB, {
-        query: { queue: "inbox", limit: 100, asOf: "2026-08-24" },
+        query: { queue: "to_acknowledge", limit: 100, asOf: "2026-08-24" },
       }),
     expectDenied: (result) =>
       expectPageExcludesField(result, "entityId", workObligationEntityB),
