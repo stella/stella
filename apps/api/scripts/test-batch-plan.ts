@@ -104,13 +104,39 @@ const isDeferredFunction = (node: ts.Node): boolean =>
   ts.isMethodDeclaration(node) ||
   ts.isSetAccessorDeclaration(node);
 
+const unwrapParentheses = (expression: ts.Expression): ts.Expression =>
+  ts.isParenthesizedExpression(expression)
+    ? unwrapParentheses(expression.expression)
+    : expression;
+
+const immediatelyInvokedBody = (node: ts.Node): ts.ConciseBody | null => {
+  if (!ts.isCallExpression(node)) {
+    return null;
+  }
+  const callee = unwrapParentheses(node.expression);
+  return ts.isArrowFunction(callee) || ts.isFunctionExpression(callee)
+    ? callee.body
+    : null;
+};
+
+const isAssignmentOperator = (kind: ts.SyntaxKind): boolean =>
+  kind >= ts.SyntaxKind.FirstAssignment &&
+  kind <= ts.SyntaxKind.LastAssignment;
+
 const hasEvaluatedProcessEnvMutation = (node: ts.Node): boolean => {
+  const invokedBody = immediatelyInvokedBody(node);
+  if (
+    invokedBody !== null &&
+    hasEvaluatedProcessEnvMutation(invokedBody)
+  ) {
+    return true;
+  }
   if (isDeferredFunction(node)) {
     return false;
   }
   if (
     ts.isBinaryExpression(node) &&
-    node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    isAssignmentOperator(node.operatorToken.kind) &&
     isProcessEnvMember(node.left)
   ) {
     return true;

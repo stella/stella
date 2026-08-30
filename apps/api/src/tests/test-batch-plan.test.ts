@@ -123,8 +123,12 @@ describe("API test batch planning", () => {
     for (const source of [
       'process.env["REDIS_URL"] = "redis://127.0.0.1:1";',
       'process.env.REDIS_URL = "redis://127.0.0.1:1";',
+      'process.env.REDIS_URL ??= "redis://127.0.0.1:1";',
+      'process.env.REDIS_URL += "?isolated=true";',
       'if (enabled) { process.env.REDIS_URL = "redis://127.0.0.1:1"; }',
       'const configured = (process.env.REDIS_URL = "redis://127.0.0.1:1");',
+      '(() => { process.env.REDIS_URL = "redis://127.0.0.1:1"; })();',
+      '(function () { process.env.REDIS_URL = "redis://127.0.0.1:1"; })();',
     ]) {
       expect(hasModuleScopeProcessEnvMutation(testPath, source)).toBe(true);
     }
