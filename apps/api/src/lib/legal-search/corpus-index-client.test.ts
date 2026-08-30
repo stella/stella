@@ -192,6 +192,15 @@ test("config attestation distinguishes a missing immutable index", async () => {
 
 test("config attestation accepts Quickwit-owned metadata and defaults", async () => {
   const config = finalCaseLawConfig();
+  const materializedFieldMappings = config.doc_mapping.field_mappings.map(
+    (field) =>
+      field.type === "text" && field.fast
+        ? { ...field, fast: { normalizer: "raw" } }
+        : field,
+  );
+  expect(materializedFieldMappings).not.toEqual(
+    config.doc_mapping.field_mappings,
+  );
   responseBody = {
     index_uid: `${config.index_id}:01JTEST`,
     index_config: {
@@ -199,6 +208,7 @@ test("config attestation accepts Quickwit-owned metadata and defaults", async ()
       index_uri: `s3://corpus-indexes/${config.index_id}`,
       doc_mapping: {
         ...config.doc_mapping,
+        field_mappings: materializedFieldMappings,
         doc_mapping_uid: "01JTESTDOCMAPPING",
         tag_fields: config.doc_mapping.tag_fields.toReversed(),
         max_num_partitions: 200,
@@ -226,6 +236,37 @@ test("config attestation accepts Quickwit-owned metadata and defaults", async ()
       status: "matching",
       indexUri: `s3://corpus-indexes/${config.index_id}`,
     });
+  }
+});
+
+test("config attestation rejects text fast-field normalizer drift", async () => {
+  const config = finalCaseLawConfig();
+  responseBody = {
+    index_config: {
+      ...config,
+      index_uri: `s3://corpus-indexes/${config.index_id}`,
+      doc_mapping: {
+        ...config.doc_mapping,
+        doc_mapping_uid: "01JTESTDOCMAPPING",
+        field_mappings: config.doc_mapping.field_mappings.map((field) =>
+          field.name === "projection_revision"
+            ? { ...field, fast: { normalizer: "lowercase" } }
+            : field,
+        ),
+      },
+    },
+  };
+  Object.assign(envBase, {
+    CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
+  });
+
+  const result = await getCorpusIndexClient("q09").attestIndexConfig(config);
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain(
+      "configuration drift at $.doc_mapping.field_mappings[1].fast",
+    );
   }
 });
 

@@ -431,6 +431,40 @@ const normalizeAttestedArray = (
     : value;
 
 /**
+ * Quickwit 0.9 accepts `fast: true` for a text field, then returns the
+ * equivalent explicit raw normalizer from the index metadata endpoint. Keep
+ * the immutable manifest's shorthand stable while comparing the engine's
+ * materialized representation. No other normalizer or field type is
+ * equivalent.
+ */
+type MaterializedRawTextFastFieldOptions = {
+  expectedField: Record<string, unknown>;
+  observedField: Record<string, unknown>;
+  key: string;
+};
+
+const isMaterializedRawTextFastField = ({
+  expectedField,
+  observedField,
+  key,
+}: MaterializedRawTextFastFieldOptions): boolean => {
+  if (
+    key !== "fast" ||
+    expectedField["type"] !== "text" ||
+    observedField["type"] !== "text" ||
+    expectedField["fast"] !== true
+  ) {
+    return false;
+  }
+  const observedFast = observedField["fast"];
+  return (
+    isRecord(observedFast) &&
+    Object.keys(observedFast).length === 1 &&
+    observedFast["normalizer"] === "raw"
+  );
+};
+
+/**
  * Return the first manifest-pinned value that differs from Quickwit state.
  *
  * Final manifests pin materialized engine defaults. Only server-owned values
@@ -468,6 +502,15 @@ const configDifference = (
       return path;
     }
     for (const [key, expectedValue] of Object.entries(expected)) {
+      if (
+        isMaterializedRawTextFastField({
+          expectedField: expected,
+          observedField: observed,
+          key,
+        })
+      ) {
+        continue;
+      }
       const difference = configDifference(
         expectedValue,
         observed[key],

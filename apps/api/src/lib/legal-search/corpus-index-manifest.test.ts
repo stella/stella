@@ -11,9 +11,9 @@ import {
 
 const EXPECTED_DIGESTS = {
   case_law_v5:
-    "8ef045bee150cc4bcd00e43147f3cd3c98cfbae44a6de3e721b47ef759a9f531",
+    "07de324370d49c611adfaa9b0667853a936a33deaf16e36d69859c051bdfdce4",
   legislation_v2:
-    "d03407015caf59dc83ce07be061a6a7ff2f83a5245d2f58606c4b21c9125b1e5",
+    "4b10263aa850392fc929b596a776a7bda7746d39e190a4224aeb54510b310fba",
 } as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, string>;
 
 test("the final-generation registry is exact and fails closed", () => {
@@ -157,7 +157,7 @@ test("v5 removes stale and repeated physical fields", () => {
     tokenizer: "raw",
     indexed: true,
     stored: false,
-    fast: { normalizer: "raw" },
+    fast: true,
   });
   expect(fields.get("is_opening")).toEqual({
     name: "is_opening",
@@ -217,11 +217,7 @@ test("final manifests make every storage and index cost explicit", () => {
       .field_mappings) {
       expect(typeof field.indexed).toBe("boolean");
       expect(typeof field.stored).toBe("boolean");
-      if (field.type === "text" && field.fast !== false) {
-        expect(field.fast).toEqual({ normalizer: "raw" });
-      } else {
-        expect(typeof field.fast).toBe("boolean");
-      }
+      expect(typeof field.fast).toBe("boolean");
     }
     for (const absent of [
       "year",
