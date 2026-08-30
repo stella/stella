@@ -45,6 +45,14 @@ const authenticateWithoutActiveOrganization = async () => {
     );
     expect(signInResponse.ok(), await signInResponse.text()).toBe(true);
 
+    const clearActiveResponse = await api.post(
+      `${API_BASE_URL}/api/auth/organization/set-active`,
+      { data: { organizationId: null } },
+    );
+    expect(clearActiveResponse.ok(), await clearActiveResponse.text()).toBe(
+      true,
+    );
+
     const storageState = await api.storageState();
     return storageState;
   } finally {
