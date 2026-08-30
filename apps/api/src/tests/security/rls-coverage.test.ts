@@ -92,6 +92,11 @@ describe("policy coverage", () => {
     // org loops can't express either shape; the dedicated test below
     // asserts its real policy boundaries.
     "ai_memories",
+    // Notifications are user-scoped (userPolicies() on app.user_id): the
+    // recipient is the tenant boundary, and organization_id is a filter
+    // column for the active-org view, not the access boundary. The
+    // cross-tenant handler suite asserts the user and org isolation.
+    "notifications",
   ]);
   const APPEND_ONLY = new Set(["audit_logs"]);
   const INSERT_ONLY = new Set([
