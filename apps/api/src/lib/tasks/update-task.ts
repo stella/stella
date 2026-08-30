@@ -39,6 +39,13 @@ import { includes } from "@/api/lib/type-guards";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
+import {
+  nextWorkObligationStatus,
+  WORK_OBLIGATION_TRANSITION_ACTION,
+  WORK_OBLIGATION_TRANSITIONS,
+  workObligationIntentForTaskStatus,
+} from "@/api/lib/work-obligations/transitions";
+import type { WorkObligationTransitionAction } from "@/api/lib/work-obligations/transitions";
 
 const agendaDateTimeSchema = t.Nullable(t.String({ format: "date-time" }));
 const agendaParticipantSchema = t.Object({
@@ -375,74 +382,78 @@ type ResolveWorkflowStatusTransitionOptions = {
   workflowReason: string | undefined;
 };
 
-const reopenedWorkflowStatus = (workflow: LockedWorkObligation) => {
-  if (workflow.ownerUserId === null) {
-    return WORK_OBLIGATION_STATUS.UNASSIGNED;
-  }
-  if (workflow.acknowledgedAt === null) {
-    return WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
-  }
-  return WORK_OBLIGATION_STATUS.ACTIVE;
+type WorkflowStatusPolicyOptions = ResolveWorkflowStatusTransitionOptions & {
+  action: WorkObligationTransitionAction;
 };
 
-const resolveWorkflowStatusTransition = ({
+/**
+ * A legacy status write carries no explicit intent, so the guards the
+ * transition endpoint applies per action are re-applied here. They stay at this
+ * call site: the shared table owns which move a status implies, not who may
+ * make it.
+ *
+ * Ungoverned workspaces keep writing task statuses freely; the obligation row
+ * only mirrors them.
+ */
+const assertWorkflowStatusPolicy = ({
+  action,
   governedWorkflow,
-  requestedStatus,
   userId,
   workflow,
   workflowReason,
-}: ResolveWorkflowStatusTransitionOptions) => {
-  if (requestedStatus === "done" && workflow.status !== "completed") {
-    if (
-      governedWorkflow &&
-      (workflow.status !== WORK_OBLIGATION_STATUS.ACTIVE ||
-        workflow.ownerUserId !== userId)
-    ) {
-      throw new HandlerError({
-        status: 409,
-        message:
-          "Only the acknowledged accountable owner can complete this work",
-      });
-    }
-    return {
-      eventType: WORK_OBLIGATION_EVENT_TYPE.COMPLETED,
-      status: WORK_OBLIGATION_STATUS.COMPLETED,
-    };
+}: WorkflowStatusPolicyOptions): void => {
+  if (!governedWorkflow) {
+    return;
   }
-
-  if (
-    requestedStatus === "cancelled" &&
-    workflow.status !== WORK_OBLIGATION_STATUS.CANCELLED
-  ) {
-    if (
-      governedWorkflow &&
-      workflow.status !== WORK_OBLIGATION_STATUS.UNASSIGNED &&
-      !workflowReason
-    ) {
-      throw new HandlerError({
-        status: 400,
-        message: "A reason is required when cancelling assigned work",
-      });
+  switch (action) {
+    case WORK_OBLIGATION_TRANSITION_ACTION.COMPLETE:
+      if (
+        workflow.status !== WORK_OBLIGATION_STATUS.ACTIVE ||
+        workflow.ownerUserId !== userId
+      ) {
+        throw new HandlerError({
+          status: 409,
+          message:
+            "Only the acknowledged accountable owner can complete this work",
+        });
+      }
+      return;
+    case WORK_OBLIGATION_TRANSITION_ACTION.CANCEL:
+      if (
+        workflow.status !== WORK_OBLIGATION_STATUS.UNASSIGNED &&
+        !workflowReason
+      ) {
+        throw new HandlerError({
+          status: 400,
+          message: "A reason is required when cancelling assigned work",
+        });
+      }
+      return;
+    case WORK_OBLIGATION_TRANSITION_ACTION.REOPEN:
+      return;
+    default: {
+      const exhaustive: never = action;
+      return exhaustive;
     }
-    return {
-      eventType: WORK_OBLIGATION_EVENT_TYPE.CANCELLED,
-      status: WORK_OBLIGATION_STATUS.CANCELLED,
-    };
   }
+};
 
-  const reopensClosedWorkflow =
-    requestedStatus !== undefined &&
-    requestedStatus !== "done" &&
-    requestedStatus !== "cancelled" &&
-    (workflow.status === WORK_OBLIGATION_STATUS.COMPLETED ||
-      workflow.status === WORK_OBLIGATION_STATUS.CANCELLED);
-  if (!reopensClosedWorkflow) {
+const resolveWorkflowStatusTransition = (
+  options: ResolveWorkflowStatusTransitionOptions,
+) => {
+  const { requestedStatus, workflow } = options;
+  const intent = workObligationIntentForTaskStatus({
+    currentStatus: workflow.status,
+    requestedTaskStatus: requestedStatus,
+  });
+  if (intent.type === "none") {
     return { eventType: undefined, status: workflow.status };
   }
 
+  assertWorkflowStatusPolicy({ ...options, action: intent.action });
   return {
-    eventType: WORK_OBLIGATION_EVENT_TYPE.REOPENED,
-    status: reopenedWorkflowStatus(workflow),
+    eventType: WORK_OBLIGATION_TRANSITIONS[intent.action].eventType,
+    status: nextWorkObligationStatus(intent.action, workflow),
   };
 };
 
