@@ -42,7 +42,10 @@ import {
 import type { InboxFilters, InboxView } from "@/lib/inbox/queries";
 import { localISODate } from "@/lib/local-iso-date";
 import { pageTitle } from "@/lib/page-title";
-import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
+import {
+  ensureRouteInfiniteQueryData,
+  ensureRouteQueryData,
+} from "@/lib/react-query";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { myWorkOptions } from "@/lib/workspaces/queries/my-work";
 import { NewRequestDialog } from "@/routes/_protected.inbox/-new-request-dialog";
@@ -61,6 +64,10 @@ export const Route = createFileRoute("/_protected/inbox/")({
           context.user.activeOrganizationId,
           DEFAULT_INBOX_FILTERS,
         ),
+      ),
+      ensureRouteQueryData(
+        context.queryClient,
+        workspacesNavigationOptions(context.user.activeOrganizationId),
       ),
       ...(env.VITE_FEATURE_GOVERNED_WORKFLOW
         ? [
