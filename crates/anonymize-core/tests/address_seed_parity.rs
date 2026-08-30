@@ -431,6 +431,26 @@ fn street_period_before_directional_keeps_address_evidence_joined() {
 }
 
 #[test]
+fn right_expansion_keeps_a_configured_directional_after_a_street_period() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "75002 123 Main Street. NE, delivery desk",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(
+    addresses
+      .iter()
+      .any(|address| address.contains("Street. NE,")),
+    "address entities: {addresses:?}; address seeds: {:?}",
+    result.detections.entities.address_seed(),
+  );
+}
+
+#[test]
 fn unconfigured_directional_does_not_join_address_evidence() {
   let prepared = barrier_address_engine_with_directionals(0.0, Vec::new());
   let result = prepared

@@ -932,9 +932,12 @@ impl PreparedAddressSeedData {
     if let Some(double_newline) = remaining.find("\n\n") {
       nearest_boundary = nearest_boundary.min(double_newline);
     }
-    if let Some(sentence_boundary) =
-      sentence_boundary(full_text, right_pos, &self.unit_abbreviations)
-    {
+    if let Some(sentence_boundary) = sentence_boundary(&SentenceBoundaryArgs {
+      full_text,
+      from: right_pos,
+      unit_abbreviations: &self.unit_abbreviations,
+      directional_abbreviations: &self.directional_abbreviations,
+    }) {
       nearest_boundary = nearest_boundary.min(sentence_boundary);
     }
 
@@ -3030,12 +3033,15 @@ fn trim_address_tail(full_text: &str, start: usize, mut end: usize) -> usize {
 /// `from`. The abbreviation check reads the whole text, not the tail: a unit
 /// abbreviation can start before `from` when a deny-list city span already
 /// covers its word ("... Springfield Apt" | ". 5").
-fn sentence_boundary(
-  full_text: &str,
+struct SentenceBoundaryArgs<'a> {
+  full_text: &'a str,
   from: usize,
-  unit_abbreviations: &BTreeSet<String>,
-) -> Option<usize> {
-  let text = full_text.get(from..)?;
+  unit_abbreviations: &'a BTreeSet<String>,
+  directional_abbreviations: &'a BTreeSet<String>,
+}
+
+fn sentence_boundary(args: &SentenceBoundaryArgs<'_>) -> Option<usize> {
+  let text = args.full_text.get(args.from..)?;
   let mut iter = text.char_indices().peekable();
   while let Some((index, ch)) = iter.next() {
     if !matches!(ch, '.' | '!' | '?') {
@@ -3043,12 +3049,24 @@ fn sentence_boundary(
     }
     if ch == '.'
       && is_unit_abbreviation(
-        full_text,
-        from.saturating_add(index),
-        unit_abbreviations,
+        args.full_text,
+        args.from.saturating_add(index),
+        args.unit_abbreviations,
       )
     {
       continue;
+    }
+    if ch == '.' {
+      let after_period = text.get(index.saturating_add(ch.len_utf8())..)?;
+      let after_space = after_period.trim_start();
+      if after_space.len() < after_period.len()
+        && starts_with_address_directional_continuation(
+          after_space,
+          args.directional_abbreviations,
+        )
+      {
+        continue;
+      }
     }
     let mut saw_whitespace = false;
     while let Some((_, next)) = iter.peek().copied() {
