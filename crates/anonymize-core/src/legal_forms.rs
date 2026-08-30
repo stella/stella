@@ -101,9 +101,11 @@ impl PreparedRolePhraseIndex {
 
   fn longest_prefix(&self, words: &[String]) -> Option<usize> {
     let first = words.first()?;
-    self.by_first.get(first)?.iter().find_map(|phrase| {
-      words.starts_with(phrase).then_some(phrase.len())
-    })
+    self
+      .by_first
+      .get(first)?
+      .iter()
+      .find_map(|phrase| words.starts_with(phrase).then_some(phrase.len()))
   }
 }
 
@@ -257,10 +259,7 @@ impl PreparedLegalFormData {
     if !contains_lowercase(&self.sentence_verb_indicators, verb) {
       return false;
     }
-    let tail = words
-      .take(4)
-      .map(str::to_lowercase)
-      .collect::<Vec<_>>();
+    let tail = words.take(4).map(str::to_lowercase).collect::<Vec<_>>();
     self.role_phrase_index.contains_sequence(&tail)
   }
 
@@ -277,8 +276,10 @@ impl PreparedLegalFormData {
       .split(|ch: char| !ch.is_alphanumeric())
       .filter(|word| !word.is_empty())
       .collect::<Vec<_>>();
-    let normalized_words =
-      words.iter().map(|word| word.to_lowercase()).collect::<Vec<_>>();
+    let normalized_words = words
+      .iter()
+      .map(|word| word.to_lowercase())
+      .collect::<Vec<_>>();
     let Some(role_word_count) =
       self.role_phrase_index.longest_prefix(&normalized_words)
     else {

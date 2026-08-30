@@ -1786,7 +1786,7 @@ mod tests {
         data: &data,
         first_names: None,
         name_corpus: Some(&names),
-          title_tokens: &BTreeSet::new(),
+        title_tokens: &BTreeSet::new(),
       });
       assert_eq!(
         detected
@@ -2022,7 +2022,7 @@ mod tests {
           data: &data,
           first_names: None,
           name_corpus: None,
-        title_tokens: &BTreeSet::new(),
+          title_tokens: &BTreeSet::new(),
         })
         .is_empty(),
         "unexpected person field match for {text:?}",
