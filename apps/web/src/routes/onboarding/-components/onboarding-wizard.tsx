@@ -30,7 +30,7 @@ import { useBrowserRegion } from "@/hooks/use-browser-region";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
-import { rootKeys, sessionOptions } from "@/lib/auth-queries";
+import { refreshAuthQueries, sessionOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
@@ -303,10 +303,7 @@ export const OnboardingWizard = () => {
         // immediately, and since the session now has an
         // `activeOrganizationId`, the guard would redirect away from
         // /onboarding before the wizard ever reaches the apps step.
-        await Promise.all([
-          queryClient.refetchQueries({ queryKey: rootKeys.session }),
-          queryClient.refetchQueries({ queryKey: rootKeys.role }),
-        ]);
+        await refreshAuthQueries(queryClient);
 
         if (finalData.practiceJurisdictions.length > 0) {
           const { error: jurisdictionError } = await api[

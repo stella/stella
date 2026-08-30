@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
 
 import { toAuthClientError } from "@/lib/errors/auth";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
@@ -6,6 +6,13 @@ import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 export const rootKeys = {
   session: ["session"],
   role: ["role"],
+};
+
+export const refreshAuthQueries = async (queryClient: QueryClient) => {
+  await Promise.all([
+    queryClient.refetchQueries({ queryKey: rootKeys.session, type: "all" }),
+    queryClient.refetchQueries({ queryKey: rootKeys.role, type: "all" }),
+  ]);
 };
 
 /**
