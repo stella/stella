@@ -490,6 +490,7 @@ Project: desktop-tauri
 - tauri-winrt-notification 0.7.3 — Apache-2.0 OR MIT
 - tempfile 3.27.0 — Apache-2.0 OR MIT
 - tendril 0.5.1 — Apache-2.0 OR MIT
+- termcolor 1.4.1 — MIT OR Unlicense
 - thiserror 1.0.69 — Apache-2.0 OR MIT
 - thiserror 2.0.20 — Apache-2.0 OR MIT
 - thiserror-impl 1.0.69 — Apache-2.0 OR MIT
@@ -530,6 +531,8 @@ Project: desktop-tauri
 - tray-icon 0.24.2 — Apache-2.0 OR MIT
 - tree_magic_mini 3.2.2 — MIT
 - try-lock 0.2.5 — MIT
+- ts-rs 12.0.1 — MIT
+- ts-rs-macros 12.0.1 — MIT
 - typed-path 0.12.3 — Apache-2.0 OR MIT
 - typeid 1.0.3 — Apache-2.0 OR MIT
 - typenum 1.20.1 — Apache-2.0 OR MIT

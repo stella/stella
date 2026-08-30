@@ -121,7 +121,7 @@
             "location": "apps/web/src/components/docx/use-edit-session.ts#8"
           },
           {
-            "location": "apps/web/src/components/docx/use-folio-collaboration-session.ts#1"
+            "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-sync-docx-suggestions.ts#13"
@@ -1861,6 +1861,15 @@
             "location": "apps/web/src/routes/tools/contribute.tsx#2"
           },
           {
+            "location": "packages/chat/src/composer.tsx#1"
+          },
+          {
+            "location": "packages/chat/src/model-selector.tsx#1"
+          },
+          {
+            "location": "packages/chat/src/stream.tsx#1"
+          },
+          {
             "location": "packages/ui/src/calendar/primitives.tsx#1"
           },
           {
@@ -1874,9 +1883,6 @@
           },
           {
             "location": "packages/ui/src/components/application-rail.tsx#1"
-          },
-          {
-            "location": "packages/ui/src/components/application-shell.tsx#1"
           },
           {
             "location": "packages/ui/src/components/bidi-text.tsx#3"
@@ -1997,6 +2003,12 @@
           },
           {
             "location": "packages/ui/src/components/tooltip-trigger-helper.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/workspace-shell.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/workspace-shell.tsx#4"
           },
           {
             "location": "packages/ui/src/data-table/table.tsx#1"
@@ -3058,7 +3070,7 @@
             "location": "apps/web/src/components/docx/use-edit-session.ts#8"
           },
           {
-            "location": "apps/web/src/components/docx/use-folio-collaboration-session.ts#1"
+            "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-sync-docx-suggestions.ts#13"
@@ -4798,6 +4810,15 @@
             "location": "apps/web/src/routes/tools/contribute.tsx#2"
           },
           {
+            "location": "packages/chat/src/composer.tsx#1"
+          },
+          {
+            "location": "packages/chat/src/model-selector.tsx#1"
+          },
+          {
+            "location": "packages/chat/src/stream.tsx#1"
+          },
+          {
             "location": "packages/ui/src/calendar/primitives.tsx#1"
           },
           {
@@ -4811,9 +4832,6 @@
           },
           {
             "location": "packages/ui/src/components/application-rail.tsx#1"
-          },
-          {
-            "location": "packages/ui/src/components/application-shell.tsx#1"
           },
           {
             "location": "packages/ui/src/components/bidi-text.tsx#3"
@@ -4936,6 +4954,12 @@
             "location": "packages/ui/src/components/tooltip-trigger-helper.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/workspace-shell.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/workspace-shell.tsx#4"
+          },
+          {
             "location": "packages/ui/src/data-table/table.tsx#1"
           },
           {
@@ -5028,6 +5052,10 @@
         {
           "name": "SrcFile",
           "value": "packages/ui/node_modules/@base-ui/react/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/chat/node_modules/@base-ui/react/package.json"
         },
         {
           "name": "SrcFile",
@@ -5747,6 +5775,68 @@
       "version": "2.18.0"
     },
     {
+      "bom-ref": "pkg:npm/@hocuspocus/extension-redis@4.6.0",
+      "description": "Scale Hocuspocus horizontally with Redis",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/collab/node_modules/@hocuspocus/extension-redis/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/collab/node_modules/@hocuspocus/extension-redis/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/collab/src/server-test-process.ts#1"
+          },
+          {
+            "location": "apps/collab/src/server.ts#1"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://hocuspocus.dev"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/ueberdosis/hocuspocus"
+        }
+      ],
+      "group": "@hocuspocus",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "extension-redis",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@hocuspocus/extension-redis/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/collab/node_modules/@hocuspocus/extension-redis/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40hocuspocus/extension-redis@4.6.0",
+      "scope": "required",
+      "type": "library",
+      "version": "4.6.0"
+    },
+    {
       "bom-ref": "pkg:npm/@hocuspocus/provider@4.6.0",
       "description": "hocuspocus provider",
       "evidence": {
@@ -5766,10 +5856,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/docx/use-folio-collaboration-session.ts#3"
+            "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#3"
           },
           {
-            "location": "apps/web/src/components/docx/use-folio-collaboration-session.ts#4"
+            "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#4"
           }
         ]
       },
@@ -5832,10 +5922,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/collab/src/server.ts#1"
+            "location": "apps/collab/src/server.ts#2"
           },
           {
-            "location": "apps/collab/src/server.ts#2"
+            "location": "apps/collab/src/server.ts#6"
           }
         ]
       },
@@ -6755,7 +6845,7 @@
             "location": "apps/web/src/components/docx/use-edit-session.ts#8"
           },
           {
-            "location": "apps/web/src/components/docx/use-folio-collaboration-session.ts#1"
+            "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-sync-docx-suggestions.ts#13"
@@ -8495,6 +8585,15 @@
             "location": "apps/web/src/routes/tools/contribute.tsx#2"
           },
           {
+            "location": "packages/chat/src/composer.tsx#1"
+          },
+          {
+            "location": "packages/chat/src/model-selector.tsx#1"
+          },
+          {
+            "location": "packages/chat/src/stream.tsx#1"
+          },
+          {
             "location": "packages/ui/src/calendar/primitives.tsx#1"
           },
           {
@@ -8508,9 +8607,6 @@
           },
           {
             "location": "packages/ui/src/components/application-rail.tsx#1"
-          },
-          {
-            "location": "packages/ui/src/components/application-shell.tsx#1"
           },
           {
             "location": "packages/ui/src/components/bidi-text.tsx#3"
@@ -8631,6 +8727,12 @@
           },
           {
             "location": "packages/ui/src/components/tooltip-trigger-helper.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/workspace-shell.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/workspace-shell.tsx#4"
           },
           {
             "location": "packages/ui/src/data-table/table.tsx#1"
@@ -9670,6 +9772,9 @@
             "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#2"
           },
           {
+            "location": "apps/api/src/lib/bilingual/ai.ts#6"
+          },
+          {
             "location": "apps/api/src/lib/document-review/review-document-messages.ts#2"
           },
           {
@@ -10615,6 +10720,9 @@
             "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#1"
           },
           {
+            "location": "apps/api/src/lib/bilingual/ai.ts#5"
+          },
+          {
             "location": "apps/api/src/lib/chat/chat-tool-types.ts#8"
           },
           {
@@ -11116,10 +11224,10 @@
             "location": "apps/web/src/components/document-translation-queries.ts#1"
           },
           {
-            "location": "apps/web/src/components/docx/use-edit-session.ts#10"
+            "location": "apps/web/src/components/document-translation-queries.ts#2"
           },
           {
-            "location": "apps/web/src/components/docx/use-folio-collaboration-session.ts#5"
+            "location": "apps/web/src/components/docx/use-edit-session.ts#10"
           },
           {
             "location": "apps/web/src/components/docx/use-sync-docx-suggestions.ts#16"
@@ -11605,7 +11713,7 @@
             "location": "apps/web/src/components/dev-sidebar-group.tsx#3"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#16"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#20"
           },
           {
             "location": "apps/web/src/components/inspector/anonymization-facet.tsx#19"
@@ -12554,9 +12662,6 @@
           },
           {
             "location": "apps/web/src/components/pdf/pdf-viewer.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/public-inspector-rail.tsx#3"
           },
           {
             "location": "apps/web/src/components/public-workspace-shell.tsx#10"
@@ -14498,7 +14603,7 @@
             "location": "apps/web/src/components/docx/use-edit-session.ts#8"
           },
           {
-            "location": "apps/web/src/components/docx/use-folio-collaboration-session.ts#1"
+            "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-sync-docx-suggestions.ts#13"
@@ -16238,6 +16343,15 @@
             "location": "apps/web/src/routes/tools/contribute.tsx#2"
           },
           {
+            "location": "packages/chat/src/composer.tsx#1"
+          },
+          {
+            "location": "packages/chat/src/model-selector.tsx#1"
+          },
+          {
+            "location": "packages/chat/src/stream.tsx#1"
+          },
+          {
             "location": "packages/ui/src/calendar/primitives.tsx#1"
           },
           {
@@ -16251,9 +16365,6 @@
           },
           {
             "location": "packages/ui/src/components/application-rail.tsx#1"
-          },
-          {
-            "location": "packages/ui/src/components/application-shell.tsx#1"
           },
           {
             "location": "packages/ui/src/components/bidi-text.tsx#3"
@@ -16374,6 +16485,12 @@
           },
           {
             "location": "packages/ui/src/components/tooltip-trigger-helper.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/workspace-shell.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/workspace-shell.tsx#4"
           },
           {
             "location": "packages/ui/src/data-table/table.tsx#1"
@@ -16651,6 +16768,9 @@
           },
           {
             "location": "packages/scripts/src/result-consumption.ts#4"
+          },
+          {
+            "location": "packages/scripts/src/workspace-app-boundaries.ts#4"
           },
           {
             "location": "scripts/env-tool.ts#13"
@@ -17019,6 +17139,15 @@
             "location": "apps/api/src/lib/user-shortcuts.ts#1"
           },
           {
+            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#15"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#16"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#17"
+          },
+          {
             "location": "apps/web/src/lib/auth.ts#2"
           },
           {
@@ -17034,6 +17163,9 @@
             "location": "apps/api/src/lib/auth.ts#5"
           },
           {
+            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#16"
+          },
+          {
             "location": "apps/api/src/lib/auth.ts#6"
           },
           {
@@ -17047,6 +17179,9 @@
           },
           {
             "location": "apps/api/src/lib/auth.ts#19"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#17"
           },
           {
             "location": "apps/web/src/lib/auth.ts#2"
@@ -17824,6 +17959,9 @@
             "location": "apps/api/src/handlers/entities/checkpoint-desktop-edit-session.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/entities/checkpoint-folio-collab-room.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/entities/clip.ts#1"
           },
           {
@@ -17872,6 +18010,9 @@
             "location": "apps/api/src/handlers/entities/get.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/entities/join-folio-collab-room.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/entities/list-files.ts#1"
           },
           {
@@ -17890,10 +18031,10 @@
             "location": "apps/api/src/handlers/entities/open-desktop-edit-session.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/open-folio-collab-session.ts#1"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#1"
+            "location": "apps/api/src/handlers/entities/publish-folio-collab-version.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/read-field-file.ts#1"
@@ -18046,19 +18187,16 @@
             "location": "apps/api/src/handlers/folio-collab/authorize.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/folio-collab/cancel.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/folio-collab/checkpoint.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/folio-collab/finalize.ts#1"
+            "location": "apps/api/src/handlers/folio-collab/heartbeat.ts#1"
           },
           {
             "location": "apps/api/src/handlers/folio-collab/refresh-token.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/folio-collab/session-credentials.ts#1"
+            "location": "apps/api/src/handlers/folio-collab/room-credentials.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/folio-collab/service-credentials.ts#1"
           },
           {
             "location": "apps/api/src/handlers/folio-collab/snapshot-load.ts#1"
@@ -19096,7 +19234,7 @@
             "location": "apps/api/src/lib/bbox/generate-b-boxes.ts#1"
           },
           {
-            "location": "apps/api/src/lib/bilingual/ai.ts#5"
+            "location": "apps/api/src/lib/bilingual/ai.ts#7"
           },
           {
             "location": "apps/api/src/lib/bilingual/formatting.ts#1"
@@ -19225,6 +19363,9 @@
             "location": "apps/api/src/lib/document-review/run-queue.ts#20"
           },
           {
+            "location": "apps/api/src/lib/document-translation/bilingual-batch-runner.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/document-translation/deepl-comments.ts#1"
           },
           {
@@ -19349,6 +19490,12 @@
           },
           {
             "location": "apps/api/src/lib/flows/sync-flow-schedule-trigger.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/folio-collab-rooms.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/folio-collab-service-room.ts#1"
           },
           {
             "location": "apps/api/src/lib/groupable-sql.ts#1"
@@ -19624,6 +19771,9 @@
             "location": "apps/api/src/lib/subprocess.ts#1"
           },
           {
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#10"
+          },
+          {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#16"
           },
           {
@@ -19810,6 +19960,9 @@
             "location": "apps/api/src/scripts/better-auth-migration-audit.ts#11"
           },
           {
+            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#18"
+          },
+          {
             "location": "apps/api/src/scripts/case-law-source-total.ts#1"
           },
           {
@@ -19829,6 +19982,9 @@
           },
           {
             "location": "apps/api/src/scripts/cz-regional-repair.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/database-census.ts#14"
           },
           {
             "location": "apps/api/src/scripts/fetch-ocr-models.ts#11"
@@ -19864,7 +20020,16 @@
             "location": "apps/api/src/scripts/replay-case-law-source.ts#1"
           },
           {
-            "location": "apps/collab/src/server.ts#3"
+            "location": "apps/collab/src/env.ts#2"
+          },
+          {
+            "location": "apps/collab/src/index.ts#1"
+          },
+          {
+            "location": "apps/collab/src/server-test-process.ts#2"
+          },
+          {
+            "location": "apps/collab/src/server.ts#7"
           },
           {
             "location": "apps/landing/scripts/check-meta-budgets.ts#2"
@@ -19930,13 +20095,16 @@
             "location": "apps/web/src/components/docx/use-edit-session.ts#11"
           },
           {
-            "location": "apps/web/src/components/docx/use-folio-collaboration-session.ts#6"
+            "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#5"
           },
           {
             "location": "apps/web/src/components/inspector/email-html-viewer.logic.ts#1"
           },
           {
             "location": "apps/web/src/components/inspector/file-download-service.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/inspector-tabs-slice.ts#1"
           },
           {
             "location": "apps/web/src/components/inspector/playbook-review-results.logic.ts#1"
@@ -20110,6 +20278,9 @@
             "location": "packages/catalogue/src/loader.ts#1"
           },
           {
+            "location": "packages/chat/src/runtime.ts#1"
+          },
+          {
             "location": "packages/cli/src/auth/credential-store.ts#15"
           },
           {
@@ -20272,6 +20443,9 @@
             "location": "scripts/changeset-guard.ts#23"
           },
           {
+            "location": "scripts/check-internal-module-mock-ledger.ts#15"
+          },
+          {
             "location": "scripts/check-lockfile-workspace-versions.ts#27"
           },
           {
@@ -20369,6 +20543,9 @@
           },
           {
             "location": "apps/web/src/components/document-language-picker.tsx#6"
+          },
+          {
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#21"
           },
           {
             "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#4"
@@ -20601,6 +20778,10 @@
         {
           "name": "SrcFile",
           "value": "packages/cli/node_modules/better-result/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/chat/node_modules/better-result/package.json"
         },
         {
           "name": "SrcFile",
@@ -21137,13 +21318,13 @@
         ],
         "occurrences": [
           {
-            "location": "apps/collab/src/server.ts#4"
+            "location": "apps/collab/src/server.ts#8"
           },
           {
-            "location": "apps/collab/src/server.ts#5"
+            "location": "apps/collab/src/server.ts#9"
           },
           {
-            "location": "apps/collab/src/server.ts#5"
+            "location": "apps/collab/src/server.ts#9"
           }
         ]
       },
@@ -22015,6 +22196,9 @@
             "location": "apps/api/src/handlers/entities/checkpoint-desktop-edit-session.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/entities/checkpoint-folio-collab-room.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/entities/clip.ts#2"
           },
           {
@@ -22045,6 +22229,9 @@
             "location": "apps/api/src/handlers/entities/finalize-desktop-edit-session.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/entities/join-folio-collab-room.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/entities/list-files.ts#2"
           },
           {
@@ -22060,10 +22247,10 @@
             "location": "apps/api/src/handlers/entities/open-desktop-edit-session.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/open-folio-collab-session.ts#2"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#2"
+            "location": "apps/api/src/handlers/entities/publish-folio-collab-version.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/read-filesystem-tree.ts#2"
@@ -22178,15 +22365,6 @@
           },
           {
             "location": "apps/api/src/handlers/flows/validate-definition.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/folio-collab/cancel.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/folio-collab/checkpoint.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/folio-collab/finalize.ts#2"
           },
           {
             "location": "apps/api/src/handlers/hosted-usage-webhook/dispatch.ts#17"
@@ -23125,7 +23303,13 @@
             "location": "apps/api/src/lib/flows/sync-flow-schedule-trigger.ts#2"
           },
           {
-            "location": "apps/api/src/lib/folio-collab-sessions.ts#1"
+            "location": "apps/api/src/lib/folio-collab-rooms.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/folio-collab-rooms.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/folio-collab-service-room.ts#2"
           },
           {
             "location": "apps/api/src/lib/groupable-sql.ts#12"
@@ -23584,6 +23768,9 @@
             "location": "apps/api/src/scripts/better-auth-migration-audit.ts#14"
           },
           {
+            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#20"
+          },
+          {
             "location": "apps/api/src/scripts/build-expansion-dictionary.ts#25"
           },
           {
@@ -23701,6 +23888,9 @@
             "location": "apps/api/src/scripts/better-auth-migration-audit.ts#14"
           },
           {
+            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#20"
+          },
+          {
             "location": "apps/api/src/db/migrate.ts#5"
           }
         ]
@@ -23779,6 +23969,9 @@
           },
           {
             "location": "apps/api/src/db/schema-validators.ts#2"
+          },
+          {
+            "location": "apps/api/src/eden-contract.ts#1"
           },
           {
             "location": "apps/api/src/handlers/agent-auth/claim.ts#2"
@@ -24216,6 +24409,12 @@
             "location": "apps/api/src/handlers/entities/checkpoint-desktop-edit-session.ts#4"
           },
           {
+            "location": "apps/api/src/handlers/entities/checkpoint-folio-collab-room.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/checkpoint-folio-collab-room.ts#4"
+          },
+          {
             "location": "apps/api/src/handlers/entities/clip.ts#3"
           },
           {
@@ -24273,6 +24472,12 @@
             "location": "apps/api/src/handlers/entities/finalize-desktop-edit-session.ts#4"
           },
           {
+            "location": "apps/api/src/handlers/entities/join-folio-collab-room.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/join-folio-collab-room.ts#4"
+          },
+          {
             "location": "apps/api/src/handlers/entities/list-files.ts#3"
           },
           {
@@ -24297,16 +24502,13 @@
             "location": "apps/api/src/handlers/entities/open-desktop-edit-session.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/entities/open-folio-collab-session.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/entities/open-folio-collab-session.ts#4"
-          },
-          {
             "location": "apps/api/src/handlers/entities/organize-suggestions.ts#3"
           },
           {
             "location": "apps/api/src/handlers/entities/organize-suggestions.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/publish-folio-collab-version.ts#3"
           },
           {
             "location": "apps/api/src/handlers/entities/read-filesystem-tree.ts#3"
@@ -24450,13 +24652,13 @@
             "location": "apps/api/src/handlers/flows/schema.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/folio-collab/checkpoint.ts#3"
+            "location": "apps/api/src/handlers/folio-collab/room-credentials.ts#2"
           },
           {
             "location": "apps/api/src/handlers/folio-collab/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/folio-collab/session-credentials.ts#2"
+            "location": "apps/api/src/handlers/folio-collab/snapshot-load.ts#2"
           },
           {
             "location": "apps/api/src/handlers/folio-collab/snapshot-store.ts#2"
@@ -25500,9 +25702,6 @@
             "location": "apps/api/src/server.ts#3"
           },
           {
-            "location": "apps/api/src/types.ts#1"
-          },
-          {
             "location": "packages/api-client/src/index.ts#3"
           },
           {
@@ -26009,7 +26208,7 @@
             "location": "apps/web/src/components/inspector/inspector-store-types.ts#1"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-tabs-slice.ts#1"
+            "location": "apps/web/src/components/inspector/inspector-tabs-slice.ts#2"
           },
           {
             "location": "apps/web/src/components/pdf/pdf-viewer.tsx#3"
@@ -26127,6 +26326,72 @@
     {
       "authors": [
         {
+          "name": "Zihua Li <i@zihua.li> (http://zihua.li)"
+        }
+      ],
+      "bom-ref": "pkg:npm/ioredis@5.6.1",
+      "description": "A robust, performance-focused and full-featured Redis client for Node.js.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/collab/node_modules/ioredis/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/collab/node_modules/ioredis/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/collab/src/redis-options.ts#1"
+          },
+          {
+            "location": "apps/collab/src/server.ts#10"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "git://github.com/luin/ioredis.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "ioredis",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/ioredis/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/collab/node_modules/ioredis/package.json"
+        }
+      ],
+      "purl": "pkg:npm/ioredis@5.6.1",
+      "scope": "required",
+      "tags": [
+        "redis"
+      ],
+      "type": "library",
+      "version": "5.6.1"
+    },
+    {
+      "authors": [
+        {
           "name": "Beau Gunderson <beau@beaugunderson.com> (https://beaugunderson.com/)"
         }
       ],
@@ -26231,6 +26496,9 @@
           },
           {
             "location": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts#19"
+          },
+          {
+            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#21"
           }
         ]
       },
@@ -26642,7 +26910,7 @@
             "location": "apps/web/src/components/document-icon.tsx#4"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#23"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#30"
           },
           {
             "location": "apps/web/src/components/docx/docx-find-bar.tsx#3"
@@ -26690,7 +26958,7 @@
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#12"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#19"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#20"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-facet-bar.tsx#3"
@@ -26699,7 +26967,7 @@
             "location": "apps/web/src/components/inspector/inspector-pdf-error-fallback.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-rail.tsx#10"
+            "location": "apps/web/src/components/inspector/inspector-rail.tsx#5"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-tab-header.tsx#3"
@@ -26759,7 +27027,7 @@
             "location": "apps/web/src/components/pdf/versions-sidebar.tsx#11"
           },
           {
-            "location": "apps/web/src/components/public-inspector-rail.tsx#4"
+            "location": "apps/web/src/components/public-inspector-rail.tsx#3"
           },
           {
             "location": "apps/web/src/components/public-workspace-shell.tsx#11"
@@ -27392,6 +27660,9 @@
             "location": "apps/web/src/routes/tools/contribute.tsx#6"
           },
           {
+            "location": "packages/chat/src/composer.tsx#3"
+          },
+          {
             "location": "packages/ui/src/components/accordion.tsx#4"
           },
           {
@@ -27444,6 +27715,9 @@
           },
           {
             "location": "packages/ui/src/components/toast.tsx#14"
+          },
+          {
+            "location": "packages/ui/src/components/workspace-shell.tsx#6"
           },
           {
             "location": "packages/ui/src/kanban/sortable-interactions.tsx#34"
@@ -27505,6 +27779,10 @@
         {
           "name": "SrcFile",
           "value": "packages/ui/node_modules/lucide-react/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/chat/node_modules/lucide-react/package.json"
         },
         {
           "name": "SrcFile",
@@ -28387,7 +28665,7 @@
             "location": "apps/web/src/components/dev/autocomplete-playground.tsx#9"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#24"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#31"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#22"
@@ -28731,6 +29009,10 @@
         },
         {
           "name": "SrcFile",
+          "value": "packages/chat/node_modules/react-dom/package.json"
+        },
+        {
+          "name": "SrcFile",
           "value": "node_modules/react-dom/package.json"
         },
         {
@@ -28959,7 +29241,7 @@
             "location": "apps/web/src/components/docx/use-edit-session.ts#8"
           },
           {
-            "location": "apps/web/src/components/docx/use-folio-collaboration-session.ts#1"
+            "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-sync-docx-suggestions.ts#13"
@@ -30699,6 +30981,15 @@
             "location": "apps/web/src/routes/tools/contribute.tsx#2"
           },
           {
+            "location": "packages/chat/src/composer.tsx#1"
+          },
+          {
+            "location": "packages/chat/src/model-selector.tsx#1"
+          },
+          {
+            "location": "packages/chat/src/stream.tsx#1"
+          },
+          {
             "location": "packages/ui/src/calendar/primitives.tsx#1"
           },
           {
@@ -30712,9 +31003,6 @@
           },
           {
             "location": "packages/ui/src/components/application-rail.tsx#1"
-          },
-          {
-            "location": "packages/ui/src/components/application-shell.tsx#1"
           },
           {
             "location": "packages/ui/src/components/bidi-text.tsx#3"
@@ -30837,6 +31125,12 @@
             "location": "packages/ui/src/components/tooltip-trigger-helper.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/workspace-shell.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/workspace-shell.tsx#4"
+          },
+          {
             "location": "packages/ui/src/data-table/table.tsx#1"
           },
           {
@@ -30933,6 +31227,10 @@
         {
           "name": "SrcFile",
           "value": "packages/transactional/node_modules/react/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/chat/node_modules/react/package.json"
         },
         {
           "name": "SrcFile",
@@ -31437,6 +31735,9 @@
             "location": "packages/scripts/src/result-consumption.ts#4"
           },
           {
+            "location": "packages/scripts/src/workspace-app-boundaries.ts#4"
+          },
+          {
             "location": "scripts/env-tool.ts#13"
           },
           {
@@ -31520,6 +31821,9 @@
           },
           {
             "location": "packages/scripts/src/result-consumption.ts#4"
+          },
+          {
+            "location": "packages/scripts/src/workspace-app-boundaries.ts#4"
           },
           {
             "location": "scripts/env-tool.ts#13"
@@ -31894,7 +32198,7 @@
             "location": "apps/web/src/components/chat/use-chat-model-selection.ts#4"
           },
           {
-            "location": "apps/web/src/components/docx/use-folio-collaboration-session.ts#7"
+            "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#6"
           },
           {
             "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#4"
@@ -32206,7 +32510,7 @@
             "location": "apps/web/src/components/document-language-picker.tsx#7"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#25"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#32"
           },
           {
             "location": "apps/web/src/components/docx/docx-find-bar.tsx#4"
@@ -32263,7 +32567,7 @@
             "location": "apps/web/src/components/inspector/file-facets.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#20"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#21"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-facet-bar.tsx#4"
@@ -32275,7 +32579,7 @@
             "location": "apps/web/src/components/inspector/inspector-pdf-error-fallback.tsx#2"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-rail.tsx#11"
+            "location": "apps/web/src/components/inspector/inspector-rail.tsx#6"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-tab-header.tsx#4"
@@ -32356,7 +32660,7 @@
             "location": "apps/web/src/components/playbook-status-badge.tsx#1"
           },
           {
-            "location": "apps/web/src/components/public-inspector-rail.tsx#5"
+            "location": "apps/web/src/components/public-inspector-rail.tsx#4"
           },
           {
             "location": "apps/web/src/components/public-workspace-shell.tsx#12"
@@ -33398,7 +33702,7 @@
             "location": "apps/web/src/components/inspector/inspector-broadcast.ts#1"
           },
           {
-            "location": "apps/web/src/components/inspector/inspector-tabs-slice.ts#2"
+            "location": "apps/web/src/components/inspector/inspector-tabs-slice.ts#3"
           },
           {
             "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#14"
@@ -33641,7 +33945,7 @@
             "location": "apps/api/src/lib/bbox/ai-prompts.ts#1"
           },
           {
-            "location": "apps/api/src/lib/bilingual/ai.ts#6"
+            "location": "apps/api/src/lib/bilingual/ai.ts#8"
           },
           {
             "location": "apps/api/src/lib/branded-types.ts#1"
@@ -33740,7 +34044,7 @@
             "location": "apps/api/src/lib/secret-brands.ts#17"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-generate.ts#10"
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#11"
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#17"
@@ -33821,10 +34125,16 @@
             "location": "apps/api/src/scripts/better-auth-migration-audit.logic.ts#12"
           },
           {
+            "location": "apps/api/src/scripts/better-auth-sign-in-replay.ts#22"
+          },
+          {
             "location": "apps/api/src/scripts/corpus-column-trim-plan.ts#1"
           },
           {
             "location": "apps/api/src/scripts/corpus-index-query-diff-report.ts#2"
+          },
+          {
+            "location": "apps/api/src/scripts/database-census.ts#17"
           },
           {
             "location": "apps/api/src/scripts/mcp-canary.ts#27"
@@ -33836,10 +34146,13 @@
             "location": "apps/collab/src/env-schema.ts#1"
           },
           {
-            "location": "apps/collab/src/server.ts#6"
+            "location": "apps/collab/src/server.ts#11"
           },
           {
             "location": "apps/web/src/components/chat-decision-passage.ts#9"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#7"
           },
           {
             "location": "apps/web/src/env-schema.ts#1"
@@ -34201,7 +34514,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/docx/use-folio-collaboration-session.ts#8"
+            "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#8"
           }
         ]
       },
@@ -34265,10 +34578,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/collab/src/server.ts#7"
+            "location": "apps/collab/src/server.ts#12"
           },
           {
-            "location": "apps/web/src/components/docx/use-folio-collaboration-session.ts#9"
+            "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#9"
           }
         ]
       },
