@@ -16459,7 +16459,16 @@
       "seção"
     ],
     "leading_clause_phrases": ["by and among", "by and between", "is between"],
-    "leading_clause_direct_prefixes": ["by", "among", "amongst", "between"],
+    "leading_clause_direct_prefixes": [
+      "mezi",
+      "s",
+      "mit",
+      "zwischen",
+      "by",
+      "among",
+      "amongst",
+      "between"
+    ],
     "connector_words": ["a", "and", "und", "et", "e", "y", "i", "&"],
     "and_connector_words": ["and", "a", "und", "y", "et", "e", "i"],
     "in_name_prepositions": ["of", "the"],

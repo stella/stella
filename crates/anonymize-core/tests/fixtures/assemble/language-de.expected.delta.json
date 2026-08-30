@@ -955,6 +955,22 @@
     },
     {
       "type": "array",
+      "path": ["legal_form_data", "leading_clause_direct_prefixes"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 2,
+          "end": 4
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "leading_clause_phrases"],
+      "segments": []
+    },
+    {
+      "type": "array",
       "path": ["legal_form_data", "non_ascii_name_short_suffixes"],
       "segments": [
         {

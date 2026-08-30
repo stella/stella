@@ -989,6 +989,17 @@
       ]
     },
     {
+      "type": "array",
+      "path": ["legal_form_data", "leading_clause_direct_prefixes"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 4,
+          "end": 8
+        }
+      ]
+    },
+    {
       "type": "set",
       "path": ["legal_form_data", "lowercase_bridge", "policy"],
       "value": "closed"

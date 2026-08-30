@@ -24,8 +24,6 @@ const ALL_CAPS_LINE_RATIO: f64 = 0.95;
 const ALL_CAPS_LINE_PROSE_EXTRA_LETTERS: usize = 20;
 const ALL_CAPS_LINE_HEADING_WORD_LIMIT: usize = 5;
 const MAX_PAGE_FOOTER_TOTAL: u32 = 1_000;
-const LEGAL_FORM_CLAUSE_INTRODUCERS: &[&str] =
-  &["among", "amongst", "between", "by", "with"];
 
 static POSTAL_CODE_RE: LazyLock<Option<Regex>> =
   LazyLock::new(|| Regex::new(r"\d{3}\s?\d{2}").ok());
@@ -85,6 +83,7 @@ pub(crate) struct FilterEntityFalsePositivesArgs<'a> {
   pub(crate) document: &'a ResolutionDocument<'a>,
   pub(crate) filters: Option<&'a DenyListFilterData>,
   pub(crate) directional_abbreviations: Option<&'a BTreeSet<String>>,
+  pub(crate) legal_form_clause_introducers: Option<&'a [String]>,
 }
 
 pub(crate) fn filter_entity_false_positives(
@@ -95,6 +94,7 @@ pub(crate) fn filter_entity_false_positives(
     document,
     filters,
     directional_abbreviations,
+    legal_form_clause_introducers,
   } = args;
   let offsets = document.offsets();
   let mut filtered = Vec::with_capacity(entities.len());
@@ -109,7 +109,13 @@ pub(crate) fn filter_entity_false_positives(
     else {
       continue;
     };
-    if should_reject_entity(&normalized, document, &offsets, filters)? {
+    if should_reject_entity(ShouldRejectEntityArgs {
+      entity: &normalized,
+      document,
+      offsets: &offsets,
+      filters,
+      legal_form_clause_introducers,
+    })? {
       continue;
     }
     filtered.push(normalized);
@@ -251,12 +257,22 @@ pub(crate) fn soft_wrapped_city_person_candidate(
   }))
 }
 
-fn should_reject_entity(
-  entity: &PipelineEntity,
-  document: &ResolutionDocument<'_>,
-  offsets: &ByteOffsets<'_>,
-  filters: Option<&DenyListFilterData>,
-) -> Result<bool> {
+struct ShouldRejectEntityArgs<'a> {
+  entity: &'a PipelineEntity,
+  document: &'a ResolutionDocument<'a>,
+  offsets: &'a ByteOffsets<'a>,
+  filters: Option<&'a DenyListFilterData>,
+  legal_form_clause_introducers: Option<&'a [String]>,
+}
+
+fn should_reject_entity(args: ShouldRejectEntityArgs<'_>) -> Result<bool> {
+  let ShouldRejectEntityArgs {
+    entity,
+    document,
+    offsets,
+    filters,
+    legal_form_clause_introducers,
+  } = args;
   let full_text = document.text();
   let text = entity.text.trim();
   if is_template_placeholder(text) {
@@ -331,7 +347,12 @@ fn should_reject_entity(
   }
   if entity.label == ORGANIZATION_LABEL
     && is_all_caps_candidate(text)
-    && is_all_caps_boilerplate_line(document, offsets, entity)?
+    && is_all_caps_boilerplate_line(IsAllCapsBoilerplateLineArgs {
+      document,
+      offsets,
+      entity,
+      legal_form_clause_introducers,
+    })?
   {
     return Ok(true);
   }
@@ -515,7 +536,10 @@ fn has_number_abbrev_prefix(
   Ok(ends_with_number_abbrev(before, filters))
 }
 
-fn ends_with_number_abbrev(text: &str, filters: &DenyListFilterData) -> bool {
+pub(crate) fn ends_with_number_abbrev(
+  text: &str,
+  filters: &DenyListFilterData,
+) -> bool {
   let lower = text.trim_end().to_lowercase();
   filters.number_abbrev_prefixes.iter().any(|prefix| {
     let Some(before_prefix) = lower.strip_suffix(prefix) else {
@@ -699,11 +723,22 @@ fn is_all_caps_candidate(text: &str) -> bool {
   has_upper
 }
 
+struct IsAllCapsBoilerplateLineArgs<'a> {
+  document: &'a ResolutionDocument<'a>,
+  offsets: &'a ByteOffsets<'a>,
+  entity: &'a PipelineEntity,
+  legal_form_clause_introducers: Option<&'a [String]>,
+}
+
 fn is_all_caps_boilerplate_line(
-  document: &ResolutionDocument<'_>,
-  offsets: &ByteOffsets<'_>,
-  entity: &PipelineEntity,
+  args: IsAllCapsBoilerplateLineArgs<'_>,
 ) -> Result<bool> {
+  let IsAllCapsBoilerplateLineArgs {
+    document,
+    offsets,
+    entity,
+    legal_form_clause_introducers,
+  } = args;
   let Some(context) = line_context(document, offsets, entity)? else {
     return Ok(false);
   };
@@ -750,7 +785,8 @@ fn is_all_caps_boilerplate_line(
     .split(|ch: char| !ch.is_alphabetic())
     .rfind(|word| !word.is_empty())
     .is_some_and(|word| {
-      LEGAL_FORM_CLAUSE_INTRODUCERS
+      legal_form_clause_introducers
+        .unwrap_or_default()
         .iter()
         .any(|introducer| word.eq_ignore_ascii_case(introducer))
     });
@@ -1484,12 +1520,44 @@ mod tests {
     full_text: &str,
     filters: Option<&DenyListFilterData>,
   ) -> Result<Vec<PipelineEntity>> {
+    let clause_introducers = [
+      String::from("among"),
+      String::from("amongst"),
+      String::from("between"),
+      String::from("by"),
+      String::from("with"),
+    ];
+    filter_with_clause_introducers(FilterWithClauseIntroducersArgs {
+      entities,
+      full_text,
+      filters,
+      clause_introducers: &clause_introducers,
+    })
+  }
+
+  struct FilterWithClauseIntroducersArgs<'a> {
+    entities: Vec<PipelineEntity>,
+    full_text: &'a str,
+    filters: Option<&'a DenyListFilterData>,
+    clause_introducers: &'a [String],
+  }
+
+  fn filter_with_clause_introducers(
+    args: FilterWithClauseIntroducersArgs<'_>,
+  ) -> Result<Vec<PipelineEntity>> {
+    let FilterWithClauseIntroducersArgs {
+      entities,
+      full_text,
+      filters,
+      clause_introducers,
+    } = args;
     let document = ResolutionDocument::new(full_text);
     super::filter_entity_false_positives(FilterEntityFalsePositivesArgs {
       entities,
       document: &document,
       filters,
       directional_abbreviations: None,
+      legal_form_clause_introducers: Some(clause_introducers),
     })
   }
 
@@ -2281,6 +2349,55 @@ mod tests {
     .unwrap();
 
     assert_eq!(entities.len(), 1);
+  }
+
+  #[test]
+  fn legal_form_party_clauses_use_scoped_introducers() {
+    for (text, entity_text, introducers) in [
+      (
+        "DIESE VEREINBARUNG IST MIT ACME GMBH ALS VERKÄUFER GESCHLOSSEN.\n",
+        "ACME GMBH",
+        vec![String::from("mit"), String::from("zwischen")],
+      ),
+      (
+        "TATO SMLOUVA JE S ACME S.R.O. JAKO PRODÁVAJÍCÍ UZAVŘENA.\n",
+        "ACME S.R.O.",
+        vec![String::from("mezi"), String::from("s")],
+      ),
+    ] {
+      let entities =
+        filter_with_clause_introducers(FilterWithClauseIntroducersArgs {
+          entities: vec![entity(
+            text,
+            entity_text,
+            ORGANIZATION_LABEL,
+            DetectionSource::LegalForm,
+          )],
+          full_text: text,
+          filters: Some(&DenyListFilterData::default()),
+          clause_introducers: &introducers,
+        })
+        .unwrap();
+      assert_eq!(entities.len(), 1, "text {text:?}");
+    }
+
+    let german =
+      "DIESE VEREINBARUNG IST MIT ACME GMBH ALS VERKÄUFER GESCHLOSSEN.\n";
+    let english_introducers = [String::from("with")];
+    let entities =
+      filter_with_clause_introducers(FilterWithClauseIntroducersArgs {
+        entities: vec![entity(
+          german,
+          "ACME GMBH",
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        full_text: german,
+        filters: Some(&DenyListFilterData::default()),
+        clause_introducers: &english_introducers,
+      })
+      .unwrap();
+    assert!(entities.is_empty());
   }
 
   #[test]

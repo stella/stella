@@ -313,7 +313,10 @@ fn barrier_address_engine_with_directionals(
       originals: vec![String::from("Paris")],
       pattern_meta: stella_anonymize_core::DenyListPatternMetaSet::default(),
       sources: vec![vec![String::from("city")]].into(),
-      filters: Some(DenyListFilterData::default()),
+      filters: Some(DenyListFilterData {
+        number_abbrev_prefixes: [String::from("no.")].into(),
+        ..DenyListFilterData::default()
+      }),
     }),
     address_seed_data: Some(AddressSeedData {
       directional_abbreviations,
@@ -409,6 +412,21 @@ fn dotted_residual_prose_before_an_entity_separates_address_evidence() {
 }
 
 #[test]
+fn dotted_residual_prose_before_a_bare_case_number_separates_evidence() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "123 Main Street, MOVED AWAY. 1:23-cv-04567, Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(!addresses.contains(&"123 Main Street"));
+  assert!(addresses.contains(&"Paris 75002"));
+}
+
+#[test]
 fn sentence_boundaries_outside_entities_separate_address_evidence() {
   let prepared = barrier_address_engine();
   for text in [
@@ -456,13 +474,8 @@ fn right_expansion_keeps_a_configured_directional_after_a_street_period() {
     .expect("static redaction should succeed");
 
   let addresses = address_texts(&result);
-  assert!(
-    addresses
-      .iter()
-      .any(|address| address.contains("Street. NE,")),
-    "address entities: {addresses:?}; address seeds: {:?}",
-    result.detections.entities.address_seed(),
-  );
+  assert_eq!(addresses, ["75002 123 Main Street. NE"]);
+  assert!(result.redaction.redacted_text.contains("delivery desk"));
 }
 
 #[test]

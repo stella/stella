@@ -4,8 +4,9 @@ use web_time::Instant;
 use regex::Regex;
 use unicode_properties::{GeneralCategory, UnicodeGeneralCategory};
 
+use crate::false_positives::ends_with_number_abbrev;
 use crate::labels::CASE_NUMBER_LABEL;
-use crate::processors::PatternSlice;
+use crate::processors::{DenyListFilterData, PatternSlice};
 use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
 use crate::search::{SearchIndex, SearchOptions, SearchPattern};
 use crate::span_index::SpanIndex;
@@ -261,6 +262,14 @@ pub(crate) struct PreparedAddressSeedData {
   house_number_after_street_re: Regex,
 }
 
+pub(crate) struct AddressSeedProcessArgs<'a> {
+  pub(crate) matches: &'a [SearchMatch],
+  pub(crate) street_type_slice: PatternSlice,
+  pub(crate) full_text: &'a str,
+  pub(crate) existing_entities: &'a [PipelineEntity],
+  pub(crate) false_positive_filters: Option<&'a DenyListFilterData>,
+}
+
 struct BoundaryPhraseSearch {
   first_token_search: SearchIndex,
   patterns_by_first_token: Vec<BoundaryPhrasePattern>,
@@ -368,13 +377,21 @@ impl PreparedAddressSeedData {
 
   pub(crate) fn process_profiled(
     &self,
-    matches: &[SearchMatch],
-    street_type_slice: PatternSlice,
-    full_text: &str,
-    existing_entities: &[PipelineEntity],
+    args: AddressSeedProcessArgs<'_>,
   ) -> Result<AddressSeedDetection> {
+    let AddressSeedProcessArgs {
+      matches,
+      street_type_slice,
+      full_text,
+      existing_entities,
+      false_positive_filters,
+    } = args;
     let mut profile = AddressSeedDetectionProfile::default();
-    let entity_index = NonAddressEntityIndex::new(existing_entities);
+    let entity_index = NonAddressEntityIndex::new(NonAddressEntityIndexArgs {
+      existing_entities,
+      full_text,
+      false_positive_filters,
+    });
     let collect_start = Instant::now();
     let seeds = self.collect_seeds_profiled(
       matches,
@@ -2309,22 +2326,40 @@ struct NonAddressEntitySpan {
   start: usize,
   end: usize,
   is_date: bool,
-  is_case_number: bool,
+  has_case_number_label: bool,
+}
+
+struct NonAddressEntityIndexArgs<'a> {
+  existing_entities: &'a [PipelineEntity],
+  full_text: &'a str,
+  false_positive_filters: Option<&'a DenyListFilterData>,
 }
 
 impl NonAddressEntityIndex {
-  fn new(existing_entities: &[PipelineEntity]) -> Self {
+  fn new(args: NonAddressEntityIndexArgs<'_>) -> Self {
+    let NonAddressEntityIndexArgs {
+      existing_entities,
+      full_text,
+      false_positive_filters,
+    } = args;
     Self {
       spans: SpanIndex::new(
         existing_entities
           .iter()
           .filter(|entity| non_address_label(&entity.label))
           .filter_map(|entity| {
+            let start = usize::try_from(entity.start).ok()?;
+            let end = usize::try_from(entity.end).ok()?;
             let span = NonAddressEntitySpan {
-              start: usize::try_from(entity.start).ok()?,
-              end: usize::try_from(entity.end).ok()?,
+              start,
+              end,
               is_date: date_label(&entity.label),
-              is_case_number: entity.label == CASE_NUMBER_LABEL,
+              has_case_number_label: entity.label == CASE_NUMBER_LABEL
+                && false_positive_filters.is_some_and(|filters| {
+                  full_text.get(..start).is_some_and(|before| {
+                    ends_with_number_abbrev(before, filters)
+                  })
+                }),
             };
             Some((entity.start, entity.end, span))
           }),
@@ -2381,7 +2416,7 @@ impl NonAddressEntityIndex {
             let Some(residual) = full_text.get(cursor..residual_end) else {
               return Ok::<_, ()>(());
             };
-            let residual_measure = if span.is_case_number {
+            let residual_measure = if span.has_case_number_label {
               residual_before_case_number_prose_measure(
                 residual,
                 directional_abbreviations,
@@ -2711,18 +2746,31 @@ pub(crate) fn starts_with_address_directional_continuation(
   text: &str,
   directional_abbreviations: &BTreeSet<String>,
 ) -> bool {
+  address_directional_continuation_end(text, directional_abbreviations)
+    .is_some()
+}
+
+fn address_directional_continuation_end(
+  text: &str,
+  directional_abbreviations: &BTreeSet<String>,
+) -> Option<usize> {
   let token_end = text
     .find(|ch: char| !ch.is_ascii_alphabetic())
     .unwrap_or(text.len());
-  let Some(token) = text.get(..token_end) else {
-    return false;
-  };
+  let token = text.get(..token_end)?;
   if !directional_abbreviations.contains(token) {
-    return false;
+    return None;
   }
-  text
-    .get(token_end..)
-    .is_some_and(|tail| tail.trim_start().starts_with(','))
+  let tail = text.get(token_end..)?;
+  let comma_tail = tail.trim_start();
+  if !comma_tail.starts_with(',') {
+    return None;
+  }
+  Some(
+    token_end
+      .saturating_add(tail.len().saturating_sub(comma_tail.len()))
+      .saturating_add(1),
+  )
 }
 
 /// House numbers, postal codes, capitalized name words, and the connectives
@@ -3068,12 +3116,19 @@ fn sentence_boundary(args: &SentenceBoundaryArgs<'_>) -> Option<usize> {
       let after_period = text.get(index.saturating_add(ch.len_utf8())..)?;
       let after_space = after_period.trim_start();
       if after_space.len() < after_period.len()
-        && starts_with_address_directional_continuation(
+        && let Some(continuation_end) = address_directional_continuation_end(
           after_space,
           args.directional_abbreviations,
         )
       {
-        continue;
+        let whitespace_len =
+          after_period.len().saturating_sub(after_space.len());
+        return Some(
+          index
+            .saturating_add(ch.len_utf8())
+            .saturating_add(whitespace_len)
+            .saturating_add(continuation_end),
+        );
       }
     }
     let mut saw_whitespace = false;
@@ -3450,13 +3505,18 @@ mod tests {
           && usize::try_from(entity.end).is_ok_and(|end| end > gap_start)
       });
 
+      let index_args = || NonAddressEntityIndexArgs {
+        existing_entities: &entities,
+        full_text: "",
+        false_positive_filters: None,
+      };
       prop_assert_eq!(
-        NonAddressEntityIndex::new(&entities)
+        NonAddressEntityIndex::new(index_args())
           .has_barrier(gap_start, gap_end),
         expected,
       );
 
-      let index = NonAddressEntityIndex::new(&entities);
+      let index = NonAddressEntityIndex::new(index_args());
       if gap_start < gap_end {
         let expected_overlap = entities.iter().any(|entity| {
           non_address_label(&entity.label)
@@ -3993,7 +4053,13 @@ mod tests {
     ];
 
     let result = data
-      .process_profiled(&[], PatternSlice::default(), full_text, &existing)?
+      .process_profiled(AddressSeedProcessArgs {
+        matches: &[],
+        street_type_slice: PatternSlice::default(),
+        full_text,
+        existing_entities: &existing,
+        false_positive_filters: None,
+      })?
       .entities;
 
     assert!(
@@ -4014,16 +4080,17 @@ mod tests {
         DetectionSource::DenyList,
       )?];
       let wrapped_result = data
-        .process_profiled(
-          &[SearchMatch::Literal {
+        .process_profiled(AddressSeedProcessArgs {
+          matches: &[SearchMatch::Literal {
             pattern: 0,
             start: 4,
             end: 10,
           }],
-          PatternSlice { start: 0, end: 1 },
-          &wrapped_text,
-          &wrapped_existing,
-        )?
+          street_type_slice: PatternSlice { start: 0, end: 1 },
+          full_text: &wrapped_text,
+          existing_entities: &wrapped_existing,
+          false_positive_filters: None,
+        })?
         .entities;
 
       assert!(

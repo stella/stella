@@ -186,6 +186,10 @@ impl PreparedLegalFormData {
     }
   }
 
+  pub(crate) fn leading_clause_direct_prefixes(&self) -> &[String] {
+    &self.leading_clause_direct_prefixes
+  }
+
   fn bridges_lowercase(&self, token: &str) -> bool {
     match &self.lowercase_bridge {
       PreparedLowercaseBridge::Open => true,

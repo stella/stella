@@ -592,7 +592,9 @@ struct LeadingClauseTrims {
   direct_prefixes: Vec<String>,
 }
 
-fn leading_clause_trims() -> Result<LeadingClauseTrims, AssembleError> {
+fn leading_clause_trims(
+  selected: Option<&[String]>,
+) -> Result<LeadingClauseTrims, AssembleError> {
   let data: OrderedMap<Value> =
     parse_ordered_data_file("legal-form-leading-clauses.json")?;
   let mut phrase_seen = HashSet::new();
@@ -601,6 +603,9 @@ fn leading_clause_trims() -> Result<LeadingClauseTrims, AssembleError> {
   let mut direct_prefixes = Vec::new();
   for (key, value) in &data {
     if key.starts_with('_') || !value.is_object() {
+      continue;
+    }
+    if !language::language_config_matches(key, selected) {
       continue;
     }
     if let Some(entries) = value.get("phrases").and_then(Value::as_array) {
@@ -809,7 +814,7 @@ pub(super) fn build_legal_form_data(
     .filter(|suffix| !suffix.is_empty())
     .collect();
 
-  let trims = leading_clause_trims()?;
+  let trims = leading_clause_trims(ctx.content_languages.as_deref())?;
   let (rule_words, connector_words, party_connector_words) =
     scoped_legal_form_rule_words(ctx.content_languages.as_deref())?;
   let institutional =
@@ -880,9 +885,10 @@ mod tests {
   use super::{
     InstitutionalOrganizationData, LegalFormRuleWords, all_legal_suffixes,
     connector_prose_heads, institutional_language_words, language,
-    non_ascii_name_short_suffixes, organization_detection_suffixes,
-    parse_data_file, role_heads, scoped_clause_noun_heads,
-    scoped_connector_words, validate_institutional_terms,
+    leading_clause_trims, non_ascii_name_short_suffixes,
+    organization_detection_suffixes, parse_data_file, role_heads,
+    scoped_clause_noun_heads, scoped_connector_words,
+    validate_institutional_terms,
   };
 
   #[test]
@@ -921,6 +927,17 @@ mod tests {
     assert!(!english.iter().any(|word| word == "dohoda"));
     assert!(english.iter().any(|word| word == "agreement"));
     assert!(!czech.iter().any(|word| word == "agreement"));
+  }
+
+  #[test]
+  fn leading_clause_prefixes_follow_content_language_scope() {
+    let german = leading_clause_trims(Some(&[String::from("de")])).unwrap();
+    assert!(german.direct_prefixes.contains(&String::from("mit")));
+    assert!(!german.direct_prefixes.contains(&String::from("with")));
+
+    let czech = leading_clause_trims(Some(&[String::from("cs")])).unwrap();
+    assert!(czech.direct_prefixes.contains(&String::from("s")));
+    assert!(!czech.direct_prefixes.contains(&String::from("mit")));
   }
 
   #[test]

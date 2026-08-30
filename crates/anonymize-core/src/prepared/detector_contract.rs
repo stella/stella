@@ -1,7 +1,8 @@
 use std::collections::BTreeSet;
 
-use crate::address_seeds::AddressSeedDetection;
-use crate::address_seeds::PreparedAddressSeedData;
+use crate::address_seeds::{
+  AddressSeedDetection, AddressSeedProcessArgs, PreparedAddressSeedData,
+};
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::labels::{
   ADDRESS_LABEL, CREDIT_CARD_NUMBER_LABEL, IDENTITY_CARD_NUMBER_LABEL,
@@ -404,12 +405,16 @@ impl<'a> StaticDetectorContext<'a> {
     };
     let entities = dependencies.collect_context_entities()?;
     let count = entities.len();
-    let detection = data.process_profiled(
-      self.literal_matches()?,
-      self.street_types_slice()?,
-      self.full_text()?,
-      &entities,
-    )?;
+    let detection = data.process_profiled(AddressSeedProcessArgs {
+      matches: self.literal_matches()?,
+      street_type_slice: self.street_types_slice()?,
+      full_text: self.full_text()?,
+      existing_entities: &entities,
+      false_positive_filters: self
+        .engine
+        .data
+        .effective_false_positive_filters(),
+    })?;
     Ok((detection, count))
   }
 
