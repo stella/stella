@@ -29,6 +29,9 @@ import {
   type CorpusProjectionReservationFailure,
   type CorpusProjectionIntentLease,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
+import type {
+  CorpusProjectionWorkScope,
+} from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   readCorpusAst,
   readCorpusAtAuthoritativePointer,
@@ -61,6 +64,7 @@ type ExecuteCorpusProjectionAppendCycleOptions = {
   client: ProjectionAppendClient;
   family: CorpusProjectionIntentLease["family"];
   generation: string;
+  scope: CorpusProjectionWorkScope;
   limit: number;
   leaseMs: number;
   payloadReadConcurrency: number;
@@ -664,6 +668,7 @@ export const executeCorpusProjectionAppendCycle = async ({
   client,
   family,
   generation,
+  scope,
   limit,
   leaseMs,
   payloadReadConcurrency,
@@ -679,11 +684,13 @@ export const executeCorpusProjectionAppendCycle = async ({
     replacements: await prepareCorpusProjectionReplacementsTx(tx, {
       family,
       generation,
+      scope,
       limit,
     }),
     leases: await reserveCorpusProjectionIntentsTx(tx, {
       family,
       generation,
+      scope,
       limit,
       leaseMs,
     }),

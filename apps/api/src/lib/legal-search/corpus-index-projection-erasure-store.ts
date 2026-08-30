@@ -11,6 +11,11 @@ import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-cont
 import { CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { readRegisteredCorpusProjectionManifestForCleanup } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { corpusIndexUnknownAppendBarrierAt } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import {
+  CORPUS_PROJECTION_GENERATION_SCOPE,
+  entityIdsForCorpusProjectionWorkScope,
+  type CorpusProjectionWorkScope,
+} from "@/api/lib/legal-search/corpus-index-projection-scope";
 
 export const CORPUS_PROJECTION_ERASURE_MAX_BATCH_SIZE = 256;
 export const CORPUS_PROJECTION_ERASURE_MAX_REVISIONS = 1024;
@@ -21,6 +26,7 @@ type AdvanceCorpusProjectionErasuresOptions = {
   family: CorpusFamily;
   generation: string;
   limit: number;
+  scope?: CorpusProjectionWorkScope;
   testNow?: Date;
 };
 
@@ -55,10 +61,12 @@ export const advanceCorpusProjectionErasuresTx = async (
     family,
     generation,
     limit: requestedLimit,
+    scope = CORPUS_PROJECTION_GENERATION_SCOPE,
     testNow,
   }: AdvanceCorpusProjectionErasuresOptions,
 ): Promise<AdvanceCorpusProjectionErasuresResult> => {
   const limit = validateLimit(requestedLimit);
+  const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
   const manifest = await readRegisteredCorpusProjectionManifestForCleanup(
     tx,
     family,
@@ -74,6 +82,9 @@ export const advanceCorpusProjectionErasuresTx = async (
       and(
         eq(corpusIndexProjectionStates.family, family),
         eq(corpusIndexProjectionStates.generation, generation),
+        scopedEntityIds === null
+          ? undefined
+          : inArray(corpusIndexProjectionStates.entityId, scopedEntityIds),
         eq(corpusIndexProjectionStates.desiredAction, "erase"),
         sql`(
           ${corpusIndexProjectionStates.appliedAction} IS DISTINCT FROM 'erase'

@@ -235,6 +235,349 @@ afterEach(async () => {
   await client.close();
 });
 
+test("a subject-scoped reservation cannot claim another pending decision", async () => {
+  await db.insert(caseLawDecisions).values({
+    id: ERASE_DECISION_ID,
+    sourceId: SOURCE_ID,
+    caseNumber: "2 A 2/2026",
+    court: "Test court",
+    country: "CZE",
+    language: "cs",
+    contentHash: "d".repeat(64),
+    projectionEpoch: 1n,
+  });
+  await db.insert(corpusIndexProjectionStates).values({
+    family: "case_law",
+    generation: "case_law_v5",
+    entityId: ERASE_DECISION_ID,
+    desiredAction: "upsert",
+    desiredEpoch: 1n,
+    desiredFingerprint: SECOND_FINGERPRINT,
+    desiredIndexId: INDEX_ID,
+    updatedAt: INITIAL_RUNNABLE_AT,
+  });
+
+  const leases = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        scope: { type: "subjects", entityIds: [ERASE_DECISION_ID] },
+        limit: 10,
+        leaseMs: 60_000,
+        newIntentId: () => FIRST_INTENT_ID,
+        newLeaseToken: () => FIRST_LEASE_TOKEN,
+      }),
+  );
+
+  expect(leases.map(({ entityId }) => entityId)).toEqual([
+    ERASE_DECISION_ID,
+  ]);
+  expect(
+    await db
+      .select({ entityId: corpusIndexProjectionIntents.entityId })
+      .from(corpusIndexProjectionIntents),
+  ).toEqual([{ entityId: ERASE_DECISION_ID }]);
+});
+
+test("a subject-scoped erasure cannot apply another erased decision", async () => {
+  await db.insert(caseLawDecisions).values({
+    id: ERASE_DECISION_ID,
+    sourceId: SOURCE_ID,
+    caseNumber: "2 A 2/2026",
+    court: "Test court",
+    country: "CZE",
+    language: "cs",
+    contentHash: "d".repeat(64),
+    projectionEpoch: 1n,
+  });
+  await db.insert(corpusIndexProjectionStates).values({
+    family: "case_law",
+    generation: "case_law_v5",
+    entityId: ERASE_DECISION_ID,
+    desiredAction: "erase",
+    desiredEpoch: 1n,
+    updatedAt: INITIAL_RUNNABLE_AT,
+  });
+  await db
+    .update(corpusIndexProjectionStates)
+    .set({
+      desiredAction: "erase",
+      desiredFingerprint: null,
+      desiredIndexId: null,
+    })
+    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
+
+  const result = await db.transaction(
+    async (tx) =>
+      await advanceCorpusProjectionErasuresTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        scope: { type: "subjects", entityIds: [ERASE_DECISION_ID] },
+        limit: 10,
+      }),
+  );
+
+  expect(result.appliedEntityIds).toEqual([ERASE_DECISION_ID]);
+  expect(
+    await db
+      .select({
+        entityId: corpusIndexProjectionStates.entityId,
+        appliedAction: corpusIndexProjectionStates.appliedAction,
+      })
+      .from(corpusIndexProjectionStates)
+      .orderBy(corpusIndexProjectionStates.entityId),
+  ).toEqual([
+    { entityId: DECISION_ID, appliedAction: null },
+    { entityId: ERASE_DECISION_ID, appliedAction: "erase" },
+  ]);
+});
+
+test("subject-scoped cleanup and settlement cannot claim another revision", async () => {
+  const cleanupAt = new Date("2026-08-25T00:00:00.000Z");
+  await db.insert(corpusIndexProjectionIntents).values([
+    {
+      id: FIRST_INTENT_ID,
+      family: "case_law",
+      generation: "case_law_v5",
+      entityId: DECISION_ID,
+      epoch: 1n,
+      fingerprint: FIRST_FINGERPRINT,
+      indexId: INDEX_ID,
+      status: "cleanup_pending",
+      appendStartedAt: cleanupAt,
+      appendPublishBarrierAt: cleanupAt,
+      cleanupNotBefore: cleanupAt,
+    },
+    {
+      id: SECOND_INTENT_ID,
+      family: "case_law",
+      generation: "case_law_v5",
+      entityId: ERASE_DECISION_ID,
+      epoch: 1n,
+      fingerprint: SECOND_FINGERPRINT,
+      indexId: INDEX_ID,
+      status: "cleanup_pending",
+      appendStartedAt: cleanupAt,
+      appendPublishBarrierAt: cleanupAt,
+      cleanupNotBefore: cleanupAt,
+    },
+  ]);
+
+  const cleanup = await db.transaction(
+    async (tx) =>
+      await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        indexId: INDEX_ID,
+        scope: { type: "subjects", entityIds: [ERASE_DECISION_ID] },
+        limit: 10,
+        leaseMs: 60_000,
+        newLeaseToken: () => CLEANUP_LEASE_TOKEN,
+      }),
+  );
+  expect(cleanup.map(({ intentId }) => intentId)).toEqual([SECOND_INTENT_ID]);
+  await db.transaction(
+    async (tx) =>
+      await recordCorpusProjectionDeleteTx(asTestRaw<Transaction>(tx), {
+        intentIds: [SECOND_INTENT_ID],
+        indexId: INDEX_ID,
+        leaseToken: CLEANUP_LEASE_TOKEN,
+        deleteOpstamp: 42,
+      }),
+  );
+
+  const settlement = await db.transaction(
+    async (tx) =>
+      await claimCorpusProjectionCleanupSettlementTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          indexId: INDEX_ID,
+          scope: { type: "subjects", entityIds: [ERASE_DECISION_ID] },
+          limit: 10,
+          leaseMs: 60_000,
+          newLeaseToken: () => ERASE_CLEANUP_TOKEN,
+        },
+      ),
+  );
+  expect(settlement?.intentIds).toEqual([SECOND_INTENT_ID]);
+  expect(
+    await db
+      .select({
+        id: corpusIndexProjectionIntents.id,
+        status: corpusIndexProjectionIntents.status,
+      })
+      .from(corpusIndexProjectionIntents)
+      .orderBy(corpusIndexProjectionIntents.id),
+  ).toEqual([
+    { id: FIRST_INTENT_ID, status: "cleanup_pending" },
+    { id: SECOND_INTENT_ID, status: "cleanup_committed" },
+  ]);
+});
+
+test("subject-scoped recovery cannot cancel another expired reservation", async () => {
+  const expiredAt = new Date("2026-08-25T00:00:00.000Z");
+  await db.insert(corpusIndexProjectionIntents).values([
+    {
+      id: FIRST_INTENT_ID,
+      family: "case_law",
+      generation: "case_law_v5",
+      entityId: DECISION_ID,
+      epoch: 1n,
+      fingerprint: FIRST_FINGERPRINT,
+      indexId: INDEX_ID,
+      status: "reserved",
+      leaseToken: FIRST_LEASE_TOKEN,
+      leaseExpiresAt: expiredAt,
+    },
+    {
+      id: SECOND_INTENT_ID,
+      family: "case_law",
+      generation: "case_law_v5",
+      entityId: ERASE_DECISION_ID,
+      epoch: 1n,
+      fingerprint: SECOND_FINGERPRINT,
+      indexId: INDEX_ID,
+      status: "reserved",
+      leaseToken: SECOND_LEASE_TOKEN,
+      leaseExpiresAt: expiredAt,
+    },
+  ]);
+
+  const recovered = await db.transaction(
+    async (tx) =>
+      await recoverExpiredCorpusProjectionIntentsTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          scope: { type: "subjects", entityIds: [ERASE_DECISION_ID] },
+          limit: 10,
+        },
+      ),
+  );
+
+  expect(recovered).toEqual([
+    { intentId: SECOND_INTENT_ID, status: "reserved" },
+  ]);
+  expect(
+    await db
+      .select({
+        id: corpusIndexProjectionIntents.id,
+        status: corpusIndexProjectionIntents.status,
+      })
+      .from(corpusIndexProjectionIntents)
+      .orderBy(corpusIndexProjectionIntents.id),
+  ).toEqual([
+    { id: FIRST_INTENT_ID, status: "reserved" },
+    { id: SECOND_INTENT_ID, status: "cancelled" },
+  ]);
+});
+
+test("subject-scoped replacement cannot retire another applied revision", async () => {
+  const appliedAt = new Date("2026-08-25T00:00:00.000Z");
+  await db.insert(caseLawDecisions).values({
+    id: ERASE_DECISION_ID,
+    sourceId: SOURCE_ID,
+    caseNumber: "2 A 2/2026",
+    court: "Test court",
+    country: "CZE",
+    language: "cs",
+    contentHash: "d".repeat(64),
+    projectionEpoch: 2n,
+  });
+  await db.insert(corpusIndexProjectionIntents).values([
+    {
+      id: FIRST_INTENT_ID,
+      family: "case_law",
+      generation: "case_law_v5",
+      entityId: DECISION_ID,
+      epoch: 1n,
+      fingerprint: FIRST_FINGERPRINT,
+      indexId: INDEX_ID,
+      status: "applied",
+      appendStartedAt: appliedAt,
+      appendCommittedAt: appliedAt,
+      expectedDocumentCount: 1,
+      appliedAt,
+    },
+    {
+      id: SECOND_INTENT_ID,
+      family: "case_law",
+      generation: "case_law_v5",
+      entityId: ERASE_DECISION_ID,
+      epoch: 1n,
+      fingerprint: FIRST_FINGERPRINT,
+      indexId: INDEX_ID,
+      status: "applied",
+      appendStartedAt: appliedAt,
+      appendCommittedAt: appliedAt,
+      expectedDocumentCount: 1,
+      appliedAt,
+    },
+  ]);
+  await db
+    .update(corpusIndexProjectionStates)
+    .set({
+      desiredEpoch: 2n,
+      desiredFingerprint: SECOND_FINGERPRINT,
+      appliedAction: "upsert",
+      appliedEpoch: 1n,
+      appliedRevision: FIRST_INTENT_ID,
+      appliedFingerprint: FIRST_FINGERPRINT,
+      appliedIndexId: INDEX_ID,
+      appliedAt,
+    })
+    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
+  await db.insert(corpusIndexProjectionStates).values({
+    family: "case_law",
+    generation: "case_law_v5",
+    entityId: ERASE_DECISION_ID,
+    desiredAction: "upsert",
+    desiredEpoch: 2n,
+    desiredFingerprint: SECOND_FINGERPRINT,
+    desiredIndexId: INDEX_ID,
+    appliedAction: "upsert",
+    appliedEpoch: 1n,
+    appliedRevision: SECOND_INTENT_ID,
+    appliedFingerprint: FIRST_FINGERPRINT,
+    appliedIndexId: INDEX_ID,
+    appliedAt,
+    updatedAt: INITIAL_RUNNABLE_AT,
+  });
+
+  const replacements = await db.transaction(
+    async (tx) =>
+      await prepareCorpusProjectionReplacementsTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          scope: { type: "subjects", entityIds: [ERASE_DECISION_ID] },
+          limit: 10,
+        },
+      ),
+  );
+
+  expect(replacements.map(({ intentId }) => intentId)).toEqual([
+    SECOND_INTENT_ID,
+  ]);
+  expect(
+    await db
+      .select({
+        id: corpusIndexProjectionIntents.id,
+        status: corpusIndexProjectionIntents.status,
+      })
+      .from(corpusIndexProjectionIntents)
+      .orderBy(corpusIndexProjectionIntents.id),
+  ).toEqual([
+    { id: FIRST_INTENT_ID, status: "applied" },
+    { id: SECOND_INTENT_ID, status: "cleanup_pending" },
+  ]);
+});
+
 test("retry classification defers poison work, then blocks the exhausted desired state", async () => {
   const startedAt = new Date("2026-08-25T12:00:00.000Z");
   await db.insert(caseLawDecisions).values({

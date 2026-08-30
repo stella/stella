@@ -18,6 +18,11 @@ import {
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
   corpusIndexUnknownAppendBarrierAt,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import {
+  CORPUS_PROJECTION_GENERATION_SCOPE,
+  entityIdsForCorpusProjectionWorkScope,
+  type CorpusProjectionWorkScope,
+} from "@/api/lib/legal-search/corpus-index-projection-scope";
 import { corpusIndexProjectionNeedsWork } from "@/api/lib/legal-search/corpus-index-projection-sql";
 
 export const CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE =
@@ -44,6 +49,7 @@ type ReserveCorpusProjectionIntentsOptions = {
   generation: string;
   limit: number;
   leaseMs: number;
+  scope?: CorpusProjectionWorkScope;
   /** Deterministic database-test clock; production expiry uses PostgreSQL. */
   testNow?: Date;
   newIntentId?: () => ProjectionIntentId;
@@ -122,6 +128,7 @@ export const reserveCorpusProjectionIntentsTx = async (
     generation,
     limit: requestedLimit,
     leaseMs: requestedLeaseMs,
+    scope = CORPUS_PROJECTION_GENERATION_SCOPE,
     testNow,
     newIntentId = () => createSafeId<"corpusIndexProjectionIntent">(),
     newLeaseToken = () => Bun.randomUUIDv7(),
@@ -129,6 +136,7 @@ export const reserveCorpusProjectionIntentsTx = async (
 ): Promise<CorpusProjectionIntentLease[]> => {
   const limit = validateBatchSize(requestedLimit);
   const leaseMs = validateLeaseMs(requestedLeaseMs);
+  const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
   await readActiveCorpusProjectionManifest(tx, family, generation, true);
   const eligibilityAt = testNow ?? (await readPostgresClock(tx));
   const runnableAt = sql<Date>`coalesce(
@@ -158,6 +166,9 @@ export const reserveCorpusProjectionIntentsTx = async (
       and(
         eq(corpusIndexProjectionStates.family, family),
         eq(corpusIndexProjectionStates.generation, generation),
+        scopedEntityIds === null
+          ? undefined
+          : inArray(corpusIndexProjectionStates.entityId, scopedEntityIds),
         eq(corpusIndexProjectionStates.desiredAction, "upsert"),
         inArray(corpusIndexProjectionStates.workStatus, [
           "eligible",
@@ -279,6 +290,7 @@ type PrepareCorpusProjectionReplacementsOptions = {
   family: CorpusFamily;
   generation: string;
   limit: number;
+  scope?: CorpusProjectionWorkScope;
   testNow?: Date;
 };
 
@@ -293,10 +305,12 @@ export const prepareCorpusProjectionReplacementsTx = async (
     family,
     generation,
     limit: requestedLimit,
+    scope = CORPUS_PROJECTION_GENERATION_SCOPE,
     testNow,
   }: PrepareCorpusProjectionReplacementsOptions,
 ): Promise<CorpusProjectionReplacementCleanup[]> => {
   const limit = validateBatchSize(requestedLimit);
+  const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
   await readActiveCorpusProjectionManifest(tx, family, generation, true);
   const candidates = await tx
     .select({
@@ -309,6 +323,9 @@ export const prepareCorpusProjectionReplacementsTx = async (
       and(
         eq(corpusIndexProjectionStates.family, family),
         eq(corpusIndexProjectionStates.generation, generation),
+        scopedEntityIds === null
+          ? undefined
+          : inArray(corpusIndexProjectionStates.entityId, scopedEntityIds),
         eq(corpusIndexProjectionStates.desiredAction, "upsert"),
         eq(corpusIndexProjectionStates.appliedAction, "upsert"),
         isNotNull(corpusIndexProjectionStates.appliedRevision),

@@ -22,6 +22,11 @@ import {
   readCorpusProjectionDeleteSettlement,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
+  CORPUS_PROJECTION_GENERATION_SCOPE,
+  entityIdsForCorpusProjectionWorkScope,
+  type CorpusProjectionWorkScope,
+} from "@/api/lib/legal-search/corpus-index-projection-scope";
+import {
   CORPUS_PROJECTION_LEASE_MAX_MS,
   CORPUS_PROJECTION_LEASE_MIN_MS,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
@@ -94,6 +99,7 @@ type ClaimCorpusProjectionCleanupOptions = {
   indexId: string;
   limit: number;
   leaseMs: number;
+  scope?: CorpusProjectionWorkScope;
   testNow?: Date;
   newLeaseToken?: () => string;
 };
@@ -106,12 +112,14 @@ export const claimCorpusProjectionCleanupTx = async (
     indexId,
     limit: requestedLimit,
     leaseMs: requestedLeaseMs,
+    scope = CORPUS_PROJECTION_GENERATION_SCOPE,
     testNow,
     newLeaseToken = () => Bun.randomUUIDv7(),
   }: ClaimCorpusProjectionCleanupOptions,
 ): Promise<CorpusProjectionCleanupLease[]> => {
   const limit = validateCleanupBatchSize(requestedLimit);
   const leaseMs = validateLeaseMs(requestedLeaseMs);
+  const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
   await readRegisteredCorpusProjectionManifestForCleanup(
     tx,
     family,
@@ -128,6 +136,9 @@ export const claimCorpusProjectionCleanupTx = async (
         eq(corpusIndexProjectionIntents.family, family),
         eq(corpusIndexProjectionIntents.generation, generation),
         eq(corpusIndexProjectionIntents.indexId, indexId),
+        scopedEntityIds === null
+          ? undefined
+          : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
         eq(corpusIndexProjectionIntents.status, "cleanup_pending"),
         sql`${corpusIndexProjectionIntents.cleanupNotBefore} <= clock_timestamp()`,
         or(
@@ -301,6 +312,7 @@ type ClaimCorpusProjectionCleanupSettlementOptions = {
   indexId: string;
   limit: number;
   leaseMs: number;
+  scope?: CorpusProjectionWorkScope;
   /** Deterministic database-test clock; production expiry uses PostgreSQL. */
   testNow?: Date;
   newLeaseToken?: () => string;
@@ -314,12 +326,14 @@ export const claimCorpusProjectionCleanupSettlementTx = async (
     indexId,
     limit: requestedLimit,
     leaseMs: requestedLeaseMs,
+    scope = CORPUS_PROJECTION_GENERATION_SCOPE,
     testNow,
     newLeaseToken = () => Bun.randomUUIDv7(),
   }: ClaimCorpusProjectionCleanupSettlementOptions,
 ): Promise<CorpusProjectionCleanupSettlementLease | null> => {
   const limit = validateCleanupBatchSize(requestedLimit);
   const leaseMs = validateLeaseMs(requestedLeaseMs);
+  const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
   await readRegisteredCorpusProjectionManifestForCleanup(
     tx,
     family,
@@ -333,6 +347,9 @@ export const claimCorpusProjectionCleanupSettlementTx = async (
         eq(corpusIndexProjectionIntents.family, family),
         eq(corpusIndexProjectionIntents.generation, generation),
         eq(corpusIndexProjectionIntents.indexId, indexId),
+        scopedEntityIds === null
+          ? undefined
+          : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
         eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
         or(
           isNull(corpusIndexProjectionIntents.leaseExpiresAt),
@@ -361,6 +378,9 @@ export const claimCorpusProjectionCleanupSettlementTx = async (
         eq(corpusIndexProjectionIntents.family, family),
         eq(corpusIndexProjectionIntents.generation, generation),
         eq(corpusIndexProjectionIntents.indexId, indexId),
+        scopedEntityIds === null
+          ? undefined
+          : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
         eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
         eq(corpusIndexProjectionIntents.deleteOpstamp, deleteOpstamp),
         or(
@@ -735,6 +755,7 @@ type RecoverExpiredCorpusProjectionIntentsOptions = {
   family: CorpusFamily;
   generation: string;
   limit: number;
+  scope?: CorpusProjectionWorkScope;
   testNow?: Date;
 };
 
@@ -749,10 +770,12 @@ export const recoverExpiredCorpusProjectionIntentsTx = async (
     family,
     generation,
     limit: requestedLimit,
+    scope = CORPUS_PROJECTION_GENERATION_SCOPE,
     testNow,
   }: RecoverExpiredCorpusProjectionIntentsOptions,
 ): Promise<CorpusProjectionExpiredIntent[]> => {
   const limit = validateCleanupBatchSize(requestedLimit);
+  const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
   const manifest = await readRegisteredCorpusProjectionManifestForCleanup(
     tx,
     family,
@@ -769,6 +792,9 @@ export const recoverExpiredCorpusProjectionIntentsTx = async (
       and(
         eq(corpusIndexProjectionIntents.family, family),
         eq(corpusIndexProjectionIntents.generation, generation),
+        scopedEntityIds === null
+          ? undefined
+          : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
         inArray(corpusIndexProjectionIntents.status, [
           "reserved",
           "append_started",
