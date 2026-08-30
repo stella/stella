@@ -75,14 +75,14 @@ type CorpusIndexFieldMapping =
 
 const rawField = (
   name: string,
-  options: { stored: boolean; fast: boolean },
+  options: { stored: boolean; fast: "disabled" | "raw" },
 ): CorpusIndexFieldMapping => ({
   name,
   type: "text",
   tokenizer: "raw",
   indexed: true,
   stored: options.stored,
-  fast: options.fast,
+  fast: options.fast === "raw" ? { normalizer: "raw" } : false,
   record: "basic",
   fieldnorms: false,
 });
@@ -109,14 +109,14 @@ const unsignedIntegerField = (name: string): CorpusIndexFieldMapping => ({
 });
 
 const commonFields = (): CorpusIndexFieldMapping[] => [
-  rawField("document_id", { stored: true, fast: false }),
+  rawField("document_id", { stored: true, fast: "disabled" }),
   // Exact cleanup queries and the standing orphan-revision census need this
   // attempt identity in the columnar store. It is never returned to readers.
-  rawField("projection_revision", { stored: false, fast: true }),
-  rawField("jurisdiction", { stored: false, fast: true }),
-  rawField("document_type", { stored: false, fast: true }),
-  rawField("source", { stored: false, fast: true }),
-  rawField("language", { stored: false, fast: true }),
+  rawField("projection_revision", { stored: false, fast: "raw" }),
+  rawField("jurisdiction", { stored: false, fast: "raw" }),
+  rawField("document_type", { stored: false, fast: "raw" }),
+  rawField("source", { stored: false, fast: "raw" }),
+  rawField("language", { stored: false, fast: "raw" }),
   {
     name: "title",
     type: "text",
@@ -200,8 +200,8 @@ const CASE_LAW_V5_INDEX_CONFIG = deepFreeze(
           fast: false,
           fieldnorms: false,
         },
-        rawField("case_number", { stored: false, fast: false }),
-        rawField("court", { stored: false, fast: true }),
+        rawField("case_number", { stored: false, fast: "disabled" }),
+        rawField("court", { stored: false, fast: "raw" }),
         dateField("decision_date"),
         // Quickwit 0.9 supports only fixed, not calendar, date-histogram
         // intervals. The projection emits this exact civil year on the one
@@ -212,7 +212,7 @@ const CASE_LAW_V5_INDEX_CONFIG = deepFreeze(
           ...dateField(DECISION_TIMESTAMP_FIELD),
           fast_precision: "seconds",
         },
-        rawField("ecli", { stored: false, fast: false }),
+        rawField("ecli", { stored: false, fast: "disabled" }),
       ],
       ["jurisdiction", "document_type", "source", "court", "language"],
       DECISION_TIMESTAMP_FIELD,
@@ -225,11 +225,11 @@ const LEGISLATION_V2_INDEX_CONFIG = deepFreeze(
     indexConfig(
       [
         ...commonFields(),
-        rawField("status", { stored: false, fast: true }),
+        rawField("status", { stored: false, fast: "raw" }),
         dateField("effective_date"),
         dateField("version_valid_from"),
         dateField("version_valid_to"),
-        rawField("eli", { stored: false, fast: false }),
+        rawField("eli", { stored: false, fast: "disabled" }),
       ],
       ["jurisdiction", "document_type", "source", "status", "language"],
     ),

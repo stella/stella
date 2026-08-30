@@ -56,10 +56,12 @@ type CorpusIndexFieldMapping = {
    * Quickwit defaults `indexed` and `stored` to true, and `fast` to false.
    * Those defaults carry index, object-storage, and heap costs, so every field
    * must make each decision explicitly rather than inherit engine behavior.
+   * Text fast fields carry their normalizer because Quickwit materializes the
+   * `true` shorthand as this object in index metadata.
    */
   indexed: boolean;
   stored: boolean;
-  fast: boolean;
+  fast: boolean | { normalizer: "raw" | "lowercase" };
   // Built-in names plus whatever `CUSTOM_TOKENIZERS` declares, so a field can
   // never name a tokenizer the doc mapping does not ship.
   tokenizer?:
