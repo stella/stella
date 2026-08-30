@@ -2081,9 +2081,7 @@ fn plausible_unit_value_end(full_text: &str, offset: usize) -> Option<usize> {
         .sum::<usize>()
     })
     .map_or(cursor, |len| cursor.saturating_add(len));
-  let Some(value) = full_text.get(cursor..value_end) else {
-    return None;
-  };
+  let value = full_text.get(cursor..value_end)?;
   is_plausible_unit_value(value).then_some(value_end)
 }
 
@@ -2500,24 +2498,30 @@ fn has_prose_run(gap: &str) -> bool {
 
 #[derive(Clone, Copy, Default)]
 struct ProseMeasure {
+  sentence_boundary: bool,
   text_units: usize,
   words: usize,
 }
 
 impl ProseMeasure {
   const fn add(&mut self, other: Self) {
+    self.sentence_boundary |= other.sentence_boundary;
     self.text_units = self.text_units.saturating_add(other.text_units);
     self.words = self.words.saturating_add(other.words);
   }
 
   const fn exceeds_gap_limit(self) -> bool {
-    self.words > MAX_PROSE_WORDS_BETWEEN_SEEDS
+    self.sentence_boundary
+      || self.words > MAX_PROSE_WORDS_BETWEEN_SEEDS
       || self.text_units > MAX_PROSE_UNITS_BETWEEN_SEEDS
   }
 }
 
 fn prose_measure(gap: &str) -> ProseMeasure {
-  let mut measure = ProseMeasure::default();
+  let mut measure = ProseMeasure {
+    sentence_boundary: has_sentence_boundary(gap),
+    ..ProseMeasure::default()
+  };
   for word in gap
     .split(|ch: char| !ch.is_alphanumeric() && !matches!(ch, '-' | '\'' | '’'))
     .filter(|word| is_prose_word(word))
@@ -2528,6 +2532,27 @@ fn prose_measure(gap: &str) -> ProseMeasure {
       .saturating_add(word.chars().map(char::len_utf16).sum::<usize>());
   }
   measure
+}
+
+fn has_sentence_boundary(text: &str) -> bool {
+  let mut chars = text.chars().peekable();
+  while let Some(ch) = chars.next() {
+    if matches!(ch, '!' | '?' | '。' | '！' | '？') {
+      return true;
+    }
+    if ch != '.' {
+      continue;
+    }
+    let mut saw_space = false;
+    while chars.peek().is_some_and(|next| next.is_whitespace()) {
+      saw_space = true;
+      chars.next();
+    }
+    if saw_space && chars.peek().is_some_and(|next| next.is_uppercase()) {
+      return true;
+    }
+  }
+  false
 }
 
 /// House numbers, postal codes, capitalized name words, and the connectives

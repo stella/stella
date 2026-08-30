@@ -728,7 +728,7 @@ fn is_all_caps_boilerplate_line(
       .trim_start()
       .chars()
       .next()
-      .is_some_and(|ch| matches!(ch, ',' | ';' | '('));
+      .is_some_and(|ch| matches!(ch, ',' | ':' | ';' | '('));
   if outside_entity_letters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS
     && (entity.source != DetectionSource::LegalForm
       || legal_form_heading_prefix)
@@ -2254,6 +2254,26 @@ mod tests {
   fn keeps_leading_all_caps_legal_form_captions() {
     let text =
       "ACME LIMITED, A DELAWARE CORPORATION AND PARTY TO THIS AGREEMENT\n";
+    let entity_text = "ACME LIMITED";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        text,
+        entity_text,
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+  }
+
+  #[test]
+  fn keeps_colon_delimited_all_caps_legal_form_captions() {
+    let text =
+      "ACME LIMITED: A DELAWARE CORPORATION AND PARTY TO THIS AGREEMENT\n";
     let entity_text = "ACME LIMITED";
     let entities = filter_entity_false_positives(
       vec![entity(

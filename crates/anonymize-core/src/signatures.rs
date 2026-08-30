@@ -314,10 +314,8 @@ fn detect_labelled_names_in_line(args: DetectLabelledNamesInLineArgs<'_>) {
   let mut field_label_starts = None::<FieldLabelStarts>;
   let mut following_contact_fields = [None::<bool>; 2];
   while let Some(label) = find_label(line, cursor, data) {
-    let mut value_start = label.value_start;
-    if let Some(after_slash) = slash_s_prefix_end(line, value_start) {
-      value_start = after_slash;
-    }
+    let value_start =
+      slash_s_prefix_end(line, label.value_start).unwrap_or(label.value_start);
     let remaining = line.get(value_start..).unwrap_or_default();
     let column_end = first_column_end(remaining).unwrap_or(remaining.len());
     let starts = field_label_starts.get_or_insert_with(|| {
@@ -764,8 +762,11 @@ fn find_label(
     )) = label_end_at(line, cursor, data)
     {
       let mut after_spaces = skip_horizontal_ws(line, after_label);
-      if line.get(after_spaces..)?.starts_with(':') {
-        after_spaces = skip_horizontal_ws(line, after_spaces.saturating_add(1));
+      if let Some(separator_len) =
+        line.get(after_spaces..).and_then(field_label_separator_len)
+      {
+        after_spaces =
+          skip_horizontal_ws(line, after_spaces.saturating_add(separator_len));
         return Some(LabelMatch {
           value_start: after_spaces,
           next_cursor: after_spaces.saturating_add(1),
@@ -935,7 +936,19 @@ fn label_tail_is_valid(line: &str, end: usize) -> bool {
   line
     .get(end..)
     .and_then(|tail| tail.chars().next())
-    .is_some_and(|ch| ch == ':' || ch == ' ' || ch == '\t')
+    .is_some_and(|ch| is_field_label_separator(ch) || ch == ' ' || ch == '\t')
+}
+
+fn field_label_separator_len(text: &str) -> Option<usize> {
+  text
+    .chars()
+    .next()
+    .filter(|ch| is_field_label_separator(*ch))
+    .map(char::len_utf8)
+}
+
+const fn is_field_label_separator(ch: char) -> bool {
+  matches!(ch, ':' | '：')
 }
 
 fn slash_s_prefix_end(line: &str, start: usize) -> Option<usize> {
@@ -1368,6 +1381,19 @@ mod tests {
         .map(|entity| entity.text.as_str())
         .collect::<Vec<_>>(),
       vec!["Priya Ramanathan", "Jonathan H. Whitaker"]
+    );
+  }
+
+  #[test]
+  fn detects_labelled_name_after_full_width_colon() {
+    let entities = detect("Name： Jane Roe");
+
+    assert_eq!(
+      entities
+        .iter()
+        .map(|entity| entity.text.as_str())
+        .collect::<Vec<_>>(),
+      vec!["Jane Roe"]
     );
   }
 

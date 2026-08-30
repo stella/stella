@@ -355,6 +355,21 @@ fn entity_barriers_do_not_hide_residual_prose_between_address_seeds() {
 }
 
 #[test]
+fn sentence_boundaries_outside_entities_separate_address_evidence() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "123 Main Street. Case No. 1:23-cv-04567. Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(!addresses.contains(&"123 Main Street"));
+  assert!(addresses.contains(&"Paris 75002"));
+}
+
+#[test]
 fn unsegmented_residual_prose_separates_address_evidence() {
   let prepared = barrier_address_engine();
   let result = prepared
