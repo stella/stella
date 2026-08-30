@@ -34,6 +34,22 @@ export const DOCUMENT_PROCESSING_STATUSES = [
 export type DocumentProcessingStatus =
   (typeof DOCUMENT_PROCESSING_STATUSES)[number];
 
+/** Durable handoff from completed OCR to the deadline-scout worker. */
+export const DOCUMENT_DEADLINE_SCOUT_STATUSES = [
+  "not_requested",
+  "pending",
+  "running",
+  "succeeded",
+  "failed",
+  "cancelled",
+] as const;
+export type DocumentDeadlineScoutStatus =
+  (typeof DOCUMENT_DEADLINE_SCOUT_STATUSES)[number];
+const DOCUMENT_DEADLINE_SCOUT_CLEAR_CLAIM_STATUSES = [
+  "succeeded",
+  "cancelled",
+] as const satisfies readonly DocumentDeadlineScoutStatus[];
+
 /** Why a processing request exists; distinct sources can have distinct policy. */
 export const DOCUMENT_PROCESSING_REQUEST_SOURCES = [
   "upload",
@@ -50,6 +66,13 @@ const DOCUMENT_PROCESSING_KIND_SQL_VALUES = DOCUMENT_PROCESSING_KINDS.map(
 const DOCUMENT_PROCESSING_STATUS_SQL_VALUES = DOCUMENT_PROCESSING_STATUSES.map(
   (status) => sql.raw(`'${status}'`),
 );
+
+const DOCUMENT_DEADLINE_SCOUT_STATUS_SQL_VALUES =
+  DOCUMENT_DEADLINE_SCOUT_STATUSES.map((status) => sql.raw(`'${status}'`));
+const DOCUMENT_DEADLINE_SCOUT_CLEAR_CLAIM_STATUS_SQL_VALUES =
+  DOCUMENT_DEADLINE_SCOUT_CLEAR_CLAIM_STATUSES.map((status) =>
+    sql.raw(`'${status}'`),
+  );
 
 const DOCUMENT_PROCESSING_REQUEST_SOURCE_SQL_VALUES =
   DOCUMENT_PROCESSING_REQUEST_SOURCES.map((source) => sql.raw(`'${source}'`));
@@ -74,6 +97,10 @@ export const SCOPED_NATIVE_EXTRACTION_ENQUEUE = {
   attemptCount: 0,
   claimedAt: null,
   claimedBy: null,
+  deadlineScoutAttemptCount: 0,
+  deadlineScoutClaimedAt: null,
+  deadlineScoutErrorCode: null,
+  deadlineScoutStatus: "not_requested",
   errorAt: null,
   errorCode: null,
   finishedAt: null,
@@ -90,6 +117,10 @@ export const SCOPED_NATIVE_EXTRACTION_ENQUEUE = {
   attemptCount: number;
   claimedAt: null;
   claimedBy: null;
+  deadlineScoutAttemptCount: number;
+  deadlineScoutClaimedAt: null;
+  deadlineScoutErrorCode: null;
+  deadlineScoutStatus: DocumentDeadlineScoutStatus;
   errorAt: null;
   errorCode: null;
   finishedAt: null;
@@ -125,6 +156,10 @@ const scopedEnqueueShapeCheck = sql`(
   AND error_at IS NULL
   AND claimed_at IS NULL
   AND claimed_by IS NULL
+  AND deadline_scout_attempt_count = ${sql.raw(String(SCOPED_NATIVE_EXTRACTION_ENQUEUE.deadlineScoutAttemptCount))}
+  AND deadline_scout_claimed_at IS NULL
+  AND deadline_scout_error_code IS NULL
+  AND deadline_scout_status = ${sql.raw(`'${SCOPED_NATIVE_EXTRACTION_ENQUEUE.deadlineScoutStatus}'`)}
   AND next_attempt_at IS NULL
   AND started_at IS NULL
   AND finished_at IS NULL
@@ -185,6 +220,22 @@ export const documentProcessingRuns = p.pgTable(
       .text({ enum: DOCUMENT_PROCESSING_STATUSES })
       .notNull()
       .default("queued"),
+    deadlineScoutStatus: p
+      .text("deadline_scout_status", {
+        enum: DOCUMENT_DEADLINE_SCOUT_STATUSES,
+      })
+      .notNull()
+      .default("not_requested"),
+    deadlineScoutAttemptCount: p
+      .integer("deadline_scout_attempt_count")
+      .notNull()
+      .default(0),
+    deadlineScoutClaimedAt: p.timestamp("deadline_scout_claimed_at", {
+      withTimezone: true,
+    }),
+    deadlineScoutErrorCode: p.varchar("deadline_scout_error_code", {
+      length: 128,
+    }),
     attemptCount: p.integer("attempt_count").notNull().default(0),
     progressCompleted: p.integer("progress_completed").notNull().default(0),
     progressTotal: p.integer("progress_total"),
@@ -239,6 +290,14 @@ export const documentProcessingRuns = p.pgTable(
       .index("document_processing_runs_field_workspace_idx")
       .on(table.fieldId, table.workspaceId),
     p.index("document_processing_runs_requested_by_idx").on(table.requestedBy),
+    p
+      .index("document_processing_runs_deadline_scout_pending_idx")
+      .on(table.updatedAt, table.id)
+      .where(sql`${table.deadlineScoutStatus} = 'pending'`),
+    p
+      .index("document_processing_runs_deadline_scout_running_idx")
+      .on(table.deadlineScoutClaimedAt, table.id)
+      .where(sql`${table.deadlineScoutStatus} = 'running'`),
     /**
      * System worker reconciliation is intentionally cross-tenant and bounded;
      * this partial index prevents its oldest-first queued scan from degrading
@@ -303,6 +362,32 @@ export const documentProcessingRuns = p.pgTable(
     p.check(
       "document_processing_runs_status_values_check",
       sql`${table.status} IN (${sql.join(DOCUMENT_PROCESSING_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "document_processing_runs_deadline_scout_status_values_check",
+      sql`${table.deadlineScoutStatus} IN (${sql.join(DOCUMENT_DEADLINE_SCOUT_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "document_processing_runs_deadline_scout_attempt_nonnegative_check",
+      sql`${table.deadlineScoutAttemptCount} >= 0`,
+    ),
+    p.check(
+      "document_processing_runs_deadline_scout_lifecycle_check",
+      sql`(
+        (${table.deadlineScoutStatus} = 'not_requested'
+          AND ${table.deadlineScoutClaimedAt} IS NULL
+          AND ${table.deadlineScoutErrorCode} IS NULL)
+        OR (${table.deadlineScoutStatus} = 'pending'
+          AND ${table.deadlineScoutClaimedAt} IS NULL)
+        OR (${table.deadlineScoutStatus} = 'running'
+          AND ${table.deadlineScoutClaimedAt} IS NOT NULL
+          AND ${table.deadlineScoutErrorCode} IS NULL)
+        OR (${table.deadlineScoutStatus} IN (${sql.join(DOCUMENT_DEADLINE_SCOUT_CLEAR_CLAIM_STATUS_SQL_VALUES, sql`, `)})
+          AND ${table.deadlineScoutClaimedAt} IS NULL)
+        OR (${table.deadlineScoutStatus} = 'failed'
+          AND ${table.deadlineScoutClaimedAt} IS NULL
+          AND ${table.deadlineScoutErrorCode} IS NOT NULL)
+      )`,
     ),
     p.check(
       "document_processing_runs_request_source_values_check",

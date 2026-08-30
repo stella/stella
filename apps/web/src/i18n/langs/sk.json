@@ -3759,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Lehota",
       "task": "Úloha"
-    }
+    },
+    "workingTargetDue": "Pracovný termín uplynul"
   },
   "templates": {
     "addItem": "Pridať položku",

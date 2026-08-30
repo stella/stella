@@ -3759,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Plazo",
       "task": "Tarea"
-    }
+    },
+    "workingTargetDue": "Objetivo de trabajo vencido"
   },
   "templates": {
     "addItem": "Añadir elemento",

@@ -3759,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "موعد نهائي",
       "task": "مهمة"
-    }
+    },
+    "workingTargetDue": "حلّ الموعد المستهدف"
   },
   "templates": {
     "addItem": "إضافة عنصر",

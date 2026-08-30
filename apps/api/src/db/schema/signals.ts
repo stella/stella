@@ -1,5 +1,6 @@
 import {
   SIGNAL_KINDS,
+  SIGNAL_KIND_ORIGIN,
   SIGNAL_ORIGINS,
   SIGNAL_SEVERITIES,
   SIGNAL_STATUSES,
@@ -69,6 +70,16 @@ export type SignalAcceptedResult =
 
 const SIGNAL_STATUS_SQL_VALUES = SIGNAL_STATUSES.map((status) =>
   sql.raw(`'${status}'`),
+);
+const SIGNAL_KIND_SQL_VALUES = SIGNAL_KINDS.map((kind) => sql.raw(`'${kind}'`));
+const SIGNAL_ORIGIN_SQL_VALUES = SIGNAL_ORIGINS.map((origin) =>
+  sql.raw(`'${origin}'`),
+);
+const SIGNAL_SEVERITY_SQL_VALUES = SIGNAL_SEVERITIES.map((severity) =>
+  sql.raw(`'${severity}'`),
+);
+const SIGNAL_KIND_ORIGIN_SQL = SIGNAL_KINDS.map((kind) =>
+  sql.raw(`("kind" = '${kind}' AND "origin" = '${SIGNAL_KIND_ORIGIN[kind]}')`),
 );
 const SIGNAL_EVENT_TYPE_SQL_VALUES = SIGNAL_EVENT_TYPES.map((type) =>
   sql.raw(`'${type}'`),
@@ -155,6 +166,23 @@ export const signals = p.pgTable(
       .index("signals_ws_status_created_idx")
       .on(table.workspaceId, table.status, table.createdAt.desc(), table.id),
     p.index("signals_assignee_idx").on(table.assigneeUserId, table.status),
+    p.index("signals_created_by_user_idx").on(table.createdByUserId),
+    p.check(
+      "signals_kind_check",
+      sql`${table.kind} in (${sql.join(SIGNAL_KIND_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "signals_origin_check",
+      sql`${table.origin} in (${sql.join(SIGNAL_ORIGIN_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "signals_severity_check",
+      sql`${table.severity} in (${sql.join(SIGNAL_SEVERITY_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "signals_kind_origin_check",
+      sql`(${sql.join(SIGNAL_KIND_ORIGIN_SQL, sql` OR `)})`,
+    ),
     p.check(
       "signals_confidence_range",
       sql`${table.confidence} is null or (${table.confidence} >= 0 and ${table.confidence} <= 1)`,
@@ -166,6 +194,30 @@ export const signals = p.pgTable(
     p.check(
       "signals_status_check",
       sql`${table.status} in (${sql.join(SIGNAL_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "signals_lifecycle_check",
+      sql`(
+        (${table.status} = 'new'
+          AND ${table.snoozedUntil} IS NULL
+          AND ${table.resolvedAt} IS NULL
+          AND ${table.acceptedResult} IS NULL
+          AND ${table.dismissReason} IS NULL)
+        OR (${table.status} = 'snoozed'
+          AND ${table.snoozedUntil} IS NOT NULL
+          AND ${table.resolvedAt} IS NULL
+          AND ${table.acceptedResult} IS NULL
+          AND ${table.dismissReason} IS NULL)
+        OR (${table.status} = 'accepted'
+          AND ${table.snoozedUntil} IS NULL
+          AND ${table.resolvedAt} IS NOT NULL
+          AND ${table.acceptedResult} IS NOT NULL
+          AND ${table.dismissReason} IS NULL)
+        OR (${table.status} = 'dismissed'
+          AND ${table.snoozedUntil} IS NULL
+          AND ${table.resolvedAt} IS NOT NULL
+          AND ${table.acceptedResult} IS NULL)
+      )`,
     ),
     ...organizationOptionalWorkspacePolicies("signals"),
   ],
@@ -207,6 +259,7 @@ export const signalEvents = p.pgTable(
       p
         .index("signal_events_signal_created_idx")
         .on(table.signalId, table.createdAt),
+      p.index("signal_events_actor_user_idx").on(table.actorUserId),
       p.check(
         "signal_events_type_check",
         sql`${table.type} in (${sql.join(SIGNAL_EVENT_TYPE_SQL_VALUES, sql`, `)})`,
@@ -261,6 +314,10 @@ export const scoutRuns = p.pgTable(
     p
       .index("scout_runs_org_scout_started_idx")
       .on(table.organizationId, table.scoutKey, table.startedAt.desc()),
+    p
+      .index("scout_runs_running_scout_started_idx")
+      .on(table.scoutKey, table.startedAt, table.id)
+      .where(sql`${table.status} = 'running'`),
     p.check(
       "scout_runs_status_check",
       sql`${table.status} in (${sql.join(SCOUT_RUN_STATUS_SQL_VALUES, sql`, `)})`,

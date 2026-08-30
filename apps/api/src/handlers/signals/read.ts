@@ -2,13 +2,15 @@ import { Result } from "better-result";
 import { and, desc, eq, isNull, lte, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { SIGNAL_STATUS } from "@stll/api-contract/signals";
-import type { SignalOrigin, SignalSeverity } from "@stll/api-contract/signals";
+import { SIGNAL_STATUS, SIGNAL_VIEW } from "@stll/api-contract/signals";
+import type {
+  SignalOrigin,
+  SignalSeverity,
+  SignalView,
+} from "@stll/api-contract/signals";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { signals, workspaces } from "@/api/db/schema";
-import type { SignalView } from "@/api/handlers/signals/schema";
-import { SIGNAL_VIEW } from "@/api/handlers/signals/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -184,7 +186,12 @@ export const listSignalsHandler = async function* ({
       );
     }
     conditions.push(
-      sql`(${signals.createdAt}, ${signals.id}) < (select b.created_at, b.id from signals b where b.id = ${cursor} and b.organization_id = ${organizationId})`,
+      sql`(${signals.createdAt}, ${signals.id}) < (
+        (SELECT cursor_boundary.created_at
+          FROM signals cursor_boundary
+          WHERE cursor_boundary.id = ${boundary.id}),
+        ${boundary.id}
+      )`,
     );
   }
 

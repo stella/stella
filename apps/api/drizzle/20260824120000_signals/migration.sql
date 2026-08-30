@@ -1,5 +1,14 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
+ALTER TABLE "document_processing_runs" ADD COLUMN "deadline_scout_status" text DEFAULT 'not_requested' NOT NULL;--> statement-breakpoint
+ALTER TABLE "document_processing_runs" ADD COLUMN "deadline_scout_attempt_count" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "document_processing_runs" ADD COLUMN "deadline_scout_claimed_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "document_processing_runs" ADD COLUMN "deadline_scout_error_code" varchar(128);--> statement-breakpoint
+ALTER TABLE "document_processing_runs" ADD CONSTRAINT "document_processing_runs_deadline_scout_status_values_check" CHECK ("deadline_scout_status" IN ('not_requested', 'pending', 'running', 'succeeded', 'failed', 'cancelled'));--> statement-breakpoint
+ALTER TABLE "document_processing_runs" ADD CONSTRAINT "document_processing_runs_deadline_scout_attempt_nonnegative_check" CHECK ("deadline_scout_attempt_count" >= 0);--> statement-breakpoint
+ALTER TABLE "document_processing_runs" ADD CONSTRAINT "document_processing_runs_deadline_scout_lifecycle_check" CHECK ((("deadline_scout_status" = 'not_requested' AND "deadline_scout_claimed_at" IS NULL AND "deadline_scout_error_code" IS NULL) OR ("deadline_scout_status" = 'pending' AND "deadline_scout_claimed_at" IS NULL) OR ("deadline_scout_status" = 'running' AND "deadline_scout_claimed_at" IS NOT NULL AND "deadline_scout_error_code" IS NULL) OR ("deadline_scout_status" IN ('succeeded', 'cancelled') AND "deadline_scout_claimed_at" IS NULL) OR ("deadline_scout_status" = 'failed' AND "deadline_scout_claimed_at" IS NULL AND "deadline_scout_error_code" IS NOT NULL)));--> statement-breakpoint
+CREATE INDEX "document_processing_runs_deadline_scout_pending_idx" ON "document_processing_runs" USING btree ("updated_at","id") WHERE "deadline_scout_status" = 'pending';--> statement-breakpoint
+CREATE INDEX "document_processing_runs_deadline_scout_running_idx" ON "document_processing_runs" USING btree ("deadline_scout_claimed_at","id") WHERE "deadline_scout_status" = 'running';--> statement-breakpoint
 CREATE TABLE "signals" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"organization_id" varchar(128) NOT NULL,
@@ -27,7 +36,12 @@ CREATE TABLE "signals" (
 	CONSTRAINT "signals_id_org_unq" UNIQUE("id","organization_id"),
 	CONSTRAINT "signals_confidence_range" CHECK ("confidence" is null or ("confidence" >= 0 and "confidence" <= 1)),
 	CONSTRAINT "signals_model_has_confidence" CHECK ("origin" <> 'model' or "confidence" is not null),
-	CONSTRAINT "signals_status_check" CHECK ("status" in ('new', 'snoozed', 'accepted', 'dismissed'))
+	CONSTRAINT "signals_kind_check" CHECK ("kind" in ('request.submitted', 'hearing.changed', 'deadline.detected', 'contract.reviewed')),
+	CONSTRAINT "signals_origin_check" CHECK ("origin" in ('manual', 'source', 'model')),
+	CONSTRAINT "signals_severity_check" CHECK ("severity" in ('info', 'notice', 'warning', 'critical')),
+	CONSTRAINT "signals_kind_origin_check" CHECK (("kind" = 'request.submitted' AND "origin" = 'manual') OR ("kind" = 'hearing.changed' AND "origin" = 'source') OR ("kind" = 'deadline.detected' AND "origin" = 'model') OR ("kind" = 'contract.reviewed' AND "origin" = 'model')),
+	CONSTRAINT "signals_status_check" CHECK ("status" in ('new', 'snoozed', 'accepted', 'dismissed')),
+	CONSTRAINT "signals_lifecycle_check" CHECK ((("status" = 'new' AND "snoozed_until" IS NULL AND "resolved_at" IS NULL AND "accepted_result" IS NULL AND "dismiss_reason" IS NULL) OR ("status" = 'snoozed' AND "snoozed_until" IS NOT NULL AND "resolved_at" IS NULL AND "accepted_result" IS NULL AND "dismiss_reason" IS NULL) OR ("status" = 'accepted' AND "snoozed_until" IS NULL AND "resolved_at" IS NOT NULL AND "accepted_result" IS NOT NULL AND "dismiss_reason" IS NULL) OR ("status" = 'dismissed' AND "snoozed_until" IS NULL AND "resolved_at" IS NOT NULL AND "accepted_result" IS NULL)))
 );
 --> statement-breakpoint
 CREATE TABLE "signal_events" (
@@ -69,8 +83,11 @@ CREATE UNIQUE INDEX "signals_org_dedupe_uidx" ON "signals" USING btree ("organiz
 CREATE INDEX "signals_org_status_created_idx" ON "signals" USING btree ("organization_id","status","created_at" DESC,"id");--> statement-breakpoint
 CREATE INDEX "signals_ws_status_created_idx" ON "signals" USING btree ("workspace_id","status","created_at" DESC,"id");--> statement-breakpoint
 CREATE INDEX "signals_assignee_idx" ON "signals" USING btree ("assignee_user_id","status");--> statement-breakpoint
+CREATE INDEX "signals_created_by_user_idx" ON "signals" USING btree ("created_by_user_id");--> statement-breakpoint
 CREATE INDEX "signal_events_signal_created_idx" ON "signal_events" USING btree ("signal_id","created_at");--> statement-breakpoint
+CREATE INDEX "signal_events_actor_user_idx" ON "signal_events" USING btree ("actor_user_id");--> statement-breakpoint
 CREATE INDEX "scout_runs_org_scout_started_idx" ON "scout_runs" USING btree ("organization_id","scout_key","started_at" DESC);--> statement-breakpoint
+CREATE INDEX "scout_runs_running_scout_started_idx" ON "scout_runs" USING btree ("scout_key","started_at","id") WHERE "status" = 'running';--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "signals" TO stella;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "signal_events" TO stella;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "scout_runs" TO stella;--> statement-breakpoint

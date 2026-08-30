@@ -590,6 +590,27 @@ export const CAPABILITY_DISPATCH = {
   "reports.read-export": {
     load: async () => await import("@/api/handlers/reports/read-export"),
   },
+  "signals.acceptances.create": {
+    load: async () => await import("@/api/handlers/signals/acceptances/create"),
+  },
+  "signals.assignments.create": {
+    load: async () => await import("@/api/handlers/signals/assignments/create"),
+  },
+  "signals.dismissals.create": {
+    load: async () => await import("@/api/handlers/signals/dismissals/create"),
+  },
+  "signals.get": {
+    load: async () => await import("@/api/handlers/signals/get"),
+  },
+  "signals.list": {
+    load: async () => await import("@/api/handlers/signals/list"),
+  },
+  "signals.requests.create": {
+    load: async () => await import("@/api/handlers/signals/requests/create"),
+  },
+  "signals.snoozes.create": {
+    load: async () => await import("@/api/handlers/signals/snoozes/create"),
+  },
   "skills.comments.create": {
     load: async () => await import("@/api/handlers/skills/comments/create"),
   },

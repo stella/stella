@@ -3759,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Tähtaeg",
       "task": "Ülesanne"
-    }
+    },
+    "workingTargetDue": "Töö sihttähtaeg on möödunud"
   },
   "templates": {
     "addItem": "Lisa element",

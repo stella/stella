@@ -100,7 +100,7 @@ const source = {
 };
 
 describe("document scout dispatch isolation", () => {
-  test("makes source completion terminal before dispatching its scout", () => {
+  test("persists pending scout work with source completion before dispatch", () => {
     const completionStart = queueSource.indexOf(
       "const completeDocumentProcessingRun",
     );
@@ -109,6 +109,9 @@ describe("document scout dispatch isolation", () => {
       completionStart,
     );
     const completionSource = queueSource.slice(completionStart, completionEnd);
+    const durableHandoff = completionSource.indexOf(
+      "deadlineScoutStatus: shouldDispatchDeadlineScout",
+    );
     const succeededTransition = completionSource.indexOf('status: "succeeded"');
     const completedGuard = completionSource.indexOf(
       "if (!completed.at(0))",
@@ -121,7 +124,9 @@ describe("document scout dispatch isolation", () => {
 
     expect(completionStart).toBeGreaterThan(-1);
     expect(completionEnd).toBeGreaterThan(completionStart);
+    expect(durableHandoff).toBeGreaterThan(-1);
     expect(succeededTransition).toBeGreaterThan(-1);
+    expect(succeededTransition).toBeGreaterThan(durableHandoff);
     expect(completedGuard).toBeGreaterThan(succeededTransition);
     expect(scoutDispatch).toBeGreaterThan(completedGuard);
     expect(completionSource).toContain(
@@ -324,6 +329,13 @@ describe("reconciliation fault isolation", () => {
     const results = await runDocumentProcessingReconciliationPhases({
       phases: [
         {
+          name: "deadline-scout",
+          run: async () => {
+            calls.push("deadline-scout");
+            return { count: 0, hasMore: false };
+          },
+        },
+        {
           name: "delivery",
           run: async () => {
             calls.push("delivery");
@@ -365,6 +377,7 @@ describe("reconciliation fault isolation", () => {
     });
 
     expect(calls).toEqual([
+      "deadline-scout",
       "delivery",
       "repair",
       "reindex",
@@ -373,6 +386,7 @@ describe("reconciliation fault isolation", () => {
     ]);
     expect(failures).toEqual([{ error: repairError, phase: "repair" }]);
     expect(results).toEqual({
+      "deadline-scout": { count: 0, hasMore: false },
       delivery: { count: 5, hasMore: false },
       reindex: { count: 2, hasMore: false },
       repair: { count: 0, hasMore: true },
@@ -1121,6 +1135,7 @@ describe("reconciliationLeftWorkBehind", () => {
     // declared but never wired in reports nothing and would be read as
     // drained; a phase run but not declared has nowhere to report.
     expect(declared).toEqual([
+      "deadline-scout",
       "delivery",
       "reindex",
       "repair",

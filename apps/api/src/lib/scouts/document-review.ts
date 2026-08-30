@@ -1,6 +1,10 @@
 import { and, eq } from "drizzle-orm";
 
-import { SIGNAL_KIND, SUGGESTION_KIND } from "@stll/api-contract/signals";
+import {
+  SCOUT_KEY,
+  SIGNAL_KIND,
+  SUGGESTION_KIND,
+} from "@stll/api-contract/signals";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -21,7 +25,6 @@ import {
 } from "@/api/lib/scouts/document-review.logic";
 import { documentScoutsEnabled } from "@/api/lib/scouts/document-scout-config";
 import { emitSignals } from "@/api/lib/signals/emit";
-import { SCOUT_KEY } from "@/api/lib/signals/scout";
 
 export type EmitDocumentReviewSignalArgs = {
   tx: Transaction;

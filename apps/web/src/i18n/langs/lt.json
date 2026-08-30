@@ -3759,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Terminas",
       "task": "Užduotis"
-    }
+    },
+    "workingTargetDue": "Darbinis terminas suėjo"
   },
   "templates": {
     "addItem": "Pridėti elementą",

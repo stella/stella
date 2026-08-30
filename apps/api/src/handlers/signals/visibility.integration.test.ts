@@ -10,9 +10,12 @@ import {
 import { eq, inArray } from "drizzle-orm";
 
 import {
+  SCOUT_KEY,
   SIGNAL_KIND,
   SIGNAL_KIND_ORIGIN,
+  SIGNAL_ORIGIN,
   SIGNAL_SEVERITY,
+  SIGNAL_STATUS,
 } from "@stll/api-contract/signals";
 
 import { SIGNAL_EVENT_TYPE, signalEvents, signals } from "@/api/db/schema";
@@ -21,7 +24,6 @@ import listSignals from "@/api/handlers/signals/list";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { encodePaginationCursor } from "@/api/lib/pagination";
-import { SCOUT_KEY } from "@/api/lib/signals/scout";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -163,6 +165,30 @@ const listAs = async (args: Parameters<typeof runListAs>[0]) => {
 };
 
 describe("signal visibility", () => {
+  test("database checks reject incoherent kind and lifecycle transitions", async () => {
+    const signalId = scopedSignalA1;
+    expect(signalId).not.toBeNull();
+    if (!signalId) {
+      throw new Error("Expected the scoped signal fixture");
+    }
+
+    const wrongOrigin = await Result.tryPromise(async () => {
+      await testDb
+        .update(signals)
+        .set({ origin: SIGNAL_ORIGIN.SOURCE })
+        .where(eq(signals.id, signalId));
+    });
+    expect(Result.isError(wrongOrigin)).toBe(true);
+
+    const incompleteSnooze = await Result.tryPromise(async () => {
+      await testDb
+        .update(signals)
+        .set({ status: SIGNAL_STATUS.SNOOZED })
+        .where(eq(signals.id, signalId));
+    });
+    expect(Result.isError(incompleteSnooze)).toBe(true);
+  });
+
   test("a member sees scoped signals only for workspaces they can access", async () => {
     // userA2 is a member of wsA2 only; wsA1's signal must stay hidden.
     expect(

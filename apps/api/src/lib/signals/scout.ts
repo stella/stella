@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
+import type { ScoutKey } from "@stll/api-contract/signals";
+
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { SCOUT_RUN_STATUS, scoutRuns } from "@/api/db/schema";
@@ -10,24 +12,18 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { emitSignals } from "@/api/lib/signals/emit";
 import type { EmitSignalsResult, NewSignal } from "@/api/lib/signals/emit";
 
-/** Closed registry of producers; every emitted signal names one of these. */
-export const SCOUT_KEY = {
-  MANUAL_REQUEST: "manual.request",
-  INFOSOUD_HEARINGS: "infosoud.hearings",
-  DOCUMENT_DEADLINES: "document.deadlines",
-  DOCUMENT_REVIEW: "document.review",
-} as const;
-export type ScoutKey = (typeof SCOUT_KEY)[keyof typeof SCOUT_KEY];
-
 export type RunScoutArgs = {
   db: ScopedDb;
   organizationId: SafeId<"organization">;
   scoutKey: ScoutKey;
-  /** Produces signals; runs inside the same transaction that stores them. */
-  observe: (tx: Transaction) => NewSignal[] | Promise<NewSignal[]>;
+  /** Produces signals outside the short transaction that stores them. */
+  observe: () => NewSignal[] | Promise<NewSignal[]>;
+  /** Revalidate mutable source ownership immediately before emission. */
+  validate?: (tx: Transaction) => Promise<boolean>;
 };
 
 export type RunScoutResult = EmitSignalsResult & {
+  observationAccepted: boolean;
   runId: SafeId<"scoutRun">;
 };
 
@@ -42,6 +38,7 @@ export const runScout = async ({
   organizationId,
   scoutKey,
   observe,
+  validate,
 }: RunScoutArgs): Promise<RunScoutResult> => {
   const runId = createSafeId<"scoutRun">();
   await db((tx) =>
@@ -54,10 +51,26 @@ export const runScout = async ({
   );
 
   let result: EmitSignalsResult;
+  let observationAccepted = true;
   try {
+    const proposed = await observe();
     result = await db(async (tx) => {
-      const proposed = await observe(tx);
-      return emitSignals({ tx, organizationId, signals: proposed });
+      observationAccepted = validate ? await validate(tx) : true;
+      const emitted = await emitSignals({
+        tx,
+        organizationId,
+        signals: observationAccepted ? proposed : [],
+      });
+      await tx
+        .update(scoutRuns)
+        .set({
+          status: SCOUT_RUN_STATUS.SUCCEEDED,
+          emittedCount: emitted.emittedCount,
+          insertedCount: emitted.insertedIds.length,
+          finishedAt: new Date(),
+        })
+        .where(eq(scoutRuns.id, runId));
+      return emitted;
     });
   } catch (error) {
     const recorded = await Result.tryPromise(
@@ -82,17 +95,5 @@ export const runScout = async ({
     throw error;
   }
 
-  await db((tx) =>
-    tx
-      .update(scoutRuns)
-      .set({
-        status: SCOUT_RUN_STATUS.SUCCEEDED,
-        emittedCount: result.emittedCount,
-        insertedCount: result.insertedIds.length,
-        finishedAt: new Date(),
-      })
-      .where(eq(scoutRuns.id, runId)),
-  );
-
-  return { ...result, runId };
+  return { ...result, observationAccepted, runId };
 };

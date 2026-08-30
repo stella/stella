@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { SIGNAL_STATUS, SUGGESTION_KIND } from "@stll/api-contract/signals";
 import type { SignalSuggestion } from "@stll/api-contract/signals";
+import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Menu,
@@ -46,11 +47,13 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { snoozeUntil } from "@/lib/inbox/inbox.logic";
+import { inboxKeys } from "@/lib/inbox/queries";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { organizationOptions } from "@/lib/organization/queries";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
+import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 import {
   acceptSignal,
   assignSignal,
@@ -63,15 +66,9 @@ import {
 type SignalCardProps = {
   signal: InboxSignal;
   organizationId: string;
-  /** Called once a mutation settles so the feed can drop the card. */
-  onSettled: () => void;
 };
 
-export const SignalCard = ({
-  signal,
-  organizationId,
-  onSettled,
-}: SignalCardProps) => {
+export const SignalCard = ({ signal, organizationId }: SignalCardProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const analytics = useAnalytics();
@@ -86,11 +83,12 @@ export const SignalCard = ({
   const run = async (
     operation: () => Promise<Result<unknown, unknown>>,
     successMessage: string | null,
+    invalidateMyWork = false,
   ) => {
     setBusy(true);
     const result = await operation();
-    setBusy(false);
     if (Result.isError(result)) {
+      setBusy(false);
       analytics.captureError(result.error);
       stellaToast.error(
         userErrorFromThrown(result.error, t("common.unexpectedError")),
@@ -100,11 +98,19 @@ export const SignalCard = ({
     if (successMessage !== null) {
       stellaToast.add({ title: successMessage, type: "success" });
     }
-    onSettled();
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: inboxKeys.all(organizationId),
+      }),
+      ...(invalidateMyWork
+        ? [queryClient.invalidateQueries({ queryKey: myWorkKeys.all })]
+        : []),
+    ]);
+    setBusy(false);
     return true;
   };
 
-  const mutationArgs = { queryClient, organizationId, signalId: signal.id };
+  const mutationArgs = { signalId: signal.id };
 
   const openEvidence = () => {
     useInspectorTabsStore.getState().openView({
@@ -134,6 +140,7 @@ export const SignalCard = ({
           ...(result ? { result } : {}),
         }),
       t("inspector.review.decisions.accepted"),
+      true,
     );
 
   const assign = async (assigneeUserId: string) =>
@@ -182,11 +189,14 @@ export const SignalCard = ({
             onClick={openEvidence}
             type="button"
           >
-            {signal.title}
+            <UserText>{signal.title}</UserText>
           </button>
-          <p className="text-muted-foreground line-clamp-2 text-sm text-pretty">
+          <UserText
+            as="p"
+            className="text-muted-foreground line-clamp-2 text-sm text-pretty"
+          >
             {signal.summary}
-          </p>
+          </UserText>
           <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             <OriginChip
               confidence={signal.confidence}
@@ -364,7 +374,11 @@ const OriginChip = ({
   return (
     <span className="bg-muted text-foreground-muted inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5">
       <span>{label}</span>
-      {author !== undefined && <span>· {author}</span>}
+      {author !== undefined && (
+        <span>
+          · <UserText>{author}</UserText>
+        </span>
+      )}
       {origin === "source" && scoutLabel !== null && (
         <span>· {scoutLabel}</span>
       )}
@@ -394,7 +408,7 @@ const WorkspaceName = ({
       className="hover:text-foreground truncate underline-offset-2 hover:underline"
       workspaceId={workspaceId}
     >
-      {name ?? workspaceId}
+      <UserText>{name ?? workspaceId}</UserText>
     </MatterRefLink>
   );
 };
@@ -519,7 +533,7 @@ const AssignMenu = ({
                 detached(onAssign(member.userId), "inbox.assign");
               }}
             >
-              {member.user.name}
+              <UserText>{member.user.name}</UserText>
             </MenuItem>
           ))}
         </MenuGroup>

@@ -93,13 +93,13 @@ export const deadlineSeverity = (
 };
 
 export const deadlineDedupeKey = (
-  entityId: string,
+  sourceRunId: string,
   dueDate: string,
-  label: string,
+  quote: string,
 ): string => {
   const hasher = new Bun.CryptoHasher("sha1");
-  hasher.update(label.trim().toLowerCase());
-  return `deadline:${entityId}:${dueDate}:${hasher.digest("hex")}`;
+  hasher.update(normalizeWhitespace(quote));
+  return `deadline:v1:${sourceRunId}:${dueDate}:${hasher.digest("hex")}`;
 };
 
 export const capText = (text: string): string =>

@@ -5,9 +5,14 @@ import {
   SERVER_EXECUTED_SUGGESTION_KINDS,
   SIGNAL_ORIGIN,
   SIGNAL_SEVERITY,
+  SIGNAL_VIEW,
   SUGGESTION_KINDS,
 } from "@stll/api-contract/signals";
-import type { SignalOrigin, SignalSeverity } from "@stll/api-contract/signals";
+import type {
+  SignalOrigin,
+  SignalSeverity,
+  SignalView,
+} from "@stll/api-contract/signals";
 
 import {
   tPaginationCursor,
@@ -15,19 +20,6 @@ import {
   tSafeId,
 } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
-
-/** Which slice of the lifecycle the feed shows. */
-export const SIGNAL_VIEW = {
-  OPEN: "open",
-  SNOOZED: "snoozed",
-  RESOLVED: "resolved",
-} as const;
-export type SignalView = (typeof SIGNAL_VIEW)[keyof typeof SIGNAL_VIEW];
-export const SIGNAL_VIEWS = [
-  SIGNAL_VIEW.OPEN,
-  SIGNAL_VIEW.SNOOZED,
-  SIGNAL_VIEW.RESOLVED,
-] as const satisfies readonly SignalView[];
 
 const SIGNAL_VIEW_SCHEMAS = {
   [SIGNAL_VIEW.OPEN]: t.Literal(SIGNAL_VIEW.OPEN),

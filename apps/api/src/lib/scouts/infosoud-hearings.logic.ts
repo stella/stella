@@ -78,38 +78,6 @@ export const toHearingRecord = (row: {
   };
 };
 
-/**
- * A reschedule is a pre-existing, non-cancelled hearing of the same case and
- * type with a different external id (the id hashes date/time/room, so any
- * change mints a new id). Returns its start, or `null` for a first listing.
- */
-export const findPreviousStart = (
-  hearing: HearingRecord,
-  existing: readonly HearingRecord[],
-): Date | null => {
-  const candidates = existing.filter(
-    (candidate) =>
-      candidate.externalId !== hearing.externalId &&
-      !candidate.cancelled &&
-      candidate.caseMark === hearing.caseMark &&
-      candidate.hearingType === hearing.hearingType &&
-      candidate.startAt !== null,
-  );
-  if (candidates.length === 0) {
-    return null;
-  }
-  let latest: HearingRecord | null = null;
-  for (const candidate of candidates) {
-    if (
-      latest === null ||
-      (candidate.startAt?.getTime() ?? 0) > (latest.startAt?.getTime() ?? 0)
-    ) {
-      latest = candidate;
-    }
-  }
-  return latest?.startAt ?? null;
-};
-
 export const hearingSeverity = (
   hearing: HearingRecord,
   previousAt: Date | null,

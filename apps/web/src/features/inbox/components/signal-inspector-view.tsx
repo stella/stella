@@ -11,6 +11,7 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
+import { openEntityInInspector } from "@/components/chat/entity-open";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
 import { MatterRefLink } from "@/components/matter-ref-link";
@@ -122,10 +123,12 @@ const SignalHeader = ({ signal }: { signal: InboxSignal }) => {
           )}
         </time>
       </div>
-      <h2 className="text-base font-semibold text-balance">{signal.title}</h2>
-      <p className="text-muted-foreground text-sm text-pretty">
+      <h2 className="text-base font-semibold text-balance">
+        <UserText>{signal.title}</UserText>
+      </h2>
+      <UserText as="p" className="text-muted-foreground text-sm text-pretty">
         {signal.summary}
-      </p>
+      </UserText>
       {signal.workspaceId !== null && (
         <MatterRefLink
           className="text-foreground text-xs underline-offset-2 hover:underline"
@@ -150,9 +153,9 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
     case SIGNAL_KIND.REQUEST_SUBMITTED:
       return (
         <div className="flex flex-col gap-3 text-sm">
-          <p className="text-pretty whitespace-pre-wrap">
+          <UserText as="p" className="text-pretty whitespace-pre-wrap">
             {evidence.description}
-          </p>
+          </UserText>
           <dl className="flex flex-col gap-2">
             <Row label={t("emailViewer.attachments")}>
               {evidence.attachments.length === 0 ? (
@@ -175,7 +178,9 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
     case SIGNAL_KIND.HEARING_CHANGED:
       return (
         <dl className="flex flex-col gap-2 text-sm">
-          <Row label={t("caseLaw.columns.court")}>{evidence.courtName}</Row>
+          <Row label={t("caseLaw.columns.court")}>
+            <UserText>{evidence.courtName}</UserText>
+          </Row>
           <Row label={t("caseLaw.columns.caseNumber")}>
             <UserText>{evidence.caseNumber}</UserText>
           </Row>
@@ -191,7 +196,7 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
           </Row>
           {evidence.hearingType !== null && (
             <Row label={t("inbox.evidence.hearingType")}>
-              {evidence.hearingType}
+              <UserText>{evidence.hearingType}</UserText>
             </Row>
           )}
           {evidence.sourceUrl !== null && (
@@ -207,13 +212,19 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
           <Row label={t("inbox.evidence.dueAt")}>
             {format.dateTime(new Date(evidence.dueAt), { dateStyle: "long" })}
           </Row>
-          <Row label={t("common.name")}>{evidence.label}</Row>
+          <Row label={t("common.name")}>
+            <UserText>{evidence.label}</UserText>
+          </Row>
           <Row label={t("common.document")}>
-            <DocumentRef name={evidence.entityName} signal={signal} />
+            <DocumentRef
+              entityId={evidence.entityId}
+              name={evidence.entityName}
+              signal={signal}
+            />
           </Row>
           <Row label={t("inbox.evidence.quote")}>
             <blockquote className="border-s-2 ps-3 text-pretty italic">
-              {evidence.quote}
+              <UserText>{evidence.quote}</UserText>
             </blockquote>
           </Row>
         </dl>
@@ -236,7 +247,11 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
             </span>
           </Row>
           <Row label={t("common.document")}>
-            <DocumentRef name={evidence.entityName} signal={signal} />
+            <DocumentRef
+              entityId={evidence.entityId}
+              name={evidence.entityName}
+              signal={signal}
+            />
           </Row>
           <Row label={t("inbox.evidence.findings")}>
             {evidence.findings.length === 0 ? (
@@ -255,11 +270,11 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
                           SEVERITY_DOT_CLASS[finding.severity],
                         )}
                       />
-                      {finding.title}
+                      <UserText>{finding.title}</UserText>
                     </span>
                     {finding.quote.length > 0 && (
                       <blockquote className="text-muted-foreground border-s-2 ps-3 text-xs text-pretty italic">
-                        {finding.quote}
+                        <UserText>{finding.quote}</UserText>
                       </blockquote>
                     )}
                   </li>
@@ -277,22 +292,34 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
 };
 
 const DocumentRef = ({
+  entityId,
   name,
   signal,
 }: {
+  entityId: string;
   name: string;
   signal: InboxSignal;
-}) =>
-  signal.workspaceId === null ? (
-    <UserText>{name}</UserText>
-  ) : (
-    <MatterRefLink
-      className="underline-offset-2 hover:underline"
-      workspaceId={signal.workspaceId}
+}) => {
+  if (signal.workspaceId === null) {
+    return <UserText>{name}</UserText>;
+  }
+
+  const workspaceId = signal.workspaceId;
+  return (
+    <button
+      className="text-start underline-offset-2 hover:underline"
+      onClick={() => {
+        detached(
+          openEntityInInspector(entityId, name, workspaceId),
+          "inbox.open-evidence-entity",
+        );
+      }}
+      type="button"
     >
       <UserText>{name}</UserText>
-    </MatterRefLink>
+    </button>
   );
+};
 
 const SourceLink = ({ url }: { url: string }) =>
   sanitizeHref(url) === undefined ? (

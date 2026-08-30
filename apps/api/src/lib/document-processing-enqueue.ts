@@ -1,3 +1,5 @@
+import type { Job } from "bullmq";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
@@ -19,10 +21,6 @@ export type DocumentProcessingJobData = {
 
 export type DocumentDeadlineScoutJobData = {
   sourceRunId: SafeId<"documentProcessingRun">;
-  entityId: SafeId<"entity">;
-  workspaceId: SafeId<"workspace">;
-  organizationId: SafeId<"organization">;
-  requestedBy: SafeId<"user"> | null;
 };
 
 const getQueue = createLazyBullMqQueue<DocumentProcessingJobData>({
@@ -88,10 +86,10 @@ export const enqueueDocumentProcessingRun = async (
   await getQueue().add(DOCUMENT_PROCESSING_OCR_JOB_NAME, { runId }, { jobId });
 };
 
-type ExistingDocumentDeadlineScoutJob = {
-  getState: () => Promise<string>;
-  retry: () => Promise<unknown>;
-};
+type ExistingDocumentDeadlineScoutJob = Pick<
+  Job<DocumentDeadlineScoutJobData>,
+  "getState" | "remove" | "retry"
+>;
 
 type DocumentDeadlineScoutQueue = {
   add: (
@@ -117,8 +115,16 @@ export const enqueueDocumentDeadlineScoutJob = async ({
     const state = await existing.getState();
     if (state === "failed") {
       await existing.retry();
+      return;
     }
-    return;
+    if (state === "completed") {
+      // PostgreSQL still says pending. The old job may have completed just
+      // before the worker could persist success, so replay it from the
+      // authoritative run instead of treating queue history as durability.
+      await existing.remove();
+    } else {
+      return;
+    }
   }
   await scoutQueue.add(DEADLINE_SCOUT_JOB_NAME, job, { jobId });
 };

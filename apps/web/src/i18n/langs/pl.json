@@ -3759,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Termin",
       "task": "Zadanie"
-    }
+    },
+    "workingTargetDue": "Termin roboczy minął"
   },
   "templates": {
     "addItem": "Dodaj element",

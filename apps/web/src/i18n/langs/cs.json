@@ -3759,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Lhůta",
       "task": "Úkol"
-    }
+    },
+    "workingTargetDue": "Pracovní termín vypršel"
   },
   "templates": {
     "addItem": "Přidat položku",

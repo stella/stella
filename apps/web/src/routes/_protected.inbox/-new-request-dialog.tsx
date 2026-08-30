@@ -8,7 +8,8 @@ import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { SIGNAL_SEVERITIES } from "@stll/api-contract/signals";
+import { SIGNAL_SEVERITIES, SIGNAL_SEVERITY } from "@stll/api-contract/signals";
+import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -35,6 +36,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 
 import { SEVERITY_LABEL_KEY } from "@/features/inbox/signal-presentation";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -45,24 +47,41 @@ import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { toFormErrors } from "@/lib/schema";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
+import {
+  getRequestWorkspacePolicy,
+  UNSCOPED_REQUEST,
+} from "@/routes/_protected.inbox/new-request.logic";
 
-const NONE = "__none__";
+type RequestSchemaOptions = {
+  canCreateUnscoped: boolean;
+  matterRequiredMessage: string;
+};
 
-const requestSchema = v.strictObject({
-  title: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(512)),
-  description: v.pipe(v.string(), v.trim(), v.maxLength(10_000)),
-  workspaceId: v.string(),
-  assigneeUserId: v.string(),
-  severity: v.picklist(SIGNAL_SEVERITIES),
-});
+const requestSchema = ({
+  canCreateUnscoped,
+  matterRequiredMessage,
+}: RequestSchemaOptions) =>
+  v.strictObject({
+    title: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(512)),
+    description: v.pipe(v.string(), v.trim(), v.maxLength(10_000)),
+    workspaceId: v.pipe(
+      v.string(),
+      v.check(
+        (workspaceId) => canCreateUnscoped || workspaceId !== UNSCOPED_REQUEST,
+        matterRequiredMessage,
+      ),
+    ),
+    assigneeUserId: v.string(),
+    severity: v.picklist(SIGNAL_SEVERITIES),
+  });
 
-const defaultValues: v.InferInput<typeof requestSchema> = {
+const requestDefaultValues = (workspaceId: string) => ({
   title: "",
   description: "",
-  workspaceId: NONE,
-  assigneeUserId: NONE,
-  severity: "notice",
-};
+  workspaceId,
+  assigneeUserId: UNSCOPED_REQUEST,
+  severity: SIGNAL_SEVERITY.NOTICE,
+});
 
 type NewRequestDialogProps = {
   organizationId: string;
@@ -72,6 +91,7 @@ type NewRequestDialogProps = {
 export const NewRequestDialog = ({ organizationId }: NewRequestDialogProps) => {
   const t = useTranslations();
   const analytics = useAnalytics();
+  const canCreateUnscoped = usePermissions({ signal: ["triage"] });
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -81,13 +101,23 @@ export const NewRequestDialog = ({ organizationId }: NewRequestDialogProps) => {
   const { data: organization } = useQuery(organizationOptions(organizationId));
   const workspaces = workspacesData ? workspacesData.workspaces : [];
   const members = organization ? organization.members : [];
+  const workspacePolicy = getRequestWorkspacePolicy({
+    canCreateUnscoped,
+    workspaceIds: workspaces.map((workspace) => workspace.id),
+  });
+  const defaultWorkspaceId =
+    workspacePolicy.defaultWorkspaceId ?? UNSCOPED_REQUEST;
+  const schema = requestSchema({
+    canCreateUnscoped,
+    matterRequiredMessage: t("billing.matterRequired"),
+  });
 
   const form = useForm({
-    defaultValues,
-    validators: { onDynamic: requestSchema },
+    defaultValues: requestDefaultValues(defaultWorkspaceId),
+    validators: { onDynamic: schema },
     onSubmit: async ({ value, formApi }) => {
       setSubmitError(null);
-      const parsed = v.safeParse(requestSchema, value);
+      const parsed = v.safeParse(schema, value);
       if (!parsed.success) {
         return;
       }
@@ -99,9 +129,13 @@ export const NewRequestDialog = ({ organizationId }: NewRequestDialogProps) => {
             title,
             description,
             matterId:
-              workspaceId === NONE ? null : toSafeId<"workspace">(workspaceId),
+              workspaceId === UNSCOPED_REQUEST
+                ? null
+                : toSafeId<"workspace">(workspaceId),
             assigneeUserId:
-              assigneeUserId === NONE ? null : toSafeId<"user">(assigneeUserId),
+              assigneeUserId === UNSCOPED_REQUEST
+                ? null
+                : toSafeId<"user">(assigneeUserId),
             severity,
           }),
         ),
@@ -128,11 +162,13 @@ export const NewRequestDialog = ({ organizationId }: NewRequestDialogProps) => {
     label: t(SEVERITY_LABEL_KEY[severity]),
   }));
   const workspaceItems = [
-    { value: NONE, label: t("common.none") },
+    ...(workspacePolicy.type === "unscoped-allowed"
+      ? [{ value: UNSCOPED_REQUEST, label: t("common.none") }]
+      : []),
     ...workspaces.map((w) => ({ value: w.id, label: w.name })),
   ];
   const memberItems = [
-    { value: NONE, label: t("inbox.unassigned") },
+    { value: UNSCOPED_REQUEST, label: t("inbox.unassigned") },
     ...members.map((m) => ({ value: m.userId, label: m.user.name })),
   ];
 
@@ -140,10 +176,12 @@ export const NewRequestDialog = ({ organizationId }: NewRequestDialogProps) => {
     <Dialog
       onOpenChange={(open) => {
         setIsOpen(open);
-        if (!open) {
-          form.reset();
-          setSubmitError(null);
+        if (open) {
+          form.reset(requestDefaultValues(defaultWorkspaceId));
+          return;
         }
+        form.reset();
+        setSubmitError(null);
       }}
       open={isOpen}
     >
@@ -210,17 +248,22 @@ export const NewRequestDialog = ({ organizationId }: NewRequestDialogProps) => {
                       }}
                       value={field.state.value}
                     >
-                      <SelectTrigger>
-                        <SelectValue />
+                      <SelectTrigger aria-required={!canCreateUnscoped}>
+                        <SelectValue placeholder={t("common.selectAMatter")} />
                       </SelectTrigger>
                       <SelectPopup alignItemWithTrigger={false}>
                         {workspaceItems.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
+                          <SelectItem
+                            key={item.value}
+                            label={item.label}
+                            value={item.value}
+                          >
+                            <UserText>{item.label}</UserText>
                           </SelectItem>
                         ))}
                       </SelectPopup>
                     </Select>
+                    <FieldError />
                   </Field>
                 )}
               </form.Field>
@@ -242,8 +285,12 @@ export const NewRequestDialog = ({ organizationId }: NewRequestDialogProps) => {
                       </SelectTrigger>
                       <SelectPopup alignItemWithTrigger={false}>
                         {memberItems.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
+                          <SelectItem
+                            key={item.value}
+                            label={item.label}
+                            value={item.value}
+                          >
+                            <UserText>{item.label}</UserText>
                           </SelectItem>
                         ))}
                       </SelectPopup>
@@ -291,9 +338,14 @@ export const NewRequestDialog = ({ organizationId }: NewRequestDialogProps) => {
             <DialogClose render={<Button variant="ghost" />}>
               {t("common.cancel")}
             </DialogClose>
-            <form.Subscribe selector={(s) => s.isSubmitting}>
-              {(isSubmitting) => (
-                <Button disabled={isSubmitting} type="submit">
+            <form.Subscribe
+              selector={(state) => ({
+                canSubmit: state.canSubmit,
+                isSubmitting: state.isSubmitting,
+              })}
+            >
+              {({ canSubmit, isSubmitting }) => (
+                <Button disabled={!canSubmit || isSubmitting} type="submit">
                   {t("inbox.request.submit")}
                 </Button>
               )}

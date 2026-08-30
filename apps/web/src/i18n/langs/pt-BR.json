@@ -3759,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Prazo",
       "task": "Tarefa"
-    }
+    },
+    "workingTargetDue": "Meta de trabalho vencida"
   },
   "templates": {
     "addItem": "Adicionar item",

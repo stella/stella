@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  findPreviousStart,
   HEARING_SOON_WINDOW_MS,
   hearingSeverity,
   infoSoudLocalDate,
@@ -83,56 +82,6 @@ describe("toHearingRecord", () => {
         startAt: null,
       }),
     ).toBeNull();
-  });
-});
-
-describe("findPreviousStart", () => {
-  const existing = [
-    record("old", "2026-09-03T07:30:00.000Z"),
-    record("other-type", "2026-08-25T07:30:00.000Z", {
-      hearingType: "Vyhlášení rozsudku",
-    }),
-    record("cancelled", "2026-09-10T07:30:00.000Z", { cancelled: true }),
-  ];
-
-  test("a same-case same-type earlier hearing is a reschedule", () => {
-    const moved = record("new", "2026-08-28T07:30:00.000Z");
-    expect(findPreviousStart(moved, existing)).toEqual(
-      new Date("2026-09-03T07:30:00.000Z"),
-    );
-  });
-
-  test("cancelled and other-type hearings never count as the previous one", () => {
-    const sentencing = record("new", "2026-09-20T07:30:00.000Z", {
-      hearingType: "Vyhlášení rozsudku",
-    });
-    expect(findPreviousStart(sentencing, existing)).toEqual(
-      new Date("2026-08-25T07:30:00.000Z"),
-    );
-    const onlyCancelled = [
-      record("c", "2026-09-10T07:30:00.000Z", {
-        cancelled: true,
-      }),
-    ];
-    expect(
-      findPreviousStart(
-        record("new", "2026-09-20T07:30:00.000Z"),
-        onlyCancelled,
-      ),
-    ).toBeNull();
-  });
-
-  test("the hearing's own id is not its previous occurrence (mutation guard)", () => {
-    const same = record("old", "2026-09-03T07:30:00.000Z");
-    const firstExisting = existing.at(0);
-    expect(firstExisting).toBeDefined();
-    if (!firstExisting) {
-      throw new Error("Expected an existing hearing fixture");
-    }
-    // The fixture shares its id with the first existing row; without the id filter
-    // the function would return the hearing's own start.
-    expect(firstExisting.externalId).toBe(same.externalId);
-    expect(findPreviousStart(same, [firstExisting])).toBeNull();
   });
 });
 

@@ -3,6 +3,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { ArrowLeftIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { cn } from "@stll/ui/utils";
@@ -146,7 +147,7 @@ export const InspectorTabHeader = ({
             onContextMenu={onLabelContextMenu}
             onDoubleClick={onStartRename}
           >
-            {label}
+            <UserText>{label}</UserText>
           </span>
         )}
         {matter !== undefined && !rename?.active && (

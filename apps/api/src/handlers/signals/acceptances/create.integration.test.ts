@@ -10,6 +10,7 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 
 import {
+  SCOUT_KEY,
   SIGNAL_KIND,
   SIGNAL_KIND_ORIGIN,
   SIGNAL_SEVERITY,
@@ -21,7 +22,6 @@ import { entities, signals } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { SCOUT_KEY } from "@/api/lib/signals/scout";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -34,20 +34,11 @@ const flushEntitySearchRepairsMock = mock(async () => ({
   failed: 0,
   repaired: 0,
 }));
-const idleRepairOutcome = async () => ({ failed: 0, repaired: 0 });
-void mock.module("@/api/lib/search/projection-repair-queue", () => ({
-  SEARCH_PROJECTION_REPAIR_BATCH_SIZE: 32,
-  drainSearchProjectionRepairQueue: idleRepairOutcome,
-  enqueueContactSearchRepairs: async () => undefined,
-  enqueueEntitySearchRepairs: async () => undefined,
-  enqueueWorkspaceSearchRepairs: async () => undefined,
-  flushContactSearchRepairs: idleRepairOutcome,
-  flushEntitySearchRepairs: flushEntitySearchRepairsMock,
-  flushWorkspaceSearchRepairs: idleRepairOutcome,
-}));
-
-const { default: acceptSignal } =
+const { createAcceptSignal } =
   await import("@/api/handlers/signals/acceptances/create");
+const acceptSignal = createAcceptSignal({
+  flushEntitySearchRepairs: flushEntitySearchRepairsMock,
+});
 
 setDefaultTimeout(120_000);
 
@@ -120,7 +111,11 @@ describe("signal acceptance", () => {
       severity: SIGNAL_SEVERITY.NOTICE,
       title: taskName,
       summary: taskName,
-      subject: { type: "workspace", workspaceId: ids.wsA1 },
+      subject: {
+        type: "entity",
+        workspaceId: ids.wsA1,
+        entityId: ids.entityA1,
+      },
       evidence: {
         kind: SIGNAL_KIND.REQUEST_SUBMITTED,
         description: taskName,
@@ -176,6 +171,11 @@ describe("signal acceptance", () => {
       expect(accepted?.acceptedResult).toMatchObject({
         result: { entityId: createdTask.id },
       });
+      const obligation = await testDb.query.workObligations.findFirst({
+        where: { entityId: { eq: createdTask.id } },
+        columns: { sourceEntityId: true },
+      });
+      expect(obligation?.sourceEntityId).toBe(ids.entityA1);
     }
     expect(flushEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
   });

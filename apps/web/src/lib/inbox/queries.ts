@@ -1,6 +1,11 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
-import type { SignalOrigin, SignalSeverity } from "@stll/api-contract/signals";
+import { SIGNAL_VIEWS } from "@stll/api-contract/signals";
+import type {
+  SignalOrigin,
+  SignalSeverity,
+  SignalView,
+} from "@stll/api-contract/signals";
 
 import { api } from "@/lib/api";
 import { STALE_TIME } from "@/lib/consts";
@@ -8,8 +13,8 @@ import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
-export const INBOX_VIEWS = ["open", "snoozed", "resolved"] as const;
-export type InboxView = (typeof INBOX_VIEWS)[number];
+export const INBOX_VIEWS = SIGNAL_VIEWS;
+export type InboxView = SignalView;
 
 export type InboxFilters = {
   view: InboxView;

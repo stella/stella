@@ -87,8 +87,8 @@ describe("toReviewSignalFindings", () => {
       ["Governing law", "critical"],
       ["Liability cap", "warning"],
     ]);
-    expect(findings[0]?.quote.length).toBe(REVIEW_QUOTE_MAX_CHARS);
-    expect(findings[1]?.quote).toBe(
+    expect(findings.at(0)?.quote.length).toBe(REVIEW_QUOTE_MAX_CHARS);
+    expect(findings.at(1)?.quote).toBe(
       "Cap set at 50% of fees; playbook requires 100%.",
     );
   });

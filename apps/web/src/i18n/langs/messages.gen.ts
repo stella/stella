@@ -3763,6 +3763,7 @@ type Messages = {
       "deadline": "Deadline";
       "task": "Task";
     };
+    "workingTargetDue": "Working target due";
   };
   "templates": {
     "addItem": "Add item";

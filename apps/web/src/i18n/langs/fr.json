@@ -3759,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Échéance",
       "task": "Tâche"
-    }
+    },
+    "workingTargetDue": "Objectif de travail arrivé à échéance"
   },
   "templates": {
     "addItem": "Ajouter un élément",

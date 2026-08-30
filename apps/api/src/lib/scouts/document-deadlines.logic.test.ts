@@ -87,10 +87,15 @@ describe("deadlineSeverity", () => {
 });
 
 describe("deadlineDedupeKey", () => {
-  test("is stable across label casing and whitespace", () => {
-    const a = deadlineDedupeKey("e1", "2026-09-30", "Předání díla");
-    const b = deadlineDedupeKey("e1", "2026-09-30", "  předání DÍLA ");
+  test("normalizes evidence and separates source runs and due dates", () => {
+    const a = deadlineDedupeKey("run-1", "2026-09-30", "Předání díla");
+    const b = deadlineDedupeKey("run-1", "2026-09-30", "  předání DÍLA ");
     expect(a).toBe(b);
-    expect(deadlineDedupeKey("e1", "2026-10-01", "Předání díla")).not.toBe(a);
+    expect(deadlineDedupeKey("run-1", "2026-10-01", "Předání díla")).not.toBe(
+      a,
+    );
+    expect(deadlineDedupeKey("run-2", "2026-09-30", "Předání díla")).not.toBe(
+      a,
+    );
   });
 });

@@ -3759,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Frist",
       "task": "Aufgabe"
-    }
+    },
+    "workingTargetDue": "Arbeitsziel fällig"
   },
   "templates": {
     "addItem": "Element hinzufügen",

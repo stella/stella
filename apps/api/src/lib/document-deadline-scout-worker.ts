@@ -6,8 +6,9 @@ import {
   DEADLINE_SCOUT_QUEUE_NAME,
   type DocumentDeadlineScoutJobData,
 } from "@/api/lib/document-processing-enqueue";
-import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 
 const DEADLINE_SCOUT_WORKER_CONCURRENCY = 1;
@@ -32,18 +33,14 @@ export const initDocumentDeadlineScoutWorker = () => {
       sourceRunId: job?.data.sourceRunId ?? "",
     });
     logger.error("scout.document_deadlines.failed", {
-      "entity.id": job?.data.entityId ?? "",
       "error.type": errorTag(error),
       "source.run.id": job?.data.sourceRunId ?? "",
-      "workspace.id": job?.data.workspaceId ?? "",
     });
   });
-  worker.on("error", (error) => {
-    logger.error(
-      "scout.document_deadlines.worker_error",
-      connectionErrorFields(error),
-    );
-  });
+  worker.on(
+    "error",
+    createQueueWorkerErrorLogger("scout.document_deadlines.worker_error"),
+  );
 
   logger.info("scout.document_deadlines.worker_started", {
     concurrency: String(DEADLINE_SCOUT_WORKER_CONCURRENCY),

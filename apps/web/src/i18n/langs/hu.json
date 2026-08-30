@@ -3759,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Határidő",
       "task": "Feladat"
-    }
+    },
+    "workingTargetDue": "Munkacél esedékes"
   },
   "templates": {
     "addItem": "Elem hozzáadása",

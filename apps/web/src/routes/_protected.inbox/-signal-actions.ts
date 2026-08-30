@@ -1,4 +1,3 @@
-import type { QueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 
 import type { SuggestionKind } from "@stll/api-contract/signals";
@@ -13,27 +12,15 @@ import {
 import { createChatThreadId, getChatThreadKey } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { unwrapEden } from "@/lib/errors/api";
-import { inboxKeys } from "@/lib/inbox/queries";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 
 type SignalClient = ReturnType<typeof api.signals>;
 
 const signalClient = (signalId: string): SignalClient =>
   api.signals({ signalId: toSafeId<"signal">(signalId) });
 
-type InvalidateArgs = { queryClient: QueryClient; organizationId: string };
-
-const invalidateInbox = async ({
-  queryClient,
-  organizationId,
-}: InvalidateArgs) =>
-  await queryClient.invalidateQueries({
-    queryKey: inboxKeys.all(organizationId),
-  });
-
-export type SignalMutationArgs = InvalidateArgs & { signalId: string };
+export type SignalMutationArgs = { signalId: string };
 
 export type ClientSignalAcceptanceResult = {
   type: "workspace";
@@ -43,29 +30,24 @@ export type ClientSignalAcceptanceResult = {
 export const snoozeSignal = async ({
   signalId,
   until,
-  ...invalidate
 }: SignalMutationArgs & { until: Date }) =>
   Result.tryPromise(async () => {
     unwrapEden(
       await signalClient(signalId).snoozes.post({ until: until.toISOString() }),
     );
-    await invalidateInbox(invalidate);
   });
 
 export const dismissSignal = async ({
   signalId,
   reason,
-  ...invalidate
 }: SignalMutationArgs & { reason: string | null }) =>
   Result.tryPromise(async () => {
     unwrapEden(await signalClient(signalId).dismissals.post({ reason }));
-    await invalidateInbox(invalidate);
   });
 
 export const assignSignal = async ({
   signalId,
   assigneeUserId,
-  ...invalidate
 }: SignalMutationArgs & { assigneeUserId: string | null }) =>
   Result.tryPromise(async () => {
     unwrapEden(
@@ -74,14 +56,12 @@ export const assignSignal = async ({
           assigneeUserId === null ? null : toSafeId<"user">(assigneeUserId),
       }),
     );
-    await invalidateInbox(invalidate);
   });
 
 export const acceptSignal = async ({
   signalId,
   suggestionKind,
   result,
-  ...invalidate
 }: SignalMutationArgs & {
   suggestionKind: SuggestionKind;
   result?: ClientSignalAcceptanceResult;
@@ -100,10 +80,6 @@ export const acceptSignal = async ({
           : {}),
       }),
     );
-    await Promise.all([
-      invalidateInbox(invalidate),
-      invalidate.queryClient.invalidateQueries({ queryKey: myWorkKeys.all }),
-    ]);
     return accepted;
   });
 

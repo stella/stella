@@ -66,6 +66,7 @@ beforeAll(async () => {
   const dependencies = {
     broadcastWorkspaceResourceUpdated: () => undefined,
     database: asTestRaw<typeof rootDb>(testDb),
+    enqueueDocumentDeadlineScout: async () => undefined,
     enqueueDocumentProcessingRun: async () => undefined,
     indexEntity: async () => undefined,
     readRepairScanCursor: async () => null,

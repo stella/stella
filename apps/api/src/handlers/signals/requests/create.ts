@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import {
+  SCOUT_KEY,
   SIGNAL_KIND,
   SIGNAL_SEVERITY,
   SUGGESTION_KIND,
@@ -23,7 +24,6 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { emitSignals } from "@/api/lib/signals/emit";
-import { SCOUT_KEY } from "@/api/lib/signals/scout";
 
 const config = {
   description:

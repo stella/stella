@@ -49,6 +49,28 @@ export const SIGNAL_STATUSES = [
   SIGNAL_STATUS.DISMISSED,
 ] as const satisfies readonly SignalStatus[];
 
+/** Which lifecycle slice the Inbox feed shows. */
+export const SIGNAL_VIEW = {
+  OPEN: "open",
+  SNOOZED: "snoozed",
+  RESOLVED: "resolved",
+} as const;
+export type SignalView = (typeof SIGNAL_VIEW)[keyof typeof SIGNAL_VIEW];
+export const SIGNAL_VIEWS = [
+  SIGNAL_VIEW.OPEN,
+  SIGNAL_VIEW.SNOOZED,
+  SIGNAL_VIEW.RESOLVED,
+] as const satisfies readonly SignalView[];
+
+/** Closed registry of signal producers shared by persistence and presentation. */
+export const SCOUT_KEY = {
+  MANUAL_REQUEST: "manual.request",
+  INFOSOUD_HEARINGS: "infosoud.hearings",
+  DOCUMENT_DEADLINES: "document.deadlines",
+  DOCUMENT_REVIEW: "document.review",
+} as const;
+export type ScoutKey = (typeof SCOUT_KEY)[keyof typeof SCOUT_KEY];
+
 export const SIGNAL_KIND = {
   REQUEST_SUBMITTED: "request.submitted",
   HEARING_CHANGED: "hearing.changed",

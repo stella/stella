@@ -1,11 +1,13 @@
 import {
   SIGNAL_ORIGIN,
   SIGNAL_SEVERITY,
+  SCOUT_KEY,
   SUGGESTION_KIND,
 } from "@stll/api-contract/signals";
 import type {
   SignalOrigin,
   SignalSeverity,
+  ScoutKey,
   SuggestionKind,
 } from "@stll/api-contract/signals";
 
@@ -45,11 +47,11 @@ export const SUGGESTION_LABEL_KEY = {
  * map.
  */
 const SCOUT_LABEL_KEY = {
-  "manual.request": "inbox.scout.manualRequest",
-  "infosoud.hearings": "workspaces.infosoud.title",
-  "document.deadlines": "inbox.scout.documentDeadlines",
-  "document.review": "inbox.scout.documentReview",
-} as const satisfies Readonly<Record<string, TranslationKey>>;
+  [SCOUT_KEY.MANUAL_REQUEST]: "inbox.scout.manualRequest",
+  [SCOUT_KEY.INFOSOUD_HEARINGS]: "workspaces.infosoud.title",
+  [SCOUT_KEY.DOCUMENT_DEADLINES]: "inbox.scout.documentDeadlines",
+  [SCOUT_KEY.DOCUMENT_REVIEW]: "inbox.scout.documentReview",
+} as const satisfies Readonly<Record<ScoutKey, TranslationKey>>;
 
 type KnownScoutKey = keyof typeof SCOUT_LABEL_KEY;
 type ScoutLabelKey = (typeof SCOUT_LABEL_KEY)[KnownScoutKey];

@@ -3759,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Termiņš",
       "task": "Uzdevums"
-    }
+    },
+    "workingTargetDue": "Darba mērķa termiņš pienācis"
   },
   "templates": {
     "addItem": "Pievienot vienību",

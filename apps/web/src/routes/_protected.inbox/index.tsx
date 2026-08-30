@@ -6,6 +6,7 @@ import { InboxIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { SIGNAL_ORIGINS, SIGNAL_SEVERITIES } from "@stll/api-contract/signals";
+import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Menu,
@@ -20,7 +21,6 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import "@/features/inbox/signal-inspector-registration";
-import { env } from "@/env";
 import { MyWorkView } from "@/features/inbox/components/my-work-view";
 import {
   ORIGIN_LABEL_KEY,
@@ -59,14 +59,10 @@ export const Route = createFileRoute("/_protected/inbox/")({
           DEFAULT_INBOX_FILTERS,
         ),
       ),
-      ...(env.VITE_FEATURE_GOVERNED_WORKFLOW
-        ? [
-            ensureRouteInfiniteQueryData(
-              context.queryClient,
-              myWorkOptions("upcoming", localISODate()),
-            ),
-          ]
-        : []),
+      ensureRouteInfiniteQueryData(
+        context.queryClient,
+        myWorkOptions("upcoming", localISODate()),
+      ),
     ]);
   },
   head: () => ({
@@ -139,28 +135,24 @@ function InboxPage() {
           <NewRequestDialog organizationId={activeOrganizationId} />
         </header>
 
-        {env.VITE_FEATURE_GOVERNED_WORKFLOW && (
-          <div className="flex gap-1 border-b pb-3">
-            <Button
-              aria-pressed={section === INBOX_SECTION.NEW}
-              onClick={() => setSection(INBOX_SECTION.NEW)}
-              size="sm"
-              variant={section === INBOX_SECTION.NEW ? "default" : "outline"}
-            >
-              {t("inbox.view.new")}
-            </Button>
-            <Button
-              aria-pressed={section === INBOX_SECTION.MY_WORK}
-              onClick={() => setSection(INBOX_SECTION.MY_WORK)}
-              size="sm"
-              variant={
-                section === INBOX_SECTION.MY_WORK ? "default" : "outline"
-              }
-            >
-              {t("tasks.myWorkTitle")}
-            </Button>
-          </div>
-        )}
+        <div className="flex gap-1 border-b pb-3">
+          <Button
+            aria-pressed={section === INBOX_SECTION.NEW}
+            onClick={() => setSection(INBOX_SECTION.NEW)}
+            size="sm"
+            variant={section === INBOX_SECTION.NEW ? "default" : "outline"}
+          >
+            {t("inbox.view.new")}
+          </Button>
+          <Button
+            aria-pressed={section === INBOX_SECTION.MY_WORK}
+            onClick={() => setSection(INBOX_SECTION.MY_WORK)}
+            size="sm"
+            variant={section === INBOX_SECTION.MY_WORK ? "default" : "outline"}
+          >
+            {t("tasks.myWorkTitle")}
+          </Button>
+        </div>
 
         {section === INBOX_SECTION.MY_WORK ? (
           <MyWorkView organizationId={activeOrganizationId} />
@@ -191,8 +183,11 @@ function InboxPage() {
               </Button>
               <Menu>
                 <MenuTrigger render={<Button size="sm" variant="ghost" />}>
-                  {selectedWorkspaceName ??
-                    t("inspector.matterPicker.allMatters")}
+                  {selectedWorkspaceName === null ? (
+                    t("inspector.matterPicker.allMatters")
+                  ) : (
+                    <UserText>{selectedWorkspaceName}</UserText>
+                  )}
                 </MenuTrigger>
                 <MenuPopup>
                   <MenuRadioGroup
@@ -210,7 +205,7 @@ function InboxPage() {
                     </MenuRadioItem>
                     {workspaces.map((workspace) => (
                       <MenuRadioItem key={workspace.id} value={workspace.id}>
-                        {workspace.name}
+                        <UserText>{workspace.name}</UserText>
                       </MenuRadioItem>
                     ))}
                   </MenuRadioGroup>
@@ -290,9 +285,6 @@ function InboxPage() {
                     {day.items.map((signal) => (
                       <SignalCard
                         key={signal.id}
-                        onSettled={() => {
-                          detached(refetch(), "inbox.refetch");
-                        }}
                         organizationId={activeOrganizationId}
                         signal={signal}
                       />

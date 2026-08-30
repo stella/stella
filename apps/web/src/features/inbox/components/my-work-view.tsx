@@ -25,6 +25,7 @@ import {
   isWorkObligationStatus,
   type WorkObligationStatus,
 } from "@stll/api-contract/workflow-status";
+import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -74,12 +75,35 @@ const PRIORITY_COLORS = {
   low: "text-foreground-muted dark:text-foreground",
 } as const satisfies Record<EntityPriority, string>;
 
+const PRIORITY_LABEL_KEY = {
+  none: "tasks.priorityValues.none",
+  urgent: "tasks.priorityValues.urgent",
+  high: "tasks.priorityValues.high",
+  medium: "tasks.priorityValues.medium",
+  low: "tasks.priorityValues.low",
+} as const satisfies Record<EntityPriority, TranslationKey>;
+
 const MY_WORK_QUEUE_LABEL = {
   inbox: "tasks.queue.inbox",
   upcoming: "tasks.queue.upcoming",
   at_risk: "tasks.queue.atRisk",
   completed: "tasks.queue.completed",
 } as const satisfies Record<MyWorkQueue, TranslationKey>;
+
+const WORK_STATUS_LABEL_KEY = {
+  unassigned: "inbox.unassigned",
+  awaiting_acknowledgement: "tasks.acknowledgementRequired",
+  active: "common.active",
+  completed: "tasks.queue.completed",
+  cancelled: "tasks.statusValues.cancelled",
+} as const satisfies Record<WorkObligationStatus, TranslationKey>;
+
+const ATTENTION_LABEL_KEY = {
+  none: null,
+  acknowledgement_required: "tasks.acknowledgementRequired",
+  working_target_due: "tasks.workingTargetDue",
+  hard_deadline_due: "tasks.hardDeadlineOverdue",
+} as const satisfies Record<MyWorkItem["attention"], TranslationKey | null>;
 
 const SKELETON_GROUP_KEYS = ["alpha", "beta"];
 const SKELETON_ROW_KEYS = ["one", "two", "three"];
@@ -196,7 +220,7 @@ export const MyWorkView = ({ organizationId }: { organizationId: string }) => {
                     );
                   }}
                 >
-                  {workspace.name}
+                  <UserText>{workspace.name}</UserText>
                 </MenuItem>
               ))}
             </MenuPopup>
@@ -233,7 +257,7 @@ export const MyWorkView = ({ organizationId }: { organizationId: string }) => {
         groups.map((group) => (
           <section className="flex flex-col gap-1" key={group.workspace.id}>
             <h2 className="text-muted-foreground px-1 text-xs font-medium">
-              {group.workspace.name}
+              <UserText>{group.workspace.name}</UserText>
             </h2>
             <div className="flex flex-col gap-1">
               {group.items.map((item) => (
@@ -261,13 +285,16 @@ export const MyWorkView = ({ organizationId }: { organizationId: string }) => {
 };
 
 const WorkItemRow = ({ item }: { item: MyWorkItem }) => {
+  const t = useTranslations();
   const format = useFormatter();
-  const statusColor = isWorkObligationStatus(item.workflowStatus)
-    ? STATUS_COLORS[item.workflowStatus]
-    : STATUS_COLORS.unassigned;
+  const workflowStatus = isWorkObligationStatus(item.workflowStatus)
+    ? item.workflowStatus
+    : "unassigned";
+  const statusColor = STATUS_COLORS[workflowStatus];
   const priority = isEntityPriority(item.priority) ? item.priority : null;
   const PriorityIcon = priority === null ? null : PRIORITY_ICONS[priority];
   const priorityColor = priority === null ? null : PRIORITY_COLORS[priority];
+  const attentionLabelKey = ATTENTION_LABEL_KEY[item.attention];
   const displayedDate = getDisplayedWorkDate(item);
   const isDue =
     item.attention === "hard_deadline_due" ||
@@ -297,18 +324,32 @@ const WorkItemRow = ({ item }: { item: MyWorkItem }) => {
       }}
       type="button"
     >
-      <span className={cn("size-2 shrink-0 rounded-full", statusColor)} />
-      <span className="min-w-0 flex-1 truncate">{item.name}</span>
+      <span
+        aria-label={t(WORK_STATUS_LABEL_KEY[workflowStatus])}
+        className={cn("size-2 shrink-0 rounded-full", statusColor)}
+        role="img"
+      />
+      <span className="min-w-0 flex-1 truncate">
+        <UserText>{item.name}</UserText>
+      </span>
       {PriorityIcon && priorityColor && (
-        <PriorityIcon className={cn("size-3.5 shrink-0", priorityColor)} />
+        <PriorityIcon
+          aria-label={t(PRIORITY_LABEL_KEY[priority])}
+          className={cn("size-3.5 shrink-0", priorityColor)}
+          role="img"
+        />
       )}
       {AttentionIcon && (
         <AttentionIcon
+          aria-hidden="true"
           className={cn(
             "size-3.5 shrink-0",
             isDue ? "text-destructive" : "text-warning",
           )}
         />
+      )}
+      {attentionLabelKey !== null && (
+        <span className="sr-only">{t(attentionLabelKey)}</span>
       )}
       {displayedDate && (
         <span
@@ -317,7 +358,7 @@ const WorkItemRow = ({ item }: { item: MyWorkItem }) => {
             isDue && "text-destructive",
           )}
         >
-          <CalendarIcon className="size-3" />
+          <CalendarIcon aria-hidden="true" className="size-3" />
           {format.dateTime(new Date(`${displayedDate}T00:00:00Z`), {
             day: "numeric",
             month: "short",
