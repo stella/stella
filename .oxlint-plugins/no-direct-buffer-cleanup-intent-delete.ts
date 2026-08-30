@@ -17,7 +17,6 @@ import {
   getImportedName,
   getImportLocalName,
   getPropertyName,
-  isAstNode,
   isIdentifier,
   isStringLiteral,
   unwrapExpression,
