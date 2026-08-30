@@ -75,12 +75,16 @@ const createOrganizationSelectionSession = async ({
   const loginApi = await playwrightRequest.newContext(requestOptions);
   try {
     await signIn(loginApi, email);
+    // Accepting the invitation activates its organization and refreshes the
+    // cached session cookie. Preserve the signed pre-accept snapshot so the
+    // route sees a real membership with no active organization selected.
+    const storageStateWithoutActiveOrganization = await loginApi.storageState();
     const acceptResponse = await loginApi.post(
       `${API_BASE_URL}/api/auth/organization/accept-invitation`,
       { data: { invitationId: invitation.id } },
     );
     expect(acceptResponse.ok(), await acceptResponse.text()).toBe(true);
-    return await loginApi.storageState();
+    return storageStateWithoutActiveOrganization;
   } finally {
     await loginApi.dispose();
   }
