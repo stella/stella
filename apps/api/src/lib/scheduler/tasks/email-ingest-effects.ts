@@ -191,7 +191,7 @@ export const processClaimedEmailIngestEffect = async (
     return false;
   }
   const heartbeat = setInterval(() => {
-    refreshClaim(effect).catch((error) =>
+    refreshClaim(effect).catch((error: unknown) =>
       captureError(error, {
         effectKind: effect.kind,
         entityId: effect.entityId,
