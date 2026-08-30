@@ -799,7 +799,8 @@ fn is_all_caps_boilerplate_line(
   }
   Ok(
     word_count(&entity.text) > ALL_CAPS_LINE_HEADING_WORD_LIMIT
-      && !entity.text.contains(','),
+      && !entity.text.contains(',')
+      && (entity.source != DetectionSource::LegalForm || legal_form_heading),
   )
 }
 
@@ -2538,6 +2539,44 @@ mod tests {
     )
     .unwrap();
     assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn keeps_long_and_multiword_role_subject_clauses() {
+    for (text, entity_text, role_heads, sentence_verbs) in [
+      (
+        "INTERNATIONAL ADVANCED TECHNOLOGY HOLDINGS GROUP LIMITED IS A PARTY TO THIS AGREEMENT.\n",
+        "INTERNATIONAL ADVANCED TECHNOLOGY HOLDINGS GROUP LIMITED",
+        vec!["party"],
+        vec!["is"],
+      ),
+      (
+        "ACME SARL EST DONNEUR D'ORDRE DANS CET ACCORD.\n",
+        "ACME SARL",
+        vec!["donneur d'ordre"],
+        vec!["est"],
+      ),
+    ] {
+      let legal_form_data = prepared_clause_data(PreparedClauseDataArgs {
+        leading_phrases: &[],
+        role_heads: &role_heads,
+        sentence_verbs: &sentence_verbs,
+      });
+      let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+        entities: vec![entity(
+          text,
+          entity_text,
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        full_text: text,
+        filters: Some(&DenyListFilterData::default()),
+        legal_form_data: &legal_form_data,
+      })
+      .unwrap();
+
+      assert_eq!(entities.len(), 1, "text {text:?}");
+    }
   }
 
   #[test]

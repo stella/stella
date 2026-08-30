@@ -22,7 +22,7 @@ struct PartyRoleEvidence<'a> {
 impl PartyRoleEvidence<'_> {
   fn has_person_name_token(self, candidate: &str) -> bool {
     if let Some(corpus) = self.name_corpus {
-      return corpus.has_person_name_token(candidate)
+      return corpus.has_leading_person_name_token(candidate)
         || (!corpus.is_organization(candidate)
           && starts_with_sorted_name_token(
             candidate,
@@ -1684,6 +1684,49 @@ mod tests {
         name_corpus: Some(&names),
       })
       .is_empty()
+    );
+  }
+
+  #[test]
+  fn scoped_corpus_requires_name_evidence_at_the_candidate_start() {
+    let data = prepared_signature_data(
+      SignatureData::default(),
+      vec![String::from("seller")],
+    );
+    let names = PreparedNameCorpusData::new(NameCorpusData {
+      first_names: vec![
+        String::from("Abdul-Malik"),
+        String::from("Imani"),
+      ],
+      ..NameCorpusData::default()
+    });
+
+    for (text, expected) in [
+      ("Seller: Imani Nwosu", "Imani Nwosu"),
+      ("Seller: Abdul-Malik Smith", "Abdul-Malik Smith"),
+    ] {
+      let detected = detect_signatures(&DetectSignaturesArgs {
+        full_text: text,
+        data: &data,
+        first_names: None,
+        name_corpus: Some(&names),
+      });
+      assert_eq!(
+        detected
+          .into_iter()
+          .map(|entity| entity.text)
+          .collect::<Vec<_>>(),
+        [expected],
+      );
+    }
+    assert!(
+      detect_signatures(&DetectSignaturesArgs {
+        full_text: "Seller: Acme Imani",
+        data: &data,
+        first_names: None,
+        name_corpus: Some(&names),
+      })
+      .is_empty(),
     );
   }
 

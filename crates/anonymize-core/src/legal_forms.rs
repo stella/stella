@@ -74,6 +74,7 @@ pub(crate) struct PreparedLegalFormData {
   normalized_in_name_words: HashSet<String>,
   normalized_suffix_words: HashSet<String>,
   role_heads: HashSet<String>,
+  subject_clause_role_phrases: HashSet<String>,
   soft_wrap_boundary_labels: HashSet<String>,
   sentence_verb_indicators: HashSet<String>,
   clause_noun_heads: HashSet<String>,
@@ -148,6 +149,12 @@ impl PreparedLegalFormData {
         !is_roman_legal_suffix(suffix)
       });
     let suffix_indices_by_last_char = suffix_indices_by_last_char(&suffixes);
+    let role_heads = lower_set(role_heads);
+    let subject_clause_role_phrases = role_heads
+      .iter()
+      .map(|role_head| normalize_word_phrase(role_head))
+      .filter(|role_head| !role_head.is_empty())
+      .collect();
 
     Self {
       suffixes,
@@ -157,7 +164,8 @@ impl PreparedLegalFormData {
       normalized_boundary_suffixes: lower_set(normalized_boundary_suffixes),
       normalized_in_name_words: lower_set(normalized_in_name_words),
       normalized_suffix_words: lower_set(normalized_suffix_words),
-      role_heads: lower_set(role_heads),
+      role_heads,
+      subject_clause_role_phrases,
       soft_wrap_boundary_labels: lower_set(soft_wrap_boundary_labels),
       sentence_verb_indicators: lower_set(sentence_verb_indicators),
       clause_noun_heads: lower_set(clause_noun_heads),
@@ -210,9 +218,11 @@ impl PreparedLegalFormData {
     if !contains_lowercase(&self.sentence_verb_indicators, verb) {
       return false;
     }
-    words
-      .take(3)
-      .any(|word| contains_lowercase(&self.role_heads, word))
+    let tail = words.take(4).collect::<Vec<_>>().join(" ").to_lowercase();
+    self
+      .subject_clause_role_phrases
+      .iter()
+      .any(|role| contains_bounded_phrase(&tail, role))
   }
 
   pub(crate) fn is_party_label_prefix(&self, text: &str) -> bool {
@@ -3066,6 +3076,15 @@ fn lower_vec(values: Vec<String>) -> Vec<String> {
     .filter(|value| !value.is_empty())
     .map(|value| value.to_lowercase())
     .collect()
+}
+
+fn normalize_word_phrase(text: &str) -> String {
+  text
+    .split(|ch: char| !ch.is_alphabetic())
+    .filter(|word| !word.is_empty())
+    .map(str::to_lowercase)
+    .collect::<Vec<_>>()
+    .join(" ")
 }
 
 fn lowercase_lookup(text: &str) -> Cow<'_, str> {

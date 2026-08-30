@@ -15,9 +15,9 @@ use crate::prepared_metadata::{
   PreparedCountryMatchData, PreparedGazetteerMatchData, PreparedRegexMatchData,
 };
 use crate::processors::{
-  DenyListMatchData, PatternSlice, process_deny_list_matches_with_field_labels,
-  process_prepared_country_matches, process_prepared_gazetteer_matches,
-  process_prepared_regex_matches,
+  DenyListFilterData, DenyListMatchData, PatternSlice,
+  process_deny_list_matches_with_field_labels, process_prepared_country_matches,
+  process_prepared_gazetteer_matches, process_prepared_regex_matches,
 };
 use crate::resolution::{PipelineEntity, ResolutionDocument};
 use crate::signatures::{
@@ -67,6 +67,7 @@ pub(super) enum StaticDetectorInput {
   TriggerData,
   FirstNames,
   TitleTokens,
+  FalsePositiveFilters,
   SignatureData,
   LegalFormData,
   NameCorpusData,
@@ -410,10 +411,7 @@ impl<'a> StaticDetectorContext<'a> {
       street_type_slice: self.street_types_slice()?,
       full_text: self.full_text()?,
       existing_entities: &entities,
-      false_positive_filters: self
-        .engine
-        .data
-        .effective_false_positive_filters(),
+      false_positive_filters: self.false_positive_filters()?,
     })?;
     Ok((detection, count))
   }
@@ -524,6 +522,13 @@ impl<'a> StaticDetectorContext<'a> {
         .effective_false_positive_filters()
         .map(|filters| &filters.first_names),
     )
+  }
+
+  fn false_positive_filters(
+    &self,
+  ) -> Result<Option<&'a DenyListFilterData>> {
+    self.require(StaticDetectorInput::FalsePositiveFilters)?;
+    Ok(self.engine.data.effective_false_positive_filters())
   }
 
   fn signature_data(&self) -> Result<Option<&'a PreparedSignatureData>> {

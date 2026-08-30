@@ -27,6 +27,7 @@ static_detector_rules! {
       DetectorInput::LiteralMatches,
       DetectorInput::ContextEntities,
       DetectorInput::FullText,
+      DetectorInput::FalsePositiveFilters,
     ];
     scales: &[
       DetectorInput::LiteralMatches,
