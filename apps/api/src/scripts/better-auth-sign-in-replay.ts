@@ -246,6 +246,10 @@ const run = async (
     // A throwaway secret: nothing signed here outlives the replay.
     secret: Bun.randomUUIDv7() + Bun.randomUUIDv7(),
     database: drizzleAdapter(database, AUTH_DATABASE_ADAPTER_OPTIONS),
+    // The replay issues every request in-process from one address-less
+    // client; rate limiting would throttle the sample into false rejections
+    // instead of exercising sign-in resolution.
+    rateLimit: { enabled: false },
     trustedOrigins: [oauthBaseUrl],
     socialProviders: {
       microsoft: {
