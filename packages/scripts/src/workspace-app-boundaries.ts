@@ -540,15 +540,25 @@ const readBaselineExceptions = (
     }
   });
   if (baseRevision === undefined) {
-    return {
-      exceptions: [],
-      issues: [
-        {
-          message: "app-boundary ledger baseline branch is unavailable",
-          path: APP_BOUNDARY_LEDGER_PATH,
-        },
-      ],
-    };
+    if (configuredBase !== undefined) {
+      // A pull-request context names its base; a checkout that cannot
+      // resolve it is misconfigured, and skipping would let an exception
+      // land without the ratchet comparison.
+      return {
+        exceptions: [],
+        issues: [
+          {
+            message: "app-boundary ledger baseline branch is unavailable",
+            path: APP_BOUNDARY_LEDGER_PATH,
+          },
+        ],
+      };
+    }
+    // Outside pull requests, a checkout without a main ref (single-commit
+    // deploy clones, tag checkouts) has the same information as a source
+    // archive: no baseline to ratchet against. The ledger's absolute rules
+    // still apply through the filesystem path.
+    return null;
   }
 
   let mergeBase: string;
