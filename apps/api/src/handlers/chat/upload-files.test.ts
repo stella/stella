@@ -416,9 +416,7 @@ describe("chat attachment hydration", () => {
       select: () => ({
         from: () => ({
           where: () => ({
-            for: async () => [
-              { id: cleanupIntentId, status: "writing" },
-            ],
+            for: async () => [{ id: cleanupIntentId, status: "writing" }],
           }),
         }),
       }),

@@ -547,9 +547,9 @@ describe("workspace deletion", () => {
     );
 
     expect(Result.isOk(result)).toBe(true);
-    expect(Result.isOk(result) ? result.value : null).toEqual({
-      status: "deleted",
-    });
+    if (Result.isOk(result)) {
+      expect(result.value).toEqual({ status: "deleted" });
+    }
     expect(auditEvents).toHaveLength(1);
     expect(auditEvents.at(0)?.changes?.["deleted"]?.old).toMatchObject({
       id: fixture.targetWorkspaceId,
