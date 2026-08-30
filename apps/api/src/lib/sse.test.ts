@@ -157,12 +157,19 @@ const authorizeAllWorkspaceConnections = async ({
 }: {
   userIds: readonly SafeId<"user">[];
 }) => new Set(userIds);
+const authorizeAllUserConnections = async () => true;
 const startTestSse = (): void => {
-  startSse(authorizeAllWorkspaceConnections, {
-    createClient: createRedisClientMock,
-    publishAccessRevoked: publishWorkspaceAccessRevokedMock,
-    publishWorkspace: publishWorkspaceEventMock,
-  });
+  startSse(
+    {
+      user: authorizeAllUserConnections,
+      workspace: authorizeAllWorkspaceConnections,
+    },
+    {
+      createClient: createRedisClientMock,
+      publishAccessRevoked: publishWorkspaceAccessRevokedMock,
+      publishWorkspace: publishWorkspaceEventMock,
+    },
+  );
 };
 const subscribeToWorkspace = (
   signal: AbortSignal,
@@ -416,8 +423,11 @@ describe("workspace access revocation", () => {
   test("reauthorizes current access when a revocation message was missed", async () => {
     const retainedUserId = toSafeId<"user">("user_2");
     startSse(
-      async ({ userIds }) =>
-        new Set(userIds.filter((candidate) => candidate === retainedUserId)),
+      {
+        user: authorizeAllUserConnections,
+        workspace: async ({ userIds }) =>
+          new Set(userIds.filter((candidate) => candidate === retainedUserId)),
+      },
       {
         createClient: createRedisClientMock,
         publishWorkspace: publishWorkspaceEventMock,
@@ -545,12 +555,15 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     const firstAuthorization = Promise.withResolvers<undefined>();
     let authorizationCalls = 0;
     startSse(
-      async ({ userIds }) => {
-        authorizationCalls += 1;
-        if (authorizationCalls === 1) {
-          await firstAuthorization.promise;
-        }
-        return new Set(userIds);
+      {
+        user: authorizeAllUserConnections,
+        workspace: async ({ userIds }) => {
+          authorizationCalls += 1;
+          if (authorizationCalls === 1) {
+            await firstAuthorization.promise;
+          }
+          return new Set(userIds);
+        },
       },
       {
         createClient: createRedisClientMock,

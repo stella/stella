@@ -2852,6 +2852,22 @@
     "toggleChat": "Csevegés be/ki",
     "toggleSidebar": "Oldalsáv be/ki"
   },
+  "notifications": {
+    "empty": "Még nincsenek értesítések",
+    "kind": {
+      "announcement": "{title}",
+      "flowRunAwaitingApproval": "A(z) {flowName} munkafolyamat a jóváhagyására vár",
+      "flowRunCompleted": "A(z) {flowName} munkafolyamat befejeződött",
+      "flowRunFailed": "A(z) {flowName} munkafolyamat sikertelen",
+      "mention": "{actorName} megemlítette Önt egy hozzászólásban",
+      "reportExportFailed": "A jelentés exportálása sikertelen",
+      "reportExportSucceeded": "A jelentése elkészült"
+    },
+    "loadOlder": "Régebbiek betöltése",
+    "markAllRead": "Összes megjelölése olvasottként",
+    "title": "Értesítések",
+    "unreadLabel": "{count, plural, one {# olvasatlan értesítés} other {# olvasatlan értesítés}}"
+  },
   "onboarding": {
     "aiConfigFailed": "Az MI-konfigurációt nem sikerült menteni. A beállításokban befejezheti.",
     "aiSubtitle": "Adja meg saját API-kulcsát. A modelleket később, a beállításokban választhatja ki.",

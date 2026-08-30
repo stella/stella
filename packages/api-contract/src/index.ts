@@ -255,8 +255,10 @@ export { OCR_EXPORT_STATUSES } from "./ocr-export";
 export type { OcrExportStatus } from "./ocr-export";
 export {
   MAX_RESOURCE_CHANGES_PER_EVENT,
+  newNotificationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
   parseOrganizationRealtimeEvent,
+  parseUserRealtimeEvent,
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
   RESOURCE_CHANGE_TYPE,
@@ -310,6 +312,7 @@ export type {
   OrganizationRealtimeEvent,
   ResourceChange,
   ResourceRealtimeEvent,
+  UserRealtimeEvent,
   WorkspaceRealtimeEvent,
 } from "./realtime-events";
 export {

@@ -43,6 +43,7 @@ import {
 } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
+import { NotificationBell } from "@/components/notification-bell";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
 import { ShortcutEchoHud } from "@/components/shortcut-echo-hud";
@@ -503,6 +504,7 @@ function ProtectedContent() {
           </Button>
         </>
       )}
+      <NotificationBell />
       {canShowInspectorButton && (
         <div className="contents md:hidden">
           <Separator className="mx-1 h-4" orientation="vertical" />

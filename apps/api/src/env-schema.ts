@@ -224,6 +224,16 @@ export const envApiServerSchema = {
    * directly.
    */
   STELLA_TRUSTED_PROXY_CIDRS: v.optional(v.string()),
+
+  /**
+   * Comma-separated user IDs allowed to publish an in-app announcement to
+   * every member of their active organization. Announcements are an operator
+   * capability, not a role: the deployment operator names the accounts here,
+   * so no organization role can grant it. Unset (the default) means nobody
+   * may announce and the endpoint answers with a configuration error rather
+   * than silently accepting and dropping the request.
+   */
+  STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS: v.optional(v.string()),
   /**
    * Selects the trustworthy source for the signup IP rate-limit bucket.
    * Direct deployments use Bun's socket peer; deployments behind a proxy

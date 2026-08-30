@@ -68,6 +68,7 @@ describe("report export status notifications", () => {
     const options = {
       delivery: recording.delivery,
       exportId,
+      organizationId: ids.orgA,
       scopedDb: scopedDbFor({ userId: requester.id, workspaceId: ids.wsA1 }),
       userId: requester.id,
       workspaceId: ids.wsA1,
@@ -109,6 +110,7 @@ describe("report export status notifications", () => {
     const result = await notifyReportExportStatus({
       delivery: recording.delivery,
       exportId,
+      organizationId: ids.orgA,
       scopedDb: scopedDbFor({ userId: requester.id, workspaceId: ids.wsA1 }),
       userId: requester.id,
       workspaceId: ids.wsA1,
@@ -142,6 +144,7 @@ describe("report export status notifications", () => {
     const result = await notifyReportExportStatus({
       delivery: recording.delivery,
       exportId,
+      organizationId: ids.orgA,
       scopedDb,
       userId: requester.id,
       workspaceId: ids.wsA1,
@@ -149,6 +152,7 @@ describe("report export status notifications", () => {
     const redelivery = await notifyReportExportStatus({
       delivery: recording.delivery,
       exportId,
+      organizationId: ids.orgA,
       scopedDb: scopedDbFor({ userId: requester.id, workspaceId: ids.wsA1 }),
       userId: requester.id,
       workspaceId: ids.wsA1,
@@ -182,6 +186,7 @@ describe("report export status notifications", () => {
     const result = await notifyReportExportStatus({
       delivery: recording.delivery,
       exportId,
+      organizationId: ids.orgA,
       scopedDb: scopedDbFor({ userId: requester.id, workspaceId: ids.wsA1 }),
       userId: requester.id,
       workspaceId: ids.wsA1,
@@ -189,6 +194,7 @@ describe("report export status notifications", () => {
     const redelivery = await notifyReportExportStatus({
       delivery: recording.delivery,
       exportId,
+      organizationId: ids.orgA,
       scopedDb: scopedDbFor({ userId: requester.id, workspaceId: ids.wsA1 }),
       userId: requester.id,
       workspaceId: ids.wsA1,
@@ -216,6 +222,7 @@ describe("report export status notifications", () => {
     const wrongRequester = await notifyReportExportStatus({
       delivery: recording.delivery,
       exportId,
+      organizationId: ids.orgA,
       scopedDb: scopedDbFor({ userId: otherUser.id, workspaceId: ids.wsA1 }),
       userId: otherUser.id,
       workspaceId: ids.wsA1,
@@ -223,6 +230,7 @@ describe("report export status notifications", () => {
     const wrongWorkspace = await notifyReportExportStatus({
       delivery: recording.delivery,
       exportId,
+      organizationId: ids.orgA,
       scopedDb: scopedDbFor({ userId: requester.id, workspaceId: ids.wsA2 }),
       userId: requester.id,
       workspaceId: ids.wsA2,
@@ -249,6 +257,7 @@ describe("report export status notifications", () => {
     const result = await notifyReportExportStatus({
       delivery: recording.delivery,
       exportId,
+      organizationId: ids.orgA,
       scopedDb: scopedDbFor({ userId: requester.id, workspaceId: ids.wsA1 }),
       userId: requester.id,
       workspaceId: ids.wsA1,
@@ -276,6 +285,7 @@ describe("report export status notifications", () => {
     const result = await notifyReportExportStatus({
       delivery: recording.delivery,
       exportId,
+      organizationId: ids.orgA,
       scopedDb: scopedDbFor({ userId: requester.id, workspaceId: ids.wsA1 }),
       userId: requester.id,
       workspaceId: ids.wsA1,
@@ -301,6 +311,7 @@ describe("report export status notifications", () => {
     const result = await notifyReportExportStatus({
       delivery: recording.delivery,
       exportId,
+      organizationId: ids.orgA,
       scopedDb: scopedDbFor({ userId: requester.id, workspaceId: ids.wsA1 }),
       userId: requester.id,
       workspaceId: ids.wsA1,
@@ -327,6 +338,7 @@ describe("report export status notifications", () => {
     const result = await notifyReportExportStatus({
       delivery: recording.delivery,
       exportId,
+      organizationId: ids.orgA,
       scopedDb: scopedDbFor({ userId: requester.id, workspaceId: ids.wsA1 }),
       userId: requester.id,
       workspaceId: ids.wsA1,
@@ -334,6 +346,7 @@ describe("report export status notifications", () => {
     const redelivery = await notifyReportExportStatus({
       delivery: recording.delivery,
       exportId,
+      organizationId: ids.orgA,
       scopedDb: scopedDbFor({ userId: requester.id, workspaceId: ids.wsA1 }),
       userId: requester.id,
       workspaceId: ids.wsA1,

@@ -1,13 +1,21 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
+
 import { legalListItemComments } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  createNotifications,
+  resolveMentionTargets,
+} from "@/api/lib/notifications";
+import type { NewNotification } from "@/api/lib/notifications";
 
 const bodySchema = t.Object({
   listId: tSafeId("legalList"),
@@ -25,7 +33,14 @@ const config = {
 
 const createItemComment = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, user, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    user,
+    body,
+    recordAuditEvent,
+    session,
+  }) {
     const result = yield* Result.await(
       safeDb(async (tx) => {
         const item = await tx.query.legalListItems.findFirst({
@@ -54,7 +69,15 @@ const createItemComment = createSafeHandler(
           resourceId: body.itemEntityId,
           metadata: { operation: "comment_added", commentId: id },
         });
-        return id;
+        // Resolved inside the request's transaction and under the caller's
+        // RLS scope, so a mention can only ever name somebody who is already
+        // a member of this server-validated workspace.
+        const mentions = await resolveMentionTargets(tx, {
+          actorUserId: user.id,
+          text: body.body,
+          workspaceId,
+        });
+        return { id, mentions };
       }),
     );
     if (!result) {
@@ -62,7 +85,27 @@ const createItemComment = createSafeHandler(
         new HandlerError({ status: 404, message: "List item not found" }),
       );
     }
-    return Result.ok({ id: result });
+
+    if (result.mentions.userIds.length > 0) {
+      const rows = result.mentions.userIds.map((userId): NewNotification => ({
+        kind: NOTIFICATION_KIND.MENTION,
+        metadata: { actorName: result.mentions.actorName },
+        entityType: "entity",
+        entityId: body.itemEntityId,
+        organizationId: session.activeOrganizationId,
+        userId,
+        idempotencyKey: `mention:${result.id}`,
+      }));
+      // Detached, not fire-and-forget: the comment is already committed and
+      // the author must not see the write fail because a colleague's badge
+      // could not be filed, but the failure still reaches error capture.
+      detached(
+        createNotifications(rows, { kind: "systemFanOut" }),
+        "notifications.list_item_mention",
+      );
+    }
+
+    return Result.ok({ id: result.id });
   },
 );
 

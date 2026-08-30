@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
 
+import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { compileLegalSourceToDocx } from "@stll/docx-core";
 
 import type { Transaction } from "@/api/db/root";
@@ -41,6 +42,7 @@ import type {
   FlowStepOutput,
   FlowTriggerSource,
 } from "@/api/lib/flows/flow-types";
+import { createNotifications } from "@/api/lib/notifications";
 import { logger } from "@/api/lib/observability/logger";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
@@ -162,6 +164,9 @@ export const executeFlowStep = async (
         runId,
         stepIndex,
         workspaceId: run.workspaceId,
+        organizationId: scope.organizationId,
+        actorUserId,
+        flowName: run.definitionSnapshot.name,
         scopedDb,
         broadcastUpdate,
       });
@@ -189,6 +194,9 @@ export const executeFlowStep = async (
         stepCount: run.definitionSnapshot.steps.length,
         output,
         workspaceId: run.workspaceId,
+        organizationId: scope.organizationId,
+        actorUserId,
+        flowName: run.definitionSnapshot.name,
         scopedDb,
         broadcastUpdate,
         enqueueStep,
@@ -211,6 +219,9 @@ export const executeFlowStep = async (
         stepCount: run.definitionSnapshot.steps.length,
         output,
         workspaceId: run.workspaceId,
+        organizationId: scope.organizationId,
+        actorUserId,
+        flowName: run.definitionSnapshot.name,
         scopedDb,
         broadcastUpdate,
         enqueueStep,
@@ -660,6 +671,9 @@ type CompleteStepArgs = {
   stepCount: number;
   output: FlowStepOutput;
   workspaceId: SafeId<"workspace">;
+  organizationId: SafeId<"organization">;
+  actorUserId: SafeId<"user">;
+  flowName: string;
   scopedDb: ReturnType<typeof createRootScopedDb>;
   broadcastUpdate: typeof broadcastFlowRunUpdate;
   enqueueStep: typeof enqueueFlowStep;
@@ -671,6 +685,9 @@ const completeStepAndAdvance = async ({
   stepCount,
   output,
   workspaceId,
+  organizationId,
+  actorUserId,
+  flowName,
   scopedDb,
   broadcastUpdate,
   enqueueStep,
@@ -691,6 +708,23 @@ const completeStepAndAdvance = async ({
         .update(flowRuns)
         .set({ status: "completed", finishedAt: now })
         .where(eq(flowRuns.id, runId));
+      // Filed in the same transaction as the terminal status, so the badge and
+      // the run can never disagree, and keyed on the run so a redelivered
+      // worker job cannot raise it twice.
+      await createNotifications(
+        [
+          {
+            kind: NOTIFICATION_KIND.FLOW_RUN_COMPLETED,
+            metadata: { flowName },
+            entityType: "flow_run",
+            entityId: runId,
+            organizationId,
+            userId: actorUserId,
+            idempotencyKey: `flow-run-completed:${runId}`,
+          },
+        ],
+        { kind: "callerTransaction", tx },
+      );
     } else {
       await tx
         .update(flowRuns)
@@ -711,12 +745,18 @@ const pauseAtReviewGate = async ({
   runId,
   stepIndex,
   workspaceId,
+  organizationId,
+  actorUserId,
+  flowName,
   scopedDb,
   broadcastUpdate,
 }: {
   runId: SafeId<"flowRun">;
   stepIndex: number;
   workspaceId: SafeId<"workspace">;
+  organizationId: SafeId<"organization">;
+  actorUserId: SafeId<"user">;
+  flowName: string;
   scopedDb: ReturnType<typeof createRootScopedDb>;
   broadcastUpdate: typeof broadcastFlowRunUpdate;
 }): Promise<void> => {
@@ -731,6 +771,20 @@ const pauseAtReviewGate = async ({
       .update(flowRuns)
       .set({ status: "awaiting_review" })
       .where(eq(flowRuns.id, runId));
+    await createNotifications(
+      [
+        {
+          kind: NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL,
+          metadata: { flowName },
+          entityType: "flow_run",
+          entityId: runId,
+          organizationId,
+          userId: actorUserId,
+          idempotencyKey: `flow-run-review-gate:${runId}:${stepIndex}`,
+        },
+      ],
+      { kind: "callerTransaction", tx },
+    );
     return await readRunProgress(tx, runId);
   });
   broadcastUpdate(workspaceId, payload);
@@ -802,6 +856,22 @@ export const failFlowRunFromWorker = async (
       .update(flowRuns)
       .set({ status: "failed", error: message, finishedAt: now })
       .where(eq(flowRuns.id, runId));
+    if (scope.actorUserId !== null) {
+      await createNotifications(
+        [
+          {
+            kind: NOTIFICATION_KIND.FLOW_RUN_FAILED,
+            metadata: { flowName: run.definitionSnapshot.name },
+            entityType: "flow_run",
+            entityId: runId,
+            organizationId: scope.organizationId,
+            userId: scope.actorUserId,
+            idempotencyKey: `flow-run-failed:${runId}`,
+          },
+        ],
+        { kind: "callerTransaction", tx },
+      );
+    }
     return await readRunProgress(tx, runId);
   };
 

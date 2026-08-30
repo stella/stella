@@ -2852,6 +2852,22 @@
     "toggleChat": "Přepnout chat",
     "toggleSidebar": "Přepnout postranní panel"
   },
+  "notifications": {
+    "empty": "Zatím žádná oznámení",
+    "kind": {
+      "announcement": "{title}",
+      "flowRunAwaitingApproval": "Pracovní postup {flowName} čeká na vaše schválení",
+      "flowRunCompleted": "Pracovní postup {flowName} byl dokončen",
+      "flowRunFailed": "Pracovní postup {flowName} selhal",
+      "mention": "{actorName} vás zmínil v komentáři",
+      "reportExportFailed": "Zprávu se nepodařilo uložit",
+      "reportExportSucceeded": "Vaše zpráva je připravena"
+    },
+    "loadOlder": "Načíst starší",
+    "markAllRead": "Označit vše jako přečtené",
+    "title": "Oznámení",
+    "unreadLabel": "{count, plural, one {# nepřečtené oznámení} few {# nepřečtená oznámení} other {# nepřečtených oznámení}}"
+  },
   "onboarding": {
     "aiConfigFailed": "Nastavení AI se nepodařilo uložit. Můžete ho dokončit v nastavení.",
     "aiSubtitle": "Přidejte vlastní API klíč. Modely můžete vybrat později v nastavení.",

@@ -2852,6 +2852,22 @@
     "toggleChat": "Afficher / masquer la conversation",
     "toggleSidebar": "Afficher/masquer la barre latérale"
   },
+  "notifications": {
+    "empty": "Aucune notification pour l’instant",
+    "kind": {
+      "announcement": "{title}",
+      "flowRunAwaitingApproval": "Le flux de travail {flowName} attend votre approbation",
+      "flowRunCompleted": "Le flux de travail {flowName} est terminé",
+      "flowRunFailed": "Le flux de travail {flowName} a échoué",
+      "mention": "{actorName} vous a mentionné dans un commentaire",
+      "reportExportFailed": "Échec de l’export de votre rapport",
+      "reportExportSucceeded": "Votre rapport est prêt"
+    },
+    "loadOlder": "Charger les plus anciennes",
+    "markAllRead": "Tout marquer comme lu",
+    "title": "Vos notifications",
+    "unreadLabel": "{count, plural, one {# notification non lue} other {# notifications non lues}}"
+  },
   "onboarding": {
     "aiConfigFailed": "Impossible d'enregistrer votre configuration IA. Vous pouvez la finaliser dans les paramètres.",
     "aiSubtitle": "Ajoutez votre clé API. Vous pourrez choisir les modèles plus tard dans les paramètres.",

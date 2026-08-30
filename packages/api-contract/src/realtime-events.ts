@@ -11,6 +11,7 @@ import {
 export const REALTIME_EVENT_TYPE = {
   DESKTOP_EDIT_SESSION_CLOSED: "__desktop_edit_session_closed__",
   FLOW_RUN_UPDATE: "flow-run-update",
+  NEW_NOTIFICATION: "new-notification",
   RESOURCE_DELETED: "resource.deleted",
   RESOURCE_SET_UPDATED: "resource-set.updated",
   RESOURCE_UPDATED: "resource.updated",
@@ -118,6 +119,20 @@ const workspaceRealtimeEventSchema = v.variant("type", [
 
 const organizationRealtimeEventSchema = resourceSetUpdatedEventSchema;
 
+/**
+ * User-channel event announcing that the recipient's notification list
+ * changed. Deliberately content-free: the stream fans out to every tab a user
+ * has open, including tabs on other organizations, so it carries no row id, no
+ * kind and no metadata. The client re-reads the first page and the unread
+ * count through the ordinary authorized endpoint.
+ */
+const newNotificationEventSchema = v.object({
+  type: v.literal(REALTIME_EVENT_TYPE.NEW_NOTIFICATION),
+  data: v.null(),
+});
+
+const userRealtimeEventSchema = v.variant("type", [newNotificationEventSchema]);
+
 export type ResourceChange = v.InferOutput<typeof resourceChangeSchema>;
 
 export type ResourceRealtimeEvent = v.InferOutput<
@@ -130,6 +145,13 @@ export type WorkspaceRealtimeEvent = v.InferOutput<
 export type OrganizationRealtimeEvent = v.InferOutput<
   typeof organizationRealtimeEventSchema
 >;
+export type UserRealtimeEvent = v.InferOutput<typeof userRealtimeEventSchema>;
+
+export const newNotificationRealtimeEvent = () =>
+  ({
+    type: REALTIME_EVENT_TYPE.NEW_NOTIFICATION,
+    data: null,
+  }) as const satisfies UserRealtimeEvent;
 
 export const resourceUpdatedRealtimeEvent = (resource: ResourceRef) =>
   ({
@@ -220,6 +242,13 @@ export const parseOrganizationRealtimeEvent = (
   input: unknown,
 ): OrganizationRealtimeEvent | null => {
   const result = v.safeParse(organizationRealtimeEventSchema, input);
+  return result.success ? result.output : null;
+};
+
+export const parseUserRealtimeEvent = (
+  input: unknown,
+): UserRealtimeEvent | null => {
+  const result = v.safeParse(userRealtimeEventSchema, input);
   return result.success ? result.output : null;
 };
 

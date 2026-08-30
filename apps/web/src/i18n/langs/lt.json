@@ -2852,6 +2852,22 @@
     "toggleChat": "Perjungti pokalbį",
     "toggleSidebar": "Perjungti šoninę juostą"
   },
+  "notifications": {
+    "empty": "Pranešimų kol kas nėra",
+    "kind": {
+      "announcement": "{title}",
+      "flowRunAwaitingApproval": "Darbo eiga {flowName} laukia jūsų patvirtinimo",
+      "flowRunCompleted": "Darbo eiga {flowName} baigta",
+      "flowRunFailed": "Darbo eiga {flowName} nepavyko",
+      "mention": "{actorName} paminėjo jus komentare",
+      "reportExportFailed": "Nepavyko eksportuoti ataskaitos",
+      "reportExportSucceeded": "Jūsų ataskaita paruošta"
+    },
+    "loadOlder": "Įkelti senesnius",
+    "markAllRead": "Žymėti visus kaip skaitytus",
+    "title": "Pranešimai",
+    "unreadLabel": "{count, plural, one {# neskaitytas pranešimas} few {# neskaityti pranešimai} many {# neskaityto pranešimo} other {# neskaitytų pranešimų}}"
+  },
   "onboarding": {
     "aiConfigFailed": "Nepavyko išsaugoti dirbtinio intelekto konfigūracijos. Galite ją užbaigti nustatymuose.",
     "aiSubtitle": "Pridėkite savo API raktą. Modelius galėsite pasirinkti vėliau nustatymuose.",

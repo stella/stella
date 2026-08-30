@@ -197,6 +197,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   },
   mcpOAuthClient: { type: "non_resource", reason: "credential" },
   mcpUserConnection: { type: "non_resource", reason: "credential" },
+  notification: { type: "non_resource", reason: "event" },
   organization: {
     type: "resource",
     resourceType: RESOURCE_TYPE.ORGANIZATION,

@@ -2852,6 +2852,22 @@
     "toggleChat": "Przełącz czat",
     "toggleSidebar": "Przełącz panel boczny"
   },
+  "notifications": {
+    "empty": "Brak powiadomień",
+    "kind": {
+      "announcement": "{title}",
+      "flowRunAwaitingApproval": "Przepływ pracy {flowName} czeka na Twoje zatwierdzenie",
+      "flowRunCompleted": "Przepływ pracy {flowName} został zakończony",
+      "flowRunFailed": "Przepływ pracy {flowName} nie powiódł się",
+      "mention": "{actorName} wspomniał o Tobie w komentarzu",
+      "reportExportFailed": "Eksport raportu nie powiódł się",
+      "reportExportSucceeded": "Twój raport jest gotowy"
+    },
+    "loadOlder": "Wczytaj starsze",
+    "markAllRead": "Oznacz wszystkie jako przeczytane",
+    "title": "Powiadomienia",
+    "unreadLabel": "{count, plural, one {# nieprzeczytane powiadomienie} few {# nieprzeczytane powiadomienia} many {# nieprzeczytanych powiadomień} other {# nieprzeczytanego powiadomienia}}"
+  },
   "onboarding": {
     "aiConfigFailed": "Nie udało się zapisać konfiguracji AI. Możesz ją dokończyć w ustawieniach.",
     "aiSubtitle": "Dodaj własny klucz API. Modele możesz wybrać później w ustawieniach.",

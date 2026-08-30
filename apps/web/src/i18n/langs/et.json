@@ -2852,6 +2852,22 @@
     "toggleChat": "Lülita vestlus sisse/välja",
     "toggleSidebar": "Külgriba kuvamine"
   },
+  "notifications": {
+    "empty": "Teavitusi veel pole",
+    "kind": {
+      "announcement": "{title}",
+      "flowRunAwaitingApproval": "Töövoog {flowName} ootab teie kinnitust",
+      "flowRunCompleted": "Töövoog {flowName} on lõpetatud",
+      "flowRunFailed": "Töövoog {flowName} ebaõnnestus",
+      "mention": "{actorName} mainis teid kommentaaris",
+      "reportExportFailed": "Aruande eksportimine ebaõnnestus",
+      "reportExportSucceeded": "Teie aruanne on valmis"
+    },
+    "loadOlder": "Laadi vanemad",
+    "markAllRead": "Märgi kõik loetuks",
+    "title": "Teavitused",
+    "unreadLabel": "{count, plural, one {# lugemata teavitus} other {# lugemata teavitust}}"
+  },
   "onboarding": {
     "aiConfigFailed": "AI seadistust ei õnnestunud salvestada. Saate selle lõpetada seadetes.",
     "aiSubtitle": "Lisage oma API-võti. Mudelid saate hiljem seadetes valida.",
