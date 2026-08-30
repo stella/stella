@@ -90,7 +90,7 @@ test("preserves committed deletion success when delivery telemetry fails", async
     await Promise.reject(new Error("redis unavailable"));
   });
 
-  await expect(
+  expect(
     handoffCommittedEntityDeletionCleanupBatch({
       captureDeliveryError,
       enqueueCleanup,

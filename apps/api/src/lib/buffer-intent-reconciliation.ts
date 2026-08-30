@@ -16,7 +16,11 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
 import { LIMITS } from "@/api/lib/limits";
-import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
+import {
+  deleteS3ObjectWithSignal,
+  S3_OBJECT_WRITE_CERTAINTY,
+} from "@/api/lib/s3";
+import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 export const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
@@ -281,6 +285,19 @@ export type ObjectWriterSettlement =
   | "cleanup-required"
   | "object-deleted"
   | "write-uncertain";
+
+export const objectWriterSettlementAfterCleanup = ({
+  cleanupSucceeded,
+  writeState,
+}: {
+  cleanupSucceeded: boolean;
+  writeState: S3ObjectWriteCertainty;
+}): ObjectWriterSettlement => {
+  if (writeState === S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN) {
+    return "write-uncertain";
+  }
+  return cleanupSucceeded ? "object-deleted" : "cleanup-required";
+};
 
 const UNRETIRED_OBJECT_WRITER_SETTLEMENT_STATUS = {
   "cleanup-required": BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
@@ -895,11 +912,13 @@ export const reconcileBufferObjectCleanupIntents = async ({
           stage: "buffer-object-cleanup-reconcile",
         });
       }
-      return Result.isOk(cleanup) &&
+      return (
+        Result.isOk(cleanup) &&
         (row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED ||
           (row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING &&
             row.attemptCount >=
               BUFFER_INTENT_RECOVERY_RETIRE_AFTER_ATTEMPTS))
+      )
         ? row.id
         : null;
     }),

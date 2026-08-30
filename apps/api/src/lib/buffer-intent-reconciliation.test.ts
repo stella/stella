@@ -313,7 +313,7 @@ test("rejects a second settlement after writer ownership has transferred", async
     }),
   });
 
-  await expect(
+  expect(
     settleObjectCleanupIntentsAfterWriterInTransaction({
       intentIds: [pendingUploadId],
       objectState: "object-deleted",

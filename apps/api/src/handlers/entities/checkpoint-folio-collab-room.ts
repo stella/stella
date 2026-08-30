@@ -19,6 +19,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockActiveWorkspaceForBufferIntent,
   lockObjectCleanupIntentsForWriter,
+  objectWriterSettlementAfterCleanup,
   reserveObjectCleanupIntent,
   retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriter,
@@ -289,12 +290,10 @@ const checkpointFolioCollabRoom = createSafeHandler(
       }
       const settlement = await settleObjectCleanupIntentsAfterWriter({
         intentIds: [cleanupIntentId],
-        objectState:
-          writeCertainty === S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN
-            ? "write-uncertain"
-            : Result.isOk(cleanup)
-              ? "object-deleted"
-              : "cleanup-required",
+        objectState: objectWriterSettlementAfterCleanup({
+          cleanupSucceeded: Result.isOk(cleanup),
+          writeState: writeCertainty,
+        }),
         safeDb,
       });
       if (Result.isError(settlement)) {

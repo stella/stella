@@ -22,6 +22,7 @@ import {
   isBufferIntentWorkspaceUnavailableError,
   lockActiveWorkspaceForBufferIntent,
   lockObjectCleanupIntentsForWriter,
+  objectWriterSettlementAfterCleanup,
   reserveObjectCleanupIntent,
   retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriter,
@@ -323,12 +324,10 @@ const publishFolioCollabVersion = createSafeHandler(
       }
       const settlement = await settleObjectCleanupIntentsAfterWriter({
         intentIds: [sourceCleanupIntentId],
-        objectState:
-          writeCertainty === S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN
-            ? "write-uncertain"
-            : Result.isOk(cleanup)
-              ? "object-deleted"
-              : "cleanup-required",
+        objectState: objectWriterSettlementAfterCleanup({
+          cleanupSucceeded: Result.isOk(cleanup),
+          writeState: writeCertainty,
+        }),
         safeDb,
       });
       if (Result.isError(settlement)) {

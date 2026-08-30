@@ -7,10 +7,7 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import {
-  fields,
-  workspaces,
-} from "@/api/db/schema";
+import { fields, workspaces } from "@/api/db/schema";
 import { DERIVATIVE_FAILURE_REASON } from "@/api/db/schema-validators";
 import type {
   DerivativeFailureReason,
@@ -22,6 +19,7 @@ import {
   BUFFER_INTENT_DELETE_TIMEOUT_MS,
   BUFFER_INTENT_WRITE_TIMEOUT_MS,
   lockObjectCleanupIntentsForWriter,
+  objectWriterSettlementAfterCleanup,
   reserveObjectCleanupIntent,
   retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriter,
@@ -113,12 +111,10 @@ const cleanupUnpublishedDerivative = async ({
   }
   const settlement = await settleObjectCleanupIntentsAfterWriter({
     intentIds: [intentId],
-    objectState:
-      writeState === "uncertain"
-        ? "write-uncertain"
-        : Result.isOk(cleanup)
-          ? "object-deleted"
-          : "cleanup-required",
+    objectState: objectWriterSettlementAfterCleanup({
+      cleanupSucceeded: Result.isOk(cleanup),
+      writeState,
+    }),
     safeDb,
   });
   if (Result.isError(settlement)) {

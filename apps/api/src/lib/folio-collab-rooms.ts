@@ -26,6 +26,7 @@ import {
   lockActiveWorkspaceForBufferIntent,
   lockObjectCleanupIntentsForWriter,
   lockOrganizationObjectIntentsForWriter,
+  objectWriterSettlementAfterCleanup,
   OBJECT_WRITE_RECOVERY_DELAY_MS,
   retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriterInTransaction,
@@ -816,12 +817,10 @@ export const storeFolioCollabSnapshot = async ({
         async (tx) =>
           await settleObjectCleanupIntentsAfterWriterInTransaction({
             intentIds: [nextCleanupIntentId],
-            objectState:
-              writeCertainty === S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN
-                ? "write-uncertain"
-                : Result.isOk(cleanup)
-                  ? "object-deleted"
-                  : "cleanup-required",
+            objectState: objectWriterSettlementAfterCleanup({
+              cleanupSucceeded: Result.isOk(cleanup),
+              writeState: writeCertainty,
+            }),
             tx,
           }),
       )

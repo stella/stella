@@ -753,7 +753,9 @@ describe("workspace deletion", () => {
       { database, enqueueCleanup: async () => {} },
     );
 
-    expect(Result.isError(result) ? result.error : null).toBe(auditFailure);
+    expect(Result.isError(result) ? result.error : null).toBe(
+      auditFailure,
+    );
     expect(
       await testDb
         .select({ status: workspaces.status })

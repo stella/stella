@@ -10,12 +10,8 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 type Row = Record<string, unknown>;
 type QueuedRows = Row[] | (() => Row[]);
 
-type QueryBuilder = {
-  delete: () => QueryBuilder;
-  execute: () => Promise<void>;
+type QueryBuilder = Promise<Row[]> & {
   for: () => QueryBuilder;
-  insert: () => QueryBuilder;
-  select: () => QueryBuilder;
   from: () => QueryBuilder;
   innerJoin: () => QueryBuilder;
   leftJoin: () => QueryBuilder;
@@ -23,12 +19,15 @@ type QueryBuilder = {
   limit: () => QueryBuilder;
   returning: () => QueryBuilder;
   set: () => QueryBuilder;
-  then: (
-    onFulfilled: (rows: Row[]) => unknown,
-    onRejected?: (reason: unknown) => unknown,
-  ) => Promise<unknown>;
+  values: (rows: Row | Row[]) => QueryBuilder;
+};
+
+type QueryApi = {
+  delete: () => QueryBuilder;
+  execute: () => Promise<void>;
+  insert: () => QueryBuilder;
+  select: () => QueryBuilder;
   update: () => QueryBuilder;
-  values: (rows: Row | Row[]) => Promise<Row[]>;
 };
 
 const resolveQueuedRows = (queued: QueuedRows | undefined): Row[] =>
@@ -43,70 +42,84 @@ let scopedDeleteCalls = 0;
 let scopedFailure: Error | null = null;
 let scopedFailureAfterCalls = 0;
 let scopedCalls = 0;
-const builder: QueryBuilder = {
-  delete: () => builder,
-  execute: async () => undefined,
-  for: () => builder,
-  insert: () => builder,
-  select: () => builder,
-  from: () => builder,
-  innerJoin: () => builder,
-  leftJoin: () => builder,
-  where: () => builder,
-  limit: () => builder,
-  returning: () => builder,
-  set: () => builder,
-  then: async (onFulfilled, onRejected) =>
-    await Promise.resolve(nextRows).then(onFulfilled, onRejected),
-  update: () => builder,
-  values: async () => [],
+
+const createQueryBuilder = ({
+  captureValues = false,
+  onLock,
+  resolveRows,
+}: {
+  captureValues?: boolean;
+  onLock?: () => void;
+  resolveRows: (lockRead: boolean) => Row[];
+}): QueryBuilder => {
+  let lockRead = false;
+  const query = Promise.resolve().then(() => resolveRows(lockRead));
+  const builder: QueryBuilder = Object.assign(query, {
+    for: () => {
+      lockRead = true;
+      onLock?.();
+      return builder;
+    },
+    from: () => builder,
+    innerJoin: () => builder,
+    leftJoin: () => builder,
+    limit: () => builder,
+    returning: () => builder,
+    set: () => builder,
+    values: (rows: Row | Row[]) => {
+      if (captureValues) {
+        scopedInsertedRows.push(...(Array.isArray(rows) ? rows : [rows]));
+      }
+      return builder;
+    },
+    where: () => builder,
+  });
+  return builder;
 };
-const scopedBuilder: QueryBuilder = {
+
+const createScopedQueryBuilder = ({
+  captureValues = false,
+  readsRows = true,
+}: {
+  captureValues?: boolean;
+  readsRows?: boolean;
+} = {}): QueryBuilder =>
+  createQueryBuilder({
+    captureValues,
+    onLock: () => {
+      scopedPendingLockReads += 1;
+    },
+    resolveRows: (lockRead) => {
+      if (!readsRows) {
+        return [];
+      }
+      if (lockRead) {
+        scopedPendingLockReads -= 1;
+        return resolveQueuedRows(scopedLockRows.shift());
+      }
+      return resolveQueuedRows(scopedRows.shift());
+    },
+  });
+
+const scopedTransaction: QueryApi = {
   delete: () => {
     scopedDeleteCalls += 1;
-    return scopedBuilder;
+    return createScopedQueryBuilder();
   },
   execute: async () => undefined,
-  for: () => {
-    scopedPendingLockReads += 1;
-    return scopedBuilder;
-  },
-  insert: () => scopedBuilder,
-  select: () => scopedBuilder,
-  from: () => scopedBuilder,
-  innerJoin: () => scopedBuilder,
-  leftJoin: () => scopedBuilder,
-  where: () => scopedBuilder,
-  limit: () => scopedBuilder,
-  returning: () => scopedBuilder,
-  set: () => scopedBuilder,
-  then: async (onFulfilled, onRejected) => {
-    let queued: QueuedRows | undefined;
-    if (scopedPendingLockReads > 0) {
-      scopedPendingLockReads -= 1;
-      queued = scopedLockRows.shift();
-    } else {
-      queued = scopedRows.shift();
-    }
-    return await Promise.resolve(resolveQueuedRows(queued)).then(
-      onFulfilled,
-      onRejected,
-    );
-  },
-  update: () => scopedBuilder,
-  values: async (rows) => {
-    scopedInsertedRows.push(...(Array.isArray(rows) ? rows : [rows]));
-    return [];
-  },
+  insert: () =>
+    createScopedQueryBuilder({ captureValues: true, readsRows: false }),
+  select: () => createScopedQueryBuilder(),
+  update: () => createScopedQueryBuilder(),
 };
 
 const createScopedDbTestDouble =
-  () => async (callback: (tx: QueryBuilder) => Promise<unknown>) => {
+  () => async (callback: (tx: QueryApi) => Promise<unknown>) => {
     scopedCalls += 1;
     if (scopedFailure !== null && scopedCalls > scopedFailureAfterCalls) {
       throw new Error(scopedFailure.message, { cause: scopedFailure });
     }
-    return await callback(scopedBuilder);
+    return await callback(scopedTransaction);
   };
 // Object storage is the real `lib/s3`, pointed at an in-process store: the
 // keys, content types and deletes below are the ones the module actually put
@@ -131,7 +144,10 @@ const createScopedDb = asTestRaw<
 >(createScopedDbTestDouble);
 const database = asTestRaw<
   NonNullable<Parameters<typeof authorizeFolioCollabRoom>[0]["db"]>
->({ select: () => builder });
+>({
+  select: () =>
+    createQueryBuilder({ resolveRows: () => resolveQueuedRows(nextRows) }),
+});
 
 const roomId = toSafeId<"folioCollabRoom">("fcr_1");
 const entityId = toSafeId<"entity">("entity_1");
