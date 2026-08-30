@@ -1423,7 +1423,7 @@
       "GET /v1/workspaces/navigation": 20480
     }
   },
-  "/settings/account/memory target": {
+  "/settings/account/memory": {
     "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
