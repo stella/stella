@@ -433,12 +433,11 @@ impl PreparedAddressSeedData {
     let mut results = Vec::new();
 
     for cluster in clusters {
-      let (score, growth) =
-        self.cluster_score_and_growth(ClusterScoreArgs {
-          cluster: &cluster,
-          runs: &runs,
-          full_text,
-        });
+      let (score, growth) = self.cluster_score_and_growth(ClusterScoreArgs {
+        cluster: &cluster,
+        runs: &runs,
+        full_text,
+      });
       if score < 0.6 {
         continue;
       }
