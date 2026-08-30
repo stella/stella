@@ -2,7 +2,7 @@ import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { BellIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { REALTIME_EVENT_TYPE } from "@stll/api-contract";
+import type { REALTIME_EVENT_TYPE } from "@stll/api-contract";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import type { NotificationKind } from "@stll/api-contract/notifications";
 import { Button } from "@stll/ui/button";
@@ -48,16 +48,13 @@ export const NotificationBell = () => {
   useUnreadFaviconDot(unreadCount > 0);
 
   useUserEventsSSE(({ type: eventType }) => {
-    switch (eventType) {
-      case REALTIME_EVENT_TYPE.NEW_NOTIFICATION:
-        detached(
-          refetchFirstNotificationsPage({ organizationId, queryClient }),
-          "notification-bell.refetch-first-page",
-        );
-        return;
-      default:
-        eventType satisfies never;
-    }
+    // The user channel carries a single event kind today; this bind makes a
+    // second kind a compile error here instead of a silently ignored event.
+    eventType satisfies typeof REALTIME_EVENT_TYPE.NEW_NOTIFICATION;
+    detached(
+      refetchFirstNotificationsPage({ organizationId, queryClient }),
+      "notification-bell.refetch-first-page",
+    );
   });
 
   const reportFailure = (error: unknown) => {

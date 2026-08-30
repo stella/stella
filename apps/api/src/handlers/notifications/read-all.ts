@@ -19,9 +19,9 @@ const markAllNotificationsRead = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user }) {
     const updated = yield* Result.await(
-      safeDb((tx) =>
+      safeDb(async (tx) => {
         // audit: skip — per-user read-state bookkeeping; no shared resource changes
-        tx
+        const rows = await tx
           .update(notifications)
           .set({ readAt: new Date() })
           .where(
@@ -31,8 +31,9 @@ const markAllNotificationsRead = createSafeRootHandler(
               isNull(notifications.readAt),
             ),
           )
-          .returning({ id: notifications.id }),
-      ),
+          .returning({ id: notifications.id });
+        return rows;
+      }),
     );
 
     // Everything unread in this organization was just marked, so the count is

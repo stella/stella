@@ -87,21 +87,23 @@ const createItemComment = createSafeHandler(
     }
 
     if (result.mentions.userIds.length > 0) {
-      const rows = result.mentions.userIds.map((userId): NewNotification => ({
-        kind: NOTIFICATION_KIND.MENTION,
-        metadata: { actorName: result.mentions.actorName },
-        entityType: "entity",
-        entityId: body.itemEntityId,
-        organizationId: session.activeOrganizationId,
-        userId,
-        idempotencyKey: `mention:${result.id}`,
-      }));
+      const rows = result.mentions.userIds.map(
+        (mentioned): NewNotification => ({
+          kind: NOTIFICATION_KIND.MENTION,
+          metadata: { actorName: result.mentions.actorName },
+          entityType: "entity",
+          entityId: body.itemEntityId,
+          organizationId: session.activeOrganizationId,
+          userId: mentioned,
+          idempotencyKey: `mention:${result.id}`,
+        }),
+      );
       // Detached, not fire-and-forget: the comment is already committed and
       // the author must not see the write fail because a colleague's badge
       // could not be filed, but the failure still reaches error capture.
       detached(
         createNotifications(rows, { kind: "systemFanOut" }),
-        "notifications.list_item_mention",
+        "notifications.list-item-mention",
       );
     }
 

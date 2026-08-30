@@ -51,6 +51,7 @@ const EXPECTED_EXEMPT_ROUTE_FILES = [
   "apps/api/src/handlers/mcp/routes.ts",
   "apps/api/src/handlers/mcp-app-sandbox/routes.ts",
   "apps/api/src/handlers/mcp-connectors/oauth-client-metadata-route.ts",
+  "apps/api/src/handlers/notifications/routes.ts",
   "apps/api/src/handlers/smoke/routes.ts",
   "apps/api/src/handlers/verify/routes.ts",
   "apps/api/src/handlers/well-known/routes.ts",

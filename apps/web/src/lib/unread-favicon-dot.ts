@@ -32,7 +32,7 @@ const UNREAD_FAVICON_HREF = `data:image/svg+xml,${encodeURIComponent(
 export const useUnreadFaviconDot = (hasUnread: boolean): void => {
   useExternalSyncEffect(() => {
     if (!hasUnread) {
-      return;
+      return undefined;
     }
 
     const link = document.createElement("link");

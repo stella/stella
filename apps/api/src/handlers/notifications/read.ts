@@ -23,9 +23,9 @@ const markNotificationRead = createSafeRootHandler(
   config,
   async function* ({ params, safeDb, session, user }) {
     const updated = yield* Result.await(
-      safeDb((tx) =>
+      safeDb(async (tx) => {
         // audit: skip — per-user read-state bookkeeping; no shared resource changes
-        tx
+        const rows = await tx
           .update(notifications)
           .set({ readAt: new Date() })
           .where(
@@ -37,8 +37,9 @@ const markNotificationRead = createSafeRootHandler(
               isNull(notifications.readAt),
             ),
           )
-          .returning({ id: notifications.id }),
-      ),
+          .returning({ id: notifications.id });
+        return rows;
+      }),
     );
 
     if (updated.length === 0) {

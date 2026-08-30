@@ -117,13 +117,13 @@ export const createPublishAnnouncementEndpoint = ({
     }
 
     const rows: NewNotification[] = recipients.map(
-      ({ userId }): NewNotification => ({
+      (recipient): NewNotification => ({
         kind: NOTIFICATION_KIND.ANNOUNCEMENT,
         metadata: { title: body.title },
         entityType: null,
         entityId: null,
         organizationId,
-        userId: brandPersistedUserId(userId),
+        userId: brandPersistedUserId(recipient.userId),
         idempotencyKey: announcementIdempotencyKey({
           announcementKey: body.announcementKey,
           organizationId,
