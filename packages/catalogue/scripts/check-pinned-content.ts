@@ -17,7 +17,7 @@
  * header on the contents API). Network is required; run in CI or with
  * connectivity, not on the offline verify path.
  */
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 
 import {
   isAllowedResourcePath,
@@ -36,11 +36,12 @@ import { catalogueLicensesMatch } from "../src/schema";
 import type { CatalogueLicense } from "../src/schema";
 
 /** Expected per-entry failure while fetching upstream content. */
-class PinnedContentError extends TaggedError("PinnedContentError")<{
+export class PinnedContentError extends TaggedError("PinnedContentError")<{
   message: string;
 }> {}
 
 const FETCH_TIMEOUT_MS = 10_000;
+const FETCH_RETRY_DELAYS_MS = [200, 800] as const;
 const SKILL_FILE_NAME = "SKILL.md";
 const GITHUB_CONTENTS_LISTING_LIMIT = 1000;
 
@@ -68,6 +69,40 @@ type GithubContentItem = {
   path: string;
   size: number | null;
   type: string;
+};
+
+type FetchWithBoundedRetryOptions<T> = {
+  fetchValue: () => Promise<T>;
+  sleep?: (delayMs: number) => Promise<void>;
+};
+
+const sleep = async (delayMs: number): Promise<void> => {
+  await Bun.sleep(delayMs);
+};
+
+/** Retry rejected transports twice; tagged response failures stay single-pass. */
+export const fetchWithBoundedRetry = async <T>({
+  fetchValue,
+  sleep: wait = sleep,
+}: FetchWithBoundedRetryOptions<T>): Promise<T> => {
+  const attempt = async (retryIndex: number): Promise<T> => {
+    const fetched = await Result.tryPromise({
+      try: fetchValue,
+      catch: (cause) => cause,
+    });
+    if (Result.isOk(fetched)) {
+      return fetched.value;
+    }
+
+    const delayMs = FETCH_RETRY_DELAYS_MS.at(retryIndex);
+    if (fetched.error instanceof PinnedContentError || delayMs === undefined) {
+      throw fetched.error;
+    }
+    await wait(delayMs);
+    return await attempt(retryIndex + 1);
+  };
+
+  return await attempt(0);
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -143,35 +178,45 @@ const fetchPinnedTextFile = async ({
   repoRelativePath,
   target,
 }: FetchPinnedTextFileOptions): Promise<PinnedTextFile | null> => {
-  const response = await fetch(rawContentUrl(target, repoRelativePath), {
-    headers: githubHeaders("text/plain"),
-    redirect: "error",
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  const file = await fetchWithBoundedRetry({
+    fetchValue: async () => {
+      const response = await fetch(rawContentUrl(target, repoRelativePath), {
+        headers: githubHeaders("text/plain"),
+        redirect: "error",
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (response.status === 404 && allowNotFound) {
+        return null;
+      }
+      if (!response.ok) {
+        throw new PinnedContentError({
+          message: `${label} fetch returned HTTP ${response.status}`,
+        });
+      }
+      if (!response.body) {
+        throw new PinnedContentError({
+          message: `${label} response has no body`,
+        });
+      }
+      const declaredLength = Number(response.headers.get("content-length"));
+      if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+        throw new PinnedContentError({
+          message: `${label} is larger than ${maxBytes} bytes`,
+        });
+      }
+      const bytes = await readCappedBytes(response.body, maxBytes);
+      if (bytes === null) {
+        throw new PinnedContentError({
+          message: `${label} is larger than ${maxBytes} bytes`,
+        });
+      }
+      return bytes;
+    },
   });
-  if (response.status === 404 && allowNotFound) {
+  if (file === null) {
     return null;
   }
-  if (!response.ok) {
-    throw new PinnedContentError({
-      message: `${label} fetch returned HTTP ${response.status}`,
-    });
-  }
-  if (!response.body) {
-    throw new PinnedContentError({ message: `${label} response has no body` });
-  }
-  const declaredLength = Number(response.headers.get("content-length"));
-  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
-    throw new PinnedContentError({
-      message: `${label} is larger than ${maxBytes} bytes`,
-    });
-  }
-  const bytes = await readCappedBytes(response.body, maxBytes);
-  if (bytes === null) {
-    throw new PinnedContentError({
-      message: `${label} is larger than ${maxBytes} bytes`,
-    });
-  }
-  return { byteLength: bytes.byteLength, content: UTF8_DECODER.decode(bytes) };
+  return { byteLength: file.byteLength, content: UTF8_DECODER.decode(file) };
 };
 
 /**
@@ -194,23 +239,31 @@ const fetchDirectoryContents = async (
   target: GithubTarget,
   repoRelativePath: string,
 ): Promise<GithubContentItem[]> => {
-  const response = await fetch(contentsApiUrl(target, repoRelativePath), {
-    headers: githubHeaders("application/vnd.github+json"),
-    redirect: "error",
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  const body = await fetchWithBoundedRetry({
+    fetchValue: async () => {
+      const response = await fetch(contentsApiUrl(target, repoRelativePath), {
+        headers: githubHeaders("application/vnd.github+json"),
+        redirect: "error",
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      // A missing resource directory is not an error: the skill simply has
+      // no files under that root.
+      if (response.status === 404) {
+        return null;
+      }
+      if (!response.ok) {
+        throw new PinnedContentError({
+          message: `GitHub contents API returned HTTP ${response.status} for ${repoRelativePath || "<root>"}`,
+        });
+      }
+      return await response.text();
+    },
   });
-  // A missing resource directory is not an error: the skill simply has
-  // no files under that root.
-  if (response.status === 404) {
+  if (body === null) {
     return [];
   }
-  if (!response.ok) {
-    throw new PinnedContentError({
-      message: `GitHub contents API returned HTTP ${response.status} for ${repoRelativePath || "<root>"}`,
-    });
-  }
 
-  const payload: unknown = await response.json();
+  const payload: unknown = JSON.parse(body);
   const items = toContentItems(payload);
   const parsed: GithubContentItem[] = [];
   for (const item of items) {

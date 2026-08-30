@@ -6,11 +6,83 @@ import {
   archiveSizeLimitError,
   assertCompleteGithubContentsListing,
   checkFrontmatterLimits,
+  fetchWithBoundedRetry,
+  PinnedContentError,
   pinnedLicenseMismatchError,
   registerResourcePath,
   resourceContentLimitError,
   resourcePathLimitError,
 } from "../scripts/check-pinned-content";
+
+describe("pinned content fetch retry", () => {
+  test("retries rejected transports with bounded backoff", async () => {
+    let attempts = 0;
+    const delays: number[] = [];
+
+    const result = await fetchWithBoundedRetry({
+      fetchValue: async () => {
+        attempts += 1;
+        if (attempts < 3) {
+          throw new TypeError("socket closed");
+        }
+        return "ok";
+      },
+      sleep: async (delayMs) => {
+        delays.push(delayMs);
+      },
+    });
+
+    expect(result).toBe("ok");
+    expect(attempts).toBe(3);
+    expect(delays).toEqual([200, 800]);
+  });
+
+  test("stops after three rejected transport attempts", async () => {
+    const failure = new TypeError("socket stayed closed");
+    let attempts = 0;
+
+    const response = fetchWithBoundedRetry({
+      fetchValue: async () => {
+        attempts += 1;
+        throw failure;
+      },
+      sleep: async () => {},
+    });
+
+    // Bun types declare `.rejects.toBe` as void; capture explicitly so
+    // type-aware lint and the runtime agree.
+    const rejection: unknown = await response.then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBe(failure);
+    expect(attempts).toBe(3);
+  });
+
+  test("does not retry tagged HTTP failures", async () => {
+    const failure = new PinnedContentError({
+      message: "fetch returned HTTP 503",
+    });
+    let attempts = 0;
+
+    const response = fetchWithBoundedRetry({
+      fetchValue: async () => {
+        attempts += 1;
+        throw failure;
+      },
+      sleep: async () => {},
+    });
+
+    const rejection: unknown = await response.then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBe(failure);
+    expect(attempts).toBe(1);
+  });
+});
 
 describe("pinned skill install-limit preflight", () => {
   test("rejects GitHub Contents listings that may have hit the API ceiling", () => {
