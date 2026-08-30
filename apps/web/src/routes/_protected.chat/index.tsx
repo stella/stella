@@ -484,77 +484,87 @@ function ChatIndex() {
           inspector pane can leave this column far narrower than a viewport
           breakpoint would suggest. */}
       <div className="@container flex min-h-0 flex-1 flex-col items-center overflow-hidden px-4">
-        <div className="flex h-[22rem] min-h-72 w-full max-w-2xl shrink flex-col items-center justify-center gap-8">
-          <div className="flex w-full flex-col items-center gap-4 text-center">
-            <div className="border-border bg-background text-foreground flex size-12 items-center justify-center rounded-lg border shadow-sm">
-              <StellaMark className="size-7" />
+        {/* Expanded drafts and attachments may exceed the preferred hero
+            height; keep every composer control reachable without making the
+            whole landing page scroll. */}
+        <ScrollArea
+          className="min-h-72 w-full max-w-2xl shrink basis-[22rem]"
+          scrollFade
+        >
+          <div className="flex min-h-full w-full flex-col items-center justify-center gap-8">
+            <div className="flex w-full flex-col items-center gap-4 text-center">
+              <div className="border-border bg-background text-foreground flex size-12 items-center justify-center rounded-lg border shadow-sm">
+                <StellaMark className="size-7" />
+              </div>
+              <p className="text-foreground max-w-md text-center text-lg font-medium">
+                {t("chat.greeting")}
+              </p>
             </div>
-            <p className="text-foreground max-w-md text-center text-lg font-medium">
-              {t("chat.greeting")}
-            </p>
+            <div className="w-full">
+              <ChatAnonymizationLayer
+                editor={controller.editor}
+                enabled={anonymized}
+                focused={composerFocused}
+                ownerKey={getChatThreadKey(threadRef)}
+                workspaceId={draftThreadId}
+              />
+              <ChatInputSurface
+                anonymized={anonymized}
+                autoFocus
+                context={{ activeOrganizationId, threadRef }}
+                controller={controller}
+                guideAnchorsEnabled
+                variant="large"
+                mcpOrganizationId={activeOrganizationId}
+                models={{
+                  activeOrganizationId,
+                  threadRef,
+                  selectedModel: chatDraftMeta?.model ?? null,
+                  selectedReasoningEffort:
+                    chatDraftMeta?.reasoningEffort ?? null,
+                  selectModel: modelSelection.selectModel,
+                }}
+                reservedCommands={{ hasPersistedThread: false }}
+                skillsOrganizationId={activeOrganizationId}
+                dock={
+                  <ChatComposerDock
+                    data={{
+                      webSearchAvailable:
+                        chatDraftMeta?.webSearchAvailable ?? false,
+                      webSearchEnabled:
+                        chatDraftMeta?.webSearchEnabled ?? false,
+                      // The draft carries the same cache-stable floor its first
+                      // send will pay, so the meter shows the honest baseline
+                      // (~system prompt + tools) rather than 0% until send.
+                      context: chatDraftMeta?.context ?? null,
+                    }}
+                    guideAnchorsEnabled
+                    models={{
+                      activeOrganizationId,
+                      threadRef,
+                      selectedModel: chatDraftMeta?.model ?? null,
+                      selectedReasoningEffort:
+                        chatDraftMeta?.reasoningEffort ?? null,
+                      selectModel: modelSelection.selectModel,
+                    }}
+                    leadingContext={
+                      <ChatMatterPicker
+                        matterIds={contextMatterIds}
+                        onChange={setContextMatterIds}
+                      />
+                    }
+                    // The hero already IS a fresh thread; a new-chat
+                    // affordance here would be a no-op, so opt out.
+                    onNewThread={null}
+                    threadRef={threadRef}
+                  />
+                }
+                onSubmit={handleSubmit}
+                onFocusChange={setComposerFocused}
+              />
+            </div>
           </div>
-          <div className="w-full">
-            <ChatAnonymizationLayer
-              editor={controller.editor}
-              enabled={anonymized}
-              focused={composerFocused}
-              ownerKey={getChatThreadKey(threadRef)}
-              workspaceId={draftThreadId}
-            />
-            <ChatInputSurface
-              anonymized={anonymized}
-              autoFocus
-              context={{ activeOrganizationId, threadRef }}
-              controller={controller}
-              guideAnchorsEnabled
-              variant="large"
-              mcpOrganizationId={activeOrganizationId}
-              models={{
-                activeOrganizationId,
-                threadRef,
-                selectedModel: chatDraftMeta?.model ?? null,
-                selectedReasoningEffort: chatDraftMeta?.reasoningEffort ?? null,
-                selectModel: modelSelection.selectModel,
-              }}
-              reservedCommands={{ hasPersistedThread: false }}
-              skillsOrganizationId={activeOrganizationId}
-              dock={
-                <ChatComposerDock
-                  data={{
-                    webSearchAvailable:
-                      chatDraftMeta?.webSearchAvailable ?? false,
-                    webSearchEnabled: chatDraftMeta?.webSearchEnabled ?? false,
-                    // The draft carries the same cache-stable floor its first
-                    // send will pay, so the meter shows the honest baseline
-                    // (~system prompt + tools) rather than 0% until send.
-                    context: chatDraftMeta?.context ?? null,
-                  }}
-                  guideAnchorsEnabled
-                  models={{
-                    activeOrganizationId,
-                    threadRef,
-                    selectedModel: chatDraftMeta?.model ?? null,
-                    selectedReasoningEffort:
-                      chatDraftMeta?.reasoningEffort ?? null,
-                    selectModel: modelSelection.selectModel,
-                  }}
-                  leadingContext={
-                    <ChatMatterPicker
-                      matterIds={contextMatterIds}
-                      onChange={setContextMatterIds}
-                    />
-                  }
-                  // The hero already IS a fresh thread; a new-chat
-                  // affordance here would be a no-op, so opt out.
-                  onNewThread={null}
-                  threadRef={threadRef}
-                />
-              }
-              onSubmit={handleSubmit}
-              onFocusChange={setComposerFocused}
-            />
-          </div>
-        </div>
+        </ScrollArea>
         {/* Keep the primary composer stable while this secondary discovery
             region owns any overflow on short or narrow viewports. One shared
             viewport avoids competing scroll traps between the three lists. */}
