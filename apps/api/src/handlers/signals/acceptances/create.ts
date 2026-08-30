@@ -62,10 +62,12 @@ const SIGNAL_WORK_OBLIGATION_SOURCE = {
 
 export type AcceptSignalDependencies = {
   flushEntitySearchRepairs: typeof flushEntitySearchRepairs;
+  taskFeatures: typeof deployedTaskFeatures;
 };
 
 const DEFAULT_ACCEPT_SIGNAL_DEPENDENCIES = {
   flushEntitySearchRepairs,
+  taskFeatures: deployedTaskFeatures,
 } satisfies AcceptSignalDependencies;
 
 export const createAcceptSignal = (
@@ -123,7 +125,7 @@ export const createAcceptSignal = (
           }
           const isDeadline =
             suggestion.kind === SUGGESTION_KIND.CREATE_DEADLINE;
-          const taskFeatures = deployedTaskFeatures();
+          const taskFeatures = dependencies.taskFeatures();
           const entityId = createSafeId<"entity">();
           acceptedResult = {
             suggestionKind: suggestion.kind,

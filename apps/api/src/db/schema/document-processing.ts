@@ -368,7 +368,7 @@ export const documentProcessingRuns = p.pgTable(
       sql`${table.deadlineScoutStatus} IN (${sql.join(DOCUMENT_DEADLINE_SCOUT_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
-      "document_processing_runs_deadline_scout_attempt_nonnegative_check",
+      "document_processing_runs_deadline_scout_attempt_nonneg_check",
       sql`${table.deadlineScoutAttemptCount} >= 0`,
     ),
     p.check(

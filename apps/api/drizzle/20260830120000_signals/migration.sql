@@ -4,10 +4,26 @@ ALTER TABLE "document_processing_runs" ADD COLUMN "deadline_scout_status" text D
 ALTER TABLE "document_processing_runs" ADD COLUMN "deadline_scout_attempt_count" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "document_processing_runs" ADD COLUMN "deadline_scout_claimed_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "document_processing_runs" ADD COLUMN "deadline_scout_error_code" varchar(128);--> statement-breakpoint
+-- The three checks below constrain only the four columns added immediately
+-- above, which land with NOT NULL defaults or NULL. Every pre-existing row
+-- therefore satisfies them by construction and validation cannot fail; the
+-- statement_timeout set at the top bounds how long the validating scan may
+-- hold ACCESS EXCLUSIVE, so an oversized table aborts the migration instead
+-- of stalling writers.
+-- squawk-ignore constraint-missing-not-valid
 ALTER TABLE "document_processing_runs" ADD CONSTRAINT "document_processing_runs_deadline_scout_status_values_check" CHECK ("deadline_scout_status" IN ('not_requested', 'pending', 'running', 'succeeded', 'failed', 'cancelled'));--> statement-breakpoint
-ALTER TABLE "document_processing_runs" ADD CONSTRAINT "document_processing_runs_deadline_scout_attempt_nonnegative_check" CHECK ("deadline_scout_attempt_count" >= 0);--> statement-breakpoint
+-- squawk-ignore constraint-missing-not-valid
+ALTER TABLE "document_processing_runs" ADD CONSTRAINT "document_processing_runs_deadline_scout_attempt_nonneg_check" CHECK ("deadline_scout_attempt_count" >= 0);--> statement-breakpoint
+-- squawk-ignore constraint-missing-not-valid
 ALTER TABLE "document_processing_runs" ADD CONSTRAINT "document_processing_runs_deadline_scout_lifecycle_check" CHECK ((("deadline_scout_status" = 'not_requested' AND "deadline_scout_claimed_at" IS NULL AND "deadline_scout_error_code" IS NULL) OR ("deadline_scout_status" = 'pending' AND "deadline_scout_claimed_at" IS NULL) OR ("deadline_scout_status" = 'running' AND "deadline_scout_claimed_at" IS NOT NULL AND "deadline_scout_error_code" IS NULL) OR ("deadline_scout_status" IN ('succeeded', 'cancelled') AND "deadline_scout_claimed_at" IS NULL) OR ("deadline_scout_status" = 'failed' AND "deadline_scout_claimed_at" IS NULL AND "deadline_scout_error_code" IS NOT NULL)));--> statement-breakpoint
+-- Both scout queue indexes are partial on a status no pre-existing row holds,
+-- so each builds with zero entries. CONCURRENTLY would require splitting the
+-- migrator's wrapping transaction; the build blocks writes only for the
+-- bounded scan the statement_timeout above already caps, and reads stay
+-- available.
+-- squawk-ignore require-concurrent-index-creation
 CREATE INDEX "document_processing_runs_deadline_scout_pending_idx" ON "document_processing_runs" USING btree ("updated_at","id") WHERE "deadline_scout_status" = 'pending';--> statement-breakpoint
+-- squawk-ignore require-concurrent-index-creation
 CREATE INDEX "document_processing_runs_deadline_scout_running_idx" ON "document_processing_runs" USING btree ("deadline_scout_claimed_at","id") WHERE "deadline_scout_status" = 'running';--> statement-breakpoint
 CREATE TABLE "signals" (
 	"id" uuid PRIMARY KEY NOT NULL,

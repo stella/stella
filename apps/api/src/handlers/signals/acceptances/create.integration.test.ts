@@ -38,6 +38,9 @@ const { createAcceptSignal } =
   await import("@/api/handlers/signals/acceptances/create");
 const acceptSignal = createAcceptSignal({
   flushEntitySearchRepairs: flushEntitySearchRepairsMock,
+  // Work obligations only exist under governed workflow; pin the flag so the
+  // assertions below do not depend on the ambient deployment env.
+  taskFeatures: () => ({ governedWorkflow: true, legalLists: false }),
 });
 
 setDefaultTimeout(120_000);

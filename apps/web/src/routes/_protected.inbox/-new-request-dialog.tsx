@@ -75,7 +75,9 @@ const requestSchema = ({
     severity: v.picklist(SIGNAL_SEVERITIES),
   });
 
-const requestDefaultValues = (workspaceId: string) => ({
+type RequestFormValues = v.InferInput<ReturnType<typeof requestSchema>>;
+
+const requestDefaultValues = (workspaceId: string): RequestFormValues => ({
   title: "",
   description: "",
   workspaceId,

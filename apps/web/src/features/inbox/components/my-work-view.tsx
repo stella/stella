@@ -292,8 +292,14 @@ const WorkItemRow = ({ item }: { item: MyWorkItem }) => {
     : "unassigned";
   const statusColor = STATUS_COLORS[workflowStatus];
   const priority = isEntityPriority(item.priority) ? item.priority : null;
-  const PriorityIcon = priority === null ? null : PRIORITY_ICONS[priority];
-  const priorityColor = priority === null ? null : PRIORITY_COLORS[priority];
+  const priorityDisplay =
+    priority === null
+      ? null
+      : {
+          Icon: PRIORITY_ICONS[priority],
+          color: PRIORITY_COLORS[priority],
+          labelKey: PRIORITY_LABEL_KEY[priority],
+        };
   const attentionLabelKey = ATTENTION_LABEL_KEY[item.attention];
   const displayedDate = getDisplayedWorkDate(item);
   const isDue =
@@ -332,10 +338,10 @@ const WorkItemRow = ({ item }: { item: MyWorkItem }) => {
       <span className="min-w-0 flex-1 truncate">
         <UserText>{item.name}</UserText>
       </span>
-      {PriorityIcon && priorityColor && (
-        <PriorityIcon
-          aria-label={t(PRIORITY_LABEL_KEY[priority])}
-          className={cn("size-3.5 shrink-0", priorityColor)}
+      {priorityDisplay !== null && (
+        <priorityDisplay.Icon
+          aria-label={t(priorityDisplay.labelKey)}
+          className={cn("size-3.5 shrink-0", priorityDisplay.color)}
           role="img"
         />
       )}
