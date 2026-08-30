@@ -462,6 +462,103 @@ describe("chat attachment hydration", () => {
     });
   });
 
+  test("keeps write-uncertain thumbnail recovery after a later save failure", async () => {
+    const databaseError = new DatabaseError({
+      message: "user file insert failed",
+    });
+    const thumbnailWriteError = new Error("thumbnail write timed out");
+    const sourceCleanupIntentId = toSafeId<"pendingUpload">(
+      "11111111-1111-4111-8111-111111111114",
+    );
+    const thumbnailCleanupIntentId = toSafeId<"pendingUpload">(
+      "11111111-1111-4111-8111-111111111115",
+    );
+    let reservationCount = 0;
+    const reserveChatObjectCleanupIntent = mock(async () => {
+      reservationCount += 1;
+      return Result.ok([
+        reservationCount === 1
+          ? sourceCleanupIntentId
+          : thumbnailCleanupIntentId,
+      ]);
+    });
+    const settleObjectCleanupIntentsAfterWriter = mock(async () =>
+      Result.ok(undefined),
+    );
+    let putCount = 0;
+    const putS3ObjectWithSignal = mock(async () => {
+      putCount += 1;
+      if (putCount === 2) {
+        throw thumbnailWriteError;
+      }
+    });
+    const testTx = asTestRaw<Transaction>({
+      insert: () => ({
+        values: async () => {
+          throw databaseError;
+        },
+      }),
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: async () => [
+              { id: sourceCleanupIntentId, status: "writing" },
+            ],
+          }),
+        }),
+      }),
+    });
+    const safeDb: SafeDb = async (callback) =>
+      Result.mapError(
+        await Result.tryPromise(async () => await callback(testTx)),
+        () => databaseError,
+      );
+
+    const imageBytes = new Uint8Array(
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+        "base64",
+      ),
+    );
+    const result = await uploadUserFile({
+      dependencies: {
+        generateImageThumbnail: async () =>
+          Result.ok({
+            placeholder: "data:image/png;base64,placeholder",
+            webp: new Uint8Array([1]),
+          }),
+        putS3ObjectWithSignal,
+        reserveChatObjectCleanupIntent,
+        settleObjectCleanupIntentsAfterWriter,
+      },
+      file: {
+        bytes: imageBytes,
+        fileName: "scan.png",
+        mimeType: IMAGE_PNG_MIME_TYPE,
+      },
+      recordAuditEvent: mock(async () => undefined),
+      safeDb,
+      threadId: toSafeId<"chatThread">(
+        "11111111-1111-4111-8111-111111111112",
+      ),
+      userId: toSafeId<"user">("11111111-1111-4111-8111-111111111113"),
+      workspaceId,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    expect(putS3ObjectWithSignal).toHaveBeenCalledTimes(2);
+    expect(settleObjectCleanupIntentsAfterWriter).toHaveBeenCalledWith({
+      intentIds: [thumbnailCleanupIntentId],
+      objectState: "write-uncertain",
+      safeDb,
+    });
+    expect(settleObjectCleanupIntentsAfterWriter).not.toHaveBeenCalledWith({
+      intentIds: [thumbnailCleanupIntentId],
+      objectState: "object-deleted",
+      safeDb,
+    });
+  });
+
   test("stores a sanitized filename, whatever the caller supplied", async () => {
     // SW-0009 waives `no-raw-filename-write` at `hydrateMessages` on two
     // claims: hydration names files from the stored row, and the stored row

@@ -27,6 +27,7 @@ import {
   lockObjectCleanupIntentsForWriter,
   lockOrganizationObjectIntentsForWriter,
   OBJECT_WRITE_RECOVERY_DELAY_MS,
+  retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriterInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
@@ -971,9 +972,10 @@ export const storeFolioCollabSnapshot = async ({
 
         // The room pointer now owns this immutable object. Retire the crash
         // recovery tombstone in the same transaction that published it.
-        await tx
-          .delete(bufferObjectCleanupIntents)
-          .where(eq(bufferObjectCleanupIntents.id, nextCleanupIntentId));
+        await retirePublishedObjectCleanupIntentsInTransaction({
+          intentIds: [nextCleanupIntentId],
+          tx,
+        });
 
         return {
           snapshotRevision: updatedRoom.snapshotRevision,

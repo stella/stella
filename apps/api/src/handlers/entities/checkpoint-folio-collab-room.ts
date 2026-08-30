@@ -20,6 +20,7 @@ import {
   lockActiveWorkspaceForBufferIntent,
   lockObjectCleanupIntentsForWriter,
   reserveObjectCleanupIntent,
+  retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -385,9 +386,10 @@ const checkpointFolioCollabRoom = createSafeHandler(
           workspaceId,
         });
       }
-      await tx
-        .delete(bufferObjectCleanupIntents)
-        .where(eq(bufferObjectCleanupIntents.id, cleanupIntentId));
+      await retirePublishedObjectCleanupIntentsInTransaction({
+        intentIds: [cleanupIntentId],
+        tx,
+      });
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,

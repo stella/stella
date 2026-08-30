@@ -200,6 +200,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-untyped-updates.fixture.ts", [
     "no-untyped-updates/no-untyped-updates",
   ]),
+  fixtureRuleOverride("no-direct-buffer-cleanup-intent-delete.fixture.ts", [
+    "no-direct-buffer-cleanup-intent-delete/no-direct-buffer-cleanup-intent-delete",
+  ]),
   fixtureRuleOverride("public-case-law-db-boundary.fixture.ts", [
     "public-case-law-db-boundary/public-case-law-db-boundary",
   ]),
@@ -466,6 +469,8 @@ export default defineConfig({
     "require-timestamp-id-cursor-codec/require-timestamp-id-cursor-codec":
       "error",
     "no-direct-audit-log-insert/no-direct-audit-log-insert": "error",
+    "no-direct-buffer-cleanup-intent-delete/no-direct-buffer-cleanup-intent-delete":
+      "error",
     "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status":
       "error",
     "require-pagination-cursor-schema/require-pagination-cursor-schema":
@@ -786,6 +791,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
+    "./.oxlint-plugins/no-direct-buffer-cleanup-intent-delete.ts",
     "./.oxlint-plugins/require-buffer-cleanup-intent-status.ts",
     "./.oxlint-plugins/no-unvalidated-json-domain-cast.ts",
     "./.oxlint-plugins/no-raw-public-law-seo.ts",

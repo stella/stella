@@ -8,7 +8,6 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  bufferObjectCleanupIntents,
   fields,
   workspaces,
 } from "@/api/db/schema";
@@ -20,9 +19,11 @@ import type {
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  BUFFER_INTENT_DELETE_TIMEOUT_MS,
   BUFFER_INTENT_WRITE_TIMEOUT_MS,
   lockObjectCleanupIntentsForWriter,
   reserveObjectCleanupIntent,
+  retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
@@ -48,7 +49,11 @@ import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { getS3, putS3ObjectWithSignal, readS3ArrayBuffer } from "@/api/lib/s3";
+import {
+  deleteS3ObjectWithSignal,
+  putS3ObjectWithSignal,
+  readS3ArrayBuffer,
+} from "@/api/lib/s3";
 import {
   brandPersistedEntityId,
   brandPersistedFieldId,
@@ -93,7 +98,14 @@ const cleanupUnpublishedDerivative = async ({
   writeState: "confirmed" | "uncertain";
 }): Promise<void> => {
   const cleanup = await Result.tryPromise({
-    try: async () => await getS3().delete(objectKey),
+    try: async () =>
+      await withTimeout(
+        async (signal) => await deleteS3ObjectWithSignal(objectKey, signal),
+        {
+          label: "file-derivative-compensating-delete",
+          timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+        },
+      ),
     catch: (cause) => cause,
   });
   if (Result.isError(cleanup)) {
@@ -482,9 +494,10 @@ const processPdfDerivativeJob = async ({
       if (updatedRows.length !== 1) {
         return "stale" as const;
       }
-      await tx
-        .delete(bufferObjectCleanupIntents)
-        .where(eq(bufferObjectCleanupIntents.id, cleanupIntent.value));
+      await retirePublishedObjectCleanupIntentsInTransaction({
+        intentIds: [cleanupIntent.value],
+        tx,
+      });
       return "published" as const;
     });
 
@@ -707,9 +720,10 @@ const processImageThumbnailJob = async ({
       if (updatedRows.length !== 1) {
         return "stale" as const;
       }
-      await tx
-        .delete(bufferObjectCleanupIntents)
-        .where(eq(bufferObjectCleanupIntents.id, cleanupIntent.value));
+      await retirePublishedObjectCleanupIntentsInTransaction({
+        intentIds: [cleanupIntent.value],
+        tx,
+      });
       return "published" as const;
     });
 

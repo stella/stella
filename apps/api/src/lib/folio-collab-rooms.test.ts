@@ -7,7 +7,11 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+type Row = Record<string, unknown>;
+type QueuedRows = Row[] | (() => Row[]);
+
 type QueryBuilder = {
+  delete: () => QueryBuilder;
   execute: () => Promise<void>;
   for: () => QueryBuilder;
   insert: () => QueryBuilder;
@@ -16,17 +20,31 @@ type QueryBuilder = {
   innerJoin: () => QueryBuilder;
   leftJoin: () => QueryBuilder;
   where: () => QueryBuilder;
-  limit: () => Promise<Record<string, unknown>[]>;
-  values: () => Promise<Record<string, unknown>[]>;
+  limit: () => QueryBuilder;
+  returning: () => QueryBuilder;
+  set: () => QueryBuilder;
+  then: (
+    onFulfilled: (rows: Row[]) => unknown,
+    onRejected?: (reason: unknown) => unknown,
+  ) => Promise<unknown>;
+  update: () => QueryBuilder;
+  values: (rows: Row | Row[]) => Promise<Row[]>;
 };
 
-let nextRows: Record<string, unknown>[] = [];
-let scopedRows: Record<string, unknown>[][] = [];
+const resolveQueuedRows = (queued: QueuedRows | undefined): Row[] =>
+  typeof queued === "function" ? queued() : (queued ?? []);
+
+let nextRows: Row[] = [];
+let scopedRows: QueuedRows[] = [];
+let scopedLockRows: QueuedRows[] = [];
+let scopedPendingLockReads = 0;
+let scopedInsertedRows: Row[] = [];
+let scopedDeleteCalls = 0;
 let scopedFailure: Error | null = null;
 let scopedFailureAfterCalls = 0;
 let scopedCalls = 0;
-let scopedLockRead = false;
 const builder: QueryBuilder = {
+  delete: () => builder,
   execute: async () => undefined,
   for: () => builder,
   insert: () => builder,
@@ -35,13 +53,22 @@ const builder: QueryBuilder = {
   innerJoin: () => builder,
   leftJoin: () => builder,
   where: () => builder,
-  limit: async () => nextRows,
+  limit: () => builder,
+  returning: () => builder,
+  set: () => builder,
+  then: async (onFulfilled, onRejected) =>
+    await Promise.resolve(nextRows).then(onFulfilled, onRejected),
+  update: () => builder,
   values: async () => [],
 };
 const scopedBuilder: QueryBuilder = {
+  delete: () => {
+    scopedDeleteCalls += 1;
+    return scopedBuilder;
+  },
   execute: async () => undefined,
   for: () => {
-    scopedLockRead = true;
+    scopedPendingLockReads += 1;
     return scopedBuilder;
   },
   insert: () => scopedBuilder,
@@ -50,14 +77,27 @@ const scopedBuilder: QueryBuilder = {
   innerJoin: () => scopedBuilder,
   leftJoin: () => scopedBuilder,
   where: () => scopedBuilder,
-  limit: async () => {
-    if (scopedLockRead) {
-      scopedLockRead = false;
-      return [{ status: "active" }];
+  limit: () => scopedBuilder,
+  returning: () => scopedBuilder,
+  set: () => scopedBuilder,
+  then: async (onFulfilled, onRejected) => {
+    let queued: QueuedRows | undefined;
+    if (scopedPendingLockReads > 0) {
+      scopedPendingLockReads -= 1;
+      queued = scopedLockRows.shift();
+    } else {
+      queued = scopedRows.shift();
     }
-    return scopedRows.shift() ?? [];
+    return await Promise.resolve(resolveQueuedRows(queued)).then(
+      onFulfilled,
+      onRejected,
+    );
   },
-  values: async () => [],
+  update: () => scopedBuilder,
+  values: async (rows) => {
+    scopedInsertedRows.push(...(Array.isArray(rows) ? rows : [rows]));
+    return [];
+  },
 };
 
 const createScopedDbTestDouble =
@@ -112,7 +152,11 @@ afterEach(() => {
   scopedFailure = null;
   scopedFailureAfterCalls = 0;
   scopedCalls = 0;
-  scopedLockRead = false;
+  scopedRows = [];
+  scopedLockRows = [];
+  scopedPendingLockReads = 0;
+  scopedInsertedRows = [];
+  scopedDeleteCalls = 0;
 });
 
 const snapshotKey = (fileId: string) =>
@@ -122,8 +166,6 @@ const snapshotKey = (fileId: string) =>
     organizationId,
     workspaceId,
   });
-
-type Row = Record<string, unknown>;
 
 const validRow = (overrides: Row = {}): Row => ({
   entityId,
@@ -346,6 +388,7 @@ describe("folio collaboration room snapshot generation", () => {
 
     scopedFailure = new Error("snapshot transaction failed");
     scopedFailureAfterCalls = 1;
+    scopedLockRows = [[{ status: "active" }]];
 
     expect(
       storeFolioCollabSnapshot({
@@ -390,19 +433,65 @@ describe("folio collaboration room snapshot generation", () => {
 });
 
 describe("folio collaboration room stored files", () => {
-  test("reserves cleanup before a snapshot write and retires it after publication", async () => {
-    const source = await Bun.file(
-      new URL("folio-collab-rooms.ts", import.meta.url),
-    ).text();
-    const reserve = source.indexOf(".insert(bufferObjectCleanupIntents)");
-    const write = source.indexOf("await writeS3ObjectWithRetry");
-    const publish = source.indexOf(".update(folioCollabRooms)", write);
-    const retire = source.indexOf(".delete(bufferObjectCleanupIntents)");
+  test("locks cleanup ownership and retires it when a snapshot publishes", async () => {
+    const authorized = await authorize(validRow());
+    expect(authorized.status).toBe("authorized");
+    if (authorized.status !== "authorized") {
+      return;
+    }
 
-    expect(reserve).toBeGreaterThan(-1);
-    expect(write).toBeGreaterThan(reserve);
-    expect(publish).toBeGreaterThan(write);
-    expect(retire).toBeGreaterThan(publish);
+    let intentLockRead = false;
+    scopedLockRows = [
+      [{ status: "active" }],
+      [{ status: "active" }],
+      [
+        {
+          generation: 3,
+          seedClaimedBy: firstUserId,
+          seedState: "claimed",
+          yjsSnapshotFileId,
+          yjsSnapshotRevision: 0,
+          yjsSnapshotUpdatedAt: null,
+        },
+      ],
+      () => {
+        intentLockRead = true;
+        const intentId = scopedInsertedRows.at(0)?.["id"];
+        return typeof intentId === "string"
+          ? [{ id: intentId, status: "writing" }]
+          : [];
+      },
+    ];
+    scopedRows = [
+      [{ snapshotRevision: 1 }],
+      () => {
+        const intentId = scopedInsertedRows.at(0)?.["id"];
+        return typeof intentId === "string" ? [{ id: intentId }] : [];
+      },
+    ];
+    const snapshotBytes = new TextEncoder().encode("snapshot");
+
+    const result = await storeFolioCollabSnapshot({
+      authority: { type: "participant", userId: firstUserId },
+      expectedGeneration: 3,
+      expectedSnapshotRevision: 0,
+      snapshotBytes,
+      value: authorized.value,
+    });
+
+    expect(result).toMatchObject({
+      snapshotRevision: 1,
+      sizeBytes: snapshotBytes.byteLength,
+      status: "stored",
+    });
+    expect(intentLockRead).toBe(true);
+    expect(scopedLockRows).toEqual([]);
+    expect(scopedPendingLockReads).toBe(0);
+    expect(scopedDeleteCalls).toBe(1);
+    expect(fake.requests.filter(({ method }) => method === "PUT")).toHaveLength(
+      1,
+    );
+    expect([...fake.objects.keys()]).toHaveLength(1);
   });
 
   test("collects only blobs that were durably written", () => {

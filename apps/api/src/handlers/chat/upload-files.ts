@@ -10,11 +10,7 @@ import { isChatFileMimeType } from "@stll/api-contract/chat-file-types";
 import { docxToMarkdown } from "@stll/folio-core/server";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import {
-  bufferObjectCleanupIntents,
-  chatThreads,
-  userFiles,
-} from "@/api/db/schema";
+import { chatThreads, userFiles } from "@/api/db/schema";
 import {
   CHAT_MAX_FILE_BYTES,
   TEXT_CSV_MIME_TYPE,
@@ -40,6 +36,7 @@ import {
   lockObjectCleanupIntentsForWriter,
   OBJECT_INTENT_WORKSPACE_AVAILABILITY,
   reserveObjectCleanupIntents,
+  retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import {
@@ -56,7 +53,11 @@ import {
 } from "@/api/lib/files/image-derivative";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { getS3, putS3ObjectWithSignal, readS3ArrayBuffer } from "@/api/lib/s3";
+import {
+  deleteS3ObjectWithSignal,
+  putS3ObjectWithSignal,
+  readS3ArrayBuffer,
+} from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { isUserFileUrl, toUserFileUrl } from "@/api/lib/user-files/types";
@@ -69,6 +70,8 @@ import type {
   ChatPart,
   PersistableChatMessage,
 } from "./types";
+
+const CHAT_ATTACHMENT_DELETE_TIMEOUT_MS = 10_000;
 
 export type UserFileThreadAccess = {
   threadId: SafeId<"chatThread">;
@@ -544,6 +547,8 @@ type ReserveChatObjectCleanupIntent = (options: {
 >;
 
 type UploadUserFileDependencies = {
+  generateImageThumbnail?: typeof generateImageThumbnail;
+  putS3ObjectWithSignal?: typeof putS3ObjectWithSignal;
   reserveChatObjectCleanupIntent?: ReserveChatObjectCleanupIntent;
   settleObjectCleanupIntentsAfterWriter?: typeof settleObjectCleanupIntentsAfterWriter;
 };
@@ -634,6 +639,10 @@ export const uploadUserFile = async ({
     const settleCleanupIntents =
       dependencies?.settleObjectCleanupIntentsAfterWriter ??
       settleObjectCleanupIntentsAfterWriter;
+    const generateThumbnail =
+      dependencies?.generateImageThumbnail ?? generateImageThumbnail;
+    const putS3Object =
+      dependencies?.putS3ObjectWithSignal ?? putS3ObjectWithSignal;
     // Enforce the MIME allowlist at the storage boundary, not only in
     // validateChatFileParts at message-send: user files are later served
     // inline (Content-Disposition without a filename), so a stored
@@ -724,7 +733,7 @@ export const uploadUserFile = async ({
       placeholder: string;
     } | null = null;
     if (shouldGenerateImageThumbnail({ mimeType: file.mimeType })) {
-      const thumbnailResult = await generateImageThumbnail(file.bytes);
+      const thumbnailResult = await generateThumbnail(file.bytes);
       if (Result.isError(thumbnailResult)) {
         captureError(thumbnailResult.error, {
           stage: "chat-thumbnail-generate",
@@ -784,12 +793,7 @@ export const uploadUserFile = async ({
       try: async () =>
         await withTimeout(
           async (signal) =>
-            await putS3ObjectWithSignal(
-              s3Key,
-              file.bytes,
-              file.mimeType,
-              signal,
-            ),
+            await putS3Object(s3Key, file.bytes, file.mimeType, signal),
           {
             label: "chat-attachment-put",
             timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
@@ -799,7 +803,11 @@ export const uploadUserFile = async ({
     });
     if (Result.isError(writeSourceResult)) {
       const cleanupResult = await Result.tryPromise({
-        try: async () => await getS3().delete(s3Key),
+        try: async () =>
+          await deleteS3ObjectWithSignal(
+            s3Key,
+            AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+          ),
         catch: (cause) => cause,
       });
       if (Result.isError(cleanupResult)) {
@@ -846,7 +854,7 @@ export const uploadUserFile = async ({
         try: async () =>
           await withTimeout(
             async (signal) =>
-              await putS3ObjectWithSignal(
+              await putS3Object(
                 preparedThumbnail.key,
                 preparedThumbnail.bytes,
                 THUMBNAIL_MIME_TYPE,
@@ -865,7 +873,11 @@ export const uploadUserFile = async ({
           userFileId: id,
         });
         const cleanupResult = await Result.tryPromise({
-          try: async () => await getS3().delete(preparedThumbnail.key),
+          try: async () =>
+            await deleteS3ObjectWithSignal(
+              preparedThumbnail.key,
+              AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+            ),
           catch: (cause) => cause,
         });
         if (Result.isError(cleanupResult)) {
@@ -881,7 +893,11 @@ export const uploadUserFile = async ({
         });
         if (Result.isError(settlement)) {
           const sourceCleanup = await Result.tryPromise({
-            try: async () => await getS3().delete(s3Key),
+            try: async () =>
+              await deleteS3ObjectWithSignal(
+                s3Key,
+                AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+              ),
             catch: (cause) => cause,
           });
           const sourceSettlement = await settleCleanupIntents({
@@ -915,6 +931,7 @@ export const uploadUserFile = async ({
             (intentId) => !settledThumbnailIds.has(intentId),
           ),
         );
+        thumbnailCleanupIntentIds = [];
       } else {
         thumbnailFileId = preparedThumbnail.fileId;
         placeholder = preparedThumbnail.placeholder;
@@ -949,9 +966,10 @@ export const uploadUserFile = async ({
         // The row now owns the objects. Retire crash-recovery ownership in the
         // same transaction so a save rollback leaves the tombstones durable.
         // audit: skip; storage recovery bookkeeping for the CREATE below.
-        await tx
-          .delete(bufferObjectCleanupIntents)
-          .where(inArray(bufferObjectCleanupIntents.id, publishedIntentIds));
+        await retirePublishedObjectCleanupIntentsInTransaction({
+          intentIds: publishedIntentIds,
+          tx,
+        });
       }
 
       await recordAuditEvent(tx, {
@@ -980,7 +998,11 @@ export const uploadUserFile = async ({
     }
 
     const sourceCleanupResult = await Result.tryPromise({
-      try: async () => await getS3().delete(s3Key),
+      try: async () =>
+        await deleteS3ObjectWithSignal(
+          s3Key,
+          AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+        ),
       catch: (cause) => cause,
     });
     const sourceSettlement = await settleCleanupIntents({
@@ -994,7 +1016,11 @@ export const uploadUserFile = async ({
       thumbnailKey === null
         ? Result.ok(undefined)
         : await Result.tryPromise({
-            try: async () => await getS3().delete(thumbnailKey),
+            try: async () =>
+              await deleteS3ObjectWithSignal(
+                thumbnailKey,
+                AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+              ),
             catch: (cause) => cause,
           });
     const thumbnailSettlement = await settleCleanupIntents({

@@ -19,9 +19,11 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  isBufferIntentWorkspaceUnavailableError,
   lockActiveWorkspaceForBufferIntent,
   lockObjectCleanupIntentsForWriter,
   reserveObjectCleanupIntent,
+  retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -344,7 +346,13 @@ const publishFolioCollabVersion = createSafeHandler(
     });
     if (Result.isError(written)) {
       await cleanupSource(S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN);
-      throw written.error;
+      return Result.err(
+        new HandlerError({
+          cause: written.error,
+          status: 500,
+          message: "Failed to store the collaborative publication.",
+        }),
+      );
     }
     const writeCertainty = written.value;
 
@@ -516,9 +524,10 @@ const publishFolioCollabVersion = createSafeHandler(
             status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
             workspaceId,
           });
-          await tx
-            .delete(bufferObjectCleanupIntents)
-            .where(eq(bufferObjectCleanupIntents.id, sourceCleanupIntentId));
+          await retirePublishedObjectCleanupIntentsInTransaction({
+            intentIds: [sourceCleanupIntentId],
+            tx,
+          });
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.UPDATE,
             resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,
@@ -591,6 +600,14 @@ const publishFolioCollabVersion = createSafeHandler(
     });
     if (Result.isError(publicationResult)) {
       await cleanupSource(writeCertainty);
+      if (isBufferIntentWorkspaceUnavailableError(publicationResult.error)) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "This document cannot be published right now.",
+          }),
+        );
+      }
       if (isFolioCollabIdempotencyConstraintError(publicationResult.error)) {
         return Result.err(
           new HandlerError({

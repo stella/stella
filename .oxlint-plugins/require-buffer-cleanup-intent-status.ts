@@ -10,9 +10,10 @@
 //     { objectKey: secondKey },
 //   ]);
 //
-// Allows explicit states, inserts into other tables, and payloads assembled in
-// variables. The last case is an intentional syntax-analysis boundary: this
-// rule does not claim to resolve arbitrary data flow.
+// Allows explicit non-undefined state expressions, inserts into other tables,
+// and payloads assembled in variables. The last case is an intentional
+// syntax-analysis boundary: this rule does not claim to resolve arbitrary data
+// flow.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
@@ -36,6 +37,14 @@ const isSchemaModule = (specifier: string): boolean =>
   specifier === "@/api/db/schema" ||
   /(?:^|\/)db\/schema(?:\/entities)?(?:\.ts)?$/u.test(specifier);
 
+const isUndefinedExpression = (node: unknown): boolean => {
+  const expression = unwrapExpression(node);
+  return (
+    isIdentifier(expression, "undefined") ||
+    (expression?.type === "UnaryExpression" && expression.operator === "void")
+  );
+};
+
 const objectHasExplicitStatus = (node: unknown): boolean => {
   const object = unwrapExpression(node);
   if (
@@ -44,12 +53,16 @@ const objectHasExplicitStatus = (node: unknown): boolean => {
   ) {
     return false;
   }
-  return object.properties.some(
-    (property) =>
-      isAstNode(property) &&
-      property.type === "Property" &&
-      getPropertyName(property.key) === "status",
-  );
+  return object.properties.some((property) => {
+    if (
+      !isAstNode(property) ||
+      property.type !== "Property" ||
+      getPropertyName(property.key) !== "status"
+    ) {
+      return false;
+    }
+    return !isUndefinedExpression(property.value);
+  });
 };
 
 const getInsertedTable = (valuesCall: unknown): unknown => {

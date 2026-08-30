@@ -1,5 +1,5 @@
 import { Result, TaggedError, panic } from "better-result";
-import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, ne, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -27,6 +27,10 @@ export const BUFFER_INTENT_DELETE_TIMEOUT_MS = 30 * 1000;
 export const BUFFER_INTENT_WRITE_TIMEOUT_MS = 2 * 60 * 1000;
 export const OBJECT_WRITE_RECOVERY_DELAY_MS = BUFFER_INTENT_WRITE_TIMEOUT_MS;
 const BUFFER_CLEANUP_RETRY_MAX_EXPONENT = 14;
+// A timed-out PUT is bounded to two minutes, but a provider may finish an
+// accepted request after the client aborts. Eleven retry windows
+// keep exact-key deletion active for more than a day before retirement.
+export const BUFFER_INTENT_RECOVERY_RETIRE_AFTER_ATTEMPTS = 11;
 
 export const OBJECT_INTENT_WORKSPACE_AVAILABILITY = {
   ACTIVE: "active",
@@ -97,6 +101,9 @@ type BufferIntentDeletionRow = Pick<
 class BufferIntentWorkspaceUnavailableError extends TaggedError(
   "BufferIntentWorkspaceUnavailableError",
 )<{ message: string }> {}
+
+export const isBufferIntentWorkspaceUnavailableError = (error: unknown) =>
+  BufferIntentWorkspaceUnavailableError.is(error);
 
 class BufferIntentOwnershipError extends TaggedError(
   "BufferIntentOwnershipError",
@@ -300,7 +307,15 @@ export const settleObjectCleanupIntentsAfterWriterInTransaction = async ({
     // audit: skip; original-writer crash-recovery ownership settlement only.
     const deleted = await tx
       .delete(bufferObjectCleanupIntents)
-      .where(inArray(bufferObjectCleanupIntents.id, uniqueIntentIds))
+      .where(
+        and(
+          inArray(bufferObjectCleanupIntents.id, uniqueIntentIds),
+          eq(
+            bufferObjectCleanupIntents.status,
+            BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
+          ),
+        ),
+      )
       .returning({ id: bufferObjectCleanupIntents.id });
     if (deleted.length !== uniqueIntentIds.length) {
       throw new BufferIntentOwnershipError({
@@ -311,10 +326,28 @@ export const settleObjectCleanupIntentsAfterWriterInTransaction = async ({
   }
   // audit: skip; exact-key cleanup still needs durable recovery, either because
   // deletion failed or because a timed-out PUT may still complete later.
+  const stateUpdate =
+    objectState === "write-uncertain"
+      ? {
+          attemptCount: 0,
+          nextAttemptAt: new Date(),
+          status: UNRETIRED_OBJECT_WRITER_SETTLEMENT_STATUS[objectState],
+        }
+      : {
+          status: UNRETIRED_OBJECT_WRITER_SETTLEMENT_STATUS[objectState],
+        };
   const updated = await tx
     .update(bufferObjectCleanupIntents)
-    .set({ status: UNRETIRED_OBJECT_WRITER_SETTLEMENT_STATUS[objectState] })
-    .where(inArray(bufferObjectCleanupIntents.id, uniqueIntentIds))
+    .set(stateUpdate)
+    .where(
+      and(
+        inArray(bufferObjectCleanupIntents.id, uniqueIntentIds),
+        eq(
+          bufferObjectCleanupIntents.status,
+          BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
+        ),
+      ),
+    )
     .returning({ id: bufferObjectCleanupIntents.id });
   if (updated.length !== uniqueIntentIds.length) {
     throw new BufferIntentOwnershipError({
@@ -323,10 +356,25 @@ export const settleObjectCleanupIntentsAfterWriterInTransaction = async ({
   }
 };
 
+/** Retire exact-key recovery ownership in the transaction that publishes it. */
+export const retirePublishedObjectCleanupIntentsInTransaction = async ({
+  intentIds,
+  tx,
+}: {
+  intentIds: SafeId<"pendingUpload">[];
+  tx: Transaction;
+}): Promise<void> =>
+  await settleObjectCleanupIntentsAfterWriterInTransaction({
+    intentIds,
+    objectState: "object-deleted",
+    tx,
+  });
+
 /** Settle recovery ownership after the original writer can no longer publish.
  * Successful exact-key deletion retires the proof only after a confirmed PUT.
  * A failed deletion becomes a writer-free orphan; an ambiguous PUT stays in
- * recovery because it may still complete after the writer returns. */
+ * recovery through the late-write quarantine because it may still complete
+ * after the writer returns. */
 export const settleObjectCleanupIntentsAfterWriter = async ({
   intentIds,
   objectState,
@@ -368,6 +416,7 @@ export const releaseObjectCleanupIntentsForLifecycle = async (
   await tx
     .update(bufferObjectCleanupIntents)
     .set({
+      attemptCount: 0,
       nextAttemptAt: new Date(),
       status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
     })
@@ -761,9 +810,9 @@ const reconcileStaleBufferIntentBatch = async ({
 };
 
 /**
- * Retry exact-key cleanup with exponential backoff. Lifecycle-transferred rows
- * stay until their original writer settles; writer-free orphan rows retire
- * after the reconciler confirms deletion.
+ * Retry exact-key cleanup with exponential backoff. Writer-free orphan rows
+ * retire after confirmed deletion. Recovery rows survive a full late-write
+ * quarantine, then retire only after one final confirmed deletion.
  */
 export const reconcileBufferObjectCleanupIntents = async ({
   safeDb,
@@ -847,7 +896,10 @@ export const reconcileBufferObjectCleanupIntents = async ({
         });
       }
       return Result.isOk(cleanup) &&
-        row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED
+        (row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED ||
+          (row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING &&
+            row.attemptCount >=
+              BUFFER_INTENT_RECOVERY_RETIRE_AFTER_ATTEMPTS))
         ? row.id
         : null;
     }),
@@ -864,9 +916,9 @@ export const reconcileBufferObjectCleanupIntents = async ({
         .where(
           and(
             inArray(bufferObjectCleanupIntents.id, retiredIds),
-            eq(
+            ne(
               bufferObjectCleanupIntents.status,
-              BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+              BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
             ),
           ),
         );

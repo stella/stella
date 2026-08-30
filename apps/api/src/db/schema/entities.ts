@@ -1203,7 +1203,8 @@ export const BUFFER_OBJECT_CLEANUP_INTENT_STATUS = {
  * and `entities.test.ts` fails if one is added. The tombstone is the only
  * record that a reserved key may still be published: recovery must outlive the
  * owner cascade and the cleanup that interrupted the write, until the original
- * writer confirms it can no longer publish. Matter writers reserve a finalized
+ * writer confirms it can no longer publish or the bounded late-write
+ * quarantine completes. Matter writers reserve a finalized
  * `{org}/{workspace}/{file}` key; organization-scoped chat writers reserve
  * their `{user}/{file}` key with a null workspace. No bucket lifecycle rule
  * expires either class and no prefix sweep can rediscover one.

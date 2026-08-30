@@ -12,6 +12,8 @@ const s3DeleteMock = mock(
 );
 
 const {
+  BUFFER_INTENT_RECOVERY_RETIRE_AFTER_ATTEMPTS,
+  isBufferIntentWorkspaceUnavailableError,
   lockObjectCleanupIntentsForWriter,
   lockActiveWorkspaceForBufferIntent,
   OBJECT_INTENT_WORKSPACE_AVAILABILITY,
@@ -19,6 +21,7 @@ const {
   reconcileStaleBufferIntentsGlobally,
   releaseObjectCleanupIntentsForLifecycle,
   reserveObjectCleanupIntents,
+  settleObjectCleanupIntentsAfterWriterInTransaction,
 } = await import("@/api/lib/buffer-intent-reconciliation");
 
 const pendingUploadId = toSafeId<"pendingUpload">(
@@ -131,6 +134,7 @@ test("rejects a writer reservation after workspace deletion seals", async () => 
     _tag: "BufferIntentWorkspaceUnavailableError",
     message: "Workspace is not active",
   });
+  expect(isBufferIntentWorkspaceUnavailableError(rejection)).toBeTrue();
 });
 
 test("reserves multi-workspace ownership under one ordered lock", async () => {
@@ -302,6 +306,25 @@ test("holds every exact-key intent until its writer transaction settles", async 
   expect(locks).toEqual(["update"]);
 });
 
+test("rejects a second settlement after writer ownership has transferred", async () => {
+  const tx = asTestRaw<Transaction>({
+    delete: () => ({
+      where: () => ({ returning: async () => [] }),
+    }),
+  });
+
+  await expect(
+    settleObjectCleanupIntentsAfterWriterInTransaction({
+      intentIds: [pendingUploadId],
+      objectState: "object-deleted",
+      tx,
+    }),
+  ).rejects.toMatchObject({
+    _tag: "BufferIntentOwnershipError",
+    message: "Object cleanup settlement ownership was lost",
+  });
+});
+
 test("transfers in-flight exact keys to lifecycle cleanup", async () => {
   const updates: unknown[] = [];
   const tx = asTestRaw<Transaction>({
@@ -321,10 +344,60 @@ test("transfers in-flight exact keys to lifecycle cleanup", async () => {
 
   expect(updates).toEqual([
     {
+      attemptCount: 0,
       nextAttemptAt: expect.any(Date),
       status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
     },
   ]);
+});
+
+test("retires recovering cleanup ownership after the late-write quarantine", async () => {
+  let retired = 0;
+  const tx = asTestRaw<Transaction>({
+    delete: () => ({
+      where: async () => {
+        retired += 1;
+      },
+    }),
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          orderBy: () => ({
+            limit: () => ({
+              for: async () => [
+                {
+                  attemptCount: BUFFER_INTENT_RECOVERY_RETIRE_AFTER_ATTEMPTS,
+                  id: pendingUploadId,
+                  objectKey: `${organizationId}/${workspaceId}/recovered.docx`,
+                  status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
+                },
+              ],
+            }),
+          }),
+        }),
+      }),
+    }),
+    update: () => ({
+      set: () => ({ where: async () => undefined }),
+    }),
+  });
+  const safeDb = asTestRaw<SafeDb>(
+    async <T>(run: (transaction: Transaction) => Promise<T>) =>
+      await Result.tryPromise({
+        try: async () => await run(tx),
+        catch: (cause) => cause,
+      }),
+  );
+
+  const claimed = await reconcileBufferObjectCleanupIntents({
+    deleteObject: s3DeleteMock,
+    limit: 1,
+    safeDb,
+  });
+
+  expect(claimed).toBe(1);
+  expect(s3DeleteMock).toHaveBeenCalledTimes(1);
+  expect(retired).toBe(1);
 });
 
 test("keeps a reclaimed writer intent recoverable after deleting its object", async () => {
