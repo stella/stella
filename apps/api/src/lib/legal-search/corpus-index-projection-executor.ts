@@ -14,7 +14,7 @@ import {
   readReservedCorpusProjectionMaterialsTx,
   type CorpusProjectionMaterial,
 } from "@/api/lib/legal-search/corpus-index-projection-materials";
-import type { CorpusProjectionWorkScope } from "@/api/lib/legal-search/corpus-index-projection-scope";
+import type { CorpusProjectionScopedWorkSelection } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   abandonCorpusProjectionAppendTx,
   cancelCorpusProjectionReservationTx,
@@ -57,12 +57,12 @@ const mapSequentially = async <Input, Output>(
 
 export const CORPUS_PROJECTION_PAYLOAD_READ_CONCURRENCY_MAX = 32;
 
-type ExecuteCorpusProjectionAppendCycleOptions = {
+type ExecuteCorpusProjectionAppendCycleOptions<
+  Family extends CorpusProjectionIntentLease["family"],
+> = CorpusProjectionScopedWorkSelection<Family> & {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
-  family: CorpusProjectionIntentLease["family"];
   generation: string;
-  scope: CorpusProjectionWorkScope;
   limit: number;
   leaseMs: number;
   payloadReadConcurrency: number;
@@ -661,7 +661,9 @@ const processPreparedWindows = async ({
  * Execute one bounded append cycle. Plane chooses scope, cadence, limits, and
  * concurrency; this primitive owns durable ordering and exact outcomes.
  */
-export const executeCorpusProjectionAppendCycle = async ({
+export const executeCorpusProjectionAppendCycle = async <
+  Family extends CorpusProjectionIntentLease["family"],
+>({
   runInTransaction,
   client,
   family,
@@ -672,7 +674,7 @@ export const executeCorpusProjectionAppendCycle = async ({
   payloadReadConcurrency,
   retryDelayMs,
   payloadRetryLimit,
-}: ExecuteCorpusProjectionAppendCycleOptions): Promise<CorpusProjectionAppendCycleResult> => {
+}: ExecuteCorpusProjectionAppendCycleOptions<Family>): Promise<CorpusProjectionAppendCycleResult> => {
   validateExecutorPolicy(
     payloadReadConcurrency,
     retryDelayMs,

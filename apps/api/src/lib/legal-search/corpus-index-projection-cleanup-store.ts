@@ -24,7 +24,7 @@ import {
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
   entityIdsForCorpusProjectionWorkScope,
-  type CorpusProjectionWorkScope,
+  type CorpusProjectionScopedWorkOptions,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   CORPUS_PROJECTION_LEASE_MAX_MS,
@@ -93,18 +93,19 @@ export type CorpusProjectionCleanupLease = {
   leaseToken: string;
 };
 
-type ClaimCorpusProjectionCleanupOptions = {
-  family: CorpusFamily;
-  generation: string;
-  indexId: string;
-  limit: number;
-  leaseMs: number;
-  scope?: CorpusProjectionWorkScope;
-  testNow?: Date;
-  newLeaseToken?: () => string;
-};
+type ClaimCorpusProjectionCleanupOptions<Family extends CorpusFamily> =
+  CorpusProjectionScopedWorkOptions<Family> & {
+    generation: string;
+    indexId: string;
+    limit: number;
+    leaseMs: number;
+    testNow?: Date;
+    newLeaseToken?: () => string;
+  };
 
-export const claimCorpusProjectionCleanupTx = async (
+export const claimCorpusProjectionCleanupTx = async <
+  Family extends CorpusFamily,
+>(
   tx: Transaction,
   {
     family,
@@ -115,7 +116,7 @@ export const claimCorpusProjectionCleanupTx = async (
     scope = CORPUS_PROJECTION_GENERATION_SCOPE,
     testNow,
     newLeaseToken = () => Bun.randomUUIDv7(),
-  }: ClaimCorpusProjectionCleanupOptions,
+  }: ClaimCorpusProjectionCleanupOptions<Family>,
 ): Promise<CorpusProjectionCleanupLease[]> => {
   const limit = validateCleanupBatchSize(requestedLimit);
   const leaseMs = validateLeaseMs(requestedLeaseMs);
@@ -306,19 +307,21 @@ export type CorpusProjectionCleanupSettlementLease = {
   leaseToken: string;
 };
 
-type ClaimCorpusProjectionCleanupSettlementOptions = {
-  family: CorpusFamily;
+type ClaimCorpusProjectionCleanupSettlementOptions<
+  Family extends CorpusFamily,
+> = CorpusProjectionScopedWorkOptions<Family> & {
   generation: string;
   indexId: string;
   limit: number;
   leaseMs: number;
-  scope?: CorpusProjectionWorkScope;
   /** Deterministic database-test clock; production expiry uses PostgreSQL. */
   testNow?: Date;
   newLeaseToken?: () => string;
 };
 
-export const claimCorpusProjectionCleanupSettlementTx = async (
+export const claimCorpusProjectionCleanupSettlementTx = async <
+  Family extends CorpusFamily,
+>(
   tx: Transaction,
   {
     family,
@@ -329,7 +332,7 @@ export const claimCorpusProjectionCleanupSettlementTx = async (
     scope = CORPUS_PROJECTION_GENERATION_SCOPE,
     testNow,
     newLeaseToken = () => Bun.randomUUIDv7(),
-  }: ClaimCorpusProjectionCleanupSettlementOptions,
+  }: ClaimCorpusProjectionCleanupSettlementOptions<Family>,
 ): Promise<CorpusProjectionCleanupSettlementLease | null> => {
   const limit = validateCleanupBatchSize(requestedLimit);
   const leaseMs = validateLeaseMs(requestedLeaseMs);
@@ -751,20 +754,21 @@ export type CorpusProjectionExpiredIntent = {
   >;
 };
 
-type RecoverExpiredCorpusProjectionIntentsOptions = {
-  family: CorpusFamily;
-  generation: string;
-  limit: number;
-  scope?: CorpusProjectionWorkScope;
-  testNow?: Date;
-};
+type RecoverExpiredCorpusProjectionIntentsOptions<Family extends CorpusFamily> =
+  CorpusProjectionScopedWorkOptions<Family> & {
+    generation: string;
+    limit: number;
+    testNow?: Date;
+  };
 
 /**
  * Recover only states whose external outcome is known from the recorded phase:
  * an expired reservation is cancelled, an expired append is assumed written,
  * and an expired delete is retried exactly.
  */
-export const recoverExpiredCorpusProjectionIntentsTx = async (
+export const recoverExpiredCorpusProjectionIntentsTx = async <
+  Family extends CorpusFamily,
+>(
   tx: Transaction,
   {
     family,
@@ -772,7 +776,7 @@ export const recoverExpiredCorpusProjectionIntentsTx = async (
     limit: requestedLimit,
     scope = CORPUS_PROJECTION_GENERATION_SCOPE,
     testNow,
-  }: RecoverExpiredCorpusProjectionIntentsOptions,
+  }: RecoverExpiredCorpusProjectionIntentsOptions<Family>,
 ): Promise<CorpusProjectionExpiredIntent[]> => {
   const limit = validateCleanupBatchSize(requestedLimit);
   const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);

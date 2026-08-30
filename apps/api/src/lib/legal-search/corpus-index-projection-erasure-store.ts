@@ -14,7 +14,7 @@ import { corpusIndexUnknownAppendBarrierAt } from "@/api/lib/legal-search/corpus
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
   entityIdsForCorpusProjectionWorkScope,
-  type CorpusProjectionWorkScope,
+  type CorpusProjectionScopedWorkOptions,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
 
 export const CORPUS_PROJECTION_ERASURE_MAX_BATCH_SIZE = 256;
@@ -22,13 +22,12 @@ export const CORPUS_PROJECTION_ERASURE_MAX_REVISIONS = 1024;
 
 type ProjectionIntentId = SafeId<"corpusIndexProjectionIntent">;
 
-type AdvanceCorpusProjectionErasuresOptions = {
-  family: CorpusFamily;
-  generation: string;
-  limit: number;
-  scope?: CorpusProjectionWorkScope;
-  testNow?: Date;
-};
+type AdvanceCorpusProjectionErasuresOptions<Family extends CorpusFamily> =
+  CorpusProjectionScopedWorkOptions<Family> & {
+    generation: string;
+    limit: number;
+    testNow?: Date;
+  };
 
 export type AdvanceCorpusProjectionErasuresResult = {
   claimedCount: number;
@@ -55,7 +54,9 @@ const validateLimit = (limit: number): number => {
  * exact revision is terminal. Engine I/O happens in the separate cleanup
  * phase; this transaction only advances durable state.
  */
-export const advanceCorpusProjectionErasuresTx = async (
+export const advanceCorpusProjectionErasuresTx = async <
+  Family extends CorpusFamily,
+>(
   tx: Transaction,
   {
     family,
@@ -63,7 +64,7 @@ export const advanceCorpusProjectionErasuresTx = async (
     limit: requestedLimit,
     scope = CORPUS_PROJECTION_GENERATION_SCOPE,
     testNow,
-  }: AdvanceCorpusProjectionErasuresOptions,
+  }: AdvanceCorpusProjectionErasuresOptions<Family>,
 ): Promise<AdvanceCorpusProjectionErasuresResult> => {
   const limit = validateLimit(requestedLimit);
   const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
