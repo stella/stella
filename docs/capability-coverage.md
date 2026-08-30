@@ -533,7 +533,7 @@ mechanics, and similar), not gaps in coverage.
 | Reason                 | Count |
 | ---------------------- | ----- |
 | account_lifecycle      | 4     |
-| assistant_chat         | 15    |
+| assistant_chat         | 16    |
 | auth_plumbing          | 8     |
 | billing_ui             | 1     |
 | chat_thread_ui         | 2     |
