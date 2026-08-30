@@ -785,8 +785,9 @@ fn is_all_caps_boilerplate_line(
     .is_some_and(|ch| matches!(ch, ',' | ':' | ';' | '(' | '-' | '–' | '—'));
   let has_structural_clause = legal_form_data.is_some_and(|data| {
     data.has_leading_clause_phrase(context.before)
-      || (context.before.trim().is_empty()
-        && data.has_subject_clause_tail(context.after))
+      || data.has_subject_clause_tail(context.after)
+        && (context.before.trim().is_empty()
+          || data.is_party_label_prefix(context.before))
   });
   let legal_form_heading = entity.source == DetectionSource::LegalForm
     && !has_caption_delimiter
@@ -2508,6 +2509,34 @@ mod tests {
     })
     .unwrap();
 
+    assert!(entities.is_empty());
+
+    let labelled = "PARTY A: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        labelled,
+        "ACME LIMITED",
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      labelled,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+    assert_eq!(entities.len(), 1);
+
+    let generic = "SECTION A: ACME LIMITED IS A PARTY TO THIS AGREEMENT.\n";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        generic,
+        "ACME LIMITED",
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      generic,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
     assert!(entities.is_empty());
   }
 

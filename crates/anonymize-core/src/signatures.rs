@@ -712,7 +712,7 @@ fn try_emit(
   }
   if !(is_name_shape(&candidate, data)
     || matches!(context, CandidateContext::PersonValueField)
-      && (is_single_name_token(&candidate)
+      && (is_person_value_name_token(&candidate)
         || is_particle_led_name_shape(&candidate, data)))
   {
     return false;
@@ -811,9 +811,9 @@ fn is_name_shape(text: &str, data: &PreparedSignatureData) -> bool {
     .all(|token| is_name_particle(token, data) || is_cap_token(token))
 }
 
-fn is_single_name_token(text: &str) -> bool {
+fn is_person_value_name_token(text: &str) -> bool {
   let text_len = text.chars().map(char::len_utf16).sum::<usize>();
-  (3..=MAX_NAME_LEN).contains(&text_len)
+  (2..=MAX_NAME_LEN).contains(&text_len)
     && !text.chars().any(char::is_whitespace)
     && is_cap_token(text)
 }
@@ -1901,6 +1901,46 @@ mod tests {
         })
         .is_empty(),
         "unexpected person field match for {text:?}",
+      );
+    }
+  }
+
+  #[test]
+  fn person_value_fields_accept_short_names_only_with_reviewed_labels() {
+    let data = prepared_signature_data(
+      SignatureData {
+        person_value_labels: vec![String::from("name")],
+        form_field_labels: vec![String::from("name")],
+        labels: vec![String::from("by")],
+        ..SignatureData::default()
+      },
+      Vec::new(),
+    );
+
+    let entities = detect_signatures(&DetectSignaturesArgs {
+      full_text: "Name: Li",
+      data: &data,
+      first_names: None,
+      name_corpus: None,
+    });
+    assert_eq!(
+      entities
+        .iter()
+        .map(|entity| entity.text.as_str())
+        .collect::<Vec<_>>(),
+      vec!["Li"]
+    );
+
+    for text in ["Li", "By: Li", "Name: li", "Name: A"] {
+      assert!(
+        detect_signatures(&DetectSignaturesArgs {
+          full_text: text,
+          data: &data,
+          first_names: None,
+          name_corpus: None,
+        })
+        .is_empty(),
+        "unexpected short-name match for {text:?}",
       );
     }
   }

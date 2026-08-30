@@ -215,6 +215,34 @@ impl PreparedLegalFormData {
       .any(|word| contains_lowercase(&self.role_heads, word))
   }
 
+  pub(crate) fn is_party_label_prefix(&self, text: &str) -> bool {
+    let trimmed = text.trim();
+    let Some(label) = trimmed
+      .strip_suffix(':')
+      .or_else(|| trimmed.strip_suffix('：'))
+      .map(str::trim_end)
+    else {
+      return false;
+    };
+    let mut words = label
+      .split(|ch: char| !ch.is_alphanumeric())
+      .filter(|word| !word.is_empty());
+    let Some(role) = words.next() else {
+      return false;
+    };
+    if !contains_lowercase(&self.role_heads, role) {
+      return false;
+    }
+    let Some(discriminator) = words.next() else {
+      return true;
+    };
+    words.next().is_none()
+      && discriminator.chars().count() <= 2
+      && discriminator
+        .chars()
+        .all(|ch| ch.is_uppercase() || ch.is_numeric())
+  }
+
   fn bridges_lowercase(&self, token: &str) -> bool {
     match &self.lowercase_bridge {
       PreparedLowercaseBridge::Open => true,
