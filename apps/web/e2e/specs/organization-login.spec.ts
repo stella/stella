@@ -67,10 +67,9 @@ const createOrganizationSelectionSession = async ({
       `${API_BASE_URL}/api/auth/organization/create`,
       { data: primaryOrganization },
     );
-    expect(
-      primaryCreateResponse.ok(),
-      await primaryCreateResponse.text(),
-    ).toBe(true);
+    expect(primaryCreateResponse.ok(), await primaryCreateResponse.text()).toBe(
+      true,
+    );
     const secondaryCreateResponse = await loginApi.post(
       `${API_BASE_URL}/api/auth/organization/create`,
       { data: secondaryOrganization },
