@@ -22542,6 +22542,54 @@
       "version": "0.5.1"
     },
     {
+      "bom-ref": "pkg:cargo/termcolor@1.4.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        },
+        {
+          "license": {
+            "id": "Unlicense"
+          }
+        }
+      ],
+      "name": "termcolor",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/termcolor@1.4.1",
+      "type": "library",
+      "version": "1.4.1"
+    },
+    {
       "bom-ref": "pkg:cargo/thiserror@1.0.69",
       "evidence": {
         "identity": [
@@ -24304,6 +24352,92 @@
       "purl": "pkg:cargo/try-lock@0.2.5",
       "type": "library",
       "version": "0.2.5"
+    },
+    {
+      "bom-ref": "pkg:cargo/ts-rs@12.0.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "756050066659291d47a554a9f558125db17428b073c5ffce1daf5dcb0f7231d8"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "ts-rs",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/ts-rs@12.0.1",
+      "type": "library",
+      "version": "12.0.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/ts-rs-macros@12.0.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "38d90eea51bc7988ef9e674bf80a85ba6804739e535e9cab48e4bb34a8b652aa"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "ts-rs-macros",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/ts-rs-macros@12.0.1",
+      "type": "library",
+      "version": "12.0.1"
     },
     {
       "bom-ref": "pkg:cargo/typed-path@0.12.3",
@@ -34519,6 +34653,7 @@
         "pkg:cargo/tower@0.5.3",
         "pkg:cargo/tracing-subscriber@0.3.23",
         "pkg:cargo/tracing@0.1.44",
+        "pkg:cargo/ts-rs@12.0.1",
         "pkg:cargo/uuid@1.25.0",
         "pkg:cargo/windows-icons@0.4.0",
         "pkg:cargo/windows-native-keyring-store@1.1.0",
@@ -35040,6 +35175,12 @@
     },
     {
       "dependsOn": [
+        "pkg:cargo/winapi-util@0.1.11"
+      ],
+      "ref": "pkg:cargo/termcolor@1.4.1"
+    },
+    {
+      "dependsOn": [
         "pkg:cargo/thiserror-impl@2.0.20"
       ],
       "ref": "pkg:cargo/thiserror@2.0.20"
@@ -35304,6 +35445,22 @@
     {
       "dependsOn": [],
       "ref": "pkg:cargo/try-lock@0.2.5"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/thiserror@2.0.20",
+        "pkg:cargo/ts-rs-macros@12.0.1"
+      ],
+      "ref": "pkg:cargo/ts-rs@12.0.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
+        "pkg:cargo/syn@2.0.119",
+        "pkg:cargo/termcolor@1.4.1"
+      ],
+      "ref": "pkg:cargo/ts-rs-macros@12.0.1"
     },
     {
       "dependsOn": [],
