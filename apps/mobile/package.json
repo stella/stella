@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "expo": "~57.0.15",
-    "expo-constants": "~57.0.13",
+    "expo-constants": "~57.0.14",
     "expo-linking": "~57.0.7",
     "expo-router": "~57.0.15",
     "expo-status-bar": "~57.0.1",
