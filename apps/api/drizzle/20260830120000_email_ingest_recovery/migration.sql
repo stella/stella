@@ -18,7 +18,7 @@ ALTER TABLE "buffer_object_cleanup_intents"
 -- squawk-ignore transaction-nesting
 COMMIT;
 --> statement-breakpoint
-SET statement_timeout = '30min';
+SET statement_timeout = 0;
 --> statement-breakpoint
 SET lock_timeout = '1s';
 --> statement-breakpoint
