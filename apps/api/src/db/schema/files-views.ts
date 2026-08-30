@@ -8,7 +8,7 @@ import {
   safeUuid,
   safeWorkspaceId,
   user,
-  userPolicies,
+  userFilePolicies,
   workspaceViewTemplatePolicies,
   wsPolicies,
   timestamptz,
@@ -53,7 +53,7 @@ export const userFiles = p.pgTable(
       .on(table.threadId, table.createdAt),
     p.index("user_files_user_hash_idx").on(table.userId, table.sha256Hex),
     p.index("user_files_s3_key_idx").on(table.s3Key),
-    ...userPolicies(),
+    ...userFilePolicies(),
   ],
 );
 

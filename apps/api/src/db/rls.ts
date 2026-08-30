@@ -259,6 +259,11 @@ const chatDerivedThreadScopeCheck = (threadIdSql: SQL) => sql`(
   )
 )`;
 
+const userFileScopeCheck = sql`(
+  ${userCheck} AND
+  ${chatDerivedThreadScopeCheck(sql`user_files.thread_id`)}
+)`;
+
 export const wsPolicies = () => [
   p.pgPolicy("workspace_select", {
     for: "select",
@@ -528,6 +533,30 @@ export const userPolicies = () => [
     for: "delete",
     to: stella,
     using: userCheck,
+  }),
+];
+
+export const userFilePolicies = () => [
+  p.pgPolicy("user_select", {
+    for: "select",
+    to: stella,
+    using: userFileScopeCheck,
+  }),
+  p.pgPolicy("user_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: userFileScopeCheck,
+  }),
+  p.pgPolicy("user_update", {
+    for: "update",
+    to: stella,
+    using: userFileScopeCheck,
+    withCheck: userFileScopeCheck,
+  }),
+  p.pgPolicy("user_delete", {
+    for: "delete",
+    to: stella,
+    using: userFileScopeCheck,
   }),
 ];
 

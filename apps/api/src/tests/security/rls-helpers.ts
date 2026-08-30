@@ -47,6 +47,7 @@ import {
   templates,
   templateVersions,
   timeEntries,
+  userFiles,
   workspaceContacts,
   workspaceMembers,
   workspaces,
@@ -87,11 +88,13 @@ export const createTestIds = () => ({
   wsA2: wsId(),
   wsB1: wsId(),
   memberA1org: mintAuthProviderIdValue(),
+  memberA1orgB: mintAuthProviderIdValue(),
   memberA2org: mintAuthProviderIdValue(),
   memberB1org: mintAuthProviderIdValue(),
   memberAdminOrg: mintAuthProviderIdValue(),
   memberA1wsA1: id<"workspaceMember">(),
   memberA1wsA2: id<"workspaceMember">(),
+  memberA1wsB1: id<"workspaceMember">(),
   memberA2wsA2: id<"workspaceMember">(),
   memberB1wsB1: id<"workspaceMember">(),
   // Workspace-scoped rows
@@ -153,6 +156,8 @@ export const createTestIds = () => ({
   // owner. The user boundary is the only thing that can hide it from user A1,
   // which is what the "different user in the same workspace" tests assert.
   chatThreadWorkspaceA1UserA2: id<"chatThread">(),
+  chatThreadGlobalB1UserA1: id<"chatThread">(),
+  chatThreadWorkspaceB1UserA1: id<"chatThread">(),
   chatThreadWorkspaceB1: id<"chatThread">(),
   chatMessageGlobalA1: id<"chatMessage">(),
   chatMessageWorkspaceA1: id<"chatMessage">(),
@@ -161,6 +166,10 @@ export const createTestIds = () => ({
   chatMessageWorkspaceB1: id<"chatMessage">(),
   fileChatThreadA1: id<"fileChatThread">(),
   templateChatThreadA1: id<"templateChatThread">(),
+  userFileGlobalA1: id<"userFile">(),
+  userFileWorkspaceA1: id<"userFile">(),
+  userFileGlobalB1UserA1: id<"userFile">(),
+  userFileWorkspaceB1UserA1: id<"userFile">(),
   // Firm-scope memory per organization: the cross-tenant matrix lists
   // memories as workspace A's org and asserts org B's firm row never
   // appears. Firm scope (not user/workspace) isolates the organization
@@ -319,6 +328,13 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       createdAt: new Date(),
     },
     {
+      id: ids.memberA1orgB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      role: "member",
+      createdAt: new Date(),
+    },
+    {
       id: ids.memberB1org,
       organizationId: ids.orgB,
       userId: ids.userB1,
@@ -403,6 +419,11 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       id: ids.memberA2wsA2,
       workspaceId: ids.wsA2,
       userId: ids.userA2,
+    },
+    {
+      id: ids.memberA1wsB1,
+      workspaceId: ids.wsB1,
+      userId: ids.userA1,
     },
     {
       id: ids.memberB1wsB1,
@@ -1056,11 +1077,63 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       workspaceId: ids.wsA1,
     },
     {
+      id: ids.chatThreadGlobalB1UserA1,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      title: "Global thread B1 (user A1)",
+      workspaceId: null,
+    },
+    {
+      id: ids.chatThreadWorkspaceB1UserA1,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      title: "Workspace thread B1 (user A1)",
+      workspaceId: ids.wsB1,
+    },
+    {
       id: ids.chatThreadWorkspaceB1,
       organizationId: ids.orgB,
       userId: ids.userB1,
       title: "Workspace thread B1",
       workspaceId: ids.wsB1,
+    },
+  ]);
+
+  const userFileFixture = {
+    fileName: "fixture.txt",
+    mimeType: "text/plain",
+    sizeBytes: 7,
+    sha256Hex: "0".repeat(64),
+  };
+  await db.insert(userFiles).values([
+    {
+      ...userFileFixture,
+      id: ids.userFileGlobalA1,
+      userId: ids.userA1,
+      s3Key: `user-files/${ids.userFileGlobalA1}`,
+      threadId: ids.chatThreadGlobalA1,
+    },
+    {
+      ...userFileFixture,
+      id: ids.userFileWorkspaceA1,
+      userId: ids.userA1,
+      s3Key: `user-files/${ids.userFileWorkspaceA1}`,
+      threadId: ids.chatThreadWorkspaceA1,
+    },
+    {
+      ...userFileFixture,
+      id: ids.userFileGlobalB1UserA1,
+      userId: ids.userA1,
+      s3Key: `user-files/${ids.userFileGlobalB1UserA1}`,
+      threadId: ids.chatThreadGlobalB1UserA1,
+    },
+    {
+      ...userFileFixture,
+      id: ids.userFileWorkspaceB1UserA1,
+      userId: ids.userA1,
+      s3Key: `user-files/${ids.userFileWorkspaceB1UserA1}`,
+      threadId: ids.chatThreadWorkspaceB1UserA1,
+      thumbnailFileId: Bun.randomUUIDv7(),
     },
   ]);
 

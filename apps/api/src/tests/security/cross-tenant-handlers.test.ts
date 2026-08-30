@@ -37,6 +37,8 @@ import readRateEntries from "@/api/handlers/rates/entries-read";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
 import getTemplate from "@/api/handlers/templates/get";
 import readTimeEntryById from "@/api/handlers/time-entries/get";
+import readUserFileContent from "@/api/handlers/user-files/read-content";
+import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
 import listWorkObligations from "@/api/handlers/work-obligations/queues/list";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -82,6 +84,7 @@ type TestHandlerContext = {
 
 type IsolationContext = {
   ids: TestIds;
+  sameUserWorkspaceB: TestHandlerContext;
   workspaceA: TestHandlerContext;
   workspaceB: TestHandlerContext;
 };
@@ -137,6 +140,32 @@ const savedSearchCriteria = (
 });
 
 const isolationCases: IsolationCase[] = [
+  {
+    name: "user file content",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(readUserFileContent, workspaceA, {
+        params: { fileId: testIds.userFileWorkspaceB1UserA1 },
+      }),
+    runBPositive: async ({ ids: testIds, sameUserWorkspaceB }) =>
+      await runHandler(readUserFileContent, sameUserWorkspaceB, {
+        params: { fileId: testIds.userFileWorkspaceB1UserA1 },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: expectStatus(302),
+  },
+  {
+    name: "user file thumbnail",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(readUserFileThumbnail, workspaceA, {
+        params: { fileId: testIds.userFileWorkspaceB1UserA1 },
+      }),
+    runBPositive: async ({ ids: testIds, sameUserWorkspaceB }) =>
+      await runHandler(readUserFileThumbnail, sameUserWorkspaceB, {
+        params: { fileId: testIds.userFileWorkspaceB1UserA1 },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: expectStatus(302),
+  },
   {
     name: "entity read by id",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
@@ -601,6 +630,12 @@ describe("cross-tenant handler isolation", () => {
 
 const createIsolationContext = (): IsolationContext => ({
   ids,
+  sameUserWorkspaceB: createWorkspaceContext({
+    activeWorkspaceIds: [ids.wsB1],
+    organizationId: ids.orgB,
+    userId: ids.userA1,
+    workspaceId: ids.wsB1,
+  }),
   workspaceA: createWorkspaceContext({
     activeWorkspaceIds: [ids.wsA1],
     organizationId: ids.orgA,
