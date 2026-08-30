@@ -259,9 +259,12 @@ const notificationMessage = (
   t: ReturnType<typeof useTranslations>,
   { kind, metadata }: Notification,
 ): string => {
+  // Parameterised branches pass their key as a literal: handing use-intl a
+  // map-indexed key together with a params object blows past TypeScript's
+  // instantiation depth. NOTIFICATION_MESSAGE_KEY stays the totality gate.
   switch (kind) {
     case NOTIFICATION_KIND.MENTION:
-      return t(NOTIFICATION_MESSAGE_KEY[NOTIFICATION_KIND.MENTION], {
+      return t("notifications.kind.mention", {
         actorName: parameter(metadata, "actorName"),
       });
     case NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED:
@@ -273,20 +276,19 @@ const notificationMessage = (
         NOTIFICATION_MESSAGE_KEY[NOTIFICATION_KIND.REPORT_EXPORT_FAILED],
       );
     case NOTIFICATION_KIND.FLOW_RUN_COMPLETED:
-      return t(NOTIFICATION_MESSAGE_KEY[NOTIFICATION_KIND.FLOW_RUN_COMPLETED], {
+      return t("notifications.kind.flowRunCompleted", {
         flowName: parameter(metadata, "flowName"),
       });
     case NOTIFICATION_KIND.FLOW_RUN_FAILED:
-      return t(NOTIFICATION_MESSAGE_KEY[NOTIFICATION_KIND.FLOW_RUN_FAILED], {
+      return t("notifications.kind.flowRunFailed", {
         flowName: parameter(metadata, "flowName"),
       });
     case NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL:
-      return t(
-        NOTIFICATION_MESSAGE_KEY[NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL],
-        { flowName: parameter(metadata, "flowName") },
-      );
+      return t("notifications.kind.flowRunAwaitingApproval", {
+        flowName: parameter(metadata, "flowName"),
+      });
     case NOTIFICATION_KIND.ANNOUNCEMENT:
-      return t(NOTIFICATION_MESSAGE_KEY[NOTIFICATION_KIND.ANNOUNCEMENT], {
+      return t("notifications.kind.announcement", {
         title: parameter(metadata, "title"),
       });
     default:

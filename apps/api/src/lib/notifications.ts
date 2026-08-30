@@ -168,7 +168,7 @@ export const createNotifications = async (
   const inserted: { userId: string; organizationId: SafeId<"organization"> }[] =
     [];
   for (const batch of chunked(values, NOTIFICATION_INSERT_BATCH_SIZE)) {
-    // oxlint-disable-next-line no-await-in-loop -- batches are written in order so one oversized fan-out cannot hold every pool connection at once
+    // oxlint-disable-next-line n -- batches are written in order so one oversized fan-out cannot hold every pool connection at once
     const batchRows = await (writer.kind === "callerTransaction"
       ? insert(writer.tx, batch)
       : (writer.database ?? rootDb).transaction(
