@@ -2,14 +2,14 @@ import { panic } from "better-result";
 import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { newNotificationRealtimeEvent } from "@stll/api-contract";
-import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
+import type { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import type {
   NotificationEntityType,
   NotificationKind,
   NotificationMetadataByKind,
 } from "@stll/api-contract/notifications";
 
-import { user } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { notifications, workspaceMembers } from "@/api/db/schema";
@@ -168,7 +168,7 @@ export const createNotifications = async (
   const inserted: { userId: string; organizationId: SafeId<"organization"> }[] =
     [];
   for (const batch of chunked(values, NOTIFICATION_INSERT_BATCH_SIZE)) {
-    // oxlint-disable-next-line n -- batches are written in order so one oversized fan-out cannot hold every pool connection at once
+    // oxlint-disable-next-line no-await-in-loop -- batches are written in order so one oversized fan-out cannot hold every pool connection at once
     const batchRows = await (writer.kind === "callerTransaction"
       ? insert(writer.tx, batch)
       : (writer.database ?? rootDb).transaction(
@@ -276,3 +276,19 @@ export const resolveMentionTargets = async (
     userIds: members.map((member) => brandPersistedUserId(member.userId)),
   };
 };
+
+/**
+ * Recipients are read through the owner connection: an announcement's audience
+ * is every member of the organization, which no single caller's RLS scope
+ * reveals. Callers pass their cap plus one so an oversized audience is
+ * detected and refused rather than silently truncated.
+ */
+export const listAnnouncementRecipients = async (
+  organizationId: SafeId<"organization">,
+  limit: number,
+): Promise<{ userId: string }[]> =>
+  await rootDb
+    .select({ userId: member.userId })
+    .from(member)
+    .where(eq(member.organizationId, organizationId))
+    .limit(limit);

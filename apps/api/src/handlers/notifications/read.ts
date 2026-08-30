@@ -22,6 +22,7 @@ const config = {
 const markNotificationRead = createSafeRootHandler(
   config,
   async function* ({ params, safeDb, session, user }) {
+    // audit: skip — per-user read-state bookkeeping; no shared resource changes
     const updated = yield* Result.await(
       safeDb((tx) =>
         tx

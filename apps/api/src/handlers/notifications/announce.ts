@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
@@ -7,15 +6,16 @@ import {
   NOTIFICATION_KIND,
 } from "@stll/api-contract/notifications";
 
-import { member } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { createNotifications } from "@/api/lib/notifications";
+import {
+  createNotifications,
+  listAnnouncementRecipients,
+} from "@/api/lib/notifications";
 import type { NewNotification } from "@/api/lib/notifications";
 import { logger } from "@/api/lib/observability/logger";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -98,18 +98,13 @@ export const createPublishAnnouncementEndpoint = ({
     }
 
     const organizationId = session.activeOrganizationId;
-    // Recipients are read through the owner connection: the audience is every
-    // member of the organization, which no single caller's RLS scope reveals.
-    // Read one past the cap so an oversized organization is refused rather
-    // than silently announced to a truncated audience.
     const recipients = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await rootDb
-            .select({ userId: member.userId })
-            .from(member)
-            .where(eq(member.organizationId, organizationId))
-            .limit(LIMITS.announcementRecipientsMax + 1),
+          await listAnnouncementRecipients(
+            organizationId,
+            LIMITS.announcementRecipientsMax + 1,
+          ),
       ),
     );
     if (recipients.length > LIMITS.announcementRecipientsMax) {
