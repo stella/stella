@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { SIGNAL_KIND, SUGGESTION_KIND } from "@stll/api-contract/signals";
 import { WORK_OBLIGATION_STATUS } from "@stll/api-contract/workflow-status";
 
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import {
   daysUntilDate,
   daysWaitingSince,
@@ -19,7 +19,8 @@ import type { WorkAttentionObligation } from "@/api/lib/scouts/work-attention.lo
 const NOW = new Date("2026-03-01T09:00:00.000Z");
 const ENTITY_ID = createSafeId<"entity">();
 const WORKSPACE_ID = createSafeId<"workspace">();
-const OWNER_ID = createSafeId<"user">();
+// Auth-provider ids are never minted here; the fixture pins one instead.
+const OWNER_ID = toSafeId<"user">("0198fa3d-fc8d-7000-8000-000000000001");
 
 const daysBefore = (days: number): Date =>
   new Date(NOW.getTime() - days * 24 * 60 * 60 * 1000);
