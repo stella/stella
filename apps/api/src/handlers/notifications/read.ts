@@ -13,6 +13,8 @@ const config = {
     "Mark one of the caller's notifications read. Idempotent: marking an " +
     "already-read notification succeeds and changes nothing. Answers with the " +
     "caller's remaining unread count.",
+  // permissions-exempt: the write touches only the caller's own notification
+  // rows (user-scoped RLS); workspace:read is the access floor.
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "native_tool_ui" },
   access: "write",

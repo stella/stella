@@ -10,6 +10,8 @@ const config = {
     "Mark every unread notification the caller has in their active " +
     "organization as read. Notifications in the caller's other organizations " +
     "are untouched. Answers with how many were marked.",
+  // permissions-exempt: the write touches only the caller's own notification
+  // rows (user-scoped RLS); workspace:read is the access floor.
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "native_tool_ui" },
   access: "write",

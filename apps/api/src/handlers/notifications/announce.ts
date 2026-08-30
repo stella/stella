@@ -29,6 +29,8 @@ const config = {
     "reports a configuration error when that list is unset. The announcement " +
     "is an awareness pointer with a title only; it carries no work state and " +
     "cannot be recalled once filed.",
+  // permissions-exempt: the real gate is the deployment operator allowlist
+  // enforced inside the handler; organization-role grants cannot model it.
   permissions: { workspace: ["read"] },
   // Internal on purpose: the gate here is deployment configuration, not an
   // organization role, so no agent consent scope can express who may call it.
