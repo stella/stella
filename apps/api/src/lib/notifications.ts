@@ -2,14 +2,14 @@ import { panic } from "better-result";
 import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { newNotificationRealtimeEvent } from "@stll/api-contract";
-import type { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import type {
+  NOTIFICATION_KIND,
   NotificationEntityType,
   NotificationKind,
   NotificationMetadataByKind,
 } from "@stll/api-contract/notifications";
 
-import { member, user } from "@/api/db/auth-schema";
+import { member as organizationMember, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { notifications, workspaceMembers } from "@/api/db/schema";
@@ -288,7 +288,7 @@ export const listAnnouncementRecipients = async (
   limit: number,
 ): Promise<{ userId: string }[]> =>
   await rootDb
-    .select({ userId: member.userId })
-    .from(member)
-    .where(eq(member.organizationId, organizationId))
+    .select({ userId: organizationMember.userId })
+    .from(organizationMember)
+    .where(eq(organizationMember.organizationId, organizationId))
     .limit(limit);

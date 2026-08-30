@@ -18,9 +18,9 @@ const config = {
 const markAllNotificationsRead = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user }) {
-    // audit: skip — per-user read-state bookkeeping; no shared resource changes
     const updated = yield* Result.await(
       safeDb((tx) =>
+        // audit: skip — per-user read-state bookkeeping; no shared resource changes
         tx
           .update(notifications)
           .set({ readAt: new Date() })

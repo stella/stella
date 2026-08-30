@@ -1424,7 +1424,7 @@
     }
   },
   "/settings/account/memory target": {
-    "depth": 5,
+    "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/list-sessions",
