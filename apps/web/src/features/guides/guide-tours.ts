@@ -5,10 +5,6 @@ import { GUIDE_TOUR_IDS, type GuideTour } from "@/features/guides/guide-types";
 // checklist renders these in order. `as const satisfies` validates every
 // translation key and anchor/route against its closed union without widening.
 //
-// The Chat tour is fully wired end-to-end (its anchors are registered on the
-// real composer). Documents, Playbooks, Workflows, and Tabular review are
-// defined with their anchors but not yet registered on their surfaces; the
-// runner skips their steps gracefully (and logs the skip) until wiring lands.
 export const GUIDE_TOURS = [
   {
     id: GUIDE_TOUR_IDS.chat,
@@ -18,7 +14,7 @@ export const GUIDE_TOURS = [
     steps: [
       {
         anchor: GUIDE_ANCHORS.chatComposer,
-        route: "/chat",
+        route: { type: "static", to: "/chat" },
         titleKey: "guides.tours.chat.steps.composer.title",
         bodyKey: "guides.tours.chat.steps.composer.body",
         // The composer is a rich-text editor, not a plain input, so the
@@ -102,8 +98,10 @@ export const GUIDE_TOURS = [
     steps: [
       {
         anchor: GUIDE_ANCHORS.documentsUpload,
+        route: { type: "workspace-view", target: "unfiltered-table" },
         titleKey: "guides.tours.documents.steps.upload.title",
         bodyKey: "guides.tours.documents.steps.upload.body",
+        whenKey: "guides.tours.documents.steps.upload.when",
         seed: { kind: "none" },
       },
       {
@@ -118,12 +116,38 @@ export const GUIDE_TOURS = [
     id: GUIDE_TOUR_IDS.playbooks,
     titleKey: "guides.tours.playbooks.title",
     descriptionKey: "guides.tours.playbooks.description",
-    estMinutes: 3,
+    estMinutes: 4,
     steps: [
+      {
+        anchor: GUIDE_ANCHORS.playbooksOverview,
+        route: { type: "static", to: "/knowledge/playbooks" },
+        titleKey: "guides.tours.playbooks.steps.overview.title",
+        bodyKey: "guides.tours.playbooks.steps.overview.body",
+        whenKey: "guides.tours.playbooks.steps.overview.when",
+        seed: { kind: "none" },
+      },
       {
         anchor: GUIDE_ANCHORS.playbooksCreate,
         titleKey: "guides.tours.playbooks.steps.create.title",
         bodyKey: "guides.tours.playbooks.steps.create.body",
+        seed: { kind: "none" },
+        interaction: {
+          kind: "transition",
+          reverseAnchor: GUIDE_ANCHORS.playbooksBack,
+        },
+      },
+      {
+        anchor: GUIDE_ANCHORS.playbooksBasics,
+        titleKey: "guides.tours.playbooks.steps.basics.title",
+        bodyKey: "guides.tours.playbooks.steps.basics.body",
+        whenKey: "guides.tours.playbooks.steps.basics.when",
+        seed: { kind: "none" },
+      },
+      {
+        anchor: GUIDE_ANCHORS.playbooksAddPosition,
+        titleKey: "guides.tours.playbooks.steps.positions.title",
+        bodyKey: "guides.tours.playbooks.steps.positions.body",
+        whenKey: "guides.tours.playbooks.steps.positions.when",
         seed: { kind: "none" },
       },
     ],
@@ -132,13 +156,44 @@ export const GUIDE_TOURS = [
     id: GUIDE_TOUR_IDS.workflows,
     titleKey: "guides.tours.workflows.title",
     descriptionKey: "guides.tours.workflows.description",
-    estMinutes: 4,
+    estMinutes: 5,
     steps: [
       {
+        anchor: GUIDE_ANCHORS.workflowsOverview,
+        route: { type: "static", to: "/knowledge/workflows" },
+        titleKey: "guides.tours.workflows.steps.overview.title",
+        bodyKey: "guides.tours.workflows.steps.overview.body",
+        whenKey: "guides.tours.workflows.steps.overview.when",
+        seed: { kind: "none" },
+      },
+      {
         anchor: GUIDE_ANCHORS.workflowsCreate,
-        route: "/knowledge/workflows",
         titleKey: "guides.tours.workflows.steps.create.title",
         bodyKey: "guides.tours.workflows.steps.create.body",
+        seed: { kind: "none" },
+        interaction: {
+          kind: "transition",
+          reverseAnchor: GUIDE_ANCHORS.workflowsBack,
+        },
+      },
+      {
+        anchor: GUIDE_ANCHORS.workflowsTrigger,
+        titleKey: "guides.tours.workflows.steps.trigger.title",
+        bodyKey: "guides.tours.workflows.steps.trigger.body",
+        whenKey: "guides.tours.workflows.steps.trigger.when",
+        seed: { kind: "none" },
+      },
+      {
+        anchor: GUIDE_ANCHORS.workflowsSteps,
+        titleKey: "guides.tours.workflows.steps.steps.title",
+        bodyKey: "guides.tours.workflows.steps.steps.body",
+        seed: { kind: "none" },
+      },
+      {
+        anchor: GUIDE_ANCHORS.workflowsReviewGate,
+        titleKey: "guides.tours.workflows.steps.reviewGate.title",
+        bodyKey: "guides.tours.workflows.steps.reviewGate.body",
+        whenKey: "guides.tours.workflows.steps.reviewGate.when",
         seed: { kind: "none" },
       },
     ],
@@ -150,9 +205,26 @@ export const GUIDE_TOURS = [
     estMinutes: 4,
     steps: [
       {
+        anchor: GUIDE_ANCHORS.tabularReviewTable,
+        route: { type: "workspace-view", target: "unfiltered-table" },
+        titleKey: "guides.tours.tabularReview.steps.table.title",
+        bodyKey: "guides.tours.tabularReview.steps.table.body",
+        whenKey: "guides.tours.tabularReview.steps.table.when",
+        seed: { kind: "none" },
+      },
+      {
         anchor: GUIDE_ANCHORS.tabularReviewAddColumn,
         titleKey: "guides.tours.tabularReview.steps.addColumn.title",
         bodyKey: "guides.tours.tabularReview.steps.addColumn.body",
+        whenKey: "guides.tours.tabularReview.steps.addColumn.when",
+        seed: { kind: "none" },
+        interaction: { kind: "open" },
+      },
+      {
+        anchor: GUIDE_ANCHORS.tabularReviewAnswerType,
+        titleKey: "guides.tours.tabularReview.steps.answerType.title",
+        bodyKey: "guides.tours.tabularReview.steps.answerType.body",
+        whenKey: "guides.tours.tabularReview.steps.answerType.when",
         seed: { kind: "none" },
       },
     ],

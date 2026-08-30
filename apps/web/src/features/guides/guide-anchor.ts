@@ -2,7 +2,9 @@ import type { GuideAnchorId } from "@/features/guides/guide-anchors";
 
 export const GUIDE_ANCHOR_ATTRIBUTE = "data-guide-anchor";
 
-type GuideAnchorProps = { readonly "data-guide-anchor"?: GuideAnchorId };
+export type GuideAnchorProps = {
+  readonly "data-guide-anchor"?: GuideAnchorId;
+};
 
 // Marks a real UI element as a guide tour target. Spread the result onto the
 // element's DOM node, e.g.

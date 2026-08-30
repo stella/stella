@@ -8,13 +8,14 @@ import { Button } from "@stll/ui/button";
 import { buttonVariants } from "@stll/ui/button-variants";
 import { cn } from "@stll/ui/utils";
 
+import type { GuideAnchorProps } from "@/features/guides/guide-anchor";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 const DEFAULT_SUPPORT_EMAIL = "hello@stll.app";
 
 type EmptyScreenMediaPlacement = "side" | "bottom";
 
-type EmptyScreenAction = {
+type EmptyScreenAction = GuideAnchorProps & {
   label: string;
   icon?: LucideIcon;
   onClick?: () => void;
@@ -222,6 +223,7 @@ type EmptyScreenActionButtonProps = {
 
 const EmptyScreenActionButton = ({ action }: EmptyScreenActionButtonProps) => {
   const Icon = action.icon;
+  const guideAnchorId = action["data-guide-anchor"];
   const children = (
     <>
       {Icon && <Icon />}
@@ -230,6 +232,8 @@ const EmptyScreenActionButton = ({ action }: EmptyScreenActionButtonProps) => {
   );
 
   if (action.href) {
+    const href = sanitizeHref(action.href);
+
     return (
       <a
         aria-disabled={action.disabled}
@@ -237,7 +241,8 @@ const EmptyScreenActionButton = ({ action }: EmptyScreenActionButtonProps) => {
           buttonVariants(),
           action.disabled && "pointer-events-none opacity-64",
         )}
-        href={sanitizeHref(action.href)}
+        href={href}
+        data-guide-anchor={guideAnchorId}
         onClick={(event) => {
           if (action.disabled) {
             event.preventDefault();
@@ -250,7 +255,11 @@ const EmptyScreenActionButton = ({ action }: EmptyScreenActionButtonProps) => {
   }
 
   return (
-    <Button disabled={action.disabled} onClick={action.onClick}>
+    <Button
+      data-guide-anchor={guideAnchorId}
+      disabled={action.disabled}
+      onClick={action.onClick}
+    >
       {children}
     </Button>
   );

@@ -5,6 +5,8 @@ import { cn } from "@stll/ui/utils";
 
 import { getInternalColId } from "@/components/workspaces/entity-utils";
 import type { WorkspaceTable } from "@/components/workspaces/table/types";
+import { guideAnchor } from "@/features/guides/guide-anchor";
+import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
 import {
@@ -35,7 +37,18 @@ export const BottomRow = ({
       onFolderCreated={onFolderCreated}
       uploadOnly
       render={
-        <WorkspaceGridRow className={cn(bottomRowClassName)} role="button">
+        <WorkspaceGridRow
+          className={cn(bottomRowClassName)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              event.currentTarget.click();
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          {...guideAnchor(GUIDE_ANCHORS.documentsUpload)}
+        >
           <WorkspaceGridCell
             className="z-10 flex items-center justify-center border-t"
             style={{
