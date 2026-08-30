@@ -185,7 +185,6 @@ type NotificationRowProps = {
 };
 
 const NotificationRow = ({ notification, onRead }: NotificationRowProps) => {
-  const t = useTranslations();
   const unread = notification.readAt === null;
 
   return (
@@ -206,7 +205,7 @@ const NotificationRow = ({ notification, onRead }: NotificationRowProps) => {
           )}
         />
         <span className="min-w-0 flex-1">
-          {notificationMessage(t, notification)}
+          <NotificationMessage notification={notification} />
         </span>
       </button>
     </li>
@@ -255,13 +254,17 @@ const parameter = (
  * and every branch takes its key from the map above, so a new kind fails to
  * compile here as well as there.
  */
-const notificationMessage = (
-  t: ReturnType<typeof useTranslations>,
-  { kind, metadata }: Notification,
-): string => {
-  // Parameterised branches pass their key as a literal: handing use-intl a
-  // map-indexed key together with a params object blows past TypeScript's
-  // instantiation depth. NOTIFICATION_MESSAGE_KEY stays the totality gate.
+// A component rather than a helper taking `t`: annotating a parameter as
+// `ReturnType<typeof useTranslations>` re-instantiates the whole message-tree
+// generic per call and exceeds TypeScript's instantiation depth; the hook's
+// inferred `t` does not. Parameterised branches pass literal keys for the
+// same reason; NOTIFICATION_MESSAGE_KEY stays the totality gate.
+const NotificationMessage = ({
+  notification: { kind, metadata },
+}: {
+  notification: Notification;
+}) => {
+  const t = useTranslations();
   switch (kind) {
     case NOTIFICATION_KIND.MENTION:
       return t("notifications.kind.mention", {
