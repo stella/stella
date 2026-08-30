@@ -37,9 +37,7 @@ import {
 import { createFileKey, createUserFileKey } from "@/api/lib/file-key";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { cents } from "@/api/lib/money";
-import {
-  completeOrganizationDeletion,
-} from "@/api/lib/organization-storage-teardown";
+import { completeOrganizationDeletion } from "@/api/lib/organization-storage-teardown";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import type { WorkspaceDeletionDatabase } from "@/api/lib/workspace-deletion";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
@@ -508,8 +506,7 @@ describe("workspace deletion", () => {
     const [compactionBefore, threadBefore] = await Promise.all([
       testDb
         .select({
-          workspaceIds:
-            chatThreadCompactions.memoryExtractionDataWorkspaceIds,
+          workspaceIds: chatThreadCompactions.memoryExtractionDataWorkspaceIds,
         })
         .from(chatThreadCompactions)
         .where(eq(chatThreadCompactions.id, fixture.derivedCompactionId)),
