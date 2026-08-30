@@ -231,8 +231,8 @@ const auditEntityNameSnapshot = () => sql<string | null>`coalesce(
   ${auditLogs.metadata} ->> 'fileName',
   ${auditLogs.changes} -> 'created' -> 'new' ->> 'name',
   ${auditLogs.changes} -> 'created' -> 'new' ->> 'fileName',
-  ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'name',
-  ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'fileName'
+  ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'fileName',
+  ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
 )`;
 
 const auditEntityMimeTypeSnapshot = () => sql<string | null>`coalesce(
@@ -247,6 +247,7 @@ const siblingVersionEntityNameSnapshot = () => sql<string | null>`(
     ${versionSnapshotAuditLogs.metadata} ->> 'fileName',
     ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'name',
     ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'fileName',
+    ${versionSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'fileName',
     ${versionSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
   )
   from ${auditLogs} as "version_snapshot_audit_logs"
@@ -260,6 +261,7 @@ const siblingVersionEntityNameSnapshot = () => sql<string | null>`(
       ${versionSnapshotAuditLogs.metadata} ->> 'fileName',
       ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'name',
       ${versionSnapshotAuditLogs.changes} -> 'created' -> 'new' ->> 'fileName',
+      ${versionSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'fileName',
       ${versionSnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
     ) is not null
   order by ${versionSnapshotAuditLogs.createdAt}, ${versionSnapshotAuditLogs.id}
@@ -279,13 +281,19 @@ const siblingDeletedEntityKind = () => sql<string | null>`(
 )`;
 
 const siblingDeletedEntityName = () => sql<string | null>`(
-  select ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
+  select coalesce(
+    ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'fileName',
+    ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
+  )
   from ${auditLogs} as "entity_snapshot_audit_logs"
   where ${entitySnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
     and ${entitySnapshotAuditLogs.workspaceId} = ${auditLogs.workspaceId}
     and ${entitySnapshotAuditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
     and ${entitySnapshotAuditLogs.resourceId} = ${resolvedAuditEntityIdSnapshot()}
-    and ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name' is not null
+    and coalesce(
+      ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'fileName',
+      ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
+    ) is not null
   order by ${entitySnapshotAuditLogs.createdAt} desc, ${entitySnapshotAuditLogs.id} desc
   limit 1
 )`;

@@ -368,7 +368,8 @@ describe("matter overview activity", () => {
             kind: "document",
             mimeType:
               "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            name: "Agreement.docx",
+            fileName: "Agreement.docx",
+            name: "Agreement",
           },
           new: null,
         },
