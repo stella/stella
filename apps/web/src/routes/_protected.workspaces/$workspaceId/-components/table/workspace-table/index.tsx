@@ -14,13 +14,11 @@ import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { cn } from "@stll/ui/utils";
-import type { CalculationSelection } from "@stll/workspace-ui/calculations";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { countDescendants } from "@/components/workspaces/entity-utils";
 import type { WorkspaceTable as WorkspaceTableType } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import type { WorkspaceProperty } from "@/lib/types";
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
@@ -37,7 +35,6 @@ import {
   reorderColumnIds,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
 import type { ColumnDropEdge } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
-import { TableCalculationsRow } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/calculations-row";
 import {
   AddPropertyRailSpacer,
   TableEndFiller,
@@ -71,13 +68,6 @@ import { DraggableRow } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 
-/** The calculations a table shows, and how a reader changes them. */
-export type TableCalculations = {
-  selections: readonly CalculationSelection[];
-  properties: readonly WorkspaceProperty[];
-  onChange: (selections: CalculationSelection[]) => void;
-};
-
 type WorkspaceTableProps = {
   workspaceId: string;
   table: WorkspaceTableType;
@@ -102,9 +92,6 @@ type WorkspaceTableProps = {
   // scroll boxes break the sticky group header). In this mode rows render
   // directly rather than virtualized — group pages are bounded.
   outerScrollRef?: RefObject<HTMLDivElement | null>;
-  // What each column adds up to, over the rows this table renders. Omitted
-  // when the view has no calculations and no way to add one.
-  calculations?: TableCalculations | undefined;
   // Set by a grouped section (its `view.id`) so "select all" can read the
   // cross-group row-id union from the table store at click time and keep
   // selections in other sections (they share one selection) while still
@@ -132,7 +119,6 @@ export const WorkspaceTable = ({
   fillHeight = true,
   outerScrollRef,
   viewId,
-  calculations,
 }: WorkspaceTableProps) => {
   const inlineFlow = outerScrollRef !== undefined;
   const tableWrapperRef = useRef<HTMLDivElement>(null);
@@ -736,16 +722,6 @@ export const WorkspaceTable = ({
               <TableEndFiller
                 addPropertyColumn={addPropertyColumn}
                 renderColumns={renderColumns}
-              />
-            )}
-            {calculations && (
-              <TableCalculationsRow
-                addPropertyColumn={addPropertyColumn}
-                calculations={calculations.selections}
-                onChange={calculations.onChange}
-                properties={calculations.properties}
-                renderColumns={renderColumns}
-                rows={rowModel.rows.map((row) => row.original)}
               />
             )}
             {showAddRow && (

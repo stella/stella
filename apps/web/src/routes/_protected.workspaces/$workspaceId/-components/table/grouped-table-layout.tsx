@@ -41,7 +41,6 @@ import type { EntityKind, WorkspaceView } from "@/lib/types";
 import { visibleEntityFieldIds } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { workspaceTableAdapter } from "@/lib/workspaces/table-adapter";
-import { mergeLayout } from "@/lib/workspaces/view-layout";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import {
@@ -67,7 +66,6 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid";
 import { getOrderedColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
-import type { TableCalculations } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
 import { RowEndFillerCell } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/end-fillers";
 import { HeaderEndFillerCell } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells";
 import {
@@ -84,7 +82,6 @@ import {
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
-import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 
 // Grouped views eager-load only the first few sections' rows upfront; every
 // later section rides its IntersectionObserver scroll-gate (400px lookahead)
@@ -152,16 +149,6 @@ export const GroupedTableLayout = ({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const groupByConfig = view.layout.groupByPropertyId ?? "";
-  const updateView = useUpdateView(workspaceId);
-  const calculations: TableCalculations = {
-    selections: view.layout.calculations,
-    properties,
-    onChange: (selections) =>
-      updateView.mutate({
-        viewId: view.id,
-        layout: mergeLayout(view.layout, { calculations: selections }),
-      }),
-  };
   const schema = useWorkspaceKanbanSchema(properties);
   const grouping = useMemo(
     () => resolveWorkspaceKanbanGrouping(groupByConfig, schema),
@@ -339,7 +326,6 @@ export const GroupedTableLayout = ({
       <div className="flex w-max min-w-full flex-col" ref={scrollRef}>
         {groups.map((group) => (
           <GroupSection
-            calculations={calculations}
             columns={columns}
             count={
               countsLoaded ? (countByValue.get(group.value) ?? 0) : undefined
@@ -547,9 +533,6 @@ type GroupSectionProps = {
   // column selection when grouped by the "Document Type" classifier. Empty for
   // other groupings (every section then renders the full column set).
   gateLabelsByColumnId: Map<string, Set<string>>;
-  // Each section totals its own rows, with the same reducer the flat table and
-  // the board use.
-  calculations: TableCalculations;
   tableState: ReturnType<typeof useTableState>;
   outerScrollRef: RefObject<HTMLDivElement | null>;
   reportGroupTreeData: (groupKey: string, nodes: TableTreeNode[]) => void;
@@ -566,7 +549,6 @@ const GroupSection = ({
   fieldIds,
   columns,
   gateLabelsByColumnId,
-  calculations,
   tableState,
   outerScrollRef,
   reportGroupTreeData,
@@ -731,7 +713,6 @@ const GroupSection = ({
             }}
           >
             <WorkspaceTable
-              calculations={calculations}
               contentMode={tableState.contentMode}
               fillHeight={false}
               hasNextPage={query.hasNextPage}
