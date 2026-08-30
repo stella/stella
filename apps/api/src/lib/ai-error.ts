@@ -140,6 +140,19 @@ const classifyAIErrorInternal = (
     if (statusCode === 402) {
       return "provider_billing";
     }
+    // A provider 401 means it rejected the credentials it was called with:
+    // the configured key is missing, revoked, or expired. Like a retired
+    // model, that is a config problem an administrator has to fix, so
+    // retrying won't help.
+    //
+    // Only a status read off a provider error counts: `HandlerError` carries
+    // a `status` of its own, and this service raises its own 401 refusals,
+    // whose curated copy this would otherwise replace. A provider 403 stays
+    // unmapped because it is ambiguous (permission, region, or account
+    // state) where a 401 is not.
+    if (statusCode === 401 && !HandlerError.is(error)) {
+      return "provider_credentials_rejected";
+    }
     // A 404 on a generate/stream call means the provider no longer
     // serves the configured model (retired or renamed upstream) — a
     // config problem, not a transient outage, so retrying won't help.
@@ -272,6 +285,13 @@ export const aiHandlerError = (
         status: 402,
         message:
           "The AI provider reported a billing or credit problem. An administrator should check the provider account.",
+        cause: error,
+      });
+    case "provider_credentials_rejected":
+      return new HandlerError({
+        status: 502,
+        message:
+          "The AI provider rejected the configured credentials. An administrator should check the provider API key in organization settings.",
         cause: error,
       });
     case "model_unavailable":

@@ -875,6 +875,7 @@ const CHAT_ERROR_TRANSLATION_KEYS = {
   empty_completion: "chat.sendErrorEmptyCompletion",
   loop_detected: "chat.sendErrorLoopDetected",
   model_unavailable: "chat.sendErrorModelUnavailable",
+  provider_credentials_rejected: "chat.sendErrorProviderCredentialsRejected",
   provider_unavailable: "chat.sendErrorProviderUnavailable",
   quota_exhausted: "chat.sendErrorQuotaExhausted",
 } as const satisfies Record<MappedChatErrorKind, TranslationKey>;

@@ -748,6 +748,7 @@
     "sendErrorLoopDetected": "Odpowiedź AI powtórzyła się zbyt wiele razy. Spróbuj ponownie z węższą prośbą.",
     "sendErrorModelUnavailable": "Skonfigurowany model AI nie jest już dostępny. Poproś administratora obszaru roboczego o zaktualizowanie modelu w ustawieniach organizacji.",
     "sendErrorProviderBilling": "Dostawca AI zgłosił problem z płatnością. Skontaktuj się z administratorem obszaru roboczego.",
+    "sendErrorProviderCredentialsRejected": "Dostawca AI odrzucił skonfigurowane dane uwierzytelniające. Poproś administratora obszaru roboczego o sprawdzenie klucza API w ustawieniach organizacji.",
     "sendErrorProviderUnavailable": "Dostawca AI jest tymczasowo niedostępny. Spróbuj ponownie za chwilę.",
     "sendErrorQuotaExhausted": "Limit dostawcy AI został wyczerpany. Spróbuj ponownie za minutę albo skontaktuj się z administratorem obszaru roboczego.",
     "sendPrompt": "Wyślij wiadomość",

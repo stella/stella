@@ -748,6 +748,7 @@
     "sendErrorLoopDetected": "Die KI-Antwort hat sich zu oft wiederholt. Versuche es mit einer enger gefassten Anfrage erneut.",
     "sendErrorModelUnavailable": "Das konfigurierte KI-Modell ist nicht mehr verfügbar. Bitte deinen Arbeitsbereichs-Admin, das Modell in den Organisationseinstellungen zu aktualisieren.",
     "sendErrorProviderBilling": "Der KI-Anbieter hat ein Abrechnungsproblem gemeldet. Wende dich an deinen Arbeitsbereichs-Admin.",
+    "sendErrorProviderCredentialsRejected": "Der KI-Anbieter hat die hinterlegten Zugangsdaten abgelehnt. Bitte deinen Arbeitsbereichs-Admin, den API-Schlüssel in den Organisationseinstellungen zu prüfen.",
     "sendErrorProviderUnavailable": "Der KI-Provider ist vorübergehend nicht verfügbar. Bitte versuche es gleich noch einmal.",
     "sendErrorQuotaExhausted": "Das Kontingent des KI-Providers ist ausgeschöpft. Versuche es in einer Minute erneut oder wende dich an deinen Arbeitsbereichs-Admin.",
     "sendPrompt": "Nachricht senden",

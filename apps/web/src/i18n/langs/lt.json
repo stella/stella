@@ -748,6 +748,7 @@
     "sendErrorLoopDetected": "AI atsakymas kartojosi per daug kartų. Bandykite dar kartą su siauresne užklausa.",
     "sendErrorModelUnavailable": "Sukonfigūruotas AI modelis nebepasiekiamas. Paprašykite darbo srities administratoriaus atnaujinti modelį organizacijos nustatymuose.",
     "sendErrorProviderBilling": "AI tiekėjas pranešė apie atsiskaitymo problemą. Susisiekite su darbo srities administratoriumi.",
+    "sendErrorProviderCredentialsRejected": "AI tiekėjas atmetė sukonfigūruotus prisijungimo duomenis. Paprašykite darbo srities administratoriaus patikrinti API raktą organizacijos nustatymuose.",
     "sendErrorProviderUnavailable": "AI teikėjas laikinai nepasiekiamas. Pabandykite po akimirkos dar kartą.",
     "sendErrorQuotaExhausted": "AI teikėjo kvota išnaudota. Pabandykite dar kartą po minutės arba susisiekite su darbo srities administratoriumi.",
     "sendPrompt": "Siųsti pranešimą",
