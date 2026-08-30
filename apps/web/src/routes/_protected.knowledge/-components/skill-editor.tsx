@@ -753,6 +753,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
           in the inspector. */}
       <FileDropZone
         className="p-3"
+        coverage="content"
         label={t("workspaces.dropToUploadFiles")}
         onDrop={(files) => {
           handleUploadFiles(files);
