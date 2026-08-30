@@ -4,7 +4,7 @@ import nodePath from "node:path";
 
 const RECOVERY_MIGRATION = nodePath.resolve(
   import.meta.dir,
-  "../../../drizzle/20260830120000_email_ingest_recovery/migration.sql",
+  "../../../drizzle/20260830120200_email_ingest_recovery/migration.sql",
 );
 const SOURCE_IDENTITY_MIGRATION = nodePath.resolve(
   import.meta.dir,
