@@ -301,6 +301,7 @@ test("a subject-scoped erasure cannot apply another erased decision", async () =
     .update(corpusIndexProjectionStates)
     .set({
       desiredAction: "erase",
+      desiredEpoch: 2n,
       desiredFingerprint: null,
       desiredIndexId: null,
     })
@@ -333,6 +334,29 @@ test("a subject-scoped erasure cannot apply another erased decision", async () =
 
 test("subject-scoped cleanup and settlement cannot claim another revision", async () => {
   const cleanupAt = new Date("2026-08-25T00:00:00.000Z");
+  await db.insert(caseLawDecisions).values({
+    id: ERASE_DECISION_ID,
+    sourceId: SOURCE_ID,
+    caseNumber: "2 A 2/2026",
+    court: "Test court",
+    country: "CZE",
+    language: "cs",
+    contentHash: "d".repeat(64),
+    projectionEpoch: 1n,
+  });
+  await db.insert(corpusIndexProjectionStates).values({
+    family: "case_law",
+    generation: "case_law_v5",
+    entityId: ERASE_DECISION_ID,
+    desiredAction: "upsert",
+    desiredEpoch: 1n,
+    desiredFingerprint: SECOND_FINGERPRINT,
+    desiredIndexId: INDEX_ID,
+    updatedAt: INITIAL_RUNNABLE_AT,
+  });
+  await db.execute(
+    sql`ALTER TABLE corpus_index_projection_intents DISABLE TRIGGER corpus_index_projection_intents_insert_guard`,
+  );
   await db.insert(corpusIndexProjectionIntents).values([
     {
       id: FIRST_INTENT_ID,
@@ -361,6 +385,9 @@ test("subject-scoped cleanup and settlement cannot claim another revision", asyn
       cleanupNotBefore: cleanupAt,
     },
   ]);
+  await db.execute(
+    sql`ALTER TABLE corpus_index_projection_intents ENABLE TRIGGER corpus_index_projection_intents_insert_guard`,
+  );
 
   const cleanup = await db.transaction(
     async (tx) =>
@@ -417,6 +444,26 @@ test("subject-scoped cleanup and settlement cannot claim another revision", asyn
 
 test("subject-scoped recovery cannot cancel another expired reservation", async () => {
   const expiredAt = new Date("2026-08-25T00:00:00.000Z");
+  await db.insert(caseLawDecisions).values({
+    id: ERASE_DECISION_ID,
+    sourceId: SOURCE_ID,
+    caseNumber: "2 A 2/2026",
+    court: "Test court",
+    country: "CZE",
+    language: "cs",
+    contentHash: "d".repeat(64),
+    projectionEpoch: 1n,
+  });
+  await db.insert(corpusIndexProjectionStates).values({
+    family: "case_law",
+    generation: "case_law_v5",
+    entityId: ERASE_DECISION_ID,
+    desiredAction: "upsert",
+    desiredEpoch: 1n,
+    desiredFingerprint: SECOND_FINGERPRINT,
+    desiredIndexId: INDEX_ID,
+    updatedAt: INITIAL_RUNNABLE_AT,
+  });
   await db.insert(corpusIndexProjectionIntents).values([
     {
       id: FIRST_INTENT_ID,
@@ -486,6 +533,9 @@ test("subject-scoped replacement cannot retire another applied revision", async 
     contentHash: "d".repeat(64),
     projectionEpoch: 2n,
   });
+  await db.execute(
+    sql`ALTER TABLE corpus_index_projection_intents DISABLE TRIGGER corpus_index_projection_intents_insert_guard`,
+  );
   await db.insert(corpusIndexProjectionIntents).values([
     {
       id: FIRST_INTENT_ID,
@@ -516,6 +566,9 @@ test("subject-scoped replacement cannot retire another applied revision", async 
       appliedAt,
     },
   ]);
+  await db.execute(
+    sql`ALTER TABLE corpus_index_projection_intents ENABLE TRIGGER corpus_index_projection_intents_insert_guard`,
+  );
   await db
     .update(corpusIndexProjectionStates)
     .set({

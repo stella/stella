@@ -95,6 +95,33 @@ const isProcessEnvMember = (expression: ts.Expression): boolean =>
     ts.isPropertyAccessExpression(expression)) &&
   isProcessEnvExpression(expression.expression);
 
+const isDeferredFunction = (node: ts.Node): boolean =>
+  ts.isArrowFunction(node) ||
+  ts.isConstructorDeclaration(node) ||
+  ts.isFunctionDeclaration(node) ||
+  ts.isFunctionExpression(node) ||
+  ts.isGetAccessorDeclaration(node) ||
+  ts.isMethodDeclaration(node) ||
+  ts.isSetAccessorDeclaration(node);
+
+const hasEvaluatedProcessEnvMutation = (node: ts.Node): boolean => {
+  if (isDeferredFunction(node)) {
+    return false;
+  }
+  if (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    isProcessEnvMember(node.left)
+  ) {
+    return true;
+  }
+  return (
+    ts.forEachChild(node, (child) =>
+      hasEvaluatedProcessEnvMutation(child) ? true : undefined,
+    ) === true
+  );
+};
+
 /**
  * Module-scope environment writes must run in a fresh process. Bun's module
  * cache survives between files in a shared batch, so setting an env value
@@ -111,13 +138,7 @@ export const hasModuleScopeProcessEnvMutation = (
     false,
     testPath.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
-  return sourceFile.statements.some(
-    (statement) =>
-      ts.isExpressionStatement(statement) &&
-      ts.isBinaryExpression(statement.expression) &&
-      statement.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      isProcessEnvMember(statement.expression.left),
-  );
+  return sourceFile.statements.some(hasEvaluatedProcessEnvMutation);
 };
 
 const isRuntimeImport = (statement: ts.ImportDeclaration) => {
