@@ -511,6 +511,7 @@
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
+      "GET /api/auth/organization/get-full-organization",
       "GET /api/auth/organization/list",
       "GET /health",
       "GET /v1/chat/threads",
@@ -522,6 +523,7 @@
     "requestCounts": {
       "GET /api/auth/get-session": 1,
       "GET /api/auth/organization/get-active-member-role": 1,
+      "GET /api/auth/organization/get-full-organization": 1,
       "GET /api/auth/organization/list": 1,
       "GET /health": 1,
       "GET /v1/chat/threads": 1,
@@ -533,6 +535,7 @@
     "dbQueries": {
       "GET /api/auth/get-session": 2,
       "GET /api/auth/organization/get-active-member-role": 4,
+      "GET /api/auth/organization/get-full-organization": 7,
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
       "GET /v1/chat/threads": 6,
@@ -544,6 +547,7 @@
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
       "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/get-full-organization": 3072,
       "GET /api/auth/organization/list": 1024,
       "GET /health": 1024,
       "GET /v1/chat/threads": 4096,
