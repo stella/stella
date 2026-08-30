@@ -5,6 +5,7 @@ export { AGENDA_ITEM_KINDS, AGENDA_ITEM_SOURCES } from "./agenda";
 export type { AgendaItemKind, AgendaItemSource } from "./agenda";
 
 export { SKILL_RESOURCE_PATH_PATTERN } from "./agent-skills";
+export { OUTLOOK_AI_INPUT_MAX_CHARS, truncateOutlookAIInput } from "./ai";
 export { AI_ERROR_KINDS } from "./ai-errors";
 export type { AIErrorKind } from "./ai-errors";
 export {
@@ -128,11 +129,47 @@ export type {
 } from "./document-properties";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
+export { DOCUMENT_UPLOAD_POLICY } from "./upload-policy";
 export {
   FOLIO_COLLAB_REDIS_SCOPE,
   parseFolioCollabRoomName,
   toFolioCollabRoomName,
 } from "./folio-collab";
+export {
+  OUTLOOK_HOST_VERSION_PATTERN,
+  OUTLOOK_INGESTION_HOSTS,
+  OUTLOOK_INGESTION_OUTCOMES,
+  OUTLOOK_INGESTION_PLATFORMS,
+  OUTLOOK_INGESTION_RETRY_STAGES,
+  OUTLOOK_MAILBOX_REQUIREMENT_SET,
+} from "./outlook-ingestion";
+export type {
+  OutlookIngestionDiagnostic,
+  OutlookIngestionHost,
+  OutlookIngestionOutcome,
+  OutlookIngestionPlatform,
+  OutlookIngestionRetryStage,
+} from "./outlook-ingestion";
+export {
+  parseOutlookAIDraftResponse,
+  parseOutlookAISummaryResponse,
+  parseOutlookFinalizeResponse,
+  parseOutlookPropertiesResponse,
+  parseOutlookPropertyCreatedResponse,
+  parseOutlookPresignResponse,
+  parseOutlookReconcileResponse,
+  parseOutlookWorkspacesResponse,
+} from "./outlook-api";
+export type {
+  OutlookAIDraftResponse,
+  OutlookAISummaryResponse,
+  OutlookFinalizeResponse,
+  OutlookPropertiesResponse,
+  OutlookPropertyCreatedResponse,
+  OutlookPresignResponse,
+  OutlookReconcileResponse,
+  OutlookWorkspacesResponse,
+} from "./outlook-api";
 export {
   DESKTOP_EDIT_FILE_TYPES,
   DESKTOP_EDIT_FILE_TYPE_CONFIG,

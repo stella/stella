@@ -28,6 +28,10 @@ import type { PendingUploadFinalizedResult } from "@/api/db/schema";
 import { finalizeAgentSkill } from "@/api/handlers/uploads/agent-skill";
 import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
+  captureOutlookIngestion,
+  outlookIngestionDiagnosticSchema,
+} from "@/api/handlers/uploads/outlook-ingestion-diagnostics";
+import {
   authorizeUploadPurpose,
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
@@ -36,12 +40,14 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
+import { finalizeEmailIngest } from "@/api/lib/uploads/email-ingest";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
@@ -49,6 +55,7 @@ import {
   sha256Base64ToHex,
   tmpUploadKey,
   tmpUploadKeys,
+  UPLOAD_REJECT_REASON,
   UploadFinalizeError,
 } from "@/api/lib/uploads/runtime";
 
@@ -56,6 +63,18 @@ const finalizeParamsSchema = t.Object({
   workspaceId: tSafeId("workspace"),
   uploadId: tSafeId("pendingUpload"),
 });
+
+const finalizeBodySchema = t.Optional(
+  t.Object(
+    {
+      diagnostic: t.Optional(outlookIngestionDiagnosticSchema),
+      queryKey: t.Optional(
+        t.Array(t.String({ maxLength: 128 }), { maxItems: 8 }),
+      ),
+    },
+    { additionalProperties: false },
+  ),
+);
 
 const config = {
   description:
@@ -74,6 +93,7 @@ const config = {
   permissions: uploadRoutePermission,
   access: "write",
   mcp: { type: "capability", reason: "file_transport" },
+  body: finalizeBodySchema,
   params: finalizeParamsSchema,
 } satisfies HandlerConfig;
 
@@ -82,6 +102,7 @@ type ClaimedRow = typeof pendingUploads.$inferSelect;
 const finalizeUpload = createSafeHandler(
   config,
   async function* ({
+    body,
     safeDb,
     session,
     workspaceId,
@@ -116,6 +137,30 @@ const finalizeUpload = createSafeHandler(
     if (Result.isError(authorization)) {
       return Result.err(authorization.error);
     }
+
+    const capture = (
+      durableState: string,
+      outcome:
+        | "complete"
+        | "in_progress"
+        | "retryable_failure"
+        | "terminal_failure",
+      retryStage: "finalize" | "none",
+    ) => {
+      if (pending.purpose !== "email_ingest") {
+        return;
+      }
+      captureOutlookIngestion({
+        diagnostic: body?.diagnostic,
+        durableState,
+        operation: "finalize",
+        organizationId: session.activeOrganizationId,
+        outcome,
+        retryStage,
+        userId: user.id,
+        workspaceId,
+      });
+    };
 
     // 1. Claim — atomic transition into `scanning`. Re-claimable
     //    if a previous holder either died (status='scanning' AND
@@ -174,9 +219,17 @@ const finalizeUpload = createSafeHandler(
         );
       }
       if (existing.status === "finalized" && existing.finalizedResult) {
+        if (
+          existing.finalizedResult.type === "email_ingest" &&
+          existing.purposeData.type !== "email_ingest"
+        ) {
+          panic("Finalized email ingest has inconsistent purpose data");
+        }
+        capture("finalized", "complete", "none");
         return Result.ok({ finalizedResult: existing.finalizedResult });
       }
       if (existing.status === "rejected") {
+        capture("rejected", "terminal_failure", "none");
         return Result.err(
           new HandlerError({
             status: 422,
@@ -185,15 +238,39 @@ const finalizeUpload = createSafeHandler(
         );
       }
       const expiredRows = yield* Result.await(
-        // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-        safeDb((tx) => {
+        safeDb(async (tx) => {
+          const expirableRows = await tx
+            .select()
+            .from(pendingUploads)
+            .where(
+              sql`${pendingUploads.id} = ${uploadId}
+                AND ${pendingUploads.workspaceId} = ${workspaceId}
+                AND ${pendingUploads.userId} = ${user.id}
+                AND ${pendingUploads.expiresAt} <= NOW()
+                AND (
+                  ${pendingUploads.status} IN ('pending', 'failed')
+                  OR (
+                    ${pendingUploads.status} = 'scanning'
+                    AND ${pendingUploads.claimedAt} < NOW() - ${timeoutSec} * interval '1 second'
+                  )
+                )`,
+            )
+            .limit(1)
+            .for("update");
+          const expirable = expirableRows.at(0);
+          if (!expirable) {
+            return [];
+          }
+
+          await preserveBufferObjectCleanupIntents(tx, [expirable]);
+
           // audit: skip — expiry transition on pending_uploads;
           // the upload never became a durable entity.
           return tx
             .update(pendingUploads)
             .set({
               status: "rejected",
-              rejectReason: "Upload URL expired",
+              rejectReason: UPLOAD_REJECT_REASON.URL_EXPIRED,
               finalizedAt: new Date(),
             })
             .where(
@@ -213,10 +290,15 @@ const finalizeUpload = createSafeHandler(
         }),
       );
       if (expiredRows.at(0)) {
+        capture("rejected", "terminal_failure", "none");
         return Result.err(
-          new HandlerError({ status: 422, message: "Upload URL expired" }),
+          new HandlerError({
+            status: 422,
+            message: UPLOAD_REJECT_REASON.URL_EXPIRED,
+          }),
         );
       }
+      capture("scanning", "in_progress", "finalize");
       return Result.err(
         new HandlerError({
           status: 409,
@@ -280,11 +362,17 @@ const finalizeUpload = createSafeHandler(
           stage: "tmp-cleanup-after-reject",
         });
       }
+      capture(
+        terminalStatus,
+        terminalStatus === "failed" ? "retryable_failure" : "terminal_failure",
+        terminalStatus === "failed" ? "finalize" : "none",
+      );
       return Result.err(
         new HandlerError({ status: error.status, message: error.message }),
       );
     }
 
+    capture("finalized", "complete", "none");
     return Result.ok({ finalizedResult: finalizeResult.value.finalizedResult });
   },
 );
@@ -517,6 +605,7 @@ const runFinalize = async function* ({
         | typeof finalizeEntityCreate
         | typeof finalizeEntityVersion
         | typeof finalizeAgentSkill
+        | typeof finalizeEmailIngest
       >
     > extends AsyncGenerator<unknown, infer R, unknown>
       ? R
@@ -524,6 +613,8 @@ const runFinalize = async function* ({
   let purposeOk: RunAnyPurpose;
   if (purposeData.type === "entity_create") {
     purposeOk = yield* finalizeEntityCreate({ ...domainArgs, purposeData });
+  } else if (purposeData.type === "email_ingest") {
+    purposeOk = yield* finalizeEmailIngest({ ...domainArgs, purposeData });
   } else if (purposeData.type === "entity_version") {
     purposeOk = yield* finalizeEntityVersion({ ...domainArgs, purposeData });
   } else {

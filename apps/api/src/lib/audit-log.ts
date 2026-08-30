@@ -94,6 +94,23 @@ export type AuditRecorder = (
   event: AuditEvent | AuditEvent[],
 ) => Promise<void>;
 
+const AUDIT_INSERT_BATCH_SIZE = 500;
+
+const insertAuditRows = async (
+  tx: Transaction,
+  rows: (typeof auditLogs.$inferInsert)[],
+): Promise<void> => {
+  for (
+    let offset = 0;
+    offset < rows.length;
+    offset += AUDIT_INSERT_BATCH_SIZE
+  ) {
+    const batch = rows.slice(offset, offset + AUDIT_INSERT_BATCH_SIZE);
+    // oxlint-disable-next-line no-await-in-loop, no-db-await-in-loop/no-db-await-in-loop -- bounded audit batches share one transaction and group ID while staying below PostgreSQL's bind-parameter limit
+    await tx.insert(auditLogs).values(batch);
+  }
+};
+
 type AuditRecorderBindings = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace"> | null;
@@ -337,7 +354,7 @@ export const createBackgroundAuditRecorder =
       groupId,
       runId: runIdForEvent(e, execution),
     });
-    await tx.insert(auditLogs).values(events.map(toRow));
+    await insertAuditRows(tx, events.map(toRow));
   };
 
 export const createAuditRecorder = (
@@ -368,6 +385,6 @@ export const createAuditRecorder = (
       groupId,
       runId: runIdForEvent(e, execution),
     });
-    await tx.insert(auditLogs).values(events.map(toRow));
+    await insertAuditRows(tx, events.map(toRow));
   };
 };

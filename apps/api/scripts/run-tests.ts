@@ -53,8 +53,12 @@ const MODULE_MOCK_TEST_BATCH_SIZE = 3;
 // graphs/allocations cannot inflate an ordinary 50-file logic batch.
 const HEAVY_LOGIC_TEST_BATCH_SIZE = 1;
 const HEAVY_LOGIC_SOURCE_MARKERS = ["@modelcontextprotocol/client"] as const;
-const HEAVY_LOGIC_PATH_MARKERS = [
+const DEDICATED_LOGIC_PATH_MARKERS = [
   "handlers/chat/tools/execute/sandbox/",
+  // This suite deliberately overrides process-global connection config before
+  // importing the client graph. A shared module cache would make its target
+  // depend on whichever test file happened to load the environment first.
+  "src/lib/redis-outage.test.ts",
 ] as const;
 // Hard per-batch peak-RSS budgets. A batch that outgrows its budget fails
 // the run even when every test passes, so memory growth surfaces here as a
@@ -191,7 +195,7 @@ for (const { source, testPath } of classifiedTests) {
     dbBacked: isDbTest(testPath, source),
     heavyLogic:
       HEAVY_LOGIC_SOURCE_MARKERS.some((marker) => source.includes(marker)) ||
-      HEAVY_LOGIC_PATH_MARKERS.some((marker) => testPath.includes(marker)),
+      DEDICATED_LOGIC_PATH_MARKERS.some((marker) => testPath.includes(marker)),
     installsModuleMock: installsModuleMock(source),
     propertyOnly,
   });

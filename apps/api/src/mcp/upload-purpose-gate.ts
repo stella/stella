@@ -26,6 +26,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 export const UPLOAD_PURPOSE_SCOPE = {
   entity_create: "stella:matters_write",
   entity_version: "stella:matters_write",
+  email_ingest: "stella:matters_write",
   agent_skill: "stella:skills",
 } as const satisfies Record<UploadPurpose, McpOAuthScope>;
 

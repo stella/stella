@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import {
   CheckIcon,
   DownloadIcon,
@@ -258,7 +259,11 @@ export const VersionsSidebar = ({
         size: file.size,
         sha256Hex,
       });
-      const { uploadId, url, headers } = unwrapEden(presign);
+      const reservation = unwrapEden(presign);
+      if (reservation.state !== "reserved") {
+        panic("Entity-version upload returned an existing reservation");
+      }
+      const { uploadId, url, headers } = reservation;
 
       // 3. PUT to S3.
       const putResponse = await fetchWithTimeout(url, {

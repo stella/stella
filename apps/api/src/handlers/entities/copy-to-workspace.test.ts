@@ -61,6 +61,8 @@ const userId = toSafeId<"user">("user_1");
 const documentId = toSafeId<"entity">("document_1");
 const folderId = toSafeId<"entity">("folder_1");
 const childDocId = toSafeId<"entity">("child_doc");
+const messageId = toSafeId<"entity">("message_1");
+const attachmentId = toSafeId<"entity">("attachment_1");
 
 // Properties in source workspace
 const sourceFilePropertyId = toSafeId<"property">("source_file_prop");
@@ -1377,6 +1379,103 @@ describe("copy-to-workspace", () => {
       copiedChild?.id,
     ]);
     expect(flushEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("moves ingested message with attachment children", async () => {
+    const insertedEntities: InsertedEntity[] = [];
+    let nextDocumentSequence = 0;
+    let deletedEntityCount = 0;
+
+    const messageEntity = {
+      id: messageId,
+      kind: "message" as const,
+      name: "Email.eml",
+      parentId: null,
+      readOnly: false,
+      currentVersion: {
+        id: toSafeId<"entityVersion">("message_v1"),
+        fields: [],
+      },
+    };
+    const attachmentEntity = {
+      id: attachmentId,
+      kind: "document" as const,
+      name: "Attachment.pdf",
+      parentId: messageId,
+      readOnly: false,
+      currentVersion: {
+        id: toSafeId<"entityVersion">("attachment_v1"),
+        fields: [],
+      },
+    };
+
+    const tx = {
+      query: {
+        entities: {
+          findFirst: async () => messageEntity,
+          findMany: async () => [messageEntity, attachmentEntity],
+        },
+        properties: {
+          findMany: async () => [],
+        },
+        workspaces: {
+          findFirst: async () => ({ reference: null }),
+        },
+      },
+      $count: async () => 0,
+      select: () => ({
+        from: () => ({
+          where: async () => [],
+        }),
+      }),
+      insert: (table: unknown) => ({
+        values: (value: unknown) => {
+          if (table === documentCounters) {
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => {
+                  nextDocumentSequence += 1;
+                  return [{ lastValue: nextDocumentSequence }];
+                },
+              }),
+            };
+          }
+
+          if (table === entities && isInsertedEntity(value)) {
+            insertedEntities.push(value);
+          }
+
+          return undefined;
+        },
+      }),
+      update: () => ({
+        set: () => ({
+          where: async () => {},
+        }),
+      }),
+      delete: () => ({
+        where: async () => {
+          deletedEntityCount += 1;
+        },
+      }),
+    };
+
+    const { safeDb } = createScopedDbMock(tx);
+    const result = await copyToWorkspace.handler(
+      createContext({ safeDb, entityId: messageId, deleteSource: true }),
+    );
+
+    expect(result).toEqual({
+      entityId: expect.any(String),
+      entityIds: expect.any(Array),
+    });
+    expect(insertedEntities).toHaveLength(2);
+    expect(insertedEntities.at(0)?.kind).toBe("message");
+    expect(insertedEntities.at(0)?.docSequence).toBe(1);
+    expect(insertedEntities.at(1)?.kind).toBe("document");
+    expect(insertedEntities.at(1)?.docSequence).toBe(2);
+    expect(insertedEntities.at(1)?.parentId).toBe(insertedEntities.at(0)?.id);
+    expect(deletedEntityCount).toBe(2);
   });
 
   test("remaps file IDs in field content for S3 copy", async () => {

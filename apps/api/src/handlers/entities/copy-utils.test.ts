@@ -6,7 +6,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 
 import {
-  getFolderSubtree,
+  getEntitySubtree,
   remapFileIds,
   type EntitySnapshot,
   type FileMapping,
@@ -16,6 +16,8 @@ const workspaceId = toSafeId<"workspace">("workspace_1");
 const organizationId = toSafeId<"organization">("organization_1");
 const firstEntityId = toSafeId<"entity">("entity_1");
 const secondEntityId = toSafeId<"entity">("entity_2");
+const messageEntityId = toSafeId<"entity">("message_1");
+const attachmentEntityId = toSafeId<"entity">("attachment_1");
 const filePropertyId = toSafeId<"property">("property_file");
 
 const sharedSourceFile = {
@@ -91,7 +93,7 @@ describe("remapFileIds", () => {
   });
 });
 
-describe("getFolderSubtree", () => {
+describe("getEntitySubtree", () => {
   const folder = (
     id: SafeId<"entity">,
     parentId: SafeId<"entity"> | null,
@@ -106,7 +108,7 @@ describe("getFolderSubtree", () => {
   test("collects the root and every descendant once", () => {
     const child = toSafeId<"entity">("entity_child");
     const grandchild = toSafeId<"entity">("entity_grandchild");
-    const subtree = getFolderSubtree(
+    const subtree = getEntitySubtree(
       [
         folder(firstEntityId, null),
         folder(child, firstEntityId),
@@ -126,7 +128,7 @@ describe("getFolderSubtree", () => {
   test("refuses a snapshot whose parent chain closes into a cycle", () => {
     // Two folders each parented to the other: the walk would enqueue forever.
     expect(() =>
-      getFolderSubtree(
+      getEntitySubtree(
         [
           folder(firstEntityId, secondEntityId),
           folder(secondEntityId, firstEntityId),
@@ -134,5 +136,32 @@ describe("getFolderSubtree", () => {
         firstEntityId,
       ),
     ).toThrow("Entity parent chain contains a cycle");
+  });
+
+  test("includes attachment children of an ingested message", () => {
+    const subtree = getEntitySubtree(
+      [
+        {
+          currentVersion: { fields: [] },
+          id: messageEntityId,
+          kind: "message",
+          name: "Email.eml",
+          parentId: null,
+        },
+        {
+          currentVersion: { fields: [] },
+          id: attachmentEntityId,
+          kind: "document",
+          name: "Attachment.pdf",
+          parentId: messageEntityId,
+        },
+      ],
+      messageEntityId,
+    );
+
+    expect(subtree?.map((entity) => entity.id)).toEqual([
+      messageEntityId,
+      attachmentEntityId,
+    ]);
   });
 });

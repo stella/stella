@@ -103,4 +103,16 @@ describe("filesystem row virtualization", () => {
     }
     expect([...nestedFolder.ancestorIds]).toEqual(["folder-a"]);
   });
+
+  test("always exposes attachments nested under a message", () => {
+    const rows = flattenFilesystemRows(
+      [entity("message", "message", [entity("attachment", "document")])],
+      new Set(),
+    );
+
+    expect(rows.map((row) => row.node.entityId)).toEqual(
+      entityIds("message", "attachment"),
+    );
+    expect(rows.map((row) => row.depth)).toEqual([0, 1]);
+  });
 });

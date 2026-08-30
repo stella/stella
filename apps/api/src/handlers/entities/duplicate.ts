@@ -11,7 +11,7 @@ import {
   copyFileObjects,
   type EntitySnapshot,
   type FileMapping,
-  getFolderSubtree,
+  getEntitySubtree,
   remapFileIds,
   rollbackS3Copies,
 } from "@/api/handlers/entities/copy-utils";
@@ -113,7 +113,7 @@ const duplicateEntityHandler = async function* ({
   }
 
   let sourceEntities: EntitySnapshot[] = [source];
-  if (source.kind === "folder") {
+  if (source.kind === "folder" || source.kind === "message") {
     const workspaceEntities = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findMany({
@@ -144,7 +144,7 @@ const duplicateEntityHandler = async function* ({
       ),
     );
 
-    const subtree = getFolderSubtree(workspaceEntities, sourceEntityId);
+    const subtree = getEntitySubtree(workspaceEntities, sourceEntityId);
     if (!subtree) {
       return Result.err(
         new HandlerError({ status: 404, message: "Entity not found" }),

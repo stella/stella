@@ -132,6 +132,10 @@ type Messages = {
     "openInProvider": "Open {provider}";
     "orSignInWithEmail": "or sign in with email";
     "organizationNamePlaceholder": "My organization";
+    "outlookHandoffDescription": "Sign in to continue using stella in Outlook.";
+    "outlookHandoffMissingDialog": "Open this page from the stella Outlook task pane.";
+    "outlookHandoffSuccess": "Signed in. You can close this window.";
+    "outlookHandoffTitle": "Sign in to stella";
     "password": "Password";
     "rateLimitExceeded": "Too many attempts. Please try again later.";
     "resendCode": "Send code again to <email>{emailAddress}</email>";

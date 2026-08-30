@@ -37248,7 +37248,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "uploads", "create"],
                 capabilityId: "uploads.create",
                 description:
-                  "Step 1 of 3 of the file-upload flow: reserve an upload and mint a short-lived presigned S3 PUT URL. This is the ONLY way to get a file into stella from an agent surface; the multipart endpoints cannot be called with JSON. Pass purpose plus the file metadata: name, mimeType, size in bytes, and sha256Hex (lowercase hex SHA-256 of the exact bytes). purpose is entity_create (with propertyId, optional parentId) to add a new document, entity_version (with entityId) to add a version to an existing one, or agent_skill (with scope team or private) for a skill pack. Returns uploadId, url, expiresAt, and headers. Step 2: PUT the bytes to url with those headers verbatim -- the URL is signed against the exact size and checksum, so any deviation is rejected. Step 3: call uploads.update with the uploadId to commit the record. Call uploads.delete instead if the PUT fails.",
+                  "Step 1 of 3 of the file-upload flow: reserve an upload and mint a short-lived presigned S3 PUT URL. This is the ONLY way to get a file into stella from an agent surface; the multipart endpoints cannot be called with JSON. Pass purpose plus the file metadata: name, mimeType, size in bytes, and sha256Hex (lowercase hex SHA-256 of the exact bytes). purpose is entity_create (with propertyId, optional parentId) to add a new document, entity_version (with entityId) to add a version to an existing one, agent_skill (with scope team or private) for a skill pack, or email_ingest with a stable Outlook source identity. Returns a reserved upload with uploadId, url, expiresAt, and headers; a previously reserved email source returns its existing uploadId. Step 2: PUT the bytes to url with those headers verbatim -- the URL is signed against the exact size and checksum, so any deviation is rejected. Step 3: call uploads.update with the uploadId to commit the record. Call uploads.delete instead if the PUT fails.",
                 access: "write",
                 flags: [
                   {
@@ -37449,6 +37449,226 @@ export const generatedRouteMap: RouteNode = {
                             },
                           },
                         },
+                        {
+                          type: "object",
+                          required: [
+                            "purpose",
+                            "propertyId",
+                            "source",
+                            "name",
+                            "mimeType",
+                            "size",
+                            "sha256Hex",
+                          ],
+                          properties: {
+                            purpose: {
+                              const: "email_ingest",
+                              type: "string",
+                            },
+                            propertyId: {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            parentId: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  minLength: 36,
+                                  maxLength: 36,
+                                  pattern:
+                                    "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                  type: "string",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                            diagnostic: {
+                              additionalProperties: false,
+                              type: "object",
+                              required: [
+                                "aggregateAttachmentBytes",
+                                "attachmentCount",
+                                "host",
+                                "hostVersion",
+                                "mailboxRequirementSetSupported",
+                                "outcome",
+                                "platform",
+                                "retryStage",
+                                "traceId",
+                              ],
+                              properties: {
+                                aggregateAttachmentBytes: {
+                                  nullable: true,
+                                  anyOf: [
+                                    {
+                                      minimum: 0,
+                                      anyOf: [
+                                        {
+                                          format: "integer",
+                                          default: 0,
+                                          type: "string",
+                                        },
+                                        {
+                                          minimum: 0,
+                                          type: "integer",
+                                        },
+                                      ],
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                                attachmentCount: {
+                                  minimum: 0,
+                                  anyOf: [
+                                    {
+                                      format: "integer",
+                                      default: 0,
+                                      type: "string",
+                                    },
+                                    {
+                                      minimum: 0,
+                                      type: "integer",
+                                    },
+                                  ],
+                                },
+                                host: {
+                                  nullable: true,
+                                  anyOf: [
+                                    {
+                                      const: "Outlook",
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                                hostVersion: {
+                                  nullable: true,
+                                  anyOf: [
+                                    {
+                                      type: "RegExp",
+                                      source: "^\\d{1,4}(?:\\.\\d{1,6}){1,3}$",
+                                      flags: "u",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                                mailboxRequirementSetSupported: {
+                                  nullable: true,
+                                  anyOf: [
+                                    {
+                                      type: "boolean",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                                outcome: {
+                                  default: "in_progress",
+                                  type: "string",
+                                  enum: [
+                                    "in_progress",
+                                    "complete",
+                                    "retryable_failure",
+                                    "terminal_failure",
+                                  ],
+                                },
+                                platform: {
+                                  nullable: true,
+                                  anyOf: [
+                                    {
+                                      default: "Android",
+                                      type: "string",
+                                      enum: [
+                                        "Android",
+                                        "iOS",
+                                        "Mac",
+                                        "OfficeOnline",
+                                        "PC",
+                                        "Universal",
+                                      ],
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                                retryStage: {
+                                  default: "none",
+                                  type: "string",
+                                  enum: [
+                                    "none",
+                                    "reserve",
+                                    "upload",
+                                    "finalize",
+                                    "abort",
+                                    "reconcile",
+                                  ],
+                                },
+                                traceId: {
+                                  format: "uuid",
+                                  type: "string",
+                                },
+                              },
+                            },
+                            source: {
+                              type: "object",
+                              required: ["mailboxEmail", "sourceId"],
+                              properties: {
+                                mailboxEmail: {
+                                  format: "email",
+                                  maxLength: 320,
+                                  type: "string",
+                                },
+                                sourceId: {
+                                  format: "uuid",
+                                  type: "string",
+                                },
+                              },
+                            },
+                            name: {
+                              minLength: 1,
+                              maxLength: 256,
+                              type: "string",
+                            },
+                            mimeType: {
+                              const: "message/rfc822",
+                              type: "string",
+                            },
+                            size: {
+                              minimum: 1,
+                              maximum: 52428800,
+                              anyOf: [
+                                {
+                                  format: "integer",
+                                  default: 0,
+                                  type: "string",
+                                },
+                                {
+                                  minimum: 1,
+                                  maximum: 52428800,
+                                  type: "integer",
+                                },
+                              ],
+                            },
+                            sha256Hex: {
+                              type: "RegExp",
+                              source: "^[0-9a-f]{64}$",
+                              flags: "u",
+                            },
+                          },
+                        },
                       ],
                     },
                     params: {
@@ -37492,7 +37712,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "uploadId",
                   },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.diagnostic"],
                 paginated: false,
                 destructive: true,
                 scope: "matters_write",
@@ -37500,6 +37720,147 @@ export const generatedRouteMap: RouteNode = {
                   type: "object",
                   additionalProperties: false,
                   properties: {
+                    body: {
+                      additionalProperties: false,
+                      type: "object",
+                      properties: {
+                        diagnostic: {
+                          additionalProperties: false,
+                          type: "object",
+                          required: [
+                            "aggregateAttachmentBytes",
+                            "attachmentCount",
+                            "host",
+                            "hostVersion",
+                            "mailboxRequirementSetSupported",
+                            "outcome",
+                            "platform",
+                            "retryStage",
+                            "traceId",
+                          ],
+                          properties: {
+                            aggregateAttachmentBytes: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  minimum: 0,
+                                  anyOf: [
+                                    {
+                                      format: "integer",
+                                      default: 0,
+                                      type: "string",
+                                    },
+                                    {
+                                      minimum: 0,
+                                      type: "integer",
+                                    },
+                                  ],
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                            attachmentCount: {
+                              minimum: 0,
+                              anyOf: [
+                                {
+                                  format: "integer",
+                                  default: 0,
+                                  type: "string",
+                                },
+                                {
+                                  minimum: 0,
+                                  type: "integer",
+                                },
+                              ],
+                            },
+                            host: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  const: "Outlook",
+                                  type: "string",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                            hostVersion: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  type: "RegExp",
+                                  source: "^\\d{1,4}(?:\\.\\d{1,6}){1,3}$",
+                                  flags: "u",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                            mailboxRequirementSetSupported: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  type: "boolean",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                            outcome: {
+                              default: "in_progress",
+                              type: "string",
+                              enum: [
+                                "in_progress",
+                                "complete",
+                                "retryable_failure",
+                                "terminal_failure",
+                              ],
+                            },
+                            platform: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  default: "Android",
+                                  type: "string",
+                                  enum: [
+                                    "Android",
+                                    "iOS",
+                                    "Mac",
+                                    "OfficeOnline",
+                                    "PC",
+                                    "Universal",
+                                  ],
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                            retryStage: {
+                              default: "none",
+                              type: "string",
+                              enum: [
+                                "none",
+                                "reserve",
+                                "upload",
+                                "finalize",
+                                "abort",
+                                "reconcile",
+                              ],
+                            },
+                            traceId: {
+                              format: "uuid",
+                              type: "string",
+                            },
+                          },
+                        },
+                      },
+                    },
                     params: {
                       type: "object",
                       required: ["workspaceId", "uploadId"],
@@ -37551,8 +37912,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "uploadId",
                   },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--query-key",
+                    prop: "queryKey",
+                    required: false,
+                    part: "body",
+                    partPath: "queryKey",
+                  },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.diagnostic"],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -37560,6 +37930,155 @@ export const generatedRouteMap: RouteNode = {
                   type: "object",
                   additionalProperties: false,
                   properties: {
+                    body: {
+                      additionalProperties: false,
+                      type: "object",
+                      properties: {
+                        diagnostic: {
+                          additionalProperties: false,
+                          type: "object",
+                          required: [
+                            "aggregateAttachmentBytes",
+                            "attachmentCount",
+                            "host",
+                            "hostVersion",
+                            "mailboxRequirementSetSupported",
+                            "outcome",
+                            "platform",
+                            "retryStage",
+                            "traceId",
+                          ],
+                          properties: {
+                            aggregateAttachmentBytes: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  minimum: 0,
+                                  anyOf: [
+                                    {
+                                      format: "integer",
+                                      default: 0,
+                                      type: "string",
+                                    },
+                                    {
+                                      minimum: 0,
+                                      type: "integer",
+                                    },
+                                  ],
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                            attachmentCount: {
+                              minimum: 0,
+                              anyOf: [
+                                {
+                                  format: "integer",
+                                  default: 0,
+                                  type: "string",
+                                },
+                                {
+                                  minimum: 0,
+                                  type: "integer",
+                                },
+                              ],
+                            },
+                            host: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  const: "Outlook",
+                                  type: "string",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                            hostVersion: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  type: "RegExp",
+                                  source: "^\\d{1,4}(?:\\.\\d{1,6}){1,3}$",
+                                  flags: "u",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                            mailboxRequirementSetSupported: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  type: "boolean",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                            outcome: {
+                              default: "in_progress",
+                              type: "string",
+                              enum: [
+                                "in_progress",
+                                "complete",
+                                "retryable_failure",
+                                "terminal_failure",
+                              ],
+                            },
+                            platform: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  default: "Android",
+                                  type: "string",
+                                  enum: [
+                                    "Android",
+                                    "iOS",
+                                    "Mac",
+                                    "OfficeOnline",
+                                    "PC",
+                                    "Universal",
+                                  ],
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                            retryStage: {
+                              default: "none",
+                              type: "string",
+                              enum: [
+                                "none",
+                                "reserve",
+                                "upload",
+                                "finalize",
+                                "abort",
+                                "reconcile",
+                              ],
+                            },
+                            traceId: {
+                              format: "uuid",
+                              type: "string",
+                            },
+                          },
+                        },
+                        queryKey: {
+                          maxItems: 8,
+                          type: "array",
+                          items: {
+                            maxLength: 128,
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
                     params: {
                       type: "object",
                       required: ["workspaceId", "uploadId"],

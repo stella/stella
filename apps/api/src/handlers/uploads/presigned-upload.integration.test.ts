@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -8,10 +9,25 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
-import { pendingUploads } from "@/api/db/schema";
+import {
+  bufferObjectCleanupIntents,
+  EMAIL_INGEST_EFFECT_KINDS,
+  emailIngestEffects,
+  pendingUploads,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import { createSafeId, toSafeId, type SafeId } from "@/api/lib/branded-types";
+import {
+  drainEmailIngestEffects,
+  getEmailIngestEffectRetryAt,
+  processClaimedEmailIngestEffect,
+} from "@/api/lib/scheduler/tasks/email-ingest-effects";
+import type {
+  EmailIngestEffectOperations,
+  EmailIngestEffectsDatabase,
+} from "@/api/lib/scheduler/tasks/email-ingest-effects";
+import { deriveOutlookEmailSourceKey } from "@/api/lib/uploads/email-ingest-source";
 import { legacyTmpUploadKey } from "@/api/lib/uploads/runtime";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -25,6 +41,7 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import presignUpload from "./create";
 import abortUpload from "./delete";
+import reconcileUpload from "./reconcile";
 import finalizeUpload from "./update";
 
 setDefaultTimeout(120_000);
@@ -32,8 +49,10 @@ setDefaultTimeout(120_000);
 type PresignCtx = Parameters<typeof presignUpload.handler>[0];
 type AbortCtx = Parameters<typeof abortUpload.handler>[0];
 type FinalizeCtx = Parameters<typeof finalizeUpload.handler>[0];
+type ReconcileCtx = Parameters<typeof reconcileUpload.handler>[0];
 
 let testDb: TestDatabase;
+let effectDatabase: EmailIngestEffectsDatabase;
 let ids: TestIds;
 // The URL is signed by the real presigner and the bytes are PUT to the real
 // store, so the key the API mints is the key the object lands under and the
@@ -42,17 +61,47 @@ let fake: FakeS3;
 
 const seededUploadIds: SafeId<"pendingUpload">[] = [];
 
+const createEffectOperations = () => {
+  const calls = {
+    extract: 0,
+    pdf_derivative: 0,
+    start_flows: 0,
+    thumbnail_derivative: 0,
+  };
+  const operations = {
+    enqueueImageThumbnailOrMarkFailed: async () => {
+      calls.thumbnail_derivative += 1;
+    },
+    enqueuePdfDerivativeOrMarkFailed: async () => {
+      calls.pdf_derivative += 1;
+    },
+    maybeStartUploadTriggeredFlows: async () => {
+      calls.start_flows += 1;
+    },
+    processExtraction: async () => {
+      calls.extract += 1;
+    },
+  } satisfies EmailIngestEffectOperations;
+  return { calls, operations };
+};
+
 beforeAll(async () => {
   fake = startFakeS3();
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
+  effectDatabase = asTestRaw<EmailIngestEffectsDatabase>(testDb);
   ids = fixture.ids;
 });
-
 afterAll(async () => {
   try {
     fake.stop();
     if (seededUploadIds.length > 0) {
+      await testDb
+        .delete(emailIngestEffects)
+        .where(inArray(emailIngestEffects.sourceUploadId, seededUploadIds));
+      await testDb
+        .delete(bufferObjectCleanupIntents)
+        .where(inArray(bufferObjectCleanupIntents.id, seededUploadIds));
       await testDb
         .delete(pendingUploads)
         .where(inArray(pendingUploads.id, seededUploadIds));
@@ -63,6 +112,85 @@ afterAll(async () => {
 });
 
 describe("presigned upload mutation flow", () => {
+  test("jitters effect retries within the bounded exponential window", () => {
+    const now = new Date("2026-08-30T00:00:00.000Z");
+    expect(
+      getEmailIngestEffectRetryAt({ attemptCount: 1, now, random: () => 0 }),
+    ).toEqual(new Date("2026-08-30T00:00:15.000Z"));
+    expect(
+      getEmailIngestEffectRetryAt({ attemptCount: 1, now, random: () => 1 }),
+    ).toEqual(new Date("2026-08-30T00:00:30.000Z"));
+    expect(
+      getEmailIngestEffectRetryAt({
+        attemptCount: 30,
+        now,
+        random: () => 1,
+      }),
+    ).toEqual(new Date("2026-08-30T06:00:00.000Z"));
+  });
+
+  test("concurrent Outlook reservations converge on one durable upload", async () => {
+    const source = {
+      mailboxEmail: "lawyer@example.org",
+      sourceId: "00000000-0000-7000-8000-000000000001",
+    };
+    const body = {
+      mimeType: "message/rfc822" as const,
+      name: "message.eml",
+      parentId: null,
+      propertyId: ids.filePropertyA1,
+      purpose: "email_ingest" as const,
+      sha256Hex: "e".repeat(64),
+      size: 12,
+      source,
+    };
+    const context = () =>
+      asTestRaw<PresignCtx>(
+        createContext({
+          body,
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      );
+
+    const [first, second] = await Promise.all([
+      presignUpload.handler(context()),
+      presignUpload.handler(context()),
+    ]);
+    const uploadId = getUploadId(first);
+    seededUploadIds.push(uploadId);
+
+    expect(getUploadId(second)).toBe(uploadId);
+    expect(
+      await testDb
+        .select({ id: pendingUploads.id })
+        .from(pendingUploads)
+        .where(eq(pendingUploads.id, uploadId)),
+    ).toHaveLength(1);
+
+    expect(
+      await abortUpload.handler(
+        asTestRaw<AbortCtx>(
+          createContext({
+            params: { workspaceId: ids.wsA1, uploadId },
+            workspaceId: ids.wsA1,
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
+        ),
+      ),
+    ).toEqual({ ok: true });
+    const retried = await presignUpload.handler(context());
+    expect(retried).toMatchObject({ state: "reserved", uploadId });
+    expect(
+      await testDb.query.pendingUploads.findFirst({
+        where: { id: { eq: uploadId } },
+        columns: { rejectReason: true, status: true },
+      }),
+    ).toEqual({ rejectReason: null, status: "pending" });
+  });
+
   test("presigns an agent skill for an authorized owner", async () => {
     const presignResult = await presignUpload.handler(
       asTestRaw<PresignCtx>(
@@ -94,6 +222,22 @@ describe("presigned upload mutation flow", () => {
       purpose: "agent_skill",
       purposeData: { type: "agent_skill", scope: "private" },
       status: "pending",
+    });
+
+    const reconcileResult = await reconcileUpload.handler(
+      asTestRaw<ReconcileCtx>(
+        createContext({
+          body: undefined,
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    expect(reconcileResult).toEqual({
+      code: 404,
+      response: { message: "Upload not found" },
     });
   });
 
@@ -200,6 +344,416 @@ describe("presigned upload mutation flow", () => {
     });
   });
 
+  test("preserves published recovery keys when aborting a failed email ingest", async () => {
+    const uploadId = createSafeId<"pendingUpload">();
+    const recoveryObjectKey = `${ids.orgA}/${ids.wsA1}/recovery/message.eml`;
+    await testDb.insert(pendingUploads).values({
+      id: uploadId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      purpose: "email_ingest",
+      purposeData: {
+        type: "email_ingest",
+        propertyId: ids.propertyA1,
+        sourceKey: "a".repeat(64),
+        recoveryObjectKeys: [recoveryObjectKey],
+      },
+      declaredName: "message.eml",
+      declaredMime: "message/rfc822",
+      declaredSize: 12,
+      declaredSha256: "c".repeat(64),
+      status: "failed",
+      claimedAt: new Date(Date.now() - 120_000),
+      expiresAt: new Date(Date.now() + 60_000),
+      createdAt: new Date(),
+    });
+    seededUploadIds.push(uploadId);
+
+    const result = await abortUpload.handler(
+      asTestRaw<AbortCtx>(
+        createContext({
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(
+      await testDb
+        .select({ objectKey: bufferObjectCleanupIntents.objectKey })
+        .from(bufferObjectCleanupIntents)
+        .where(eq(bufferObjectCleanupIntents.id, uploadId)),
+    ).toEqual([{ objectKey: recoveryObjectKey }]);
+  });
+
+  test("preserves published recovery keys when expiring a failed email ingest", async () => {
+    const uploadId = createSafeId<"pendingUpload">();
+    const recoveryObjectKey = `${ids.orgA}/${ids.wsA1}/recovery/attachment.pdf`;
+    await testDb.insert(pendingUploads).values({
+      id: uploadId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      purpose: "email_ingest",
+      purposeData: {
+        type: "email_ingest",
+        propertyId: ids.propertyA1,
+        sourceKey: "b".repeat(64),
+        recoveryObjectKeys: [recoveryObjectKey],
+      },
+      declaredName: "message.eml",
+      declaredMime: "message/rfc822",
+      declaredSize: 12,
+      declaredSha256: "d".repeat(64),
+      status: "failed",
+      claimedAt: new Date(Date.now() - 120_000),
+      expiresAt: new Date(Date.now() - 60_000),
+      createdAt: new Date(Date.now() - 120_000),
+    });
+    seededUploadIds.push(uploadId);
+
+    const result = await finalizeUpload.handler(
+      asTestRaw<FinalizeCtx>(
+        createContext({
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+
+    expect(result).toEqual({
+      code: 422,
+      response: { message: "Upload URL expired" },
+    });
+    expect(
+      await testDb
+        .select({ objectKey: bufferObjectCleanupIntents.objectKey })
+        .from(bufferObjectCleanupIntents)
+        .where(eq(bufferObjectCleanupIntents.id, uploadId)),
+    ).toEqual([{ objectKey: recoveryObjectKey }]);
+  });
+
+  test("replays a completed email-ingest reconciliation without changing its durable result", async () => {
+    const uploadId = createSafeId<"pendingUpload">();
+    const source = {
+      mailboxEmail: "lawyer@example.org",
+      sourceId: "00000000-0000-7000-8000-000000000002",
+    };
+    const finalizedResult = {
+      attachmentEntityIds: [],
+      entityId: ids.entityA1,
+      fieldId: ids.fieldA1,
+      fileId: Bun.randomUUIDv7(),
+      fileName: "message.eml",
+      renamed: false,
+      type: "email_ingest" as const,
+    };
+    await testDb.insert(pendingUploads).values({
+      id: uploadId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      purpose: "email_ingest",
+      purposeData: {
+        type: "email_ingest",
+        propertyId: ids.propertyA1,
+        sourceKey: deriveOutlookEmailSourceKey({ source }),
+      },
+      declaredName: "message.eml",
+      declaredMime: "message/rfc822",
+      declaredSize: 12,
+      declaredSha256: "e".repeat(64),
+      status: "finalized",
+      finalizedResult,
+      finalizedAt: new Date(),
+      expiresAt: new Date(Date.now() + 60_000),
+      createdAt: new Date(),
+    });
+    seededUploadIds.push(uploadId);
+    const context = asTestRaw<ReconcileCtx>(
+      createContext({
+        body: undefined,
+        params: { workspaceId: ids.wsA1, uploadId },
+        workspaceId: ids.wsA1,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
+    );
+    const finalizedReplay = await finalizeUpload.handler(
+      asTestRaw<FinalizeCtx>(
+        createContext({
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+
+    const first = await reconcileUpload.handler(context);
+    const replay = await reconcileUpload.handler(context);
+    const duplicateReservation = await presignUpload.handler(
+      asTestRaw<PresignCtx>(
+        createContext({
+          body: {
+            mimeType: "message/rfc822",
+            name: "message.eml",
+            parentId: null,
+            propertyId: ids.filePropertyA1,
+            purpose: "email_ingest",
+            sha256Hex: "f".repeat(64),
+            size: 99,
+            source,
+          },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+
+    expect(first).toEqual({
+      finalizedResult,
+      state: "complete",
+    });
+    expect(replay).toEqual(first);
+    expect(finalizedReplay).toEqual({ finalizedResult });
+    expect(duplicateReservation).toEqual({ state: "existing", uploadId });
+    expect(
+      await testDb
+        .select({ kind: emailIngestEffects.kind })
+        .from(emailIngestEffects)
+        .where(eq(emailIngestEffects.sourceUploadId, uploadId)),
+    ).toEqual([]);
+  });
+
+  test("claims each committed email effect once across concurrent drainers", async () => {
+    const { calls, operations } = createEffectOperations();
+    const sourceUploadId = createSafeId<"pendingUpload">();
+    seededUploadIds.push(sourceUploadId);
+    await testDb.insert(emailIngestEffects).values(
+      EMAIL_INGEST_EFFECT_KINDS.map((kind) => ({
+        encrypted: false,
+        entityId: ids.entityA1,
+        fieldId: ids.fieldA1,
+        fileName: "message.eml",
+        kind,
+        mimeType: "message/rfc822",
+        organizationId: ids.orgA,
+        sourceUploadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      })),
+    );
+
+    await Promise.all([
+      drainEmailIngestEffects({
+        database: effectDatabase,
+        operations,
+        sourceUploadId,
+      }),
+      drainEmailIngestEffects({
+        database: effectDatabase,
+        operations,
+        sourceUploadId,
+      }),
+    ]);
+
+    expect(calls).toEqual({
+      extract: 1,
+      pdf_derivative: 1,
+      start_flows: 1,
+      thumbnail_derivative: 1,
+    });
+    expect(
+      await testDb
+        .select({
+          attemptCount: emailIngestEffects.attemptCount,
+          status: emailIngestEffects.status,
+        })
+        .from(emailIngestEffects)
+        .where(eq(emailIngestEffects.sourceUploadId, sourceUploadId)),
+    ).toEqual(
+      Array.from({ length: 4 }, () => ({
+        attemptCount: 1,
+        status: "completed",
+      })),
+    );
+  });
+
+  test("records a failed effect and completes it on a due retry", async () => {
+    const { calls, operations } = createEffectOperations();
+    const sourceUploadId = createSafeId<"pendingUpload">();
+    seededUploadIds.push(sourceUploadId);
+    const claim = (
+      await testDb
+        .insert(emailIngestEffects)
+        .values({
+          attemptCount: 1,
+          claimedAt: new Date(),
+          claimToken: Bun.randomUUIDv7(),
+          encrypted: false,
+          entityId: ids.entityA2,
+          fieldId: ids.fieldA2,
+          fileName: "attachment.txt",
+          kind: "extract",
+          mimeType: "text/plain",
+          organizationId: ids.orgA,
+          sourceUploadId,
+          status: "processing",
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        })
+        .returning()
+    ).at(0);
+    if (!claim) {
+      throw new Error("Expected a claimed email ingest effect");
+    }
+
+    expect(
+      await processClaimedEmailIngestEffect({
+        database: effectDatabase,
+        effect: claim,
+        operations: {
+          enqueueImageThumbnailOrMarkFailed: async () => undefined,
+          enqueuePdfDerivativeOrMarkFailed: async () => undefined,
+          maybeStartUploadTriggeredFlows: async () => undefined,
+          processExtraction: async () => {
+            throw new Error("transient");
+          },
+        },
+      }),
+    ).toBe(false);
+    expect(
+      (
+        await testDb
+          .select({
+            attemptCount: emailIngestEffects.attemptCount,
+            status: emailIngestEffects.status,
+          })
+          .from(emailIngestEffects)
+          .where(eq(emailIngestEffects.sourceUploadId, sourceUploadId))
+      ).at(0),
+    ).toEqual({ attemptCount: 1, status: "failed" });
+
+    await testDb
+      .update(emailIngestEffects)
+      .set({ nextAttemptAt: new Date(0) })
+      .where(eq(emailIngestEffects.sourceUploadId, sourceUploadId));
+    await drainEmailIngestEffects({
+      database: effectDatabase,
+      operations,
+      sourceUploadId,
+    });
+
+    expect(calls.extract).toBe(1);
+    expect(
+      (
+        await testDb
+          .select({
+            attemptCount: emailIngestEffects.attemptCount,
+            status: emailIngestEffects.status,
+          })
+          .from(emailIngestEffects)
+          .where(eq(emailIngestEffects.sourceUploadId, sourceUploadId))
+      ).at(0),
+    ).toEqual({ attemptCount: 2, status: "completed" });
+  });
+
+  test("does not run a stale worker after its lease is reclaimed", async () => {
+    const { calls, operations } = createEffectOperations();
+    const sourceUploadId = createSafeId<"pendingUpload">();
+    seededUploadIds.push(sourceUploadId);
+    const staleClaim = (
+      await testDb
+        .insert(emailIngestEffects)
+        .values({
+          attemptCount: 1,
+          claimedAt: new Date(0),
+          claimToken: Bun.randomUUIDv7(),
+          encrypted: false,
+          entityId: ids.entityA2,
+          fieldId: ids.fieldA2,
+          fileName: "attachment.txt",
+          kind: "extract",
+          mimeType: "text/plain",
+          organizationId: ids.orgA,
+          sourceUploadId,
+          status: "processing",
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        })
+        .returning()
+    ).at(0);
+    if (!staleClaim) {
+      throw new Error("Expected a stale email ingest effect claim");
+    }
+
+    await testDb
+      .update(emailIngestEffects)
+      .set({
+        attemptCount: 2,
+        claimedAt: new Date(),
+        claimToken: Bun.randomUUIDv7(),
+      })
+      .where(eq(emailIngestEffects.sourceUploadId, sourceUploadId));
+
+    expect(
+      await processClaimedEmailIngestEffect({
+        database: effectDatabase,
+        effect: staleClaim,
+        operations,
+      }),
+    ).toBe(false);
+    expect(calls.extract).toBe(0);
+  });
+
+  test("allows tenant-scoped effect inserts and rejects cross-tenant rows", async () => {
+    const sourceUploadId = createSafeId<"pendingUpload">();
+    seededUploadIds.push(sourceUploadId);
+    const context = createContext({
+      workspaceId: ids.wsA1,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
+    const baseEffect = {
+      encrypted: false,
+      fileName: "message.eml",
+      kind: "extract" as const,
+      mimeType: "message/rfc822",
+      sourceUploadId,
+      userId: ids.userA1,
+    };
+
+    const sameTenant = await context.safeDb(async (tx) => {
+      await tx.insert(emailIngestEffects).values({
+        ...baseEffect,
+        entityId: ids.entityA1,
+        fieldId: ids.fieldA1,
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+      });
+    });
+    const otherTenant = await context.safeDb(async (tx) => {
+      await tx.insert(emailIngestEffects).values({
+        ...baseEffect,
+        entityId: ids.entityB1,
+        fieldId: ids.fieldB1,
+        organizationId: ids.orgB,
+        workspaceId: ids.wsB1,
+      });
+    });
+
+    expect(Result.isOk(sameTenant)).toBe(true);
+    expect(Result.isError(otherTenant)).toBe(true);
+  });
+
   test("does not let workspace A abort workspace B upload IDs", async () => {
     const uploadId = createSafeId<"pendingUpload">();
     await testDb.insert(pendingUploads).values({
@@ -232,6 +786,21 @@ describe("presigned upload mutation flow", () => {
     );
 
     expect(result).toEqual({
+      code: 404,
+      response: { message: "Upload not found" },
+    });
+    const reconcileResult = await reconcileUpload.handler(
+      asTestRaw<ReconcileCtx>(
+        createContext({
+          body: undefined,
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    expect(reconcileResult).toEqual({
       code: 404,
       response: { message: "Upload not found" },
     });

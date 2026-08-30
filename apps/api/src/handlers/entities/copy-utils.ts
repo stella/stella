@@ -9,7 +9,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { allocateEntityStamp } from "@/api/lib/document-counter";
+import {
+  allocateEntityStamp,
+  entityKindHasDocumentReference,
+} from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -424,7 +427,7 @@ export const resolveEntityName = async ({
   return `${base}_${maxN + 1}${ext}`;
 };
 
-export const getFolderSubtree = (
+export const getEntitySubtree = (
   allEntities: EntitySnapshot[],
   rootId: SafeId<"entity">,
 ): EntitySnapshot[] | null => {
@@ -662,11 +665,10 @@ export const copyEntities = async ({
           })
         : source.name;
 
-    const entityStamp =
-      source.kind === "document"
-        ? // oxlint-disable-next-line no-await-in-loop -- stamp allocation is a sequential per-workspace counter; must run in order within the transaction
-          await allocateEntityStamp(tx, targetWorkspaceId)
-        : null;
+    const entityStamp = entityKindHasDocumentReference(source.kind)
+      ? // oxlint-disable-next-line no-await-in-loop -- stamp allocation is a sequential per-workspace counter; must run in order within the transaction
+        await allocateEntityStamp(tx, targetWorkspaceId)
+      : null;
 
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential by design: same DB transaction client; children reference parent IDs created in earlier iterations, and the version insert/currentVersionId update just below depend on this row
     await tx.insert(entities).values({

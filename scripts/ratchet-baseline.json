@@ -173,7 +173,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 44,
+    "count": 45,
     "files": {
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 1,
@@ -191,6 +191,7 @@
       "apps/api/src/handlers/views/table-export.ts": 1,
       "apps/api/src/handlers/workspaces/duplicate.ts": 4,
       "apps/api/src/lib/account-deletion-steps.ts": 2,
+      "apps/api/src/lib/audit-log.ts": 1,
       "apps/api/src/lib/entity-cap-lock.ts": 1,
       "apps/api/src/lib/legal-search/case-law-search-index.ts": 1,
       "apps/api/src/lib/template-clause-links.ts": 1,
@@ -245,7 +246,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 741,
+    "count": 739,
     "files": {
       "apps/api/scripts/ai-provider-canary.ts": 4,
       "apps/api/scripts/backfill-image-thumbnails.ts": 9,
@@ -340,9 +341,9 @@
       "apps/api/src/handlers/templates/fill.ts": 1,
       "apps/api/src/handlers/templates/prepare-template.ts": 1,
       "apps/api/src/handlers/uploads/agent-skill.ts": 1,
-      "apps/api/src/handlers/uploads/delete.ts": 2,
+      "apps/api/src/handlers/uploads/delete.ts": 1,
       "apps/api/src/handlers/uploads/entity-create-tree.ts": 2,
-      "apps/api/src/handlers/uploads/update.ts": 4,
+      "apps/api/src/handlers/uploads/update.ts": 3,
       "apps/api/src/handlers/views/table-export.ts": 1,
       "apps/api/src/handlers/workspaces/delete.ts": 1,
       "apps/api/src/handlers/workspaces/duplicate.ts": 2,
@@ -350,7 +351,7 @@
       "apps/api/src/lib/account-deletion-steps.ts": 1,
       "apps/api/src/lib/agent-skills/skills.ts": 2,
       "apps/api/src/lib/analytics/posthog.ts": 1,
-      "apps/api/src/lib/auth.ts": 3,
+      "apps/api/src/lib/auth.ts": 2,
       "apps/api/src/lib/cell-lock.ts": 1,
       "apps/api/src/lib/corpus-index/backfill-pacing.ts": 1,
       "apps/api/src/lib/corpus-index/core.ts": 10,
@@ -446,6 +447,7 @@
       "apps/legal-atlas-runner/src/runners/sk-document-drain.ts": 3,
       "apps/legal-atlas-runner/src/runners/source-total-poll.ts": 2,
       "apps/mobile/src/app/_layout.tsx": 1,
+      "apps/outlook/src/lib/bounded-concurrency.ts": 1,
       "apps/web/scripts/assert-start-runtime-build.ts": 1,
       "apps/web/src/client.tsx": 1,
       "apps/web/src/components/ai-config-providers-editor.tsx": 2,

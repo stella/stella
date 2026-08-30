@@ -6,7 +6,7 @@ import {
   pendingUploads,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { bufferIntentObjectKey } from "@/api/lib/buffer-intent-reconciliation";
+import { pendingUploadRecoveryObjectKeys } from "@/api/lib/buffer-intent-reconciliation";
 import { tmpUploadKeys } from "@/api/lib/uploads/runtime";
 
 type PendingUploadDeletionRow = Pick<
@@ -27,8 +27,7 @@ export const pendingUploadS3KeysForDeletion = (
     uploadId: row.id,
     workspaceId: row.workspaceId,
   });
-  const objectKey = bufferIntentObjectKey(row);
-  if (objectKey !== null) {
+  for (const objectKey of pendingUploadRecoveryObjectKeys(row)) {
     keys.push(objectKey);
   }
   return keys;

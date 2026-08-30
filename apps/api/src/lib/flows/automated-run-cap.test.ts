@@ -121,6 +121,25 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     return { runId, result };
   };
 
+  const attemptStartWithRunId = async (
+    definitionId: SafeId<"flowDefinition">,
+    runId: SafeId<"flowRun">,
+  ) => {
+    const rows = buildFlowRunRows({
+      runId,
+      workspaceId,
+      definitionId,
+      definition: { name: "Automated cap flow", steps: [AI_STEP] },
+      triggerSource: FILE_UPLOAD_SOURCE,
+      inputEntityIds: [],
+    });
+    return await insertAutomatedFlowRunWithinCap({
+      database: capDatabase,
+      definitionId,
+      rows,
+    });
+  };
+
   const countRunsForDefinition = async (
     definitionId: SafeId<"flowDefinition">,
   ): Promise<number> =>
@@ -196,6 +215,22 @@ describe("insertAutomatedFlowRunWithinCap", () => {
       .from(flowRunSteps)
       .where(eq(flowRunSteps.runId, runId));
     expect(stepRows).toHaveLength(1);
+  });
+
+  test("replays a deterministic run id without inserting duplicate rows", async () => {
+    const definitionId = await createDefinition();
+    const runId = createSafeId<"flowRun">();
+
+    expect((await attemptStartWithRunId(definitionId, runId)).outcome).toBe(
+      "started",
+    );
+    expect((await attemptStartWithRunId(definitionId, runId)).outcome).toBe(
+      "duplicate",
+    );
+    expect(await countRunsForDefinition(definitionId)).toBe(1);
+    expect(
+      await testDb.$count(flowRunSteps, eq(flowRunSteps.runId, runId)),
+    ).toBe(1);
   });
 
   test("counts only today's automated runs, not manual or prior-day runs", async () => {
