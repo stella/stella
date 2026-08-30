@@ -3,6 +3,7 @@ import {
   type ReactNode,
   type RefObject,
   type UIEvent,
+  useId,
   useRef,
 } from "react";
 
@@ -16,6 +17,10 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { cn } from "../lib/utils";
+import {
+  useKanbanDropTarget,
+  type UseKanbanDropTargetOptions,
+} from "./sortable-interactions";
 
 const DEFAULT_ESTIMATE_SIZE_PX = 128;
 const DEFAULT_OVERSCAN = 8;
@@ -44,9 +49,9 @@ export type KanbanVirtualCellPagination =
  * merely to support dnd-kit consumers.
  */
 export type KanbanVirtualCellSortableContext<TRow> = {
+  dropTarget: Omit<UseKanbanDropTargetOptions, "itemIds">;
   getRowId: (row: TRow) => UniqueIdentifier;
   disabled?: SortableContextProps["disabled"] | undefined;
-  id?: SortableContextProps["id"] | undefined;
   strategy?: SortingStrategy | undefined;
 };
 
@@ -83,8 +88,16 @@ export const KanbanVirtualCell = <TRow,>({
   className,
 }: KanbanVirtualCellProps<TRow>) => {
   const internalRef = useRef<HTMLDivElement>(null);
-  const scrollRef = containerRef ?? internalRef;
+  const fallbackDropTargetId = useId();
+  const scrollRef = internalRef;
   const requestedPageKeyRef = useRef<string | number | null>(null);
+  const itemIds = sortable ? rows.map(sortable.getRowId) : [];
+  const dropTarget = useKanbanDropTarget({
+    disabled: sortable?.dropTarget.disabled ?? sortable === undefined,
+    id: sortable?.dropTarget.id ?? fallbackDropTargetId,
+    itemIds,
+    position: sortable?.dropTarget.position ?? { column: -1, lane: -1 },
+  });
   const virtualizer = useVirtualizer({
     count: rows.length,
     estimateSize: () => estimateSize,
@@ -118,6 +131,14 @@ export const KanbanVirtualCell = <TRow,>({
     pagination.onRequestMore();
   };
 
+  const setScrollElement = (element: HTMLDivElement | null) => {
+    internalRef.current = element;
+    if (containerRef) {
+      containerRef.current = element;
+    }
+    dropTarget.setNodeRef(element);
+  };
+
   const content = (
     <div
       className={cn(
@@ -125,8 +146,9 @@ export const KanbanVirtualCell = <TRow,>({
         active && "bg-primary/5 ring-primary/50 ring-2",
         className,
       )}
+      data-kanban-cell={sortable?.dropTarget.id}
       onScroll={handleScroll}
-      ref={scrollRef}
+      ref={setScrollElement}
       style={backgroundColor ? { backgroundColor } : undefined}
     >
       <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
@@ -161,8 +183,8 @@ export const KanbanVirtualCell = <TRow,>({
       {...(sortable.disabled === undefined
         ? {}
         : { disabled: sortable.disabled })}
-      {...(sortable.id === undefined ? {} : { id: sortable.id })}
-      items={rows.map(sortable.getRowId)}
+      id={sortable.dropTarget.id}
+      items={itemIds}
       strategy={sortable.strategy ?? verticalListSortingStrategy}
     >
       {content}

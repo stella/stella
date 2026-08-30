@@ -11,34 +11,84 @@ import { KanbanVirtualCell } from "../virtual-cell";
 const fixtureStyles = `
   .touch-auto { touch-action: auto; }
   .touch-none { touch-action: none; }
-  [data-board] { block-size: 180px; display: flex; inline-size: 320px; overflow-x: auto; }
+  .size-11 { block-size: 44px; inline-size: 44px; }
+  [data-board] { block-size: 300px; display: flex; inline-size: 320px; overflow-x: auto; position: relative; }
   [data-column] { flex: 0 0 200px; }
   .kanban-test-list { block-size: 120px; max-block-size: 120px; overflow-y: auto; }
   [data-sortable-item] { block-size: 96px; }
 `;
 
-const firstColumnRows = [{ id: "first" }, { id: "third" }, { id: "fourth" }];
+const firstColumnRows = [
+  { id: "first" },
+  { id: "third" },
+  { id: "fourth" },
+  { id: "fifth" },
+  { id: "sixth" },
+];
 
-const secondColumnRows = [{ id: "second" }];
+const cells = [
+  { id: "cell-a", position: { column: 0, lane: 0 }, rows: firstColumnRows },
+  { id: "cell-b", position: { column: 1, lane: 0 }, rows: [] },
+  {
+    id: "cell-c",
+    position: { column: 0, lane: 1 },
+    rows: [{ id: "lane-second" }],
+  },
+  {
+    id: "cell-d",
+    position: { column: 1, lane: 1 },
+    rows: [{ id: "second" }, { id: "whole-item" }],
+  },
+] as const;
 
 const SortableItem = ({ id }: { id: string }) => {
-  const { dragHandle, setNodeRef, style } = useKanbanSortable({ id });
+  const { activator, setNodeRef, style } = useKanbanSortable({
+    activation: { type: id === "whole-item" ? "item" : "handle" },
+    id,
+  });
+
+  if (activator.type === "item") {
+    return (
+      <div
+        {...activator.attributes}
+        {...activator.listeners}
+        aria-label={`Move ${id}`}
+        data-sortable-item={id}
+        data-whole-item=""
+        ref={setNodeRef}
+        style={style}
+      >
+        {id}
+      </div>
+    );
+  }
 
   return (
     <div data-sortable-item={id} ref={setNodeRef} style={style}>
-      <KanbanDragHandle bindings={dragHandle} label={`Move ${id}`} />
+      <KanbanDragHandle bindings={activator.bindings} label={`Move ${id}`} />
     </div>
   );
 };
 
-const SortableVirtualCell = ({ rows }: { rows: readonly { id: string }[] }) => (
+const SortableVirtualCell = ({
+  id,
+  position,
+  rows,
+}: {
+  id: string;
+  position: { column: number; lane: number };
+  rows: readonly { id: string }[];
+}) => (
   <KanbanVirtualCell
     className="kanban-test-list"
-    getRowKey={({ id }) => id}
+    getRowKey={({ id: rowId }) => rowId}
     pagination={{ type: "none" }}
-    renderRow={({ id }) => <SortableItem id={id} />}
+    renderRow={({ id: rowId }) => <SortableItem id={rowId} />}
     rows={rows}
-    sortable={{ getRowId: ({ id }) => id }}
+    sortable={{
+      dropTarget: { id, position },
+      getRowId: ({ id: rowId }) => rowId,
+    }}
   />
 );
 
@@ -53,21 +103,27 @@ const SortableFixture = () => (
       document.documentElement.dataset["droppedOn"] =
         over === null ? "" : String(over.id);
     }}
+    onDragOver={({ over }) => {
+      document.documentElement.dataset["draggedOver"] =
+        over === null ? "" : String(over.id);
+    }}
     overlayProps={{ dropAnimation: null }}
     overlay={(activeId) =>
       activeId === null ? null : <output data-overlay="">{activeId}</output>
     }
   >
     <style>{fixtureStyles}</style>
-    <KanbanSortableColumns
-      data-board=""
-      items={["first-column", "second-column"]}
-    >
+    <KanbanSortableColumns data-board="" items={["column-a", "column-b"]}>
       <section data-column="first">
-        <SortableVirtualCell rows={firstColumnRows} />
+        <div data-board-chrome="" style={{ position: "sticky", zIndex: 20 }}>
+          First
+        </div>
+        <SortableVirtualCell {...cells[0]} />
+        <SortableVirtualCell {...cells[2]} />
       </section>
       <section data-column="second">
-        <SortableVirtualCell rows={secondColumnRows} />
+        <SortableVirtualCell {...cells[1]} />
+        <SortableVirtualCell {...cells[3]} />
       </section>
     </KanbanSortableColumns>
   </KanbanSortableBoard>

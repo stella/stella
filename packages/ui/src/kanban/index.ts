@@ -18,7 +18,9 @@ export type {
   KanbanDragHandleProps,
   KanbanDragCancelEvent,
   KanbanDragEndEvent,
+  KanbanDragOverEvent,
   KanbanDragStartEvent,
+  KanbanSortableActivationMode,
   KanbanSortableBindings,
   KanbanSortableBoardProps,
   KanbanSortableColumnsProps,
@@ -27,9 +29,11 @@ export type {
   UseKanbanDropTargetOptions,
 } from "./sortable-interactions";
 export {
+  KANBAN_BOARD_AUTO_SCROLL_OPTIONS,
   KANBAN_MOUSE_ACTIVATION_DISTANCE,
   KANBAN_BOARD_COLLISION_DETECTION,
   KANBAN_DRAG_OVERLAY_Z_INDEX,
+  KANBAN_SORTABLE_ACTIVATION_MODES,
   KANBAN_TOUCH_ACTIVATION_CONSTRAINT,
   KanbanDragHandle,
   KanbanSortableBoard,
@@ -38,7 +42,9 @@ export {
   useKanbanSortable,
   useKanbanDropTarget,
   useKanbanSortableSensors,
+  kanbanKeyboardCoordinates,
 } from "./sortable-interactions";
+export type { KanbanSortableCellPosition } from "./sortable-interactions";
 export type { KanbanDirection, KanbanHorizontalEdge } from "./sortable-edge";
 export {
   getKanbanHorizontalEdge,

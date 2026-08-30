@@ -125,7 +125,7 @@ describe("sortable board interactions", () => {
     expect(html).toContain("overflow-x-auto");
     expect(html).toContain("touch-auto");
     expect(html).toContain("overflow-y-auto");
-    expect(html).toContain("size-11 touch-none");
+    expect(html).toContain("size-11 min-h-11 min-w-11 touch-none sm:size-11");
     expect(html).toContain('aria-label="Move card"');
   });
 });
