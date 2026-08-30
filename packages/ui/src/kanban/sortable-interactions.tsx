@@ -40,6 +40,7 @@ import { cn } from "../lib/utils";
 import {
   clearKanbanKeyboardTarget,
   getKanbanKeyboardTargetState,
+  isKanbanKeyboardDropSettled,
   KANBAN_BOARD_COLLISION_DETECTION,
   KANBAN_DROP_TARGET_TYPES,
   kanbanKeyboardCoordinates,
@@ -96,6 +97,8 @@ const KANBAN_KEYBOARD_CODES = {
 } as const;
 const KANBAN_KEYBOARD_LISTENER_DELAY_MS = 0;
 const KANBAN_KEYBOARD_TARGET_RETRY_LIMIT = 60;
+/** A render commit, not a virtual scroll, so the budget stays short. */
+const KANBAN_KEYBOARD_DROP_RETRY_LIMIT = 10;
 
 type TouchEventWithLists = Event & {
   changedTouches: TouchList;
@@ -267,16 +270,38 @@ class KanbanKeyboardSensor implements SensorInstance {
     if (endCodes.some((code) => code === event.code)) {
       event.preventDefault();
       this.moveSequence += 1;
-      clearKanbanKeyboardTarget(
-        this.props.context.current.active?.data.current,
-      );
       this.listeners.abort();
-      this.props.onEnd();
+      this.end(0);
       return;
     }
 
     this.moveSequence += 1;
     this.move(event, this.moveSequence, 0);
+  };
+
+  /**
+   * The board commits its navigated target inside the coordinate getter, but
+   * dnd-kit resolves the drop from the target it has published to the sensor
+   * context, which trails by one render. Ending before those agree drops the
+   * item on the previously published target.
+   */
+  private readonly end = (retryCount: number) => {
+    const currentContext = this.props.context.current;
+    const activeData = currentContext.active?.data.current;
+    if (
+      retryCount < KANBAN_KEYBOARD_DROP_RETRY_LIMIT &&
+      !isKanbanKeyboardDropSettled({
+        activeData,
+        overId: currentContext.over?.id,
+      })
+    ) {
+      requestAnimationFrame(() => {
+        this.end(retryCount + 1);
+      });
+      return;
+    }
+    clearKanbanKeyboardTarget(activeData);
+    this.props.onEnd();
   };
 
   private readonly move = (

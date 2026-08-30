@@ -8,6 +8,18 @@ const openFixture = async (page: Page) => {
   return page.getByRole("button", { name: "Move first" });
 };
 
+/** Keyboard navigation must work once the drag is live, not only in the same tick. */
+const expectDragActivated = async (page: Page) => {
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["dragStartedAt"] ?? "",
+        ),
+    )
+    .not.toBe("");
+};
+
 const getTouchCoordinates = async (handle: Locator) => {
   const box = await handle.boundingBox();
   if (!box) {
@@ -559,6 +571,7 @@ test("drops a keyboard drag into an adjacent virtual cell", async ({
 
   await handle.focus();
   await page.keyboard.press("Space");
+  await expectDragActivated(page);
   await page.keyboard.press("ArrowRight");
   await expect
     .poll(
@@ -587,6 +600,7 @@ test("navigates items in order, then across matrix cells and lanes", async ({
 
   await handle.focus();
   await page.keyboard.press("Space");
+  await expectDragActivated(page);
   await page.keyboard.press("ArrowDown");
   await expect
     .poll(
@@ -610,6 +624,7 @@ test("navigates items in order, then across matrix cells and lanes", async ({
   const reloadedHandle = page.getByRole("button", { name: "Move first" });
   await reloadedHandle.focus();
   await page.keyboard.press("Space");
+  await expectDragActivated(page);
   await page.keyboard.press("ArrowRight");
   await expect
     .poll(

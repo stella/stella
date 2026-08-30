@@ -111,6 +111,27 @@ export const getKanbanKeyboardTargetState = (
 ): KanbanKeyboardTargetState | undefined =>
   isKanbanItemDropData(value) ? value.navigation.current : undefined;
 
+export type KanbanKeyboardDropOptions = {
+  activeData: unknown;
+  overId: UniqueIdentifier | undefined;
+};
+
+/**
+ * dnd-kit publishes a collision target to its sensor context one render after
+ * the coordinate getter commits it, and resolves a drop from that published
+ * value. A keyboard drop that finalizes earlier lands on the previous target.
+ */
+export const isKanbanKeyboardDropSettled = ({
+  activeData,
+  overId,
+}: KanbanKeyboardDropOptions): boolean => {
+  const target = getKanbanKeyboardTargetState(activeData);
+  if (target?.type !== "ready") {
+    return true;
+  }
+  return overId === target.targetId;
+};
+
 export const clearKanbanKeyboardTarget = (value: unknown): void => {
   if (isKanbanItemDropData(value) && value.navigation.current.type !== "idle") {
     value.navigation.current = { type: "idle" };

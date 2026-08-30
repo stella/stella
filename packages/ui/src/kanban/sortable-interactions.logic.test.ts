@@ -5,6 +5,7 @@ import {
   getKanbanKeyboardTargetState,
   getKanbanKeyboardTarget,
   isKanbanCellDropData,
+  isKanbanKeyboardDropSettled,
 } from "./sortable-interactions.logic";
 
 const cells = [
@@ -53,6 +54,44 @@ describe("Kanban keyboard navigation", () => {
 
     expect(data.navigation).toBe(navigation);
     expect(getKanbanKeyboardTargetState(data)).toEqual({ type: "idle" });
+  });
+
+  test("holds a keyboard drop until the navigated target is published", () => {
+    const navigated = {
+      navigation: { current: { targetId: "cell-b", type: "ready" } },
+      type: "kanban-item",
+    };
+
+    expect(
+      isKanbanKeyboardDropSettled({ activeData: navigated, overId: "first" }),
+    ).toBe(false);
+    expect(
+      isKanbanKeyboardDropSettled({ activeData: navigated, overId: "cell-b" }),
+    ).toBe(true);
+  });
+
+  test("drops immediately when no keyboard target is awaiting publication", () => {
+    expect(
+      isKanbanKeyboardDropSettled({
+        activeData: {
+          navigation: { current: { type: "idle" } },
+          type: "kanban-item",
+        },
+        overId: "first",
+      }),
+    ).toBe(true);
+    expect(
+      isKanbanKeyboardDropSettled({
+        activeData: {
+          navigation: { current: { targetId: "offscreen", type: "pending" } },
+          type: "kanban-item",
+        },
+        overId: undefined,
+      }),
+    ).toBe(true);
+    expect(
+      isKanbanKeyboardDropSettled({ activeData: undefined, overId: "first" }),
+    ).toBe(true);
   });
 
   test("rejects invalid matrix positions at the drop boundary", () => {
