@@ -21,6 +21,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import "@/features/inbox/signal-inspector-registration";
+import { env } from "@/env";
 import { MyWorkView } from "@/features/inbox/components/my-work-view";
 import {
   ORIGIN_LABEL_KEY,
@@ -51,6 +52,8 @@ const protectedRouteApi = getRouteApi("/_protected");
 
 export const Route = createFileRoute("/_protected/inbox/")({
   loader: async ({ context }) => {
+    // Governed queues only exist behind the deployment flag; prefetching
+    // them on a flag-off deployment would fail the whole route load.
     await Promise.all([
       ensureRouteInfiniteQueryData(
         context.queryClient,
@@ -59,10 +62,14 @@ export const Route = createFileRoute("/_protected/inbox/")({
           DEFAULT_INBOX_FILTERS,
         ),
       ),
-      ensureRouteInfiniteQueryData(
-        context.queryClient,
-        myWorkOptions("upcoming", localISODate()),
-      ),
+      ...(env.VITE_FEATURE_GOVERNED_WORKFLOW
+        ? [
+            ensureRouteInfiniteQueryData(
+              context.queryClient,
+              myWorkOptions("upcoming", localISODate()),
+            ),
+          ]
+        : []),
     ]);
   },
   head: () => ({
@@ -135,24 +142,28 @@ function InboxPage() {
           <NewRequestDialog organizationId={activeOrganizationId} />
         </header>
 
-        <div className="flex gap-1 border-b pb-3">
-          <Button
-            aria-pressed={section === INBOX_SECTION.NEW}
-            onClick={() => setSection(INBOX_SECTION.NEW)}
-            size="sm"
-            variant={section === INBOX_SECTION.NEW ? "default" : "outline"}
-          >
-            {t("inbox.view.new")}
-          </Button>
-          <Button
-            aria-pressed={section === INBOX_SECTION.MY_WORK}
-            onClick={() => setSection(INBOX_SECTION.MY_WORK)}
-            size="sm"
-            variant={section === INBOX_SECTION.MY_WORK ? "default" : "outline"}
-          >
-            {t("tasks.myWorkTitle")}
-          </Button>
-        </div>
+        {env.VITE_FEATURE_GOVERNED_WORKFLOW ? (
+          <div className="flex gap-1 border-b pb-3">
+            <Button
+              aria-pressed={section === INBOX_SECTION.NEW}
+              onClick={() => setSection(INBOX_SECTION.NEW)}
+              size="sm"
+              variant={section === INBOX_SECTION.NEW ? "default" : "outline"}
+            >
+              {t("inbox.view.new")}
+            </Button>
+            <Button
+              aria-pressed={section === INBOX_SECTION.MY_WORK}
+              onClick={() => setSection(INBOX_SECTION.MY_WORK)}
+              size="sm"
+              variant={
+                section === INBOX_SECTION.MY_WORK ? "default" : "outline"
+              }
+            >
+              {t("tasks.myWorkTitle")}
+            </Button>
+          </div>
+        ) : null}
 
         {section === INBOX_SECTION.MY_WORK ? (
           <MyWorkView organizationId={activeOrganizationId} />
