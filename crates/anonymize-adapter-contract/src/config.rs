@@ -427,6 +427,7 @@ fn signature_data_from_binding(data: BindingSignatureData) -> SignatureData {
     labels: data.labels,
     person_value_labels: data.person_value_labels,
     person_list_labels: data.person_list_labels,
+    party_role_name_evidence: data.party_role_name_evidence,
     witness_phrases: data.witness_phrases,
     name_particles: data.name_particles,
     post_nominal_suffixes: data.post_nominal_suffixes,

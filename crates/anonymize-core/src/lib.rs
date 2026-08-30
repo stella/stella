@@ -97,6 +97,8 @@ pub use session_archive::{
   REDACTION_SESSION_ARCHIVE_KEY_BYTES, REDACTION_SESSION_ARCHIVE_MAX_BYTES,
   REDACTION_SESSION_ARCHIVE_VERSION, SessionArchiveKey,
 };
+#[doc(hidden)]
+pub use signatures::encode_party_role_name_evidence;
 pub use signatures::{PersonSpanTerminators, SignatureData};
 pub use triggers::{
   PERSON_OR_ORGANIZATION_TRIGGER_LABEL, TriggerData, TriggerRule,

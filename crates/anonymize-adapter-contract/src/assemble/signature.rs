@@ -9,7 +9,10 @@
 
 use serde::Deserialize;
 use serde_json::Value;
-use stella_anonymize_core::assemble::{AssembleError, OrderedMap};
+use stella_anonymize_core::assemble::{
+  AssembleError, Dictionaries, OrderedMap,
+};
+use stella_anonymize_core::encode_party_role_name_evidence;
 
 use super::language::language_keyed_terms;
 use crate::BindingSignatureData;
@@ -56,6 +59,7 @@ pub(super) fn form_field_labels(
 /// Returns [`AssembleError`] when `signature-detection.json` fails to parse.
 pub(super) fn build_signature_data(
   selected: Option<&[String]>,
+  dictionaries: Option<&Dictionaries>,
 ) -> Result<BindingSignatureData, AssembleError> {
   let data: SignatureDetection =
     stella_anonymize_core::assemble::parse_data_file(
@@ -71,6 +75,9 @@ pub(super) fn build_signature_data(
       &data.person_list_labels,
       selected,
     ),
+    party_role_name_evidence: cross_locale_party_role_first_names(
+      dictionaries,
+    )?,
     witness_phrases: language_keyed_terms(&data.witness_phrases, None),
     name_particles: language_keyed_terms(&data.name_particles, None),
     post_nominal_suffixes: language_keyed_terms(
@@ -91,6 +98,27 @@ pub(super) fn build_signature_data(
       None,
     ),
     image_stub_prefixes: language_keyed_terms(&data.image_stub_prefixes, None),
+  })
+}
+
+/// Legal-party fields may contain a name from outside the document language.
+/// Keep that evidence separate from the language-scoped detector corpus so it
+/// can verify a structured field without enabling cross-locale name matches in
+/// ordinary prose.
+fn cross_locale_party_role_first_names(
+  dictionaries: Option<&Dictionaries>,
+) -> Result<String, AssembleError> {
+  encode_party_role_name_evidence(
+    dictionaries
+      .and_then(|dictionaries| dictionaries.first_names.as_ref())
+      .into_iter()
+      .flat_map(OrderedMap::values)
+      .flatten()
+      .cloned(),
+  )
+  .map_err(|message| AssembleError::InvalidDictionaryData {
+    field: "firstNames",
+    message,
   })
 }
 
@@ -174,7 +202,7 @@ mod tests {
   fn detected_people(text: &str, language: &str) -> Vec<String> {
     detected_people_with_signature_data(
       text,
-      build_signature_data(Some(&[language.to_owned()])).unwrap(),
+      build_signature_data(Some(&[language.to_owned()]), None).unwrap(),
     )
   }
 
@@ -280,9 +308,61 @@ mod tests {
       .collect()
   }
 
+  fn detected_scoped_party_people(text: &str) -> Vec<String> {
+    let config: PipelineConfig = serde_json::from_value(serde_json::json!({
+      "threshold": 0.3,
+      "enableTriggerPhrases": true,
+      "enableRegex": true,
+      "language": "en",
+      "nameCorpusLanguages": ["en"],
+      "enableLegalForms": true,
+      "enableNameCorpus": true,
+      "enableDenyList": true,
+      "enableGazetteer": false,
+      "enableCountries": false,
+      "enableConfidenceBoost": true,
+      "enableCoreference": true,
+      "enableZoneClassification": true,
+      "labels": ["person"],
+      "workspaceId": "scoped-global-party-role-test"
+    }))
+    .unwrap();
+    let dictionaries = Dictionaries {
+      first_names: Some(OrderedMap(vec![
+        (String::from("en"), vec![String::from("Ayo")]),
+        (String::from("sk"), vec![String::from("Imani")]),
+        (String::from("pl"), vec![String::from("Zofia")]),
+      ])),
+      surnames: Some(OrderedMap(vec![(
+        String::from("en"),
+        vec![
+          String::from("Mercer"),
+          String::from("Balogun"),
+          String::from("Okafor"),
+        ],
+      )])),
+      ..Dictionaries::default()
+    };
+    let binding =
+      crate::assemble_static_search_config(&config, Some(&dictionaries), &[])
+        .unwrap();
+    let prepared = PreparedEngine::new(
+      prepared_search_config_from_binding(binding).unwrap(),
+    )
+    .unwrap();
+    prepared
+      .redact_static_entities(text, &OperatorConfig::default())
+      .unwrap()
+      .resolved_entities
+      .into_iter()
+      .filter(|entity| entity.label == "person")
+      .map(|entity| entity.text)
+      .collect()
+  }
+
   #[test]
   fn scoped_packages_keep_cross_locale_signing_software_stamps() {
-    let data = build_signature_data(Some(&[String::from("cs")])).unwrap();
+    let data = build_signature_data(Some(&[String::from("cs")]), None).unwrap();
 
     assert!(
       data
@@ -322,7 +402,7 @@ mod tests {
     assert_eq!(
       detected_people_with_signature_data(
         "zastoupen Jméno: Jan Novák",
-        build_signature_data(None).unwrap(),
+        build_signature_data(None, None).unwrap(),
       ),
       vec![String::from("Jan Novák")]
     );
@@ -358,9 +438,17 @@ mod tests {
       detected_party_people_without_name_corpus("Seller: Acme Trading", "en")
         .is_empty()
     );
+    assert!(
+      detected_party_people_without_name_corpus("Seller: General Lender", "en")
+        .is_empty()
+    );
+    assert!(
+      detected_party_people_without_name_corpus("Customer: Harbor Legal", "en")
+        .is_empty()
+    );
 
     let mut signature =
-      build_signature_data(Some(&[String::from("en")])).unwrap();
+      build_signature_data(Some(&[String::from("en")]), None).unwrap();
     signature.labels.push(String::from("seller"));
     assert!(
       detected_people_with_signature_data(
@@ -372,11 +460,28 @@ mod tests {
   }
 
   #[test]
+  fn scoped_corpus_uses_cross_locale_first_names_only_for_party_roles() {
+    assert_eq!(
+      detected_scoped_party_people(
+        "Buyer: Q. Z. Mercer\nSeller: Imani Nwosu\nLender: Ayo Balogun\nGuarantor: B. T. Okafor"
+      ),
+      ["Q. Z. Mercer", "Imani Nwosu", "Ayo Balogun", "B. T. Okafor"]
+    );
+    assert_eq!(
+      detected_scoped_party_people("Borrower:\nZofia Wrona"),
+      ["Zofia Wrona"]
+    );
+    assert!(detected_scoped_party_people("Seller: Acme Trading").is_empty());
+    assert!(detected_scoped_party_people("Seller: General Lender").is_empty());
+    assert!(detected_scoped_party_people("Imani Nwosu").is_empty());
+  }
+
+  #[test]
   fn german_registry_labels_share_the_scoped_field_source() {
     let german_signature =
-      build_signature_data(Some(&[String::from("de")])).unwrap();
+      build_signature_data(Some(&[String::from("de")]), None).unwrap();
     let english_signature =
-      build_signature_data(Some(&[String::from("en")])).unwrap();
+      build_signature_data(Some(&[String::from("en")]), None).unwrap();
     let german = form_field_labels(Some(&[String::from("de")])).unwrap();
     let english = form_field_labels(Some(&[String::from("en")])).unwrap();
 

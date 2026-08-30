@@ -732,8 +732,8 @@ mod tests {
 
   #[test]
   fn prepared_package_schema_versions_track_the_current_payload_shape() {
-    assert_eq!(BINDING_PACKAGE_SCHEMA_VERSION, 12);
-    assert_eq!(CORE_PACKAGE_SCHEMA_VERSION, 12);
+    assert_eq!(BINDING_PACKAGE_SCHEMA_VERSION, 13);
+    assert_eq!(CORE_PACKAGE_SCHEMA_VERSION, 13);
   }
 
   #[test]

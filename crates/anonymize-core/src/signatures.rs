@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::fmt::Write as _;
 
 use crate::resolution::{DetectionSource, PipelineEntity};
 
@@ -6,18 +7,26 @@ use crate::labels::PERSON_LABEL;
 use crate::name_corpus::{PreparedNameCorpusData, contains_first_name_token};
 const MAX_NAME_LEN: usize = 60;
 const MAX_WITNESS_SCAN_UNITS: usize = 600;
+const MAX_PARTY_ROLE_NAME_EVIDENCE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_PARTY_ROLE_NAME_EVIDENCE_TOKENS: usize = 500_000;
 const SIGNATURE_ONLY_PERSON_LABELS: &[&str] = &["by"];
 
 #[derive(Clone, Copy)]
 struct PartyRoleEvidence<'a> {
   first_names: Option<&'a BTreeSet<String>>,
   name_corpus: Option<&'a PreparedNameCorpusData>,
+  party_role_name_tokens: &'a [String],
 }
 
 impl PartyRoleEvidence<'_> {
   fn has_person_name_token(self, candidate: &str) -> bool {
     if let Some(corpus) = self.name_corpus {
-      return corpus.has_person_name_token(candidate);
+      return corpus.has_person_name_token(candidate)
+        || (!corpus.is_organization(candidate)
+          && contains_sorted_name_token(
+            candidate,
+            self.party_role_name_tokens,
+          ));
     }
     self.first_names.is_some_and(|first_names| {
       contains_first_name_token(candidate, first_names)
@@ -45,6 +54,9 @@ pub struct SignatureData {
   /// Language-scoped labels that introduce people in legal notice blocks.
   #[serde(default)]
   pub person_list_labels: Vec<String>,
+  /// Front-coded cross-locale given-name evidence used only for legal-party
+  /// fields.
+  pub party_role_name_evidence: String,
   #[serde(default)]
   pub witness_phrases: Vec<String>,
   #[serde(default)]
@@ -74,6 +86,7 @@ pub(crate) struct PreparedSignatureData {
   person_value_labels: Vec<String>,
   signature_only_person_labels: Vec<String>,
   party_role_labels: Vec<String>,
+  party_role_name_tokens: Vec<String>,
   person_list_labels: Vec<String>,
   witness_phrases: Vec<String>,
   form_field_labels: Vec<String>,
@@ -86,6 +99,10 @@ pub(crate) struct PreparedSignatureData {
 }
 
 impl PreparedSignatureData {
+  #[allow(
+    clippy::expect_used,
+    reason = "prepared config validation proves the front-coded evidence is valid"
+  )]
   #[must_use]
   pub(crate) fn new(
     data: SignatureData,
@@ -110,6 +127,10 @@ impl PreparedSignatureData {
       person_value_labels: non_empty_lowercase(data.person_value_labels),
       signature_only_person_labels,
       party_role_labels: non_empty_lowercase(party_role_labels),
+      party_role_name_tokens: decode_party_role_name_evidence(
+        &data.party_role_name_evidence,
+      )
+      .expect("party-role name evidence is validated before preparation"),
       person_list_labels: non_empty_lowercase(data.person_list_labels),
       witness_phrases: non_empty_lowercase(data.witness_phrases),
       form_field_labels,
@@ -149,6 +170,125 @@ impl PreparedSignatureData {
   pub(crate) fn person_value_labels(&self) -> &[String] {
     &self.person_value_labels
   }
+}
+
+/// Front-codes sorted, lowercased tokens into one compact exact-membership
+/// payload. The prepared package compresses this shared-prefix representation
+/// further without duplicating the source dictionary as a string array.
+#[doc(hidden)]
+#[allow(
+  clippy::expect_used,
+  reason = "writing formatted text into a String is infallible"
+)]
+pub fn encode_party_role_name_evidence(
+  source_tokens: impl IntoIterator<Item = String>,
+) -> std::result::Result<String, String> {
+  let mut normalized = Vec::new();
+  for token in source_tokens {
+    if normalized.len() >= MAX_PARTY_ROLE_NAME_EVIDENCE_TOKENS {
+      return Err(String::from("source evidence exceeds token limit"));
+    }
+    let token = token.to_lowercase();
+    if !token.is_empty() {
+      normalized.push(token);
+    }
+  }
+  let mut normalized_tokens = normalized;
+  normalized_tokens.sort_unstable();
+  normalized_tokens.dedup();
+  let mut encoded = String::new();
+  let mut previous = String::new();
+  for token in normalized_tokens {
+    let mut prefix_len = previous
+      .bytes()
+      .zip(token.bytes())
+      .take_while(|(left, right)| left == right)
+      .count();
+    while !previous.is_char_boundary(prefix_len)
+      || !token.is_char_boundary(prefix_len)
+    {
+      prefix_len = prefix_len.saturating_sub(1);
+    }
+    let suffix = token
+      .get(prefix_len..)
+      .ok_or_else(|| String::from("invalid encoded token prefix boundary"))?;
+    write!(encoded, "{prefix_len:x},{:x}:{suffix}", suffix.len())
+      .expect("String formatting is infallible");
+    if encoded.len() > MAX_PARTY_ROLE_NAME_EVIDENCE_BYTES {
+      return Err(String::from("encoded evidence exceeds byte limit"));
+    }
+    previous = token;
+  }
+  Ok(encoded)
+}
+
+fn contains_sorted_name_token(text: &str, names: &[String]) -> bool {
+  crate::name_corpus::segmented_word_texts(text)
+    .any(|word| names.binary_search(&word.to_lowercase()).is_ok())
+}
+
+pub(crate) fn decode_party_role_name_evidence(
+  encoded: &str,
+) -> std::result::Result<Vec<String>, String> {
+  if encoded.len() > MAX_PARTY_ROLE_NAME_EVIDENCE_BYTES {
+    return Err(String::from("encoded evidence exceeds byte limit"));
+  }
+  let mut cursor = 0usize;
+  let mut previous = String::new();
+  let mut tokens = Vec::new();
+  while cursor < encoded.len() {
+    if tokens.len() >= MAX_PARTY_ROLE_NAME_EVIDENCE_TOKENS {
+      return Err(String::from("encoded evidence exceeds token limit"));
+    }
+    let comma = encoded
+      .get(cursor..)
+      .and_then(|tail| tail.find(','))
+      .map(|offset| cursor.saturating_add(offset))
+      .ok_or_else(|| String::from("missing prefix separator"))?;
+    let colon = encoded
+      .get(comma.saturating_add(1)..)
+      .and_then(|tail| tail.find(':'))
+      .map(|offset| comma.saturating_add(1).saturating_add(offset))
+      .ok_or_else(|| String::from("missing suffix separator"))?;
+    let prefix_len = usize::from_str_radix(
+      encoded
+        .get(cursor..comma)
+        .ok_or_else(|| String::from("invalid prefix header bounds"))?,
+      16,
+    )
+    .map_err(|_| String::from("invalid prefix length"))?;
+    let suffix_len = usize::from_str_radix(
+      encoded
+        .get(comma.saturating_add(1)..colon)
+        .ok_or_else(|| String::from("invalid suffix header bounds"))?,
+      16,
+    )
+    .map_err(|_| String::from("invalid suffix length"))?;
+    let suffix_start = colon.saturating_add(1);
+    let suffix_end = suffix_start
+      .checked_add(suffix_len)
+      .ok_or_else(|| String::from("suffix length overflow"))?;
+    if prefix_len > previous.len()
+      || !previous.is_char_boundary(prefix_len)
+      || suffix_end > encoded.len()
+      || !encoded.is_char_boundary(suffix_end)
+    {
+      return Err(String::from("invalid front-coded token bounds"));
+    }
+    let mut token = previous.get(..prefix_len).unwrap_or_default().to_owned();
+    token.push_str(
+      encoded
+        .get(suffix_start..suffix_end)
+        .ok_or_else(|| String::from("invalid token utf-8 boundary"))?,
+    );
+    if token.is_empty() || tokens.last().is_some_and(|prior| prior >= &token) {
+      return Err(String::from("tokens are not strictly sorted"));
+    }
+    previous.clone_from(&token);
+    tokens.push(token);
+    cursor = suffix_end;
+  }
+  Ok(tokens)
 }
 
 /// Lowercased vocabulary marking where a person span must stop.
@@ -372,6 +512,7 @@ fn detect_labelled_names_in_line(args: DetectLabelledNamesInLineArgs<'_>) {
     let context = label.kind.candidate_context(PartyRoleEvidence {
       first_names,
       name_corpus,
+      party_role_name_tokens: &data.party_role_name_tokens,
     });
     if value_is_empty {
       try_emit_forward_lines(
@@ -1218,6 +1359,7 @@ mod tests {
           String::from("attention"),
           String::from("do rąk własnych"),
         ],
+        party_role_name_evidence: String::new(),
         witness_phrases: vec![String::from("in witness whereof")],
         form_field_labels: Vec::new(),
         contact_field_labels: vec![

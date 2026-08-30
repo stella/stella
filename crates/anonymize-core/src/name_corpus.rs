@@ -591,7 +591,7 @@ impl PreparedNameCorpusData {
       .is_some_and(|first| self.cjk_surname_starters.contains(&first))
   }
 
-  fn is_organization(&self, text: &str) -> bool {
+  pub(crate) fn is_organization(&self, text: &str) -> bool {
     segment_words(text)
       .iter()
       .any(|word| self.organization_terms.contains(&word.text.to_lowercase()))
@@ -832,6 +832,10 @@ fn segment_words(full_text: &str) -> Vec<WordSegment<'_>> {
     });
   }
   words
+}
+
+pub(crate) fn segmented_word_texts(text: &str) -> impl Iterator<Item = &str> {
+  segment_words(text).into_iter().map(|word| word.text)
 }
 
 pub(crate) fn contains_first_name_token(

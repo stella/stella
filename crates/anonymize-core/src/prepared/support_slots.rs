@@ -268,6 +268,7 @@ fn signature_data_len(data: Option<&SignatureData>) -> usize {
       data.labels.len(),
       data.person_value_labels.len(),
       data.person_list_labels.len(),
+      data.party_role_name_evidence.len(),
       data.witness_phrases.len(),
       data.name_particles.len(),
       data.post_nominal_suffixes.len(),

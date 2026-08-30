@@ -308,6 +308,7 @@ export type NativeSignatureData = {
   labels: string[];
   person_value_labels: string[];
   person_list_labels: string[];
+  party_role_name_evidence: string;
   witness_phrases: string[];
   name_particles: string[];
   post_nominal_suffixes: string[];

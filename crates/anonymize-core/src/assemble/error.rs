@@ -28,6 +28,13 @@ pub enum AssembleError {
     /// The unsupported validator id (or `"unknown"` when absent).
     validator: String,
   },
+  /// Caller-injected dictionary data cannot be represented safely.
+  InvalidDictionaryData {
+    /// Dictionary field that violated its boundary contract.
+    field: &'static str,
+    /// Human-readable validation failure.
+    message: String,
+  },
 }
 
 impl fmt::Display for AssembleError {
@@ -44,6 +51,9 @@ impl fmt::Display for AssembleError {
           formatter,
           "native static config does not support regex validator {validator}"
         )
+      }
+      Self::InvalidDictionaryData { field, message } => {
+        write!(formatter, "invalid dictionary data for {field}: {message}")
       }
     }
   }

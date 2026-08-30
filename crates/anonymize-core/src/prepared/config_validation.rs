@@ -1,6 +1,7 @@
 use crate::processors::{
   DenyListMatchData, PatternSlice, ensure_supported_deny_list_sources,
 };
+use crate::signatures::decode_party_role_name_evidence;
 use crate::types::{Error, Result};
 
 use super::{
@@ -18,7 +19,21 @@ pub(super) fn validate_supported_config(
   validate_gazetteer_config(config)?;
   validate_country_config(config)?;
   validate_hotword_config(config)?;
-  validate_address_seed_config(config)
+  validate_address_seed_config(config)?;
+  validate_signature_config(config)
+}
+
+fn validate_signature_config(config: &PreparedEngineConfig) -> Result<()> {
+  let Some(data) = config.detectors.signature_data.as_ref() else {
+    return Ok(());
+  };
+  decode_party_role_name_evidence(&data.party_role_name_evidence).map_err(
+    |reason| Error::InvalidStaticData {
+      field: "signature_data.party_role_name_evidence",
+      reason,
+    },
+  )?;
+  Ok(())
 }
 
 pub(super) fn validate_supported_config_for_artifacts(

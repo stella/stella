@@ -162,6 +162,7 @@ pub struct BindingSignatureData {
   pub person_value_labels: Vec<String>,
   #[serde(default)]
   pub person_list_labels: Vec<String>,
+  pub party_role_name_evidence: String,
   #[serde(default)]
   pub witness_phrases: Vec<String>,
   #[serde(default)]
@@ -683,22 +684,42 @@ mod tests {
   use super::BindingPreparedSearchConfig;
 
   #[test]
-  fn direct_prepared_config_requires_person_value_labels() {
-    let missing = json!({
+  fn direct_prepared_config_requires_signature_proof_fields() {
+    let missing_person_labels = json!({
       "signature_data": {
         "form_field_labels": [],
         "image_stub_prefixes": [],
+        "party_role_name_evidence": "",
         "signature_stamp_phrases": []
       }
     });
     assert!(
-      serde_json::from_value::<BindingPreparedSearchConfig>(missing).is_err()
+      serde_json::from_value::<BindingPreparedSearchConfig>(
+        missing_person_labels
+      )
+      .is_err()
+    );
+
+    let missing_party_tokens = json!({
+      "signature_data": {
+        "form_field_labels": [],
+        "image_stub_prefixes": [],
+        "person_value_labels": [],
+        "signature_stamp_phrases": []
+      }
+    });
+    assert!(
+      serde_json::from_value::<BindingPreparedSearchConfig>(
+        missing_party_tokens
+      )
+      .is_err()
     );
 
     let explicitly_empty = json!({
       "signature_data": {
         "form_field_labels": [],
         "image_stub_prefixes": [],
+        "party_role_name_evidence": "",
         "person_value_labels": [],
         "signature_stamp_phrases": []
       }

@@ -232,6 +232,7 @@ pub fn assemble_static_search_config(
     ),
     signature_data: Some(signature::build_signature_data(
       ctx.content_languages.as_deref(),
+      ctx.dictionaries,
     )?),
     monetary_data: monetary::build_monetary_data(&ctx)?,
     date_data: dates::build_date_data(&ctx)?,
