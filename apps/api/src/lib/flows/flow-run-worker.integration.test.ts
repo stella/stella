@@ -134,6 +134,7 @@ const executeFlowStepWithTestModel = async (
     enqueueStep: enqueueFlowStepMock,
     broadcastUpdate,
     createEntity,
+    loadAIConfig: async () => null,
   });
 
 const resolveFlowReviewGate = async (

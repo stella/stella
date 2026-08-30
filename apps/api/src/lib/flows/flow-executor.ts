@@ -84,6 +84,7 @@ export const executeFlowStep = async (
     enqueueStep = enqueueFlowStep,
     broadcastUpdate = broadcastFlowRunUpdate,
     createEntity = createEntityFromBuffer,
+    loadAIConfig = loadOrgAIConfig,
   }: {
     /** External model-dispatch boundary; supplied by focused integration tests. */
     generateTextForRole?: typeof generateTanStackTextForRole | undefined;
@@ -93,6 +94,7 @@ export const executeFlowStep = async (
     enqueueStep?: typeof enqueueFlowStep | undefined;
     broadcastUpdate?: typeof broadcastFlowRunUpdate | undefined;
     createEntity?: typeof createEntityFromBuffer | undefined;
+    loadAIConfig?: typeof loadOrgAIConfig | undefined;
   } = {},
 ): Promise<void> => {
   const runId = brandPersistedFlowRunId(rawRunId);
@@ -179,6 +181,7 @@ export const executeFlowStep = async (
         }),
         signal,
         generateTextForRole,
+        loadAIConfig,
       });
       await completeStepAndAdvance({
         runId,
@@ -326,6 +329,7 @@ type RunAiStepArgs = {
   safeDb: SafeDb;
   signal: AbortSignal;
   generateTextForRole: typeof generateTanStackTextForRole;
+  loadAIConfig: typeof loadOrgAIConfig;
 };
 
 const FLOW_AI_SYSTEM_PROMPT =
@@ -341,6 +345,7 @@ const runAiStep = async ({
   safeDb,
   signal,
   generateTextForRole,
+  loadAIConfig,
 }: RunAiStepArgs): Promise<FlowStepOutput> => {
   const priorOutputs = await scopedDb(
     async (tx) => await readPriorAiMarkdown(tx, run.id, stepIndex),
@@ -355,7 +360,7 @@ const runAiStep = async ({
     documents,
   });
 
-  const orgAIConfig = await loadOrgAIConfig(organizationId);
+  const orgAIConfig = await loadAIConfig(organizationId);
   // Every step settles against the organization's usage as it runs; the
   // initiator pre-flighted the whole run's estimate under the same action
   // type before enqueueing it.
