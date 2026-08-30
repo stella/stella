@@ -476,11 +476,10 @@ describe("chat attachment hydration", () => {
     let reservationCount = 0;
     const reserveChatObjectCleanupIntent = mock(async () => {
       reservationCount += 1;
-      return Result.ok([
-        reservationCount === 1
-          ? sourceCleanupIntentId
-          : thumbnailCleanupIntentId,
-      ]);
+      if (reservationCount === 1) {
+        return Result.ok([sourceCleanupIntentId]);
+      }
+      return Result.ok([thumbnailCleanupIntentId]);
     });
     const settleObjectCleanupIntentsAfterWriter = mock(async () =>
       Result.ok(undefined),

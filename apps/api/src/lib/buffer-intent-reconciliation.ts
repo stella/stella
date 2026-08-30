@@ -912,15 +912,19 @@ export const reconcileBufferObjectCleanupIntents = async ({
           stage: "buffer-object-cleanup-reconcile",
         });
       }
-      return (
-        Result.isOk(cleanup) &&
-        (row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED ||
-          (row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING &&
-            row.attemptCount >=
-              BUFFER_INTENT_RECOVERY_RETIRE_AFTER_ATTEMPTS))
-      )
-        ? row.id
-        : null;
+      if (Result.isError(cleanup)) {
+        return null;
+      }
+      if (row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED) {
+        return row.id;
+      }
+      if (
+        row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING &&
+        row.attemptCount >= BUFFER_INTENT_RECOVERY_RETIRE_AFTER_ATTEMPTS
+      ) {
+        return row.id;
+      }
+      return null;
     }),
   );
   signal?.throwIfAborted();

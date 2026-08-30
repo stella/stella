@@ -37,8 +37,12 @@ import {
 import { createFileKey, createUserFileKey } from "@/api/lib/file-key";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { cents } from "@/api/lib/money";
-import { completeOrganizationDeletion } from "@/api/lib/organization-storage-teardown";
-import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
+import {
+  completeOrganizationDeletion,
+} from "@/api/lib/organization-storage-teardown";
+import {
+  executeAuthorizedWorkspaceDeletion,
+} from "@/api/lib/workspace-deletion";
 import type { WorkspaceDeletionDatabase } from "@/api/lib/workspace-deletion";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -753,9 +757,10 @@ describe("workspace deletion", () => {
       { database, enqueueCleanup: async () => {} },
     );
 
-    expect(Result.isError(result) ? result.error : null).toBe(
-      auditFailure,
-    );
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toBe(auditFailure);
+    }
     expect(
       await testDb
         .select({ status: workspaces.status })

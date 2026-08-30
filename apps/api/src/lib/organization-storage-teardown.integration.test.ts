@@ -502,6 +502,11 @@ beforeAll(async () => {
     safeDb: scopedSafeDb,
     workspaceIds: [],
   });
+  let foreignOrganizationWriterErrorTag: string | null = null;
+  if (Result.isError(foreignOrganizationWriter)) {
+    foreignOrganizationWriterErrorTag =
+      foreignOrganizationWriter.error._tag;
+  }
 
   fixture = {
     chatAttachmentKey: attachment.s3Key,
@@ -509,11 +514,7 @@ beforeAll(async () => {
     checkpointKey: `${organizationId}/${firstWorkspaceId}/${checkpointFileId}.docx`,
     collabDocxKey: `${organizationId}/${secondWorkspaceId}/${collabDocxFileId}.docx`,
     collabSnapshotKey: `${organizationId}/${secondWorkspaceId}/${collabSnapshotFileId}.bin`,
-    foreignOrganizationWriterErrorTag: Result.isError(
-      foreignOrganizationWriter,
-    )
-      ? foreignOrganizationWriter.error._tag
-      : null,
+    foreignOrganizationWriterErrorTag,
     globalChatAttachmentKey: globalAttachment.s3Key,
     ocrKey: `${organizationId}/${firstWorkspaceId}/ocr/${runId}.pdf`,
     organizationId,
