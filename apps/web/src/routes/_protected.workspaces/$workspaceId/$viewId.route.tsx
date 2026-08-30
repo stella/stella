@@ -16,6 +16,8 @@ import {
   resolveKanbanGroupBy,
   toISODate,
 } from "@/components/workspaces/entity-utils";
+import { guideAnchor } from "@/features/guides/guide-anchor";
+import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -392,8 +394,20 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
           <ViewToolbar view={activeView} workspaceId={workspaceId} />
         )}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex-1 overflow-auto">
+      <div
+        className="flex min-h-0 flex-1 flex-col"
+        {...guideAnchor(
+          GUIDE_ANCHORS.tabularReviewTable,
+          activeView.layout.type === "table",
+        )}
+      >
+        <div
+          className="flex-1 overflow-auto"
+          {...guideAnchor(
+            GUIDE_ANCHORS.documentsList,
+            activeView.layout.type === "table",
+          )}
+        >
           <Outlet />
         </div>
       </div>

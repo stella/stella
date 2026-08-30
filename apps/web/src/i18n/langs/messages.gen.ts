@@ -2194,15 +2194,16 @@ type Messages = {
         "title": "Ask with the right context";
       };
       "documents": {
-        "description": "Upload a file and open it";
+        "description": "File a document, then find it again";
         "steps": {
           "browse": {
-            "body": "Find and open any document you have added.";
-            "title": "Browse your documents";
+            "body": "This table is the matter's document list. Uploaded files land here as rows. To return later, open the matter from the sidebar, choose its table view, then select the document row.";
+            "title": "Find the document again";
           };
           "upload": {
-            "body": "Add a file to bring it into your workspace.";
-            "title": "Upload a document";
+            "body": "Upload opens the file picker; you can also drag files onto the matter. Each file becomes a document in this matter, where your team can find it and stella can use it in review.";
+            "title": "File a document in the matter";
+            "when": "Upload here when the file belongs to the matter and should remain available. Attach it directly in chat only when it is temporary context for one conversation.";
           };
         };
         "title": "Work with documents";
@@ -2210,9 +2211,24 @@ type Messages = {
       "playbooks": {
         "description": "Turn review know-how into a reusable playbook";
         "steps": {
+          "basics": {
+            "body": "Give the playbook a name that identifies the standard, not the current file. Add a short description so another reviewer knows the scope; if it applies only to one document type, select that type here.";
+            "title": "Name and scope the standard";
+            "when": "Limit the document type only when the review rules truly differ by category. Leave it on all types when the same questions apply across the matter.";
+          };
           "create": {
-            "body": "Start a playbook to capture how a review should run.";
-            "title": "Create a playbook";
+            "body": "Create opens a blank draft without saving anything. The next steps cover its scope and the review positions that make the playbook useful.";
+            "title": "Start a blank playbook";
+          };
+          "overview": {
+            "body": "A playbook turns review judgment into a shared set of questions, expected answers, and fallback positions. Reviewers can apply the same standard without rebuilding the instructions for every document.";
+            "title": "Make review judgment reusable";
+            "when": "Use a playbook when the same review standard repeats across documents or reviewers. Ask directly in chat for a one-off question whose answer does not need to become a maintained standard.";
+          };
+          "positions": {
+            "body": "Positions are the playbook's review instructions. Add a graded position when stella should compare language with acceptable and unacceptable outcomes; add an extract position when you only need a structured fact from the document.";
+            "title": "Add the review positions";
+            "when": "Grade language when the answer requires legal judgment or negotiation guidance. Extract it when the answer is factual and does not need a verdict.";
           };
         };
         "title": "Build a playbook";
@@ -2221,8 +2237,19 @@ type Messages = {
         "description": "Extract answers across many files at once";
         "steps": {
           "addColumn": {
-            "body": "Add a question to answer across every row.";
-            "title": "Add a column";
+            "body": "New column opens the column composer. Give the column a clear question-shaped name and tell stella exactly what to read for; the same instruction runs against every document row.";
+            "title": "Ask one question of every document";
+            "when": "Create a separate column for each answer you need to compare, filter, sort, or export. Keep related context in the prompt instead of combining several answers in one cell.";
+          };
+          "answerType": {
+            "body": "Returns controls the shape of every answer. Choose a number, date, single select, or multi-select when the result has structure; stella will keep the column consistent instead of returning arbitrary prose.";
+            "title": "Choose the answer type";
+            "when": "Use select for a fixed set of outcomes, number or date for sorting and calculations, and text only when the answer genuinely needs narrative detail.";
+          };
+          "table": {
+            "body": "Each row is a document; each custom column is one question asked of every document at once. That turns a folder of files into comparable answers without opening them one by one.";
+            "title": "Review the set, not one file";
+            "when": "Use the table when you need the same facts or decisions across several documents. Open a document directly when layout, wording, or surrounding context matters more than comparison.";
           };
         };
         "title": "Review in a table";
@@ -2231,8 +2258,27 @@ type Messages = {
         "description": "Chain steps into a repeatable workflow";
         "steps": {
           "create": {
-            "body": "Combine steps that run together on demand.";
-            "title": "Create a workflow";
+            "body": "Create opens an unsaved workflow draft. The next steps define when it starts, what it does, and where a person must decide whether it continues.";
+            "title": "Start a workflow draft";
+          };
+          "overview": {
+            "body": "A workflow connects a trigger to a sequence of actions, so a routine process runs the same way each time. It can prepare work automatically while keeping judgment with a reviewer where needed.";
+            "title": "Automate a repeatable process";
+            "when": "Automate work that has a stable trigger, repeatable steps, and a clear owner for exceptions. Keep changing or judgment-heavy work manual until the process itself is settled.";
+          };
+          "reviewGate": {
+            "body": "A review gate pauses the run until a person approves or rejects it. Put the gate before the first action that should not happen solely on an automated result.";
+            "title": "Keep judgment with a reviewer";
+            "when": "Use a gate before sending, filing, escalating, or otherwise committing a consequential result. Skip it only when the next step is safely reversible and needs no human judgment.";
+          };
+          "steps": {
+            "body": "Steps run in this order and pass their work forward. Keep each step responsible for one clear action so failures are understandable and the sequence is easy to change.";
+            "title": "Build the sequence";
+          };
+          "trigger": {
+            "body": "The trigger decides when a run begins: manually, on a schedule, or when matching files are uploaded. Narrow its matter and file conditions so unrelated work never starts the workflow.";
+            "title": "Choose what starts the workflow";
+            "when": "Use manual while the process is new, a schedule for time-based routines, and file upload only when an arriving document is the reliable signal to begin.";
           };
         };
         "title": "Automate a workflow";

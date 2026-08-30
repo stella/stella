@@ -2191,15 +2191,16 @@
         "title": "Perguntar com o contexto certo"
       },
       "documents": {
-        "description": "Envie um arquivo e abra-o",
+        "description": "Adicione um documento ao caso e encontre-o depois",
         "steps": {
           "browse": {
-            "body": "Encontre e abra qualquer documento que você adicionou.",
-            "title": "Navegue pelos seus documentos"
+            "body": "Esta tabela é a lista de documentos do caso. Os arquivos enviados aparecem aqui como linhas. Para voltar depois, abra o caso pela barra lateral, escolha a visualização em tabela e selecione a linha do documento.",
+            "title": "Encontrar o documento novamente"
           },
           "upload": {
-            "body": "Adicione um arquivo para trazê-lo ao seu espaço de trabalho.",
-            "title": "Enviar um documento"
+            "body": "A opção Enviar abre o seletor de arquivos; você também pode arrastar arquivos para o caso. Cada arquivo se torna um documento deste caso, onde sua equipe pode encontrá-lo e a Stella pode usá-lo na revisão.",
+            "title": "Adicionar um documento ao caso",
+            "when": "Envie o arquivo aqui quando ele pertencer ao caso e precisar continuar disponível. Anexe-o diretamente no chat somente quando ele servir de contexto temporário para uma única conversa."
           }
         },
         "title": "Trabalhe com documentos"
@@ -2207,9 +2208,24 @@
       "playbooks": {
         "description": "Transforme o conhecimento de revisão em um playbook reutilizável",
         "steps": {
+          "basics": {
+            "body": "Dê ao playbook um nome que identifique o padrão, não o arquivo atual. Adicione uma breve descrição para que outro revisor entenda o escopo; se ele se aplicar a apenas um tipo de documento, selecione esse tipo aqui.",
+            "title": "Nomear o padrão e definir seu escopo",
+            "when": "Restrinja o tipo de documento somente quando as regras de revisão realmente variarem conforme a categoria. Mantenha todos os tipos quando as mesmas perguntas se aplicarem a todo o caso."
+          },
           "create": {
-            "body": "Inicie um playbook para registrar como uma revisão deve ocorrer.",
-            "title": "Criar um playbook"
+            "body": "A opção Criar abre um rascunho em branco sem salvar nada. As próximas etapas definem o escopo e as posições de revisão que tornam o playbook útil.",
+            "title": "Iniciar um playbook em branco"
+          },
+          "overview": {
+            "body": "Um playbook transforma os critérios de revisão em um conjunto compartilhado de perguntas, respostas esperadas e posições alternativas. Os revisores podem aplicar o mesmo padrão sem recriar as instruções para cada documento.",
+            "title": "Reutilizar os critérios de revisão",
+            "when": "Use um playbook quando o mesmo padrão de revisão se repetir entre documentos ou revisores. Faça uma pergunta pontual diretamente no chat quando a resposta não precisar fazer parte de um padrão permanente."
+          },
+          "positions": {
+            "body": "As posições são as instruções de revisão do playbook. Adicione uma posição avaliada quando a Stella precisar comparar o texto com resultados aceitáveis e inaceitáveis; adicione uma posição de extração quando você precisar apenas de um fato estruturado do documento.",
+            "title": "Adicionar as posições de revisão",
+            "when": "Avalie o texto quando a resposta exigir análise jurídica ou orientação para negociação. Extraia o dado quando a resposta for factual e não precisar de um veredito."
           }
         },
         "title": "Monte um playbook"
@@ -2218,8 +2234,19 @@
         "description": "Extraia respostas de muitos arquivos de uma só vez",
         "steps": {
           "addColumn": {
-            "body": "Adicione uma pergunta a ser respondida em cada linha.",
-            "title": "Adicionar uma coluna"
+            "body": "Nova coluna abre o editor de colunas. Dê à coluna um nome claro em forma de pergunta e diga à Stella exatamente o que procurar; a mesma instrução será executada em cada linha de documento.",
+            "title": "Fazer uma pergunta sobre cada documento",
+            "when": "Crie uma coluna separada para cada resposta que você precise comparar, filtrar, ordenar ou exportar. Inclua o contexto relacionado no prompt em vez de combinar várias respostas em uma só célula."
+          },
+          "answerType": {
+            "body": "O campo Retorna controla o formato de cada resposta. Escolha número, data, seleção única ou seleção múltipla quando o resultado tiver uma estrutura; a Stella manterá a coluna consistente em vez de retornar um texto qualquer.",
+            "title": "Escolher o tipo de resposta",
+            "when": "Use seleção para um conjunto fixo de resultados, número ou data para ordenação e cálculos, e texto somente quando a resposta realmente precisar de detalhes narrativos."
+          },
+          "table": {
+            "body": "Cada linha é um documento, e cada coluna personalizada é uma pergunta feita sobre todos os documentos ao mesmo tempo. Isso transforma uma pasta de arquivos em respostas comparáveis sem precisar abrir os arquivos um por um.",
+            "title": "Revisar o conjunto, não apenas um arquivo",
+            "when": "Use a tabela quando precisar dos mesmos fatos ou decisões em vários documentos. Abra um documento diretamente quando o layout, o texto ou o contexto ao redor for mais importante do que a comparação."
           }
         },
         "title": "Revise em uma tabela"
@@ -2228,8 +2255,27 @@
         "description": "Encadeie etapas em um fluxo de trabalho repetível",
         "steps": {
           "create": {
-            "body": "Combine etapas que são executadas juntas sob demanda.",
-            "title": "Criar um fluxo de trabalho"
+            "body": "A opção Criar abre um rascunho de fluxo de trabalho que ainda não foi salvo. As próximas etapas definem quando ele começa, o que faz e em que ponto uma pessoa precisa decidir se ele pode continuar.",
+            "title": "Iniciar um rascunho de fluxo de trabalho"
+          },
+          "overview": {
+            "body": "Um fluxo de trabalho conecta um gatilho a uma sequência de ações para que um processo rotineiro seja executado sempre da mesma forma. Ele pode preparar o trabalho automaticamente e manter a decisão com um revisor quando necessário.",
+            "title": "Automatizar um processo repetível",
+            "when": "Automatize o trabalho que tenha um gatilho estável, etapas repetíveis e uma pessoa claramente responsável pelas exceções. Mantenha manual o trabalho variável ou que exija muito julgamento até que o processo esteja bem definido."
+          },
+          "reviewGate": {
+            "body": "Uma aprovação de revisão pausa a execução até que uma pessoa a aprove ou rejeite. Coloque a aprovação antes da primeira ação que não deva ocorrer apenas com base em um resultado automatizado.",
+            "title": "Manter a decisão com um revisor",
+            "when": "Use uma aprovação antes de enviar, protocolar, escalar ou confirmar de outra forma um resultado com consequências importantes. Ignore-a somente quando a próxima etapa puder ser revertida com segurança e não exigir análise humana."
+          },
+          "steps": {
+            "body": "As etapas são executadas nesta ordem e repassam o trabalho adiante. Mantenha cada etapa responsável por uma única ação clara para que as falhas sejam compreensíveis e a sequência seja fácil de alterar.",
+            "title": "Montar a sequência"
+          },
+          "trigger": {
+            "body": "O gatilho determina quando uma execução começa: manualmente, conforme um agendamento ou quando arquivos correspondentes são enviados. Restrinja as condições de caso e arquivo para que trabalhos não relacionados nunca iniciem o fluxo.",
+            "title": "Escolher o que inicia o fluxo de trabalho",
+            "when": "Use o início manual enquanto o processo for novo, um agendamento para rotinas baseadas em tempo e o envio de arquivo somente quando a chegada de um documento for um sinal confiável para começar."
           }
         },
         "title": "Automatize um fluxo de trabalho"

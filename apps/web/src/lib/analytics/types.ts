@@ -39,10 +39,11 @@ export type Analytics = {
 // there would be a value no dashboard filter can match.
 export type GuideStepSkippedProperties =
   // `anchor-missing` is real divergence: the anchor should have been on the
-  // page. `anchor-pending` is declared-unwired, so it is expected noise until
-  // the owning surface lands.
+  // page. `route-unavailable` means the user has no authorized destination
+  // matching the semantic route. `anchor-pending` is declared-unwired, so it
+  // is expected noise until the owning surface lands.
   | {
-      reason: "anchor-missing" | "anchor-pending";
+      reason: "anchor-missing" | "anchor-pending" | "route-unavailable";
       tourId: string;
       anchorId: string;
     }

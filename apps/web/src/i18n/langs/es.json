@@ -2191,15 +2191,16 @@
         "title": "Preguntar con el contexto adecuado"
       },
       "documents": {
-        "description": "Sube un archivo y ábrelo",
+        "description": "Archiva un documento y vuelve a encontrarlo después",
         "steps": {
           "browse": {
-            "body": "Encuentra y abre cualquier documento que hayas añadido.",
-            "title": "Explora tus documentos"
+            "body": "Esta tabla es la lista de documentos del asunto. Los archivos subidos aparecen aquí como filas. Para volver más adelante, abre el asunto desde la barra lateral, elige la vista de tabla y selecciona la fila del documento.",
+            "title": "Vuelve a encontrar el documento"
           },
           "upload": {
-            "body": "Añade un archivo para incorporarlo a tu espacio de trabajo.",
-            "title": "Subir un documento"
+            "body": "«Subir» abre el selector de archivos; también puedes arrastrarlos al asunto. Cada archivo se convierte en un documento de este asunto, donde tu equipo puede encontrarlo y Stella puede utilizarlo en la revisión.",
+            "title": "Archiva un documento en el asunto",
+            "when": "Sube aquí el archivo cuando pertenezca al asunto y deba seguir disponible. Adjúntalo directamente en el chat solo si sirve como contexto temporal para una única conversación."
           }
         },
         "title": "Trabaja con documentos"
@@ -2207,9 +2208,24 @@
       "playbooks": {
         "description": "Convierte el conocimiento de revisión en un playbook reutilizable",
         "steps": {
+          "basics": {
+            "body": "Da al playbook un nombre que identifique el criterio, no el archivo actual. Añade una breve descripción para que otros revisores conozcan su alcance; si solo se aplica a un tipo de documento, selecciónalo aquí.",
+            "title": "Nombra el criterio y define su alcance",
+            "when": "Limita el tipo de documento solo cuando las reglas de revisión difieran realmente según la categoría. Déjalo en todos los tipos cuando las mismas preguntas se apliquen a todo el asunto."
+          },
           "create": {
-            "body": "Inicia un playbook para registrar cómo debe realizarse una revisión.",
-            "title": "Crear un playbook"
+            "body": "«Crear» abre un borrador en blanco sin guardar nada. Los pasos siguientes explican su alcance y las posiciones de revisión que hacen útil el playbook.",
+            "title": "Empieza un playbook en blanco"
+          },
+          "overview": {
+            "body": "Un playbook convierte el criterio aplicado en las revisiones en un conjunto compartido de preguntas, respuestas esperadas y posturas alternativas. Así, los revisores pueden aplicar el mismo criterio sin tener que recrear las instrucciones para cada documento.",
+            "title": "Reutiliza el criterio de revisión",
+            "when": "Usa un playbook cuando el mismo criterio de revisión se repita en varios documentos o entre distintos revisores. Formula directamente en el chat las preguntas puntuales cuya respuesta no deba convertirse en un criterio mantenido."
+          },
+          "positions": {
+            "body": "Las posiciones son las instrucciones de revisión del playbook. Añade una posición evaluada cuando Stella deba comparar la redacción con resultados aceptables e inaceptables; añade una posición de extracción cuando solo necesites un dato estructurado del documento.",
+            "title": "Añade las posiciones de revisión",
+            "when": "Evalúa la redacción cuando la respuesta requiera criterio jurídico u orientación para negociar. Extráela cuando la respuesta sea factual y no necesite un veredicto."
           }
         },
         "title": "Crea un playbook"
@@ -2218,8 +2234,19 @@
         "description": "Extrae respuestas de muchos archivos a la vez",
         "steps": {
           "addColumn": {
-            "body": "Añade una pregunta para responder en cada fila.",
-            "title": "Añadir una columna"
+            "body": "«Nueva columna» abre el editor de columnas. Dale un nombre claro en forma de pregunta e indica a Stella exactamente qué debe buscar; la misma instrucción se aplica a cada fila de documento.",
+            "title": "Haz la misma pregunta a cada documento",
+            "when": "Crea una columna aparte para cada respuesta que necesites comparar, filtrar, ordenar o exportar. Incluye el contexto relacionado en la instrucción en lugar de combinar varias respuestas en una sola celda."
+          },
+          "answerType": {
+            "body": "La opción «Formato» determina la forma de cada respuesta. Elige número, fecha, selección única o selección múltiple cuando el resultado esté estructurado; Stella mantendrá la coherencia de la columna en lugar de devolver texto libre arbitrario.",
+            "title": "Elige el tipo de respuesta",
+            "when": "Usa una selección para un conjunto fijo de resultados, un número o una fecha para ordenar y calcular, y texto solo cuando la respuesta requiera realmente una explicación detallada."
+          },
+          "table": {
+            "body": "Cada fila es un documento y cada columna personalizada es una pregunta que se formula a todos los documentos a la vez. Así, una carpeta de archivos se convierte en respuestas comparables sin abrirlos uno por uno.",
+            "title": "Revisa el conjunto, no un solo archivo",
+            "when": "Usa la tabla cuando necesites los mismos datos o decisiones en varios documentos. Abre un documento directamente cuando el diseño, la redacción o el contexto sean más importantes que la comparación."
           }
         },
         "title": "Revisa en una tabla"
@@ -2228,8 +2255,27 @@
         "description": "Encadena pasos en un flujo de trabajo repetible",
         "steps": {
           "create": {
-            "body": "Combina pasos que se ejecutan juntos cuando lo necesites.",
-            "title": "Crear un flujo de trabajo"
+            "body": "«Crear» abre un borrador de flujo de trabajo sin guardar. Los pasos siguientes definen cuándo se inicia, qué hace y en qué punto una persona debe decidir si continúa.",
+            "title": "Empieza un borrador de flujo de trabajo"
+          },
+          "overview": {
+            "body": "Un flujo de trabajo conecta un desencadenante con una secuencia de acciones para que un proceso rutinario se ejecute siempre de la misma forma. Puede preparar el trabajo automáticamente y dejar las decisiones en manos de un revisor cuando sea necesario.",
+            "title": "Automatiza un proceso repetible",
+            "when": "Automatiza el trabajo que tenga un desencadenante estable, pasos repetibles y una persona claramente responsable de las excepciones. Mantén manual el trabajo cambiante o que dependa mucho del criterio profesional hasta que el propio proceso esté asentado."
+          },
+          "reviewGate": {
+            "body": "Un punto de revisión pausa la ejecución hasta que una persona la aprueba o rechaza. Colócalo antes de la primera acción que no deba realizarse basándose únicamente en un resultado automatizado.",
+            "title": "Deja la decisión en manos de un revisor",
+            "when": "Usa un punto de revisión antes de enviar, archivar, escalar o confirmar de cualquier otro modo un resultado importante. Omítelo solo cuando el paso siguiente pueda revertirse de forma segura y no requiera criterio humano."
+          },
+          "steps": {
+            "body": "Los pasos se ejecutan en este orden y transmiten su trabajo al siguiente. Haz que cada paso se encargue de una única acción clara para que los fallos sean comprensibles y la secuencia sea fácil de modificar.",
+            "title": "Construye la secuencia"
+          },
+          "trigger": {
+            "body": "El desencadenante determina cuándo empieza una ejecución: manualmente, según una programación o al subir archivos que cumplan las condiciones. Acota las condiciones del asunto y de los archivos para que ningún trabajo ajeno inicie el flujo.",
+            "title": "Elige qué inicia el flujo de trabajo",
+            "when": "Usa el inicio manual mientras el proceso sea nuevo, una programación para las rutinas basadas en el tiempo y la subida de archivos solo cuando la llegada de un documento sea una señal fiable para empezar."
           }
         },
         "title": "Automatiza un flujo de trabajo"

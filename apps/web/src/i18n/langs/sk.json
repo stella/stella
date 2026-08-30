@@ -2191,15 +2191,16 @@
         "title": "Pýtajte sa so správnym kontextom"
       },
       "documents": {
-        "description": "Nahrajte súbor a otvorte ho",
+        "description": "Zaraďte dokument do spisu a neskôr ho znova nájdite",
         "steps": {
           "browse": {
-            "body": "Nájdite a otvorte ľubovoľný pridaný dokument.",
-            "title": "Prehľadávať dokumenty"
+            "body": "Táto tabuľka je zoznamom dokumentov v spise. Nahrané súbory sa tu zobrazujú ako riadky. Ak sa sem chcete vrátiť neskôr, otvorte spis z bočného panela, vyberte jeho tabuľkové zobrazenie a potom riadok dokumentu.",
+            "title": "Znova nájsť dokument"
           },
           "upload": {
-            "body": "Pridajte súbor a preneste ho do pracovného priestoru.",
-            "title": "Nahrať dokument"
+            "body": "Možnosť Nahrať otvorí výber súborov; súbory môžete tiež presunúť myšou do spisu. Každý súbor sa stane dokumentom v tomto spise, takže ho váš tím môže nájsť a Stella ho môže použiť pri revízii.",
+            "title": "Zaradiť dokument do spisu",
+            "when": "Súbor nahrajte sem, keď patrí do spisu a má zostať k dispozícii. Priamo v čete ho priložte iba vtedy, keď slúži ako dočasný kontext pre jednu konverzáciu."
           }
         },
         "title": "Práca s dokumentmi"
@@ -2207,9 +2208,24 @@
       "playbooks": {
         "description": "Premeňte znalosti z revízie na opakovane použiteľný playbook",
         "steps": {
+          "basics": {
+            "body": "Dajte playbooku názov, ktorý označuje štandard, nie aktuálny súbor. Pridajte krátky opis, aby ďalší revízor poznal jeho rozsah; ak sa vzťahuje iba na jeden typ dokumentu, vyberte ho tu.",
+            "title": "Pomenovať štandard a určiť jeho rozsah",
+            "when": "Typ dokumentu obmedzte iba vtedy, keď sa pravidlá revízie skutočne líšia podľa kategórie. Ponechajte všetky typy, keď sa v celom spise používajú rovnaké otázky."
+          },
           "create": {
-            "body": "Založte playbook a zachyťte, ako má revízia prebiehať.",
-            "title": "Vytvoriť playbook"
+            "body": "Možnosť Vytvoriť otvorí prázdny koncept bez toho, aby sa čokoľvek uložilo. Ďalšie kroky určia jeho rozsah a pozície revízie, vďaka ktorým je playbook užitočný.",
+            "title": "Začať s prázdnym playbookom"
+          },
+          "overview": {
+            "body": "Playbook premieňa úsudok pri revízii na spoločný súbor otázok, očakávaných odpovedí a záložných stanovísk. Revízori môžu používať ten istý štandard bez toho, aby museli znova vytvárať pokyny pre každý dokument.",
+            "title": "Opakovane používať úsudok pri revízii",
+            "when": "Playbook použite, keď sa rovnaký štandard revízie opakuje vo viacerých dokumentoch alebo ho používa viacero revízorov. Jednorazovú otázku položte priamo v čete, ak odpoveď nemusí byť súčasťou trvalo používaného štandardu."
+          },
+          "positions": {
+            "body": "Pozície sú pokyny playbooku na revíziu. Hodnotenú pozíciu pridajte, keď má Stella porovnať formuláciu s prijateľnými a neprijateľnými výsledkami; pozíciu typu Iba extrakcia pridajte, keď potrebujete z dokumentu iba štruktúrovaný fakt.",
+            "title": "Pridať pozície revízie",
+            "when": "Formuláciu hodnoťte, keď odpoveď vyžaduje právny úsudok alebo usmernenie pri rokovaní. Údaj extrahujte, keď je odpoveď faktická a nepotrebuje výsledné hodnotenie."
           }
         },
         "title": "Zostaviť playbook"
@@ -2218,8 +2234,19 @@
         "description": "Získajte odpovede naprieč mnohými súbormi naraz",
         "steps": {
           "addColumn": {
-            "body": "Pridajte otázku, na ktorú sa odpovie v každom riadku.",
-            "title": "Pridať stĺpec"
+            "body": "Nový stĺpec otvorí editor stĺpca. Stĺpec pomenujte jasnou otázkou a presne povedzte Stelle, čo má hľadať; rovnaký pokyn sa spustí pre každý riadok dokumentu.",
+            "title": "Položiť jednu otázku ku každému dokumentu",
+            "when": "Pre každú odpoveď, ktorú potrebujete porovnať, filtrovať, zoradiť alebo exportovať, vytvorte samostatný stĺpec. Súvisiaci kontext uveďte v zadaní namiesto spájania viacerých odpovedí do jednej bunky."
+          },
+          "answerType": {
+            "body": "Pole Vráti určuje formát každej odpovede. Ak má výsledok štruktúru, vyberte číslo, dátum, jeden výber alebo viacnásobný výber; Stella zachová konzistentnosť stĺpca namiesto toho, aby vracala ľubovoľný text.",
+            "title": "Vybrať typ odpovede",
+            "when": "Pre pevnú množinu výsledkov použite výber, na zoraďovanie a výpočty číslo alebo dátum a text iba vtedy, keď si odpoveď skutočne vyžaduje podrobný opis."
+          },
+          "table": {
+            "body": "Každý riadok je dokument a každý vlastný stĺpec je jedna otázka položená naraz ku všetkým dokumentom. Priečinok súborov sa tak zmení na porovnateľné odpovede bez toho, aby ste ich museli otvárať po jednom.",
+            "title": "Revidovať všetky dokumenty, nie iba jeden",
+            "when": "Tabuľku použite, keď potrebujete rovnaké fakty alebo rozhodnutia z viacerých dokumentov. Dokument otvorte priamo, keď sú rozloženie, formulácia alebo okolitý kontext dôležitejšie než porovnanie."
           }
         },
         "title": "Revízia v tabuľke"
@@ -2228,8 +2255,27 @@
         "description": "Zreťazte kroky do opakovateľného pracovného postupu",
         "steps": {
           "create": {
-            "body": "Skombinujte kroky, ktoré sa na požiadanie spustia spoločne.",
-            "title": "Vytvoriť pracovný postup"
+            "body": "Možnosť Vytvoriť otvorí neuložený koncept pracovného postupu. Ďalšie kroky určia, kedy sa spustí, čo vykoná a kde musí človek rozhodnúť, či môže pokračovať.",
+            "title": "Začať s konceptom pracovného postupu"
+          },
+          "overview": {
+            "body": "Pracovný postup spája spúšťač so sledom úkonov, takže rutinný proces zakaždým prebehne rovnako. Môže automaticky pripraviť prácu, pričom v prípade potreby ponechá rozhodnutie na revízorovi.",
+            "title": "Automatizovať opakovateľný proces",
+            "when": "Automatizujte prácu, ktorá má stabilný spúšťač, opakovateľné kroky a jasne určeného zodpovedného za výnimky. Meniacu sa prácu alebo prácu náročnú na úsudok vykonávajte manuálne, kým sa samotný proces neustáli."
+          },
+          "reviewGate": {
+            "body": "Kontrolný bod revízie pozastaví vykonávanie, kým ho človek neschváli alebo nezamietne. Umiestnite ho pred prvý úkon, ktorý sa nemá vykonať iba na základe automatizovaného výsledku.",
+            "title": "Ponechať rozhodnutie na revízorovi",
+            "when": "Kontrolný bod použite pred odoslaním, zaradením do spisu, eskaláciou alebo iným konečným potvrdením výsledku so závažnými dôsledkami. Vynechajte ho iba vtedy, keď je ďalší krok bezpečne vratný a nevyžaduje ľudský úsudok."
+          },
+          "steps": {
+            "body": "Kroky sa vykonávajú v tomto poradí a odovzdávajú výsledky práce ďalej. Každý krok nech zodpovedá za jeden jasný úkon, aby boli zlyhania zrozumiteľné a poradie sa dalo ľahko meniť.",
+            "title": "Zostaviť poradie krokov"
+          },
+          "trigger": {
+            "body": "Spúšťač určuje, kedy sa začne vykonávanie: manuálne, podľa harmonogramu alebo po nahraní zodpovedajúcich súborov. Zúžte podmienky spisu a súborov, aby nesúvisiaca práca nikdy nespustila pracovný postup.",
+            "title": "Vybrať, čo spustí pracovný postup",
+            "when": "Kým je proces nový, používajte manuálne spustenie; pre časovo určené rutinné úlohy použite harmonogram a nahranie súboru iba vtedy, keď je prijatý dokument spoľahlivým signálom na začatie."
           }
         },
         "title": "Automatizovať pracovný postup"

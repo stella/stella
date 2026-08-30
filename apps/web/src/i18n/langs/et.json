@@ -2191,15 +2191,16 @@
         "title": "Küsi õige kontekstiga"
       },
       "documents": {
-        "description": "Laadi fail üles ja ava see",
+        "description": "Lisa dokument toimikusse ja leia see hiljem uuesti",
         "steps": {
           "browse": {
-            "body": "Leia ja ava mis tahes lisatud dokument.",
-            "title": "Sirvi oma dokumente"
+            "body": "See tabel on toimiku dokumentide loend. Üleslaaditud failid kuvatakse siin ridadena. Hiljem naasmiseks ava toimik külgribalt, vali selle tabelivaade ja seejärel dokumendi rida.",
+            "title": "Leia dokument uuesti"
           },
           "upload": {
-            "body": "Lisa fail, et tuua see oma tööruumi.",
-            "title": "Laadi dokument üles"
+            "body": "Nupp „Laadi üles“ avab failivalija; faile saab ka toimikusse lohistada. Igast failist saab selles toimikus dokument, mille sinu meeskond leiab ja mida Stella saab ülevaatusel kasutada.",
+            "title": "Lisa dokument toimikusse",
+            "when": "Laadi fail siia, kui see kuulub toimikusse ja peab jääma kättesaadavaks. Lisa fail otse vestlusesse ainult siis, kui see on ajutine kontekst ühe vestluse jaoks."
           }
         },
         "title": "Töö dokumentidega"
@@ -2207,9 +2208,24 @@
       "playbooks": {
         "description": "Muuda ülevaatuse oskusteave korduvkasutatavaks juhendiks",
         "steps": {
+          "basics": {
+            "body": "Anna juhendile nimi, mis tähistab standardit, mitte praegust faili. Lisa lühikirjeldus, et teine ülevaataja mõistaks selle ulatust; kui juhend kehtib ainult ühe dokumendiliigi kohta, vali see siin.",
+            "title": "Anna standardile nimi ja määra selle ulatus",
+            "when": "Piira dokumendiliiki ainult siis, kui ülevaatuse reeglid tõesti kategooriate lõikes erinevad. Jäta valituks kõik liigid, kui kogu toimikus kehtivad samad küsimused."
+          },
           "create": {
-            "body": "Alusta juhendit, et jäädvustada, kuidas ülevaatus peaks toimuma.",
-            "title": "Loo juhend"
+            "body": "Nupp „Loo“ avab tühja mustandi ega salvesta veel midagi. Järgmised sammud käsitlevad selle ulatust ja ülevaatuse seisukohti, mis muudavad juhendi kasulikuks.",
+            "title": "Alusta tühja juhendiga"
+          },
+          "overview": {
+            "body": "Juhend koondab ülevaatusel tehtavad otsused jagatud küsimusteks, oodatud vastusteks ja alternatiivseteks seisukohtadeks. Nii saavad ülevaatajad rakendada sama standardit, ilma et peaksid iga dokumendi jaoks juhiseid uuesti koostama.",
+            "title": "Muuda ülevaatuse otsused korduvkasutatavaks",
+            "when": "Kasuta juhendit, kui sama ülevaatuse standard kordub mitme dokumendi või ülevaataja puhul. Ühekordne küsimus, mille vastusest ei pea saama püsiv standard, esita otse vestluses."
+          },
+          "positions": {
+            "body": "Seisukohad on juhendi ülevaatusjuhised. Lisa hinnatud seisukoht, kui Stella peab võrdlema sõnastust vastuvõetavate ja vastuvõetamatute tulemustega; lisa väljavõtte seisukoht, kui vajad dokumendist ainult struktureeritud fakti.",
+            "title": "Lisa ülevaatuse seisukohad",
+            "when": "Hinda sõnastust, kui vastus nõuab õiguslikku hinnangut või läbirääkimisjuhiseid. Tee väljavõte, kui vastus on faktiline ega vaja otsust."
           }
         },
         "title": "Koosta juhend"
@@ -2218,8 +2234,19 @@
         "description": "Eralda vastused paljudest failidest korraga",
         "steps": {
           "addColumn": {
-            "body": "Lisa küsimus, millele igal real vastata.",
-            "title": "Lisa veerg"
+            "body": "Nupp „Uus veerg“ avab veeruredaktori. Sõnasta veeru nimi selge küsimusena ja ütle Stellale täpselt, mida otsida; sama juhist rakendatakse iga dokumendi rea suhtes.",
+            "title": "Esita igale dokumendile sama küsimus",
+            "when": "Loo eraldi veerg iga vastuse jaoks, mida soovid võrrelda, filtreerida, sortida või eksportida. Lisa seotud kontekst juhisesse, selle asemel et ühendada mitu vastust ühte lahtrisse."
+          },
+          "answerType": {
+            "body": "Valik „Vorming“ määrab iga vastuse kuju. Kui tulemusel on kindel struktuur, vali arv, kuupäev, üksikvalik või mitmikvalik; nii hoiab Stella veeru ühtlasena ega tagasta suvalist vabateksti.",
+            "title": "Vali vastuse tüüp",
+            "when": "Kasuta fikseeritud tulemuste jaoks valikut, sortimiseks ja arvutusteks arvu või kuupäeva ning teksti ainult siis, kui vastus vajab tõepoolest põhjalikku kirjeldust."
+          },
+          "table": {
+            "body": "Iga rida on dokument ja iga kohandatud veerg üks küsimus, mis esitatakse korraga kõigile dokumentidele. Nii muutub failide kaust võrreldavateks vastusteks, ilma et peaksid dokumente ükshaaval avama.",
+            "title": "Vaata läbi kogu kogum, mitte üks fail",
+            "when": "Kasuta tabelit, kui vajad mitmest dokumendist samu fakte või otsuseid. Ava dokument otse, kui paigutus, sõnastus või ümbritsev kontekst on võrdlusest olulisem."
           }
         },
         "title": "Ülevaatus tabelis"
@@ -2228,8 +2255,27 @@
         "description": "Ühenda sammud korratavaks töövooks",
         "steps": {
           "create": {
-            "body": "Kombineeri sammud, mis käivituvad nõudmisel koos.",
-            "title": "Loo töövoog"
+            "body": "Nupp „Loo“ avab salvestamata töövoo mustandi. Järgmised sammud määravad, millal see käivitub, mida teeb ja kus peab inimene otsustama, kas töövoog jätkub.",
+            "title": "Alusta töövoo mustandiga"
+          },
+          "overview": {
+            "body": "Töövoog ühendab käivitaja toimingute jadaga, et tavapärane protsess kulgeks iga kord ühtemoodi. See võib töö automaatselt ette valmistada, jättes vajalikud otsused ülevaataja teha.",
+            "title": "Automatiseeri korratav protsess",
+            "when": "Automatiseeri töö, millel on kindel käivitaja, korduvad sammud ja erandite eest selgelt vastutav isik. Hoia muutuv või suuresti hinnangutel põhinev töö käsitsi tehtavana, kuni protsess ise on paigas."
+          },
+          "reviewGate": {
+            "body": "Ülevaatuse kontrollpunkt peatab käituse, kuni inimene selle kinnitab või tagasi lükkab. Lisa kontrollpunkt enne esimest toimingut, mida ei tohiks teha üksnes automatiseeritud tulemuse põhjal.",
+            "title": "Jäta otsus ülevaatajale",
+            "when": "Kasuta kontrollpunkti enne saatmist, toimikusse lisamist, eskaleerimist või muul viisil olulise tulemuse kinnitamist. Jäta see vahele ainult siis, kui järgmise sammu saab ohutult tagasi võtta ja see ei vaja inimese hinnangut."
+          },
+          "steps": {
+            "body": "Sammud käivituvad selles järjekorras ja annavad oma töö edasi. Määra igale sammule üks selge toiming, et tõrkeid oleks lihtne mõista ja järjestust muuta.",
+            "title": "Koosta sammude jada"
+          },
+          "trigger": {
+            "body": "Käivitaja määrab, millal käitus algab: käsitsi, ajakava järgi või sobivate failide üleslaadimisel. Täpsusta toimiku- ja failitingimusi nii, et töövoog ei käivituks kunagi seosetu töö peale.",
+            "title": "Vali, mis töövoo käivitab",
+            "when": "Kasuta käsitsi käivitamist, kuni protsess on uus, ajakava ajapõhiste rutiinide jaoks ning faili üleslaadimist ainult siis, kui saabuv dokument on usaldusväärne alustamissignaal."
           }
         },
         "title": "Automatiseeri töövoog"

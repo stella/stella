@@ -2191,15 +2191,16 @@
         "title": "Jautājiet ar pareizo kontekstu"
       },
       "documents": {
-        "description": "Augšupielādējiet failu un atveriet to",
+        "description": "Pievienojiet dokumentu lietai un vēlāk atrodiet to",
         "steps": {
           "browse": {
-            "body": "Atrodiet un atveriet jebkuru pievienoto dokumentu.",
-            "title": "Pārlūkot dokumentus"
+            "body": "Šī tabula ir lietas dokumentu saraksts. Augšupielādētie faili šeit tiek parādīti kā rindas. Lai vēlāk atgrieztos, sānjoslā atveriet lietu, izvēlieties tās tabulas skatu un pēc tam atlasiet dokumenta rindu.",
+            "title": "Vēlreiz atrast dokumentu"
           },
           "upload": {
-            "body": "Pievienojiet failu, lai ienestu to savā darba vietā.",
-            "title": "Augšupielādēt dokumentu"
+            "body": "Nospiežot Augšupielādēt, tiek atvērts failu atlasītājs; failus varat arī ievilkt lietā. Katrs fails kļūst par šīs lietas dokumentu, ko jūsu komanda var atrast un Stella var izmantot pārskatīšanā.",
+            "title": "Pievienot dokumentu lietai",
+            "when": "Augšupielādējiet šeit, ja fails pieder pie lietas un tam jāpaliek pieejamam. Pievienojiet to tieši tērzēšanā tikai tad, ja tas ir pagaidu konteksts vienai sarunai."
           }
         },
         "title": "Darbs ar dokumentiem"
@@ -2207,9 +2208,24 @@
       "playbooks": {
         "description": "Pārvērtiet pārskatīšanas zināšanas atkārtoti izmantojamā plānā",
         "steps": {
+          "basics": {
+            "body": "Piešķiriet plānam nosaukumu, kas identificē standartu, nevis pašreizējo failu. Pievienojiet īsu aprakstu, lai cits pārskatītājs zinātu tvērumu; ja plāns attiecas tikai uz vienu dokumentu veidu, atlasiet to šeit.",
+            "title": "Nosaukt standartu un noteikt tā tvērumu",
+            "when": "Ierobežojiet dokumentu veidu tikai tad, ja pārskatīšanas noteikumi tiešām atšķiras pēc kategorijas. Atstājiet visus veidus, ja visā lietā ir piemērojami vieni un tie paši jautājumi."
+          },
           "create": {
-            "body": "Sāciet plānu, lai fiksētu, kā jānorit pārskatīšanai.",
-            "title": "Izveidot plānu"
+            "body": "Izveidot atver tukšu melnrakstu, neko nesaglabājot. Nākamajās darbībās noteiksiet tā tvērumu un pārskatīšanas pozīcijas, kas padara plānu noderīgu.",
+            "title": "Sākt tukšu plānu"
+          },
+          "overview": {
+            "body": "Plāns pārvērš pārskatīšanas apsvērumus kopīgā jautājumu, sagaidāmo atbilžu un rezerves nostāju kopumā. Pārskatītāji var piemērot vienu un to pašu standartu, no jauna neveidojot norādījumus katram dokumentam.",
+            "title": "Atkārtoti izmantot pārskatīšanas apsvērumus",
+            "when": "Izmantojiet plānu, ja viens pārskatīšanas standarts atkārtojas vairākos dokumentos vai to izmanto vairāki pārskatītāji. Vienreizēju jautājumu uzdodiet tieši tērzēšanā, ja atbilde nav jāiekļauj turpmāk izmantojamā standartā."
+          },
+          "positions": {
+            "body": "Pozīcijas ir plāna pārskatīšanas norādījumi. Pievienojiet novērtētu pozīciju, ja Stellai jāsalīdzina formulējums ar pieņemamiem un nepieņemamiem rezultātiem; pievienojiet izvilkšanas pozīciju, ja no dokumenta vajadzīgs tikai strukturēts fakts.",
+            "title": "Pievienot pārskatīšanas pozīcijas",
+            "when": "Novērtējiet formulējumu, ja atbildei vajadzīgs juridisks vērtējums vai sarunu norādījumi. Izvelciet datus, ja atbilde ir faktiska un tai nav vajadzīgs vērtējums."
           }
         },
         "title": "Izstrādāt plānu"
@@ -2218,8 +2234,19 @@
         "description": "Iegūstiet atbildes no daudziem failiem vienlaikus",
         "steps": {
           "addColumn": {
-            "body": "Pievienojiet jautājumu, uz kuru atbildēt katrā rindā.",
-            "title": "Pievienot kolonnu"
+            "body": "Jauna kolonna atver kolonnas redaktoru. Piešķiriet kolonnai skaidru, jautājuma formā izteiktu nosaukumu un precīzi norādiet Stellai, ko meklēt; viens un tas pats norādījums tiek izpildīts katrai dokumenta rindai.",
+            "title": "Uzdot vienu jautājumu par katru dokumentu",
+            "when": "Katram atbildes veidam, ko vēlaties salīdzināt, filtrēt, kārtot vai eksportēt, izveidojiet atsevišķu kolonnu. Saistīto kontekstu iekļaujiet uzvednē, nevis apvienojiet vairākas atbildes vienā šūnā."
+          },
+          "answerType": {
+            "body": "Lauks Atgriež nosaka katras atbildes formu. Ja rezultāts ir strukturēts, izvēlieties skaitli, datumu, vienu atlasi vai vairākas atlases; Stella saglabās kolonnas vienveidību, nevis atgriezīs patvaļīgu tekstu.",
+            "title": "Izvēlēties atbildes veidu",
+            "when": "Fiksētai rezultātu kopai izmantojiet atlasi, kārtošanai un aprēķiniem – skaitli vai datumu, bet tekstu tikai tad, ja atbildei patiešām nepieciešams detalizēts izklāsts."
+          },
+          "table": {
+            "body": "Katra rinda ir dokuments, bet katra pielāgotā kolonna ir viens jautājums, kas vienlaikus tiek uzdots par visiem dokumentiem. Tādējādi failu mape kļūst par salīdzināmām atbildēm, neatverot katru failu atsevišķi.",
+            "title": "Pārskatīt visu kopu, nevis vienu failu",
+            "when": "Izmantojiet tabulu, ja vairākiem dokumentiem vajadzīgi vieni un tie paši fakti vai lēmumi. Atveriet dokumentu tieši, ja izkārtojums, formulējums vai apkārtējais konteksts ir svarīgāks par salīdzināšanu."
           }
         },
         "title": "Pārskatīšana tabulā"
@@ -2228,8 +2255,27 @@
         "description": "Sasaistiet soļus atkārtojamā darbplūsmā",
         "steps": {
           "create": {
-            "body": "Apvienojiet soļus, kas pēc pieprasījuma tiek izpildīti kopā.",
-            "title": "Izveidot darbplūsmu"
+            "body": "Izveidot atver nesaglabātu darbplūsmas melnrakstu. Nākamajās darbībās noteiksiet, kad tā sākas, ko tā dara un kur cilvēkam jāizlemj, vai tā drīkst turpināties.",
+            "title": "Sākt darbplūsmas melnrakstu"
+          },
+          "overview": {
+            "body": "Darbplūsma savieno aktivizētāju ar darbību secību, lai ierasts process katru reizi noritētu vienādi. Tā var automātiski sagatavot darbu, vajadzības gadījumā atstājot lēmumu pārskatītāja ziņā.",
+            "title": "Automatizēt atkārtojamu procesu",
+            "when": "Automatizējiet darbu, kam ir stabils aktivizētājs, atkārtojami soļi un skaidrs atbildīgais par izņēmumiem. Mainīgu vai uz spriedumiem balstītu darbu veiciet manuāli, līdz pats process ir nostabilizējies."
+          },
+          "reviewGate": {
+            "body": "Pārskatīšanas apstiprinājums aptur izpildi, līdz cilvēks to apstiprina vai noraida. Novietojiet apstiprinājumu pirms pirmās darbības, kuru nedrīkst veikt, pamatojoties tikai uz automatizētu rezultātu.",
+            "title": "Atstāt lēmumu pārskatītāja ziņā",
+            "when": "Izmantojiet apstiprinājumu pirms nosūtīšanas, reģistrēšanas, tālākas izskatīšanas vai citādas būtisku seku rezultāta galīgas apstiprināšanas. Izlaidiet to tikai tad, ja nākamā darbība ir droši atgriezeniska un tai nav vajadzīgs cilvēka vērtējums."
+          },
+          "steps": {
+            "body": "Soļi tiek izpildīti šādā secībā un nodod darba rezultātu tālāk. Katram solim piešķiriet vienu skaidru darbību, lai kļūmes būtu saprotamas un secību varētu viegli mainīt.",
+            "title": "Izveidot soļu secību"
+          },
+          "trigger": {
+            "body": "Aktivizētājs nosaka, kad sākas izpilde: manuāli, pēc grafika vai augšupielādējot atbilstošus failus. Sašauriniet lietas un failu nosacījumus, lai nesaistīts darbs nekad neaktivizētu darbplūsmu.",
+            "title": "Izvēlēties, kas sāk darbplūsmu",
+            "when": "Kamēr process ir jauns, izmantojiet manuālu palaišanu; laika noteiktām rutīnas darbībām izmantojiet grafiku, bet faila augšupielādi tikai tad, ja saņemts dokuments ir uzticams signāls sākt."
           }
         },
         "title": "Automatizēt darbplūsmu"

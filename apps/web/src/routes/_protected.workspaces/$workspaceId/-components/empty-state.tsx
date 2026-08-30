@@ -7,6 +7,8 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 
 import { EmptyScreen } from "@/components/empty-screen";
+import { guideAnchor } from "@/features/guides/guide-anchor";
+import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 
 type EmptyStateProps = {
@@ -107,6 +109,7 @@ const WorkspaceUploadEmptyScreen = ({
           icon: UploadIcon,
           disabled: isPending,
           onClick: () => fileInputRef.current?.click(),
+          ...guideAnchor(GUIDE_ANCHORS.documentsUpload),
         }}
         title={title}
       />

@@ -11,7 +11,6 @@ type State = {
   publicLawPreview: boolean;
   workflowsPreview: boolean;
   inboxPreview: boolean;
-  guidesPreview: boolean;
   timeBillingPreview: boolean;
   simulateSlowLoad: boolean;
 };
@@ -23,7 +22,6 @@ type Actions = {
   setPublicLawPreview: (value: boolean) => void;
   setWorkflowsPreview: (value: boolean) => void;
   setInboxPreview: (value: boolean) => void;
-  setGuidesPreview: (value: boolean) => void;
   setTimeBillingPreview: (value: boolean) => void;
   setSimulateSlowLoad: (value: boolean) => void;
 };
@@ -43,7 +41,6 @@ export const useDevStore = create<State & Actions>()(
       publicLawPreview: false,
       workflowsPreview: false,
       inboxPreview: false,
-      guidesPreview: false,
       timeBillingPreview: false,
       simulateSlowLoad: false,
 
@@ -64,9 +61,6 @@ export const useDevStore = create<State & Actions>()(
       },
       setInboxPreview: (inboxPreview) => {
         set({ inboxPreview });
-      },
-      setGuidesPreview: (guidesPreview) => {
-        set({ guidesPreview });
       },
       setTimeBillingPreview: (timeBillingPreview) => {
         set({ timeBillingPreview });

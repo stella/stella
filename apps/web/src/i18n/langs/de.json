@@ -2191,15 +2191,16 @@
         "title": "Mit dem richtigen Kontext fragen"
       },
       "documents": {
-        "description": "Laden Sie eine Datei hoch und öffnen Sie sie",
+        "description": "Legen Sie ein Dokument ab und finden Sie es später wieder",
         "steps": {
           "browse": {
-            "body": "Finden und öffnen Sie ein beliebiges hinzugefügtes Dokument.",
-            "title": "Dokumente durchsuchen"
+            "body": "Diese Tabelle ist die Dokumentenliste der Akte. Hochgeladene Dateien erscheinen hier als Zeilen. Um später zurückzukehren, öffnen Sie die Akte über die Seitenleiste, wählen Sie die Tabellenansicht und anschließend die Dokumentzeile aus.",
+            "title": "Dokument wiederfinden"
           },
           "upload": {
-            "body": "Fügen Sie eine Datei hinzu, um sie in Ihren Arbeitsbereich zu holen.",
-            "title": "Dokument hochladen"
+            "body": "Über „Hochladen“ öffnen Sie die Dateiauswahl; Sie können Dateien auch auf die Akte ziehen. Jede Datei wird zu einem Dokument in dieser Akte, das Ihr Team wiederfinden und Stella für die Prüfung verwenden kann.",
+            "title": "Dokument in der Akte ablegen",
+            "when": "Laden Sie eine Datei hier hoch, wenn sie zur Akte gehört und dauerhaft verfügbar bleiben soll. Hängen Sie sie nur dann direkt an einen Chat an, wenn sie als vorübergehender Kontext für ein einzelnes Gespräch dient."
           }
         },
         "title": "Mit Dokumenten arbeiten"
@@ -2207,9 +2208,24 @@
       "playbooks": {
         "description": "Verwandeln Sie Prüfungswissen in ein wiederverwendbares Playbook",
         "steps": {
+          "basics": {
+            "body": "Geben Sie dem Playbook einen Namen, der den Standard bezeichnet und nicht die aktuelle Datei. Fügen Sie eine kurze Beschreibung hinzu, damit andere Prüfende den Geltungsbereich kennen; wenn der Standard nur für einen Dokumenttyp gilt, wählen Sie diesen hier aus.",
+            "title": "Standard benennen und Geltungsbereich festlegen",
+            "when": "Beschränken Sie den Dokumenttyp nur, wenn sich die Prüfregeln tatsächlich je nach Kategorie unterscheiden. Lassen Sie alle Typen ausgewählt, wenn in der gesamten Akte dieselben Fragen gelten."
+          },
           "create": {
-            "body": "Beginnen Sie ein Playbook, um festzuhalten, wie eine Prüfung ablaufen soll.",
-            "title": "Playbook erstellen"
+            "body": "Mit „Erstellen“ öffnen Sie einen leeren Entwurf, ohne etwas zu speichern. Die nächsten Schritte behandeln seinen Geltungsbereich und die Prüfstandpunkte, die das Playbook nützlich machen.",
+            "title": "Mit einem leeren Playbook beginnen"
+          },
+          "overview": {
+            "body": "Ein Playbook überführt das Fachurteil aus Prüfungen in einen gemeinsamen Satz aus Fragen, erwarteten Antworten und Ausweichpositionen. So können Prüfende denselben Standard anwenden, ohne die Anweisungen für jedes Dokument neu zu erstellen.",
+            "title": "Prüfungswissen wiederverwendbar machen",
+            "when": "Verwenden Sie ein Playbook, wenn derselbe Prüfstandard für mehrere Dokumente oder Prüfende gilt. Stellen Sie eine einmalige Frage direkt im Chat, wenn die Antwort nicht als dauerhaft gepflegter Standard benötigt wird."
+          },
+          "positions": {
+            "body": "Standpunkte sind die Prüfanweisungen des Playbooks. Fügen Sie einen bewerteten Standpunkt hinzu, wenn Stella Formulierungen mit akzeptablen und nicht akzeptablen Ergebnissen vergleichen soll; fügen Sie einen Extraktionsstandpunkt hinzu, wenn Sie nur eine strukturierte Angabe aus dem Dokument benötigen.",
+            "title": "Prüfstandpunkte hinzufügen",
+            "when": "Bewerten Sie Formulierungen, wenn die Antwort rechtliches Urteilsvermögen oder Verhandlungshinweise erfordert. Extrahieren Sie die Angabe, wenn die Antwort rein sachlich ist und kein Urteil benötigt."
           }
         },
         "title": "Playbook aufbauen"
@@ -2218,8 +2234,19 @@
         "description": "Extrahieren Sie Antworten über viele Dateien gleichzeitig",
         "steps": {
           "addColumn": {
-            "body": "Fügen Sie eine Frage hinzu, die in jeder Zeile beantwortet wird.",
-            "title": "Spalte hinzufügen"
+            "body": "Mit „Neue Spalte“ öffnen Sie den Spalteneditor. Geben Sie der Spalte einen eindeutigen, als Frage formulierten Namen und teilen Sie Stella genau mit, wonach gesucht werden soll; dieselbe Anweisung wird auf jede Dokumentzeile angewendet.",
+            "title": "Jedem Dokument dieselbe Frage stellen",
+            "when": "Erstellen Sie für jede Antwort, die Sie vergleichen, filtern, sortieren oder exportieren möchten, eine eigene Spalte. Nehmen Sie zusammengehörigen Kontext in die Anweisung auf, statt mehrere Antworten in einer Zelle zu bündeln."
+          },
+          "answerType": {
+            "body": "Die Einstellung „Format“ bestimmt die Form jeder Antwort. Wählen Sie Zahl, Datum, Einfachauswahl oder Mehrfachauswahl, wenn das Ergebnis strukturiert ist; Stella hält die Spalte dadurch einheitlich, statt beliebigen Freitext zurückzugeben.",
+            "title": "Antworttyp auswählen",
+            "when": "Verwenden Sie eine Auswahl für eine feste Ergebnismenge, eine Zahl oder ein Datum zum Sortieren und Berechnen und Text nur dann, wenn die Antwort tatsächlich eine ausführliche Beschreibung erfordert."
+          },
+          "table": {
+            "body": "Jede Zeile steht für ein Dokument, jede benutzerdefinierte Spalte für eine Frage, die allen Dokumenten gleichzeitig gestellt wird. So wird aus einem Ordner voller Dateien eine Sammlung vergleichbarer Antworten, ohne jedes Dokument einzeln zu öffnen.",
+            "title": "Den Bestand prüfen, nicht nur eine Datei",
+            "when": "Verwenden Sie die Tabelle, wenn Sie dieselben Angaben oder Entscheidungen aus mehreren Dokumenten benötigen. Öffnen Sie ein Dokument direkt, wenn Layout, Wortlaut oder Kontext wichtiger sind als der Vergleich."
           }
         },
         "title": "In einer Tabelle prüfen"
@@ -2228,8 +2255,27 @@
         "description": "Verketten Sie Schritte zu einem wiederholbaren Arbeitsablauf",
         "steps": {
           "create": {
-            "body": "Kombinieren Sie Schritte, die bei Bedarf gemeinsam ausgeführt werden.",
-            "title": "Arbeitsablauf erstellen"
+            "body": "Mit „Erstellen“ öffnen Sie einen noch nicht gespeicherten Arbeitsablaufentwurf. In den nächsten Schritten legen Sie fest, wann er startet, was er ausführt und an welcher Stelle eine Person über die Fortsetzung entscheiden muss.",
+            "title": "Arbeitsablaufentwurf anlegen"
+          },
+          "overview": {
+            "body": "Ein Arbeitsablauf verbindet einen Auslöser mit einer Abfolge von Aktionen, damit ein Routineprozess jedes Mal gleich abläuft. Er kann Arbeit automatisch vorbereiten und Entscheidungen bei Bedarf weiterhin einer prüfenden Person überlassen.",
+            "title": "Wiederholbaren Prozess automatisieren",
+            "when": "Automatisieren Sie Aufgaben mit einem stabilen Auslöser, wiederholbaren Schritten und klarer Verantwortung für Ausnahmen. Lassen Sie wechselnde oder stark ermessensabhängige Aufgaben manuell, bis der Prozess selbst gefestigt ist."
+          },
+          "reviewGate": {
+            "body": "Ein Prüfpunkt hält die Ausführung an, bis eine Person sie genehmigt oder ablehnt. Setzen Sie ihn vor die erste Aktion, die nicht allein aufgrund eines automatisierten Ergebnisses erfolgen darf.",
+            "title": "Entscheidung bei einer prüfenden Person belassen",
+            "when": "Verwenden Sie einen Prüfpunkt vor dem Versenden, Ablegen, Eskalieren oder einer anderen verbindlichen Übernahme eines folgenreichen Ergebnisses. Überspringen Sie ihn nur, wenn der nächste Schritt sicher rückgängig zu machen ist und kein menschliches Urteilsvermögen erfordert."
+          },
+          "steps": {
+            "body": "Die Schritte werden in dieser Reihenfolge ausgeführt und geben ihre Arbeit weiter. Jeder Schritt sollte für eine klar abgegrenzte Aktion zuständig sein, damit Fehler nachvollziehbar bleiben und sich die Abfolge leicht ändern lässt.",
+            "title": "Abfolge aufbauen"
+          },
+          "trigger": {
+            "body": "Der Auslöser bestimmt, wann eine Ausführung beginnt: manuell, nach Zeitplan oder beim Hochladen passender Dateien. Grenzen Sie die Bedingungen für Akte und Dateien so ein, dass sachfremde Vorgänge den Arbeitsablauf niemals starten.",
+            "title": "Auslöser für den Arbeitsablauf auswählen",
+            "when": "Verwenden Sie den manuellen Start, solange der Prozess neu ist, einen Zeitplan für zeitgesteuerte Routinen und den Datei-Upload nur dann, wenn ein eingehendes Dokument ein verlässliches Startsignal darstellt."
           }
         },
         "title": "Arbeitsablauf automatisieren"

@@ -5,6 +5,8 @@ import { Button } from "@stll/ui/button";
 
 import { FlowTriggerBadge } from "@/components/flows/flow-badges";
 import { FlowSwitch } from "@/components/flows/flow-switch";
+import { guideAnchor } from "@/features/guides/guide-anchor";
+import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { usePermissions } from "@/hooks/use-permissions";
 import {
   buildFlowExample,
@@ -54,6 +56,7 @@ export const FlowList = ({
             onClick={onNewFlow}
             size="sm"
             title={t("flows.createFlow")}
+            {...guideAnchor(GUIDE_ANCHORS.workflowsCreate)}
           >
             <PlusIcon />
             <span className="hidden sm:inline">{t("flows.createFlow")}</span>

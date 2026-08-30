@@ -2191,15 +2191,16 @@
         "title": "Pytaj z właściwym kontekstem"
       },
       "documents": {
-        "description": "Prześlij plik i otwórz go",
+        "description": "Dodaj dokument do sprawy i znajdź go później",
         "steps": {
           "browse": {
-            "body": "Znajdź i otwórz dowolny dodany dokument.",
-            "title": "Przeglądaj dokumenty"
+            "body": "Ta tabela jest listą dokumentów sprawy. Przesłane pliki pojawiają się tutaj jako wiersze. Aby wrócić później, otwórz sprawę z paska bocznego, wybierz jej widok tabeli, a następnie wybierz wiersz dokumentu.",
+            "title": "Znajdź dokument ponownie"
           },
           "upload": {
-            "body": "Dodaj plik, aby wprowadzić go do obszaru roboczego.",
-            "title": "Prześlij dokument"
+            "body": "Przycisk Prześlij otwiera selektor plików; możesz też przeciągać pliki do sprawy. Każdy plik staje się dokumentem w tej sprawie, dzięki czemu zespół może go znaleźć, a Stella może wykorzystać podczas przeglądu.",
+            "title": "Dodaj dokument do sprawy",
+            "when": "Prześlij plik tutaj, jeśli należy do sprawy i powinien pozostać dostępny. Dołącz go bezpośrednio w czacie tylko wtedy, gdy stanowi tymczasowy kontekst jednej rozmowy."
           }
         },
         "title": "Praca z dokumentami"
@@ -2207,9 +2208,24 @@
       "playbooks": {
         "description": "Zamień wiedzę o przeglądzie w wielokrotnego użytku scenariusz",
         "steps": {
+          "basics": {
+            "body": "Nadaj scenariuszowi nazwę, która określa standard, a nie bieżący plik. Dodaj krótki opis, aby inna osoba przeprowadzająca przegląd znała zakres; jeśli scenariusz dotyczy tylko jednego typu dokumentu, wybierz go tutaj.",
+            "title": "Nazwij standard i określ jego zakres",
+            "when": "Ogranicz typ dokumentu tylko wtedy, gdy reguły przeglądu rzeczywiście różnią się zależnie od kategorii. Pozostaw wszystkie typy, gdy te same pytania mają zastosowanie w całej sprawie."
+          },
           "create": {
-            "body": "Rozpocznij scenariusz, aby uchwycić przebieg przeglądu.",
-            "title": "Utwórz scenariusz"
+            "body": "Opcja Utwórz otwiera pustą wersję roboczą bez zapisywania czegokolwiek. Kolejne kroki określają jej zakres i stanowiska przeglądu, dzięki którym scenariusz jest użyteczny.",
+            "title": "Rozpocznij pusty scenariusz"
+          },
+          "overview": {
+            "body": "Scenariusz przekształca kryteria przeglądu we wspólny zestaw pytań, oczekiwanych odpowiedzi i stanowisk rezerwowych. Osoby przeprowadzające przegląd mogą stosować ten sam standard bez ponownego tworzenia instrukcji dla każdego dokumentu.",
+            "title": "Wykorzystuj kryteria przeglądu wielokrotnie",
+            "when": "Użyj scenariusza, gdy ten sam standard przeglądu powtarza się w wielu dokumentach lub stosuje go wiele osób. Jednorazowe pytanie zadaj bezpośrednio na czacie, jeśli odpowiedź nie musi zostać włączona do stale stosowanego standardu."
+          },
+          "positions": {
+            "body": "Stanowiska są instrukcjami przeglądu w scenariuszu. Dodaj stanowisko oceniane, gdy Stella ma porównać sformułowanie z akceptowalnymi i nieakceptowalnymi wynikami; dodaj stanowisko typu Tylko ekstrakcja, gdy potrzebujesz jedynie ustrukturyzowanego faktu z dokumentu.",
+            "title": "Dodaj stanowiska przeglądu",
+            "when": "Oceniaj sformułowania, gdy odpowiedź wymaga oceny prawnej lub wskazówek negocjacyjnych. Wydobądź dane, gdy odpowiedź jest faktem i nie wymaga werdyktu."
           }
         },
         "title": "Zbuduj scenariusz"
@@ -2218,8 +2234,19 @@
         "description": "Wydobądź odpowiedzi z wielu plików naraz",
         "steps": {
           "addColumn": {
-            "body": "Dodaj pytanie, na które odpowiesz w każdym wierszu.",
-            "title": "Dodaj kolumnę"
+            "body": "Opcja Nowa kolumna otwiera edytor kolumny. Nadaj kolumnie jasną nazwę w formie pytania i dokładnie wskaż Stelli, czego ma szukać; ta sama instrukcja zostanie zastosowana do każdego wiersza dokumentu.",
+            "title": "Zadaj jedno pytanie o każdy dokument",
+            "when": "Utwórz osobną kolumnę dla każdej odpowiedzi, którą chcesz porównywać, filtrować, sortować lub eksportować. Powiązany kontekst umieść w prompcie zamiast łączyć kilka odpowiedzi w jednej komórce."
+          },
+          "answerType": {
+            "body": "Pole Zwraca określa format każdej odpowiedzi. Gdy wynik ma strukturę, wybierz liczbę, datę, pojedynczy wybór lub wielokrotny wybór; Stella zachowa spójność kolumny zamiast zwracać dowolny tekst.",
+            "title": "Wybierz typ odpowiedzi",
+            "when": "Użyj wyboru dla stałego zestawu wyników, liczby lub daty do sortowania i obliczeń, a tekstu tylko wtedy, gdy odpowiedź rzeczywiście wymaga szczegółowego opisu."
+          },
+          "table": {
+            "body": "Każdy wiersz to dokument, a każda kolumna niestandardowa to jedno pytanie zadawane jednocześnie o wszystkie dokumenty. W ten sposób folder plików zmienia się w porównywalne odpowiedzi bez otwierania każdego pliku osobno.",
+            "title": "Przejrzyj cały zestaw, nie jeden plik",
+            "when": "Użyj tabeli, gdy potrzebujesz tych samych faktów lub decyzji z kilku dokumentów. Otwórz dokument bezpośrednio, jeśli układ, sformułowania lub otaczający kontekst są ważniejsze niż porównanie."
           }
         },
         "title": "Przegląd w tabeli"
@@ -2228,8 +2255,27 @@
         "description": "Połącz kroki w powtarzalny przepływ pracy",
         "steps": {
           "create": {
-            "body": "Połącz kroki, które uruchamiają się razem na żądanie.",
-            "title": "Utwórz przepływ pracy"
+            "body": "Opcja Utwórz otwiera niezapisaną wersję roboczą przepływu pracy. Kolejne kroki określają, kiedy przepływ się uruchamia, co robi i w którym miejscu człowiek musi zdecydować, czy może być kontynuowany.",
+            "title": "Rozpocznij wersję roboczą przepływu pracy"
+          },
+          "overview": {
+            "body": "Przepływ pracy łączy wyzwalacz z sekwencją działań, dzięki czemu rutynowy proces za każdym razem przebiega tak samo. Może automatycznie przygotować pracę, pozostawiając w razie potrzeby decyzję osobie przeprowadzającej przegląd.",
+            "title": "Zautomatyzuj powtarzalny proces",
+            "when": "Automatyzuj pracę, która ma stabilny wyzwalacz, powtarzalne kroki i jasno wskazaną osobę odpowiedzialną za wyjątki. Pracę zmienną lub wymagającą dużej dozy osądu wykonuj ręcznie, dopóki sam proces się nie ustabilizuje."
+          },
+          "reviewGate": {
+            "body": "Punkt zatwierdzenia wstrzymuje wykonanie, dopóki ktoś go nie zatwierdzi lub nie odrzuci. Umieść go przed pierwszym działaniem, którego nie należy podejmować wyłącznie na podstawie automatycznego wyniku.",
+            "title": "Pozostaw decyzję osobie przeprowadzającej przegląd",
+            "when": "Użyj punktu zatwierdzenia przed wysłaniem, zarejestrowaniem, eskalacją lub innym ostatecznym przyjęciem wyniku o istotnych skutkach. Pomiń go tylko wtedy, gdy następny krok można bezpiecznie cofnąć i nie wymaga ludzkiej oceny."
+          },
+          "steps": {
+            "body": "Kroki są wykonywane w tej kolejności i przekazują wyniki pracy dalej. Każdy krok powinien odpowiadać za jedno jasno określone działanie, aby błędy były zrozumiałe, a kolejność łatwa do zmiany.",
+            "title": "Zbuduj sekwencję kroków"
+          },
+          "trigger": {
+            "body": "Wyzwalacz określa, kiedy rozpoczyna się wykonanie: ręcznie, według harmonogramu lub po przesłaniu pasujących plików. Zawęź warunki dotyczące sprawy i plików, aby niepowiązana praca nigdy nie uruchomiła przepływu.",
+            "title": "Wybierz, co uruchamia przepływ pracy",
+            "when": "Gdy proces jest nowy, uruchamiaj go ręcznie; w rutynowych działaniach zależnych od czasu użyj harmonogramu, a przesyłania pliku tylko wtedy, gdy przychodzący dokument stanowi wiarygodny sygnał do rozpoczęcia."
           }
         },
         "title": "Zautomatyzuj przepływ pracy"

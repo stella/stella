@@ -2191,15 +2191,16 @@
         "title": "Kérdezzen a megfelelő kontextussal"
       },
       "documents": {
-        "description": "Töltsön fel egy fájlt, és nyissa meg",
+        "description": "Iktasson egy dokumentumot, majd találja meg később",
         "steps": {
           "browse": {
-            "body": "Keresse meg és nyissa meg bármelyik hozzáadott dokumentumot.",
-            "title": "Dokumentumok tallózása"
+            "body": "Ez a táblázat az ügy dokumentumlistája. A feltöltött fájlok itt sorokként jelennek meg. Ha később vissza szeretne térni, nyissa meg az ügyet az oldalsávból, válassza ki a táblázatos nézetét, majd jelölje ki a dokumentum sorát.",
+            "title": "A dokumentum újbóli megkeresése"
           },
           "upload": {
-            "body": "Adjon hozzá egy fájlt, hogy bekerüljön a munkaterületére.",
-            "title": "Dokumentum feltöltése"
+            "body": "A Feltöltés megnyitja a fájlválasztót; a fájlokat rá is húzhatja az ügyre. Minden fájlból dokumentum lesz ebben az ügyben, így a csapata megtalálhatja, Stella pedig felhasználhatja a felülvizsgálat során.",
+            "title": "Dokumentum iktatása az ügybe",
+            "when": "Akkor töltsön fel ide egy fájlt, ha az ügyhöz tartozik, és később is elérhetőnek kell maradnia. Közvetlenül a csevegéshez csak akkor csatolja, ha egyetlen beszélgetés ideiglenes kontextusául szolgál."
           }
         },
         "title": "Munka dokumentumokkal"
@@ -2207,9 +2208,24 @@
       "playbooks": {
         "description": "Alakítsa át a felülvizsgálati tudást újrafelhasználható forgatókönyvvé",
         "steps": {
+          "basics": {
+            "body": "Olyan nevet adjon a forgatókönyvnek, amely a szabványt azonosítja, nem az aktuális fájlt. Rövid leírásban jelezze a hatókört, hogy egy másik felülvizsgáló is megértse; ha csak egy dokumentumtípusra vonatkozik, itt válassza ki azt.",
+            "title": "A szabvány elnevezése és hatókörének megadása",
+            "when": "Csak akkor korlátozza a dokumentumtípust, ha a felülvizsgálati szabályok kategóriánként valóban eltérnek. Hagyja minden típusra állítva, ha ugyanazok a kérdések érvényesek az egész ügyben."
+          },
           "create": {
-            "body": "Indítson el egy forgatókönyvet, hogy rögzítse a felülvizsgálat menetét.",
-            "title": "Forgatókönyv létrehozása"
+            "body": "A Létrehozás mentés nélkül megnyit egy üres vázlatot. A következő lépések a hatókörét és a forgatókönyvet hasznossá tevő felülvizsgálati álláspontokat mutatják be.",
+            "title": "Üres forgatókönyv indítása"
+          },
+          "overview": {
+            "body": "A forgatókönyv a felülvizsgálati szempontokat közös kérdésekké, elvárt válaszokká és tartalék álláspontokká alakítja. A felülvizsgálók így minden dokumentumnál ugyanazt a szabványt alkalmazhatják anélkül, hogy újra össze kellene állítaniuk az utasításokat.",
+            "title": "A felülvizsgálati szempontok újrafelhasználása",
+            "when": "Akkor használjon forgatókönyvet, ha ugyanaz a felülvizsgálati szabvány több dokumentumnál vagy felülvizsgálónál is ismétlődik. Egy egyszeri kérdést közvetlenül a csevegésben tegyen fel, ha a választ nem kell később is alkalmazható szabvánnyá alakítani."
+          },
+          "positions": {
+            "body": "Az álláspontok a forgatókönyv felülvizsgálati utasításai. Akkor adjon hozzá értékelt álláspontot, ha Stellának össze kell vetnie a megfogalmazást az elfogadható és elfogadhatatlan eredményekkel; akkor adjon hozzá Csak kinyerés típusú álláspontot, ha csak egy strukturált tényre van szüksége a dokumentumból.",
+            "title": "Felülvizsgálati álláspontok hozzáadása",
+            "when": "Akkor értékelje a megfogalmazást, ha a válasz jogi mérlegelést vagy tárgyalási útmutatást igényel. Akkor nyerje ki, ha a válasz tényszerű, és nincs szükség minősítésre."
           }
         },
         "title": "Forgatókönyv összeállítása"
@@ -2218,8 +2234,19 @@
         "description": "Nyerjen ki válaszokat sok fájlból egyszerre",
         "steps": {
           "addColumn": {
-            "body": "Adjon hozzá egy kérdést, amelyre minden sorban választ kap.",
-            "title": "Oszlop hozzáadása"
+            "body": "Az Új oszlop megnyitja az oszlopszerkesztőt. Adjon az oszlopnak egyértelmű, kérdésként megfogalmazott nevet, és pontosan írja le Stellának, mit keressen; ugyanaz az utasítás fut le minden dokumentumsoron.",
+            "title": "Egy kérdés feltevése minden dokumentumhoz",
+            "when": "Minden összehasonlítani, szűrni, rendezni vagy exportálni kívánt válaszhoz hozzon létre külön oszlopot. A kapcsolódó kontextust a promptban adja meg, ahelyett hogy több választ egyetlen cellába vonna össze."
+          },
+          "answerType": {
+            "body": "A Visszatérési érték határozza meg az egyes válaszok formáját. Ha az eredmény strukturált, válasszon számot, dátumot, egyszeres vagy többszörös kijelölést; Stella így biztosítja az oszlop egységességét, és nem tetszőleges szöveget ad vissza.",
+            "title": "A válasz típusának kiválasztása",
+            "when": "Rögzített eredményhalmazhoz használjon kijelölést, rendezéshez és számításokhoz számot vagy dátumot, szöveget pedig csak akkor, ha a válasz valóban részletes kifejtést igényel."
+          },
+          "table": {
+            "body": "Minden sor egy dokumentum, minden egyéni oszlop pedig egy kérdés, amelyet egyszerre tesz fel az összes dokumentumhoz. Így a fájlok mappájából összehasonlítható válaszok lesznek anélkül, hogy egyenként meg kellene nyitnia őket.",
+            "title": "A teljes dokumentumkészlet felülvizsgálata",
+            "when": "Akkor használja a táblázatot, ha több dokumentumból ugyanazokra a tényekre vagy döntésekre van szüksége. Nyissa meg közvetlenül a dokumentumot, ha az elrendezés, a megfogalmazás vagy a környező kontextus fontosabb az összehasonlításnál."
           }
         },
         "title": "Áttekintés táblázatban"
@@ -2228,8 +2255,27 @@
         "description": "Fűzzön össze lépéseket ismételhető munkafolyamattá",
         "steps": {
           "create": {
-            "body": "Kombináljon lépéseket, amelyek igény szerint együtt futnak.",
-            "title": "Munkafolyamat létrehozása"
+            "body": "A Létrehozás megnyit egy mentetlen munkafolyamat-vázlatot. A következő lépések meghatározzák, mikor indul el, mit végez, és hol kell egy személynek eldöntenie, hogy folytatódhat-e.",
+            "title": "Munkafolyamat-vázlat indítása"
+          },
+          "overview": {
+            "body": "A munkafolyamat egy eseményindítót műveletek sorozatához kapcsol, így egy rutinfolyamat minden alkalommal ugyanúgy fut le. Automatikusan előkészítheti a munkát, miközben szükség esetén a felülvizsgálónál hagyja a döntést.",
+            "title": "Egy ismételhető folyamat automatizálása",
+            "when": "Olyan munkát automatizáljon, amelynek állandó eseményindítója, ismételhető lépései és a kivételek kezeléséért egyértelműen kijelölt felelőse van. A változó vagy sok mérlegelést igénylő munkát addig végezze manuálisan, amíg maga a folyamat ki nem alakul."
+          },
+          "reviewGate": {
+            "body": "A felülvizsgálati ellenőrzőpont szünetelteti a futást, amíg valaki jóvá nem hagyja vagy el nem utasítja. Helyezze az ellenőrzőpontot az első olyan művelet elé, amelyet nem szabad kizárólag automatizált eredmény alapján végrehajtani.",
+            "title": "A döntés a felülvizsgálónál marad",
+            "when": "Használjon ellenőrzőpontot elküldés, iktatás, eszkalálás vagy egyéb jelentős következményekkel járó eredmény véglegesítése előtt. Csak akkor hagyja ki, ha a következő lépés biztonságosan visszafordítható, és nem igényel emberi mérlegelést."
+          },
+          "steps": {
+            "body": "A lépések ebben a sorrendben futnak, és továbbadják egymásnak a munkát. Minden lépés egyetlen, egyértelmű műveletért feleljen, hogy a hibák érthetők legyenek, a sorrend pedig könnyen módosítható maradjon.",
+            "title": "A lépéssor összeállítása"
+          },
+          "trigger": {
+            "body": "Az eseményindító határozza meg, mikor kezdődik egy futás: manuálisan, ütemezés szerint vagy egyező fájlok feltöltésekor. Szűkítse az ügyre és a fájlokra vonatkozó feltételeit, hogy a nem kapcsolódó munka soha ne indítsa el a munkafolyamatot.",
+            "title": "A munkafolyamat indítási feltételének kiválasztása",
+            "when": "Amíg új a folyamat, használjon manuális indítást; időalapú rutinfeladatokhoz ütemezést, fájlfeltöltést pedig csak akkor, ha egy beérkező dokumentum megbízhatóan jelzi a kezdést."
           }
         },
         "title": "Munkafolyamat automatizálása"

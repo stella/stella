@@ -20,6 +20,7 @@ import {
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import {
@@ -45,6 +46,8 @@ import {
   type FlowTriggerType,
 } from "@/components/flows/flow-meta";
 import { FlowSwitch } from "@/components/flows/flow-switch";
+import { guideAnchor } from "@/features/guides/guide-anchor";
+import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
@@ -486,8 +489,14 @@ const FlowEditorForm = ({
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="mx-auto w-full max-w-3xl space-y-6 p-6">
         <div className="flex items-center justify-between gap-2">
-          <Button onClick={onBack} size="sm" type="button" variant="ghost">
-            <ArrowLeftIcon />
+          <Button
+            onClick={onBack}
+            size="sm"
+            type="button"
+            variant="ghost"
+            {...guideAnchor(GUIDE_ANCHORS.workflowsBack)}
+          >
+            <DirectionalIcon icon={ArrowLeftIcon} />
             {t("common.back")}
           </Button>
           <div className="flex items-center gap-2">
@@ -618,7 +627,7 @@ const TriggerSection = ({
   const t = useTranslations();
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" {...guideAnchor(GUIDE_ANCHORS.workflowsTrigger)}>
       <h2 className="text-sm font-semibold">{t("flows.trigger.title")}</h2>
       <div className="grid gap-1.5">
         <Label htmlFor="flow-trigger-type">
@@ -979,7 +988,7 @@ const StepsSection = ({
   const atLimit = steps.length >= MAX_FLOW_STEPS;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" {...guideAnchor(GUIDE_ANCHORS.workflowsSteps)}>
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">{t("flows.steps.title")}</h2>
         <span className="text-muted-foreground text-xs tabular-nums">
@@ -1023,6 +1032,10 @@ const StepsSection = ({
               title={t(FLOW_STEP_KIND_HELP_KEYS[kind])}
               type="button"
               variant="outline"
+              {...guideAnchor(
+                GUIDE_ANCHORS.workflowsReviewGate,
+                kind === "review-gate",
+              )}
             >
               <Icon />
               {t(FLOW_STEP_KIND_LABEL_KEYS[kind])}
