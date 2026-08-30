@@ -23,7 +23,10 @@ import {
   getEmailIngestEffectRetryAt,
   processClaimedEmailIngestEffect,
 } from "@/api/lib/scheduler/tasks/email-ingest-effects";
-import type { EmailIngestEffectOperations } from "@/api/lib/scheduler/tasks/email-ingest-effects";
+import type {
+  EmailIngestEffectOperations,
+  EmailIngestEffectsDatabase,
+} from "@/api/lib/scheduler/tasks/email-ingest-effects";
 import { deriveOutlookEmailSourceKey } from "@/api/lib/uploads/email-ingest-source";
 import { legacyTmpUploadKey } from "@/api/lib/uploads/runtime";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -49,6 +52,7 @@ type FinalizeCtx = Parameters<typeof finalizeUpload.handler>[0];
 type ReconcileCtx = Parameters<typeof reconcileUpload.handler>[0];
 
 let testDb: TestDatabase;
+let effectDatabase: EmailIngestEffectsDatabase;
 let ids: TestIds;
 // The URL is signed by the real presigner and the bytes are PUT to the real
 // store, so the key the API mints is the key the object lands under and the
@@ -85,6 +89,7 @@ beforeAll(async () => {
   fake = startFakeS3();
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
+  effectDatabase = asTestRaw<EmailIngestEffectsDatabase>(testDb);
   ids = fixture.ids;
 });
 afterAll(async () => {
@@ -548,8 +553,16 @@ describe("presigned upload mutation flow", () => {
     );
 
     await Promise.all([
-      drainEmailIngestEffects({ operations, sourceUploadId }),
-      drainEmailIngestEffects({ operations, sourceUploadId }),
+      drainEmailIngestEffects({
+        database: effectDatabase,
+        operations,
+        sourceUploadId,
+      }),
+      drainEmailIngestEffects({
+        database: effectDatabase,
+        operations,
+        sourceUploadId,
+      }),
     ]);
 
     expect(calls).toEqual({
@@ -604,12 +617,16 @@ describe("presigned upload mutation flow", () => {
     }
 
     expect(
-      await processClaimedEmailIngestEffect(claim, {
-        enqueueImageThumbnailOrMarkFailed: async () => undefined,
-        enqueuePdfDerivativeOrMarkFailed: async () => undefined,
-        maybeStartUploadTriggeredFlows: async () => undefined,
-        processExtraction: async () => {
-          throw new Error("transient");
+      await processClaimedEmailIngestEffect({
+        database: effectDatabase,
+        effect: claim,
+        operations: {
+          enqueueImageThumbnailOrMarkFailed: async () => undefined,
+          enqueuePdfDerivativeOrMarkFailed: async () => undefined,
+          maybeStartUploadTriggeredFlows: async () => undefined,
+          processExtraction: async () => {
+            throw new Error("transient");
+          },
         },
       }),
     ).toBe(false);
@@ -629,7 +646,11 @@ describe("presigned upload mutation flow", () => {
       .update(emailIngestEffects)
       .set({ nextAttemptAt: new Date(0) })
       .where(eq(emailIngestEffects.sourceUploadId, sourceUploadId));
-    await drainEmailIngestEffects({ operations, sourceUploadId });
+    await drainEmailIngestEffects({
+      database: effectDatabase,
+      operations,
+      sourceUploadId,
+    });
 
     expect(calls.extract).toBe(1);
     expect(
@@ -683,9 +704,13 @@ describe("presigned upload mutation flow", () => {
       })
       .where(eq(emailIngestEffects.sourceUploadId, sourceUploadId));
 
-    expect(await processClaimedEmailIngestEffect(staleClaim, operations)).toBe(
-      false,
-    );
+    expect(
+      await processClaimedEmailIngestEffect({
+        database: effectDatabase,
+        effect: staleClaim,
+        operations,
+      }),
+    ).toBe(false);
     expect(calls.extract).toBe(0);
   });
 

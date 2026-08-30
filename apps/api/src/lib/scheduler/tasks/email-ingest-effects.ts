@@ -27,6 +27,11 @@ const RETRY_MAX_SECONDS = 6 * 60 * 60;
 
 type ClaimedEffect = typeof emailIngestEffects.$inferSelect;
 
+export type EmailIngestEffectsDatabase = Pick<
+  typeof rootDb,
+  "transaction" | "update"
+>;
+
 export type EmailIngestEffectOperations = {
   processExtraction: typeof processExtraction;
   maybeStartUploadTriggeredFlows: typeof maybeStartUploadTriggeredFlows;
@@ -61,12 +66,13 @@ export const getEmailIngestEffectRetryAt = ({
 };
 
 const claimEffects = async (
+  database: EmailIngestEffectsDatabase,
   sourceUploadId?: SafeId<"pendingUpload">,
 ): Promise<ClaimedEffect[]> => {
   const now = new Date();
   const staleBefore = new Date(now.getTime() - EFFECT_LEASE_MS);
   const claimToken = Bun.randomUUIDv7();
-  return await rootDb.transaction(async (tx) => {
+  return await database.transaction(async (tx) => {
     const due = or(
       eq(emailIngestEffects.status, "pending"),
       and(
@@ -135,9 +141,12 @@ const claimedEffectIdentity = (effect: ClaimedEffect) => {
   );
 };
 
-const refreshClaim = async (effect: ClaimedEffect): Promise<boolean> => {
+const refreshClaim = async (
+  database: EmailIngestEffectsDatabase,
+  effect: ClaimedEffect,
+): Promise<boolean> => {
   const refreshedAt = new Date();
-  const refreshed = await rootDb
+  const refreshed = await database
     .update(emailIngestEffects)
     .set({ claimedAt: refreshedAt, updatedAt: refreshedAt })
     .where(claimedEffectIdentity(effect))
@@ -183,15 +192,22 @@ const runEffect = async (
   }
 };
 
-export const processClaimedEmailIngestEffect = async (
-  effect: ClaimedEffect,
-  operations: EmailIngestEffectOperations = defaultOperations,
-): Promise<boolean> => {
-  if (!(await refreshClaim(effect))) {
+type ProcessClaimedEmailIngestEffectOptions = {
+  database?: EmailIngestEffectsDatabase;
+  effect: ClaimedEffect;
+  operations?: EmailIngestEffectOperations;
+};
+
+export const processClaimedEmailIngestEffect = async ({
+  database = rootDb,
+  effect,
+  operations = defaultOperations,
+}: ProcessClaimedEmailIngestEffectOptions): Promise<boolean> => {
+  if (!(await refreshClaim(database, effect))) {
     return false;
   }
   const heartbeat = setInterval(() => {
-    refreshClaim(effect).catch((error: unknown) =>
+    refreshClaim(database, effect).catch((error: unknown) =>
       captureError(error, {
         effectKind: effect.kind,
         entityId: effect.entityId,
@@ -209,7 +225,7 @@ export const processClaimedEmailIngestEffect = async (
   }).finally(() => clearInterval(heartbeat));
   const identity = claimedEffectIdentity(effect);
   if (Result.isOk(outcome)) {
-    await rootDb
+    await database
       .update(emailIngestEffects)
       .set({
         completedAt: new Date(),
@@ -231,7 +247,7 @@ export const processClaimedEmailIngestEffect = async (
   });
   const failedAt = new Date();
   const exhausted = effect.attemptCount >= EFFECT_MAX_ATTEMPTS;
-  await rootDb
+  await database
     .update(emailIngestEffects)
     .set({
       claimedAt: null,
@@ -249,12 +265,14 @@ export const processClaimedEmailIngestEffect = async (
 };
 
 type DrainEmailIngestEffectsOptions = {
+  database?: EmailIngestEffectsDatabase;
   operations?: EmailIngestEffectOperations;
   signal?: AbortSignal;
   sourceUploadId?: SafeId<"pendingUpload">;
 };
 
 export const drainEmailIngestEffects = async ({
+  database = rootDb,
   operations = defaultOperations,
   signal,
   sourceUploadId,
@@ -265,7 +283,7 @@ export const drainEmailIngestEffects = async ({
   if (signal?.aborted) {
     return { completed: 0, failed: 0 };
   }
-  const claims = await claimEffects(sourceUploadId);
+  const claims = await claimEffects(database, sourceUploadId);
   let next = 0;
   let completed = 0;
   let failed = 0;
@@ -275,7 +293,13 @@ export const drainEmailIngestEffects = async ({
     if (!claim || signal?.aborted) {
       return;
     }
-    if (await processClaimedEmailIngestEffect(claim, operations)) {
+    if (
+      await processClaimedEmailIngestEffect({
+        database,
+        effect: claim,
+        operations,
+      })
+    ) {
       completed += 1;
     } else {
       failed += 1;
