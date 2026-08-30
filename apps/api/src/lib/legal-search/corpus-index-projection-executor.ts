@@ -14,9 +14,7 @@ import {
   readReservedCorpusProjectionMaterialsTx,
   type CorpusProjectionMaterial,
 } from "@/api/lib/legal-search/corpus-index-projection-materials";
-import type {
-  CorpusProjectionWorkScope,
-} from "@/api/lib/legal-search/corpus-index-projection-scope";
+import type { CorpusProjectionWorkScope } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   abandonCorpusProjectionAppendTx,
   cancelCorpusProjectionReservationTx,

@@ -270,9 +270,7 @@ test("a subject-scoped reservation cannot claim another pending decision", async
       }),
   );
 
-  expect(leases.map(({ entityId }) => entityId)).toEqual([
-    ERASE_DECISION_ID,
-  ]);
+  expect(leases.map(({ entityId }) => entityId)).toEqual([ERASE_DECISION_ID]);
   expect(
     await db
       .select({ entityId: corpusIndexProjectionIntents.entityId })
@@ -550,15 +548,12 @@ test("subject-scoped replacement cannot retire another applied revision", async 
 
   const replacements = await db.transaction(
     async (tx) =>
-      await prepareCorpusProjectionReplacementsTx(
-        asTestRaw<Transaction>(tx),
-        {
-          family: "case_law",
-          generation: "case_law_v5",
-          scope: { type: "subjects", entityIds: [ERASE_DECISION_ID] },
-          limit: 10,
-        },
-      ),
+      await prepareCorpusProjectionReplacementsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        scope: { type: "subjects", entityIds: [ERASE_DECISION_ID] },
+        limit: 10,
+      }),
   );
 
   expect(replacements.map(({ intentId }) => intentId)).toEqual([
