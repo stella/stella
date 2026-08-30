@@ -43,7 +43,7 @@ export const NotificationBell = () => {
   // The count travels with every page and is computed server-side, so it stays
   // right no matter how little history this client holds.
   const unreadCount = data?.pages.at(0)?.unreadCount ?? 0;
-  const items = data?.pages.flatMap((page) => page.items) ?? [];
+  const items = data ? data.pages.flatMap((page) => page.items) : [];
 
   useUnreadFaviconDot(unreadCount > 0);
 
