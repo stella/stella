@@ -8,7 +8,7 @@ import {
 } from "@/api/handlers/uploads/outlook-ingestion-diagnostics";
 import {
   authorizeUploadPurpose,
-  uploadRoutePermission,
+  UPLOAD_PURPOSE_PERMISSION,
 } from "@/api/handlers/uploads/permissions";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type {
@@ -37,7 +37,7 @@ const config = {
     "re-checks the upload purpose permission, and idempotently repairs durable " +
     "post-commit work for completed email ingests. Returns an explicit " +
     "reserved, finalizing, retryable, complete, or rejected state.",
-  permissions: uploadRoutePermission,
+  permissions: UPLOAD_PURPOSE_PERMISSION.email_ingest,
   access: "write",
   mcp: { type: "internal", reason: "upload_mechanics" },
   body: reconcileBodySchema,
