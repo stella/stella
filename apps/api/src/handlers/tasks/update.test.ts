@@ -419,7 +419,7 @@ describe("updateTaskHandler governed lifecycle", () => {
 
   test("lets the owner complete from every status the table admits", async () => {
     const runs = await Promise.all(
-      WORK_OBLIGATION_TRANSITIONS.complete.from.map((status) =>
+      WORK_OBLIGATION_TRANSITIONS.complete.from.map(async (status) =>
         runStatusWrite({
           governedWorkflow: true,
           owner: "caller",
