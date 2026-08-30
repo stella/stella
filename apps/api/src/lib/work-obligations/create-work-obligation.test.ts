@@ -39,8 +39,13 @@ describe("createWorkObligation", () => {
       acknowledgedAt: null,
       acknowledgedByUserId: null,
     });
+    // No cause: the governed path is the origin of this work, unlike the
+    // legacy bridge, which marks what it derived from a pre-governance task.
     expect(inserts.at(1)).toEqual([
-      expect.objectContaining({ type: WORK_OBLIGATION_EVENT_TYPE.CREATED }),
+      expect.objectContaining({
+        type: WORK_OBLIGATION_EVENT_TYPE.CREATED,
+        details: { type: "created" },
+      }),
     ]);
   });
 });

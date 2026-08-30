@@ -59,6 +59,16 @@ describe("updateTaskHandler feature compatibility", () => {
     const workspaceId = createSafeId<"workspace">();
     const userId = mintAuthProviderId<"user">();
     const { safeDb } = createScopedDbMock({
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            limit: () => ({
+              for: async () =>
+                table === entities ? [{ listItemType: "task" }] : [],
+            }),
+          }),
+        }),
+      }),
       update: () => ({
         set: () => ({
           where: () => ({ returning: async () => [{ id: taskId }] }),

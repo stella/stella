@@ -51,13 +51,24 @@ export const isEntityPriority = (value: unknown): value is EntityPriority =>
   typeof value === "string" &&
   ENTITY_PRIORITIES.some((priority) => priority === value);
 
-/** Values accepted by a task's legal-list item discriminator. */
+/**
+ * Values accepted by a task's legal-list item discriminator. `TASK` is the
+ * only actionable one: the rest are reference rows a matter reasons about.
+ */
+export const LIST_ITEM_TYPE = {
+  TASK: "task",
+  FACT: "fact",
+  ISSUE: "issue",
+  REQUIREMENT: "requirement",
+  EVENT: "event",
+} as const;
+
 export const LIST_ITEM_TYPES = Object.freeze([
-  "task",
-  "fact",
-  "issue",
-  "requirement",
-  "event",
+  LIST_ITEM_TYPE.TASK,
+  LIST_ITEM_TYPE.FACT,
+  LIST_ITEM_TYPE.ISSUE,
+  LIST_ITEM_TYPE.REQUIREMENT,
+  LIST_ITEM_TYPE.EVENT,
 ] as const);
 
 export type ListItemType = (typeof LIST_ITEM_TYPES)[number];

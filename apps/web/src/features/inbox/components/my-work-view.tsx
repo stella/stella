@@ -136,7 +136,9 @@ export const MyWorkView = ({ organizationId }: { organizationId: string }) => {
   const analytics = useAnalytics();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [queue, setQueue] = useState<MyWorkQueue>("upcoming");
+  // The queues partition the work, so the landing tab is the one asking the
+  // owner for an answer, not the widest one.
+  const [queue, setQueue] = useState<MyWorkQueue>("inbox");
   const asOf = localISODate();
   const {
     data,

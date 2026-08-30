@@ -4,9 +4,11 @@ import type { Transaction } from "@/api/db/root";
 import {
   entities,
   taskAssignees,
+  WORK_OBLIGATION_EVENT_TYPE,
   WORK_OBLIGATION_SOURCE,
   WORK_OBLIGATION_STATUS,
   WORK_OBLIGATION_TYPE,
+  workObligationEvents,
   workObligations,
   workspaceMembers,
 } from "@/api/db/schema";
@@ -14,9 +16,11 @@ import type {
   WorkObligationSource,
   WorkObligationStatus,
 } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 
 type LegacyTask = {
   id: SafeId<"entity">;
@@ -72,6 +76,32 @@ export const legacyWorkObligationValues = (task: LegacyTask) => {
   };
 };
 
+type LegacyCreatedEventRow = {
+  entityId: SafeId<"entity">;
+  workspaceId: SafeId<"workspace">;
+  createdByUserId: string | null;
+};
+
+/**
+ * The obligation carries no history of its own: the legacy task predates
+ * governance. One `created` event, stamped at insertion rather than at the
+ * task's original creation, keeps the timeline honest about when the governed
+ * record actually began.
+ */
+export const legacyWorkObligationCreatedEvents = (
+  rows: LegacyCreatedEventRow[],
+  occurredAt: Date,
+): (typeof workObligationEvents.$inferInsert)[] =>
+  rows.map((row) => ({
+    id: createSafeId<"workObligationEvent">(),
+    workspaceId: row.workspaceId,
+    obligationEntityId: row.entityId,
+    actorUserId: row.createdByUserId,
+    type: WORK_OBLIGATION_EVENT_TYPE.CREATED,
+    details: { type: "created", cause: "legacy_backfill" },
+    occurredAt,
+  }));
+
 type EnsureLegacyWorkObligationOptions = {
   tx: Transaction;
   entityId: SafeId<"entity">;
@@ -90,6 +120,7 @@ export const ensureLegacyWorkObligation = async ({
     .select({
       id: entities.id,
       workspaceId: entities.workspaceId,
+      listItemType: entities.listItemType,
       agendaKind: entities.agendaKind,
       agendaSource: entities.agendaSource,
       status: entities.status,
@@ -109,7 +140,7 @@ export const ensureLegacyWorkObligation = async ({
     .limit(1)
     .for("update");
   const task = tasks.at(0);
-  if (!task) {
+  if (!task || !isWorkObligationEligible(task.listItemType)) {
     return;
   }
 
@@ -132,7 +163,7 @@ export const ensureLegacyWorkObligation = async ({
     .limit(2)
     .for("update", { of: workspaceMembers });
 
-  await tx
+  const inserted = await tx
     .insert(workObligations)
     .values(
       legacyWorkObligationValues({
@@ -142,5 +173,17 @@ export const ensureLegacyWorkObligation = async ({
         ),
       }),
     )
-    .onConflictDoNothing({ target: workObligations.entityId });
+    .onConflictDoNothing({ target: workObligations.entityId })
+    .returning({
+      entityId: workObligations.entityId,
+      workspaceId: workObligations.workspaceId,
+      createdByUserId: workObligations.createdByUserId,
+    });
+  if (inserted.length === 0) {
+    return;
+  }
+
+  await tx
+    .insert(workObligationEvents)
+    .values(legacyWorkObligationCreatedEvents(inserted, new Date()));
 };

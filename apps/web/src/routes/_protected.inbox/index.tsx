@@ -66,7 +66,7 @@ export const Route = createFileRoute("/_protected/inbox/")({
         ? [
             ensureRouteInfiniteQueryData(
               context.queryClient,
-              myWorkOptions("upcoming", localISODate()),
+              myWorkOptions("inbox", localISODate()),
             ),
           ]
         : []),
