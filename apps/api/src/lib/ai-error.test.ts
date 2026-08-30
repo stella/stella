@@ -27,6 +27,12 @@ const tanStackProviderError = (status: number) =>
     message: `provider responded ${status}`,
   }) satisfies Record<string, unknown>;
 
+const tanStackRunError = (code: number) =>
+  ({
+    code: String(code),
+    message: `provider responded ${code}`,
+  }) satisfies Record<string, unknown>;
+
 const providerErrorBody = (code: number, status: string) =>
   ({
     error: {
@@ -93,6 +99,18 @@ describe("classifyAIError", () => {
     expect(classifyAIError(tanStackProviderError(401))).toBe(
       "provider_credentials_rejected",
     );
+    expect(classifyAIError(tanStackRunError(401))).toBe(
+      "provider_credentials_rejected",
+    );
+    expect(classifyAIError({ code: "invalid_api_key" })).toBe(
+      "provider_credentials_rejected",
+    );
+    expect(
+      classifyAIError({
+        error: { type: "authentication_error" },
+        type: "error",
+      }),
+    ).toBe("provider_credentials_rejected");
     expect(classifyAIError(providerErrorBody(401, "UNAUTHENTICATED"))).toBe(
       "provider_credentials_rejected",
     );
@@ -184,6 +202,7 @@ describe("classifyAIError", () => {
     expect(
       classifyAIError({ error: { code: 14, message: "unavailable" } }),
     ).toBe("unknown");
+    expect(classifyAIError({ code: "model_not_found" })).toBe("unknown");
   });
 });
 

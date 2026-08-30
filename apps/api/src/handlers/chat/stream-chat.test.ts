@@ -11,6 +11,7 @@ import type {
   StreamChunk,
   ToolCallPart,
 } from "@tanstack/ai";
+import { createOpenaiChat } from "@tanstack/ai-openai";
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
@@ -1504,6 +1505,60 @@ describe("outgoing chat stream message ids", () => {
         rawEvent: { statusCode: 429 },
       },
     ]);
+    expect(outcomes).toEqual(["failed"]);
+  });
+
+  test("normalizes a credential rejection emitted by the installed OpenAI adapter", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const outcomes: string[] = [];
+    const adapter = createOpenaiChat("gpt-5.4-mini", "test-api-key", {
+      baseURL: "https://provider.invalid/v1",
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "invalid_api_key",
+              message: "Incorrect API key",
+              param: null,
+              type: "invalid_request_error",
+            },
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 401,
+          },
+        ),
+    });
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      getResponseMessage: () => null,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: ({ outcome }) => {
+        outcomes.push(outcome.type);
+      },
+      processor: new StreamProcessor(),
+      source: chat({
+        adapter,
+        messages: [{ content: "Hello", role: "user" }],
+      }),
+    });
+
+    const chunks = await collectChunks(stream);
+    expect(
+      chunks.find((chunk) => chunk.type === EventType.RUN_ERROR),
+    ).toMatchObject({
+      code: "provider_credentials_rejected",
+      message: "provider_credentials_rejected",
+      rawEvent: {
+        code: "invalid_api_key",
+        message: "Incorrect API key",
+        param: null,
+        type: "invalid_request_error",
+      },
+      type: EventType.RUN_ERROR,
+    });
     expect(outcomes).toEqual(["failed"]);
   });
 
