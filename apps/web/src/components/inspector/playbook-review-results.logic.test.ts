@@ -205,14 +205,14 @@ describe("what the run says it read", () => {
     workspaceName: null,
     entityId: "entity-1",
     fileFieldId: "field-1",
-    name: "Elixir SPA",
-    fileName: "elixir.docx",
+    name: "Precedent SPA",
+    fileName: "precedent.docx",
   };
 
   test("names the document, its version, the references, the playbook and the side", () => {
     expect(
       buildRunSummarySentence({
-        targetName: "Fusion SPA",
+        targetName: "Draft SPA",
         targetVersionNumber: 4,
         references: [reference],
         playbookName: "SPA (buyer)",
@@ -220,13 +220,13 @@ describe("what the run says it read", () => {
         proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
         sideLabel: "for the Purchaser",
       }),
-    ).toBe("Fusion SPA v4 · Elixir SPA · SPA (buyer) · for the Purchaser");
+    ).toBe("Draft SPA v4 · Precedent SPA · SPA (buyer) · for the Purchaser");
   });
 
   test("says where an unsaved run's positions came from, and that no side was chosen", () => {
     expect(
       buildRunSummarySentence({
-        targetName: "Fusion SPA",
+        targetName: "Draft SPA",
         targetVersionNumber: null,
         references: [reference],
         playbookName: "Positions confirmed for this review",
@@ -235,7 +235,7 @@ describe("what the run says it read", () => {
         sideLabel: NO_SIDE,
       }),
     ).toBe(
-      "Fusion SPA · Elixir SPA · positions proposed from the references · no side",
+      "Draft SPA · Precedent SPA · positions proposed from the references · no side",
     );
   });
 });
