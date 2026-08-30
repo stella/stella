@@ -7,50 +7,119 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+type Row = Record<string, unknown>;
+type QueuedRows = Row[] | (() => Row[]);
+
 type QueryBuilder = {
-  insert: () => QueryBuilder;
-  select: () => QueryBuilder;
+  for: () => QueryBuilder;
   from: () => QueryBuilder;
   innerJoin: () => QueryBuilder;
   leftJoin: () => QueryBuilder;
   where: () => QueryBuilder;
-  limit: () => Promise<Record<string, unknown>[]>;
-  values: () => Promise<Record<string, unknown>[]>;
+  limit: () => QueryBuilder;
+  returning: () => QueryBuilder;
+  set: () => QueryBuilder;
+  values: (rows: Row | Row[]) => QueryBuilder;
 };
 
-let nextRows: Record<string, unknown>[] = [];
-let scopedRows: Record<string, unknown>[][] = [];
+type QueryApi = {
+  delete: () => QueryBuilder;
+  execute: () => Promise<void>;
+  insert: () => QueryBuilder;
+  select: () => QueryBuilder;
+  update: () => QueryBuilder;
+};
+
+const resolveQueuedRows = (queued: QueuedRows | undefined): Row[] =>
+  typeof queued === "function" ? queued() : (queued ?? []);
+
+let nextRows: Row[] = [];
+let scopedRows: QueuedRows[] = [];
+let scopedLockRows: QueuedRows[] = [];
+let scopedPendingLockReads = 0;
+let scopedInsertedRows: Row[] = [];
+let scopedDeleteCalls = 0;
 let scopedFailure: Error | null = null;
 let scopedFailureAfterCalls = 0;
 let scopedCalls = 0;
-const builder: QueryBuilder = {
-  insert: () => builder,
-  select: () => builder,
-  from: () => builder,
-  innerJoin: () => builder,
-  leftJoin: () => builder,
-  where: () => builder,
-  limit: async () => nextRows,
-  values: async () => [],
+
+const createQueryBuilder = ({
+  captureValues = false,
+  onLock,
+  resolveRows,
+}: {
+  captureValues?: boolean;
+  onLock?: () => void;
+  resolveRows: (lockRead: boolean) => Row[];
+}): QueryBuilder => {
+  let lockRead = false;
+  const query = Promise.resolve().then(() => resolveRows(lockRead));
+  const builder: QueryBuilder = Object.assign(query, {
+    for: () => {
+      lockRead = true;
+      onLock?.();
+      return builder;
+    },
+    from: () => builder,
+    innerJoin: () => builder,
+    leftJoin: () => builder,
+    limit: () => builder,
+    returning: () => builder,
+    set: () => builder,
+    values: (rows: Row | Row[]) => {
+      if (captureValues) {
+        scopedInsertedRows.push(...(Array.isArray(rows) ? rows : [rows]));
+      }
+      return builder;
+    },
+    where: () => builder,
+  });
+  return builder;
 };
-const scopedBuilder: QueryBuilder = {
-  insert: () => scopedBuilder,
-  select: () => scopedBuilder,
-  from: () => scopedBuilder,
-  innerJoin: () => scopedBuilder,
-  leftJoin: () => scopedBuilder,
-  where: () => scopedBuilder,
-  limit: async () => scopedRows.shift() ?? [],
-  values: async () => [],
+
+const createScopedQueryBuilder = ({
+  captureValues = false,
+  readsRows = true,
+}: {
+  captureValues?: boolean;
+  readsRows?: boolean;
+} = {}): QueryBuilder =>
+  createQueryBuilder({
+    captureValues,
+    onLock: () => {
+      scopedPendingLockReads += 1;
+    },
+    resolveRows: (lockRead) => {
+      if (!readsRows) {
+        return [];
+      }
+      if (lockRead) {
+        scopedPendingLockReads -= 1;
+        return resolveQueuedRows(scopedLockRows.shift());
+      }
+      return resolveQueuedRows(scopedRows.shift());
+    },
+  });
+
+const scopedTransaction: QueryApi = {
+  delete: () => {
+    scopedDeleteCalls += 1;
+    return createScopedQueryBuilder();
+  },
+  execute: async () => undefined,
+  insert: () =>
+    createScopedQueryBuilder({ captureValues: true, readsRows: false }),
+  select: () => createScopedQueryBuilder(),
+  update: () => createScopedQueryBuilder(),
 };
 
 const createScopedDbTestDouble =
-  () => async (callback: (tx: QueryBuilder) => Promise<unknown>) => {
+  () => async (callback: (tx: QueryApi) => Promise<unknown>) => {
     scopedCalls += 1;
     if (scopedFailure !== null && scopedCalls > scopedFailureAfterCalls) {
       throw new Error(scopedFailure.message, { cause: scopedFailure });
     }
-    return await callback(scopedBuilder);
+    return await callback(scopedTransaction);
   };
 // Object storage is the real `lib/s3`, pointed at an in-process store: the
 // keys, content types and deletes below are the ones the module actually put
@@ -75,7 +144,10 @@ const createScopedDb = asTestRaw<
 >(createScopedDbTestDouble);
 const database = asTestRaw<
   NonNullable<Parameters<typeof authorizeFolioCollabRoom>[0]["db"]>
->({ select: () => builder });
+>({
+  select: () =>
+    createQueryBuilder({ resolveRows: () => resolveQueuedRows(nextRows) }),
+});
 
 const roomId = toSafeId<"folioCollabRoom">("fcr_1");
 const entityId = toSafeId<"entity">("entity_1");
@@ -96,6 +168,11 @@ afterEach(() => {
   scopedFailure = null;
   scopedFailureAfterCalls = 0;
   scopedCalls = 0;
+  scopedRows = [];
+  scopedLockRows = [];
+  scopedPendingLockReads = 0;
+  scopedInsertedRows = [];
+  scopedDeleteCalls = 0;
 });
 
 const snapshotKey = (fileId: string) =>
@@ -105,8 +182,6 @@ const snapshotKey = (fileId: string) =>
     organizationId,
     workspaceId,
   });
-
-type Row = Record<string, unknown>;
 
 const validRow = (overrides: Row = {}): Row => ({
   entityId,
@@ -329,6 +404,7 @@ describe("folio collaboration room snapshot generation", () => {
 
     scopedFailure = new Error("snapshot transaction failed");
     scopedFailureAfterCalls = 1;
+    scopedLockRows = [[{ status: "active" }]];
 
     expect(
       storeFolioCollabSnapshot({
@@ -373,19 +449,65 @@ describe("folio collaboration room snapshot generation", () => {
 });
 
 describe("folio collaboration room stored files", () => {
-  test("reserves cleanup before a snapshot write and retires it after publication", async () => {
-    const source = await Bun.file(
-      new URL("folio-collab-rooms.ts", import.meta.url),
-    ).text();
-    const reserve = source.indexOf(".insert(bufferObjectCleanupIntents)");
-    const write = source.indexOf("await writeS3ObjectWithRetry");
-    const publish = source.indexOf(".update(folioCollabRooms)", write);
-    const retire = source.indexOf(".delete(bufferObjectCleanupIntents)");
+  test("locks cleanup ownership and retires it when a snapshot publishes", async () => {
+    const authorized = await authorize(validRow());
+    expect(authorized.status).toBe("authorized");
+    if (authorized.status !== "authorized") {
+      return;
+    }
 
-    expect(reserve).toBeGreaterThan(-1);
-    expect(write).toBeGreaterThan(reserve);
-    expect(publish).toBeGreaterThan(write);
-    expect(retire).toBeGreaterThan(publish);
+    let intentLockRead = false;
+    scopedLockRows = [
+      [{ status: "active" }],
+      [{ status: "active" }],
+      [
+        {
+          generation: 3,
+          seedClaimedBy: firstUserId,
+          seedState: "claimed",
+          yjsSnapshotFileId,
+          yjsSnapshotRevision: 0,
+          yjsSnapshotUpdatedAt: null,
+        },
+      ],
+      () => {
+        intentLockRead = true;
+        const intentId = scopedInsertedRows.at(0)?.["id"];
+        return typeof intentId === "string"
+          ? [{ id: intentId, status: "writing" }]
+          : [];
+      },
+    ];
+    scopedRows = [
+      [{ snapshotRevision: 1 }],
+      () => {
+        const intentId = scopedInsertedRows.at(0)?.["id"];
+        return typeof intentId === "string" ? [{ id: intentId }] : [];
+      },
+    ];
+    const snapshotBytes = new TextEncoder().encode("snapshot");
+
+    const result = await storeFolioCollabSnapshot({
+      authority: { type: "participant", userId: firstUserId },
+      expectedGeneration: 3,
+      expectedSnapshotRevision: 0,
+      snapshotBytes,
+      value: authorized.value,
+    });
+
+    expect(result).toMatchObject({
+      snapshotRevision: 1,
+      sizeBytes: snapshotBytes.byteLength,
+      status: "stored",
+    });
+    expect(intentLockRead).toBe(true);
+    expect(scopedLockRows).toEqual([]);
+    expect(scopedPendingLockReads).toBe(0);
+    expect(scopedDeleteCalls).toBe(1);
+    expect(fake.requests.filter(({ method }) => method === "PUT")).toHaveLength(
+      1,
+    );
+    expect([...fake.objects.keys()]).toHaveLength(1);
   });
 
   test("collects only blobs that were durably written", () => {

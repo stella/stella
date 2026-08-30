@@ -139,14 +139,15 @@ export const docxSuggestions = p.pgTable(
       .index("docx_suggestions_ws_entity_created_idx")
       .on(table.workspaceId, table.entityId, table.createdAt, table.id),
     p
+      .index("docx_suggestions_source_data_workspace_ids_idx")
+      .using("gin", table.sourceDataWorkspaceIds),
+    p
       .foreignKey({
         name: "docx_suggestions_entity_fk",
         columns: [table.entityId, table.workspaceId],
         foreignColumns: [entities.id, entities.workspaceId],
       })
       .onDelete("cascade"),
-    // No index over the source matters: the scope is only ever read row-wise
-    // by the policy below, never searched.
     ...wsDataScopePolicies("source_data_workspace_ids"),
   ],
 );

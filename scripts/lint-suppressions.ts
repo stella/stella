@@ -143,9 +143,21 @@ export const TRACKED_SUPPRESSION_RULES = [
     guards: "audit rows written outside the audit-log recorder",
   },
   {
+    rule: "no-direct-buffer-cleanup-intent-delete/no-direct-buffer-cleanup-intent-delete",
+    tier: "security",
+    guards:
+      "publication recovery ownership retired outside its transaction boundary",
+  },
+  {
     rule: "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write",
     tier: "security",
     guards: "ingestion checkpoints advanced outside the replay-safe boundary",
+  },
+  {
+    rule: "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status",
+    tier: "security",
+    guards:
+      "cleanup-intent inserts that silently inherit a lifecycle state",
   },
   {
     rule: "require-query-limit/require-query-limit",

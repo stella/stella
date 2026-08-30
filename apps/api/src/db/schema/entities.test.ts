@@ -82,6 +82,14 @@ describe("storage-erasure outboxes", () => {
     expect(workspaceColumn?.notNull).toBe(false);
   });
 
+  test("an exact-key tombstone may name an organization-scoped writer", () => {
+    const workspaceColumn = getTableConfig(
+      bufferObjectCleanupIntents,
+    ).columns.find((column) => column.name === "workspace_id");
+
+    expect(workspaceColumn?.notNull).toBe(false);
+  });
+
   test("buffer object cleanup tombstones have a bounded scheduler index", () => {
     const scheduleIndex = getTableConfig(
       bufferObjectCleanupIntents,

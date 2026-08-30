@@ -77,7 +77,9 @@ runtime validation, or integration tests.
 - [`no-bare-jsonb-cast`](./no-bare-jsonb-cast.ts) (`no-bare-jsonb-cast`): rejects bare PostgreSQL JSONB casts that bypass the typed JSONB expression helper.
 - [`no-db-await-in-loop`](./no-db-await-in-loop.ts) (`no-db-await-in-loop`): catches database calls awaited serially in loops and unbounded `Promise.all` query fan-out.
 - [`no-direct-audit-log-insert`](./no-direct-audit-log-insert.ts) (`no-direct-audit-log-insert`): keeps audit-log insertion behind the canonical append-only audit service.
+- [`no-direct-buffer-cleanup-intent-delete`](./no-direct-buffer-cleanup-intent-delete.ts) (`no-direct-buffer-cleanup-intent-delete`): keeps publication-time cleanup-intent retirement behind the transaction-owned reconciliation helper; tests and the owning reconciliation module may delete directly.
 - [`no-direct-ingestion-checkpoint-write`](./no-direct-ingestion-checkpoint-write.ts) (`no-direct-ingestion-checkpoint-write`): keeps checkpoint writes behind the replay-safe ingestion coordination helper.
+- [`require-buffer-cleanup-intent-status`](./require-buffer-cleanup-intent-status.ts) (`require-buffer-cleanup-intent-status`): requires a non-undefined `status` on direct object-literal cleanup-intent inserts, including every direct object in an array; variable-built payloads are outside this syntax-only guard.
 - [`no-inline-timestamp-cursor-sql`](./no-inline-timestamp-cursor-sql.ts) (`no-inline-timestamp-cursor-sql`): requires shared timestamp-and-ID cursor predicates instead of hand-written comparison SQL.
 - [`no-naive-timestamp-cast`](./no-naive-timestamp-cast.ts) (`no-naive-timestamp-cast`): rejects timestamp casts that discard or assume timezone semantics.
 - [`queue-worker-error-sink`](./queue-worker-error-sink.ts) (`queue-worker-error-sink`): keeps a queue worker's `error` event on the throttled sink, so a Valkey disruption cannot log one line per failed poll.

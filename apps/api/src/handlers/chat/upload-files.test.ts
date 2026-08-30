@@ -31,6 +31,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
   canHydrateFilePartAsPlainText,
+  chatObjectCleanupWorkspaceIds,
   hydrateFilePart,
   uploadMessageFiles,
   uploadUserFile,
@@ -70,6 +71,9 @@ const makeDocxBytes = async (): Promise<Uint8Array> => {
   return new Uint8Array(await zip.generateAsync({ type: "uint8array" }));
 };
 const workspaceId = toSafeId<"workspace">("workspace_1");
+const uploadDependencies = {
+  reserveChatObjectCleanupIntent: async () => Result.ok([]),
+};
 
 describe("chat attachment hydration", () => {
   beforeEach(() => {
@@ -88,6 +92,17 @@ describe("chat attachment hydration", () => {
     expect(canHydrateFilePartAsPlainText(DOCX_MIME_TYPE)).toBe(true);
     expect(canHydrateFilePartAsPlainText(XLSX_MIME_TYPE)).toBe(true);
     expect(canHydrateFilePartAsPlainText(PDF_MIME_TYPE)).toBe(false);
+  });
+
+  test("assigns recovery ownership to every matter contributing to a chat", () => {
+    const otherWorkspaceId = toSafeId<"workspace">("workspace_2");
+
+    expect(
+      chatObjectCleanupWorkspaceIds({
+        dataWorkspaceIds: [otherWorkspaceId, workspaceId, otherWorkspaceId],
+        workspaceId,
+      }),
+    ).toEqual([otherWorkspaceId, workspaceId].sort());
   });
 
   test("coerces text-like attachments to a text content part (universal, never modality-gated)", async () => {
@@ -287,6 +302,7 @@ describe("chat attachment hydration", () => {
     );
 
     const uploadResult = await uploadUserFile({
+      dependencies: uploadDependencies,
       file: {
         bytes,
         fileName: "schedule.xlsx",
@@ -355,6 +371,7 @@ describe("chat attachment hydration", () => {
 
     const recordAuditEvent = mock(async () => undefined);
     const result = await uploadMessageFiles({
+      dependencies: uploadDependencies,
       message,
       recordAuditEvent,
       safeDb,
@@ -384,11 +401,38 @@ describe("chat attachment hydration", () => {
     const databaseError = new DatabaseError({
       message: "user file insert failed",
     });
-    const safeDb: SafeDb = async <T>(_fn: (tx: Transaction) => Promise<T>) =>
-      Result.err(databaseError);
+    const cleanupIntentId = toSafeId<"pendingUpload">(
+      "11111111-1111-4111-8111-111111111114",
+    );
+    const settleIntents = mock(async () => Result.ok(undefined));
+    const cleanupIntentRow = { id: cleanupIntentId, status: "writing" };
+    const testTx = asTestRaw<Transaction>({
+      insert: () => ({
+        values: async () => {
+          throw databaseError;
+        },
+      }),
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: async () => [cleanupIntentRow],
+          }),
+        }),
+      }),
+    });
+    const safeDb: SafeDb = async (callback) =>
+      Result.mapError(
+        await Result.tryPromise(async () => await callback(testTx)),
+        () => databaseError,
+      );
     const recordAuditEvent = mock(async () => undefined);
 
     const result = await uploadUserFile({
+      dependencies: {
+        reserveChatObjectCleanupIntent: async () =>
+          Result.ok([cleanupIntentId]),
+        settleObjectCleanupIntentsAfterWriter: settleIntents,
+      },
       file: {
         bytes: new TextEncoder().encode("confidential text"),
         fileName: "notes.txt",
@@ -410,6 +454,102 @@ describe("chat attachment hydration", () => {
     expect(requestKeys("DELETE")).toEqual(requestKeys("PUT"));
     expect([...fake.objects.keys()]).toEqual([`${bucket}/${ATTACHMENT_KEY}`]);
     expect(recordAuditEvent).not.toHaveBeenCalled();
+    expect(settleIntents).toHaveBeenCalledWith({
+      intentIds: [cleanupIntentId],
+      objectState: "object-deleted",
+      safeDb,
+    });
+  });
+
+  test("keeps write-uncertain thumbnail recovery after a later save failure", async () => {
+    const databaseError = new DatabaseError({
+      message: "user file insert failed",
+    });
+    const thumbnailWriteError = new Error("thumbnail write timed out");
+    const sourceCleanupIntentId = toSafeId<"pendingUpload">(
+      "11111111-1111-4111-8111-111111111114",
+    );
+    const thumbnailCleanupIntentId = toSafeId<"pendingUpload">(
+      "11111111-1111-4111-8111-111111111115",
+    );
+    let reservationCount = 0;
+    const reserveChatObjectCleanupIntent = mock(async () => {
+      reservationCount += 1;
+      if (reservationCount === 1) {
+        return Result.ok([sourceCleanupIntentId]);
+      }
+      return Result.ok([thumbnailCleanupIntentId]);
+    });
+    const settleIntents = mock(async () => Result.ok(undefined));
+    let putCount = 0;
+    const putS3ObjectWithSignal = mock(async () => {
+      putCount += 1;
+      if (putCount === 2) {
+        throw thumbnailWriteError;
+      }
+    });
+    const sourceIntentRow = {
+      id: sourceCleanupIntentId,
+      status: "writing",
+    };
+    const testTx = asTestRaw<Transaction>({
+      insert: () => ({
+        values: async () => {
+          throw databaseError;
+        },
+      }),
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: async () => [sourceIntentRow],
+          }),
+        }),
+      }),
+    });
+    const safeDb: SafeDb = async (callback) =>
+      Result.mapError(
+        await Result.tryPromise(async () => await callback(testTx)),
+        () => databaseError,
+      );
+
+    const imageBytes = Uint8Array.fromBase64(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+    );
+    const result = await uploadUserFile({
+      dependencies: {
+        generateImageThumbnail: async () =>
+          Result.ok({
+            placeholder: "data:image/png;base64,placeholder",
+            webp: new Uint8Array([1]),
+          }),
+        putS3ObjectWithSignal,
+        reserveChatObjectCleanupIntent,
+        settleObjectCleanupIntentsAfterWriter: settleIntents,
+      },
+      file: {
+        bytes: imageBytes,
+        fileName: "scan.png",
+        mimeType: IMAGE_PNG_MIME_TYPE,
+      },
+      recordAuditEvent: mock(async () => undefined),
+      safeDb,
+      threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111112"),
+      userId: toSafeId<"user">("11111111-1111-4111-8111-111111111113"),
+      workspaceId,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    expect(putS3ObjectWithSignal).toHaveBeenCalledTimes(2);
+    expect(settleIntents).toHaveBeenCalledWith({
+      intentIds: [thumbnailCleanupIntentId],
+      objectState: "write-uncertain",
+      safeDb,
+    });
+    expect(settleIntents).not.toHaveBeenCalledWith({
+      intentIds: [thumbnailCleanupIntentId],
+      objectState: "object-deleted",
+      safeDb,
+    });
   });
 
   test("stores a sanitized filename, whatever the caller supplied", async () => {
@@ -429,6 +569,7 @@ describe("chat attachment hydration", () => {
       await Result.tryPromise(async () => await callback(testTx));
 
     const result = await uploadUserFile({
+      dependencies: uploadDependencies,
       file: {
         bytes: new TextEncoder().encode("confidential text"),
         fileName: hostileName,

@@ -161,7 +161,15 @@
     "count": 0,
     "files": {}
   },
+  "no-direct-buffer-cleanup-intent-delete-suppressions": {
+    "count": 0,
+    "files": {}
+  },
   "no-direct-ingestion-checkpoint-write-suppressions": {
+    "count": 0,
+    "files": {}
+  },
+  "require-buffer-cleanup-intent-status-suppressions": {
     "count": 0,
     "files": {}
   },

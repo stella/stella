@@ -164,8 +164,12 @@
           "contains": ["RETRY_MAX_DELAY_MS"]
         },
         {
-          "path": "apps/api/src/handlers/workspaces/delete.ts",
-          "contains": ["status: \"deleting\"", ".delete(workspaces)"]
+          "path": "apps/api/src/lib/workspace-deletion.ts",
+          "contains": ["status: \"deleting\"", "completeWorkspaceDeletion"]
+        },
+        {
+          "path": "apps/api/src/lib/organization-storage-teardown.ts",
+          "contains": ["recordWorkspaceStorageTeardown", ".delete(workspaces)"]
         }
       ]
     },

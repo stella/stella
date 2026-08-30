@@ -5,7 +5,9 @@ import type { SQL } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
-import { fields } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
+import { fields, workspaces } from "@/api/db/schema";
 import { DERIVATIVE_FAILURE_REASON } from "@/api/db/schema-validators";
 import type {
   DerivativeFailureReason,
@@ -13,6 +15,15 @@ import type {
 } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  BUFFER_INTENT_DELETE_TIMEOUT_MS,
+  BUFFER_INTENT_WRITE_TIMEOUT_MS,
+  lockObjectCleanupIntentsForWriter,
+  objectWriterSettlementAfterCleanup,
+  reserveObjectCleanupIntent,
+  retirePublishedObjectCleanupIntentsInTransaction,
+  settleObjectCleanupIntentsAfterWriter,
+} from "@/api/lib/buffer-intent-reconciliation";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -35,8 +46,12 @@ import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
-import { createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
+import {
+  deleteS3ObjectWithSignal,
+  putS3ObjectWithSignal,
+  readS3ArrayBuffer,
+} from "@/api/lib/s3";
 import {
   brandPersistedEntityId,
   brandPersistedFieldId,
@@ -44,6 +59,7 @@ import {
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { processExtraction } from "@/api/lib/search/process-extraction";
+import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const QUEUE_NAME = "file-derivatives";
@@ -51,6 +67,60 @@ const GENERATE_PDF_JOB_NAME = "generate-pdf";
 const GENERATE_THUMBNAIL_JOB_NAME = "generate-thumbnail";
 const WORKER_CONCURRENCY = 3;
 const DEFAULT_JOB_ATTEMPTS = 3;
+
+const lockActiveWorkspaceForDerivative = async (
+  tx: Transaction,
+  workspaceId: SafeId<"workspace">,
+): Promise<boolean> => {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
+  const workspaceRows = await tx
+    .select({ status: workspaces.status })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1)
+    .for("update");
+  return workspaceRows.at(0)?.status === "active";
+};
+
+const cleanupUnpublishedDerivative = async ({
+  intentId,
+  objectKey,
+  safeDb,
+  telemetry,
+  writeState,
+}: {
+  intentId: SafeId<"pendingUpload">;
+  objectKey: string;
+  safeDb: SafeDb;
+  telemetry: Record<string, string>;
+  writeState: "confirmed" | "uncertain";
+}): Promise<void> => {
+  const cleanup = await Result.tryPromise({
+    try: async () =>
+      await withTimeout(
+        async (signal) => await deleteS3ObjectWithSignal(objectKey, signal),
+        {
+          label: "file-derivative-compensating-delete",
+          timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+        },
+      ),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(cleanup)) {
+    captureError(cleanup.error, telemetry);
+  }
+  const settlement = await settleObjectCleanupIntentsAfterWriter({
+    intentIds: [intentId],
+    objectState: objectWriterSettlementAfterCleanup({
+      cleanupSucceeded: Result.isOk(cleanup),
+      writeState,
+    }),
+    safeDb,
+  });
+  if (Result.isError(settlement)) {
+    captureError(settlement.error, telemetry);
+  }
+};
 
 /** Which derivative a job produces; also the job id's discriminating part. */
 export const FILE_DERIVATIVE_KIND = {
@@ -308,6 +378,11 @@ const processPdfDerivativeJob = async ({
     userId: brandPersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
+  const safeDb = createRootSafeDb({
+    organizationId: branded.organizationId,
+    userId: brandPersistedUserId(userId),
+    workspaceIds: [branded.workspaceId],
+  });
   const brandedEntityId = brandPersistedEntityId(entityId);
   const brandedFieldId = brandPersistedFieldId(fieldId);
 
@@ -363,20 +438,40 @@ const processPdfDerivativeJob = async ({
     fileId: pdfFileId,
     mimeType: PDF_MIME_TYPE,
   });
-
-  // The key is fixed by the job's derivative id, so a retry after an attempt
-  // died mid-write addresses the object that attempt left behind instead of
-  // adding a second one. That is also the deterministic-key contract
-  // writeS3ObjectWithRetry documents for its own attempts, which can time out
-  // here and still land in the bucket.
-  await writeS3ObjectWithRetry({
-    data: new Uint8Array(conversionResult.value.buffer),
-    key: pdfKey,
+  const cleanupIntent = await reserveObjectCleanupIntent({
+    objectKey: pdfKey,
+    organizationId: branded.organizationId,
+    safeDb,
+    workspaceId: branded.workspaceId,
   });
+  if (Result.isError(cleanupIntent)) {
+    throw cleanupIntent.error;
+  }
 
+  let writeState: "confirmed" | "uncertain" = "uncertain";
   try {
-    const updatedRows = await scopedDb((tx) =>
-      tx
+    await withTimeout(
+      async (signal) =>
+        await putS3ObjectWithSignal(
+          pdfKey,
+          new Uint8Array(conversionResult.value.buffer),
+          PDF_MIME_TYPE,
+          signal,
+        ),
+      {
+        label: "file-derivative-pdf-put",
+        timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+      },
+    );
+    writeState = "confirmed";
+    const publication = await scopedDb(async (tx) => {
+      if (!(await lockActiveWorkspaceForDerivative(tx, branded.workspaceId))) {
+        return "workspace-inactive" as const;
+      }
+      await lockObjectCleanupIntentsForWriter(tx, [cleanupIntent.value]);
+      // Publish the pointer only while the workspace and exact-key ownership
+      // are still live. Lifecycle cleanup wins the same locks when it seals.
+      const updatedRows = await tx
         .update(fields)
         .set({
           content: readyPdfDerivativeContent(pdfFileId),
@@ -391,22 +486,41 @@ const processPdfDerivativeJob = async ({
             sql`coalesce(${fields.content}->'pdfDerivative'->>'status', 'pending') = 'pending'`,
           ),
         )
-        .returning({ id: fields.id }),
-    );
+        .returning({ id: fields.id });
+      if (updatedRows.length !== 1) {
+        return "stale" as const;
+      }
+      await retirePublishedObjectCleanupIntentsInTransaction({
+        intentIds: [cleanupIntent.value],
+        tx,
+      });
+      return "published" as const;
+    });
 
-    if (updatedRows.length === 0) {
-      await getS3().delete(pdfKey);
+    if (publication !== "published") {
+      await cleanupUnpublishedDerivative({
+        intentId: cleanupIntent.value,
+        objectKey: pdfKey,
+        safeDb,
+        telemetry: {
+          fieldId: brandedFieldId,
+          workspaceId: branded.workspaceId,
+        },
+        writeState,
+      });
       return;
     }
   } catch (error) {
-    await getS3()
-      .delete(pdfKey)
-      .catch((deleteError: unknown) => {
-        captureError(deleteError, {
-          fieldId: brandedFieldId,
-          workspaceId: branded.workspaceId,
-        });
-      });
+    await cleanupUnpublishedDerivative({
+      intentId: cleanupIntent.value,
+      objectKey: pdfKey,
+      safeDb,
+      telemetry: {
+        fieldId: brandedFieldId,
+        workspaceId: branded.workspaceId,
+      },
+      writeState,
+    });
     throw error;
   }
 
@@ -490,6 +604,11 @@ const processImageThumbnailJob = async ({
     userId: brandPersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
+  const safeDb = createRootSafeDb({
+    organizationId: branded.organizationId,
+    userId: brandPersistedUserId(userId),
+    workspaceIds: [branded.workspaceId],
+  });
   const brandedFieldId = brandPersistedFieldId(fieldId);
 
   const row = await scopedDb((tx) =>
@@ -544,16 +663,38 @@ const processImageThumbnailJob = async ({
     fileId: thumbnailFileId,
     mimeType: THUMBNAIL_MIME_TYPE,
   });
-
-  // Same fixed key across this job's attempts as the PDF path above.
-  await writeS3ObjectWithRetry({
-    data: thumbnailResult.value.webp,
-    key: thumbnailKey,
+  const cleanupIntent = await reserveObjectCleanupIntent({
+    objectKey: thumbnailKey,
+    organizationId: branded.organizationId,
+    safeDb,
+    workspaceId: branded.workspaceId,
   });
+  if (Result.isError(cleanupIntent)) {
+    throw cleanupIntent.error;
+  }
 
+  let writeState: "confirmed" | "uncertain" = "uncertain";
   try {
-    const updatedRows = await scopedDb((tx) =>
-      tx
+    await withTimeout(
+      async (signal) =>
+        await putS3ObjectWithSignal(
+          thumbnailKey,
+          thumbnailResult.value.webp,
+          THUMBNAIL_MIME_TYPE,
+          signal,
+        ),
+      {
+        label: "file-derivative-thumbnail-put",
+        timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+      },
+    );
+    writeState = "confirmed";
+    const publication = await scopedDb(async (tx) => {
+      if (!(await lockActiveWorkspaceForDerivative(tx, branded.workspaceId))) {
+        return "workspace-inactive" as const;
+      }
+      await lockObjectCleanupIntentsForWriter(tx, [cleanupIntent.value]);
+      const updatedRows = await tx
         .update(fields)
         .set({
           content: readyThumbnailContent(
@@ -571,22 +712,41 @@ const processImageThumbnailJob = async ({
             sql`coalesce(${fields.content}->'thumbnailDerivative'->>'status', 'pending') = 'pending'`,
           ),
         )
-        .returning({ id: fields.id }),
-    );
+        .returning({ id: fields.id });
+      if (updatedRows.length !== 1) {
+        return "stale" as const;
+      }
+      await retirePublishedObjectCleanupIntentsInTransaction({
+        intentIds: [cleanupIntent.value],
+        tx,
+      });
+      return "published" as const;
+    });
 
-    if (updatedRows.length === 0) {
-      await getS3().delete(thumbnailKey);
+    if (publication !== "published") {
+      await cleanupUnpublishedDerivative({
+        intentId: cleanupIntent.value,
+        objectKey: thumbnailKey,
+        safeDb,
+        telemetry: {
+          fieldId: brandedFieldId,
+          workspaceId: branded.workspaceId,
+        },
+        writeState,
+      });
       return;
     }
   } catch (error) {
-    await getS3()
-      .delete(thumbnailKey)
-      .catch((deleteError: unknown) => {
-        captureError(deleteError, {
-          fieldId: brandedFieldId,
-          workspaceId: branded.workspaceId,
-        });
-      });
+    await cleanupUnpublishedDerivative({
+      intentId: cleanupIntent.value,
+      objectKey: thumbnailKey,
+      safeDb,
+      telemetry: {
+        fieldId: brandedFieldId,
+        workspaceId: branded.workspaceId,
+      },
+      writeState,
+    });
     throw error;
   }
 

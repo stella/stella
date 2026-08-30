@@ -1189,18 +1189,25 @@ export const pendingUploads = p.pgTable(
   ],
 );
 
+export const BUFFER_OBJECT_CLEANUP_INTENT_STATUS = {
+  ORPHANED: "orphaned",
+  RECOVERING: "recovering",
+  WRITING: "writing",
+} as const;
+
 /**
  * Durable tombstones for server-generated object writes interrupted by a
- * workspace or account deletion.
+ * workspace, organization, or account deletion.
  *
  * This table has NO foreign keys, to any ancestor, including `organization`,
  * and `entities.test.ts` fails if one is added. The tombstone is the only
  * record that a reserved key may still be published: recovery must outlive the
- * workspace cascade and the user cleanup that interrupted the write, until the
- * original writer confirms it can no longer publish. The reserved key is a
- * finalized `{org}/{workspace}/{file}` key built by `createFileKey`, which no
- * bucket lifecycle rule expires and no prefix sweep can find, so cascading the
- * tombstone away leaves the object stranded rather than cleaned up.
+ * owner cascade and the cleanup that interrupted the write, until the original
+ * writer confirms it can no longer publish or the bounded late-write
+ * quarantine completes. Matter writers reserve a finalized
+ * `{org}/{workspace}/{file}` key; organization-scoped chat writers reserve
+ * their `{user}/{file}` key with a null workspace. No bucket lifecycle rule
+ * expires either class and no prefix sweep can rediscover one.
  *
  * Adding an ancestor reference is therefore only safe once that ancestor's
  * deletion performs its own storage teardown. Until then tenancy stays a plain
@@ -1211,34 +1218,103 @@ export const bufferObjectCleanupIntents = p.pgTable(
   {
     id: pUuid<"pendingUpload">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
-    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id"),
+    // Deliberately not a foreign key: the cleanup proof must outlive its chat.
+    chatThreadId: safeUuid<"chatThread">("chat_thread_id"),
+    // No FK: a writer must retain settlement authority after its owning
+    // workspace, thread, or organization has been removed.
+    writerUserId: p
+      .text("writer_user_id")
+      .$type<SafeId<"user">>()
+      // PostgreSQL deparses this built-in without its implicit pg_catalog
+      // qualifier and with an explicit text cast; matching that canonical form
+      // keeps schema parity stable.
+      .default(sql`current_setting('app.user_id'::text, true)`),
     objectKey: p.text("object_key").notNull(),
+    status: p
+      .text({
+        enum: [
+          BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+          BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
+          BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
+        ],
+      })
+      .notNull()
+      .default(BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING),
     attemptCount: p.integer("attempt_count").notNull().default(0),
     nextAttemptAt: timestamptz("next_attempt_at").notNull().defaultNow(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
-  (table) => [
-    p
-      .index("buffer_object_cleanup_schedule_idx")
-      .on(table.nextAttemptAt, table.id),
-    p.check(
-      "buffer_object_cleanup_attempt_count_nonnegative_check",
-      sql`${table.attemptCount} >= 0`,
-    ),
-    // Lifecycle deletion may transfer the intent through its scoped
-    // transaction. The original scoped writer may remove it only after its
-    // PUT settles and exact-key cleanup succeeds; retry reads stay root-only.
-    p.pgPolicy("buffer_object_cleanup_insert", {
-      for: "insert",
-      to: stella,
-      withCheck: sql`${workspaceCheck} AND ${organizationCheck}`,
-    }),
-    p.pgPolicy("buffer_object_cleanup_delete", {
-      for: "delete",
-      to: stella,
-      using: sql`${workspaceCheck} AND ${organizationCheck}`,
-    }),
-  ],
+  (table) => {
+    const ownerScopeAccess = sql`((
+      ${table.chatThreadId} IS NOT NULL
+      AND pg_catalog.split_part(${table.objectKey}, '/', 1) = (SELECT pg_catalog.current_setting('app.user_id', true))
+      AND EXISTS (
+        SELECT 1 FROM chat_threads ct
+        WHERE ct.id = ${table.chatThreadId}
+          AND ct.organization_id = ${table.organizationId}
+          AND ct.user_id = (SELECT pg_catalog.current_setting('app.user_id', true))
+          AND (
+            (${table.workspaceId} IS NULL AND ct.workspace_id IS NULL AND pg_catalog.cardinality(ct.data_workspace_ids) = 0)
+            OR (${table.workspaceId} IS NOT NULL AND (ct.workspace_id = ${table.workspaceId} OR ct.data_workspace_ids @> ARRAY[${table.workspaceId}]::uuid[]))
+          )
+      )
+    ) OR (
+      ${table.chatThreadId} IS NULL
+      AND ${table.workspaceId} IS NOT NULL
+      AND ${workspaceCheck}
+      AND pg_catalog.split_part(${table.objectKey}, '/', 1) = ${table.organizationId}
+      AND pg_catalog.split_part(${table.objectKey}, '/', 2) = ${table.workspaceId}::text
+    ))`;
+    const writerSettlementAccess = sql`
+      ${table.writerUserId} = (SELECT pg_catalog.current_setting('app.user_id', true))
+    `;
+    const scopedAccess = sql`${organizationCheck} AND (${ownerScopeAccess} OR ${writerSettlementAccess})`;
+
+    return [
+      p
+        .index("buffer_object_cleanup_schedule_idx")
+        .on(table.nextAttemptAt, table.id),
+      p
+        .index("buffer_object_cleanup_workspace_idx")
+        .on(table.workspaceId, table.id),
+      p
+        .index("buffer_object_cleanup_organization_idx")
+        .on(table.organizationId, table.id),
+      p.check(
+        "buffer_object_cleanup_attempt_count_nonnegative_check",
+        sql`${table.attemptCount} >= 0`,
+      ),
+      p.check(
+        "buffer_object_cleanup_status_check",
+        sql`${table.status} IN (${BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED}, ${BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING}, ${BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING})`,
+      ),
+      // Lifecycle deletion may transfer the intent through its scoped
+      // transaction. The original scoped writer may remove it only after its
+      // PUT settles and exact-key cleanup succeeds. Scoped reads expose only the
+      // opaque id and state needed for that lock; recovery reads stay root-only.
+      p.pgPolicy("buffer_object_cleanup_insert", {
+        for: "insert",
+        to: stella,
+        withCheck: sql`${organizationCheck} AND ${writerSettlementAccess} AND ${ownerScopeAccess}`,
+      }),
+      p.pgPolicy("buffer_object_cleanup_select", {
+        for: "select",
+        to: stella,
+        using: scopedAccess,
+      }),
+      p.pgPolicy("buffer_object_cleanup_update", {
+        for: "update",
+        to: stella,
+        using: scopedAccess,
+      }),
+      p.pgPolicy("buffer_object_cleanup_delete", {
+        for: "delete",
+        to: stella,
+        using: scopedAccess,
+      }),
+    ];
+  },
 );
 
 export const fields = p.pgTable(

@@ -235,6 +235,12 @@ export const chatThreads = p.pgTable(
     p
       .index("chat_threads_org_user_updated_id_idx")
       .on(table.organizationId, table.userId, table.updatedAt, table.id),
+    p
+      .index("chat_threads_context_matter_ids_idx")
+      .using("gin", table.contextMatterIds),
+    p
+      .index("chat_threads_data_workspace_ids_idx")
+      .using("gin", table.dataWorkspaceIds),
     p.index("chat_threads_user_updated_idx").on(table.userId, table.updatedAt),
     // Serves the compactor's claim seek: due threads oldest-first, with
     // never-attempted work ahead of previously failed work.
@@ -819,6 +825,9 @@ export const chatThreadCompactions = p.pgTable(
     p
       .index("chat_thread_compactions_thread_status_created_idx")
       .on(table.threadId, table.status, table.createdAt),
+    p
+      .index("chat_thread_compactions_memory_data_workspace_ids_idx")
+      .using("gin", table.memoryExtractionDataWorkspaceIds),
     p
       .foreignKey({
         name: "chat_compactions_memory_extraction_org_fk",

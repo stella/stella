@@ -783,8 +783,7 @@ const handleDeleteMatterTool: TypedMcpToolHandler<
 
   const deleted = await Result.gen(() =>
     deleteWorkspaceHandler({
-      scopedDb: context.scopedDb,
-      safeDb: context.safeDb,
+      actorUserId: context.userId,
       workspaceId,
       organizationId: context.organizationId,
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),

@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import { errorTag } from "@/api/lib/errors/utils";
+import { logger } from "@/api/lib/observability/logger";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const CLEANUP_HANDOFF_TIMEOUT_MS = 2000;
@@ -40,7 +42,16 @@ export const handoffCommittedEntityDeletionCleanup = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(enqueueResult)) {
-    captureDeliveryError(enqueueResult.error, { requestId });
+    const captureResult = Result.try({
+      try: () => captureDeliveryError(enqueueResult.error, { requestId }),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(captureResult)) {
+      logger.warn("entity_deletion_cleanup.delivery_capture_failed", {
+        "error.type": errorTag(captureResult.error),
+        requestId,
+      });
+    }
   }
 };
 

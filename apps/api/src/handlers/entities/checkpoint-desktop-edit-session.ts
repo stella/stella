@@ -1,11 +1,11 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
-import { desktopEditSessions } from "@/api/db/schema";
+import { desktopEditSessions, workspaces } from "@/api/db/schema";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -155,6 +155,19 @@ export const checkpointDesktopEditSessionHandler = async ({
   });
 
   const result = await authorizedSession.value.scopedDb(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${authorizedSession.value.workspaceId}))`,
+    );
+    const workspaceRows = await tx
+      .select({ status: workspaces.status })
+      .from(workspaces)
+      .where(eq(workspaces.id, authorizedSession.value.workspaceId))
+      .limit(1)
+      .for("update");
+    if (workspaceRows.at(0)?.status !== "active") {
+      return status(409, { message: "Workspace is not active" });
+    }
+
     const existingSessions = await tx
       .select({
         checkpointFileId: desktopEditSessions.checkpointFileId,
