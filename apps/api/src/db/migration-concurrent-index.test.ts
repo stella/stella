@@ -96,6 +96,9 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // generation. The static body performs one bounded existence read over
   // corpus_index_generations and raises; it executes no dynamic SQL.
   "20260826004000_corpus_index_serving_generation/migration.sql:3cf1be3c49aad9abb99793f955b1c60e6d4fc5926ca1538e9ae2419a14242738",
+  // Adds the cleanup-status CHECK only when absent. The body is static DDL;
+  // the conditional makes a partially applied migration retryable.
+  "20260830150000_workspace_reference_cleanup_indexes/migration.sql:157817473ab2cf147be3836c532ca148079553e488ae4df0bdb9ae19ecaa32e2",
 ]);
 
 type TimeoutState = "bounded" | "unbounded" | "unset";
