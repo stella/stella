@@ -56,7 +56,10 @@ const seed = (items: ReturnType<typeof provision>[]) => {
 describe("ProvisionsCited", () => {
   test("says nothing about a decision that applies no provisions", () => {
     expect(
-      renderPanel(<ProvisionsCited decisionId={decisionId} />, seed([])),
+      renderPanel(
+        <ProvisionsCited decisionId={decisionId} isHydrated />,
+        seed([]),
+      ),
     ).toBe("");
   });
 

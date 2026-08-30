@@ -25,7 +25,10 @@ import {
   streamTanStackObjectForRole,
   streamTanStackTextForRole,
 } from "@/api/lib/tanstack-ai-generate";
-import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import {
+  type ResolvedTanStackTextModel,
+  tanStackModelOptionsForRole,
+} from "@/api/lib/tanstack-ai-models";
 import {
   projectSchemaInputJsonSchema,
   toTanStackValibotSchema,
@@ -821,15 +824,13 @@ describe("Anthropic extended-thinking budgets", () => {
     for (const modelId of BYOK_MODEL_OPTIONS.anthropic) {
       for (const role of MODEL_ROLES) {
         for (const reasoningEffort of [undefined, ...REASONING_EFFORTS]) {
-          const modelOptions = realTanStackAIModels.tanStackModelOptionsForRole(
-            {
-              modelId,
-              organizationId: null,
-              provider: "anthropic",
-              reasoningEffort,
-              role,
-            },
-          );
+          const modelOptions = tanStackModelOptionsForRole({
+            modelId,
+            organizationId: null,
+            provider: "anthropic",
+            reasoningEffort,
+            role,
+          });
           // SAFETY: mergeGenerationOptions only reads
           // provider/modelOptions/modelId. The adapter is irrelevant for this
           // pure option-merge invariant.
