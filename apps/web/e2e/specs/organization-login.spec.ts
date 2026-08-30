@@ -56,7 +56,10 @@ const createOrganizationSelectionSession = async ({
   };
   const inviteResponse = await ownerApi.post(
     `${API_BASE_URL}/api/auth/organization/invite-member`,
-    { data: { email, role: "member" } },
+    {
+      data: { email, role: "member" },
+      headers: requestOptions.extraHTTPHeaders,
+    },
   );
   const invitation: unknown = await inviteResponse.json();
   expect(inviteResponse.ok(), JSON.stringify(invitation)).toBe(true);
