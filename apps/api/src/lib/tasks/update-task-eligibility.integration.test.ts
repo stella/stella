@@ -22,6 +22,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -78,14 +79,16 @@ const changeListItemType = async (
   listItemType: "task" | "fact",
 ) =>
   await Result.gen(() =>
-    updateTaskHandler({
-      safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-      workspaceId: ids.wsA1,
-      userId: ids.userA1,
-      recordAuditEvent: async () => undefined,
-      body: { taskId, listItemType },
-      features: FEATURES_ENABLED,
-    }),
+    updateTaskHandler(
+      asTestRaw<Parameters<typeof updateTaskHandler>[0]>({
+        safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+        recordAuditEvent: async () => undefined,
+        body: { taskId, listItemType },
+        features: FEATURES_ENABLED,
+      }),
+    ),
   );
 
 const storedListItemType = async (entityId: SafeId<"entity">) => {
