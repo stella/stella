@@ -1,9 +1,12 @@
+import { Result, panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
+  BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
   bufferObjectCleanupIntents,
   chatThreads,
   desktopEditSessions,
@@ -23,8 +26,13 @@ import {
 } from "@/api/db/schema";
 import type { PendingUploadPurposeData } from "@/api/db/schema";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
+import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  lockObjectCleanupIntentsForWriter,
+  reserveObjectCleanupIntents,
+} from "@/api/lib/buffer-intent-reconciliation";
 import {
   completeOrganizationDeletion,
   OrganizationStorageTeardownBoundError,
@@ -71,8 +79,12 @@ type Fixture = {
   checkpointKey: string;
   collabDocxKey: string;
   collabSnapshotKey: string;
+  foreignOrganizationWriterRejected: boolean;
+  globalChatAttachmentKey: string;
   ocrKey: string;
   organizationId: SafeId<"organization">;
+  organizationWriterIntentId: SafeId<"pendingUpload">;
+  organizationWriterKey: string;
   otherChatAttachmentKey: string;
   otherOrganizationId: SafeId<"organization">;
   otherTemplateKey: string;
@@ -413,11 +425,82 @@ beforeAll(async () => {
     userId,
     workspaceId: firstWorkspaceId,
   });
+  const globalAttachment = await seedChatAttachment({
+    organizationId,
+    thumbnailFileId: null,
+    userId,
+    workspaceId: null,
+  });
   const otherAttachment = await seedChatAttachment({
     organizationId: otherOrganizationId,
     thumbnailFileId: null,
     userId,
     workspaceId: otherWorkspaceId,
+  });
+  const organizationWriterKey = `${userId}/${uuid()}.txt`;
+  const scopedSafeDb = asTestRaw<SafeDb>(
+    createSafeDb(testDb, [], organizationId, userId),
+  );
+  const organizationWriterIntent = await reserveObjectCleanupIntents({
+    chatThreadId: globalAttachment.threadId,
+    objectKey: organizationWriterKey,
+    organizationId,
+    safeDb: scopedSafeDb,
+    workspaceIds: [],
+  });
+  if (Result.isError(organizationWriterIntent)) {
+    throw organizationWriterIntent.error;
+  }
+  const visibleThread = await scopedSafeDb(
+    async (tx) =>
+      await tx
+        .select({ id: chatThreads.id })
+        .from(chatThreads)
+        .where(eq(chatThreads.id, globalAttachment.threadId)),
+  );
+  if (Result.isError(visibleThread)) {
+    throw visibleThread.error;
+  }
+  if (visibleThread.value.length !== 1) {
+    panic("Organization-scoped chat thread is not visible to its writer");
+  }
+  const visibleIntent = await scopedSafeDb(
+    async (tx) =>
+      await tx
+        .select({
+          id: bufferObjectCleanupIntents.id,
+          status: bufferObjectCleanupIntents.status,
+        })
+        .from(bufferObjectCleanupIntents)
+        .where(
+          eq(
+            bufferObjectCleanupIntents.id,
+            organizationWriterIntent.value.at(0) ??
+              panic("Organization writer reservation returned no intent"),
+          ),
+        ),
+  );
+  if (Result.isError(visibleIntent)) {
+    throw visibleIntent.error;
+  }
+  if (
+    visibleIntent.value.at(0)?.status !==
+    BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING
+  ) {
+    panic("Organization-scoped cleanup intent is not visible to its writer");
+  }
+  const writerLock = await scopedSafeDb(async (tx) => {
+    await lockObjectCleanupIntentsForWriter(tx, organizationWriterIntent.value);
+  });
+  if (Result.isError(writerLock)) {
+    throw writerLock.error;
+  }
+  const foreignOrganizationWriter = await reserveObjectCleanupIntents({
+    chatThreadId: globalAttachment.threadId,
+    objectKey: `another-user/${uuid()}.txt`,
+    organizationId,
+    safeDb: scopedSafeDb,
+    workspaceIds: [],
   });
 
   fixture = {
@@ -426,8 +509,16 @@ beforeAll(async () => {
     checkpointKey: `${organizationId}/${firstWorkspaceId}/${checkpointFileId}.docx`,
     collabDocxKey: `${organizationId}/${secondWorkspaceId}/${collabDocxFileId}.docx`,
     collabSnapshotKey: `${organizationId}/${secondWorkspaceId}/${collabSnapshotFileId}.bin`,
+    foreignOrganizationWriterRejected: Result.isError(
+      foreignOrganizationWriter,
+    ),
+    globalChatAttachmentKey: globalAttachment.s3Key,
     ocrKey: `${organizationId}/${firstWorkspaceId}/ocr/${runId}.pdf`,
     organizationId,
+    organizationWriterIntentId:
+      organizationWriterIntent.value.at(0) ??
+      panic("Organization writer reservation returned no intent"),
+    organizationWriterKey,
     otherChatAttachmentKey: otherAttachment.s3Key,
     otherOrganizationId,
     otherTemplateKey,
@@ -520,6 +611,10 @@ const recordedKeys = async (
 };
 
 describe("organization deletion storage teardown", () => {
+  test("organization-scoped writer ownership stays pinned to the user key", () => {
+    expect(fixture.foreignOrganizationWriterRejected).toBe(true);
+  });
+
   test("records every stored object the organization owns", async () => {
     // Declared set equals recorded set, in both directions: a storage class the
     // enumeration forgets fails here, and so does a key it invents.
@@ -530,6 +625,7 @@ describe("organization deletion storage teardown", () => {
         fixture.checkpointKey,
         fixture.collabDocxKey,
         fixture.collabSnapshotKey,
+        fixture.globalChatAttachmentKey,
         fixture.ocrKey,
         fixture.pdfKey,
         fixture.pendingFinalKey,
@@ -564,17 +660,31 @@ describe("organization deletion storage teardown", () => {
     expect(rows.filter((row) => !pageKeysMatchScope(row))).toEqual([]);
   });
 
-  test("hands a still-publishable upload key to the buffer tombstone", async () => {
+  test("hands every still-publishable key to the buffer tombstone", async () => {
     const intents = await testDb
-      .select({ objectKey: bufferObjectCleanupIntents.objectKey })
+      .select({
+        id: bufferObjectCleanupIntents.id,
+        objectKey: bufferObjectCleanupIntents.objectKey,
+        status: bufferObjectCleanupIntents.status,
+        workspaceId: bufferObjectCleanupIntents.workspaceId,
+      })
       .from(bufferObjectCleanupIntents)
       .where(
         eq(bufferObjectCleanupIntents.organizationId, fixture.organizationId),
       );
 
-    expect(intents.map(({ objectKey }) => objectKey)).toEqual([
-      fixture.pendingFinalKey,
-    ]);
+    expect(intents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ objectKey: fixture.pendingFinalKey }),
+        {
+          id: fixture.organizationWriterIntentId,
+          objectKey: fixture.organizationWriterKey,
+          status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.CLEANUP,
+          workspaceId: null,
+        },
+      ]),
+    );
+    expect(intents).toHaveLength(2);
   });
 
   test("leaves another organization's storage alone", async () => {
@@ -661,6 +771,6 @@ describe("organization deletion storage teardown", () => {
       .where(
         eq(bufferObjectCleanupIntents.organizationId, fixture.organizationId),
       );
-    expect(intents.length).toBe(1);
+    expect(intents.length).toBe(2);
   });
 });

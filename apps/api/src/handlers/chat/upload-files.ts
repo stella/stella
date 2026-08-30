@@ -10,7 +10,11 @@ import { isChatFileMimeType } from "@stll/api-contract/chat-file-types";
 import { docxToMarkdown } from "@stll/folio-core/server";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { userFiles } from "@/api/db/schema";
+import {
+  bufferObjectCleanupIntents,
+  chatThreads,
+  userFiles,
+} from "@/api/db/schema";
 import {
   CHAT_MAX_FILE_BYTES,
   TEXT_CSV_MIME_TYPE,
@@ -32,6 +36,11 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  BUFFER_INTENT_WRITE_TIMEOUT_MS,
+  lockObjectCleanupIntentsForWriter,
+  reserveObjectCleanupIntents,
+} from "@/api/lib/buffer-intent-reconciliation";
+import {
   isDataUrlSizeLimitError,
   parseDataUrl,
   toDataUrl,
@@ -45,10 +54,11 @@ import {
 } from "@/api/lib/files/image-derivative";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { getS3, putS3ObjectWithSignal, readS3ArrayBuffer } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { isUserFileUrl, toUserFileUrl } from "@/api/lib/user-files/types";
+import { withTimeout } from "@/api/lib/with-timeout";
 import { DOCX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 
 import type {
@@ -64,6 +74,7 @@ export type UserFileThreadAccess = {
 };
 
 type UploadMessageFilesProps = {
+  dependencies?: UploadUserFileDependencies;
   message: PersistableChatMessage;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
@@ -89,6 +100,7 @@ type UploadedChatMessage = {
 };
 
 export const uploadMessageFiles = async ({
+  dependencies,
   message,
   recordAuditEvent,
   safeDb,
@@ -143,6 +155,7 @@ export const uploadMessageFiles = async ({
 
     // oxlint-disable-next-line no-await-in-loop -- sequential per-file upload + DB write preserving parts order, with rollback on error
     const uploadedFile = await uploadUserFile({
+      ...(dependencies === undefined ? {} : { dependencies }),
       file: parsedPart.value,
       recordAuditEvent,
       safeDb,
@@ -520,7 +533,75 @@ export const hydrateFilePart = async ({
     return Result.ok<HydratedFilePart>(createBlockedHydratedFilePart());
   });
 
+type ReserveChatObjectCleanupIntent = (options: {
+  objectKey: string;
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+}) => Promise<
+  Result<SafeId<"pendingUpload">[], SafeDbError | HandlerError<400>>
+>;
+
+type UploadUserFileDependencies = {
+  reserveChatObjectCleanupIntent?: ReserveChatObjectCleanupIntent;
+};
+
+export const chatObjectCleanupWorkspaceIds = ({
+  dataWorkspaceIds,
+  workspaceId,
+}: {
+  dataWorkspaceIds: SafeId<"workspace">[];
+  workspaceId: SafeId<"workspace"> | null;
+}): SafeId<"workspace">[] =>
+  [
+    ...new Set(
+      [workspaceId, ...dataWorkspaceIds].filter(
+        (candidate): candidate is SafeId<"workspace"> => candidate !== null,
+      ),
+    ),
+  ].sort();
+
+const reserveChatObjectCleanupIntent: ReserveChatObjectCleanupIntent = async (
+  options,
+) => {
+  const { objectKey, safeDb, threadId } = options;
+  const threadScopeResult = await safeDb(
+    async (tx) =>
+      await tx
+        .select({
+          dataWorkspaceIds: chatThreads.dataWorkspaceIds,
+          organizationId: chatThreads.organizationId,
+          workspaceId: chatThreads.workspaceId,
+        })
+        .from(chatThreads)
+        .where(eq(chatThreads.id, threadId))
+        .limit(1)
+        .then((rows) => rows.at(0) ?? null),
+  );
+  if (Result.isError(threadScopeResult)) {
+    return Result.err(threadScopeResult.error);
+  }
+  if (threadScopeResult.value === null) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Chat thread no longer exists",
+      }),
+    );
+  }
+  const cleanupWorkspaceIds = chatObjectCleanupWorkspaceIds(
+    threadScopeResult.value,
+  );
+  return await reserveObjectCleanupIntents({
+    chatThreadId: threadId,
+    objectKey,
+    organizationId: threadScopeResult.value.organizationId,
+    safeDb,
+    workspaceIds: cleanupWorkspaceIds,
+  });
+};
+
 type UploadUserFileInput = {
+  dependencies?: UploadUserFileDependencies;
   file: {
     bytes: Uint8Array;
     fileName: string;
@@ -534,6 +615,7 @@ type UploadUserFileInput = {
 };
 
 export const uploadUserFile = async ({
+  dependencies,
   file,
   recordAuditEvent,
   safeDb,
@@ -542,6 +624,9 @@ export const uploadUserFile = async ({
   workspaceId,
 }: UploadUserFileInput) =>
   await Result.gen(async function* () {
+    const reserveCleanupIntent =
+      dependencies?.reserveChatObjectCleanupIntent ??
+      reserveChatObjectCleanupIntent;
     // Enforce the MIME allowlist at the storage boundary, not only in
     // validateChatFileParts at message-send: user files are later served
     // inline (Content-Disposition without a filename), so a stored
@@ -622,29 +707,15 @@ export const uploadUserFile = async ({
       );
     }
 
-    yield* Result.await(
-      Result.tryPromise({
-        try: async () =>
-          await writeS3ObjectWithRetry({
-            contentType: file.mimeType,
-            data: file.bytes,
-            key: s3Key,
-          }),
-        catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Failed to store chat attachment",
-            cause,
-          }),
-      }),
-    );
-
     // Best-effort image thumbnail + blur placeholder. A failure here never
     // blocks the upload: the original still serves; the row just carries no
     // derivative.
-    let thumbnailFileId: string | null = null;
-    let placeholder: string | null = null;
-    let thumbnailKey: string | null = null;
+    let preparedThumbnail: {
+      bytes: Uint8Array;
+      fileId: string;
+      key: string;
+      placeholder: string;
+    } | null = null;
     if (shouldGenerateImageThumbnail({ mimeType: file.mimeType })) {
       const thumbnailResult = await generateImageThumbnail(file.bytes);
       if (Result.isError(thumbnailResult)) {
@@ -659,29 +730,117 @@ export const uploadUserFile = async ({
           mimeType: THUMBNAIL_MIME_TYPE,
           userId,
         });
-        const writeThumbnailResult = await Result.tryPromise({
-          try: async () =>
-            await writeS3ObjectWithRetry({
-              contentType: THUMBNAIL_MIME_TYPE,
-              data: thumbnailResult.value.webp,
-              key,
-            }),
-          catch: (cause) => cause,
+        preparedThumbnail = {
+          bytes: thumbnailResult.value.webp,
+          fileId: generatedThumbnailId,
+          key,
+          placeholder: thumbnailResult.value.placeholder,
+        };
+      }
+    }
+
+    const cleanupIntentIds: SafeId<"pendingUpload">[] = [];
+    const cleanupIntent = await reserveCleanupIntent({
+      objectKey: s3Key,
+      safeDb,
+      threadId,
+    });
+    if (Result.isError(cleanupIntent)) {
+      return Result.err(cleanupIntent.error);
+    }
+    cleanupIntentIds.push(...cleanupIntent.value);
+
+    let thumbnailCleanupIntentIds: SafeId<"pendingUpload">[] = [];
+    if (preparedThumbnail !== null) {
+      const thumbnailCleanupIntent = await reserveCleanupIntent({
+        objectKey: preparedThumbnail.key,
+        safeDb,
+        threadId,
+      });
+      if (Result.isError(thumbnailCleanupIntent)) {
+        captureError(thumbnailCleanupIntent.error, {
+          stage: "chat-thumbnail-cleanup-reserve",
+          userFileId: id,
         });
-        if (Result.isError(writeThumbnailResult)) {
-          captureError(writeThumbnailResult.error, {
-            stage: "chat-thumbnail-write",
+        preparedThumbnail = null;
+      } else {
+        thumbnailCleanupIntentIds = thumbnailCleanupIntent.value;
+        cleanupIntentIds.push(...thumbnailCleanupIntent.value);
+      }
+    }
+
+    let thumbnailFileId: string | null = null;
+    let placeholder: string | null = null;
+    let thumbnailKey: string | null = null;
+    const writeSourceResult = await Result.tryPromise({
+      try: async () =>
+        await withTimeout(
+          async (signal) =>
+            await putS3ObjectWithSignal(
+              s3Key,
+              file.bytes,
+              file.mimeType,
+              signal,
+            ),
+          {
+            label: "chat-attachment-put",
+            timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+          },
+        ),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(writeSourceResult)) {
+      await getS3()
+        .delete(s3Key)
+        .catch((cleanupError: unknown) => {
+          captureError(cleanupError, {
+            s3Key,
+            stage: "chat-attachment-write-cleanup",
             userFileId: id,
           });
-        } else {
-          thumbnailFileId = generatedThumbnailId;
-          placeholder = thumbnailResult.value.placeholder;
-          thumbnailKey = key;
-        }
+        });
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Failed to store chat attachment",
+          cause: writeSourceResult.error,
+        }),
+      );
+    }
+
+    if (preparedThumbnail !== null) {
+      const writeThumbnailResult = await Result.tryPromise({
+        try: async () =>
+          await withTimeout(
+            async (signal) =>
+              await putS3ObjectWithSignal(
+                preparedThumbnail.key,
+                preparedThumbnail.bytes,
+                THUMBNAIL_MIME_TYPE,
+                signal,
+              ),
+            {
+              label: "chat-thumbnail-put",
+              timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
+            },
+          ),
+        catch: (cause) => cause,
+      });
+      if (Result.isError(writeThumbnailResult)) {
+        captureError(writeThumbnailResult.error, {
+          stage: "chat-thumbnail-write",
+          userFileId: id,
+        });
+      } else {
+        thumbnailFileId = preparedThumbnail.fileId;
+        placeholder = preparedThumbnail.placeholder;
+        thumbnailKey = preparedThumbnail.key;
       }
     }
 
     const saveResult = await safeDb(async (tx) => {
+      await lockObjectCleanupIntentsForWriter(tx, cleanupIntentIds);
+
       await tx.insert(userFiles).values({
         id,
         userId,
@@ -696,6 +855,20 @@ export const uploadUserFile = async ({
         thumbnailFileId,
         placeholder,
       });
+
+      const publishedIntentIds = cleanupIntentIds.filter(
+        (intentId) =>
+          !thumbnailCleanupIntentIds.includes(intentId) ||
+          thumbnailKey !== null,
+      );
+      if (publishedIntentIds.length > 0) {
+        // The row now owns the objects. Retire crash-recovery ownership in the
+        // same transaction so a save rollback leaves the tombstones durable.
+        // audit: skip; storage recovery bookkeeping for the CREATE below.
+        await tx
+          .delete(bufferObjectCleanupIntents)
+          .where(inArray(bufferObjectCleanupIntents.id, publishedIntentIds));
+      }
 
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.CREATE,

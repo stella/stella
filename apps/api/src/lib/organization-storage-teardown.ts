@@ -1,16 +1,19 @@
 import { TaggedError } from "better-result";
-import { and, asc, eq, gt, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
 
-import { organization } from "@/api/db/auth-schema";
+import { member, organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
+  aiMemories,
   chatThreads,
   desktopEditSessions,
+  docxSuggestions,
   documentProcessingRuns,
   entityDeletionCleanupRequests,
   fields,
   folioCollabRooms,
   pendingUploads,
+  propertyDependencies,
   styleSets,
   templateVersions,
   templates,
@@ -19,7 +22,11 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
-import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
+import {
+  lockOrganizationObjectIntentsForLifecycle,
+  preserveBufferObjectCleanupIntents,
+  releaseObjectCleanupIntentsForLifecycle,
+} from "@/api/lib/buffer-intent-reconciliation";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import {
   createFileKey,
@@ -53,8 +60,8 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
  * cascade runs, into the two tombstone tables that deliberately reference
  * nothing (`entity_deletion_cleanup_requests`, `buffer_object_cleanup_intents`)
  * and so survive it. `apps/api/src/db/schema/entities.ts` states that contract
- * from the tombstones' side; this module is the organization half of it, and
- * `handlers/workspaces/delete.ts` is the matter half.
+ * from the tombstones' side; this module owns the storage census for both
+ * organization and matter lifecycles.
  *
  * Storage classes the enumeration covers, and how the deletion reaches each:
  *
@@ -94,6 +101,90 @@ export class OrganizationStorageTeardownBoundError extends TaggedError(
   organizationId: SafeId<"organization">;
 }> {}
 
+export class OrganizationStorageTeardownStateError extends TaggedError(
+  "OrganizationStorageTeardownStateError",
+)<{
+  message: string;
+  organizationId: SafeId<"organization">;
+}> {}
+
+export class WorkspaceStorageTeardownBoundError extends TaggedError(
+  "WorkspaceStorageTeardownBoundError",
+)<{
+  message: string;
+  workspaceId: SafeId<"workspace">;
+}> {}
+
+export class WorkspaceStorageTeardownStateError extends TaggedError(
+  "WorkspaceStorageTeardownStateError",
+)<{
+  message: string;
+  workspaceId: SafeId<"workspace">;
+}> {}
+
+export const WORKSPACE_DELETION_MANUAL_TABLES = [
+  userFiles,
+  chatThreads,
+  propertyDependencies,
+] as const;
+
+export const WORKSPACE_STORAGE_CLASS = {
+  CHAT_ATTACHMENT: "chat-attachment",
+  DESKTOP_EDIT_CHECKPOINT: "desktop-edit-checkpoint",
+  FIELD_FILE: "field-file",
+  FOLIO_DOCX_CHECKPOINT: "folio-docx-checkpoint",
+  FOLIO_YJS_SNAPSHOT: "folio-yjs-snapshot",
+  OCR_DERIVATIVE: "ocr-derivative",
+  PENDING_UPLOAD: "pending-upload",
+  REPORT_EXPORT: "report-export",
+} as const;
+
+export type WorkspaceStorageClass =
+  (typeof WORKSPACE_STORAGE_CLASS)[keyof typeof WORKSPACE_STORAGE_CLASS];
+
+export const WORKSPACE_STORAGE_DISPOSITION = {
+  [WORKSPACE_STORAGE_CLASS.CHAT_ATTACHMENT]: "cleanup-request",
+  [WORKSPACE_STORAGE_CLASS.DESKTOP_EDIT_CHECKPOINT]: "cleanup-request",
+  [WORKSPACE_STORAGE_CLASS.FIELD_FILE]: "cleanup-request",
+  [WORKSPACE_STORAGE_CLASS.FOLIO_DOCX_CHECKPOINT]: "cleanup-request",
+  [WORKSPACE_STORAGE_CLASS.FOLIO_YJS_SNAPSHOT]: "cleanup-request",
+  [WORKSPACE_STORAGE_CLASS.OCR_DERIVATIVE]: "cleanup-request",
+  [WORKSPACE_STORAGE_CLASS.PENDING_UPLOAD]: "cleanup-request",
+  [WORKSPACE_STORAGE_CLASS.REPORT_EXPORT]: "bucket-lifecycle",
+} as const satisfies Record<
+  WorkspaceStorageClass,
+  "bucket-lifecycle" | "cleanup-request"
+>;
+
+export const WORKSPACE_STORAGE_REFERENCE_DISPOSITION = {
+  "buffer_object_cleanup_intents.object_key": "recovery-tombstone",
+  "desktop_edit_sessions.checkpoint_file_id": "cleanup-request",
+  "document_processing_runs.id": "derived-key-cleanup-request",
+  "document_processing_runs.source_file_id": "field-file-alias",
+  "document_translation_runs.source_file_id": "field-file-alias",
+  "expenses.receipt_file_id": "reserved-no-writer",
+  "extracted_content.source_file_id": "field-file-alias",
+  "fields.content": "cleanup-request",
+  "fields.file_id": "reserved-no-writer",
+  "folio_collab_rooms.docx_checkpoint_file_id": "cleanup-request",
+  "folio_collab_rooms.yjs_snapshot_file_id": "cleanup-request",
+  "office_file_evidence.source_file_id": "field-file-alias",
+  "pending_uploads.purpose_data": "cleanup-request",
+  "report_exports.result_s3_key": "bucket-lifecycle",
+  "user_files.s3_key": "cleanup-request",
+  "user_files.thumbnail_file_id": "cleanup-request",
+} as const;
+
+export const WORKSPACE_DERIVED_REFERENCE_DISPOSITION = {
+  "account_deletion_requests.workspace_ids": "retain-history",
+  "ai_memories.source_data_workspace_ids": "delete-derived-row-and-trigger",
+  "chat_thread_compactions.memory_extraction_data_workspace_ids":
+    "cascade-with-thread",
+  "chat_threads.context_matter_ids": "prune-reference",
+  "chat_threads.data_workspace_ids": "delete-derived-thread",
+  "docx_suggestions.source_data_workspace_ids": "delete-derived-row",
+} as const;
+
 /**
  * Sink for one page of keys. `workspaceId` names the matter the page came from,
  * or null for storage the organization owns directly, which never had one.
@@ -102,6 +193,46 @@ type TeardownPageSink = (
   workspaceId: SafeId<"workspace"> | null,
   s3Keys: string[],
 ) => Promise<void>;
+
+type TeardownRecorderOptions = {
+  createBoundError: () => Error;
+  organizationId: SafeId<"organization">;
+  pagesMax: number;
+  tx: Transaction;
+};
+
+const createTeardownRecorder = ({
+  createBoundError,
+  organizationId,
+  pagesMax,
+  tx,
+}: TeardownRecorderOptions) => {
+  const requestIds: SafeId<"entityDeletionCleanupRequest">[] = [];
+  const record: TeardownPageSink = async (
+    workspaceId: SafeId<"workspace"> | null,
+    s3Keys: string[],
+  ) => {
+    const uniqueKeys = [...new Set(s3Keys)];
+    if (uniqueKeys.length === 0) {
+      return;
+    }
+    if (requestIds.length >= pagesMax) {
+      throw createBoundError();
+    }
+    const requestId = createSafeId<"entityDeletionCleanupRequest">();
+    // audit: skip — storage-erasure bookkeeping for the deletion whose
+    // user-visible mutation and audit event own this transaction.
+    await tx.insert(entityDeletionCleanupRequests).values({
+      id: requestId,
+      organizationId,
+      s3Keys: uniqueKeys,
+      workspaceId,
+    });
+    requestIds.push(requestId);
+  };
+
+  return { record, requestIds };
+};
 
 type OrganizationTeardownScope = {
   organizationId: SafeId<"organization">;
@@ -356,6 +487,16 @@ type ChatAttachment = {
   userId: SafeId<"user">;
 };
 
+type ChatAttachmentTeardownScope =
+  | { type: "organization" }
+  | { type: "workspace"; workspaceId: SafeId<"workspace"> };
+
+const workspaceOwnedChatThread = (workspaceId: SafeId<"workspace">) =>
+  or(
+    eq(chatThreads.workspaceId, workspaceId),
+    sql`${chatThreads.dataWorkspaceIds} @> ARRAY[${workspaceId}]::uuid[]`,
+  );
+
 /**
  * Chat attachments and their thumbnails. The key is minted from the user id, so
  * it names no matter and the page is recorded against the organization itself.
@@ -365,6 +506,7 @@ type ChatAttachment = {
 const recordChatAttachmentPage = async (
   scope: OrganizationTeardownScope,
   record: TeardownPageSink,
+  teardownScope: ChatAttachmentTeardownScope,
   cursor: PageCursor<"userFile"> = null,
 ): Promise<void> => {
   const page = await scope.tx
@@ -379,6 +521,9 @@ const recordChatAttachmentPage = async (
     .where(
       and(
         eq(chatThreads.organizationId, scope.organizationId),
+        teardownScope.type === "workspace"
+          ? workspaceOwnedChatThread(teardownScope.workspaceId)
+          : undefined,
         cursor === null ? undefined : gt(userFiles.id, cursor),
       ),
     )
@@ -399,7 +544,7 @@ const recordChatAttachmentPage = async (
   }));
 
   await record(
-    null,
+    teardownScope.type === "workspace" ? teardownScope.workspaceId : null,
     attachments.flatMap((attachment) =>
       attachment.thumbnailFileId === null
         ? [attachment.s3Key]
@@ -418,7 +563,7 @@ const recordChatAttachmentPage = async (
   if (!lastRow) {
     return;
   }
-  await recordChatAttachmentPage(scope, record, lastRow.id);
+  await recordChatAttachmentPage(scope, record, teardownScope, lastRow.id);
 };
 
 const recordTemplatePage = async (
@@ -566,39 +711,38 @@ export const recordOrganizationStorageTeardown = async ({
   pagesMax = LIMITS.organizationStorageTeardownPagesMax,
   tx,
 }: OrganizationTeardownOptions): Promise<OrganizationStorageTeardownResult> => {
-  const requestIds: SafeId<"entityDeletionCleanupRequest">[] = [];
-  // The scope is annotated rather than left to `TeardownPageSink`'s contextual
-  // type: an ownership id reaching a sink has to declare its brand where the
-  // parameter is written, so no future edit can widen it to a bare string
-  // without the change being visible right here.
-  const record: TeardownPageSink = async (
-    workspaceId: SafeId<"workspace"> | null,
-    s3Keys: string[],
-  ) => {
-    const uniqueKeys = [...new Set(s3Keys)];
-    if (uniqueKeys.length === 0) {
-      return;
-    }
-    if (requestIds.length >= pagesMax) {
-      throw new OrganizationStorageTeardownBoundError({
+  // Exact-key writers share this advisory lock while reserving storage. Taking
+  // it exclusively before transferring intents closes the lifecycle to both
+  // matter-scoped and organization-scoped publications.
+  await lockOrganizationObjectIntentsForLifecycle(tx, organizationId);
+  const lockedOrganizations = await tx
+    .select({ id: organization.id })
+    .from(organization)
+    .where(eq(organization.id, organizationId))
+    .limit(1)
+    .for("update");
+  if (lockedOrganizations.length !== 1) {
+    throw new OrganizationStorageTeardownStateError({
+      message: "Organization teardown target no longer exists.",
+      organizationId,
+    });
+  }
+  await releaseObjectCleanupIntentsForLifecycle(tx, {
+    organizationId,
+    type: "organization",
+  });
+  const { record, requestIds } = createTeardownRecorder({
+    createBoundError: () =>
+      new OrganizationStorageTeardownBoundError({
         message:
           "This organization holds more stored files than one deletion can " +
           "clear. Delete some matters first, then delete the organization.",
         organizationId,
-      });
-    }
-    const requestId = createSafeId<"entityDeletionCleanupRequest">();
-    // audit: skip — storage-erasure bookkeeping for the organization deletion
-    // the endpoint already answers for; the request rows carry no user-visible
-    // state of their own.
-    await tx.insert(entityDeletionCleanupRequests).values({
-      id: requestId,
-      organizationId,
-      s3Keys: uniqueKeys,
-      workspaceId,
-    });
-    requestIds.push(requestId);
-  };
+      }),
+    organizationId,
+    pagesMax,
+    tx,
+  });
 
   const scope = { organizationId, tx };
   const workspaceRows = await tx
@@ -631,13 +775,147 @@ export const recordOrganizationStorageTeardown = async ({
   }
   await cancelRecoverableUploads(tx, workspaceIds);
 
-  await recordChatAttachmentPage(scope, record);
+  await recordChatAttachmentPage(scope, record, { type: "organization" });
   await recordTemplatePage(scope, record);
   await recordTemplateVersionPage(scope, record);
   await recordStyleSetPage(scope, record);
   await recordMatterStorage(scope, workspaceIds, record);
 
   return { requestIds };
+};
+
+type WorkspaceStorageTeardownOptions = OrganizationTeardownScope & {
+  pagesMax?: number;
+  workspaceId: SafeId<"workspace">;
+};
+
+/** Record every durable object class owned by one matter. */
+export const recordWorkspaceStorageTeardown = async ({
+  organizationId,
+  pagesMax = LIMITS.organizationStorageTeardownPagesMax,
+  tx,
+  workspaceId,
+}: WorkspaceStorageTeardownOptions): Promise<OrganizationStorageTeardownResult> => {
+  await releaseObjectCleanupIntentsForLifecycle(tx, {
+    organizationId,
+    type: "workspace",
+    workspaceId,
+  });
+  const { record, requestIds } = createTeardownRecorder({
+    createBoundError: () =>
+      new WorkspaceStorageTeardownBoundError({
+        message:
+          "This matter holds more stored files than one deletion can clear.",
+        workspaceId,
+      }),
+    organizationId,
+    pagesMax,
+    tx,
+  });
+  const scope = { organizationId, tx };
+
+  await cancelRecoverableUploads(tx, [workspaceId]);
+  await recordFieldFilePage(scope, workspaceId, record);
+  await recordOcrDerivatives(scope, workspaceId, record);
+  await recordDesktopEditCheckpointPage(scope, workspaceId, record);
+  await recordFolioCollabRoomFilePage(scope, workspaceId, record);
+  await recordPendingUploadPage(scope, workspaceId, record);
+  await recordChatAttachmentPage(scope, record, {
+    type: "workspace",
+    workspaceId,
+  });
+
+  return { requestIds };
+};
+
+/**
+ * Remove one matter's restrictive and derived rows after its storage keys have
+ * been durably recorded. The caller owns authorization, the workspace lock,
+ * processing fences, status transition, and audit event in this transaction.
+ */
+export const completeWorkspaceDeletion = async ({
+  organizationId,
+  pagesMax,
+  tx,
+  workspaceId,
+}: WorkspaceStorageTeardownOptions): Promise<OrganizationStorageTeardownResult> => {
+  const teardown = await recordWorkspaceStorageTeardown({
+    organizationId,
+    ...(pagesMax === undefined ? {} : { pagesMax }),
+    tx,
+    workspaceId,
+  });
+
+  const deletedThreadIds = tx
+    .select({ id: chatThreads.id })
+    .from(chatThreads)
+    .where(
+      and(
+        eq(chatThreads.organizationId, organizationId),
+        workspaceOwnedChatThread(workspaceId),
+      ),
+    );
+
+  // audit: skip; storage-owning and derived rows of the audited matter delete.
+  await tx
+    .delete(userFiles)
+    .where(inArray(userFiles.threadId, deletedThreadIds));
+  await tx
+    .delete(chatThreads)
+    .where(
+      and(
+        eq(chatThreads.organizationId, organizationId),
+        workspaceOwnedChatThread(workspaceId),
+      ),
+    );
+  await tx
+    .update(chatThreads)
+    .set({
+      contextMatterIds: sql`array_remove(${chatThreads.contextMatterIds}, ${workspaceId}::uuid)`,
+    })
+    .where(
+      and(
+        eq(chatThreads.organizationId, organizationId),
+        sql`${chatThreads.contextMatterIds} @> ARRAY[${workspaceId}]::uuid[]`,
+      ),
+    );
+  await tx
+    .delete(aiMemories)
+    .where(
+      and(
+        eq(aiMemories.organizationId, organizationId),
+        sql`${aiMemories.sourceDataWorkspaceIds} @> ARRAY[${workspaceId}]::uuid[]`,
+      ),
+    );
+  await tx
+    .delete(docxSuggestions)
+    .where(
+      sql`${docxSuggestions.sourceDataWorkspaceIds} @> ARRAY[${workspaceId}]::uuid[]`,
+    );
+  await tx
+    .delete(propertyDependencies)
+    .where(eq(propertyDependencies.workspaceId, workspaceId));
+  await tx
+    .update(member)
+    .set({ lastActiveWorkspaceId: null })
+    .where(eq(member.lastActiveWorkspaceId, workspaceId));
+  const deletedWorkspaces = await tx
+    .delete(workspaces)
+    .where(
+      and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.organizationId, organizationId),
+      ),
+    )
+    .returning({ id: workspaces.id });
+  if (deletedWorkspaces.length !== 1) {
+    throw new WorkspaceStorageTeardownStateError({
+      message: "Matter deletion did not remove exactly one row.",
+      workspaceId,
+    });
+  }
+
+  return teardown;
 };
 
 /**

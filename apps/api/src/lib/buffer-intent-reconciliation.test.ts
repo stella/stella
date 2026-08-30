@@ -3,6 +3,7 @@ import { beforeEach, expect, mock, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { BUFFER_OBJECT_CLEANUP_INTENT_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -11,9 +12,12 @@ const s3DeleteMock = mock(
 );
 
 const {
+  lockObjectCleanupIntentsForWriter,
   lockActiveWorkspaceForBufferIntent,
   reconcileBufferObjectCleanupIntents,
   reconcileStaleBufferIntentsGlobally,
+  releaseObjectCleanupIntentsForLifecycle,
+  reserveObjectCleanupIntents,
 } = await import("@/api/lib/buffer-intent-reconciliation");
 
 const pendingUploadId = toSafeId<"pendingUpload">(
@@ -24,6 +28,9 @@ const organizationId = toSafeId<"organization">(
 );
 const workspaceId = toSafeId<"workspace">(
   "00000000-0000-0000-0000-000000000003",
+);
+const otherWorkspaceId = toSafeId<"workspace">(
+  "00000000-0000-0000-0000-000000000006",
 );
 
 type UpdateValues = {
@@ -125,6 +132,154 @@ test("rejects a writer reservation after workspace deletion seals", async () => 
     _tag: "BufferIntentWorkspaceUnavailableError",
     message: "Workspace is not active",
   });
+});
+
+test("reserves multi-workspace ownership under one ordered lock", async () => {
+  let advisoryLocks = 0;
+  const locks: unknown[] = [];
+  const insertedRows: unknown[] = [];
+  const tx = asTestRaw<Transaction>({
+    execute: async () => {
+      advisoryLocks += 1;
+    },
+    insert: () => ({
+      values: async (rows: unknown[]) => {
+        insertedRows.push(...rows);
+      },
+    }),
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: () => ({
+            for: async (strength: unknown) => {
+              locks.push(strength);
+              return [{ id: organizationId }];
+            },
+          }),
+          orderBy: () => ({
+            limit: () => ({
+              for: async (strength: unknown) => {
+                locks.push(strength);
+                return [
+                  { id: workspaceId, status: "active" },
+                  { id: otherWorkspaceId, status: "active" },
+                ];
+              },
+            }),
+          }),
+        }),
+      }),
+    }),
+  });
+  const safeDb = asTestRaw<SafeDb>(
+    async <T>(run: (transaction: Transaction) => Promise<T>) =>
+      await Result.tryPromise({
+        try: async () => await run(tx),
+        catch: (cause) => cause,
+      }),
+  );
+
+  const result = await reserveObjectCleanupIntents({
+    objectKey: `${organizationId}/shared-object`,
+    organizationId,
+    safeDb,
+    workspaceIds: [otherWorkspaceId, workspaceId],
+  });
+
+  if (Result.isError(result)) {
+    throw result.error;
+  }
+  expect(advisoryLocks).toBe(1);
+  expect(locks).toEqual(["share"]);
+  expect(insertedRows).toEqual([
+    expect.objectContaining({ workspaceId }),
+    expect.objectContaining({ workspaceId: otherWorkspaceId }),
+  ]);
+});
+
+test("reserves organization-scoped ownership without inventing a matter", async () => {
+  let advisoryLocks = 0;
+  const insertedRows: unknown[] = [];
+  const tx = asTestRaw<Transaction>({
+    execute: async () => {
+      advisoryLocks += 1;
+    },
+    insert: () => ({
+      values: async (rows: unknown[]) => {
+        insertedRows.push(...rows);
+      },
+    }),
+  });
+  const safeDb = asTestRaw<SafeDb>(
+    async <T>(run: (transaction: Transaction) => Promise<T>) =>
+      await Result.tryPromise({
+        try: async () => await run(tx),
+        catch: (cause) => cause,
+      }),
+  );
+
+  const result = await reserveObjectCleanupIntents({
+    objectKey: "user-id/global-chat-file",
+    organizationId,
+    safeDb,
+    workspaceIds: [],
+  });
+
+  expect(result.status).toBe("ok");
+  expect(advisoryLocks).toBe(1);
+  expect(insertedRows).toEqual([
+    expect.objectContaining({ workspaceId: null }),
+  ]);
+});
+
+test("holds every exact-key intent until its writer transaction settles", async () => {
+  const locks: unknown[] = [];
+  const tx = asTestRaw<Transaction>({
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          for: async (strength: unknown) => {
+            locks.push(strength);
+            return [
+              {
+                id: pendingUploadId,
+                status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
+              },
+            ];
+          },
+        }),
+      }),
+    }),
+  });
+
+  await lockObjectCleanupIntentsForWriter(tx, [pendingUploadId]);
+
+  expect(locks).toEqual(["update"]);
+});
+
+test("transfers in-flight exact keys to lifecycle cleanup", async () => {
+  const updates: unknown[] = [];
+  const tx = asTestRaw<Transaction>({
+    update: () => ({
+      set: (values: unknown) => {
+        updates.push(values);
+        return { where: async () => undefined };
+      },
+    }),
+  });
+
+  await releaseObjectCleanupIntentsForLifecycle(tx, {
+    organizationId,
+    type: "workspace",
+    workspaceId,
+  });
+
+  expect(updates).toEqual([
+    {
+      nextAttemptAt: expect.any(Date),
+      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.CLEANUP,
+    },
+  ]);
 });
 
 test("keeps a reclaimed writer intent recoverable after deleting its object", async () => {

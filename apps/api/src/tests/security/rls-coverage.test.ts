@@ -98,7 +98,6 @@ describe("policy coverage", () => {
     "entity_deletion_cleanup_requests",
     "template_deletion_cleanup_requests",
   ]);
-  const INSERT_DELETE_ONLY = new Set(["buffer_object_cleanup_intents"]);
   // History tables written only by a SECURITY DEFINER trigger: the app role
   // reads them and has no write policy at all.
   const SELECT_ONLY = new Set(["agent_skill_revisions"]);
@@ -217,8 +216,6 @@ describe("policy coverage", () => {
       expect(cmds).toContain("a"); // INSERT
       if (INSERT_ONLY.has(table)) {
         expect(cmds).toEqual(new Set(["a"]));
-      } else if (INSERT_DELETE_ONLY.has(table)) {
-        expect(cmds).toEqual(new Set(["a", "d"]));
       } else {
         expect(cmds).toContain("r"); // SELECT
         if (!APPEND_ONLY.has(table)) {

@@ -235,6 +235,12 @@ export const chatThreads = p.pgTable(
     p
       .index("chat_threads_org_user_updated_id_idx")
       .on(table.organizationId, table.userId, table.updatedAt, table.id),
+    p
+      .index("chat_threads_context_matter_ids_idx")
+      .using("gin", table.contextMatterIds),
+    p
+      .index("chat_threads_data_workspace_ids_idx")
+      .using("gin", table.dataWorkspaceIds),
     p.index("chat_threads_user_updated_idx").on(table.userId, table.updatedAt),
     // Serves the compactor's claim seek: due threads oldest-first, with
     // never-attempted work ahead of previously failed work.

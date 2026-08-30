@@ -73,19 +73,16 @@ Handler: `apps/api/src/handlers/views/delete-by-id.ts`
 
 Handler: `apps/api/src/handlers/workspaces/delete.ts`
 
-1. Set workspace status to `"deleting"`, which gates all
-   new uploads and actor connections.
-2. Query all files in the workspace.
-3. Delete S3 objects with bounded concurrency.
-4. Within a transaction:
-   - Delete `propertyDependencies` targeting workspace
-     properties (required because restrict FKs block cascade).
-   - Delete all `entities` (cascades to versions, fields,
-     justifications).
-   - Delete the `workspaces` row (cascades to properties,
-     views, remaining files).
-5. If S3 deletion fails, revert status to `"active"` to
-   allow retry.
+1. Reauthorize the actor, lock the workspace, and set its status to
+   `"deleting"` in the transaction that owns the deletion.
+2. Record all referenced object keys in durable cleanup requests and transfer
+   any in-flight exact-key writes to the cleanup reconciler.
+3. In the same transaction, remove restrictive and derived rows, prune
+   retained context references, delete the workspace row, and record the audit
+   event. Cascade FKs remove workspace-owned content.
+4. After commit, dispatch a bounded prefix of cleanup requests. Durable
+   reconciliation owns eventual object deletion if dispatch or storage is
+   temporarily unavailable.
 
 ### Upload failure cleanup
 
@@ -111,10 +108,10 @@ Handler: `apps/api/src/handlers/templates/delete.ts`
   50 object deletions in flight.
 - **Idempotency:** Repeated deletion of an absent object is treated as a
   successful cleanup by supported S3-compatible providers.
-- **Ordering:** Object cleanup currently precedes the database delete so
-  an object-store failure leaves the database record available for retry.
-  A later database failure requires reconciliation because object storage
-  cannot participate in the PostgreSQL transaction.
+- **Ordering:** Entity, workspace, and organization teardown records durable
+  cleanup work in the same transaction as the database delete. Object cleanup
+  follows commit because object storage cannot participate in the PostgreSQL
+  transaction; bounded reconciliation retries incomplete effects.
 
 ## Retention periods
 

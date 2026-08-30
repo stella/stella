@@ -2,8 +2,9 @@ import { Result, TaggedError, panic } from "better-result";
 import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
+  BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
   bufferObjectCleanupIntents,
   pendingUploads,
   PENDING_UPLOAD_RECOVERABLE_STATUSES,
@@ -14,6 +15,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
+import { LIMITS } from "@/api/lib/limits";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -23,6 +25,7 @@ export const BUFFER_INTENT_HEARTBEAT_MS = 15 * 1000;
 const BUFFER_INTENT_RECONCILE_LIMIT = 25;
 export const BUFFER_INTENT_DELETE_TIMEOUT_MS = 30 * 1000;
 export const BUFFER_INTENT_WRITE_TIMEOUT_MS = 2 * 60 * 1000;
+export const OBJECT_WRITE_RECOVERY_DELAY_MS = BUFFER_INTENT_WRITE_TIMEOUT_MS;
 const BUFFER_CLEANUP_RETRY_MAX_EXPONENT = 14;
 
 export type BufferIntentPurpose = "entity_create" | "entity_version";
@@ -87,6 +90,32 @@ class BufferIntentWorkspaceUnavailableError extends TaggedError(
   "BufferIntentWorkspaceUnavailableError",
 )<{ message: string }> {}
 
+class BufferIntentOwnershipError extends TaggedError(
+  "BufferIntentOwnershipError",
+)<{ message: string }> {}
+
+const organizationObjectIntentLockKey = (
+  organizationId: SafeId<"organization">,
+): string => `buffer-object:${organizationId}`;
+
+const lockOrganizationObjectIntentsForWriter = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+): Promise<void> => {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock_shared(hashtext(${organizationObjectIntentLockKey(organizationId)}))`,
+  );
+};
+
+export const lockOrganizationObjectIntentsForLifecycle = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+): Promise<void> => {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${organizationObjectIntentLockKey(organizationId)}))`,
+  );
+};
+
 /**
  * Share-lock the workspace while reserving an intent. Workspace deletion
  * takes an update lock before sealing, so either the reservation commits in
@@ -107,6 +136,156 @@ export const lockActiveWorkspaceForBufferIntent = async (
       message: "Workspace is not active",
     });
   }
+};
+
+/** Reserve exact-key recovery ownership before a non-upload writer calls PUT. */
+export const reserveObjectCleanupIntents = async ({
+  chatThreadId,
+  objectKey,
+  organizationId,
+  safeDb,
+  workspaceIds,
+}: {
+  chatThreadId?: SafeId<"chatThread">;
+  objectKey: string;
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  workspaceIds: SafeId<"workspace">[];
+}): Promise<Result<SafeId<"pendingUpload">[], SafeDbError>> => {
+  const uniqueWorkspaceIds = [...new Set(workspaceIds)].sort();
+  const intents =
+    uniqueWorkspaceIds.length === 0
+      ? [{ id: createSafeId<"pendingUpload">(), ownerWorkspaceId: null }]
+      : uniqueWorkspaceIds.map((candidate) => ({
+          id: createSafeId<"pendingUpload">(),
+          ownerWorkspaceId: candidate,
+        }));
+  const result = await safeDb(async (tx) => {
+    await lockOrganizationObjectIntentsForWriter(tx, organizationId);
+
+    if (uniqueWorkspaceIds.length > 0) {
+      const lockedWorkspaces = await tx
+        .select({ id: workspaces.id, status: workspaces.status })
+        .from(workspaces)
+        .where(
+          and(
+            eq(workspaces.organizationId, organizationId),
+            inArray(workspaces.id, uniqueWorkspaceIds),
+          ),
+        )
+        .orderBy(asc(workspaces.id))
+        .limit(LIMITS.workspacesCount)
+        .for("share");
+      if (
+        lockedWorkspaces.length !== uniqueWorkspaceIds.length ||
+        lockedWorkspaces.some(({ status }) => status !== "active")
+      ) {
+        throw new BufferIntentWorkspaceUnavailableError({
+          message: "Workspace is not active",
+        });
+      }
+    }
+    // audit: skip; crash-recovery ownership for the later audited mutation.
+    await tx.insert(bufferObjectCleanupIntents).values(
+      intents.map(({ id, ownerWorkspaceId }) => ({
+        chatThreadId: chatThreadId ?? null,
+        id,
+        nextAttemptAt: new Date(Date.now() + OBJECT_WRITE_RECOVERY_DELAY_MS),
+        objectKey,
+        organizationId,
+        status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
+        workspaceId: ownerWorkspaceId,
+      })),
+    );
+  });
+  return Result.isError(result)
+    ? Result.err(result.error)
+    : Result.ok(intents.map(({ id }) => id));
+};
+
+export const reserveObjectCleanupIntent = async ({
+  objectKey,
+  organizationId,
+  safeDb,
+  workspaceId,
+}: {
+  objectKey: string;
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+}): Promise<Result<SafeId<"pendingUpload">, SafeDbError>> => {
+  const result = await reserveObjectCleanupIntents({
+    objectKey,
+    organizationId,
+    safeDb,
+    workspaceIds: [workspaceId],
+  });
+  return Result.isError(result)
+    ? Result.err(result.error)
+    : Result.ok(
+        result.value.at(0) ?? panic("Object intent insert returned no row"),
+      );
+};
+
+/** Keep recovery from deleting an exact key while its writer still owns PUT. */
+export const lockObjectCleanupIntentsForWriter = async (
+  tx: Transaction,
+  intentIds: SafeId<"pendingUpload">[],
+): Promise<void> => {
+  const uniqueIntentIds = [...new Set(intentIds)];
+  if (uniqueIntentIds.length === 0) {
+    return;
+  }
+  const rows = await tx
+    .select({
+      id: bufferObjectCleanupIntents.id,
+      status: bufferObjectCleanupIntents.status,
+    })
+    .from(bufferObjectCleanupIntents)
+    .where(inArray(bufferObjectCleanupIntents.id, uniqueIntentIds))
+    .for("update");
+  if (
+    rows.length !== uniqueIntentIds.length ||
+    rows.some(
+      ({ status }) => status !== BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
+    )
+  ) {
+    throw new BufferIntentOwnershipError({
+      message: "Object cleanup ownership was lost before publication",
+    });
+  }
+};
+
+type ReleaseObjectCleanupIntentScope =
+  | {
+      organizationId: SafeId<"organization">;
+      type: "organization";
+    }
+  | {
+      organizationId: SafeId<"organization">;
+      type: "workspace";
+      workspaceId: SafeId<"workspace">;
+    };
+
+/** Transfer every in-flight exact key in a lifecycle scope to recovery. */
+export const releaseObjectCleanupIntentsForLifecycle = async (
+  tx: Transaction,
+  scope: ReleaseObjectCleanupIntentScope,
+): Promise<void> => {
+  await tx
+    .update(bufferObjectCleanupIntents)
+    .set({
+      nextAttemptAt: new Date(),
+      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.CLEANUP,
+    })
+    .where(
+      scope.type === "workspace"
+        ? and(
+            eq(bufferObjectCleanupIntents.organizationId, scope.organizationId),
+            eq(bufferObjectCleanupIntents.workspaceId, scope.workspaceId),
+          )
+        : eq(bufferObjectCleanupIntents.organizationId, scope.organizationId),
+    );
 };
 
 /** Reserve the final object key before a trusted server-side writer publishes. */
@@ -529,6 +708,7 @@ export const reconcileBufferObjectCleanupIntents = async ({
           )) * interval '1 minute',
           interval '24 hours'
         )`,
+        status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.CLEANUP,
       })
       .where(inArray(bufferObjectCleanupIntents.id, ids));
     return rows;

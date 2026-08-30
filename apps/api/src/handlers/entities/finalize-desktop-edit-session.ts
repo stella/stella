@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
@@ -164,6 +164,21 @@ export const finalizeDesktopEditSessionHandler = async ({
     // 500 instead of a clean 409, for only a marginal lock-duration win on
     // this low-frequency, single-entity path.
     const result = await authorizedSession.value.scopedDb(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${authorizedSession.value.workspaceId}))`,
+      );
+      const workspaceRows = await tx
+        .select({ status: workspaces.status })
+        .from(workspaces)
+        .where(eq(workspaces.id, authorizedSession.value.workspaceId))
+        .limit(1)
+        .for("update");
+      if (workspaceRows.at(0)?.status !== "active") {
+        return {
+          error: { message: "Workspace is not active", statusCode: 409 },
+        } as const;
+      }
+
       const lockedSessions = await tx
         .select({
           baseVersionId: desktopEditSessions.baseVersionId,

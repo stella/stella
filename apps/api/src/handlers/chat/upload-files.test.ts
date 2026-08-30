@@ -31,6 +31,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
   canHydrateFilePartAsPlainText,
+  chatObjectCleanupWorkspaceIds,
   hydrateFilePart,
   uploadMessageFiles,
   uploadUserFile,
@@ -70,6 +71,9 @@ const makeDocxBytes = async (): Promise<Uint8Array> => {
   return new Uint8Array(await zip.generateAsync({ type: "uint8array" }));
 };
 const workspaceId = toSafeId<"workspace">("workspace_1");
+const uploadDependencies = {
+  reserveChatObjectCleanupIntent: async () => Result.ok([]),
+};
 
 describe("chat attachment hydration", () => {
   beforeEach(() => {
@@ -88,6 +92,17 @@ describe("chat attachment hydration", () => {
     expect(canHydrateFilePartAsPlainText(DOCX_MIME_TYPE)).toBe(true);
     expect(canHydrateFilePartAsPlainText(XLSX_MIME_TYPE)).toBe(true);
     expect(canHydrateFilePartAsPlainText(PDF_MIME_TYPE)).toBe(false);
+  });
+
+  test("assigns recovery ownership to every matter contributing to a chat", () => {
+    const otherWorkspaceId = toSafeId<"workspace">("workspace_2");
+
+    expect(
+      chatObjectCleanupWorkspaceIds({
+        dataWorkspaceIds: [otherWorkspaceId, workspaceId, otherWorkspaceId],
+        workspaceId,
+      }),
+    ).toEqual([otherWorkspaceId, workspaceId].sort());
   });
 
   test("coerces text-like attachments to a text content part (universal, never modality-gated)", async () => {
@@ -287,6 +302,7 @@ describe("chat attachment hydration", () => {
     );
 
     const uploadResult = await uploadUserFile({
+      dependencies: uploadDependencies,
       file: {
         bytes,
         fileName: "schedule.xlsx",
@@ -355,6 +371,7 @@ describe("chat attachment hydration", () => {
 
     const recordAuditEvent = mock(async () => undefined);
     const result = await uploadMessageFiles({
+      dependencies: uploadDependencies,
       message,
       recordAuditEvent,
       safeDb,
@@ -384,11 +401,22 @@ describe("chat attachment hydration", () => {
     const databaseError = new DatabaseError({
       message: "user file insert failed",
     });
-    const safeDb: SafeDb = async <T>(_fn: (tx: Transaction) => Promise<T>) =>
-      Result.err(databaseError);
+    const testTx = asTestRaw<Transaction>({
+      insert: () => ({
+        values: async () => {
+          throw databaseError;
+        },
+      }),
+    });
+    const safeDb: SafeDb = async (callback) =>
+      Result.mapError(
+        await Result.tryPromise(async () => await callback(testTx)),
+        () => databaseError,
+      );
     const recordAuditEvent = mock(async () => undefined);
 
     const result = await uploadUserFile({
+      dependencies: uploadDependencies,
       file: {
         bytes: new TextEncoder().encode("confidential text"),
         fileName: "notes.txt",
@@ -429,6 +457,7 @@ describe("chat attachment hydration", () => {
       await Result.tryPromise(async () => await callback(testTx));
 
     const result = await uploadUserFile({
+      dependencies: uploadDependencies,
       file: {
         bytes: new TextEncoder().encode("confidential text"),
         fileName: hostileName,
