@@ -89,6 +89,10 @@ deployed projects when the upstream template is updated. Review the stella
 changelog before applying updates, especially when database migrations or
 environment changes are included.
 
+Updating an instance with existing users across v0.7.28 requires a one-time
+auth backfill before migrations pass; see the "One-time auth backfill" section
+of the deployment guide linked below.
+
 ## Documentation
 
 See the Railway deployment guide for operational details:
