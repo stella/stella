@@ -66,46 +66,55 @@ enum PreparedLowercaseBridge {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct PreparedRolePhraseIndex {
-  by_first: HashMap<String, Vec<Vec<String>>>,
+  roots: HashMap<String, PreparedRolePhraseNode>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct PreparedRolePhraseNode {
+  terminal: bool,
+  children: HashMap<String, Self>,
 }
 
 impl PreparedRolePhraseIndex {
   fn new(role_heads: &HashSet<String>) -> Self {
-    let mut by_first = HashMap::<String, Vec<Vec<String>>>::new();
+    let mut roots = HashMap::<String, PreparedRolePhraseNode>::new();
     for role_head in role_heads {
-      let phrase = role_head
+      let mut phrase = role_head
         .split(|ch: char| !ch.is_alphabetic())
         .filter(|word| !word.is_empty())
-        .map(str::to_lowercase)
-        .collect::<Vec<_>>();
-      let Some(first) = phrase.first() else {
+        .map(str::to_lowercase);
+      let Some(first) = phrase.next() else {
         continue;
       };
-      by_first.entry(first.clone()).or_default().push(phrase);
+      let mut node = roots.entry(first).or_default();
+      for word in phrase {
+        node = node.children.entry(word).or_default();
+      }
+      node.terminal = true;
     }
-    for phrases in by_first.values_mut() {
-      phrases.sort_by(|left, right| right.len().cmp(&left.len()));
-    }
-    Self { by_first }
+    Self { roots }
   }
 
   fn contains_sequence(&self, words: &[String]) -> bool {
-    words.iter().enumerate().any(|(start, first)| {
-      self.by_first.get(first).is_some_and(|phrases| {
-        phrases
-          .iter()
-          .any(|phrase| words[start..].starts_with(phrase))
-      })
+    words.iter().enumerate().any(|(start, _)| {
+      self.longest_prefix(&words[start..]).is_some()
     })
   }
 
   fn longest_prefix(&self, words: &[String]) -> Option<usize> {
     let first = words.first()?;
-    self
-      .by_first
-      .get(first)?
-      .iter()
-      .find_map(|phrase| words.starts_with(phrase).then_some(phrase.len()))
+    let mut node = self.roots.get(first)?;
+    let mut longest = node.terminal.then_some(1);
+    for (offset, word) in words.iter().enumerate().skip(1) {
+      let Some(next) = node.children.get(word) else {
+        break;
+      };
+      node = next;
+      if node.terminal {
+        longest = Some(offset.saturating_add(1));
+      }
+    }
+    longest
   }
 }
 
@@ -3140,6 +3149,7 @@ mod tests {
 
   use super::{
     Candidate, CandidateContainmentIndex, LegalFormData, PreparedLegalFormData,
+    PreparedRolePhraseIndex,
     crosses_sentence_end, drop_overlapping, ends_with_list_suffix,
     extend_backward, is_roman_legal_suffix,
     previous_nonempty_line_has_organization_cue, process_legal_form_matches,
@@ -3149,6 +3159,30 @@ mod tests {
   use crate::processors::PatternSlice;
   use crate::types::SearchMatch;
   use proptest::prelude::*;
+
+  #[test]
+  fn role_phrase_index_returns_the_longest_bounded_prefix() {
+    let index = PreparedRolePhraseIndex::new(&HashSet::from([
+      String::from("party"),
+      String::from("party representative"),
+      String::from("donneur d'ordre"),
+    ]));
+
+    assert_eq!(
+      index.longest_prefix(&[
+        String::from("party"),
+        String::from("representative"),
+        String::from("a"),
+      ]),
+      Some(2),
+    );
+    assert!(index.contains_sequence(&[
+      String::from("est"),
+      String::from("donneur"),
+      String::from("d"),
+      String::from("ordre"),
+    ]));
+  }
 
   proptest! {
     #[test]
