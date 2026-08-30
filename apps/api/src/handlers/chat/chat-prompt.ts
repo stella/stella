@@ -33,7 +33,6 @@ import type {
   CaseLawAnnotationVisibility,
   PracticeJurisdiction,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { CHAT_EDIT_APPLY_MODE } from "@/api/handlers/chat/chat-schema";
 import type {
   ChatEditApplyMode,

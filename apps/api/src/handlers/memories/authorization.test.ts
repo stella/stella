@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { canManageMemory } from "@/api/handlers/memories/authorization";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 
 const activeWorkspaceId = createSafeId<"workspace">();
 const archivedWorkspaceId = createSafeId<"workspace">();
-const currentUserId = createSafeId<"user">();
+const currentUserId = toSafeId<"user">("current-user");
 const accessibleWorkspaces = [
   { id: activeWorkspaceId, status: "active" as const },
   { id: archivedWorkspaceId, status: "archived" as const },
@@ -32,7 +32,7 @@ describe("memory management authorization", () => {
         memberRole: { role: "member" },
         memory: {
           scope: "user",
-          userId: createSafeId(),
+          userId: toSafeId<"user">("another-user"),
           workspaceId: null,
         },
       }),
