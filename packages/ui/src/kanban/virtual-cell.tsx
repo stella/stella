@@ -3,16 +3,46 @@ import {
   type ReactNode,
   type RefObject,
   type UIEvent,
+  useId,
   useRef,
 } from "react";
 
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useDndContext, type UniqueIdentifier } from "@dnd-kit/core";
+import {
+  SortableContext,
+  type SortableContextProps,
+  type SortingStrategy,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import {
+  defaultRangeExtractor,
+  type Range,
+  useVirtualizer,
+} from "@tanstack/react-virtual";
 
 import { cn } from "../lib/utils";
+import {
+  useKanbanDropTarget,
+  type KanbanVirtualScrollRequest,
+  type UseKanbanDropTargetOptions,
+} from "./sortable-interactions";
 
 const DEFAULT_ESTIMATE_SIZE_PX = 128;
 const DEFAULT_OVERSCAN = 8;
 const DEFAULT_LOAD_MORE_THRESHOLD_PX = 200;
+
+const retainActiveSortableIndex = (
+  range: Range,
+  activeIndex: number,
+): number[] => {
+  const indexes = defaultRangeExtractor(range);
+  if (activeIndex < 0 || indexes.includes(activeIndex)) {
+    return indexes;
+  }
+  indexes.push(activeIndex);
+  indexes.sort((left, right) => left - right);
+  return indexes;
+};
 
 export const KANBAN_VIRTUAL_CELL_PAGINATION = {
   NONE: "none",
@@ -29,11 +59,26 @@ export type KanbanVirtualCellPagination =
       onRequestMore: () => void;
     };
 
+/**
+ * Makes a virtual cell the canonical sortable context for its rendered rows.
+ *
+ * `getRowKey` remains responsible for React and virtualizer identity. A
+ * separate sortable identifier avoids narrowing an existing React key contract
+ * merely to support dnd-kit consumers.
+ */
+export type KanbanVirtualCellSortableContext<TRow> = {
+  dropTarget: Omit<UseKanbanDropTargetOptions, "itemIds" | "navigation">;
+  getRowId: (row: TRow) => UniqueIdentifier;
+  disabled?: SortableContextProps["disabled"] | undefined;
+  strategy?: SortingStrategy | undefined;
+};
+
 export type KanbanVirtualCellProps<TRow> = {
   rows: readonly TRow[];
   getRowKey: (row: TRow) => Key;
   renderRow: (row: TRow) => ReactNode;
   pagination: KanbanVirtualCellPagination;
+  sortable?: KanbanVirtualCellSortableContext<TRow> | undefined;
   containerRef?: RefObject<HTMLDivElement | null> | undefined;
   active?: boolean | undefined;
   backgroundColor?: string | undefined;
@@ -50,6 +95,7 @@ export const KanbanVirtualCell = <TRow,>({
   getRowKey,
   renderRow,
   pagination,
+  sortable,
   containerRef,
   active = false,
   backgroundColor,
@@ -60,8 +106,13 @@ export const KanbanVirtualCell = <TRow,>({
   className,
 }: KanbanVirtualCellProps<TRow>) => {
   const internalRef = useRef<HTMLDivElement>(null);
-  const scrollRef = containerRef ?? internalRef;
+  const fallbackDropTargetId = useId();
+  const scrollRef = internalRef;
   const requestedPageKeyRef = useRef<string | number | null>(null);
+  const itemIds = sortable ? rows.map(sortable.getRowId) : [];
+  const { active: activeDrag } = useDndContext();
+  const activeSortableIndex =
+    activeDrag === null ? -1 : itemIds.indexOf(activeDrag.id);
   const virtualizer = useVirtualizer({
     count: rows.length,
     estimateSize: () => estimateSize,
@@ -71,6 +122,24 @@ export const KanbanVirtualCell = <TRow,>({
     },
     getScrollElement: () => scrollRef.current,
     overscan,
+    rangeExtractor: (range) =>
+      retainActiveSortableIndex(range, activeSortableIndex),
+  });
+  const requestScroll = ({ itemId }: KanbanVirtualScrollRequest) => {
+    const index = itemIds.indexOf(itemId);
+    if (index !== -1) {
+      virtualizer.scrollToIndex(index, { align: "auto" });
+    }
+  };
+  const dropTarget = useKanbanDropTarget({
+    disabled: sortable?.dropTarget.disabled ?? sortable === undefined,
+    id: sortable?.dropTarget.id ?? fallbackDropTargetId,
+    itemIds,
+    navigation:
+      sortable === undefined
+        ? { type: "static" }
+        : { requestScroll, type: "virtual" },
+    position: sortable?.dropTarget.position ?? { column: -1, lane: -1 },
   });
 
   const handleScroll = ({ currentTarget }: UIEvent<HTMLDivElement>) => {
@@ -95,15 +164,24 @@ export const KanbanVirtualCell = <TRow,>({
     pagination.onRequestMore();
   };
 
-  return (
+  const setScrollElement = (element: HTMLDivElement | null) => {
+    internalRef.current = element;
+    if (containerRef) {
+      containerRef.current = element;
+    }
+    dropTarget.setNodeRef(element);
+  };
+
+  const content = (
     <div
       className={cn(
         "bg-muted/20 max-h-[min(60vh,40rem)] min-h-20 overflow-y-auto overscroll-y-contain rounded-xl p-2 transition-[background-color,outline-color]",
         active && "bg-primary/5 ring-primary/50 ring-2",
         className,
       )}
+      data-kanban-cell={sortable?.dropTarget.id}
       onScroll={handleScroll}
-      ref={scrollRef}
+      ref={setScrollElement}
       style={backgroundColor ? { backgroundColor } : undefined}
     >
       <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
@@ -127,5 +205,22 @@ export const KanbanVirtualCell = <TRow,>({
       </div>
       {footer}
     </div>
+  );
+
+  if (sortable === undefined) {
+    return content;
+  }
+
+  return (
+    <SortableContext
+      {...(sortable.disabled === undefined
+        ? {}
+        : { disabled: sortable.disabled })}
+      id={sortable.dropTarget.id}
+      items={itemIds}
+      strategy={sortable.strategy ?? verticalListSortingStrategy}
+    >
+      {content}
+    </SortableContext>
   );
 };

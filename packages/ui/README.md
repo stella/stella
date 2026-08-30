@@ -116,10 +116,16 @@ import {
 } from "@stll/ui/kanban";
 
 const Card = ({ id }: { id: string }) => {
-  const { dragHandle, setNodeRef } = useKanbanSortable({ id });
+  const { activator, setNodeRef } = useKanbanSortable({
+    activation: { type: "handle" },
+    id,
+  });
+  if (activator.type !== "handle") {
+    return null;
+  }
   return (
     <article ref={setNodeRef}>
-      <KanbanDragHandle bindings={dragHandle} label="Move card" />
+      <KanbanDragHandle bindings={activator.bindings} label="Move card" />
     </article>
   );
 };
@@ -178,6 +184,32 @@ const matrix = buildKanbanBoardMatrix({
   )}
 />;
 ```
+
+When rows inside a virtual cell are sortable, give the cell a unique drop target
+and its ordered matrix position. The cell registers its actual scroll element,
+including when `rows` is empty, and owns the matching `SortableContext`.
+
+```tsx
+<KanbanVirtualCell
+  getRowKey={(row) => row.id}
+  pagination={{ type: "none" }}
+  renderRow={(row) => <Card row={row} />}
+  rows={cell.rows}
+  sortable={{
+    dropTarget: {
+      id: cellId,
+      position: { column: columnIndex, lane: laneIndex },
+    },
+    getRowId: (row) => row.id,
+  }}
+/>
+```
+
+The default keyboard coordinates move through items in their cell before
+crossing into adjacent columns or subgroup lanes; empty cells remain reachable.
+Pointer and touch drops outside registered board targets cancel. Choose an
+explicit `{ type: "handle" }` activation for the 44px handle, or `{ type:
+"item" }` when the whole item is the intended activation surface.
 
 ## Styles
 

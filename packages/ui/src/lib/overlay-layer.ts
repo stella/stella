@@ -7,6 +7,8 @@
 // composer and its veil) is NOT modal, so anything with a dimming backdrop has
 // to cover it. Dialogs sat at z-50 and lost that argument, which left the
 // composer painted on top of a dimmed template-check dialog.
+export const BOARD_DRAG_OVERLAY_Z_INDEX = 75;
+
 export const OVERLAY_LAYER_CLASS_NAMES = {
   /** Docked composer, suggestion chips, and other in-pane floating chrome. */
   chrome: "z-[80]",

@@ -16,22 +16,37 @@ export type { KanbanColumnHeaderProps } from "./column-header";
 export { KanbanColumnHeader } from "./column-header";
 export type {
   KanbanDragHandleProps,
+  KanbanDragCancelEvent,
+  KanbanDragEndEvent,
+  KanbanDragOverEvent,
+  KanbanDragStartEvent,
+  KanbanSortableActivationMode,
   KanbanSortableBindings,
   KanbanSortableBoardProps,
   KanbanSortableColumnsProps,
   KanbanSortableListProps,
+  KanbanVirtualScrollRequest,
+  KanbanCellVirtualNavigation,
   UseKanbanSortableOptions,
+  UseKanbanDropTargetOptions,
 } from "./sortable-interactions";
 export {
+  KANBAN_BOARD_AUTO_SCROLL_OPTIONS,
   KANBAN_MOUSE_ACTIVATION_DISTANCE,
+  KANBAN_BOARD_COLLISION_DETECTION,
+  KANBAN_DRAG_OVERLAY_Z_INDEX,
+  KANBAN_SORTABLE_ACTIVATION_MODES,
   KANBAN_TOUCH_ACTIVATION_CONSTRAINT,
   KanbanDragHandle,
   KanbanSortableBoard,
   KanbanSortableColumns,
   KanbanSortableList,
   useKanbanSortable,
+  useKanbanDropTarget,
   useKanbanSortableSensors,
+  kanbanKeyboardCoordinates,
 } from "./sortable-interactions";
+export type { KanbanSortableCellPosition } from "./sortable-interactions";
 export type { KanbanDirection, KanbanHorizontalEdge } from "./sortable-edge";
 export {
   getKanbanHorizontalEdge,
@@ -92,6 +107,7 @@ export { KanbanSubgroupBoard } from "./subgroup-board";
 export type {
   KanbanVirtualCellPagination,
   KanbanVirtualCellProps,
+  KanbanVirtualCellSortableContext,
 } from "./virtual-cell";
 export {
   KANBAN_VIRTUAL_CELL_PAGINATION,
