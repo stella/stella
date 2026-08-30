@@ -74,7 +74,7 @@ describe("local Quickwit generations", () => {
       stringField(rustfsSetupEnvironment, "QUICKWIT09_INDEX_ROOT_URI"),
     );
     expect(stringField(rustfsSetup, "entrypoint")).toMatch(
-      /quickwit09_bucket=\$\$\{QUICKWIT09_INDEX_ROOT_URI#s3:\/\/\}/,
+      /quickwit09_bucket=\$\$\{QUICKWIT09_INDEX_ROOT_URI#s3:\/\/\}/u,
     );
     expect(stringArrayField(q09, "ports")).not.toEqual(
       stringArrayField(q08, "ports"),
