@@ -5,6 +5,15 @@ const fixturePath = "/src/kanban/fixtures/sortable-interactions.fixture.html";
 
 const openFixture = async (page: Page) => {
   await page.goto(fixturePath);
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () =>
+            document.documentElement.dataset["kanbanInteractionReady"] ?? "",
+        ),
+    )
+    .toBe("true");
   return page.getByRole("button", { name: "Move first" });
 };
 

@@ -114,6 +114,9 @@ const SortableFixture = () => (
       document.documentElement.dataset["draggedOver"] =
         over === null ? "" : String(over.id);
     }}
+    onInteractionReady={() => {
+      document.documentElement.dataset["kanbanInteractionReady"] = "true";
+    }}
     overlayProps={{ dropAnimation: null }}
     overlay={(activeId) =>
       activeId === null ? null : <output data-overlay="">{activeId}</output>

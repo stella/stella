@@ -311,14 +311,9 @@ class KanbanKeyboardSensor implements SensorInstance {
 
   private readonly handleKeyDown = (event: KeyboardEvent) => {
     // The sensor can be constructed while the activation key is still
-    // bubbling. Ignore that exact native event even when React has wrapped it
-    // before passing it to the sensor; the next key must be observed without
-    // waiting for another task.
-    if (
-      event === this.props.event ||
-      (event.target === this.props.event.target &&
-        event.timeStamp === this.props.event.timeStamp)
-    ) {
+    // bubbling. Ignore that exact native event; distinct keys may share a
+    // timestamp in a fast browser session and must never be coalesced.
+    if (event === this.props.event) {
       return;
     }
     const keyboardCodes = this.props.options.keyboardCodes;
@@ -395,25 +390,37 @@ class KanbanKeyboardSensor implements SensorInstance {
     retryCount: number,
   ) => {
     const currentContext = this.props.context.current;
+    // onStart enters dnd-kit's React state machine. A key pressed immediately
+    // after Space can reach this native listener before that active context is
+    // committed. Preserve that real input until the context has registered the
+    // active item; processing it earlier would navigate from an incomplete
+    // target set and silently drop the key.
+    if (currentContext.active?.id !== this.props.active) {
+      requestAnimationFrame(() => {
+        if (this.listeners.signal.aborted || this.moveSequence !== sequence) {
+          return;
+        }
+        this.move(event, sequence, retryCount);
+      });
+      return;
+    }
     const collisionRect = currentContext.collisionRect;
     const currentCoordinates = collisionRect
       ? { x: collisionRect.left, y: collisionRect.top }
       : { x: 0, y: 0 };
     this.referenceCoordinates ??= currentCoordinates;
+    const activeData = currentContext.active.data.current;
     const coordinates = this.props.options.coordinateGetter?.(event, {
       active: this.props.active,
       context: currentContext,
       currentCoordinates,
     });
     if (coordinates === undefined) {
-      if (
-        getKanbanKeyboardTargetState(currentContext.active?.data.current)
-          ?.type !== "pending"
-      ) {
+      if (getKanbanKeyboardTargetState(activeData)?.type !== "pending") {
         return;
       }
       if (retryCount >= KANBAN_KEYBOARD_TARGET_RETRY_LIMIT) {
-        clearKanbanKeyboardTarget(currentContext.active?.data.current);
+        clearKanbanKeyboardTarget(activeData);
         return;
       }
       requestAnimationFrame(() => {
@@ -451,6 +458,8 @@ export type KanbanSortableBoardProps = {
   onDragStart?: ((event: KanbanDragStartEvent) => void) | undefined;
   onDragOver?: ((event: KanbanDragOverEvent) => void) | undefined;
   onDragCancel?: ((event: KanbanDragCancelEvent) => void) | undefined;
+  /** Called once mounted child drop targets can safely receive input. */
+  onInteractionReady?: (() => void) | undefined;
   /** Rendered in document.body while an item is active. */
   overlay?:
     | ((activeId: UniqueIdentifier | null) => React.ReactNode)
@@ -466,6 +475,11 @@ export type UseKanbanDropTargetOptions = {
   position: KanbanSortableCellPosition;
 };
 
+// Keep sensor descriptors stable while child sortable and virtual-cell effects
+// register with dnd-kit. Components used outside a KanbanSortableBoard retain
+// their existing behavior through the ready default.
+const KanbanInteractionReadinessContext = React.createContext(true);
+
 /**
  * Register a board-level drop target such as an empty cell or terminal lane.
  *
@@ -480,6 +494,7 @@ export const useKanbanDropTarget = ({
   navigation,
   position,
 }: UseKanbanDropTargetOptions) => {
+  const interactionReady = React.useContext(KanbanInteractionReadinessContext);
   const dropTarget = useDroppable({
     data: {
       itemIds,
@@ -487,7 +502,7 @@ export const useKanbanDropTarget = ({
       position,
       type: KANBAN_DROP_TARGET_TYPES.CELL,
     } satisfies KanbanCellDropData,
-    ...(disabled === undefined ? {} : { disabled }),
+    disabled: !interactionReady || disabled === true,
     id,
   });
 
@@ -515,11 +530,34 @@ export const KanbanSortableBoard = ({
   onDragStart,
   onDragOver,
   onDragCancel,
+  onInteractionReady,
   overlay,
   overlayProps,
 }: KanbanSortableBoardProps) => {
   const [activeId, setActiveId] = React.useState<UniqueIdentifier | null>(null);
+  const [interactionReady, setInteractionReady] = React.useState(false);
+  const interactionReadyNotified = React.useRef(false);
   const defaultSensors = useKanbanSortableSensors(keyboardCoordinates);
+
+  // dnd-kit registers child droppables after commit. Keep the sensor list
+  // stable, but hold sortable sources and virtual cells disabled until that
+  // registration pass has completed.
+  React.useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      setInteractionReady(true);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!interactionReady || interactionReadyNotified.current) {
+      return;
+    }
+    interactionReadyNotified.current = true;
+    onInteractionReady?.();
+  }, [interactionReady, onInteractionReady]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id);
@@ -537,31 +575,33 @@ export const KanbanSortableBoard = ({
   };
 
   return (
-    <DndContext
-      autoScroll={autoScroll ?? KANBAN_BOARD_AUTO_SCROLL_OPTIONS}
-      {...(accessibility === undefined ? {} : { accessibility })}
-      collisionDetection={
-        collisionDetection ?? KANBAN_BOARD_COLLISION_DETECTION
-      }
-      onDragCancel={handleDragCancel}
-      onDragEnd={handleDragEnd}
-      {...(onDragOver === undefined ? {} : { onDragOver })}
-      onDragStart={handleDragStart}
-      sensors={sensors ?? defaultSensors}
-    >
-      {children}
-      {overlay && typeof document !== "undefined"
-        ? createPortal(
-            <DragOverlay
-              {...overlayProps}
-              zIndex={overlayProps?.zIndex ?? KANBAN_DRAG_OVERLAY_Z_INDEX}
-            >
-              {overlay(activeId)}
-            </DragOverlay>,
-            document.body,
-          )
-        : null}
-    </DndContext>
+    <KanbanInteractionReadinessContext value={interactionReady}>
+      <DndContext
+        autoScroll={autoScroll ?? KANBAN_BOARD_AUTO_SCROLL_OPTIONS}
+        {...(accessibility === undefined ? {} : { accessibility })}
+        collisionDetection={
+          collisionDetection ?? KANBAN_BOARD_COLLISION_DETECTION
+        }
+        onDragCancel={handleDragCancel}
+        onDragEnd={handleDragEnd}
+        {...(onDragOver === undefined ? {} : { onDragOver })}
+        onDragStart={handleDragStart}
+        sensors={sensors ?? defaultSensors}
+      >
+        {children}
+        {overlay && typeof document !== "undefined"
+          ? createPortal(
+              <DragOverlay
+                {...overlayProps}
+                zIndex={overlayProps?.zIndex ?? KANBAN_DRAG_OVERLAY_Z_INDEX}
+              >
+                {overlay(activeId)}
+              </DragOverlay>,
+              document.body,
+            )
+          : null}
+      </DndContext>
+    </KanbanInteractionReadinessContext>
   );
 };
 
@@ -680,6 +720,7 @@ export const useKanbanSortable = ({
   id,
   disabled,
 }: UseKanbanSortableOptions) => {
+  const interactionReady = React.useContext(KanbanInteractionReadinessContext);
   // useSortable merges custom data into a new object after virtualizer renders.
   // The stable nested holder preserves the current navigation branch.
   const data = React.useMemo(
@@ -692,8 +733,8 @@ export const useKanbanSortable = ({
   );
   const sortable = useSortable({
     data,
+    disabled: !interactionReady || disabled === true,
     id,
-    ...(disabled === undefined ? {} : { disabled }),
   });
 
   const setNodeRef = (element: HTMLElement | null) => {
