@@ -338,6 +338,50 @@ migrations, so a fresh managed Postgres needs no manual role setup.
 If a migration fails, Railway should not promote the API deployment. Fix the
 database/config problem, then redeploy the API service.
 
+### One-time auth backfill (updating across v0.7.28)
+
+Instances created before v0.7.28 that already have signed-in users must run a
+one-time backfill when updating: the auth schema migration stops with
+`issuer backfill is incomplete` until existing account rows carry their
+identity provider issuer. Fresh deployments are unaffected.
+
+Run this during a quiet window: the running pre-v0.7.28 API keeps serving
+while the backfill executes, and a sign-in that lands between the backfill and
+the final migration can make that migration report the guard again (rerun the
+backfill and migrate) or fail that one sign-in until the redeploy completes.
+Nothing is corrupted in either case.
+
+The scripts ship in the API image. With the Railway CLI linked to the project,
+run them inside the API service in a single shell so the temporary files
+persist:
+
+```sh
+railway ssh --service api -- sh -c '
+  set -e
+  umask 177
+  bun /app/apps/api/src/db/migrate.js || true
+  if [ -n "${MICROSOFT_AUTH_CLIENT_ID:-}" ]; then
+    bun /app/better-auth-microsoft-identity-map.js \
+      --output /tmp/identity-map.json --writes-frozen
+  else
+    printf "{\"formatVersion\":1,\"microsoftAccounts\":[]}" > /tmp/identity-map.json
+  fi
+  bun /app/better-auth-migration-audit.js pre-migration \
+    --baseline /tmp/baseline.json --identity-map /tmp/identity-map.json \
+    --oauth-base-url "$BETTER_AUTH_URL"
+  bun /app/better-auth-17-backfill.js --baseline /tmp/baseline.json \
+    --identity-map /tmp/identity-map.json --batch-size 500 \
+    --oauth-base-url "$BETTER_AUTH_URL" --writes-frozen
+  bun /app/apps/api/src/db/migrate.js
+'
+```
+
+The first migrate applies everything up to the guarded step, the identity map
+and pre-migration audit record the trusted identities (Microsoft identities
+are derived from stored tokens), the backfill fills the identity columns, and
+the second migrate applies the remaining constraints. Then redeploy the API
+service so the pre-deploy migration confirms a clean state.
+
 ## Storage Bucket
 
 The public template provisions a Railway Storage Bucket and wires its
