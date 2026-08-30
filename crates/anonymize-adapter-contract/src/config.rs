@@ -144,6 +144,7 @@ fn address_seed_data_from_binding(
     boundary_words: data.boundary_words,
     br_cep_cue_words: data.br_cep_cue_words,
     unit_abbreviations: data.unit_abbreviations,
+    directional_abbreviations: data.directional_abbreviations,
     standalone_street: data.standalone_street.map(|data| {
       StandaloneStreetData {
         street_type_words: data.street_type_words,

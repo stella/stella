@@ -2,16 +2,6 @@
   "base": "baseline-all-on",
   "changes": [
     {
-      "type": "set",
-      "path": ["signature_data", "party_role_name_evidence"],
-      "value": "0,3:jan0,4:petr"
-    },
-    {
-      "type": "array",
-      "path": ["signature_data", "person_value_labels"],
-      "segments": [{ "type": "copy", "start": 0, "end": 2 }]
-    },
-    {
       "type": "array",
       "path": ["address_seed_data", "boundary_words"],
       "segments": [
@@ -45,6 +35,11 @@
           "end": 175
         }
       ]
+    },
+    {
+      "type": "array",
+      "path": ["address_seed_data", "directional_abbreviations"],
+      "segments": []
     },
     {
       "type": "array",
@@ -5624,6 +5619,11 @@
       ]
     },
     {
+      "type": "set",
+      "path": ["signature_data", "party_role_name_evidence"],
+      "value": "0,3:jan0,4:petr"
+    },
+    {
       "type": "array",
       "path": ["signature_data", "person_list_labels"],
       "segments": [
@@ -5631,6 +5631,17 @@
           "type": "copy",
           "start": 0,
           "end": 1
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["signature_data", "person_value_labels"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 2
         }
       ]
     },

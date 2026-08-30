@@ -1,0 +1,4 @@
+{
+  "_comment": "Cardinal abbreviations that can continue an address after a street-ending period. Locale-scoped because short direction letters are ambiguous prose outside their address conventions.",
+  "en": ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+}

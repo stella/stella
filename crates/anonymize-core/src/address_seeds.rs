@@ -229,6 +229,7 @@ pub struct AddressSeedData {
   pub br_cep_cue_words: Vec<String>,
   #[serde(default)]
   pub unit_abbreviations: Vec<String>,
+  pub directional_abbreviations: Vec<String>,
   #[serde(default)]
   pub standalone_street: Option<StandaloneStreetData>,
 }
@@ -249,6 +250,7 @@ pub(crate) struct PreparedAddressSeedData {
   boundary_phrase_search: Option<BoundaryPhraseSearch>,
   br_cep_cue_search: Option<SearchIndex>,
   unit_abbreviations: BTreeSet<String>,
+  directional_abbreviations: BTreeSet<String>,
   standalone_street: Option<PreparedStandaloneStreetData>,
   postal_code_re: Regex,
   br_cep_shape_re: Regex,
@@ -328,6 +330,10 @@ impl PreparedAddressSeedData {
       boundary_phrase_search,
       br_cep_cue_search: literal_search(data.br_cep_cue_words)?,
       unit_abbreviations: lowercased_set(data.unit_abbreviations),
+      directional_abbreviations: data
+        .directional_abbreviations
+        .into_iter()
+        .collect(),
       standalone_street,
       postal_code_re: compile_regex(
         r"(?u)(?:\d{5}[-‐‑‒–—―]\d{4}|\d{5}[-‐‑‒–—―]\d{3}|\d{3}\s\d{2}|\d{2}[-‐‑‒–—―]\d{3}|\d{5})",
@@ -355,6 +361,10 @@ impl PreparedAddressSeedData {
     })
   }
 
+  pub(crate) const fn directional_abbreviations(&self) -> &BTreeSet<String> {
+    &self.directional_abbreviations
+  }
+
   pub(crate) fn process_profiled(
     &self,
     matches: &[SearchMatch],
@@ -377,7 +387,12 @@ impl PreparedAddressSeedData {
     profile.seed_count = seeds.len();
 
     let cluster_start = Instant::now();
-    let clusters = cluster_seeds(&seeds, full_text, &entity_index);
+    let clusters = cluster_seeds(
+      &seeds,
+      full_text,
+      &entity_index,
+      &self.directional_abbreviations,
+    );
     let runs = run_evidence(&clusters);
     profile.cluster_elapsed_us = elapsed_us(cluster_start);
     profile.cluster_count = clusters.len();
@@ -2138,7 +2153,7 @@ const fn is_mark_category(category: GeneralCategory) -> bool {
 
 fn is_house_number_word(word: &str) -> bool {
   !word.is_empty()
-    && word.len() <= 13
+    && word.chars().count() <= 13
     && word.split(['-', '/']).all(is_house_number_part)
 }
 
@@ -2148,7 +2163,9 @@ fn is_house_number_word(word: &str) -> bool {
 fn is_house_number_part(part: &str) -> bool {
   let digits = part.trim_end_matches(char::is_alphabetic);
   !digits.is_empty()
-    && digits.chars().all(|ch| ch.is_ascii_digit())
+    && digits
+      .chars()
+      .all(|ch| ch.general_category() == GeneralCategory::DecimalNumber)
     && part.chars().count().saturating_sub(digits.chars().count()) <= 1
 }
 
@@ -2191,6 +2208,7 @@ fn cluster_seeds(
   seeds: &[Seed],
   full_text: &str,
   entity_index: &NonAddressEntityIndex,
+  directional_abbreviations: &BTreeSet<String>,
 ) -> Vec<SeedCluster> {
   let Some(first) = seeds.first() else {
     return Vec::new();
@@ -2221,6 +2239,7 @@ fn cluster_seeds(
           seed,
         },
         entity_index,
+        directional_abbreviations,
       )
     } else {
       ClusterSeparation::DistanceGap
@@ -2311,6 +2330,7 @@ impl NonAddressEntityIndex {
     full_text: &str,
     gap_start: usize,
     gap_end: usize,
+    directional_abbreviations: &BTreeSet<String>,
   ) -> bool {
     let Some((query_start, query_end)) = u32::try_from(gap_start)
       .ok()
@@ -2331,7 +2351,7 @@ impl NonAddressEntityIndex {
             let Some(residual) = full_text.get(cursor..residual_end) else {
               return Ok::<_, ()>(());
             };
-            prose.add(prose_measure(residual));
+            prose.add(prose_measure(residual, directional_abbreviations));
             if prose.exceeds_gap_limit() {
               return Err(());
             }
@@ -2348,7 +2368,7 @@ impl NonAddressEntityIndex {
     let Some(residual) = full_text.get(cursor..gap_end) else {
       return false;
     };
-    prose.add(prose_measure(residual));
+    prose.add(prose_measure(residual, directional_abbreviations));
     prose.exceeds_gap_limit()
   }
 
@@ -2490,13 +2510,20 @@ fn cluster_separation(
   gap_end: usize,
   join: ClusterJoin<'_>,
   entity_index: &NonAddressEntityIndex,
+  directional_abbreviations: &BTreeSet<String>,
 ) -> ClusterSeparation {
   let has_text_barrier = full_text.get(gap_start..gap_end).is_some_and(|gap| {
     has_paragraph_break(gap)
       || has_prose_wrap_after_weak_cluster(gap, join.cluster)
-      || (join.guards_against_prose() && has_prose_run(gap))
+      || (join.guards_against_prose()
+        && has_prose_run(gap, directional_abbreviations))
       || (!join.guards_against_prose()
-        && entity_index.residual_gap_has_prose(full_text, gap_start, gap_end))
+        && entity_index.residual_gap_has_prose(
+          full_text,
+          gap_start,
+          gap_end,
+          directional_abbreviations,
+        ))
   });
   if has_text_barrier {
     return ClusterSeparation::TextBarrier;
@@ -2513,8 +2540,11 @@ fn cluster_separation(
 /// tolerated so a connective still joins components ("10 Main Street in
 /// Springfield"). Only applied before a street word opens the address; see
 /// `ClusterJoin::guards_against_prose`.
-fn has_prose_run(gap: &str) -> bool {
-  prose_measure(gap).exceeds_gap_limit()
+fn has_prose_run(
+  gap: &str,
+  directional_abbreviations: &BTreeSet<String>,
+) -> bool {
+  prose_measure(gap, directional_abbreviations).exceeds_gap_limit()
 }
 
 #[derive(Clone, Copy, Default)]
@@ -2538,9 +2568,12 @@ impl ProseMeasure {
   }
 }
 
-fn prose_measure(gap: &str) -> ProseMeasure {
+fn prose_measure(
+  gap: &str,
+  directional_abbreviations: &BTreeSet<String>,
+) -> ProseMeasure {
   let mut measure = ProseMeasure {
-    sentence_boundary: has_sentence_boundary(gap),
+    sentence_boundary: has_sentence_boundary(gap, directional_abbreviations),
     ..ProseMeasure::default()
   };
   for word in gap
@@ -2555,7 +2588,10 @@ fn prose_measure(gap: &str) -> ProseMeasure {
   measure
 }
 
-fn has_sentence_boundary(text: &str) -> bool {
+fn has_sentence_boundary(
+  text: &str,
+  directional_abbreviations: &BTreeSet<String>,
+) -> bool {
   if text.trim() == "." {
     return true;
   }
@@ -2573,7 +2609,10 @@ fn has_sentence_boundary(text: &str) -> bool {
     let after_space = after_period.trim_start();
     if after_space.len() < after_period.len()
       && after_space.chars().next().is_some_and(char::is_uppercase)
-      && !starts_with_address_directional_continuation(after_space)
+      && !starts_with_address_directional_continuation(
+        after_space,
+        directional_abbreviations,
+      )
     {
       return true;
     }
@@ -2581,14 +2620,17 @@ fn has_sentence_boundary(text: &str) -> bool {
   false
 }
 
-pub(crate) fn starts_with_address_directional_continuation(text: &str) -> bool {
+pub(crate) fn starts_with_address_directional_continuation(
+  text: &str,
+  directional_abbreviations: &BTreeSet<String>,
+) -> bool {
   let token_end = text
     .find(|ch: char| !ch.is_ascii_alphabetic())
     .unwrap_or(text.len());
   let Some(token) = text.get(..token_end) else {
     return false;
   };
-  if !matches!(token, "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW") {
+  if !directional_abbreviations.contains(token) {
     return false;
   }
   text
@@ -3099,6 +3141,17 @@ mod tests {
     let value = "A\u{0308}1";
 
     assert_eq!(plausible_unit_value_end(value, 0), Some(value.len()));
+  }
+
+  #[test]
+  fn unit_value_end_accepts_bounded_unicode_decimal_numbers() {
+    for value in ["１２３４５", "١٢٣٤٥"] {
+      assert_eq!(plausible_unit_value_end(value, 0), Some(value.len()));
+    }
+    assert_eq!(
+      plausible_unit_value_end("１２３４５６７８９０１２３４", 0),
+      None
+    );
   }
 
   #[test]

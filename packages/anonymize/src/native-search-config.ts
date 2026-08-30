@@ -219,6 +219,7 @@ export type NativeAddressSeedData = {
   boundary_words: string[];
   br_cep_cue_words: string[];
   unit_abbreviations: string[];
+  directional_abbreviations: string[];
   /** Present only when `standaloneStreetDetection` is enabled. */
   standalone_street?: NativeStandaloneStreetData;
 };

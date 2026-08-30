@@ -203,6 +203,7 @@ fn address_seed_data_len(data: Option<&AddressSeedData>) -> usize {
       .len()
       .saturating_add(data.br_cep_cue_words.len())
       .saturating_add(data.unit_abbreviations.len())
+      .saturating_add(data.directional_abbreviations.len())
   })
 }
 

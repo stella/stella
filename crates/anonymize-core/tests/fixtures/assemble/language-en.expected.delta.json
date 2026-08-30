@@ -3,11 +3,6 @@
   "changes": [
     {
       "type": "array",
-      "path": ["signature_data", "person_value_labels"],
-      "segments": [{ "type": "copy", "start": 2, "end": 3 }]
-    },
-    {
-      "type": "array",
       "path": ["address_seed_data", "boundary_words"],
       "segments": [
         {
@@ -1360,6 +1355,17 @@
           "type": "copy",
           "start": 3,
           "end": 4
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["signature_data", "person_value_labels"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 2,
+          "end": 3
         }
       ]
     },

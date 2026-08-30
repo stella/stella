@@ -266,6 +266,19 @@ fn barrier_address_engine() -> PreparedEngine {
 }
 
 fn barrier_address_engine_with_threshold(threshold: f64) -> PreparedEngine {
+  barrier_address_engine_with_directionals(
+    threshold,
+    ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+      .into_iter()
+      .map(String::from)
+      .collect(),
+  )
+}
+
+fn barrier_address_engine_with_directionals(
+  threshold: f64,
+  directional_abbreviations: Vec<String>,
+) -> PreparedEngine {
   let literal = |pattern: &str| SearchPattern::LiteralWithOptions {
     pattern: String::from(pattern),
     case_insensitive: Some(true),
@@ -302,7 +315,10 @@ fn barrier_address_engine_with_threshold(threshold: f64) -> PreparedEngine {
       sources: vec![vec![String::from("city")]].into(),
       filters: Some(DenyListFilterData::default()),
     }),
-    address_seed_data: Some(AddressSeedData::default()),
+    address_seed_data: Some(AddressSeedData {
+      directional_abbreviations,
+      ..AddressSeedData::default()
+    }),
     ..empty_config(PreparedEngineSlices::default())
   };
   config.policy.threshold = threshold;
@@ -389,6 +405,21 @@ fn street_period_before_directional_keeps_address_evidence_joined() {
     "address entities: {addresses:?}; address seeds: {:?}",
     result.detections.entities.address_seed(),
   );
+}
+
+#[test]
+fn unconfigured_directional_does_not_join_address_evidence() {
+  let prepared = barrier_address_engine_with_directionals(0.0, Vec::new());
+  let result = prepared
+    .redact_static_entities(
+      "123 Main Street. E, Case No. 1:23-cv-04567, Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(!addresses.contains(&"123 Main Street"));
+  assert!(addresses.contains(&"Paris 75002"));
 }
 
 #[test]
@@ -586,23 +617,26 @@ fn preserves_unit_abbreviation_inside_address_seed_span() {
   .expect("address seed data should prepare");
 
   for designator in ["Apt.", "Apt"] {
-    let suffix = "á".repeat(97);
-    let full_text = format!(
-      "Notices go to 10 Main Street, Springfield 12345 {designator} 5 {suffix}. Thank you."
-    );
-    let result = prepared
-      .redact_static_entities(&full_text, &OperatorConfig::default())
-      .expect("static redaction should succeed");
-    let expected =
-      format!("10 Main Street, Springfield 12345 {designator} 5 {suffix}");
+    for unit_value in ["5", "１２３４５", "١٢٣٤٥"] {
+      let suffix = "á".repeat(97);
+      let full_text = format!(
+        "Notices go to 10 Main Street, Springfield 12345 {designator} {unit_value} {suffix}. Thank you."
+      );
+      let result = prepared
+        .redact_static_entities(&full_text, &OperatorConfig::default())
+        .expect("static redaction should succeed");
+      let expected = format!(
+        "10 Main Street, Springfield 12345 {designator} {unit_value} {suffix}"
+      );
 
-    assert!(
-      address_texts(&result).contains(&expected.as_str()),
-      "resolved address entities: {:?}; address seed entities: {:?}",
-      result.resolved_entities,
-      result.detections.entities.address_seed(),
-    );
-    assert!(!result.redaction.redacted_text.contains(&suffix));
+      assert!(
+        address_texts(&result).contains(&expected.as_str()),
+        "resolved address entities: {:?}; address seed entities: {:?}",
+        result.resolved_entities,
+        result.detections.entities.address_seed(),
+      );
+      assert!(!result.redaction.redacted_text.contains(&suffix));
+    }
   }
 }
 

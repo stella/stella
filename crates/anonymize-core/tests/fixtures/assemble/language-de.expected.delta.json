@@ -3,11 +3,6 @@
   "changes": [
     {
       "type": "array",
-      "path": ["signature_data", "person_value_labels"],
-      "segments": [{ "type": "copy", "start": 2, "end": 3 }]
-    },
-    {
-      "type": "array",
       "path": ["address_seed_data", "boundary_words"],
       "segments": [
         {
@@ -26,6 +21,11 @@
           "end": 183
         }
       ]
+    },
+    {
+      "type": "array",
+      "path": ["address_seed_data", "directional_abbreviations"],
+      "segments": []
     },
     {
       "type": "array",
@@ -1438,6 +1438,17 @@
         {
           "type": "copy",
           "start": 1,
+          "end": 3
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["signature_data", "person_value_labels"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 2,
           "end": 3
         }
       ]

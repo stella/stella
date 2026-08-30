@@ -2188,7 +2188,8 @@
       "portador",
       "portadora"
     ],
-    "unit_abbreviations": ["apt.", "bldg.", "fl.", "ste.", "unit."]
+    "unit_abbreviations": ["apt.", "bldg.", "fl.", "ste.", "unit."],
+    "directional_abbreviations": ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
   },
   "country_data": {
     "labels": [

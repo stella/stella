@@ -78,11 +78,22 @@ fn line_context<'a>(
   }))
 }
 
+pub(crate) struct FilterEntityFalsePositivesArgs<'a> {
+  pub(crate) entities: Vec<PipelineEntity>,
+  pub(crate) document: &'a ResolutionDocument<'a>,
+  pub(crate) filters: Option<&'a DenyListFilterData>,
+  pub(crate) directional_abbreviations: Option<&'a BTreeSet<String>>,
+}
+
 pub(crate) fn filter_entity_false_positives(
-  entities: Vec<PipelineEntity>,
-  document: &ResolutionDocument<'_>,
-  filters: Option<&DenyListFilterData>,
+  args: FilterEntityFalsePositivesArgs<'_>,
 ) -> Result<Vec<PipelineEntity>> {
+  let FilterEntityFalsePositivesArgs {
+    entities,
+    document,
+    filters,
+    directional_abbreviations,
+  } = args;
   let offsets = document.offsets();
   let mut filtered = Vec::with_capacity(entities.len());
   for entity in entities {
@@ -91,7 +102,9 @@ pub(crate) fn filter_entity_false_positives(
       continue;
     }
 
-    let Some(normalized) = normalize_entity(entity, &offsets, filters)? else {
+    let Some(normalized) =
+      normalize_entity(entity, &offsets, filters, directional_abbreviations)?
+    else {
       continue;
     };
     if should_reject_entity(&normalized, document, &offsets, filters)? {
@@ -107,6 +120,7 @@ fn normalize_entity(
   mut entity: PipelineEntity,
   offsets: &ByteOffsets<'_>,
   filters: Option<&DenyListFilterData>,
+  directional_abbreviations: Option<&BTreeSet<String>>,
 ) -> Result<Option<PipelineEntity>> {
   let raw_text = offsets.slice_ref(entity.start, entity.end)?;
   let mut start_byte = 0usize;
@@ -126,9 +140,11 @@ fn normalize_entity(
     }
 
     let address_text = slice(raw_text, start_byte, end_byte)?;
-    if let Some(trimmed_end) =
-      trim_trailing_address_prose(address_text, filters)
-    {
+    if let Some(trimmed_end) = trim_trailing_address_prose(
+      address_text,
+      filters,
+      directional_abbreviations,
+    ) {
       end_byte = start_byte.saturating_add(trimmed_end);
     }
   }
@@ -732,7 +748,7 @@ fn is_all_caps_boilerplate_line(
     .trim_end()
     .chars()
     .next_back()
-    .is_some_and(|ch| matches!(ch, '.' | '!' | '?'));
+    .is_some_and(|ch| matches!(ch, '.' | '!' | '?' | '。' | '！' | '？'));
   let legal_form_heading = entity.source == DetectionSource::LegalForm
     && !has_caption_delimiter
     && !has_sentence_terminal;
@@ -855,6 +871,7 @@ fn looks_like_address_start(text: &str, filters: &DenyListFilterData) -> bool {
 fn trim_trailing_address_prose(
   text: &str,
   filters: &DenyListFilterData,
+  directional_abbreviations: Option<&BTreeSet<String>>,
 ) -> Option<usize> {
   for (index, ch) in text.char_indices() {
     if ch != '.' {
@@ -881,7 +898,11 @@ fn trim_trailing_address_prose(
       // dot when a unit/address continuation follows ("Suite 100"); otherwise
       // it is a real sentence boundary and trailing prose must be trimmed. Keep
       // the abbreviation dot in the retained span.
-      if is_unit_or_address_continuation(after, filters) {
+      if is_unit_or_address_continuation(
+        after,
+        filters,
+        directional_abbreviations,
+      ) {
         continue;
       }
       if after.chars().next().is_some_and(char::is_uppercase) {
@@ -894,7 +915,11 @@ fn trim_trailing_address_prose(
       // street name is never a sentence boundary here.
       continue;
     }
-    if is_unit_or_address_continuation(after, filters) {
+    if is_unit_or_address_continuation(
+      after,
+      filters,
+      directional_abbreviations,
+    ) {
       continue;
     }
     if after.chars().next().is_some_and(char::is_uppercase) {
@@ -910,10 +935,16 @@ fn trim_trailing_address_prose(
 fn is_unit_or_address_continuation(
   after: &str,
   filters: &DenyListFilterData,
+  directional_abbreviations: Option<&BTreeSet<String>>,
 ) -> bool {
   after.len() < 5
     || has_address_component(after, filters)
-    || crate::address_seeds::starts_with_address_directional_continuation(after)
+    || directional_abbreviations.is_some_and(|abbreviations| {
+      crate::address_seeds::starts_with_address_directional_continuation(
+        after,
+        abbreviations,
+      )
+    })
     || starts_with_unit_number(after, filters)
 }
 
@@ -1448,11 +1479,20 @@ mod tests {
     full_text: &str,
     filters: Option<&DenyListFilterData>,
   ) -> Result<Vec<PipelineEntity>> {
-    super::filter_entity_false_positives(
+    let document = ResolutionDocument::new(full_text);
+    super::filter_entity_false_positives(FilterEntityFalsePositivesArgs {
       entities,
-      &ResolutionDocument::new(full_text),
+      document: &document,
       filters,
-    )
+      directional_abbreviations: None,
+    })
+  }
+
+  fn trim_trailing_address_prose(
+    text: &str,
+    filters: &DenyListFilterData,
+  ) -> Option<usize> {
+    super::trim_trailing_address_prose(text, filters, None)
   }
 
   #[test]
@@ -1485,6 +1525,7 @@ mod tests {
       entity,
       &ByteOffsets::new(full_text),
       Some(&DenyListFilterData::default()),
+      None,
     )?
     .ok_or(Error::InvalidSpan { start: 0, end: 0 })?;
 
@@ -2196,24 +2237,27 @@ mod tests {
     // reads the surrounding line, so a party named in an all-caps clause
     // looks like a heading; a legal-form suffix is positive evidence that it
     // is a company, and must survive the line-shape veto.
-    let text = "THIS AGREEMENT IS WITH ACME LIMITED IN PRAGUE.\n";
-    let start = text.find("ACME LIMITED").unwrap();
-    let end = start.saturating_add("ACME LIMITED".len());
-    let entities = filter_entity_false_positives(
-      vec![PipelineEntity::detected(
-        u32::try_from(start).unwrap(),
-        u32::try_from(end).unwrap(),
-        ORGANIZATION_LABEL,
-        "ACME LIMITED",
-        0.8,
-        DetectionSource::LegalForm,
-      )],
-      text,
-      Some(&DenyListFilterData::default()),
-    )
-    .unwrap();
+    for terminal in [".", "!", "?", "。", "！", "？"] {
+      let text =
+        format!("THIS AGREEMENT IS WITH ACME LIMITED IN PRAGUE{terminal}\n");
+      let start = text.find("ACME LIMITED").unwrap();
+      let end = start.saturating_add("ACME LIMITED".len());
+      let entities = filter_entity_false_positives(
+        vec![PipelineEntity::detected(
+          u32::try_from(start).unwrap(),
+          u32::try_from(end).unwrap(),
+          ORGANIZATION_LABEL,
+          "ACME LIMITED",
+          0.8,
+          DetectionSource::LegalForm,
+        )],
+        &text,
+        Some(&DenyListFilterData::default()),
+      )
+      .unwrap();
 
-    assert_eq!(entities.len(), 1);
+      assert_eq!(entities.len(), 1, "terminal {terminal:?}");
+    }
   }
 
   #[test]

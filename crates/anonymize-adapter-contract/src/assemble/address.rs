@@ -256,12 +256,18 @@ pub(super) fn build_address_seed_data(
   }
   let unit_abbreviations: OrderedMap<Value> =
     parse_ordered_data_file("address-unit-abbreviations.json")?;
+  let directional_abbreviations: OrderedMap<Value> =
+    parse_ordered_data_file("address-directional-abbreviations.json")?;
 
   Ok(Some(BindingAddressSeedData {
     boundary_words: shared.boundary_words.clone(),
     br_cep_cue_words: shared.br_cep_cue_words.clone(),
     unit_abbreviations: language_keyed_terms(
       &unit_abbreviations,
+      ctx.content_languages.as_deref(),
+    ),
+    directional_abbreviations: language_keyed_terms(
+      &directional_abbreviations,
       ctx.content_languages.as_deref(),
     ),
     standalone_street: build_standalone_street_data(ctx)?,
@@ -529,6 +535,29 @@ mod tests {
     )
   }
 
+  fn directional_abbreviations(
+    languages: &[&str],
+  ) -> Result<Vec<String>, AssembleError> {
+    let config = config(
+      languages
+        .iter()
+        .map(|language| (*language).to_owned())
+        .collect(),
+    );
+    let context = AssembleContext {
+      config: &config,
+      dictionaries: None,
+      content_languages: config.languages.clone(),
+      allowed_labels: None,
+    };
+    let shared = build_address_shared_data(&context)?;
+    Ok(
+      build_address_seed_data(&context, &shared)?
+        .map(|data| data.directional_abbreviations)
+        .unwrap_or_default(),
+    )
+  }
+
   #[test]
   fn unit_abbreviations_follow_language_scope() -> Result<(), AssembleError> {
     assert!(
@@ -537,6 +566,17 @@ mod tests {
         .any(|word| word == "apt.")
     );
     assert!(unit_abbreviations(&["de"])?.is_empty());
+    Ok(())
+  }
+
+  #[test]
+  fn directional_abbreviations_follow_language_scope()
+  -> Result<(), AssembleError> {
+    assert_eq!(
+      directional_abbreviations(&["en"])?,
+      ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+    );
+    assert!(directional_abbreviations(&["de"])?.is_empty());
     Ok(())
   }
 

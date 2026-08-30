@@ -30,7 +30,7 @@ impl PartyRoleEvidence<'_> {
     }
     self.first_names.is_some_and(|first_names| {
       contains_first_name_token(candidate, first_names)
-    })
+    }) || starts_with_sorted_name_token(candidate, self.party_role_name_tokens)
   }
 }
 
@@ -225,6 +225,12 @@ pub fn encode_party_role_name_evidence(
 fn contains_sorted_name_token(text: &str, names: &[String]) -> bool {
   crate::name_corpus::segmented_word_texts(text)
     .any(|word| names.binary_search(&word.to_lowercase()).is_ok())
+}
+
+fn starts_with_sorted_name_token(text: &str, names: &[String]) -> bool {
+  crate::name_corpus::segmented_word_texts(text)
+    .next()
+    .is_some_and(|word| names.binary_search(&word.to_lowercase()).is_ok())
 }
 
 pub(crate) fn decode_party_role_name_evidence(
@@ -1475,6 +1481,44 @@ mod tests {
       })
       .is_empty()
     );
+  }
+
+  #[test]
+  fn party_role_fields_use_cross_locale_evidence_without_corpus()
+  -> std::result::Result<(), String> {
+    let data = PreparedSignatureData::new(
+      SignatureData {
+        party_role_name_evidence: super::encode_party_role_name_evidence([
+          String::from("Imani"),
+          String::from("Zofia"),
+        ])?,
+        ..SignatureData::default()
+      },
+      vec![String::from("seller")],
+    );
+
+    assert_eq!(
+      detect_signatures(&DetectSignaturesArgs {
+        full_text: "Seller: Imani Nwosu",
+        data: &data,
+        first_names: None,
+        name_corpus: None,
+      })
+      .into_iter()
+      .map(|entity| entity.text)
+      .collect::<Vec<_>>(),
+      ["Imani Nwosu"]
+    );
+    assert!(
+      detect_signatures(&DetectSignaturesArgs {
+        full_text: "Seller: Acme Imani",
+        data: &data,
+        first_names: None,
+        name_corpus: None,
+      })
+      .is_empty()
+    );
+    Ok(())
   }
 
   #[test]

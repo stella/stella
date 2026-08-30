@@ -401,6 +401,7 @@ pub struct BindingAddressSeedData {
   pub br_cep_cue_words: Vec<String>,
   #[serde(default)]
   pub unit_abbreviations: Vec<String>,
+  pub directional_abbreviations: Vec<String>,
   /// Present only when the caller opts into standalone street detection.
   #[serde(default)]
   pub standalone_street: Option<BindingStandaloneStreetData>,
@@ -722,6 +723,36 @@ mod tests {
         "party_role_name_evidence": "",
         "person_value_labels": [],
         "signature_stamp_phrases": []
+      }
+    });
+    assert!(
+      serde_json::from_value::<BindingPreparedSearchConfig>(explicitly_empty)
+        .is_ok()
+    );
+  }
+
+  #[test]
+  fn direct_prepared_config_requires_directional_scope_decision() {
+    let missing_directionals = json!({
+      "address_seed_data": {
+        "boundary_words": [],
+        "br_cep_cue_words": [],
+        "unit_abbreviations": []
+      }
+    });
+    assert!(
+      serde_json::from_value::<BindingPreparedSearchConfig>(
+        missing_directionals
+      )
+      .is_err()
+    );
+
+    let explicitly_empty = json!({
+      "address_seed_data": {
+        "boundary_words": [],
+        "br_cep_cue_words": [],
+        "directional_abbreviations": [],
+        "unit_abbreviations": []
       }
     });
     assert!(
