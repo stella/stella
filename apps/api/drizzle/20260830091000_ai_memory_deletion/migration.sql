@@ -1,6 +1,6 @@
--- stella-migration-safety: reviewed destructive-change - replaces the deny-all DELETE policy with the same tenant and ethical-wall scope used by memory reads; rollback recreates ai_memory_no_delete and drops ai_memory_delete.
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
+-- stella-migration-safety: reviewed drop-object - replaces the deny-all DELETE policy with the tenant and ethical-wall-scoped policy below; rollback recreates ai_memory_no_delete and drops ai_memory_delete.
 DROP POLICY "ai_memory_no_delete" ON "ai_memories";
 --> statement-breakpoint
 CREATE POLICY "ai_memory_delete" ON "ai_memories" AS PERMISSIVE FOR DELETE TO "stella" USING (

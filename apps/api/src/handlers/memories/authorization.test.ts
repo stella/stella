@@ -44,6 +44,14 @@ describe("memory management authorization", () => {
       canManageMemory({
         accessibleWorkspaces,
         currentUserId,
+        memberRole: { role: "admin" },
+        memory: { scope: "organization", userId: null, workspaceId: null },
+      }),
+    ).toBe(true);
+    expect(
+      canManageMemory({
+        accessibleWorkspaces,
+        currentUserId,
         memberRole: { role: "owner" },
         memory: { scope: "organization", userId: null, workspaceId: null },
       }),
