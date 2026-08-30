@@ -47,3 +47,16 @@ test("routes cleanup dispatch through the bounded hand-off", () => {
   expect(source).toContain("handoffCommittedEntityDeletionCleanupBatch(");
   expect(source).not.toContain("Promise.all(");
 });
+
+test("records the canonical file field in the deletion snapshot", () => {
+  const fieldSelect = source.indexOf("id: fields.id");
+  const fieldOrder = source.indexOf(".orderBy(asc(fields.id))", fieldSelect);
+  const firstFileGuard = source.indexOf(
+    "currentFileByEntityId.has(entityId)",
+    fieldOrder,
+  );
+
+  expect(fieldSelect).toBeGreaterThan(-1);
+  expect(fieldOrder).toBeGreaterThan(fieldSelect);
+  expect(firstFileGuard).toBeGreaterThan(fieldOrder);
+});

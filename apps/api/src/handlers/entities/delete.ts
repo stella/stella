@@ -178,23 +178,32 @@ export const deleteEntitiesHandler = async function* ({
         .select({
           content: fields.content,
           entityVersionId: fields.entityVersionId,
+          id: fields.id,
         })
         .from(fields)
-        .where(inArray(fields.entityVersionId, entityVersionIds));
+        .where(inArray(fields.entityVersionId, entityVersionIds))
+        .orderBy(asc(fields.id));
 
       const entityIdByCurrentVersionId = new Map(
         lockedEntities.flatMap(({ currentVersionId, id }) =>
           currentVersionId === null ? [] : [[currentVersionId, id] as const],
         ),
       );
-      const currentFileByEntityId = new Map(
-        fieldRows.flatMap(({ content, entityVersionId }) => {
-          const entityId = entityIdByCurrentVersionId.get(entityVersionId);
-          return content.type === "file" && entityId !== undefined
-            ? [[entityId, content] as const]
-            : [];
-        }),
-      );
+      const currentFileByEntityId = new Map<
+        string,
+        Extract<(typeof fieldRows)[number]["content"], { type: "file" }>
+      >();
+      for (const { content, entityVersionId } of fieldRows) {
+        const entityId = entityIdByCurrentVersionId.get(entityVersionId);
+        if (
+          content.type !== "file" ||
+          entityId === undefined ||
+          currentFileByEntityId.has(entityId)
+        ) {
+          continue;
+        }
+        currentFileByEntityId.set(entityId, content);
+      }
 
       const fileRefs = fieldRows.flatMap((row) =>
         extractFieldFileRefs(row.content),
