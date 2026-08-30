@@ -679,7 +679,7 @@ describe("organization deletion storage teardown", () => {
         {
           id: fixture.organizationWriterIntentId,
           objectKey: fixture.organizationWriterKey,
-          status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.CLEANUP,
+          status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
           workspaceId: null,
         },
       ]),

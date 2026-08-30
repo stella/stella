@@ -8,10 +8,25 @@ SET lock_timeout = '1s';
 SET statement_timeout = '30min';
 --> statement-breakpoint
 ALTER TABLE "buffer_object_cleanup_intents"
-ADD COLUMN "status" text DEFAULT 'cleanup' NOT NULL;
+-- Old application tasks omit this new column. Fail safe during rollout: their
+-- rows may still have a live writer, so only that writer may retire them after
+-- exact-key cleanup. Current application inserts are linted to choose a state
+-- explicitly even though this rolling-deploy default must remain available.
+ADD COLUMN "status" text DEFAULT 'recovering' NOT NULL;
 --> statement-breakpoint
 ALTER TABLE "buffer_object_cleanup_intents"
 ADD COLUMN "chat_thread_id" uuid;
+--> statement-breakpoint
+-- The creator identity is deliberately not an FK: it is the narrow settlement
+-- capability that remains after lifecycle teardown removes the owner rows.
+-- Existing root-owned recovery rows remain null; scoped writers receive the
+-- transaction's authenticated user automatically, including older tasks.
+ALTER TABLE "buffer_object_cleanup_intents"
+ADD COLUMN "writer_user_id" text;
+--> statement-breakpoint
+ALTER TABLE "buffer_object_cleanup_intents"
+ALTER COLUMN "writer_user_id"
+SET DEFAULT pg_catalog.current_setting('app.user_id', true);
 --> statement-breakpoint
 -- The writer locks only its opaque id and state before publishing the owning
 -- database row; object keys and retry metadata remain root-only.
@@ -25,11 +40,12 @@ GRANT UPDATE ("status") ON TABLE "buffer_object_cleanup_intents" TO stella;
 -- squawk-ignore ban-drop-not-null -- Organization-scoped chat writers deliberately have no matter scope; policies bind those rows to their visible chat thread and organization.
 ALTER TABLE "buffer_object_cleanup_intents" ALTER COLUMN "workspace_id" DROP NOT NULL;
 --> statement-breakpoint
--- stella-migration-safety: reviewed alter-policy - non-chat inserts retain the existing organization and authorized-workspace checks and additionally pin both key path segments; chat inserts require a visible thread in the same organization, require each stated matter to belong to that thread's persisted scope, and accept only a current-user key.
+-- stella-migration-safety: reviewed alter-policy - non-chat inserts retain the existing organization and authorized-workspace checks and additionally pin both key path segments; chat inserts require a visible thread in the same organization, require each stated matter to belong to that thread's persisted scope, and accept only a current-user key; every scoped insert stamps the authenticated writer used for later settlement.
 ALTER POLICY "buffer_object_cleanup_insert"
 ON "buffer_object_cleanup_intents"
 WITH CHECK (
   organization_id = (SELECT pg_catalog.current_setting('app.organization_id', true))
+  AND writer_user_id = (SELECT pg_catalog.current_setting('app.user_id', true))
   AND (
     (
       chat_thread_id IS NOT NULL
@@ -91,6 +107,8 @@ AS PERMISSIVE FOR SELECT TO stella
 USING (
   organization_id = (SELECT pg_catalog.current_setting('app.organization_id', true))
   AND (
+    writer_user_id = (SELECT pg_catalog.current_setting('app.user_id', true))
+    OR
     (
       chat_thread_id IS NOT NULL
       AND pg_catalog.split_part(object_key, '/', 1) =
@@ -151,6 +169,8 @@ AS PERMISSIVE FOR UPDATE TO stella
 USING (
   organization_id = (SELECT pg_catalog.current_setting('app.organization_id', true))
   AND (
+    writer_user_id = (SELECT pg_catalog.current_setting('app.user_id', true))
+    OR
     (
       chat_thread_id IS NOT NULL
       AND pg_catalog.split_part(object_key, '/', 1) =
@@ -205,12 +225,14 @@ USING (
   )
 );
 --> statement-breakpoint
--- stella-migration-safety: reviewed alter-policy - deletion keeps the same scope and key predicates as insertion, so a writer can retire only the exact ownership proof it was authorized to create.
+-- stella-migration-safety: reviewed alter-policy - deletion keeps the same scope and key predicates as insertion, while the authenticated creator may retire only its server-minted ownership proof after the owner rows are gone.
 ALTER POLICY "buffer_object_cleanup_delete"
 ON "buffer_object_cleanup_intents"
 USING (
   organization_id = (SELECT pg_catalog.current_setting('app.organization_id', true))
   AND (
+    writer_user_id = (SELECT pg_catalog.current_setting('app.user_id', true))
+    OR
     (
       chat_thread_id IS NOT NULL
       AND pg_catalog.split_part(object_key, '/', 1) =
@@ -267,7 +289,7 @@ USING (
 --> statement-breakpoint
 ALTER TABLE "buffer_object_cleanup_intents"
 ADD CONSTRAINT "buffer_object_cleanup_status_check"
-CHECK ("status" IN ('cleanup', 'writing')) NOT VALID;
+CHECK ("status" IN ('orphaned', 'recovering', 'writing')) NOT VALID;
 --> statement-breakpoint
 -- Finish the additive DDL transaction before validating so the scan does not
 -- retain its earlier locks. The remaining index work must also run outside a
@@ -307,6 +329,12 @@ DROP INDEX CONCURRENTLY IF EXISTS "chat_threads_data_workspace_ids_idx";
 -- squawk-ignore prefer-robust-stmts -- the retry drop above removes an INVALID build before recreation
 CREATE INDEX CONCURRENTLY "chat_threads_data_workspace_ids_idx"
 ON "chat_threads" USING gin ("data_workspace_ids");
+--> statement-breakpoint
+DROP INDEX CONCURRENTLY IF EXISTS "chat_thread_compactions_memory_data_workspace_ids_idx";
+--> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts -- the retry drop above removes an INVALID build before recreation
+CREATE INDEX CONCURRENTLY "chat_thread_compactions_memory_data_workspace_ids_idx"
+ON "chat_thread_compactions" USING gin ("memory_extraction_data_workspace_ids");
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "docx_suggestions_source_data_workspace_ids_idx";
 --> statement-breakpoint

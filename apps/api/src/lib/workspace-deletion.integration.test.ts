@@ -4,10 +4,14 @@ import { eq, inArray } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import { createSafeDb } from "@/api/db/scoped";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   aiMemories,
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
   bufferObjectCleanupIntents,
+  chatMessages,
+  chatThreadCompactions,
   chatThreads,
   desktopEditSessions,
   docxSuggestions,
@@ -26,6 +30,10 @@ import {
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  reserveObjectCleanupIntent,
+  settleObjectCleanupIntentsAfterWriter,
+} from "@/api/lib/buffer-intent-reconciliation";
 import { createFileKey, createUserFileKey } from "@/api/lib/file-key";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { cents } from "@/api/lib/money";
@@ -42,6 +50,7 @@ type Fixture = {
   actorUserId: SafeId<"user">;
   contextThreadId: SafeId<"chatThread">;
   dataThreadId: SafeId<"chatThread">;
+  derivedCompactionId: SafeId<"chatThreadCompaction">;
   derivedMemoryId: SafeId<"aiMemory">;
   derivedSuggestionId: SafeId<"docxSuggestion">;
   expectedDeletedKeys: string[];
@@ -51,11 +60,14 @@ type Fixture = {
   retainedThreadId: SafeId<"chatThread">;
   retainedWorkspaceId: SafeId<"workspace">;
   targetWorkspaceId: SafeId<"workspace">;
+  targetFailedCleanupIntentId: SafeId<"pendingUpload">;
+  targetUncertainWriterIntentId: SafeId<"pendingUpload">;
   targetWriterIntentId: SafeId<"pendingUpload">;
 };
 
 let testDb: TestDatabase;
 let fixture: Fixture;
+let writerSafeDb: SafeDb;
 
 const seedUser = async (name: string) => {
   const id = mintAuthProviderId<"user">();
@@ -196,23 +208,40 @@ beforeAll(async () => {
       userId: actorUserId,
     },
   ]);
-  const targetWriterIntentId = createSafeId<"pendingUpload">();
-  await testDb.insert(bufferObjectCleanupIntents).values([
-    {
-      id: targetWriterIntentId,
-      objectKey: `${organizationId}/${targetWorkspaceId}/late-target-object`,
+  writerSafeDb = asTestRaw<SafeDb>(
+    createSafeDb(
+      testDb,
+      [targetWorkspaceId, retainedWorkspaceId],
       organizationId,
-      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
+      actorUserId,
+    ),
+  );
+  const reserveTargetWriter = async (suffix: string) => {
+    const intent = await reserveObjectCleanupIntent({
+      objectKey: `${organizationId}/${targetWorkspaceId}/${suffix}`,
+      organizationId,
+      safeDb: writerSafeDb,
       workspaceId: targetWorkspaceId,
-    },
-    {
-      id: createSafeId<"pendingUpload">(),
-      objectKey: `${organizationId}/${retainedWorkspaceId}/late-retained-object`,
-      organizationId,
-      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
-      workspaceId: retainedWorkspaceId,
-    },
-  ]);
+    });
+    if (Result.isError(intent)) {
+      throw intent.error;
+    }
+    return intent.value;
+  };
+  const targetWriterIntentId = await reserveTargetWriter("late-target-object");
+  const targetFailedCleanupIntentId = await reserveTargetWriter(
+    "failed-cleanup-object",
+  );
+  const targetUncertainWriterIntentId = await reserveTargetWriter(
+    "uncertain-write-object",
+  );
+  await testDb.insert(bufferObjectCleanupIntents).values({
+    id: createSafeId<"pendingUpload">(),
+    objectKey: `${organizationId}/${retainedWorkspaceId}/late-retained-object`,
+    organizationId,
+    status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
+    workspaceId: retainedWorkspaceId,
+  });
 
   const targetDocument = await seedDocument(targetWorkspaceId);
   const sourceFileId = Bun.randomUUIDv7();
@@ -319,6 +348,44 @@ beforeAll(async () => {
     userId: actorUserId,
     workspaceId: retainedWorkspaceId,
   });
+  const retainedMessageId = createSafeId<"chatMessage">();
+  await testDb.insert(chatMessages).values({
+    content: { data: [{ text: "Retained chat", type: "text" }], version: 1 },
+    id: retainedMessageId,
+    role: "user",
+    threadId: retainedThread.threadId,
+    userId: actorUserId,
+    workspaceId: retainedWorkspaceId,
+  });
+  const derivedCompactionId = createSafeId<"chatThreadCompaction">();
+  await testDb.insert(chatThreadCompactions).values({
+    firstKeptMessageId: retainedMessageId,
+    firstSummarizedMessageId: retainedMessageId,
+    id: derivedCompactionId,
+    lastSummarizedMessageId: retainedMessageId,
+    memoryExtractionDataWorkspaceIds: [targetWorkspaceId],
+    preservedTokens: 1,
+    promptVersion: 1,
+    status: "stale",
+    summary: {
+      blocked: [],
+      constraints: [],
+      criticalContext: [],
+      done: [],
+      goal: "Retained chat",
+      inProgress: [],
+      keyDecisions: [],
+      modifiedFiles: [],
+      nextSteps: [],
+      readFiles: [],
+      version: 1,
+    },
+    summaryMarkdown: "Retained chat",
+    summarizedMessageCount: 1,
+    threadId: retainedThread.threadId,
+    totalSummarizedMessageCount: 1,
+    totalTokens: 1,
+  });
 
   const retainedDocument = await seedDocument(retainedWorkspaceId);
   const derivedMemoryId = createSafeId<"aiMemory">();
@@ -354,6 +421,7 @@ beforeAll(async () => {
     actorUserId,
     contextThreadId,
     dataThreadId: dataThread.threadId,
+    derivedCompactionId,
     derivedMemoryId,
     derivedSuggestionId,
     expectedDeletedKeys: [
@@ -403,6 +471,8 @@ beforeAll(async () => {
     retainedThreadId: retainedThread.threadId,
     retainedWorkspaceId,
     targetWorkspaceId,
+    targetFailedCleanupIntentId,
+    targetUncertainWriterIntentId,
     targetWriterIntentId,
   };
 });
@@ -433,6 +503,29 @@ afterAll(async () => {
 
 describe("workspace deletion", () => {
   test("atomically removes the complete target while preserving unrelated chats", async () => {
+    const [compactionBefore, threadBefore] = await Promise.all([
+      testDb
+        .select({
+          workspaceIds:
+            chatThreadCompactions.memoryExtractionDataWorkspaceIds,
+        })
+        .from(chatThreadCompactions)
+        .where(eq(chatThreadCompactions.id, fixture.derivedCompactionId)),
+      testDb
+        .select({
+          dataWorkspaceIds: chatThreads.dataWorkspaceIds,
+          workspaceId: chatThreads.workspaceId,
+        })
+        .from(chatThreads)
+        .where(eq(chatThreads.id, fixture.retainedThreadId)),
+    ]);
+    expect(compactionBefore).toEqual([
+      { workspaceIds: [fixture.targetWorkspaceId] },
+    ]);
+    expect(threadBefore).toEqual([
+      { dataWorkspaceIds: [], workspaceId: fixture.retainedWorkspaceId },
+    ]);
+
     const auditEvents: AuditEvent[] = [];
     const recordAuditEvent: AuditRecorder = async (_tx, event) => {
       auditEvents.push(...(Array.isArray(event) ? event : [event]));
@@ -473,7 +566,62 @@ describe("workspace deletion", () => {
         .select({ status: bufferObjectCleanupIntents.status })
         .from(bufferObjectCleanupIntents)
         .where(eq(bufferObjectCleanupIntents.id, fixture.targetWriterIntentId)),
-    ).toEqual([{ status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.CLEANUP }]);
+    ).toEqual([{ status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING }]);
+    const settledWriter = await settleObjectCleanupIntentsAfterWriter({
+      intentIds: [fixture.targetWriterIntentId],
+      objectState: "object-deleted",
+      safeDb: writerSafeDb,
+    });
+    expect(Result.isOk(settledWriter)).toBe(true);
+    expect(
+      await testDb
+        .select({ id: bufferObjectCleanupIntents.id })
+        .from(bufferObjectCleanupIntents)
+        .where(eq(bufferObjectCleanupIntents.id, fixture.targetWriterIntentId)),
+    ).toEqual([]);
+    const duplicateSettlement = await settleObjectCleanupIntentsAfterWriter({
+      intentIds: [fixture.targetWriterIntentId],
+      objectState: "object-deleted",
+      safeDb: writerSafeDb,
+    });
+    expect(Result.isError(duplicateSettlement)).toBe(true);
+    const failedCleanup = await settleObjectCleanupIntentsAfterWriter({
+      intentIds: [fixture.targetFailedCleanupIntentId],
+      objectState: "cleanup-required",
+      safeDb: writerSafeDb,
+    });
+    const uncertainWrite = await settleObjectCleanupIntentsAfterWriter({
+      intentIds: [fixture.targetUncertainWriterIntentId],
+      objectState: "write-uncertain",
+      safeDb: writerSafeDb,
+    });
+    expect(Result.isOk(failedCleanup)).toBe(true);
+    expect(Result.isOk(uncertainWrite)).toBe(true);
+    expect(
+      await testDb
+        .select({
+          id: bufferObjectCleanupIntents.id,
+          status: bufferObjectCleanupIntents.status,
+        })
+        .from(bufferObjectCleanupIntents)
+        .where(
+          inArray(bufferObjectCleanupIntents.id, [
+            fixture.targetFailedCleanupIntentId,
+            fixture.targetUncertainWriterIntentId,
+          ]),
+        ),
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          id: fixture.targetFailedCleanupIntentId,
+          status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+        },
+        {
+          id: fixture.targetUncertainWriterIntentId,
+          status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
+        },
+      ]),
+    );
     expect(
       await testDb
         .select({ status: bufferObjectCleanupIntents.status })
@@ -521,6 +669,18 @@ describe("workspace deletion", () => {
         .select({ id: chatThreads.id })
         .from(chatThreads)
         .where(eq(chatThreads.id, fixture.retainedThreadId)),
+    ).toHaveLength(1);
+    expect(
+      await testDb
+        .select({ id: chatThreadCompactions.id })
+        .from(chatThreadCompactions)
+        .where(eq(chatThreadCompactions.id, fixture.derivedCompactionId)),
+    ).toEqual([]);
+    expect(
+      await testDb
+        .select({ id: chatMessages.id })
+        .from(chatMessages)
+        .where(eq(chatMessages.threadId, fixture.retainedThreadId)),
     ).toHaveLength(1);
     expect(
       await testDb

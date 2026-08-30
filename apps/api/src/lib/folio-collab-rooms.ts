@@ -10,6 +10,7 @@ import { rootDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { FolioCollabTokenPermissions } from "@/api/db/schema";
 import {
+  BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
   bufferObjectCleanupIntents,
   desktopEditSessions,
   folioCollabContributions,
@@ -21,6 +22,13 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  lockActiveWorkspaceForBufferIntent,
+  lockObjectCleanupIntentsForWriter,
+  lockOrganizationObjectIntentsForWriter,
+  OBJECT_WRITE_RECOVERY_DELAY_MS,
+  settleObjectCleanupIntentsAfterWriterInTransaction,
+} from "@/api/lib/buffer-intent-reconciliation";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -36,15 +44,16 @@ import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
   deleteS3ObjectWithSignal,
   readS3ObjectIfPresent,
+  S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
+import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const FOLIO_COLLAB_TOKEN_PART_LENGTH = 32;
 const FOLIO_COLLAB_TOKEN_CLEANUP_BATCH_SIZE = 100;
 const FOLIO_COLLAB_SNAPSHOT_CLEANUP_GRACE_MS = 60_000;
-const FOLIO_COLLAB_SNAPSHOT_WRITE_RECOVERY_DELAY_MS = 2 * 60 * 1000;
 const FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS = 10_000;
 
 export {
@@ -771,34 +780,68 @@ export const storeFolioCollabSnapshot = async ({
     workspaceId: value.workspaceId,
   });
   await value.scopedDb(async (tx) => {
+    await lockOrganizationObjectIntentsForWriter(tx, value.organizationId);
+    await lockActiveWorkspaceForBufferIntent(tx, value.workspaceId);
     // Reserve cleanup ownership before the object can exist. A process crash
     // after PUT therefore leaves a durable exact-key tombstone for recovery.
     await tx.insert(bufferObjectCleanupIntents).values({
       id: nextCleanupIntentId,
-      nextAttemptAt: new Date(
-        Date.now() + FOLIO_COLLAB_SNAPSHOT_WRITE_RECOVERY_DELAY_MS,
-      ),
+      nextAttemptAt: new Date(Date.now() + OBJECT_WRITE_RECOVERY_DELAY_MS),
       objectKey: nextKey,
       organizationId: value.organizationId,
+      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
       workspaceId: value.workspaceId,
     });
   });
-  await writeS3ObjectWithRetry({
-    contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-    data: snapshotBytes,
-    key: nextKey,
-  });
-
-  const discardNewObject = async () =>
-    await deleteStoredRoomFile({
-      file: {
-        fileId: nextSnapshotFileId,
-        mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-      },
-      organizationId: value.organizationId,
-      roomId: value.roomId,
-      workspaceId: value.workspaceId,
+  const discardNewObject = async (
+    writeCertainty: S3ObjectWriteCertainty,
+  ): Promise<void> => {
+    const cleanup = await Result.tryPromise({
+      try: async () =>
+        await deleteS3ObjectWithSignal(
+          nextKey,
+          AbortSignal.timeout(FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS),
+        ),
+      catch: (cause) => cause,
     });
+    if (Result.isError(cleanup)) {
+      captureError(cleanup.error, {
+        roomId: value.roomId,
+        storageKey: nextKey,
+      });
+    }
+    await value
+      .scopedDb(
+        async (tx) =>
+          await settleObjectCleanupIntentsAfterWriterInTransaction({
+            intentIds: [nextCleanupIntentId],
+            objectState:
+              writeCertainty === S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN
+                ? "write-uncertain"
+                : Result.isOk(cleanup)
+                  ? "object-deleted"
+                  : "cleanup-required",
+            tx,
+          }),
+      )
+      .catch((error: unknown) => {
+        captureError(error, { roomId: value.roomId, storageKey: nextKey });
+      });
+  };
+  const written = await Result.tryPromise({
+    try: async () =>
+      await writeS3ObjectWithRetry({
+        contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+        data: snapshotBytes,
+        key: nextKey,
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(written)) {
+    await discardNewObject(S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN);
+    throw written.error;
+  }
+  const writeCertainty = written.value;
 
   const storedAt = new Date();
   const transactionResult = await Result.tryPromise({
@@ -852,6 +895,7 @@ export const storeFolioCollabSnapshot = async ({
         if (decision.status !== "accepted") {
           return decision;
         }
+        await lockObjectCleanupIntentsForWriter(tx, [nextCleanupIntentId]);
 
         const updated = await tx
           .update(folioCollabRooms)
@@ -920,6 +964,7 @@ export const storeFolioCollabSnapshot = async ({
             ),
             objectKey: previousKey,
             organizationId: value.organizationId,
+            status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
             workspaceId: value.workspaceId,
           });
         }
@@ -939,14 +984,14 @@ export const storeFolioCollabSnapshot = async ({
   });
 
   if (Result.isError(transactionResult)) {
-    await discardNewObject();
+    await discardNewObject(writeCertainty);
     throw transactionResult.error;
   }
 
   const result = transactionResult.value;
 
   if (result.status !== "stored") {
-    await discardNewObject();
+    await discardNewObject(writeCertainty);
     return result;
   }
 

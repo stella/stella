@@ -826,6 +826,9 @@ export const chatThreadCompactions = p.pgTable(
       .index("chat_thread_compactions_thread_status_created_idx")
       .on(table.threadId, table.status, table.createdAt),
     p
+      .index("chat_thread_compactions_memory_data_workspace_ids_idx")
+      .using("gin", table.memoryExtractionDataWorkspaceIds),
+    p
       .foreignKey({
         name: "chat_compactions_memory_extraction_org_fk",
         columns: [table.memoryExtractionOrganizationId],

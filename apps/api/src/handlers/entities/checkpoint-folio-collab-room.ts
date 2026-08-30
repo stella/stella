@@ -5,13 +5,23 @@ import type { Static } from "elysia";
 
 import { materializeYjsDocx } from "@stll/folio-core/server";
 
-import { bufferObjectCleanupIntents, folioCollabRooms } from "@/api/db/schema";
+import {
+  BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
+  bufferObjectCleanupIntents,
+  folioCollabRooms,
+} from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  lockActiveWorkspaceForBufferIntent,
+  lockObjectCleanupIntentsForWriter,
+  reserveObjectCleanupIntent,
+  settleObjectCleanupIntentsAfterWriter,
+} from "@/api/lib/buffer-intent-reconciliation";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
   presignDocxDownloadFromFileId,
@@ -29,12 +39,13 @@ import {
 import {
   deleteS3ObjectWithSignal,
   readS3ArrayBuffer,
+  S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
+import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const CHECKPOINT_CLEANUP_GRACE_MS = 60_000;
-const CHECKPOINT_WRITE_RECOVERY_DELAY_MS = 2 * 60 * 1000;
 
 const checkpointFolioCollabRoomBodySchema = t.Object({
   expectedGeneration: t.Integer({ minimum: 0 }),
@@ -247,127 +258,157 @@ const checkpointFolioCollabRoom = createSafeHandler(
       .update(checkpointBytes)
       .digest("hex");
     const nextFileId = createSafeId<"userFile">();
-    const cleanupIntentId = createSafeId<"pendingUpload">();
     const checkpointKey = createFileKey({
       fileId: nextFileId,
       mimeType: DOCX_MIME_TYPE,
       organizationId: session.activeOrganizationId,
       workspaceId,
     });
-    yield* Result.await(
-      safeDb(async (tx) => {
-        // audit: skip — durable crash-recovery storage bookkeeping; the room
-        // checkpoint pointer mutation is audited when it commits.
-        await tx.insert(bufferObjectCleanupIntents).values({
-          id: cleanupIntentId,
-          nextAttemptAt: new Date(
-            Date.now() + CHECKPOINT_WRITE_RECOVERY_DELAY_MS,
-          ),
-          objectKey: checkpointKey,
-          organizationId: session.activeOrganizationId,
-          workspaceId,
-        });
+    const cleanupIntentId = yield* Result.await(
+      reserveObjectCleanupIntent({
+        objectKey: checkpointKey,
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        workspaceId,
       }),
     );
-    await writeS3ObjectWithRetry({
-      contentType: DOCX_MIME_TYPE,
-      data: checkpointBytes,
-      key: checkpointKey,
+    const discardCheckpoint = async (
+      writeCertainty: S3ObjectWriteCertainty,
+    ): Promise<void> => {
+      const cleanup = await Result.tryPromise({
+        try: async () =>
+          await deleteS3ObjectWithSignal(
+            checkpointKey,
+            AbortSignal.timeout(10_000),
+          ),
+        catch: (cause) => cause,
+      });
+      if (Result.isError(cleanup)) {
+        captureError(cleanup.error, { roomId, storageKey: checkpointKey });
+      }
+      const settlement = await settleObjectCleanupIntentsAfterWriter({
+        intentIds: [cleanupIntentId],
+        objectState:
+          writeCertainty === S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN
+            ? "write-uncertain"
+            : Result.isOk(cleanup)
+              ? "object-deleted"
+              : "cleanup-required",
+        safeDb,
+      });
+      if (Result.isError(settlement)) {
+        captureError(settlement.error, {
+          roomId,
+          storageKey: checkpointKey,
+        });
+      }
+    };
+    const written = await Result.tryPromise({
+      try: async () =>
+        await writeS3ObjectWithRetry({
+          contentType: DOCX_MIME_TYPE,
+          data: checkpointBytes,
+          key: checkpointKey,
+        }),
+      catch: (cause) => cause,
     });
+    if (Result.isError(written)) {
+      await discardCheckpoint(S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN);
+      throw written.error;
+    }
+    const writeCertainty = written.value;
 
     const checkpointedAt = new Date();
-    const stored = yield* Result.await(
-      safeDb(async (tx) => {
-        const rooms = await tx
-          .select({
-            baseVersionId: folioCollabRooms.baseVersionId,
-            checkpointFileId: folioCollabRooms.docxCheckpointFileId,
-            checkpointSha256Hex: folioCollabRooms.docxCheckpointSha256Hex,
-            checkpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
-            generation: folioCollabRooms.generation,
-            snapshotFileId: folioCollabRooms.yjsSnapshotFileId,
-            snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
-            snapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
-          })
-          .from(folioCollabRooms)
-          .where(
-            and(
-              eq(folioCollabRooms.id, roomId),
-              eq(folioCollabRooms.workspaceId, workspaceId),
-            ),
-          )
-          .limit(1)
-          .for("update");
-        const room = rooms.at(0);
-        if (
-          !room ||
-          !matchesFolioCollabSnapshotCut({
-            current: room,
-            materialized: target.room,
-          })
-        ) {
-          return false;
-        }
+    const storedResult = await safeDb(async (tx) => {
+      await lockActiveWorkspaceForBufferIntent(tx, workspaceId);
+      const rooms = await tx
+        .select({
+          baseVersionId: folioCollabRooms.baseVersionId,
+          checkpointFileId: folioCollabRooms.docxCheckpointFileId,
+          checkpointSha256Hex: folioCollabRooms.docxCheckpointSha256Hex,
+          checkpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
+          generation: folioCollabRooms.generation,
+          snapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+          snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
+          snapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
+        })
+        .from(folioCollabRooms)
+        .where(
+          and(
+            eq(folioCollabRooms.id, roomId),
+            eq(folioCollabRooms.workspaceId, workspaceId),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      const room = rooms.at(0);
+      if (
+        !room ||
+        !matchesFolioCollabSnapshotCut({
+          current: room,
+          materialized: target.room,
+        })
+      ) {
+        return false;
+      }
+      await lockObjectCleanupIntentsForWriter(tx, [cleanupIntentId]);
 
-        await tx
-          .update(folioCollabRooms)
-          .set({
-            docxCheckpointFileId: nextFileId,
-            docxCheckpointScanWarnings: scanWarnings,
-            docxCheckpointSha256Hex: sha256Hex,
-            docxCheckpointSizeBytes: checkpointBytes.byteLength,
-            docxCheckpointUpdatedAt: checkpointedAt,
-          })
-          .where(
-            and(
-              eq(folioCollabRooms.id, roomId),
-              eq(folioCollabRooms.workspaceId, workspaceId),
-              eq(folioCollabRooms.generation, expectedGeneration),
-              eq(
-                folioCollabRooms.yjsSnapshotRevision,
-                expectedSnapshotRevision,
-              ),
-            ),
-          );
-        if (room.checkpointUpdatedAt !== null) {
-          await tx.insert(bufferObjectCleanupIntents).values({
-            id: createSafeId<"pendingUpload">(),
-            nextAttemptAt: new Date(Date.now() + CHECKPOINT_CLEANUP_GRACE_MS),
-            objectKey: createFileKey({
-              fileId: room.checkpointFileId,
-              mimeType: DOCX_MIME_TYPE,
-              organizationId: session.activeOrganizationId,
-              workspaceId,
-            }),
+      await tx
+        .update(folioCollabRooms)
+        .set({
+          docxCheckpointFileId: nextFileId,
+          docxCheckpointScanWarnings: scanWarnings,
+          docxCheckpointSha256Hex: sha256Hex,
+          docxCheckpointSizeBytes: checkpointBytes.byteLength,
+          docxCheckpointUpdatedAt: checkpointedAt,
+        })
+        .where(
+          and(
+            eq(folioCollabRooms.id, roomId),
+            eq(folioCollabRooms.workspaceId, workspaceId),
+            eq(folioCollabRooms.generation, expectedGeneration),
+            eq(folioCollabRooms.yjsSnapshotRevision, expectedSnapshotRevision),
+          ),
+        );
+      if (room.checkpointUpdatedAt !== null) {
+        await tx.insert(bufferObjectCleanupIntents).values({
+          id: createSafeId<"pendingUpload">(),
+          nextAttemptAt: new Date(Date.now() + CHECKPOINT_CLEANUP_GRACE_MS),
+          objectKey: createFileKey({
+            fileId: room.checkpointFileId,
+            mimeType: DOCX_MIME_TYPE,
             organizationId: session.activeOrganizationId,
             workspaceId,
-          });
-        }
-        await tx
-          .delete(bufferObjectCleanupIntents)
-          .where(eq(bufferObjectCleanupIntents.id, cleanupIntentId));
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,
-          resourceId: roomId,
-          changes: {
-            checkpointSha256Hex: {
-              old: room.checkpointSha256Hex,
-              new: sha256Hex,
-            },
-          },
+          }),
+          organizationId: session.activeOrganizationId,
+          status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+          workspaceId,
         });
-        return true;
-      }),
-    );
+      }
+      await tx
+        .delete(bufferObjectCleanupIntents)
+        .where(eq(bufferObjectCleanupIntents.id, cleanupIntentId));
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,
+        resourceId: roomId,
+        changes: {
+          checkpointSha256Hex: {
+            old: room.checkpointSha256Hex,
+            new: sha256Hex,
+          },
+        },
+      });
+      return true;
+    });
+    if (Result.isError(storedResult)) {
+      await discardCheckpoint(writeCertainty);
+      return Result.err(storedResult.error);
+    }
+    const stored = storedResult.value;
 
     if (!stored) {
-      await deleteS3ObjectWithSignal(
-        checkpointKey,
-        AbortSignal.timeout(10_000),
-      ).catch((error: unknown) => {
-        captureError(error, { roomId, storageKey: checkpointKey });
-      });
+      await discardCheckpoint(writeCertainty);
       return Result.err(
         new HandlerError({
           code: "folio_collab_checkpoint_changed",

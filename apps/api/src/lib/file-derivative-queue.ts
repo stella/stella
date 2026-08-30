@@ -6,6 +6,7 @@ import type { SQL } from "drizzle-orm";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   bufferObjectCleanupIntents,
   fields,
@@ -22,6 +23,7 @@ import {
   BUFFER_INTENT_WRITE_TIMEOUT_MS,
   lockObjectCleanupIntentsForWriter,
   reserveObjectCleanupIntent,
+  settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
@@ -75,6 +77,41 @@ const lockActiveWorkspaceForDerivative = async (
     .limit(1)
     .for("update");
   return workspaceRows.at(0)?.status === "active";
+};
+
+const cleanupUnpublishedDerivative = async ({
+  intentId,
+  objectKey,
+  safeDb,
+  telemetry,
+  writeState,
+}: {
+  intentId: SafeId<"pendingUpload">;
+  objectKey: string;
+  safeDb: SafeDb;
+  telemetry: Record<string, string>;
+  writeState: "confirmed" | "uncertain";
+}): Promise<void> => {
+  const cleanup = await Result.tryPromise({
+    try: async () => await getS3().delete(objectKey),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(cleanup)) {
+    captureError(cleanup.error, telemetry);
+  }
+  const settlement = await settleObjectCleanupIntentsAfterWriter({
+    intentIds: [intentId],
+    objectState:
+      writeState === "uncertain"
+        ? "write-uncertain"
+        : Result.isOk(cleanup)
+          ? "object-deleted"
+          : "cleanup-required",
+    safeDb,
+  });
+  if (Result.isError(settlement)) {
+    captureError(settlement.error, telemetry);
+  }
 };
 
 /** Which derivative a job produces; also the job id's discriminating part. */
@@ -403,6 +440,7 @@ const processPdfDerivativeJob = async ({
     throw cleanupIntent.error;
   }
 
+  let writeState: "confirmed" | "uncertain" = "uncertain";
   try {
     await withTimeout(
       async (signal) =>
@@ -417,6 +455,7 @@ const processPdfDerivativeJob = async ({
         timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
       },
     );
+    writeState = "confirmed";
     const publication = await scopedDb(async (tx) => {
       if (!(await lockActiveWorkspaceForDerivative(tx, branded.workspaceId))) {
         return "workspace-inactive" as const;
@@ -450,18 +489,29 @@ const processPdfDerivativeJob = async ({
     });
 
     if (publication !== "published") {
-      await getS3().delete(pdfKey);
+      await cleanupUnpublishedDerivative({
+        intentId: cleanupIntent.value,
+        objectKey: pdfKey,
+        safeDb,
+        telemetry: {
+          fieldId: brandedFieldId,
+          workspaceId: branded.workspaceId,
+        },
+        writeState,
+      });
       return;
     }
   } catch (error) {
-    await getS3()
-      .delete(pdfKey)
-      .catch((deleteError: unknown) => {
-        captureError(deleteError, {
-          fieldId: brandedFieldId,
-          workspaceId: branded.workspaceId,
-        });
-      });
+    await cleanupUnpublishedDerivative({
+      intentId: cleanupIntent.value,
+      objectKey: pdfKey,
+      safeDb,
+      telemetry: {
+        fieldId: brandedFieldId,
+        workspaceId: branded.workspaceId,
+      },
+      writeState,
+    });
     throw error;
   }
 
@@ -614,6 +664,7 @@ const processImageThumbnailJob = async ({
     throw cleanupIntent.error;
   }
 
+  let writeState: "confirmed" | "uncertain" = "uncertain";
   try {
     await withTimeout(
       async (signal) =>
@@ -628,6 +679,7 @@ const processImageThumbnailJob = async ({
         timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,
       },
     );
+    writeState = "confirmed";
     const publication = await scopedDb(async (tx) => {
       if (!(await lockActiveWorkspaceForDerivative(tx, branded.workspaceId))) {
         return "workspace-inactive" as const;
@@ -662,18 +714,29 @@ const processImageThumbnailJob = async ({
     });
 
     if (publication !== "published") {
-      await getS3().delete(thumbnailKey);
+      await cleanupUnpublishedDerivative({
+        intentId: cleanupIntent.value,
+        objectKey: thumbnailKey,
+        safeDb,
+        telemetry: {
+          fieldId: brandedFieldId,
+          workspaceId: branded.workspaceId,
+        },
+        writeState,
+      });
       return;
     }
   } catch (error) {
-    await getS3()
-      .delete(thumbnailKey)
-      .catch((deleteError: unknown) => {
-        captureError(deleteError, {
-          fieldId: brandedFieldId,
-          workspaceId: branded.workspaceId,
-        });
-      });
+    await cleanupUnpublishedDerivative({
+      intentId: cleanupIntent.value,
+      objectKey: thumbnailKey,
+      safeDb,
+      telemetry: {
+        fieldId: brandedFieldId,
+        workspaceId: branded.workspaceId,
+      },
+      writeState,
+    });
     throw error;
   }
 

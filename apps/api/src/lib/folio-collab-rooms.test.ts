@@ -8,6 +8,8 @@ import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type QueryBuilder = {
+  execute: () => Promise<void>;
+  for: () => QueryBuilder;
   insert: () => QueryBuilder;
   select: () => QueryBuilder;
   from: () => QueryBuilder;
@@ -23,7 +25,10 @@ let scopedRows: Record<string, unknown>[][] = [];
 let scopedFailure: Error | null = null;
 let scopedFailureAfterCalls = 0;
 let scopedCalls = 0;
+let scopedLockRead = false;
 const builder: QueryBuilder = {
+  execute: async () => undefined,
+  for: () => builder,
   insert: () => builder,
   select: () => builder,
   from: () => builder,
@@ -34,13 +39,24 @@ const builder: QueryBuilder = {
   values: async () => [],
 };
 const scopedBuilder: QueryBuilder = {
+  execute: async () => undefined,
+  for: () => {
+    scopedLockRead = true;
+    return scopedBuilder;
+  },
   insert: () => scopedBuilder,
   select: () => scopedBuilder,
   from: () => scopedBuilder,
   innerJoin: () => scopedBuilder,
   leftJoin: () => scopedBuilder,
   where: () => scopedBuilder,
-  limit: async () => scopedRows.shift() ?? [],
+  limit: async () => {
+    if (scopedLockRead) {
+      scopedLockRead = false;
+      return [{ status: "active" }];
+    }
+    return scopedRows.shift() ?? [];
+  },
   values: async () => [],
 };
 
@@ -96,6 +112,7 @@ afterEach(() => {
   scopedFailure = null;
   scopedFailureAfterCalls = 0;
   scopedCalls = 0;
+  scopedLockRead = false;
 });
 
 const snapshotKey = (fileId: string) =>

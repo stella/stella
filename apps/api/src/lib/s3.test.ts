@@ -10,6 +10,7 @@ import {
   S3ObjectBudgetError,
   readS3ArrayBuffer,
   resolveS3Credentials,
+  S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
 import { credentialsFromEnvValues } from "@/api/lib/s3-credentials";
@@ -306,9 +307,25 @@ describe("writeS3ObjectWithRetry", () => {
     // recoverable blip is enough to stall a whole source.
     const attempts = { code: "ConnectionClosed", count: 0 };
 
-    await writeS3ObjectWithRetry(object, failingWriter(attempts, 1));
+    const certainty = await writeS3ObjectWithRetry(
+      object,
+      failingWriter(attempts, 1),
+    );
 
     expect(attempts.count).toBe(2);
+    expect(certainty).toBe(S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN);
+  });
+
+  test("a first-attempt success is confirmed settled", async () => {
+    const attempts = { count: 0 };
+
+    const certainty = await writeS3ObjectWithRetry(
+      object,
+      failingWriter(attempts, 0),
+    );
+
+    expect(attempts.count).toBe(1);
+    expect(certainty).toBe(S3_OBJECT_WRITE_CERTAINTY.CONFIRMED);
   });
 
   test("an unrecognised code retries rather than wedging the caller", async () => {
@@ -317,9 +334,13 @@ describe("writeS3ObjectWithRetry", () => {
     // code the list happens to miss.
     const attempts = { code: "SomeCodeNobodyEnumerated", count: 0 };
 
-    await writeS3ObjectWithRetry(object, failingWriter(attempts, 1));
+    const certainty = await writeS3ObjectWithRetry(
+      object,
+      failingWriter(attempts, 1),
+    );
 
     expect(attempts.count).toBe(2);
+    expect(certainty).toBe(S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN);
   });
 
   test("a terminal rejection is not retried", async () => {

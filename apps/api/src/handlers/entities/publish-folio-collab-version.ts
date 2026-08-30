@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import {
+  BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
   bufferObjectCleanupIntents,
   entityVersions,
   folioCollabContributions,
@@ -17,6 +18,12 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  lockActiveWorkspaceForBufferIntent,
+  lockObjectCleanupIntentsForWriter,
+  reserveObjectCleanupIntent,
+  settleObjectCleanupIntentsAfterWriter,
+} from "@/api/lib/buffer-intent-reconciliation";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { COLLABORATION_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
@@ -37,8 +44,10 @@ import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
   deleteS3ObjectWithSignal,
   readS3ArrayBuffer,
+  S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
+import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import {
   processExtraction,
@@ -46,7 +55,6 @@ import {
 } from "@/api/lib/search/process-extraction";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const PUBLICATION_WRITE_RECOVERY_DELAY_MS = 2 * 60 * 1000;
 const CHECKPOINT_CLEANUP_GRACE_MS = 60_000;
 const FOLIO_COLLAB_PUBLICATION_IDEMPOTENCY_CONSTRAINT =
   "folio_collab_publications_idempotency_uidx";
@@ -289,38 +297,59 @@ const publishFolioCollabVersion = createSafeHandler(
       organizationId: session.activeOrganizationId,
       workspaceId,
     });
-    const sourceCleanupIntentId = createSafeId<"pendingUpload">();
-    yield* Result.await(
-      safeDb(async (tx) => {
-        // audit: skip — durable crash-recovery storage bookkeeping; the room
-        // publication and canonical entity/version mutations are audited.
-        await tx.insert(bufferObjectCleanupIntents).values({
-          id: sourceCleanupIntentId,
-          nextAttemptAt: new Date(
-            Date.now() + PUBLICATION_WRITE_RECOVERY_DELAY_MS,
-          ),
-          objectKey: sourceKey,
-          organizationId: session.activeOrganizationId,
-          workspaceId,
-        });
+    const sourceCleanupIntentId = yield* Result.await(
+      reserveObjectCleanupIntent({
+        objectKey: sourceKey,
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        workspaceId,
       }),
     );
-    await writeS3ObjectWithRetry({
-      contentType: DOCX_MIME_TYPE,
-      data: checkpointBytes,
-      key: sourceKey,
-    });
-
-    const cleanupSource = async () => {
-      await deleteS3ObjectWithSignal(
-        sourceKey,
-        AbortSignal.timeout(10_000),
-      ).catch((error: unknown) => {
-        captureError(error, { roomId, storageKey: sourceKey });
+    const cleanupSource = async (
+      writeCertainty: S3ObjectWriteCertainty,
+    ): Promise<void> => {
+      const cleanup = await Result.tryPromise({
+        try: async () =>
+          await deleteS3ObjectWithSignal(
+            sourceKey,
+            AbortSignal.timeout(10_000),
+          ),
+        catch: (cause) => cause,
       });
+      if (Result.isError(cleanup)) {
+        captureError(cleanup.error, { roomId, storageKey: sourceKey });
+      }
+      const settlement = await settleObjectCleanupIntentsAfterWriter({
+        intentIds: [sourceCleanupIntentId],
+        objectState:
+          writeCertainty === S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN
+            ? "write-uncertain"
+            : Result.isOk(cleanup)
+              ? "object-deleted"
+              : "cleanup-required",
+        safeDb,
+      });
+      if (Result.isError(settlement)) {
+        captureError(settlement.error, { roomId, storageKey: sourceKey });
+      }
     };
+    const written = await Result.tryPromise({
+      try: async () =>
+        await writeS3ObjectWithRetry({
+          contentType: DOCX_MIME_TYPE,
+          data: checkpointBytes,
+          key: sourceKey,
+        }),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(written)) {
+      await cleanupSource(S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN);
+      throw written.error;
+    }
+    const writeCertainty = written.value;
 
     const publicationResult = await safeDb(async (tx) => {
+      await lockActiveWorkspaceForBufferIntent(tx, workspaceId);
       await lockDocxEditTarget({
         entityId: preliminary.room.entityId,
         propertyId: preliminary.room.propertyId,
@@ -394,6 +423,7 @@ const publishFolioCollabVersion = createSafeHandler(
       ) {
         return { status: "checkpoint-changed" } as const;
       }
+      await lockObjectCleanupIntentsForWriter(tx, [sourceCleanupIntentId]);
 
       const contributorRows = await tx
         .select({
@@ -483,6 +513,7 @@ const publishFolioCollabVersion = createSafeHandler(
             nextAttemptAt: new Date(Date.now() + CHECKPOINT_CLEANUP_GRACE_MS),
             objectKey: checkpointKey,
             organizationId: session.activeOrganizationId,
+            status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
             workspaceId,
           });
           await tx
@@ -559,7 +590,7 @@ const publishFolioCollabVersion = createSafeHandler(
       }
     });
     if (Result.isError(publicationResult)) {
-      await cleanupSource();
+      await cleanupSource(writeCertainty);
       if (isFolioCollabIdempotencyConstraintError(publicationResult.error)) {
         return Result.err(
           new HandlerError({
@@ -617,7 +648,7 @@ const publishFolioCollabVersion = createSafeHandler(
       });
     }
 
-    await cleanupSource();
+    await cleanupSource(writeCertainty);
     if (publication.status === "idempotent") {
       return Result.ok({
         idempotent: true,

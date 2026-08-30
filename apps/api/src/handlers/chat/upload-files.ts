@@ -38,7 +38,9 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   BUFFER_INTENT_WRITE_TIMEOUT_MS,
   lockObjectCleanupIntentsForWriter,
+  OBJECT_INTENT_WORKSPACE_AVAILABILITY,
   reserveObjectCleanupIntents,
+  settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import {
   isDataUrlSizeLimitError,
@@ -543,6 +545,7 @@ type ReserveChatObjectCleanupIntent = (options: {
 
 type UploadUserFileDependencies = {
   reserveChatObjectCleanupIntent?: ReserveChatObjectCleanupIntent;
+  settleObjectCleanupIntentsAfterWriter?: typeof settleObjectCleanupIntentsAfterWriter;
 };
 
 export const chatObjectCleanupWorkspaceIds = ({
@@ -596,6 +599,7 @@ const reserveChatObjectCleanupIntent: ReserveChatObjectCleanupIntent = async (
     objectKey,
     organizationId: threadScopeResult.value.organizationId,
     safeDb,
+    workspaceAvailability: OBJECT_INTENT_WORKSPACE_AVAILABILITY.NOT_DELETING,
     workspaceIds: cleanupWorkspaceIds,
   });
 };
@@ -627,6 +631,9 @@ export const uploadUserFile = async ({
     const reserveCleanupIntent =
       dependencies?.reserveChatObjectCleanupIntent ??
       reserveChatObjectCleanupIntent;
+    const settleCleanupIntents =
+      dependencies?.settleObjectCleanupIntentsAfterWriter ??
+      settleObjectCleanupIntentsAfterWriter;
     // Enforce the MIME allowlist at the storage boundary, not only in
     // validateChatFileParts at message-send: user files are later served
     // inline (Content-Disposition without a filename), so a stored
@@ -748,7 +755,8 @@ export const uploadUserFile = async ({
     if (Result.isError(cleanupIntent)) {
       return Result.err(cleanupIntent.error);
     }
-    cleanupIntentIds.push(...cleanupIntent.value);
+    const sourceCleanupIntentIds = cleanupIntent.value;
+    cleanupIntentIds.push(...sourceCleanupIntentIds);
 
     let thumbnailCleanupIntentIds: SafeId<"pendingUpload">[] = [];
     if (preparedThumbnail !== null) {
@@ -790,15 +798,40 @@ export const uploadUserFile = async ({
       catch: (cause) => cause,
     });
     if (Result.isError(writeSourceResult)) {
-      await getS3()
-        .delete(s3Key)
-        .catch((cleanupError: unknown) => {
-          captureError(cleanupError, {
-            s3Key,
-            stage: "chat-attachment-write-cleanup",
-            userFileId: id,
-          });
+      const cleanupResult = await Result.tryPromise({
+        try: async () => await getS3().delete(s3Key),
+        catch: (cause) => cause,
+      });
+      if (Result.isError(cleanupResult)) {
+        captureError(cleanupResult.error, {
+          s3Key,
+          stage: "chat-attachment-write-cleanup",
+          userFileId: id,
         });
+      }
+      const sourceSettlement = await settleCleanupIntents({
+        intentIds: sourceCleanupIntentIds,
+        objectState: "write-uncertain",
+        safeDb,
+      });
+      if (Result.isError(sourceSettlement)) {
+        captureError(sourceSettlement.error, {
+          s3Key,
+          stage: "chat-attachment-write-settle",
+          userFileId: id,
+        });
+      }
+      const thumbnailSettlement = await settleCleanupIntents({
+        intentIds: thumbnailCleanupIntentIds,
+        objectState: "object-deleted",
+        safeDb,
+      });
+      if (Result.isError(thumbnailSettlement)) {
+        captureError(thumbnailSettlement.error, {
+          stage: "chat-thumbnail-unwritten-settle",
+          userFileId: id,
+        });
+      }
       return Result.err(
         new HandlerError({
           status: 500,
@@ -831,6 +864,57 @@ export const uploadUserFile = async ({
           stage: "chat-thumbnail-write",
           userFileId: id,
         });
+        const cleanupResult = await Result.tryPromise({
+          try: async () => await getS3().delete(preparedThumbnail.key),
+          catch: (cause) => cause,
+        });
+        if (Result.isError(cleanupResult)) {
+          captureError(cleanupResult.error, {
+            stage: "chat-thumbnail-write-cleanup",
+            userFileId: id,
+          });
+        }
+        const settlement = await settleCleanupIntents({
+          intentIds: thumbnailCleanupIntentIds,
+          objectState: "write-uncertain",
+          safeDb,
+        });
+        if (Result.isError(settlement)) {
+          const sourceCleanup = await Result.tryPromise({
+            try: async () => await getS3().delete(s3Key),
+            catch: (cause) => cause,
+          });
+          const sourceSettlement = await settleCleanupIntents({
+            intentIds: sourceCleanupIntentIds,
+            objectState: Result.isOk(sourceCleanup)
+              ? "object-deleted"
+              : "cleanup-required",
+            safeDb,
+          });
+          if (Result.isError(sourceCleanup)) {
+            captureError(sourceCleanup.error, {
+              s3Key,
+              stage: "chat-attachment-thumbnail-settle-cleanup",
+              userFileId: id,
+            });
+          }
+          if (Result.isError(sourceSettlement)) {
+            captureError(sourceSettlement.error, {
+              s3Key,
+              stage: "chat-attachment-thumbnail-settle",
+              userFileId: id,
+            });
+          }
+          return Result.err(settlement.error);
+        }
+        const settledThumbnailIds = new Set(thumbnailCleanupIntentIds);
+        cleanupIntentIds.splice(
+          0,
+          cleanupIntentIds.length,
+          ...cleanupIntentIds.filter(
+            (intentId) => !settledThumbnailIds.has(intentId),
+          ),
+        );
       } else {
         thumbnailFileId = preparedThumbnail.fileId;
         placeholder = preparedThumbnail.placeholder;
@@ -895,27 +979,59 @@ export const uploadUserFile = async ({
       });
     }
 
-    const cleanupResult = await Result.tryPromise({
-      try: async () => {
-        await getS3().delete(s3Key);
-        if (thumbnailKey) {
-          await getS3().delete(thumbnailKey);
-        }
-      },
-      catch: (cleanupError) =>
-        new HandlerError({
-          status: 500,
-          message: "Failed to clean up chat attachment after a save failure",
-          cause: cleanupError,
-        }),
+    const sourceCleanupResult = await Result.tryPromise({
+      try: async () => await getS3().delete(s3Key),
+      catch: (cause) => cause,
+    });
+    const sourceSettlement = await settleCleanupIntents({
+      intentIds: sourceCleanupIntentIds,
+      objectState: Result.isOk(sourceCleanupResult)
+        ? "object-deleted"
+        : "cleanup-required",
+      safeDb,
+    });
+    const thumbnailCleanupResult =
+      thumbnailKey === null
+        ? Result.ok(undefined)
+        : await Result.tryPromise({
+            try: async () => await getS3().delete(thumbnailKey),
+            catch: (cause) => cause,
+          });
+    const thumbnailSettlement = await settleCleanupIntents({
+      intentIds: thumbnailCleanupIntentIds,
+      objectState: Result.isOk(thumbnailCleanupResult)
+        ? "object-deleted"
+        : "cleanup-required",
+      safeDb,
     });
 
-    if (Result.isOk(cleanupResult)) {
+    if (
+      Result.isOk(sourceCleanupResult) &&
+      Result.isOk(thumbnailCleanupResult) &&
+      Result.isOk(sourceSettlement) &&
+      Result.isOk(thumbnailSettlement)
+    ) {
       return Result.err(saveResult.error);
     }
 
     captureError(saveResult.error, { s3Key, threadId, userFileId: id });
-    return Result.err(cleanupResult.error);
+    let cleanupError: unknown = saveResult.error;
+    if (Result.isError(sourceCleanupResult)) {
+      cleanupError = sourceCleanupResult.error;
+    } else if (Result.isError(thumbnailCleanupResult)) {
+      cleanupError = thumbnailCleanupResult.error;
+    } else if (Result.isError(sourceSettlement)) {
+      cleanupError = sourceSettlement.error;
+    } else if (Result.isError(thumbnailSettlement)) {
+      cleanupError = thumbnailSettlement.error;
+    }
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: "Failed to clean up chat attachment after a save failure",
+        cause: cleanupError,
+      }),
+    );
   });
 
 type NormalizeUserFilePartProps = {

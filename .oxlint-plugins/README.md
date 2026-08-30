@@ -78,6 +78,7 @@ runtime validation, or integration tests.
 - [`no-db-await-in-loop`](./no-db-await-in-loop.ts) (`no-db-await-in-loop`): catches database calls awaited serially in loops and unbounded `Promise.all` query fan-out.
 - [`no-direct-audit-log-insert`](./no-direct-audit-log-insert.ts) (`no-direct-audit-log-insert`): keeps audit-log insertion behind the canonical append-only audit service.
 - [`no-direct-ingestion-checkpoint-write`](./no-direct-ingestion-checkpoint-write.ts) (`no-direct-ingestion-checkpoint-write`): keeps checkpoint writes behind the replay-safe ingestion coordination helper.
+- [`require-buffer-cleanup-intent-status`](./require-buffer-cleanup-intent-status.ts) (`require-buffer-cleanup-intent-status`): requires direct cleanup-intent inserts to choose their lifecycle state explicitly instead of inheriting the database rollout default.
 - [`no-inline-timestamp-cursor-sql`](./no-inline-timestamp-cursor-sql.ts) (`no-inline-timestamp-cursor-sql`): requires shared timestamp-and-ID cursor predicates instead of hand-written comparison SQL.
 - [`no-naive-timestamp-cast`](./no-naive-timestamp-cast.ts) (`no-naive-timestamp-cast`): rejects timestamp casts that discard or assume timezone semantics.
 - [`queue-worker-error-sink`](./queue-worker-error-sink.ts) (`queue-worker-error-sink`): keeps a queue worker's `error` event on the throttled sink, so a Valkey disruption cannot log one line per failed poll.

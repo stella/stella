@@ -28,6 +28,14 @@ export const BUFFER_INTENT_WRITE_TIMEOUT_MS = 2 * 60 * 1000;
 export const OBJECT_WRITE_RECOVERY_DELAY_MS = BUFFER_INTENT_WRITE_TIMEOUT_MS;
 const BUFFER_CLEANUP_RETRY_MAX_EXPONENT = 14;
 
+export const OBJECT_INTENT_WORKSPACE_AVAILABILITY = {
+  ACTIVE: "active",
+  NOT_DELETING: "not-deleting",
+} as const;
+
+type ObjectIntentWorkspaceAvailability =
+  (typeof OBJECT_INTENT_WORKSPACE_AVAILABILITY)[keyof typeof OBJECT_INTENT_WORKSPACE_AVAILABILITY];
+
 export type BufferIntentPurpose = "entity_create" | "entity_version";
 
 export type BufferIntent = {
@@ -98,7 +106,7 @@ const organizationObjectIntentLockKey = (
   organizationId: SafeId<"organization">,
 ): string => `buffer-object:${organizationId}`;
 
-const lockOrganizationObjectIntentsForWriter = async (
+export const lockOrganizationObjectIntentsForWriter = async (
   tx: Transaction,
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
@@ -129,8 +137,8 @@ export const lockActiveWorkspaceForBufferIntent = async (
     .select({ status: workspaces.status })
     .from(workspaces)
     .where(eq(workspaces.id, workspaceId))
-    .limit(1)
-    .for("share");
+    .for("share")
+    .limit(1);
   if (rows.at(0)?.status !== "active") {
     throw new BufferIntentWorkspaceUnavailableError({
       message: "Workspace is not active",
@@ -144,12 +152,14 @@ export const reserveObjectCleanupIntents = async ({
   objectKey,
   organizationId,
   safeDb,
+  workspaceAvailability = OBJECT_INTENT_WORKSPACE_AVAILABILITY.ACTIVE,
   workspaceIds,
 }: {
   chatThreadId?: SafeId<"chatThread">;
   objectKey: string;
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
+  workspaceAvailability?: ObjectIntentWorkspaceAvailability;
   workspaceIds: SafeId<"workspace">[];
 }): Promise<Result<SafeId<"pendingUpload">[], SafeDbError>> => {
   const uniqueWorkspaceIds = [...new Set(workspaceIds)].sort();
@@ -178,7 +188,11 @@ export const reserveObjectCleanupIntents = async ({
         .for("share");
       if (
         lockedWorkspaces.length !== uniqueWorkspaceIds.length ||
-        lockedWorkspaces.some(({ status }) => status !== "active")
+        lockedWorkspaces.some(({ status }) =>
+          workspaceAvailability === OBJECT_INTENT_WORKSPACE_AVAILABILITY.ACTIVE
+            ? status !== "active"
+            : status === "deleting",
+        )
       ) {
         throw new BufferIntentWorkspaceUnavailableError({
           message: "Workspace is not active",
@@ -256,6 +270,85 @@ export const lockObjectCleanupIntentsForWriter = async (
   }
 };
 
+export type ObjectWriterSettlement =
+  | "cleanup-required"
+  | "object-deleted"
+  | "write-uncertain";
+
+const UNRETIRED_OBJECT_WRITER_SETTLEMENT_STATUS = {
+  "cleanup-required": BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+  "write-uncertain": BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
+} as const satisfies Record<
+  Exclude<ObjectWriterSettlement, "object-deleted">,
+  (typeof BUFFER_OBJECT_CLEANUP_INTENT_STATUS)[keyof typeof BUFFER_OBJECT_CLEANUP_INTENT_STATUS]
+>;
+
+export const settleObjectCleanupIntentsAfterWriterInTransaction = async ({
+  intentIds,
+  objectState,
+  tx,
+}: {
+  intentIds: SafeId<"pendingUpload">[];
+  objectState: ObjectWriterSettlement;
+  tx: Transaction;
+}): Promise<void> => {
+  const uniqueIntentIds = [...new Set(intentIds)];
+  if (uniqueIntentIds.length === 0) {
+    return;
+  }
+  if (objectState === "object-deleted") {
+    // audit: skip; original-writer crash-recovery ownership settlement only.
+    const deleted = await tx
+      .delete(bufferObjectCleanupIntents)
+      .where(inArray(bufferObjectCleanupIntents.id, uniqueIntentIds))
+      .returning({ id: bufferObjectCleanupIntents.id });
+    if (deleted.length !== uniqueIntentIds.length) {
+      throw new BufferIntentOwnershipError({
+        message: "Object cleanup settlement ownership was lost",
+      });
+    }
+    return;
+  }
+  // audit: skip; exact-key cleanup still needs durable recovery, either because
+  // deletion failed or because a timed-out PUT may still complete later.
+  const updated = await tx
+    .update(bufferObjectCleanupIntents)
+    .set({ status: UNRETIRED_OBJECT_WRITER_SETTLEMENT_STATUS[objectState] })
+    .where(inArray(bufferObjectCleanupIntents.id, uniqueIntentIds))
+    .returning({ id: bufferObjectCleanupIntents.id });
+  if (updated.length !== uniqueIntentIds.length) {
+    throw new BufferIntentOwnershipError({
+      message: "Object cleanup settlement ownership was lost",
+    });
+  }
+};
+
+/** Settle recovery ownership after the original writer can no longer publish.
+ * Successful exact-key deletion retires the proof only after a confirmed PUT.
+ * A failed deletion becomes a writer-free orphan; an ambiguous PUT stays in
+ * recovery because it may still complete after the writer returns. */
+export const settleObjectCleanupIntentsAfterWriter = async ({
+  intentIds,
+  objectState,
+  safeDb,
+}: {
+  intentIds: SafeId<"pendingUpload">[];
+  objectState: ObjectWriterSettlement;
+  safeDb: SafeDb;
+}): Promise<Result<void, SafeDbError>> => {
+  if (intentIds.length === 0) {
+    return Result.ok(undefined);
+  }
+  return await safeDb(
+    async (tx) =>
+      await settleObjectCleanupIntentsAfterWriterInTransaction({
+        intentIds,
+        objectState,
+        tx,
+      }),
+  );
+};
+
 type ReleaseObjectCleanupIntentScope =
   | {
       organizationId: SafeId<"organization">;
@@ -276,15 +369,24 @@ export const releaseObjectCleanupIntentsForLifecycle = async (
     .update(bufferObjectCleanupIntents)
     .set({
       nextAttemptAt: new Date(),
-      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.CLEANUP,
+      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
     })
     .where(
-      scope.type === "workspace"
-        ? and(
-            eq(bufferObjectCleanupIntents.organizationId, scope.organizationId),
-            eq(bufferObjectCleanupIntents.workspaceId, scope.workspaceId),
-          )
-        : eq(bufferObjectCleanupIntents.organizationId, scope.organizationId),
+      and(
+        scope.type === "workspace"
+          ? and(
+              eq(
+                bufferObjectCleanupIntents.organizationId,
+                scope.organizationId,
+              ),
+              eq(bufferObjectCleanupIntents.workspaceId, scope.workspaceId),
+            )
+          : eq(bufferObjectCleanupIntents.organizationId, scope.organizationId),
+        eq(
+          bufferObjectCleanupIntents.status,
+          BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
+        ),
+      ),
     );
 };
 
@@ -491,6 +593,7 @@ export const preserveBufferObjectCleanupIntents = async (
         organizationId: row.organizationId,
         workspaceId: row.workspaceId,
         objectKey,
+        status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
       },
     ];
   });
@@ -658,9 +761,9 @@ const reconcileStaleBufferIntentBatch = async ({
 };
 
 /**
- * Retry lifecycle-transferred keys indefinitely with exponential backoff.
- * Only the original writer may remove a tombstone after its PUT has settled
- * and deletion of the exact key succeeds.
+ * Retry exact-key cleanup with exponential backoff. Lifecycle-transferred rows
+ * stay until their original writer settles; writer-free orphan rows retire
+ * after the reconciler confirms deletion.
  */
 export const reconcileBufferObjectCleanupIntents = async ({
   safeDb,
@@ -683,6 +786,7 @@ export const reconcileBufferObjectCleanupIntents = async ({
         attemptCount: bufferObjectCleanupIntents.attemptCount,
         id: bufferObjectCleanupIntents.id,
         objectKey: bufferObjectCleanupIntents.objectKey,
+        status: bufferObjectCleanupIntents.status,
       })
       .from(bufferObjectCleanupIntents)
       .where(lte(bufferObjectCleanupIntents.nextAttemptAt, new Date()))
@@ -708,7 +812,11 @@ export const reconcileBufferObjectCleanupIntents = async ({
           )) * interval '1 minute',
           interval '24 hours'
         )`,
-        status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.CLEANUP,
+        status: sql`CASE
+          WHEN ${bufferObjectCleanupIntents.status} = ${BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING}
+            THEN ${BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING}
+          ELSE ${bufferObjectCleanupIntents.status}
+        END`,
       })
       .where(inArray(bufferObjectCleanupIntents.id, ids));
     return rows;
@@ -717,7 +825,7 @@ export const reconcileBufferObjectCleanupIntents = async ({
     throw claimedResult.error;
   }
 
-  await Promise.all(
+  const cleanupResults = await Promise.all(
     claimedResult.value.map(async (row) => {
       const cleanup = await Result.tryPromise({
         try: async () =>
@@ -738,9 +846,35 @@ export const reconcileBufferObjectCleanupIntents = async ({
           stage: "buffer-object-cleanup-reconcile",
         });
       }
+      return Result.isOk(cleanup) &&
+        row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED
+        ? row.id
+        : null;
     }),
   );
   signal?.throwIfAborted();
+  const retiredIds = cleanupResults.filter(
+    (id): id is SafeId<"pendingUpload"> => id !== null,
+  );
+  if (retiredIds.length > 0) {
+    const retired = await safeDb(async (tx) => {
+      // audit: skip; terminal cleanup bookkeeping after exact-key deletion.
+      await tx
+        .delete(bufferObjectCleanupIntents)
+        .where(
+          and(
+            inArray(bufferObjectCleanupIntents.id, retiredIds),
+            eq(
+              bufferObjectCleanupIntents.status,
+              BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+            ),
+          ),
+        );
+    });
+    if (Result.isError(retired)) {
+      throw retired.error;
+    }
+  }
   return claimedResult.value.length;
 };
 

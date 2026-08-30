@@ -1190,7 +1190,8 @@ export const pendingUploads = p.pgTable(
 );
 
 export const BUFFER_OBJECT_CLEANUP_INTENT_STATUS = {
-  CLEANUP: "cleanup",
+  ORPHANED: "orphaned",
+  RECOVERING: "recovering",
   WRITING: "writing",
 } as const;
 
@@ -1219,22 +1220,29 @@ export const bufferObjectCleanupIntents = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id"),
     // Deliberately not a foreign key: the cleanup proof must outlive its chat.
     chatThreadId: safeUuid<"chatThread">("chat_thread_id"),
+    // No FK: a writer must retain settlement authority after its owning
+    // workspace, thread, or organization has been removed.
+    writerUserId: p
+      .text("writer_user_id")
+      .$type<SafeId<"user">>()
+      .default(sql`pg_catalog.current_setting('app.user_id', true)`),
     objectKey: p.text("object_key").notNull(),
     status: p
       .text({
         enum: [
-          BUFFER_OBJECT_CLEANUP_INTENT_STATUS.CLEANUP,
+          BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+          BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
           BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
         ],
       })
       .notNull()
-      .default(BUFFER_OBJECT_CLEANUP_INTENT_STATUS.CLEANUP),
+      .default(BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING),
     attemptCount: p.integer("attempt_count").notNull().default(0),
     nextAttemptAt: timestamptz("next_attempt_at").notNull().defaultNow(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => {
-    const scopedAccess = sql`${organizationCheck} AND ((
+    const ownerScopeAccess = sql`((
       ${table.chatThreadId} IS NOT NULL
       AND pg_catalog.split_part(${table.objectKey}, '/', 1) = (SELECT pg_catalog.current_setting('app.user_id', true))
       AND EXISTS (
@@ -1254,6 +1262,10 @@ export const bufferObjectCleanupIntents = p.pgTable(
       AND pg_catalog.split_part(${table.objectKey}, '/', 1) = ${table.organizationId}
       AND pg_catalog.split_part(${table.objectKey}, '/', 2) = ${table.workspaceId}::text
     ))`;
+    const writerSettlementAccess = sql`
+      ${table.writerUserId} = (SELECT pg_catalog.current_setting('app.user_id', true))
+    `;
+    const scopedAccess = sql`${organizationCheck} AND (${ownerScopeAccess} OR ${writerSettlementAccess})`;
 
     return [
       p
@@ -1271,7 +1283,7 @@ export const bufferObjectCleanupIntents = p.pgTable(
       ),
       p.check(
         "buffer_object_cleanup_status_check",
-        sql`${table.status} IN (${BUFFER_OBJECT_CLEANUP_INTENT_STATUS.CLEANUP}, ${BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING})`,
+        sql`${table.status} IN (${BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED}, ${BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING}, ${BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING})`,
       ),
       // Lifecycle deletion may transfer the intent through its scoped
       // transaction. The original scoped writer may remove it only after its
@@ -1280,7 +1292,7 @@ export const bufferObjectCleanupIntents = p.pgTable(
       p.pgPolicy("buffer_object_cleanup_insert", {
         for: "insert",
         to: stella,
-        withCheck: scopedAccess,
+        withCheck: sql`${organizationCheck} AND ${writerSettlementAccess} AND ${ownerScopeAccess}`,
       }),
       p.pgPolicy("buffer_object_cleanup_select", {
         for: "select",

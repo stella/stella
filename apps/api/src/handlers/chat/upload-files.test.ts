@@ -401,11 +401,24 @@ describe("chat attachment hydration", () => {
     const databaseError = new DatabaseError({
       message: "user file insert failed",
     });
+    const cleanupIntentId = toSafeId<"pendingUpload">(
+      "11111111-1111-4111-8111-111111111114",
+    );
+    const settleObjectCleanupIntentsAfterWriter = mock(async () =>
+      Result.ok(undefined),
+    );
     const testTx = asTestRaw<Transaction>({
       insert: () => ({
         values: async () => {
           throw databaseError;
         },
+      }),
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: async () => [{ id: cleanupIntentId, status: "writing" }],
+          }),
+        }),
       }),
     });
     const safeDb: SafeDb = async (callback) =>
@@ -416,7 +429,11 @@ describe("chat attachment hydration", () => {
     const recordAuditEvent = mock(async () => undefined);
 
     const result = await uploadUserFile({
-      dependencies: uploadDependencies,
+      dependencies: {
+        reserveChatObjectCleanupIntent: async () =>
+          Result.ok([cleanupIntentId]),
+        settleObjectCleanupIntentsAfterWriter,
+      },
       file: {
         bytes: new TextEncoder().encode("confidential text"),
         fileName: "notes.txt",
@@ -438,6 +455,11 @@ describe("chat attachment hydration", () => {
     expect(requestKeys("DELETE")).toEqual(requestKeys("PUT"));
     expect([...fake.objects.keys()]).toEqual([`${bucket}/${ATTACHMENT_KEY}`]);
     expect(recordAuditEvent).not.toHaveBeenCalled();
+    expect(settleObjectCleanupIntentsAfterWriter).toHaveBeenCalledWith({
+      intentIds: [cleanupIntentId],
+      objectState: "object-deleted",
+      safeDb,
+    });
   });
 
   test("stores a sanitized filename, whatever the caller supplied", async () => {

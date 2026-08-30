@@ -5,6 +5,7 @@ import { member, organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   aiMemories,
+  chatThreadCompactions,
   chatThreads,
   desktopEditSessions,
   docxSuggestions,
@@ -179,7 +180,7 @@ export const WORKSPACE_DERIVED_REFERENCE_DISPOSITION = {
   "account_deletion_requests.workspace_ids": "retain-history",
   "ai_memories.source_data_workspace_ids": "delete-derived-row-and-trigger",
   "chat_thread_compactions.memory_extraction_data_workspace_ids":
-    "cascade-with-thread",
+    "delete-derived-row",
   "chat_threads.context_matter_ids": "prune-reference",
   "chat_threads.data_workspace_ids": "delete-derived-thread",
   "docx_suggestions.source_data_workspace_ids": "delete-derived-row",
@@ -885,6 +886,20 @@ export const completeWorkspaceDeletion = async ({
       and(
         eq(aiMemories.organizationId, organizationId),
         sql`${aiMemories.sourceDataWorkspaceIds} @> ARRAY[${workspaceId}]::uuid[]`,
+      ),
+    );
+  await tx
+    .delete(chatThreadCompactions)
+    .where(
+      and(
+        inArray(
+          chatThreadCompactions.threadId,
+          tx
+            .select({ id: chatThreads.id })
+            .from(chatThreads)
+            .where(eq(chatThreads.organizationId, organizationId)),
+        ),
+        sql`${chatThreadCompactions.memoryExtractionDataWorkspaceIds} @> ARRAY[${workspaceId}]::uuid[]`,
       ),
     );
   await tx

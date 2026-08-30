@@ -456,6 +456,14 @@ type S3ObjectWrite = {
 
 type S3ObjectWriter = (write: S3ObjectWrite) => Promise<unknown>;
 
+export const S3_OBJECT_WRITE_CERTAINTY = {
+  CONFIRMED: "confirmed",
+  UNCERTAIN: "uncertain",
+} as const;
+
+export type S3ObjectWriteCertainty =
+  (typeof S3_OBJECT_WRITE_CERTAINTY)[keyof typeof S3_OBJECT_WRITE_CERTAINTY];
+
 const writeViaClient: S3ObjectWriter = async ({ contentType, data, key }) =>
   await getS3().write(
     key,
@@ -473,13 +481,17 @@ const writeViaClient: S3ObjectWriter = async ({ contentType, data, key }) =>
  * propagates to the caller, and a caller that holds an ingestion cursor on
  * failure cannot make progress past it.
  *
+ * Returns `uncertain` when any earlier attempt failed before a later success:
+ * that attempt may still complete after this function returns, so a caller
+ * rolling back the owning database pointer must retain durable cleanup.
  * `write` is injected only by tests; production always uses the shared client.
  */
 export const writeS3ObjectWithRetry = async (
   object: S3ObjectWrite,
   write: S3ObjectWriter = writeViaClient,
-): Promise<void> => {
+): Promise<S3ObjectWriteCertainty> => {
   let lastError: unknown;
+  let priorAttemptMayCompleteLate = false;
   for (let attempt = 1; attempt <= S3_WRITE_MAX_ATTEMPTS; attempt += 1) {
     // oxlint-disable-next-line no-await-in-loop -- sequential by construction: each attempt must observe the previous one's failure
     const written = await Result.tryPromise({
@@ -491,8 +503,11 @@ export const writeS3ObjectWithRetry = async (
       catch: (cause) => cause,
     });
     if (!Result.isError(written)) {
-      return;
+      return priorAttemptMayCompleteLate
+        ? S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN
+        : S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
     }
+    priorAttemptMayCompleteLate = true;
     lastError = written.error;
     if (isTerminalS3WriteError(written.error)) {
       break;

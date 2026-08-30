@@ -14,6 +14,7 @@ const s3DeleteMock = mock(
 const {
   lockObjectCleanupIntentsForWriter,
   lockActiveWorkspaceForBufferIntent,
+  OBJECT_INTENT_WORKSPACE_AVAILABILITY,
   reconcileBufferObjectCleanupIntents,
   reconcileStaleBufferIntentsGlobally,
   releaseObjectCleanupIntentsForLifecycle,
@@ -93,12 +94,10 @@ test("share-locks an active workspace before reserving a writer intent", async (
     select: () => ({
       from: () => ({
         where: () => ({
-          limit: () => ({
-            for: async (strength: unknown) => {
-              locks.push(strength);
-              return [{ status: "active" }];
-            },
-          }),
+          for: (strength: unknown) => {
+            locks.push(strength);
+            return { limit: async () => [{ status: "active" }] };
+          },
         }),
       }),
     }),
@@ -114,7 +113,7 @@ test("rejects a writer reservation after workspace deletion seals", async () => 
     select: () => ({
       from: () => ({
         where: () => ({
-          limit: () => ({ for: async () => [{ status: "deleting" }] }),
+          for: () => ({ limit: async () => [{ status: "deleting" }] }),
         }),
       }),
     }),
@@ -232,6 +231,52 @@ test("reserves organization-scoped ownership without inventing a matter", async 
   ]);
 });
 
+test("reserves chat ownership for archived scope while deletion stays fenced", async () => {
+  const insertedRows: unknown[] = [];
+  const tx = asTestRaw<Transaction>({
+    execute: async () => undefined,
+    insert: () => ({
+      values: async (rows: unknown[]) => {
+        insertedRows.push(...rows);
+      },
+    }),
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          orderBy: () => ({
+            limit: () => ({
+              for: async () => [{ id: workspaceId, status: "archived" }],
+            }),
+          }),
+        }),
+      }),
+    }),
+  });
+  const safeDb = asTestRaw<SafeDb>(
+    async <T>(run: (transaction: Transaction) => Promise<T>) =>
+      await Result.tryPromise({
+        try: async () => await run(tx),
+        catch: (cause) => cause,
+      }),
+  );
+
+  const result = await reserveObjectCleanupIntents({
+    objectKey: "user-id/archived-chat-file",
+    organizationId,
+    safeDb,
+    workspaceAvailability: OBJECT_INTENT_WORKSPACE_AVAILABILITY.NOT_DELETING,
+    workspaceIds: [workspaceId],
+  });
+
+  expect(Result.isOk(result)).toBe(true);
+  expect(insertedRows).toEqual([
+    expect.objectContaining({
+      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING,
+      workspaceId,
+    }),
+  ]);
+});
+
 test("holds every exact-key intent until its writer transaction settles", async () => {
   const locks: unknown[] = [];
   const tx = asTestRaw<Transaction>({
@@ -277,7 +322,7 @@ test("transfers in-flight exact keys to lifecycle cleanup", async () => {
   expect(updates).toEqual([
     {
       nextAttemptAt: expect.any(Date),
-      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.CLEANUP,
+      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
     },
   ]);
 });
@@ -315,6 +360,7 @@ test("keeps a lifecycle tombstone while backing off repeated deletion", async ()
                   attemptCount: 0,
                   id: pendingUploadId,
                   objectKey: `${organizationId}/${workspaceId}/reserved.docx`,
+                  status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
                 },
               ],
             }),
@@ -355,6 +401,104 @@ test("keeps a lifecycle tombstone while backing off repeated deletion", async ()
       nextAttemptAt: expect.anything(),
     }),
   );
+});
+
+test("retires orphaned cleanup ownership after exact-key deletion", async () => {
+  let retired = 0;
+  const tx = asTestRaw<Transaction>({
+    delete: () => ({
+      where: async () => {
+        retired += 1;
+      },
+    }),
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          orderBy: () => ({
+            limit: () => ({
+              for: async () => [
+                {
+                  attemptCount: 0,
+                  id: pendingUploadId,
+                  objectKey: `${organizationId}/${workspaceId}/orphan.docx`,
+                  status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+                },
+              ],
+            }),
+          }),
+        }),
+      }),
+    }),
+    update: () => ({
+      set: () => ({ where: async () => undefined }),
+    }),
+  });
+  const safeDb = asTestRaw<SafeDb>(
+    async <T>(run: (transaction: Transaction) => Promise<T>) =>
+      await Result.tryPromise({
+        try: async () => await run(tx),
+        catch: (cause) => cause,
+      }),
+  );
+
+  const claimed = await reconcileBufferObjectCleanupIntents({
+    deleteObject: s3DeleteMock,
+    limit: 1,
+    safeDb,
+  });
+
+  expect(claimed).toBe(1);
+  expect(s3DeleteMock).toHaveBeenCalledTimes(1);
+  expect(retired).toBe(1);
+});
+
+test("retains orphaned cleanup ownership when exact-key deletion fails", async () => {
+  let retired = 0;
+  const tx = asTestRaw<Transaction>({
+    delete: () => ({
+      where: async () => {
+        retired += 1;
+      },
+    }),
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          orderBy: () => ({
+            limit: () => ({
+              for: async () => [
+                {
+                  attemptCount: 0,
+                  id: pendingUploadId,
+                  objectKey: `${organizationId}/${workspaceId}/orphan.docx`,
+                  status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+                },
+              ],
+            }),
+          }),
+        }),
+      }),
+    }),
+    update: () => ({
+      set: () => ({ where: async () => undefined }),
+    }),
+  });
+  const safeDb = asTestRaw<SafeDb>(
+    async <T>(run: (transaction: Transaction) => Promise<T>) =>
+      await Result.tryPromise({
+        try: async () => await run(tx),
+        catch: (cause) => cause,
+      }),
+  );
+  s3DeleteMock.mockRejectedValueOnce(new Error("object deletion failed"));
+
+  const claimed = await reconcileBufferObjectCleanupIntents({
+    deleteObject: s3DeleteMock,
+    limit: 1,
+    safeDb,
+  });
+
+  expect(claimed).toBe(1);
+  expect(retired).toBe(0);
 });
 
 test("stops an in-flight object cleanup when the scheduler aborts", async () => {
