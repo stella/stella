@@ -11,14 +11,11 @@ import {
 const DECISION_ID = toSafeId<"caseLawDecision">(
   "0198e331-e578-7000-8000-000000000202",
 );
-const SCOPE_ERROR =
-  `must contain 1 to ${CORPUS_PROJECTION_WORK_SCOPE_MAX_ENTITY_COUNT} unique entities`;
+const SCOPE_ERROR = `must contain 1 to ${CORPUS_PROJECTION_WORK_SCOPE_MAX_ENTITY_COUNT} unique entities`;
 
 test("a generation scope has no entity predicate", () => {
   expect(
-    entityIdsForCorpusProjectionWorkScope(
-      CORPUS_PROJECTION_GENERATION_SCOPE,
-    ),
+    entityIdsForCorpusProjectionWorkScope(CORPUS_PROJECTION_GENERATION_SCOPE),
   ).toBeNull();
 });
 
