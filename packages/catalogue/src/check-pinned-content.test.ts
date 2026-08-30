@@ -6,6 +6,8 @@ import {
   archiveSizeLimitError,
   assertCompleteGithubContentsListing,
   checkFrontmatterLimits,
+  fetchDirectoryContents,
+  fetchPinnedTextFile,
   fetchWithBoundedRetry,
   PinnedContentError,
   pinnedLicenseMismatchError,
@@ -13,6 +15,23 @@ import {
   resourceContentLimitError,
   resourcePathLimitError,
 } from "../scripts/check-pinned-content";
+
+const GITHUB_TARGET = {
+  directory: "skills/example",
+  license: "MIT",
+  repo: "example/skills",
+  rev: "a".repeat(40),
+  slug: "example",
+} as const;
+
+const closedSocketResponse = (): Response =>
+  new Response(
+    new ReadableStream({
+      pull: (controller) => {
+        controller.error(new TypeError("socket closed during body read"));
+      },
+    }),
+  );
 
 describe("pinned content fetch retry", () => {
   test("retries rejected transports with bounded backoff", async () => {
@@ -81,6 +100,64 @@ describe("pinned content fetch retry", () => {
 
     expect(rejection).toBe(failure);
     expect(attempts).toBe(1);
+  });
+
+  test("retries a body-read failure through the pinned-file path", async () => {
+    let attempts = 0;
+    const delays: number[] = [];
+
+    const file = await fetchPinnedTextFile({
+      fetcher: async () => {
+        attempts += 1;
+        return attempts === 1
+          ? closedSocketResponse()
+          : new Response("pinned content");
+      },
+      label: "SKILL.md",
+      maxBytes: 1024,
+      repoRelativePath: "skills/example/SKILL.md",
+      sleep: async (delayMs) => {
+        delays.push(delayMs);
+      },
+      target: GITHUB_TARGET,
+    });
+
+    expect(file).toEqual({
+      byteLength: 14,
+      content: "pinned content",
+    });
+    expect(attempts).toBe(2);
+    expect(delays).toEqual([200]);
+  });
+
+  test("retries a body-read failure through the contents path", async () => {
+    let attempts = 0;
+    const delays: number[] = [];
+    const contents = [
+      {
+        path: "skills/example/references/source.md",
+        size: 12,
+        type: "file",
+      },
+    ];
+
+    const result = await fetchDirectoryContents({
+      fetcher: async () => {
+        attempts += 1;
+        return attempts === 1
+          ? closedSocketResponse()
+          : new Response(JSON.stringify(contents));
+      },
+      repoRelativePath: "skills/example/references",
+      sleep: async (delayMs) => {
+        delays.push(delayMs);
+      },
+      target: GITHUB_TARGET,
+    });
+
+    expect(result).toEqual(contents);
+    expect(attempts).toBe(2);
+    expect(delays).toEqual([200]);
   });
 });
 

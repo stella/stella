@@ -71,9 +71,12 @@ type GithubContentItem = {
   type: string;
 };
 
+type Fetcher = (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>;
+type RetrySleep = (delayMs: number) => Promise<void>;
+
 type FetchWithBoundedRetryOptions<T> = {
   fetchValue: () => Promise<T>;
-  sleep?: (delayMs: number) => Promise<void>;
+  sleep?: RetrySleep;
 };
 
 const sleep = async (delayMs: number): Promise<void> => {
@@ -160,9 +163,11 @@ const contentsApiUrl = (
 
 type FetchPinnedTextFileOptions = {
   allowNotFound?: boolean;
+  fetcher?: Fetcher;
   label: string;
   maxBytes: number;
   repoRelativePath: string;
+  sleep?: RetrySleep;
   target: GithubTarget;
 };
 
@@ -171,47 +176,51 @@ type PinnedTextFile = {
   content: string;
 };
 
-const fetchPinnedTextFile = async ({
+export const fetchPinnedTextFile = async ({
   allowNotFound = false,
+  fetcher = fetch,
   label,
   maxBytes,
   repoRelativePath,
+  sleep: wait = sleep,
   target,
 }: FetchPinnedTextFileOptions): Promise<PinnedTextFile | null> => {
-  const file = await fetchWithBoundedRetry({
-    fetchValue: async () => {
-      const response = await fetch(rawContentUrl(target, repoRelativePath), {
-        headers: githubHeaders("text/plain"),
-        redirect: "error",
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  const fetchValue = async () => {
+    const response = await fetcher(rawContentUrl(target, repoRelativePath), {
+      headers: githubHeaders("text/plain"),
+      redirect: "error",
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (response.status === 404 && allowNotFound) {
+      return null;
+    }
+    if (!response.ok) {
+      throw new PinnedContentError({
+        message: `${label} fetch returned HTTP ${response.status}`,
       });
-      if (response.status === 404 && allowNotFound) {
-        return null;
-      }
-      if (!response.ok) {
-        throw new PinnedContentError({
-          message: `${label} fetch returned HTTP ${response.status}`,
-        });
-      }
-      if (!response.body) {
-        throw new PinnedContentError({
-          message: `${label} response has no body`,
-        });
-      }
-      const declaredLength = Number(response.headers.get("content-length"));
-      if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
-        throw new PinnedContentError({
-          message: `${label} is larger than ${maxBytes} bytes`,
-        });
-      }
-      const bytes = await readCappedBytes(response.body, maxBytes);
-      if (bytes === null) {
-        throw new PinnedContentError({
-          message: `${label} is larger than ${maxBytes} bytes`,
-        });
-      }
-      return bytes;
-    },
+    }
+    if (!response.body) {
+      throw new PinnedContentError({
+        message: `${label} response has no body`,
+      });
+    }
+    const declaredLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+      throw new PinnedContentError({
+        message: `${label} is larger than ${maxBytes} bytes`,
+      });
+    }
+    const bytes = await readCappedBytes(response.body, maxBytes);
+    if (bytes === null) {
+      throw new PinnedContentError({
+        message: `${label} is larger than ${maxBytes} bytes`,
+      });
+    }
+    return bytes;
+  };
+  const file = await fetchWithBoundedRetry({
+    fetchValue,
+    sleep: wait,
   });
   if (file === null) {
     return null;
@@ -235,29 +244,40 @@ const fetchSkillFile = async (
     target,
   });
 
-const fetchDirectoryContents = async (
-  target: GithubTarget,
-  repoRelativePath: string,
-): Promise<GithubContentItem[]> => {
-  const body = await fetchWithBoundedRetry({
-    fetchValue: async () => {
-      const response = await fetch(contentsApiUrl(target, repoRelativePath), {
-        headers: githubHeaders("application/vnd.github+json"),
-        redirect: "error",
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+type FetchDirectoryContentsOptions = {
+  fetcher?: Fetcher;
+  repoRelativePath: string;
+  sleep?: RetrySleep;
+  target: GithubTarget;
+};
+
+export const fetchDirectoryContents = async ({
+  fetcher = fetch,
+  repoRelativePath,
+  sleep: wait = sleep,
+  target,
+}: FetchDirectoryContentsOptions): Promise<GithubContentItem[]> => {
+  const fetchValue = async () => {
+    const response = await fetcher(contentsApiUrl(target, repoRelativePath), {
+      headers: githubHeaders("application/vnd.github+json"),
+      redirect: "error",
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    // A missing resource directory is not an error: the skill simply has
+    // no files under that root.
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      throw new PinnedContentError({
+        message: `GitHub contents API returned HTTP ${response.status} for ${repoRelativePath || "<root>"}`,
       });
-      // A missing resource directory is not an error: the skill simply has
-      // no files under that root.
-      if (response.status === 404) {
-        return null;
-      }
-      if (!response.ok) {
-        throw new PinnedContentError({
-          message: `GitHub contents API returned HTTP ${response.status} for ${repoRelativePath || "<root>"}`,
-        });
-      }
-      return await response.text();
-    },
+    }
+    return await response.text();
+  };
+  const body = await fetchWithBoundedRetry({
+    fetchValue,
+    sleep: wait,
   });
   if (body === null) {
     return [];
@@ -681,7 +701,10 @@ const checkResources = async (
     if (directory === undefined) {
       return;
     }
-    const items = await fetchDirectoryContents(target, directory);
+    const items = await fetchDirectoryContents({
+      repoRelativePath: directory,
+      target,
+    });
     const shouldContinue = await processItems(items, 0);
     if (!shouldContinue) {
       return;
