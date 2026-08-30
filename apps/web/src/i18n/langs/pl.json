@@ -2157,6 +2157,9 @@
     "empty": "Nic nie czeka. Dodaj zgłoszenie przyciskiem powyżej.",
     "evidence": {
       "current": "Obecnie",
+      "daysOverdue": "Dni po terminie",
+      "daysUnanswered": "Dni bez potwierdzenia",
+      "daysUntilDeadline": "Dni do terminu",
       "dueAt": "Termin",
       "findings": "Ustalenia",
       "hearingType": "Rodzaj rozprawy",
@@ -2185,7 +2188,8 @@
     "scout": {
       "documentDeadlines": "Terminy z dokumentu",
       "documentReview": "Przegląd wg playbooka",
-      "manualRequest": "Zgłoszenie"
+      "manualRequest": "Zgłoszenie",
+      "workAttention": "Monitorowanie pracy"
     },
     "severity": {
       "info": "Informacja",
@@ -3714,6 +3718,7 @@
     },
     "addAssignee": "Przypisz osobę",
     "addSubtask": "Dodaj podzadanie",
+    "assigned": "Przypisano",
     "assigneeRoles": {
       "assignee": "Wykonawca",
       "reviewer": "Recenzent"
@@ -3776,6 +3781,7 @@
       "deadline": "Termin",
       "task": "Zadanie"
     },
+    "workingTarget": "Termin roboczy",
     "workingTargetDue": "Termin roboczy minął"
   },
   "templates": {

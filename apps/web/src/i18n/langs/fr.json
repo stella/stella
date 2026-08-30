@@ -2157,6 +2157,9 @@
     "empty": "Rien ne vous attend. Créez une demande avec le bouton ci-dessus.",
     "evidence": {
       "current": "Actuellement",
+      "daysOverdue": "Jours de retard",
+      "daysUnanswered": "Jours sans confirmation",
+      "daysUntilDeadline": "Jours avant l'échéance",
       "dueAt": "Échéance",
       "findings": "Constats",
       "hearingType": "Type d'audience",
@@ -2185,7 +2188,8 @@
     "scout": {
       "documentDeadlines": "Échéances du document",
       "documentReview": "Revue selon le playbook",
-      "manualRequest": "Demande"
+      "manualRequest": "Demande",
+      "workAttention": "Suivi du travail"
     },
     "severity": {
       "info": "Information",
@@ -3714,6 +3718,7 @@
     },
     "addAssignee": "Ajouter un assigné",
     "addSubtask": "Ajouter une sous-tâche",
+    "assigned": "Attribué",
     "assigneeRoles": {
       "assignee": "Assigné",
       "reviewer": "Réviseur"
@@ -3776,6 +3781,7 @@
       "deadline": "Échéance",
       "task": "Tâche"
     },
+    "workingTarget": "Objectif de travail",
     "workingTargetDue": "Objectif de travail arrivé à échéance"
   },
   "templates": {

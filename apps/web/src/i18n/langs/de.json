@@ -2157,6 +2157,9 @@
     "empty": "Nichts wartet auf Sie. Erstellen Sie oben eine Anfrage.",
     "evidence": {
       "current": "Jetzt",
+      "daysOverdue": "Tage überfällig",
+      "daysUnanswered": "Tage ohne Bestätigung",
+      "daysUntilDeadline": "Tage bis zur Frist",
       "dueAt": "Fällig",
       "findings": "Feststellungen",
       "hearingType": "Art des Termins",
@@ -2185,7 +2188,8 @@
     "scout": {
       "documentDeadlines": "Fristen aus Dokument",
       "documentReview": "Playbook-Prüfung",
-      "manualRequest": "Anfrage"
+      "manualRequest": "Anfrage",
+      "workAttention": "Arbeitsüberwachung"
     },
     "severity": {
       "info": "Information",
@@ -3714,6 +3718,7 @@
     },
     "addAssignee": "Person zuweisen",
     "addSubtask": "Unteraufgabe hinzufügen",
+    "assigned": "Zugewiesen",
     "assigneeRoles": {
       "assignee": "Bearbeiter",
       "reviewer": "Prüfer"
@@ -3776,6 +3781,7 @@
       "deadline": "Frist",
       "task": "Aufgabe"
     },
+    "workingTarget": "Arbeitsziel",
     "workingTargetDue": "Arbeitsziel fällig"
   },
   "templates": {

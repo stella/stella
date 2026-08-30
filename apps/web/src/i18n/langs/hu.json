@@ -2157,6 +2157,9 @@
     "empty": "Most semmi sem vár Önre. Adjon fel kérést a fenti gombbal.",
     "evidence": {
       "current": "Most",
+      "daysOverdue": "Késés napokban",
+      "daysUnanswered": "Megerősítés nélküli napok",
+      "daysUntilDeadline": "Napok a határidőig",
       "dueAt": "Határidő",
       "findings": "Megállapítások",
       "hearingType": "Tárgyalás típusa",
@@ -2185,7 +2188,8 @@
     "scout": {
       "documentDeadlines": "Határidők a dokumentumból",
       "documentReview": "Playbook-ellenőrzés",
-      "manualRequest": "Kérés"
+      "manualRequest": "Kérés",
+      "workAttention": "Munkafigyelés"
     },
     "severity": {
       "info": "Információ",
@@ -3714,6 +3718,7 @@
     },
     "addAssignee": "Felelős hozzáadása",
     "addSubtask": "Alfeladat hozzáadása",
+    "assigned": "Kijelölve",
     "assigneeRoles": {
       "assignee": "Felelős",
       "reviewer": "Ellenőr"
@@ -3776,6 +3781,7 @@
       "deadline": "Határidő",
       "task": "Feladat"
     },
+    "workingTarget": "Munkacél",
     "workingTargetDue": "Munkacél esedékes"
   },
   "templates": {

@@ -27,6 +27,7 @@ import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-
 import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search-projection-repair";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
 import { CLEAN_TEMPLATE_DELETION_OBJECTS_TASK } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
+import { WORK_ATTENTION_SCOUT_TASK } from "@/api/lib/scheduler/tasks/work-attention-scout";
 import { BACKFILL_WORK_OBLIGATIONS_TASK } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
 
 type SchedulerJobDefinition = {
@@ -190,6 +191,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_WORK_OBLIGATIONS_TASK,
+  },
+  {
+    description: "Surface stuck and at-risk governed work as inbox signals",
+    enabled: env.FEATURE_GOVERNED_WORKFLOW,
+    id: "workObligations.attentionScout.hourly",
+    mode: "recurring",
+    payloadUpdate: "preserve",
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
+    task: WORK_ATTENTION_SCOUT_TASK,
   },
   {
     description: "Repair stale chat search projections",

@@ -2157,6 +2157,9 @@
     "empty": "Pašlaik nekas negaida. Izveidojiet pieprasījumu ar pogu augšā.",
     "evidence": {
       "current": "Tagad",
+      "daysOverdue": "Nokavētās dienas",
+      "daysUnanswered": "Dienas bez apstiprinājuma",
+      "daysUntilDeadline": "Dienas līdz termiņam",
       "dueAt": "Termiņš",
       "findings": "Konstatējumi",
       "hearingType": "Sēdes veids",
@@ -2185,7 +2188,8 @@
     "scout": {
       "documentDeadlines": "Dokumenta termiņi",
       "documentReview": "Pārbaude pēc playbook",
-      "manualRequest": "Pieprasījums"
+      "manualRequest": "Pieprasījums",
+      "workAttention": "Darba uzraudzība"
     },
     "severity": {
       "info": "Informācija",
@@ -3714,6 +3718,7 @@
     },
     "addAssignee": "Pievienot atbildīgo",
     "addSubtask": "Pievienot apakšuzdevumu",
+    "assigned": "Piešķirts",
     "assigneeRoles": {
       "assignee": "Izpildītājs",
       "reviewer": "Pārskatītājs"
@@ -3776,6 +3781,7 @@
       "deadline": "Termiņš",
       "task": "Uzdevums"
     },
+    "workingTarget": "Darba mērķa termiņš",
     "workingTargetDue": "Darba mērķa termiņš pienācis"
   },
   "templates": {

@@ -2157,6 +2157,9 @@
     "empty": "Šiuo metu nieko nelaukia. Sukurkite užklausą mygtuku viršuje.",
     "evidence": {
       "current": "Dabar",
+      "daysOverdue": "Vėluojama dienų",
+      "daysUnanswered": "Dienų be patvirtinimo",
+      "daysUntilDeadline": "Dienų iki termino",
       "dueAt": "Terminas",
       "findings": "Išvados",
       "hearingType": "Posėdžio tipas",
@@ -2185,7 +2188,8 @@
     "scout": {
       "documentDeadlines": "Dokumento terminai",
       "documentReview": "Peržiūra pagal playbook",
-      "manualRequest": "Užklausa"
+      "manualRequest": "Užklausa",
+      "workAttention": "Darbo stebėsena"
     },
     "severity": {
       "info": "Informacija",
@@ -3714,6 +3718,7 @@
     },
     "addAssignee": "Priskirti asmenį",
     "addSubtask": "Pridėti použduotį",
+    "assigned": "Paskirta",
     "assigneeRoles": {
       "assignee": "Vykdytojas",
       "reviewer": "Peržiūrėtojas"
@@ -3776,6 +3781,7 @@
       "deadline": "Terminas",
       "task": "Užduotis"
     },
+    "workingTarget": "Darbinis terminas",
     "workingTargetDue": "Darbinis terminas suėjo"
   },
   "templates": {

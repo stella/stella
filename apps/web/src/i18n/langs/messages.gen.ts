@@ -2160,6 +2160,9 @@ type Messages = {
     "empty": "Nothing needs you right now. Post a request to start one.";
     "evidence": {
       "current": "Now";
+      "daysOverdue": "Days overdue";
+      "daysUnanswered": "Days unanswered";
+      "daysUntilDeadline": "Days until deadline";
       "dueAt": "Due";
       "findings": "Findings";
       "hearingType": "Hearing type";
@@ -2189,6 +2192,7 @@ type Messages = {
       "documentDeadlines": "Document deadlines";
       "documentReview": "Playbook review";
       "manualRequest": "Request";
+      "workAttention": "Work monitoring";
     };
     "severity": {
       "info": "Info";
@@ -3717,6 +3721,7 @@ type Messages = {
     };
     "addAssignee": "Add assignee";
     "addSubtask": "Add subtask";
+    "assigned": "Assigned";
     "assigneeRoles": {
       "assignee": "Assignee";
       "reviewer": "Reviewer";
@@ -3779,6 +3784,7 @@ type Messages = {
       "deadline": "Deadline";
       "task": "Task";
     };
+    "workingTarget": "Working target";
     "workingTargetDue": "Working target due";
   };
   "templates": {

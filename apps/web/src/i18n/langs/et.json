@@ -2157,6 +2157,9 @@
     "empty": "Praegu ei oota miski. Lisa taotlus ülalolevast nupust.",
     "evidence": {
       "current": "Nüüd",
+      "daysOverdue": "Päevi üle tähtaja",
+      "daysUnanswered": "Päevi kinnitamata",
+      "daysUntilDeadline": "Päevi tähtajani",
       "dueAt": "Tähtaeg",
       "findings": "Leiud",
       "hearingType": "Istungi liik",
@@ -2185,7 +2188,8 @@
     "scout": {
       "documentDeadlines": "Dokumendi tähtajad",
       "documentReview": "Playbooki ülevaatus",
-      "manualRequest": "Taotlus"
+      "manualRequest": "Taotlus",
+      "workAttention": "Töö jälgimine"
     },
     "severity": {
       "info": "Teave",
@@ -3714,6 +3718,7 @@
     },
     "addAssignee": "Lisa isik",
     "addSubtask": "Lisa alamülesanne",
+    "assigned": "Määratud",
     "assigneeRoles": {
       "assignee": "Täitja",
       "reviewer": "Ülevaataja"
@@ -3776,6 +3781,7 @@
       "deadline": "Tähtaeg",
       "task": "Ülesanne"
     },
+    "workingTarget": "Töö sihttähtaeg",
     "workingTargetDue": "Töö sihttähtaeg on möödunud"
   },
   "templates": {

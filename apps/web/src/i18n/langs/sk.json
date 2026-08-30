@@ -2157,6 +2157,9 @@
     "empty": "Teraz vás nič nečaká. Zadajte požiadavku tlačidlom vyššie.",
     "evidence": {
       "current": "Novo",
+      "daysOverdue": "Dní po termíne",
+      "daysUnanswered": "Dní bez potvrdenia",
+      "daysUntilDeadline": "Dní do lehoty",
       "dueAt": "Lehota",
       "findings": "Zistenia",
       "hearingType": "Druh pojednávania",
@@ -2185,7 +2188,8 @@
     "scout": {
       "documentDeadlines": "Lehoty z dokumentu",
       "documentReview": "Kontrola podľa playbooku",
-      "manualRequest": "Požiadavka"
+      "manualRequest": "Požiadavka",
+      "workAttention": "Sledovanie práce"
     },
     "severity": {
       "info": "Informácia",
@@ -3714,6 +3718,7 @@
     },
     "addAssignee": "Pridať osobu",
     "addSubtask": "Pridať podúlohu",
+    "assigned": "Priradené",
     "assigneeRoles": {
       "assignee": "Riešiteľ",
       "reviewer": "Revident"
@@ -3776,6 +3781,7 @@
       "deadline": "Lehota",
       "task": "Úloha"
     },
+    "workingTarget": "Pracovný termín",
     "workingTargetDue": "Pracovný termín uplynul"
   },
   "templates": {

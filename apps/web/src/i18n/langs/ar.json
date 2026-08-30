@@ -2157,6 +2157,9 @@
     "empty": "لا شيء بانتظارك الآن. أنشئ طلباً بالزر أعلاه.",
     "evidence": {
       "current": "الآن",
+      "daysOverdue": "أيام التأخير",
+      "daysUnanswered": "أيام بلا تأكيد",
+      "daysUntilDeadline": "أيام حتى الموعد النهائي",
       "dueAt": "الاستحقاق",
       "findings": "النتائج",
       "hearingType": "نوع الجلسة",
@@ -2185,7 +2188,8 @@
     "scout": {
       "documentDeadlines": "مواعيد من المستند",
       "documentReview": "مراجعة وفق الدليل",
-      "manualRequest": "طلب"
+      "manualRequest": "طلب",
+      "workAttention": "متابعة العمل"
     },
     "severity": {
       "info": "معلومة",
@@ -3714,6 +3718,7 @@
     },
     "addAssignee": "إضافة مُكلَّف",
     "addSubtask": "إضافة مهمة فرعية",
+    "assigned": "تم التعيين",
     "assigneeRoles": {
       "assignee": "المُكلَّف",
       "reviewer": "المراجِع"
@@ -3776,6 +3781,7 @@
       "deadline": "موعد نهائي",
       "task": "مهمة"
     },
+    "workingTarget": "الموعد المستهدف",
     "workingTargetDue": "حلّ الموعد المستهدف"
   },
   "templates": {

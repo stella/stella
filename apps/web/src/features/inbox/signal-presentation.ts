@@ -5,11 +5,13 @@ import {
   SUGGESTION_KIND,
 } from "@stll/api-contract/signals";
 import type {
+  OpenWorkObligationStatus,
   SignalOrigin,
   SignalSeverity,
   ScoutKey,
   SuggestionKind,
 } from "@stll/api-contract/signals";
+import { WORK_OBLIGATION_STATUS } from "@stll/api-contract/workflow-status";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -51,7 +53,15 @@ const SCOUT_LABEL_KEY = {
   [SCOUT_KEY.INFOSOUD_HEARINGS]: "workspaces.infosoud.title",
   [SCOUT_KEY.DOCUMENT_DEADLINES]: "inbox.scout.documentDeadlines",
   [SCOUT_KEY.DOCUMENT_REVIEW]: "inbox.scout.documentReview",
+  [SCOUT_KEY.WORK_ATTENTION]: "inbox.scout.workAttention",
 } as const satisfies Readonly<Record<ScoutKey, TranslationKey>>;
+
+/** The statuses work-attention evidence can report; closed work emits none. */
+export const OPEN_WORK_STATUS_LABEL_KEY = {
+  [WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT]:
+    "tasks.queue.toAcknowledge",
+  [WORK_OBLIGATION_STATUS.ACTIVE]: "common.active",
+} as const satisfies Record<OpenWorkObligationStatus, TranslationKey>;
 
 type KnownScoutKey = keyof typeof SCOUT_LABEL_KEY;
 type ScoutLabelKey = (typeof SCOUT_LABEL_KEY)[KnownScoutKey];

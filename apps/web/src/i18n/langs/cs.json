@@ -2157,6 +2157,9 @@
     "empty": "Teď vás nic nečeká. Založte požadavek tlačítkem výše.",
     "evidence": {
       "current": "Nově",
+      "daysOverdue": "Dnů po termínu",
+      "daysUnanswered": "Dnů bez potvrzení",
+      "daysUntilDeadline": "Dnů do lhůty",
       "dueAt": "Lhůta",
       "findings": "Zjištění",
       "hearingType": "Druh jednání",
@@ -2185,7 +2188,8 @@
     "scout": {
       "documentDeadlines": "Lhůty z dokumentu",
       "documentReview": "Kontrola podle playbooku",
-      "manualRequest": "Požadavek"
+      "manualRequest": "Požadavek",
+      "workAttention": "Sledování práce"
     },
     "severity": {
       "info": "Informace",
@@ -3714,6 +3718,7 @@
     },
     "addAssignee": "Přidat osobu",
     "addSubtask": "Přidat podúkol",
+    "assigned": "Přiřazeno",
     "assigneeRoles": {
       "assignee": "Řešitel",
       "reviewer": "Revident"
@@ -3776,6 +3781,7 @@
       "deadline": "Lhůta",
       "task": "Úkol"
     },
+    "workingTarget": "Pracovní termín",
     "workingTargetDue": "Pracovní termín vypršel"
   },
   "templates": {
