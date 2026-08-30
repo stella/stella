@@ -30,6 +30,8 @@ const ADDRESS_RIGHT_EXPAND_LIMIT: usize = 200;
 const BR_CEP_CONTEXT_WINDOW: usize = 200;
 const PLAIN_POSTAL_CONTEXT_WINDOW: usize = 120;
 const US_ZIP_CONTEXT_WINDOW: usize = 120;
+const MAX_ALPHA_UNIT_VALUE_CHARS: usize = 3;
+const MAX_ALPHANUMERIC_UNIT_VALUE_CHARS: usize = 4;
 
 fn us_state_zip_prefix_len(
   text: &str,
@@ -2074,9 +2076,21 @@ fn plausible_unit_value_follows(full_text: &str, offset: usize) -> bool {
   }
   let mut chars = value.chars();
   let count = chars.clone().count();
-  count <= 3
-    && count > 0
-    && chars.all(|ch| ch.is_alphabetic() && ch.is_uppercase())
+  if count == 0 || count > MAX_ALPHANUMERIC_UNIT_VALUE_CHARS {
+    return false;
+  }
+  let uppercase_letters = chars
+    .clone()
+    .all(|ch| ch.is_alphabetic() && ch.is_uppercase());
+  if uppercase_letters {
+    return count <= MAX_ALPHA_UNIT_VALUE_CHARS;
+  }
+  chars
+    .all(|ch| (ch.is_alphabetic() && ch.is_uppercase()) || ch.is_ascii_digit())
+    && value
+      .chars()
+      .any(|ch| ch.is_alphabetic() && ch.is_uppercase())
+    && value.chars().any(|ch| ch.is_ascii_digit())
 }
 
 fn is_house_number_word(word: &str) -> bool {

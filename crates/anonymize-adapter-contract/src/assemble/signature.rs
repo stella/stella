@@ -265,6 +265,10 @@ mod tests {
   #[test]
   fn scoped_person_value_labels_drive_production_trigger_detection() {
     assert_eq!(
+      detected_people("By: Q. Z. Mercer", "en"),
+      vec![String::from("Q. Z. Mercer")]
+    );
+    assert_eq!(
       detected_people("zastoupen Jméno: Jan Novák", "cs"),
       vec![String::from("Jan Novák")]
     );

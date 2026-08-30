@@ -736,6 +736,9 @@ fn address_span_keeps_a_unit_component_that_follows_the_city() {
   for (unit, expected) in [
     ("Apt. 5", "10 Main Street, Springfield Apt. 5"),
     ("Apt A", "10 Main Street, Springfield Apt A"),
+    ("Apt. PH1", "10 Main Street, Springfield Apt. PH1"),
+    ("Apt A12", "10 Main Street, Springfield Apt A12"),
+    ("Apt Ä1", "10 Main Street, Springfield Apt Ä1"),
     ("Apt.\u{2028}5", "10 Main Street, Springfield Apt.\u{2028}5"),
   ] {
     let text = format!("Notices go to 10 Main Street, Springfield {unit}.");

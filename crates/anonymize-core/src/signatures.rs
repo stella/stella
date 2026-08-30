@@ -3,6 +3,7 @@ use crate::resolution::{DetectionSource, PipelineEntity};
 use crate::labels::PERSON_LABEL;
 const MAX_NAME_LEN: usize = 60;
 const MAX_WITNESS_SCAN_UNITS: usize = 600;
+const SIGNATURE_ONLY_PERSON_LABELS: &[&str] = &["by"];
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum CandidateContext {
@@ -49,6 +50,7 @@ pub struct SignatureData {
 pub(crate) struct PreparedSignatureData {
   labels: Vec<String>,
   person_value_labels: Vec<String>,
+  signature_only_person_labels: Vec<String>,
   party_role_labels: Vec<String>,
   person_list_labels: Vec<String>,
   witness_phrases: Vec<String>,
@@ -75,9 +77,16 @@ impl PreparedSignatureData {
     form_field_labels.extend(contact_field_labels.iter().cloned());
     form_field_labels.sort_unstable();
     form_field_labels.dedup();
+    let labels = non_empty_lowercase(data.labels);
+    let signature_only_person_labels = labels
+      .iter()
+      .filter(|label| SIGNATURE_ONLY_PERSON_LABELS.contains(&label.as_str()))
+      .cloned()
+      .collect();
     Self {
-      labels: non_empty_lowercase(data.labels),
+      labels,
       person_value_labels: non_empty_lowercase(data.person_value_labels),
+      signature_only_person_labels,
       party_role_labels: non_empty_lowercase(party_role_labels),
       person_list_labels: non_empty_lowercase(data.person_list_labels),
       witness_phrases: non_empty_lowercase(data.witness_phrases),
@@ -689,6 +698,7 @@ fn label_end_at(
   for (label, requires_list_structure) in data
     .person_value_labels
     .iter()
+    .chain(data.signature_only_person_labels.iter())
     .chain(data.party_role_labels.iter())
     .map(|label| (label, false))
     .chain(data.person_list_labels.iter().map(|label| (label, true)))
@@ -1102,6 +1112,27 @@ mod tests {
         .collect::<Vec<_>>(),
       ["Zofia Wrona"]
     );
+  }
+
+  #[test]
+  fn legacy_by_label_remains_signature_only() {
+    let data = PreparedSignatureData::new(
+      SignatureData {
+        labels: vec![String::from("by"), String::from("name")],
+        person_value_labels: vec![String::from("jméno")],
+        ..SignatureData::default()
+      },
+      Vec::new(),
+    );
+
+    assert_eq!(
+      detect_signatures("By: Q. Z. Mercer", &data)
+        .into_iter()
+        .map(|entity| entity.text)
+        .collect::<Vec<_>>(),
+      ["Q. Z. Mercer"]
+    );
+    assert!(detect_signatures("Name: Main Street", &data).is_empty());
   }
 
   #[test]
