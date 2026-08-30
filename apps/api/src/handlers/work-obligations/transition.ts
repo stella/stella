@@ -4,70 +4,27 @@ import { t } from "elysia";
 
 import {
   entities,
-  WORK_OBLIGATION_EVENT_TYPE,
   WORK_OBLIGATION_STATUS,
   workObligationEvents,
   workObligations,
 } from "@/api/db/schema";
-import type { WorkObligationStatus } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
-
-const TRANSITION_ACTION = {
-  COMPLETE: "complete",
-  CANCEL: "cancel",
-  REOPEN: "reopen",
-} as const;
-
-type TransitionAction =
-  (typeof TRANSITION_ACTION)[keyof typeof TRANSITION_ACTION];
+import {
+  resolveWorkObligationTransition,
+  WORK_OBLIGATION_TRANSITION_ACTION,
+  WORK_OBLIGATION_TRANSITION_ACTIONS,
+} from "@/api/lib/work-obligations/transitions";
 
 const transitionParams = workspaceParams({ entityId: tSafeId("entity") });
 const transitionBody = t.Object({
-  action: t.UnionEnum([
-    TRANSITION_ACTION.COMPLETE,
-    TRANSITION_ACTION.CANCEL,
-    TRANSITION_ACTION.REOPEN,
-  ]),
+  action: t.UnionEnum(WORK_OBLIGATION_TRANSITION_ACTIONS),
   reason: t.Optional(t.String({ minLength: 1, maxLength: 1000 })),
 });
-
-type TransitionDefinition = {
-  from: readonly WorkObligationStatus[];
-  to: WorkObligationStatus;
-  eventType: "completed" | "cancelled" | "reopened";
-  taskStatus: "done" | "cancelled" | "in_progress";
-};
-
-const TRANSITIONS = {
-  complete: {
-    from: [WORK_OBLIGATION_STATUS.ACTIVE],
-    to: WORK_OBLIGATION_STATUS.COMPLETED,
-    eventType: WORK_OBLIGATION_EVENT_TYPE.COMPLETED,
-    taskStatus: TASK_STATUS.DONE,
-  },
-  cancel: {
-    from: [
-      WORK_OBLIGATION_STATUS.UNASSIGNED,
-      WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
-      WORK_OBLIGATION_STATUS.ACTIVE,
-    ],
-    to: WORK_OBLIGATION_STATUS.CANCELLED,
-    eventType: WORK_OBLIGATION_EVENT_TYPE.CANCELLED,
-    taskStatus: TASK_STATUS.CANCELLED,
-  },
-  reopen: {
-    from: [WORK_OBLIGATION_STATUS.COMPLETED, WORK_OBLIGATION_STATUS.CANCELLED],
-    to: WORK_OBLIGATION_STATUS.ACTIVE,
-    eventType: WORK_OBLIGATION_EVENT_TYPE.REOPENED,
-    taskStatus: TASK_STATUS.IN_PROGRESS,
-  },
-} as const satisfies Record<TransitionAction, TransitionDefinition>;
 
 const transitionWorkObligation = createSafeHandler(
   {
@@ -86,7 +43,6 @@ const transitionWorkObligation = createSafeHandler(
     body,
     recordAuditEvent,
   }) {
-    const transition = TRANSITIONS[body.action];
     const reason = body.reason?.trim();
     const result = yield* Result.await(
       safeDb(async (tx) => {
@@ -97,17 +53,21 @@ const transitionWorkObligation = createSafeHandler(
         if (!existing) {
           return { status: "not_found" as const };
         }
-        if (!transition.from.some((status) => status === existing.status)) {
+        const transition = resolveWorkObligationTransition(
+          body.action,
+          existing,
+        );
+        if (transition.type === "invalid_status") {
           return { status: "invalid_status" as const };
         }
         if (
-          body.action === TRANSITION_ACTION.COMPLETE &&
+          body.action === WORK_OBLIGATION_TRANSITION_ACTION.COMPLETE &&
           existing.ownerUserId !== user.id
         ) {
           return { status: "not_owner" as const };
         }
         if (
-          body.action === TRANSITION_ACTION.CANCEL &&
+          body.action === WORK_OBLIGATION_TRANSITION_ACTION.CANCEL &&
           existing.status !== WORK_OBLIGATION_STATUS.UNASSIGNED &&
           !reason
         ) {
@@ -115,18 +75,7 @@ const transitionWorkObligation = createSafeHandler(
         }
 
         const now = new Date();
-        let reopenedStatus: WorkObligationStatus;
-        if (existing.ownerUserId === null) {
-          reopenedStatus = WORK_OBLIGATION_STATUS.UNASSIGNED;
-        } else if (existing.acknowledgedAt === null) {
-          reopenedStatus = WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT;
-        } else {
-          reopenedStatus = WORK_OBLIGATION_STATUS.ACTIVE;
-        }
-        const nextStatus =
-          body.action === TRANSITION_ACTION.REOPEN
-            ? reopenedStatus
-            : transition.to;
+        const { nextStatus } = transition;
         const acknowledgementReset =
           nextStatus === WORK_OBLIGATION_STATUS.UNASSIGNED
             ? { acknowledgedAt: null, acknowledgedByUserId: null }
@@ -173,7 +122,7 @@ const transitionWorkObligation = createSafeHandler(
         });
         await recordAuditEvent(tx, {
           action:
-            body.action === TRANSITION_ACTION.CANCEL
+            body.action === WORK_OBLIGATION_TRANSITION_ACTION.CANCEL
               ? AUDIT_ACTION.CANCEL
               : AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
