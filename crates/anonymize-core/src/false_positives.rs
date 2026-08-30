@@ -24,6 +24,8 @@ const ALL_CAPS_LINE_RATIO: f64 = 0.95;
 const ALL_CAPS_LINE_PROSE_EXTRA_LETTERS: usize = 20;
 const ALL_CAPS_LINE_HEADING_WORD_LIMIT: usize = 5;
 const MAX_PAGE_FOOTER_TOTAL: u32 = 1_000;
+const LEGAL_FORM_CLAUSE_INTRODUCERS: &[&str] =
+  &["among", "amongst", "between", "by", "with"];
 
 static POSTAL_CODE_RE: LazyLock<Option<Regex>> =
   LazyLock::new(|| Regex::new(r"\d{3}\s?\d{2}").ok());
@@ -743,22 +745,18 @@ fn is_all_caps_boilerplate_line(
     .chars()
     .next()
     .is_some_and(|ch| matches!(ch, ',' | ':' | ';' | '(' | '-' | '–' | '—'));
-  let has_sentence_terminal = context
-    .line
-    .trim_end()
-    .chars()
-    .next_back()
-    .is_some_and(|ch| matches!(ch, '.' | '!' | '?' | '。' | '！' | '？'));
-  let trailing_letters = context
-    .after
-    .chars()
-    .filter(|ch| ch.is_alphabetic())
-    .count();
-  let has_bounded_clause_tail = has_sentence_terminal
-    && (1..=ALL_CAPS_LINE_PROSE_EXTRA_LETTERS).contains(&trailing_letters);
+  let has_clause_introducer = context
+    .before
+    .split(|ch: char| !ch.is_alphabetic())
+    .rfind(|word| !word.is_empty())
+    .is_some_and(|word| {
+      LEGAL_FORM_CLAUSE_INTRODUCERS
+        .iter()
+        .any(|introducer| word.eq_ignore_ascii_case(introducer))
+    });
   let legal_form_heading = entity.source == DetectionSource::LegalForm
     && !has_caption_delimiter
-    && !has_bounded_clause_tail;
+    && !has_clause_introducer;
   if outside_entity_letters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS
     && (entity.source != DetectionSource::LegalForm || legal_form_heading)
   {
@@ -2268,6 +2266,24 @@ mod tests {
   }
 
   #[test]
+  fn keeps_long_legal_form_party_clauses() {
+    let text = "THIS AGREEMENT IS WITH ACME LIMITED AS THE SELLER UNDER THIS AGREEMENT.\n";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        text,
+        "ACME LIMITED",
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+  }
+
+  #[test]
   fn rejects_legal_form_organizations_in_numbered_all_caps_headings() {
     let text = "17. FORMATION OF LIMITED LIABILITY COMPANY\n";
     let entity_text = "LIMITED LIABILITY COMPANY";
@@ -2310,6 +2326,24 @@ mod tests {
 
       assert!(entities.is_empty(), "terminal {terminal:?}");
     }
+  }
+
+  #[test]
+  fn rejects_short_tailed_punctuated_legal_form_headings() {
+    let text = "REGISTRATION OF LIMITED LIABILITY COMPANY PROCEDURES.\n";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        text,
+        "LIMITED LIABILITY COMPANY",
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
   }
 
   #[test]

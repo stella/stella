@@ -24,7 +24,7 @@ impl PartyRoleEvidence<'_> {
     if let Some(corpus) = self.name_corpus {
       return corpus.has_person_name_token(candidate)
         || (!corpus.is_organization(candidate)
-          && contains_sorted_name_token(
+          && starts_with_sorted_name_token(
             candidate,
             self.party_role_name_tokens,
           ));
@@ -246,11 +246,6 @@ pub fn encode_party_role_name_evidence(
     previous = token;
   }
   Ok(encoded)
-}
-
-fn contains_sorted_name_token(text: &str, names: &[String]) -> bool {
-  crate::name_corpus::segmented_word_texts(text)
-    .any(|word| names.binary_search(&word.to_lowercase()).is_ok())
 }
 
 fn starts_with_sorted_name_token(text: &str, names: &[String]) -> bool {
@@ -1651,6 +1646,44 @@ mod tests {
       .map(|entity| entity.text)
       .collect::<Vec<_>>(),
       ["Arnoud-Jan Smith"]
+    );
+  }
+
+  #[test]
+  fn scoped_corpus_uses_cross_locale_evidence_only_at_the_name_start() {
+    let data = prepared_signature_data(
+      SignatureData {
+        party_role_name_evidence: encoded_name_evidence([
+          String::from("Abdul-Malik"),
+          String::from("Imani"),
+        ]),
+        ..SignatureData::default()
+      },
+      vec![String::from("seller")],
+    );
+    let names = PreparedNameCorpusData::new(NameCorpusData::default());
+
+    let detected = detect_signatures(&DetectSignaturesArgs {
+      full_text: "Seller: Abdul-Malik Smith",
+      data: &data,
+      first_names: None,
+      name_corpus: Some(&names),
+    });
+    assert_eq!(
+      detected
+        .into_iter()
+        .map(|entity| entity.text)
+        .collect::<Vec<_>>(),
+      ["Abdul-Malik Smith"]
+    );
+    assert!(
+      detect_signatures(&DetectSignaturesArgs {
+        full_text: "Seller: Acme Imani",
+        data: &data,
+        first_names: None,
+        name_corpus: Some(&names),
+      })
+      .is_empty()
     );
   }
 

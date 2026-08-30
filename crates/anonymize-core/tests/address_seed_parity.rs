@@ -394,6 +394,21 @@ fn uppercase_residual_prose_separates_address_evidence() {
 }
 
 #[test]
+fn dotted_residual_prose_before_an_entity_separates_address_evidence() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "123 Main Street, MOVED AWAY. reference@example.test, Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(!addresses.contains(&"123 Main Street"));
+  assert!(addresses.contains(&"Paris 75002"));
+}
+
+#[test]
 fn sentence_boundaries_outside_entities_separate_address_evidence() {
   let prepared = barrier_address_engine();
   for text in [

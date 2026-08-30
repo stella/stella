@@ -4,6 +4,7 @@ use web_time::Instant;
 use regex::Regex;
 use unicode_properties::{GeneralCategory, UnicodeGeneralCategory};
 
+use crate::labels::CASE_NUMBER_LABEL;
 use crate::processors::PatternSlice;
 use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
 use crate::search::{SearchIndex, SearchOptions, SearchPattern};
@@ -2308,6 +2309,7 @@ struct NonAddressEntitySpan {
   start: usize,
   end: usize,
   is_date: bool,
+  is_case_number: bool,
 }
 
 impl NonAddressEntityIndex {
@@ -2322,6 +2324,7 @@ impl NonAddressEntityIndex {
               start: usize::try_from(entity.start).ok()?,
               end: usize::try_from(entity.end).ok()?,
               is_date: date_label(&entity.label),
+              is_case_number: entity.label == CASE_NUMBER_LABEL,
             };
             Some((entity.start, entity.end, span))
           }),
@@ -2378,10 +2381,15 @@ impl NonAddressEntityIndex {
             let Some(residual) = full_text.get(cursor..residual_end) else {
               return Ok::<_, ()>(());
             };
-            prose.add(residual_before_entity_prose_measure(
-              residual,
-              directional_abbreviations,
-            ));
+            let residual_measure = if span.is_case_number {
+              residual_before_case_number_prose_measure(
+                residual,
+                directional_abbreviations,
+              )
+            } else {
+              residual_prose_measure(residual, directional_abbreviations)
+            };
+            prose.add(residual_measure);
             if prose.exceeds_gap_limit() {
               return Err(());
             }
@@ -2641,7 +2649,7 @@ fn residual_prose_measure(
   measure
 }
 
-fn residual_before_entity_prose_measure(
+fn residual_before_case_number_prose_measure(
   gap: &str,
   directional_abbreviations: &BTreeSet<String>,
 ) -> ProseMeasure {
