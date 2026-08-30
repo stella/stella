@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
-import { loadAuthContext } from "@/routes/-auth-context";
+import { loadAuthContextForRootRedirect } from "@/routes/-auth-context";
 
 export const Route = createFileRoute("/")({
   component: RootRedirect,
@@ -30,10 +30,7 @@ function RootRedirect() {
 
     detached(
       (async () => {
-        // loadAuthContext swallows its own errors (returns a null session), so
-        // this never rejects; a failed session simply routes to /auth below.
-
-        const authContext = await loadAuthContext(queryClient);
+        const authContext = await loadAuthContextForRootRedirect(queryClient);
         if (run.cancelled) {
           return;
         }
