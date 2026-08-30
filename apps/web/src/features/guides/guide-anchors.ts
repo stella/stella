@@ -17,9 +17,20 @@ export const GUIDE_ANCHORS = {
   chatSend: "chat-send",
   documentsUpload: "documents-upload",
   documentsList: "documents-list",
+  playbooksOverview: "playbooks-overview",
   playbooksCreate: "playbooks-create",
+  playbooksBack: "playbooks-back",
+  playbooksBasics: "playbooks-basics",
+  playbooksAddPosition: "playbooks-add-position",
+  workflowsOverview: "workflows-overview",
   workflowsCreate: "workflows-create",
+  workflowsBack: "workflows-back",
+  workflowsTrigger: "workflows-trigger",
+  workflowsSteps: "workflows-steps",
+  workflowsReviewGate: "workflows-review-gate",
+  tabularReviewTable: "tabular-review-table",
   tabularReviewAddColumn: "tabular-review-add-column",
+  tabularReviewAnswerType: "tabular-review-answer-type",
 } as const;
 
 export type GuideAnchorId = (typeof GUIDE_ANCHORS)[keyof typeof GUIDE_ANCHORS];
@@ -30,10 +41,4 @@ export type GuideAnchorId = (typeof GUIDE_ANCHORS)[keyof typeof GUIDE_ANCHORS];
 // registered in app source and forbids a pending anchor from already being
 // registered: once you wire a pending anchor, remove it from this list or the
 // test fails.
-export const PENDING_GUIDE_ANCHOR_IDS: readonly GuideAnchorId[] = [
-  GUIDE_ANCHORS.documentsUpload,
-  GUIDE_ANCHORS.documentsList,
-  GUIDE_ANCHORS.playbooksCreate,
-  GUIDE_ANCHORS.workflowsCreate,
-  GUIDE_ANCHORS.tabularReviewAddColumn,
-];
+export const PENDING_GUIDE_ANCHOR_IDS: readonly GuideAnchorId[] = [];

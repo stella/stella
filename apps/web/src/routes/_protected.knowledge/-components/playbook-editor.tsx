@@ -43,6 +43,8 @@ import { cn } from "@stll/ui/utils";
 
 import { useReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
 import Tooltip from "@/components/tooltip";
+import { guideAnchor } from "@/features/guides/guide-anchor";
+import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -764,6 +766,7 @@ const PlaybookEditorForm = ({
               size="sm"
               type="button"
               variant="ghost"
+              {...guideAnchor(GUIDE_ANCHORS.playbooksBack)}
             >
               <ArrowLeftIcon />
               {t("common.back")}
@@ -863,63 +866,73 @@ const PlaybookEditorForm = ({
             </div>
           </div>
 
-          <div className="grid gap-1.5">
-            <Label htmlFor="playbook-name">{t("common.name")}</Label>
-            <Input
-              aria-invalid={attemptedSave && name.trim() === ""}
-              id="playbook-name"
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t("knowledge.playbooks.namePlaceholder")}
-              value={name}
-            />
-          </div>
-
-          <div className="grid gap-1.5">
-            <Label htmlFor="playbook-description">
-              {t("common.description")}
-            </Label>
-            <Textarea
-              className="min-h-[60px]"
-              id="playbook-description"
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder={t("knowledge.playbooks.descriptionPlaceholder")}
-              value={description}
-            />
-          </div>
-
-          {documentTypes.length > 0 && (
+          <div
+            className="space-y-6"
+            {...guideAnchor(GUIDE_ANCHORS.playbooksBasics)}
+          >
             <div className="grid gap-1.5">
-              <Label htmlFor="playbook-document-type">{t("common.type")}</Label>
-              <Select
-                onValueChange={(next) =>
-                  setDocumentTypeKey(
-                    next === null || next === SCOPE_ALL_VALUE ? null : next,
-                  )
-                }
-                value={documentTypeKey ?? SCOPE_ALL_VALUE}
-              >
-                <SelectTrigger id="playbook-document-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPopup>
-                  <SelectItem value={SCOPE_ALL_VALUE}>
-                    {t("common.all")}
-                  </SelectItem>
-                  {documentTypes.map((documentType) => (
-                    <SelectItem key={documentType.key} value={documentType.key}>
-                      {documentType.label}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-              <Link
-                className="text-muted-foreground hover:text-foreground text-xs"
-                to="/settings/organization/document-types"
-              >
-                {t("knowledge.playbooks.manageTypes")}
-              </Link>
+              <Label htmlFor="playbook-name">{t("common.name")}</Label>
+              <Input
+                aria-invalid={attemptedSave && name.trim() === ""}
+                id="playbook-name"
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t("knowledge.playbooks.namePlaceholder")}
+                value={name}
+              />
             </div>
-          )}
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="playbook-description">
+                {t("common.description")}
+              </Label>
+              <Textarea
+                className="min-h-[60px]"
+                id="playbook-description"
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={t("knowledge.playbooks.descriptionPlaceholder")}
+                value={description}
+              />
+            </div>
+
+            {documentTypes.length > 0 && (
+              <div className="grid gap-1.5">
+                <Label htmlFor="playbook-document-type">
+                  {t("common.type")}
+                </Label>
+                <Select
+                  onValueChange={(next) =>
+                    setDocumentTypeKey(
+                      next === null || next === SCOPE_ALL_VALUE ? null : next,
+                    )
+                  }
+                  value={documentTypeKey ?? SCOPE_ALL_VALUE}
+                >
+                  <SelectTrigger id="playbook-document-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value={SCOPE_ALL_VALUE}>
+                      {t("common.all")}
+                    </SelectItem>
+                    {documentTypes.map((documentType) => (
+                      <SelectItem
+                        key={documentType.key}
+                        value={documentType.key}
+                      >
+                        {documentType.label}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+                <Link
+                  className="text-muted-foreground hover:text-foreground text-xs"
+                  to="/settings/organization/document-types"
+                >
+                  {t("knowledge.playbooks.manageTypes")}
+                </Link>
+              </div>
+            )}
+          </div>
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -1142,7 +1155,14 @@ const AddPositionMenu = ({
   return (
     <Menu>
       <MenuTrigger
-        render={<Button size="sm" type="button" variant="outline" />}
+        render={
+          <Button
+            size="sm"
+            type="button"
+            variant="outline"
+            {...guideAnchor(GUIDE_ANCHORS.playbooksAddPosition)}
+          />
+        }
       >
         <PlusIcon />
         {t("knowledge.playbooks.addPosition")}

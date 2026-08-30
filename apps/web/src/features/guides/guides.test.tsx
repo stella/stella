@@ -10,7 +10,10 @@ import {
   type GuideAnchorId,
   PENDING_GUIDE_ANCHOR_IDS,
 } from "@/features/guides/guide-anchors";
+import { isGuideTourAvailable } from "@/features/guides/guide-availability";
+import { resolveGuideWorkspaceViewId } from "@/features/guides/guide-route";
 import { GUIDE_TOURS } from "@/features/guides/guide-tours";
+import { GUIDE_TOUR_IDS } from "@/features/guides/guide-types";
 import {
   countResolvedTours,
   parseGuideProgress,
@@ -129,6 +132,10 @@ describe("guide anchor registration", () => {
     );
     expect(strays).toEqual([]);
   });
+
+  test("anchor values are unique", () => {
+    expect(new Set(ALL_ANCHOR_IDS).size).toBe(ALL_ANCHOR_IDS.length);
+  });
 });
 
 describe("guide tours", () => {
@@ -144,12 +151,205 @@ describe("guide tours", () => {
     expect(unregistered).toEqual([]);
   });
 
-  test("the chat tour is fully wired end to end", () => {
-    const chatTour = GUIDE_TOURS.find((tour) => tour.id === "chat");
-    expect(chatTour).toBeDefined();
-    for (const step of chatTour?.steps ?? []) {
-      expect(registeredAnchorIds.has(step.anchor)).toBe(true);
+  test("every published tour is fully wired end to end", () => {
+    expect(PENDING_GUIDE_ANCHOR_IDS).toEqual([]);
+    for (const tour of GUIDE_TOURS) {
+      for (const step of tour.steps) {
+        expect(registeredAnchorIds.has(step.anchor)).toBe(true);
+      }
     }
+  });
+
+  test("the registry covers every tour id exactly once", () => {
+    expect(GUIDE_TOURS.map((tour) => tour.id)).toEqual(
+      Object.values(GUIDE_TOUR_IDS),
+    );
+  });
+
+  test("every tour can leave the global drawer for its first surface", () => {
+    for (const tour of GUIDE_TOURS) {
+      const firstStep = tour.steps.at(0);
+      expect(firstStep && "route" in firstStep).toBe(true);
+    }
+  });
+
+  test("every local transition has a registered way back and a next step", () => {
+    for (const tour of GUIDE_TOURS) {
+      for (const [index, step] of tour.steps.entries()) {
+        if (
+          !("interaction" in step) ||
+          step.interaction.kind !== "transition"
+        ) {
+          continue;
+        }
+        expect(registeredAnchorIds.has(step.interaction.reverseAnchor)).toBe(
+          true,
+        );
+        expect(tour.steps.at(index + 1)).toBeDefined();
+      }
+    }
+  });
+
+  test("matter tours select an unfiltered table instead of the first table", () => {
+    expect(
+      resolveGuideWorkspaceViewId(
+        [
+          {
+            id: "filtered-table-view",
+            name: "Filtered",
+            position: 0,
+            version: 1,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            layout: {
+              calculations: [],
+              columnOrder: [],
+              columnPinning: [],
+              hiddenProperties: [],
+              sorts: [],
+              type: "table",
+              version: 1,
+              filters: [
+                {
+                  operand: { type: "kind" },
+                  op: "is_not_empty",
+                  type: "predicate",
+                },
+              ],
+            },
+          },
+          {
+            id: "unfiltered-table-view",
+            name: "All documents",
+            position: 1,
+            version: 1,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            layout: {
+              calculations: [],
+              columnOrder: [],
+              columnPinning: [],
+              filters: [],
+              hiddenProperties: [],
+              sorts: [],
+              type: "table",
+              version: 1,
+            },
+          },
+        ],
+        "unfiltered-table",
+      ),
+    ).toBe("unfiltered-table-view");
+    expect(
+      resolveGuideWorkspaceViewId(
+        [
+          {
+            id: "filtered-table-view",
+            name: "Filtered",
+            position: 0,
+            version: 1,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            layout: {
+              calculations: [],
+              columnOrder: [],
+              columnPinning: [],
+              hiddenProperties: [],
+              sorts: [],
+              type: "table",
+              version: 1,
+              filters: [
+                {
+                  operand: { type: "kind" },
+                  op: "is_not_empty",
+                  type: "predicate",
+                },
+              ],
+            },
+          },
+        ],
+        "unfiltered-table",
+      ),
+    ).toBeNull();
+  });
+
+  test("unavailable or unauthorized destinations stay out of the checklist", () => {
+    const unavailable = {
+      canUseChat: false,
+      canCreateDocument: false,
+      canCreateProperty: false,
+      documentsAvailable: false,
+      tabularReviewAvailable: false,
+      playbooksAvailable: false,
+      workflowsAvailable: false,
+      canCreatePlaybook: false,
+      canCreateWorkflow: false,
+    };
+    expect(isGuideTourAvailable(GUIDE_TOUR_IDS.chat, unavailable)).toBe(false);
+    expect(isGuideTourAvailable(GUIDE_TOUR_IDS.documents, unavailable)).toBe(
+      false,
+    );
+    expect(
+      isGuideTourAvailable(GUIDE_TOUR_IDS.tabularReview, unavailable),
+    ).toBe(false);
+    expect(
+      isGuideTourAvailable(GUIDE_TOUR_IDS.documents, {
+        ...unavailable,
+        documentsAvailable: true,
+      }),
+    ).toBe(false);
+    expect(
+      isGuideTourAvailable(GUIDE_TOUR_IDS.documents, {
+        ...unavailable,
+        canCreateDocument: true,
+        documentsAvailable: true,
+      }),
+    ).toBe(true);
+    expect(
+      isGuideTourAvailable(GUIDE_TOUR_IDS.tabularReview, {
+        ...unavailable,
+        tabularReviewAvailable: true,
+      }),
+    ).toBe(false);
+    expect(
+      isGuideTourAvailable(GUIDE_TOUR_IDS.tabularReview, {
+        ...unavailable,
+        canCreateProperty: true,
+        tabularReviewAvailable: true,
+      }),
+    ).toBe(true);
+    expect(
+      isGuideTourAvailable(GUIDE_TOUR_IDS.chat, {
+        ...unavailable,
+        canUseChat: true,
+      }),
+    ).toBe(true);
+    expect(isGuideTourAvailable(GUIDE_TOUR_IDS.playbooks, unavailable)).toBe(
+      false,
+    );
+    expect(
+      isGuideTourAvailable(GUIDE_TOUR_IDS.playbooks, {
+        ...unavailable,
+        playbooksAvailable: true,
+      }),
+    ).toBe(false);
+    expect(
+      isGuideTourAvailable(GUIDE_TOUR_IDS.workflows, {
+        ...unavailable,
+        workflowsAvailable: true,
+      }),
+    ).toBe(false);
+    expect(
+      isGuideTourAvailable(GUIDE_TOUR_IDS.playbooks, {
+        ...unavailable,
+        playbooksAvailable: true,
+        canCreatePlaybook: true,
+      }),
+    ).toBe(true);
+    expect(
+      isGuideTourAvailable(GUIDE_TOUR_IDS.workflows, {
+        ...unavailable,
+        workflowsAvailable: true,
+        canCreateWorkflow: true,
+      }),
+    ).toBe(true);
   });
 });
 
