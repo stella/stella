@@ -52,7 +52,10 @@ export const requestOutlookApi = async <TResponse>({
     signal: AbortSignal.timeout(timeoutMs),
   });
   const decoded = await Result.tryPromise({
-    try: async () => await response.json(),
+    try: async (): Promise<unknown> => {
+      const responseBody: unknown = await response.json();
+      return responseBody;
+    },
     catch: (cause) => cause,
   });
   if (Result.isError(decoded)) {
