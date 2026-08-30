@@ -1,13 +1,12 @@
 import { request as playwrightRequest } from "@playwright/test";
+import { randomUUID } from "node:crypto";
 
 import { expect, test } from "../helpers/test";
 
-const TEST_USER_EMAIL = "test@stella.dev";
-const TEST_ORGANIZATION_NAME = "Harbrook & Partners";
 const API_BASE_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
 const WEB_BASE_URL = process.env["E2E_WEB_URL"] ?? "http://localhost:3000";
 
-const authenticateWithoutActiveOrganization = async () => {
+const authenticateWithoutActiveOrganization = async (email: string) => {
   const api = await playwrightRequest.newContext({
     extraHTTPHeaders: { origin: new URL(WEB_BASE_URL).origin },
   });
@@ -15,12 +14,12 @@ const authenticateWithoutActiveOrganization = async () => {
   try {
     const sendResponse = await api.post(
       `${API_BASE_URL}/api/auth/email-otp/send-verification-otp`,
-      { data: { email: TEST_USER_EMAIL, type: "sign-in" } },
+      { data: { email, type: "sign-in" } },
     );
     expect(sendResponse.ok(), await sendResponse.text()).toBe(true);
 
     const otpResponse = await api.get(
-      `${API_BASE_URL}/dev-public/last-otp?email=${encodeURIComponent(TEST_USER_EMAIL)}`,
+      `${API_BASE_URL}/dev-public/last-otp?email=${encodeURIComponent(email)}`,
     );
     expect(otpResponse.ok(), await otpResponse.text()).toBe(true);
     const otpPayload: unknown = await otpResponse.json();
@@ -41,17 +40,9 @@ const authenticateWithoutActiveOrganization = async () => {
 
     const signInResponse = await api.post(
       `${API_BASE_URL}/api/auth/sign-in/email-otp`,
-      { data: { email: TEST_USER_EMAIL, otp: otpPayload.otp } },
+      { data: { email, otp: otpPayload.otp } },
     );
     expect(signInResponse.ok(), await signInResponse.text()).toBe(true);
-
-    const clearActiveResponse = await api.post(
-      `${API_BASE_URL}/api/auth/organization/set-active`,
-      { data: { organizationId: null } },
-    );
-    expect(clearActiveResponse.ok(), await clearActiveResponse.text()).toBe(
-      true,
-    );
 
     const storageState = await api.storageState();
     return storageState;
@@ -60,21 +51,24 @@ const authenticateWithoutActiveOrganization = async () => {
   }
 };
 
-test("selecting an organization completes login and renders the destination", async ({
+test("creating an organization completes login and renders the destination", async ({
   page,
 }) => {
-  const storageState = await authenticateWithoutActiveOrganization();
+  const testToken = randomUUID().slice(0, 8);
+  const organizationName = `Northbridge Legal ${testToken}`;
+  const storageState = await authenticateWithoutActiveOrganization(
+    `organization-login-${testToken}@stella.dev`,
+  );
   await page.context().clearCookies();
   await page.context().addCookies(storageState.cookies);
 
   await page.goto("/auth/organization?redirectTo=%2Fchat", {
     waitUntil: "commit",
   });
-  const organization = page.getByRole("button", {
-    name: TEST_ORGANIZATION_NAME,
-  });
-  await expect(organization).toBeVisible({ timeout: 30_000 });
-  await organization.click();
+  const organizationNameInput = page.getByLabel("Organization name");
+  await expect(organizationNameInput).toBeVisible({ timeout: 30_000 });
+  await organizationNameInput.fill(organizationName);
+  await page.getByRole("button", { name: "Create organization" }).click();
 
   await expect(page).toHaveURL(/\/chat\/?$/u, { timeout: 30_000 });
   await expect(
