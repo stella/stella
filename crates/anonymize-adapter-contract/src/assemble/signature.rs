@@ -233,6 +233,43 @@ mod tests {
       .collect()
   }
 
+  fn detected_party_people_without_name_corpus(
+    text: &str,
+    language: &str,
+  ) -> Vec<String> {
+    let config: PipelineConfig = serde_json::from_value(serde_json::json!({
+      "threshold": 0.3,
+      "enableTriggerPhrases": true,
+      "enableRegex": true,
+      "language": language,
+      "enableLegalForms": true,
+      "enableNameCorpus": false,
+      "enableDenyList": false,
+      "enableGazetteer": false,
+      "enableCountries": false,
+      "enableConfidenceBoost": false,
+      "enableCoreference": false,
+      "enableZoneClassification": false,
+      "labels": ["person"],
+      "workspaceId": "party-role-without-name-corpus-test"
+    }))
+    .unwrap();
+    let binding =
+      crate::assemble_static_search_config(&config, None, &[]).unwrap();
+    let prepared = PreparedEngine::new(
+      prepared_search_config_from_binding(binding).unwrap(),
+    )
+    .unwrap();
+    prepared
+      .redact_static_entities(text, &OperatorConfig::default())
+      .unwrap()
+      .resolved_entities
+      .into_iter()
+      .filter(|entity| entity.label == "person")
+      .map(|entity| entity.text)
+      .collect()
+  }
+
   #[test]
   fn scoped_packages_keep_cross_locale_signing_software_stamps() {
     let data = build_signature_data(Some(&[String::from("cs")])).unwrap();
@@ -290,6 +327,14 @@ mod tests {
     );
     assert!(
       detected_trigger_people("represented by seller: Acme Trading", "en",)
+        .is_empty()
+    );
+    assert_eq!(
+      detected_party_people_without_name_corpus("Seller: Imani Nwosu", "en"),
+      vec![String::from("Imani Nwosu")]
+    );
+    assert!(
+      detected_party_people_without_name_corpus("Seller: Acme Trading", "en")
         .is_empty()
     );
 

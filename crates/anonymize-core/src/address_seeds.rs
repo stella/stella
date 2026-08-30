@@ -396,13 +396,13 @@ impl PreparedAddressSeedData {
         // A barrier split this cluster off an address that does carry enough
         // evidence, so it is still address material. Keep the span tight: on
         // its own it has no destination to bound its right edge.
-        None
-          if runs
-            .get(cluster.run)
-            .is_some_and(|evidence| evidence.is_sufficient()) =>
+        None => match runs
+          .get(cluster.run)
+          .copied()
+          .filter(|evidence| evidence.is_sufficient())
         {
-          (
-            AddressEvidence::collect(&cluster.seeds).score(),
+          Some(run_evidence) => (
+            run_evidence.score(),
             if cluster
               .seeds
               .iter()
@@ -412,12 +412,12 @@ impl PreparedAddressSeedData {
             } else {
               SpanGrowth::None
             },
-          )
-        }
-        None => (
-          self.standalone_street_score(&cluster, full_text),
-          SpanGrowth::StreetNameOnly,
-        ),
+          ),
+          None => (
+            self.standalone_street_score(&cluster, full_text),
+            SpanGrowth::StreetNameOnly,
+          ),
+        },
       };
       if score < 0.6 {
         continue;

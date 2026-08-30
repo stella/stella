@@ -64,6 +64,7 @@ pub(super) enum StaticDetectorInput {
   DateData,
   MonetaryData,
   TriggerData,
+  FirstNames,
   TitleTokens,
   SignatureData,
   LegalFormData,
@@ -315,11 +316,13 @@ impl<'a> StaticDetectorContext<'a> {
 
   pub(super) fn detect_signature(&self) -> Result<Vec<PipelineEntity>> {
     let full_text = self.full_text()?;
+    let first_names = self.first_names()?;
     let name_corpus = self.name_corpus_data()?;
     Ok(self.signature_data()?.map_or_else(Vec::new, |data| {
       detect_signatures(&DetectSignaturesArgs {
         full_text,
         data,
+        first_names,
         name_corpus,
       })
     }))
@@ -505,6 +508,18 @@ impl<'a> StaticDetectorContext<'a> {
         .false_positive_filters
         .as_ref()
         .map(|filters| &filters.title_tokens),
+    )
+  }
+
+  fn first_names(&self) -> Result<Option<&'a BTreeSet<String>>> {
+    self.require(StaticDetectorInput::FirstNames)?;
+    Ok(
+      self
+        .engine
+        .data
+        .false_positive_filters
+        .as_ref()
+        .map(|filters| &filters.first_names),
     )
   }
 

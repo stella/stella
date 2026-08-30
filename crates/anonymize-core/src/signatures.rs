@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use crate::resolution::{DetectionSource, PipelineEntity};
 
 use crate::labels::PERSON_LABEL;
@@ -7,10 +9,30 @@ const MAX_WITNESS_SCAN_UNITS: usize = 600;
 const SIGNATURE_ONLY_PERSON_LABELS: &[&str] = &["by"];
 
 #[derive(Clone, Copy)]
+struct PartyRoleEvidence<'a> {
+  first_names: Option<&'a BTreeSet<String>>,
+  name_corpus: Option<&'a PreparedNameCorpusData>,
+}
+
+impl PartyRoleEvidence<'_> {
+  fn has_person_name_token(self, candidate: &str) -> bool {
+    if let Some(corpus) = self.name_corpus {
+      return corpus.has_person_name_token(candidate);
+    }
+    self.first_names.is_some_and(|first_names| {
+      candidate.split([' ', '\t']).any(|token| {
+        let letters = token.trim_matches(|ch: char| !ch.is_alphabetic());
+        first_names.contains(&letters.to_lowercase())
+      })
+    })
+  }
+}
+
+#[derive(Clone, Copy)]
 enum CandidateContext<'a> {
   SignatureBlock,
   LabelledField,
-  PartyRoleField(Option<&'a PreparedNameCorpusData>),
+  PartyRoleField(PartyRoleEvidence<'a>),
 }
 
 #[derive(
@@ -144,6 +166,7 @@ pub struct PersonSpanTerminators<'a> {
 pub(crate) struct DetectSignaturesArgs<'a> {
   pub full_text: &'a str,
   pub data: &'a PreparedSignatureData,
+  pub first_names: Option<&'a BTreeSet<String>>,
   pub name_corpus: Option<&'a PreparedNameCorpusData>,
 }
 
@@ -153,12 +176,14 @@ pub(crate) fn detect_signatures(
 ) -> Vec<PipelineEntity> {
   let full_text = args.full_text;
   let data = args.data;
+  let first_names = args.first_names;
   let name_corpus = args.name_corpus;
   let mut results = Vec::new();
   detect_slash_s(full_text, data, &mut results);
   detect_labelled_names(DetectLabelledNamesArgs {
     full_text,
     data,
+    first_names,
     name_corpus,
     results: &mut results,
   });
@@ -231,6 +256,7 @@ fn detect_slash_s(
 struct DetectLabelledNamesArgs<'a> {
   full_text: &'a str,
   data: &'a PreparedSignatureData,
+  first_names: Option<&'a BTreeSet<String>>,
   name_corpus: Option<&'a PreparedNameCorpusData>,
   results: &'a mut Vec<PipelineEntity>,
 }
@@ -239,6 +265,7 @@ fn detect_labelled_names(args: DetectLabelledNamesArgs<'_>) {
   let DetectLabelledNamesArgs {
     full_text,
     data,
+    first_names,
     name_corpus,
     results,
   } = args;
@@ -249,6 +276,7 @@ fn detect_labelled_names(args: DetectLabelledNamesArgs<'_>) {
       detect_labelled_names_in_line(DetectLabelledNamesInLineArgs {
         full_text,
         data,
+        first_names,
         name_corpus,
         line,
         line_start,
@@ -265,6 +293,7 @@ fn detect_labelled_names(args: DetectLabelledNamesArgs<'_>) {
 struct DetectLabelledNamesInLineArgs<'a> {
   full_text: &'a str,
   data: &'a PreparedSignatureData,
+  first_names: Option<&'a BTreeSet<String>>,
   name_corpus: Option<&'a PreparedNameCorpusData>,
   line: &'a str,
   line_start: usize,
@@ -275,6 +304,7 @@ fn detect_labelled_names_in_line(args: DetectLabelledNamesInLineArgs<'_>) {
   let DetectLabelledNamesInLineArgs {
     full_text,
     data,
+    first_names,
     name_corpus,
     line,
     line_start,
@@ -343,7 +373,10 @@ fn detect_labelled_names_in_line(args: DetectLabelledNamesInLineArgs<'_>) {
       continue;
     }
     let context = if label.requires_person_evidence {
-      CandidateContext::PartyRoleField(name_corpus)
+      CandidateContext::PartyRoleField(PartyRoleEvidence {
+        first_names,
+        name_corpus,
+      })
     } else {
       CandidateContext::LabelledField
     };
@@ -492,9 +525,8 @@ fn try_emit(
   {
     return false;
   }
-  if let CandidateContext::PartyRoleField(name_corpus) = context
-    && name_corpus
-      .is_none_or(|corpus| !corpus.has_person_name_token(&candidate))
+  if let CandidateContext::PartyRoleField(evidence) = context
+    && !evidence.has_person_name_token(&candidate)
   {
     return false;
   }
@@ -1112,6 +1144,8 @@ fn non_empty_compact_lowercase(values: Vec<String>) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+  use std::collections::BTreeSet;
+
   use proptest::prelude::*;
 
   use crate::name_corpus::{NameCorpusData, PreparedNameCorpusData};
@@ -1125,6 +1159,7 @@ mod tests {
     detect_signatures(&DetectSignaturesArgs {
       full_text: text,
       data: &test_data(),
+      first_names: None,
       name_corpus: None,
     })
   }
@@ -1187,6 +1222,7 @@ mod tests {
       detect_signatures(&DetectSignaturesArgs {
         full_text: "Seller: Imani Nwosu",
         data: &data,
+        first_names: None,
         name_corpus: Some(&names),
       })
       .into_iter()
@@ -1198,6 +1234,7 @@ mod tests {
       detect_signatures(&DetectSignaturesArgs {
         full_text: "Borrower:\nZofia Wrona",
         data: &data,
+        first_names: None,
         name_corpus: Some(&names),
       })
       .into_iter()
@@ -1209,7 +1246,31 @@ mod tests {
       detect_signatures(&DetectSignaturesArgs {
         full_text: "Seller: Acme Trading",
         data: &data,
+        first_names: None,
         name_corpus: Some(&names),
+      })
+      .is_empty()
+    );
+
+    let first_names = BTreeSet::from([String::from("imani")]);
+    assert_eq!(
+      detect_signatures(&DetectSignaturesArgs {
+        full_text: "Seller: Imani Nwosu",
+        data: &data,
+        first_names: Some(&first_names),
+        name_corpus: None,
+      })
+      .into_iter()
+      .map(|entity| entity.text)
+      .collect::<Vec<_>>(),
+      ["Imani Nwosu"]
+    );
+    assert!(
+      detect_signatures(&DetectSignaturesArgs {
+        full_text: "Seller: Acme Trading",
+        data: &data,
+        first_names: Some(&first_names),
+        name_corpus: None,
       })
       .is_empty()
     );
@@ -1230,6 +1291,7 @@ mod tests {
       detect_signatures(&DetectSignaturesArgs {
         full_text: "By: Q. Z. Mercer",
         data: &data,
+        first_names: None,
         name_corpus: None,
       })
       .into_iter()
@@ -1241,6 +1303,7 @@ mod tests {
       detect_signatures(&DetectSignaturesArgs {
         full_text: "Name: Main Street",
         data: &data,
+        first_names: None,
         name_corpus: None,
       })
       .is_empty()

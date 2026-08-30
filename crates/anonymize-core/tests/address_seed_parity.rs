@@ -262,12 +262,16 @@ fn keeps_date_like_street_name_in_address_seed_span() {
 }
 
 fn barrier_address_engine() -> PreparedEngine {
+  barrier_address_engine_with_threshold(0.0)
+}
+
+fn barrier_address_engine_with_threshold(threshold: f64) -> PreparedEngine {
   let literal = |pattern: &str| SearchPattern::LiteralWithOptions {
     pattern: String::from(pattern),
     case_insensitive: Some(true),
     whole_words: Some(true),
   };
-  PreparedEngine::new(prepared_config! {
+  let mut config = prepared_config! {
     regex_patterns: vec![
       SearchPattern::Regex(String::from(r"\d:\d{2}-cv-\d{5}")),
       SearchPattern::Regex(String::from(r"[a-z]+@[a-z]+\.[a-z]+")),
@@ -300,8 +304,9 @@ fn barrier_address_engine() -> PreparedEngine {
     }),
     address_seed_data: Some(AddressSeedData::default()),
     ..empty_config(PreparedEngineSlices::default())
-  })
-  .expect("address seed data should prepare")
+  };
+  config.policy.threshold = threshold;
+  PreparedEngine::new(config).expect("address seed data should prepare")
 }
 
 /// A barrier entity between two halves of an address splits the seed cluster.
@@ -311,7 +316,7 @@ fn barrier_address_engine() -> PreparedEngine {
 /// evidence is what has to keep the street.
 #[test]
 fn keeps_both_halves_of_an_address_split_by_a_case_number() {
-  let prepared = barrier_address_engine();
+  let prepared = barrier_address_engine_with_threshold(0.7);
 
   let result = prepared
     .redact_static_entities(

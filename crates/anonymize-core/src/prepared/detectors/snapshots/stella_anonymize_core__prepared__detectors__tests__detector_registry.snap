@@ -96,6 +96,7 @@ modules:
         stage: EntitySignature
         inputs:
           - FullText
+          - FirstNames
         dependencies: []
         support_resources:
           - Signature

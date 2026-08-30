@@ -7,7 +7,10 @@ static_detector_rules! {
   SIGNATURE_RULE {
     id: DetectorId::Signature;
     stage: DiagnosticStage::EntitySignature;
-    inputs: &[DetectorInput::FullText];
+    inputs: &[
+      DetectorInput::FullText,
+      DetectorInput::FirstNames,
+    ];
     scales: &[DetectorInput::FullText];
     uses: &[
       SupportResource::Signature,
