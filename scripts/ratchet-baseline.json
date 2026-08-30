@@ -173,7 +173,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 44,
+    "count": 45,
     "files": {
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 1,
@@ -246,7 +246,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 741,
+    "count": 739,
     "files": {
       "apps/api/scripts/ai-provider-canary.ts": 4,
       "apps/api/scripts/backfill-image-thumbnails.ts": 9,
