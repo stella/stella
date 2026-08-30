@@ -149,6 +149,7 @@ describe("updateWorkObligation", () => {
                         workspaceId,
                         agendaKind: "task",
                         agendaSource: null,
+                        listItemType: null,
                         status: "open",
                         dueDate: null,
                         createdBy: actorUserId,
@@ -193,7 +194,14 @@ describe("updateWorkObligation", () => {
           if (table === workObligations) {
             insertedLegacyObligation = true;
           }
-          return { onConflictDoNothing: async () => {} };
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () =>
+                table === workObligations
+                  ? [{ entityId, workspaceId, createdByUserId: actorUserId }]
+                  : [],
+            }),
+          };
         },
       }),
     });
