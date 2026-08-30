@@ -151,6 +151,26 @@ export type {
   OutlookIngestionRetryStage,
 } from "./outlook-ingestion";
 export {
+  parseOutlookAIDraftResponse,
+  parseOutlookAISummaryResponse,
+  parseOutlookFinalizeResponse,
+  parseOutlookPropertiesResponse,
+  parseOutlookPropertyCreatedResponse,
+  parseOutlookPresignResponse,
+  parseOutlookReconcileResponse,
+  parseOutlookWorkspacesResponse,
+} from "./outlook-api";
+export type {
+  OutlookAIDraftResponse,
+  OutlookAISummaryResponse,
+  OutlookFinalizeResponse,
+  OutlookPropertiesResponse,
+  OutlookPropertyCreatedResponse,
+  OutlookPresignResponse,
+  OutlookReconcileResponse,
+  OutlookWorkspacesResponse,
+} from "./outlook-api";
+export {
   DESKTOP_EDIT_FILE_TYPES,
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
   desktopEditFileTypeForMimeType,

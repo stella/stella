@@ -551,6 +551,7 @@ describe("entity-create presigned upload validation", () => {
           purposeData: {
             type: "email_ingest",
             propertyId: seeded.propertyId,
+            sourceKey: "e".repeat(64),
           },
           declaredName: "message.eml",
           declaredMime: "message/rfc822",

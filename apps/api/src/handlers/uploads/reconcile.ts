@@ -17,7 +17,6 @@ import type {
 } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { replayEmailIngestPostCommitWork } from "@/api/lib/uploads/email-ingest";
 
 const reconcileParamsSchema = t.Object({
   workspaceId: tSafeId("workspace"),
@@ -160,12 +159,6 @@ const reconcileUpload = createSafeHandler(
         ) {
           return panic("Finalized email ingest has inconsistent durable data");
         }
-        replayEmailIngestPostCommitWork({
-          organizationId: session.activeOrganizationId,
-          purposeData: upload.purposeData,
-          userId: user.id,
-          workspaceId,
-        });
         capture("finalized", "complete", "none");
         return Result.ok({
           finalizedResult: upload.finalizedResult,

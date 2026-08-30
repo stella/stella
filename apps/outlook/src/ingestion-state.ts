@@ -1,7 +1,6 @@
 import { TaggedError } from "better-result";
 
-import type { OutlookIngestionDiagnostic } from "@stll/api-contract";
-import type { SafeId } from "@stll/api/types";
+import type { OutlookIngestionDiagnostic, SafeId } from "@stll/api-contract";
 
 export type IngestEmailResult = {
   attachmentCount: number;

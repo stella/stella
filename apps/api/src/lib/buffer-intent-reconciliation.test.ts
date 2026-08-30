@@ -174,6 +174,7 @@ test("enumerates every persisted email-ingest recovery object", () => {
         propertyId: toSafeId<"property">(
           "00000000-0000-0000-0000-000000000004",
         ),
+        sourceKey: "a".repeat(64),
         recoveryObjectKeys,
       },
       workspaceId,
@@ -216,6 +217,7 @@ test("shares one bounded cleanup pool across claimed email ingests", async () =>
           propertyId: toSafeId<"property">(
             "00000000-0000-0000-0000-000000000004",
           ),
+          sourceKey: "b".repeat(64),
           recoveryObjectKeys: Array.from(
             { length: 5 },
             (_, objectIndex) =>
@@ -257,6 +259,7 @@ test("lets lifecycle tombstones progress fairly through the shared pool", async 
     purposeData: {
       type: "email_ingest",
       propertyId: toSafeId<"property">("00000000-0000-0000-0000-000000000004"),
+      sourceKey: "c".repeat(64),
       recoveryObjectKeys: Array.from(
         { length: 8 },
         (_, index) => `${pendingKeyPrefix}-${String(index)}`,

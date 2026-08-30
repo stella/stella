@@ -24,6 +24,10 @@ import {
   dispatchDocumentOcr,
 } from "@/api/lib/scheduler/tasks/document-processing-ocr";
 import {
+  DRAIN_EMAIL_INGEST_EFFECTS_TASK,
+  drainEmailIngestEffectsTask,
+} from "@/api/lib/scheduler/tasks/email-ingest-effects";
+import {
   REPAIR_FILE_DERIVATIVES_TASK,
   repairFileDerivatives,
 } from "@/api/lib/scheduler/tasks/file-derivative-repair";
@@ -82,6 +86,7 @@ const SCHEDULER_TASKS = {
   [INFO_SOUD_SYNC_TRACKED_CASES_TASK]: syncInfoSoudTrackedCases,
   [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
+  [DRAIN_EMAIL_INGEST_EFFECTS_TASK]: drainEmailIngestEffectsTask,
   [FLOW_RUN_TASK]: runScheduledFlow,
   [BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK]:
     backfillCaseLawRedactionTombstones,

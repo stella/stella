@@ -176,6 +176,7 @@ const MessageApp = ({
   const aiDraft = useAIDraft(t("saveErrorFallback"));
   const ingest = useIngestEmail({
     attachmentErrorFallback: t("attachmentReadError"),
+    conflictFallback: t("saveConflict"),
     errorFallback: t("saveErrorFallback"),
     getPendingEmailUpload,
     previousEmailSaveCompleted: t("previousEmailSaveCompleted"),

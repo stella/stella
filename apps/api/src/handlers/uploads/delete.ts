@@ -30,7 +30,7 @@ import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reco
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
-import { tmpUploadKeys } from "@/api/lib/uploads/runtime";
+import { tmpUploadKeys, UPLOAD_REJECT_REASON } from "@/api/lib/uploads/runtime";
 
 const abortParamsSchema = t.Object({
   workspaceId: tSafeId("workspace"),
@@ -160,7 +160,7 @@ const abortUpload = createSafeHandler(
           .update(pendingUploads)
           .set({
             status: "rejected",
-            rejectReason: "Aborted by client",
+            rejectReason: UPLOAD_REJECT_REASON.CLIENT_ABORT,
             finalizedAt: new Date(),
           })
           .where(

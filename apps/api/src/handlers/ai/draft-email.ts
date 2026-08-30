@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
 
-import { OUTLOOK_AI_INPUT_MAX_CHARS } from "@stll/api-contract";
+import {
+  OUTLOOK_AI_INPUT_MAX_CHARS,
+  type OutlookAIDraftResponse,
+} from "@stll/api-contract";
 
 import { toOutlookGenerationError } from "@/api/handlers/ai/outlook-generation-error";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -151,7 +154,9 @@ const draftEmail = createSafeRootHandler(
       }),
     );
 
-    return Result.ok({ draft: generation.draft.trim() });
+    return Result.ok({
+      draft: generation.draft.trim(),
+    } satisfies OutlookAIDraftResponse);
   },
 );
 

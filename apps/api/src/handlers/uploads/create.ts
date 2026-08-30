@@ -8,8 +8,11 @@
  * `t.Union(...)` and add a `switch(body.purpose)` branch.
  */
 import { Result } from "better-result";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
+
+import type { OutlookPresignResponse } from "@stll/api-contract";
 
 import {
   AGENT_SKILL_SCOPES,
@@ -27,7 +30,10 @@ import {
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type {
+  HandlerConfig,
+  SafeHandlerGenerator,
+} from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -35,6 +41,7 @@ import { EML_MIME_TYPE } from "@/api/lib/files/email-to-html";
 import { resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { presignUploadUrl } from "@/api/lib/s3-presign";
+import { deriveOutlookEmailSourceKey } from "@/api/lib/uploads/email-ingest-source";
 import {
   checkEntityCreateCapacityForInsert,
   checkEntityCreateTargetForInsert,
@@ -46,6 +53,7 @@ import {
   PRESIGN_URL_EXPIRY_SECONDS,
   sha256HexToBase64,
   tmpUploadKey,
+  UPLOAD_REJECT_REASON,
 } from "@/api/lib/uploads/runtime";
 
 const baseFileMetadataSchema = {
@@ -74,6 +82,10 @@ const skillPackFileMetadataSchema = {
   }),
 } as const;
 
+const RETRYABLE_EMAIL_RESERVATION_REJECT_REASONS: ReadonlySet<string> = new Set(
+  [UPLOAD_REJECT_REASON.CLIENT_ABORT, UPLOAD_REJECT_REASON.URL_EXPIRED],
+);
+
 const entityCreatePresignBodySchema = t.Object({
   purpose: t.Literal("entity_create"),
   propertyId: tSafeId("property"),
@@ -92,6 +104,10 @@ const emailIngestPresignBodySchema = t.Object({
   propertyId: tSafeId("property"),
   parentId: t.Optional(t.Nullable(tSafeId("entity"))),
   diagnostic: t.Optional(outlookIngestionDiagnosticSchema),
+  source: t.Object({
+    mailboxEmail: t.String({ format: "email", maxLength: 320 }),
+    sourceId: t.String({ format: "uuid" }),
+  }),
   ...baseFileMetadataSchema,
   mimeType: t.Literal(EML_MIME_TYPE),
 });
@@ -121,7 +137,7 @@ type EntityCreatePurposeDataWithParent = Extract<
 type EmailIngestPurposeDataWithParent = Extract<
   PendingUploadPurposeData,
   { type: "email_ingest" }
-> & { parentId: SafeId<"entity"> | null };
+> & { parentId: SafeId<"entity"> | null; sourceKey: string };
 
 type PresignPurposeData =
   | EntityCreatePurposeDataWithParent
@@ -145,6 +161,9 @@ const toPurposeData = (purposeBody: PresignBody): PresignPurposeData => {
       type: "email_ingest",
       propertyId: purposeBody.propertyId,
       parentId: purposeBody.parentId ?? null,
+      sourceKey: deriveOutlookEmailSourceKey({
+        source: purposeBody.source,
+      }),
     };
     return purposeData;
   }
@@ -166,8 +185,10 @@ const config = {
     "size in bytes, and sha256Hex (lowercase hex SHA-256 of the exact " +
     "bytes). purpose is entity_create (with propertyId, optional parentId) " +
     "to add a new document, entity_version (with entityId) to add a version " +
-    "to an existing one, or agent_skill (with scope team or private) for a " +
-    "skill pack. Returns uploadId, url, expiresAt, and headers. Step 2: PUT " +
+    "to an existing one, agent_skill (with scope team or private) for a " +
+    "skill pack, or email_ingest with a stable Outlook source identity. " +
+    "Returns a reserved upload with uploadId, url, expiresAt, and headers; " +
+    "a previously reserved email source returns its existing uploadId. Step 2: PUT " +
     "the bytes to url with those headers verbatim -- the URL is signed " +
     "against the exact size and checksum, so any deviation is rejected. " +
     "Step 3: call uploads.update with the uploadId to commit the record. " +
@@ -190,7 +211,7 @@ const presignUpload = createSafeHandler(
     user,
     memberRole,
     body: purposeBody,
-  }) {
+  }): SafeHandlerGenerator<OutlookPresignResponse> {
     const authorization = authorizeUploadPurpose({
       memberRole,
       purpose: purposeBody.purpose,
@@ -199,13 +220,7 @@ const presignUpload = createSafeHandler(
       return Result.err(authorization.error);
     }
 
-    if (
-      purposeBody.purpose === "entity_create" ||
-      purposeBody.purpose === "email_ingest"
-    ) {
-      // email_ingest shares entity_create's file-property + folder-parent
-      // checks. Capacity reserves 1 here; the authoritative count check
-      // runs at finalize once the attachment count is known.
+    if (purposeBody.purpose === "entity_create") {
       const validation = yield* validateEntityCreate({
         safeDb,
         workspaceId,
@@ -247,49 +262,173 @@ const presignUpload = createSafeHandler(
       fileName: purposeBody.name,
     });
 
-    const uploadId = createSafeId<"pendingUpload">();
-    const tmpKey = tmpUploadKey({
-      organizationId: session.activeOrganizationId,
-      uploadId,
-      workspaceId,
-    });
+    const candidateUploadId = createSafeId<"pendingUpload">();
     const now = new Date();
     const expiresAt = new Date(
       now.getTime() + PRESIGN_URL_EXPIRY_SECONDS * 1000,
     );
     const purposeData = toPurposeData(purposeBody);
 
-    const presign = await presignUploadUrl({
-      key: tmpKey,
-      expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
-      contentType: resolvedMime,
-      contentLength: purposeBody.size,
-      sha256Base64: sha256HexToBase64(purposeBody.sha256Hex),
-      scope: {
-        organizationId: session.activeOrganizationId,
-        workspaceId,
-      },
-      tagAsTemporaryUpload: true,
-    });
-    if (Result.isError(presign)) {
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "Failed to issue upload URL",
-          cause: presign.error,
-        }),
-      );
-    }
-
     type PresignWriteResult =
-      | { status: "ok" }
-      | { status: EntityCreateWriteFailureStatus };
+      | {
+          disposition: "existing" | "reserved";
+          expiresAt: Date;
+          status: "ok";
+          uploadId: SafeId<"pendingUpload">;
+        }
+      | { status: EntityCreateWriteFailureStatus | "source-conflict" };
 
     // Persist intent. RLS pins the row to this workspace, so even
     // a stolen URL can only be finalized by a request that
     // resolves to the same workspace_ids on the API role.
     const writeResult = yield* Result.await(
       safeDb(async (tx): Promise<PresignWriteResult> => {
+        if (purposeData.type === "email_ingest") {
+          const existing = (
+            await tx
+              .select()
+              .from(pendingUploads)
+              .where(
+                and(
+                  eq(
+                    pendingUploads.organizationId,
+                    session.activeOrganizationId,
+                  ),
+                  eq(pendingUploads.workspaceId, workspaceId),
+                  eq(pendingUploads.purpose, "email_ingest"),
+                  sql`${pendingUploads.purposeData}->>'sourceKey' = ${purposeData.sourceKey}`,
+                ),
+              )
+              .limit(1)
+              .for("update")
+          ).at(0);
+          if (existing) {
+            if (
+              existing.userId !== user.id ||
+              existing.purposeData.type !== "email_ingest"
+            ) {
+              return { status: "source-conflict" };
+            }
+            if (
+              existing.status === "rejected" &&
+              existing.rejectReason !== null &&
+              RETRYABLE_EMAIL_RESERVATION_REJECT_REASONS.has(
+                existing.rejectReason,
+              )
+            ) {
+              const capacityResult = await checkEntityCreateCapacityForInsert({
+                tx,
+                workspaceId,
+                entityCount: 1,
+              });
+              if (Result.isError(capacityResult)) {
+                return { status: capacityResult.error };
+              }
+              const targetResult = await checkEntityCreateTargetForInsert({
+                tx,
+                workspaceId,
+                propertyId: purposeData.propertyId,
+                parentId: purposeData.parentId,
+              });
+              if (Result.isError(targetResult)) {
+                return { status: targetResult.error };
+              }
+              await tx
+                .update(pendingUploads)
+                .set({
+                  claimedAt: null,
+                  claimedByRequestId: null,
+                  declaredMime: resolvedMime,
+                  declaredName: purposeBody.name,
+                  declaredSha256: purposeBody.sha256Hex,
+                  declaredSize: purposeBody.size,
+                  expiresAt,
+                  finalizedAt: null,
+                  finalizedResult: null,
+                  purposeData,
+                  rejectReason: null,
+                  status: "pending",
+                })
+                .where(
+                  and(
+                    eq(pendingUploads.id, existing.id),
+                    eq(pendingUploads.status, "rejected"),
+                  ),
+                );
+              return {
+                disposition: "reserved",
+                expiresAt,
+                status: "ok",
+                uploadId: existing.id,
+              };
+            }
+            if (existing.status !== "pending") {
+              return {
+                disposition: "existing",
+                expiresAt: existing.expiresAt,
+                status: "ok",
+                uploadId: existing.id,
+              };
+            }
+            const isExpired = existing.expiresAt <= now;
+            if (
+              existing.purposeData.propertyId !== purposeData.propertyId ||
+              (existing.purposeData.parentId ?? null) !==
+                purposeData.parentId ||
+              (!isExpired &&
+                (existing.declaredName !== purposeBody.name ||
+                  existing.declaredMime !== resolvedMime ||
+                  existing.declaredSize !== purposeBody.size ||
+                  existing.declaredSha256 !== purposeBody.sha256Hex))
+            ) {
+              return { status: "source-conflict" };
+            }
+            const reservationExpiresAt = isExpired
+              ? expiresAt
+              : existing.expiresAt;
+            if (isExpired) {
+              const capacityResult = await checkEntityCreateCapacityForInsert({
+                tx,
+                workspaceId,
+                entityCount: 1,
+              });
+              if (Result.isError(capacityResult)) {
+                return { status: capacityResult.error };
+              }
+              const targetResult = await checkEntityCreateTargetForInsert({
+                tx,
+                workspaceId,
+                propertyId: purposeData.propertyId,
+                parentId: purposeData.parentId,
+              });
+              if (Result.isError(targetResult)) {
+                return { status: targetResult.error };
+              }
+              await tx
+                .update(pendingUploads)
+                .set({
+                  declaredMime: resolvedMime,
+                  declaredName: purposeBody.name,
+                  declaredSha256: purposeBody.sha256Hex,
+                  declaredSize: purposeBody.size,
+                  expiresAt: reservationExpiresAt,
+                })
+                .where(
+                  and(
+                    eq(pendingUploads.id, existing.id),
+                    eq(pendingUploads.status, "pending"),
+                  ),
+                );
+            }
+            return {
+              disposition: "reserved",
+              expiresAt: reservationExpiresAt,
+              status: "ok",
+              uploadId: existing.id,
+            };
+          }
+        }
+
         if (
           purposeData.type === "entity_create" ||
           purposeData.type === "email_ingest"
@@ -321,30 +460,127 @@ const presignUpload = createSafeHandler(
         // audit: skip — presigned URL bookkeeping; the audit row is
         // emitted by the per-purpose finalize once the upload
         // becomes a durable entity.
-        await tx.insert(pendingUploads).values({
-          id: uploadId,
-          organizationId: session.activeOrganizationId,
-          workspaceId,
-          userId: user.id,
-          purpose: purposeBody.purpose,
-          purposeData,
-          declaredName: purposeBody.name,
-          declaredMime: resolvedMime,
-          declaredSize: purposeBody.size,
-          declaredSha256: purposeBody.sha256Hex,
-          status: "pending",
-          expiresAt,
-          createdAt: now,
-        });
+        const inserted = await tx
+          .insert(pendingUploads)
+          .values({
+            id: candidateUploadId,
+            organizationId: session.activeOrganizationId,
+            workspaceId,
+            userId: user.id,
+            purpose: purposeBody.purpose,
+            purposeData,
+            declaredName: purposeBody.name,
+            declaredMime: resolvedMime,
+            declaredSize: purposeBody.size,
+            declaredSha256: purposeBody.sha256Hex,
+            status: "pending",
+            expiresAt,
+            createdAt: now,
+          })
+          .onConflictDoNothing()
+          .returning({ id: pendingUploads.id });
+        if (!inserted.at(0)) {
+          if (purposeData.type === "email_ingest") {
+            const concurrent = (
+              await tx
+                .select()
+                .from(pendingUploads)
+                .where(
+                  and(
+                    eq(
+                      pendingUploads.organizationId,
+                      session.activeOrganizationId,
+                    ),
+                    eq(pendingUploads.workspaceId, workspaceId),
+                    eq(pendingUploads.purpose, "email_ingest"),
+                    sql`${pendingUploads.purposeData}->>'sourceKey' = ${purposeData.sourceKey}`,
+                  ),
+                )
+                .limit(1)
+            ).at(0);
+            if (
+              concurrent?.userId === user.id &&
+              concurrent.purposeData.type === "email_ingest"
+            ) {
+              if (concurrent.status !== "pending") {
+                return {
+                  disposition: "existing",
+                  expiresAt: concurrent.expiresAt,
+                  status: "ok",
+                  uploadId: concurrent.id,
+                };
+              }
+              if (
+                concurrent.declaredName === purposeBody.name &&
+                concurrent.declaredMime === resolvedMime &&
+                concurrent.declaredSize === purposeBody.size &&
+                concurrent.declaredSha256 === purposeBody.sha256Hex &&
+                concurrent.purposeData.propertyId === purposeData.propertyId &&
+                (concurrent.purposeData.parentId ?? null) ===
+                  purposeData.parentId
+              ) {
+                return {
+                  disposition: "reserved",
+                  expiresAt: concurrent.expiresAt,
+                  status: "ok",
+                  uploadId: concurrent.id,
+                };
+              }
+            }
+          }
+          return { status: "source-conflict" };
+        }
 
-        return { status: "ok" };
+        return {
+          disposition: "reserved",
+          expiresAt,
+          status: "ok",
+          uploadId: candidateUploadId,
+        };
       }),
     );
     if (writeResult.status !== "ok") {
       return Result.err(
         new HandlerError({
-          status: 400,
-          message: entityCreateWriteErrorMessage(writeResult.status),
+          status: writeResult.status === "source-conflict" ? 409 : 400,
+          message:
+            writeResult.status === "source-conflict"
+              ? "This Outlook email already has an incompatible filing reservation"
+              : entityCreateWriteErrorMessage(writeResult.status),
+        }),
+      );
+    }
+
+    if (writeResult.disposition === "existing") {
+      return Result.ok({
+        state: "existing" as const,
+        uploadId: writeResult.uploadId,
+      });
+    }
+
+    const tmpKey = tmpUploadKey({
+      organizationId: session.activeOrganizationId,
+      uploadId: writeResult.uploadId,
+      workspaceId,
+    });
+    const presign = await presignUploadUrl({
+      key: tmpKey,
+      expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
+      contentType: resolvedMime,
+      contentLength: purposeBody.size,
+      sha256Base64: sha256HexToBase64(purposeBody.sha256Hex),
+      scope: {
+        organizationId: session.activeOrganizationId,
+        workspaceId,
+      },
+      tagAsTemporaryUpload: true,
+    });
+    if (Result.isError(presign)) {
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Failed to issue upload URL",
+          cause: presign.error,
         }),
       );
     }
@@ -363,9 +599,10 @@ const presignUpload = createSafeHandler(
     }
 
     return Result.ok({
-      uploadId,
+      state: "reserved" as const,
+      uploadId: writeResult.uploadId,
       url: presign.value.url,
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: writeResult.expiresAt.toISOString(),
       headers: presign.value.headers,
     });
   },

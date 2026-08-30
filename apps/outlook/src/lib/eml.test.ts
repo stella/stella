@@ -16,6 +16,7 @@ const baseSnapshot: MailSnapshot = {
   itemId: "item-1",
   mode: "read",
   sentAt: "2026-06-13T09:00:00.000Z",
+  sourceId: "00000000-0000-7000-8000-000000000001",
   subject: "SPA review",
   to: [{ email: "lawyer@firm.example", name: "Lawyer" }],
   userEmail: "lawyer@firm.example",

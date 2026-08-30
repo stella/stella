@@ -1,4 +1,4 @@
-import type { SafeId } from "@stll/api/types";
+import type { SafeId } from "@stll/api-contract";
 
 export type MailAddress = {
   email: string;
@@ -26,6 +26,7 @@ export type MailSnapshot = {
   itemId: string | null;
   mode: "browser" | "compose" | "read";
   sentAt: string | null;
+  sourceId: string | null;
   subject: string;
   to: MailAddress[];
   userEmail: string | null;

@@ -26,11 +26,12 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type {
-  EmailIngestPostCommitKickoff,
   PendingUploadFinalizedResult,
   PendingUploadPurposeData,
 } from "@/api/db/schema";
 import {
+  EMAIL_INGEST_EFFECT_KINDS,
+  emailIngestEffects,
   entities,
   entityVersions,
   fields,
@@ -44,10 +45,6 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { startBufferIntentHeartbeat } from "@/api/lib/buffer-intent-reconciliation";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
-import {
-  enqueueImageThumbnailOrMarkFailed,
-  enqueuePdfDerivativeOrMarkFailed,
-} from "@/api/lib/file-derivative-queue";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import {
   parseEmail,
@@ -63,11 +60,9 @@ import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { createFileKey } from "@/api/lib/files/utils";
-import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { mapWithConcurrency } from "@/api/lib/map-with-concurrency";
 import { deleteS3ObjectWithSignal, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { processExtraction } from "@/api/lib/search/process-extraction";
 import {
   resolveStoredEmailFileName,
   emailIngestFinalObjectCleanupFailure,
@@ -75,6 +70,7 @@ import {
   validateEmailAttachmentMimeType,
   validateEmailIngestContainer,
 } from "@/api/lib/uploads/email-ingest-policy";
+import { OUTLOOK_EMAIL_EXTERNAL_SOURCE } from "@/api/lib/uploads/email-ingest-source";
 import {
   checkEntityCreateCapacityForInsert,
   checkEntityCreateTargetForInsert,
@@ -194,116 +190,6 @@ type AcceptedAttachment = {
   sha256Hex: string;
   encrypted: boolean;
   scanWarnings: string[] | undefined;
-};
-
-type EmailIngestPostCommitOperations = {
-  processExtraction: typeof processExtraction;
-  maybeStartUploadTriggeredFlows: typeof maybeStartUploadTriggeredFlows;
-  enqueuePdfDerivativeOrMarkFailed: typeof enqueuePdfDerivativeOrMarkFailed;
-  enqueueImageThumbnailOrMarkFailed: typeof enqueueImageThumbnailOrMarkFailed;
-};
-
-export type ScheduleEmailIngestPostCommitWorkOptions = {
-  kickoffs: EmailIngestPostCommitKickoff[];
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-  workspaceId: SafeId<"workspace">;
-  operations: EmailIngestPostCommitOperations;
-};
-
-export const scheduleEmailIngestPostCommitWork = ({
-  kickoffs,
-  organizationId,
-  userId,
-  workspaceId,
-  operations,
-}: ScheduleEmailIngestPostCommitWorkOptions): void => {
-  for (const kickoff of kickoffs) {
-    operations.processExtraction(kickoff.entityId).catch((error: unknown) => {
-      captureError(error, {
-        entityId: kickoff.entityId,
-        mimeType: kickoff.mimeType,
-      });
-    });
-    operations
-      .maybeStartUploadTriggeredFlows({
-        entityId: kickoff.entityId,
-        workspaceId,
-        organizationId,
-        fileName: kickoff.fileName,
-        idempotencyKey: kickoff.sourceUploadId,
-      })
-      .catch((error: unknown) => {
-        captureError(error, {
-          entityId: kickoff.entityId,
-          workspaceId,
-        });
-      });
-    operations
-      .enqueuePdfDerivativeOrMarkFailed({
-        encrypted: kickoff.encrypted,
-        entityId: kickoff.entityId,
-        fieldId: kickoff.fieldId,
-        mimeType: kickoff.mimeType,
-        organizationId,
-        userId,
-        workspaceId,
-      })
-      .catch((error: unknown) => {
-        captureError(error, {
-          entityId: kickoff.entityId,
-          fieldId: kickoff.fieldId,
-          mimeType: kickoff.mimeType,
-        });
-      });
-    operations
-      .enqueueImageThumbnailOrMarkFailed({
-        encrypted: kickoff.encrypted,
-        entityId: kickoff.entityId,
-        fieldId: kickoff.fieldId,
-        mimeType: kickoff.mimeType,
-        organizationId,
-        userId,
-        workspaceId,
-      })
-      .catch((error: unknown) => {
-        captureError(error, {
-          entityId: kickoff.entityId,
-          fieldId: kickoff.fieldId,
-          mimeType: kickoff.mimeType,
-        });
-      });
-  }
-};
-
-type ReplayEmailIngestPostCommitWorkOptions = {
-  organizationId: SafeId<"organization">;
-  purposeData: EmailIngestPurposeData;
-  userId: SafeId<"user">;
-  workspaceId: SafeId<"workspace">;
-};
-
-export const replayEmailIngestPostCommitWork = ({
-  organizationId,
-  purposeData,
-  userId,
-  workspaceId,
-}: ReplayEmailIngestPostCommitWorkOptions): void => {
-  const kickoffs =
-    purposeData.postCommitKickoffs ??
-    panic("Finalized email ingest has no post-commit work descriptors");
-  scheduleEmailIngestPostCommitWork({
-    kickoffs,
-    organizationId,
-    userId,
-    workspaceId,
-    operations: {
-      processExtraction,
-      maybeStartUploadTriggeredFlows,
-      enqueuePdfDerivativeOrMarkFailed,
-      enqueueImageThumbnailOrMarkFailed,
-    },
-  });
 };
 
 const attachmentMimeType = (attachment: EmailAttachment): string =>
@@ -696,6 +582,7 @@ export const finalizeEmailIngest = async function* ({
     }
 
     const parentId = purposeData.parentId ?? null;
+    const sourceKey = purposeData.sourceKey;
 
     type WriteResult =
       | {
@@ -704,7 +591,6 @@ export const finalizeEmailIngest = async function* ({
             PendingUploadFinalizedResult,
             { type: "email_ingest" }
           >;
-          purposeData: EmailIngestPurposeData;
         }
       | { status: EntityCreateWriteFailureStatus };
 
@@ -766,6 +652,8 @@ export const finalizeEmailIngest = async function* ({
         id: messageEntityId,
         workspaceId,
         kind: "message",
+        externalId: sourceKey,
+        externalSource: OUTLOOK_EMAIL_EXTERNAL_SOURCE,
         parentId,
         name: renamed.value,
         createdBy: userId,
@@ -944,12 +832,11 @@ export const finalizeEmailIngest = async function* ({
         renamed: renamed.renamed,
         attachmentEntityIds: accepted.map((attachment) => attachment.entityId),
       };
-      const postCommitKickoffs: EmailIngestPostCommitKickoff[] = [
+      const effectTargets = [
         {
           entityId: messageEntityId,
           mimeType: declaredMime,
           fieldId: messageFieldId,
-          sourceUploadId: uploadId,
           fileName: finalized.fileName,
           encrypted: messageEncrypted,
         },
@@ -957,15 +844,29 @@ export const finalizeEmailIngest = async function* ({
           entityId: attachment.entityId,
           mimeType: attachment.mimeType,
           fieldId: attachment.fieldId,
-          sourceUploadId: uploadId,
           fileName: attachment.fileName,
           encrypted: attachment.encrypted,
         })),
       ];
+      await tx.insert(emailIngestEffects).values(
+        effectTargets.flatMap((target) =>
+          EMAIL_INGEST_EFFECT_KINDS.map((kind) => ({
+            encrypted: target.encrypted,
+            entityId: target.entityId,
+            fieldId: target.fieldId,
+            fileName: target.fileName,
+            kind,
+            mimeType: target.mimeType,
+            organizationId,
+            sourceUploadId: uploadId,
+            userId,
+            workspaceId,
+          })),
+        ),
+      );
       const finalizedPurposeData: EmailIngestPurposeData = {
         ...purposeData,
         recoveryObjectKeys: writtenKeys,
-        postCommitKickoffs,
       };
 
       // audit: skip — final FSM transition on pending_uploads; the
@@ -997,7 +898,7 @@ export const finalizeEmailIngest = async function* ({
       // once prepared, cleanup belongs to the durable recovery record so this
       // request cannot delete objects that a committed entity may reference.
       transactionState.status = "durable_reference_prepared";
-      return { status: "ok", finalized, purposeData: finalizedPurposeData };
+      return { status: "ok", finalized };
     });
 
     if (
@@ -1028,17 +929,10 @@ export const finalizeEmailIngest = async function* ({
           ) {
             panic("Finalized email ingest has inconsistent durable data");
           }
-          const durablePurposeData = durable.purposeData;
           return finalizeOk({
             finalizedResult: durable.finalizedResult,
             finalKey: messageFinalKey,
-            afterPromote: () =>
-              replayEmailIngestPostCommitWork({
-                organizationId,
-                purposeData: durablePurposeData,
-                userId,
-                workspaceId,
-              }),
+            afterPromote: undefined,
           });
         }
 
@@ -1075,20 +969,12 @@ export const finalizeEmailIngest = async function* ({
         rejectReason: writeResult.status,
       });
     }
-    const { finalized, purposeData: finalizedPurposeData } = writeResult;
-
-    const afterPromote = () =>
-      replayEmailIngestPostCommitWork({
-        organizationId,
-        purposeData: finalizedPurposeData,
-        userId,
-        workspaceId,
-      });
+    const { finalized } = writeResult;
 
     return finalizeOk({
       finalizedResult: finalized,
       finalKey: messageFinalKey,
-      afterPromote,
+      afterPromote: undefined,
     });
   } finally {
     await stopClaimHeartbeat();

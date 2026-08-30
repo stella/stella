@@ -59,6 +59,7 @@ type PendingEmailUploadStore = {
 
 type UseIngestEmailOptions = PendingEmailUploadStore & {
   attachmentErrorFallback: string;
+  conflictFallback: string;
   errorFallback: string;
   previousEmailSaveCompleted: string;
 };
@@ -173,10 +174,12 @@ const PENDING_RETRY_STAGE = {
 
 const ingestErrorMessage = ({
   attachmentErrorFallback,
+  conflictFallback,
   error,
   errorFallback,
 }: {
   attachmentErrorFallback: string;
+  conflictFallback: string;
   error: unknown;
   errorFallback: string;
 }): string => {
@@ -184,6 +187,9 @@ const ingestErrorMessage = ({
     return attachmentErrorFallback;
   }
   if (error instanceof APIError) {
+    if (error.status === 409) {
+      return conflictFallback;
+    }
     return userErrorMessage(error, errorFallback);
   }
   return errorFallback;
@@ -191,6 +197,7 @@ const ingestErrorMessage = ({
 
 export const useIngestEmail = ({
   attachmentErrorFallback,
+  conflictFallback,
   errorFallback,
   getPendingEmailUpload,
   previousEmailSaveCompleted,
@@ -371,6 +378,13 @@ export const useIngestEmail = ({
           workspaceId,
         });
         remember(reserved);
+        if (reserved.type === "finalizing") {
+          const resumed = await resumePending(reserved);
+          if (resumed) {
+            return resumed;
+          }
+          throw new APIError({ message: errorFallback, status: 409 });
+        }
         return await finalizeEmailUpload(await uploadPending(reserved));
       },
       catch: (cause) => cause,
@@ -395,6 +409,7 @@ export const useIngestEmail = ({
         diagnostic,
         message: ingestErrorMessage({
           attachmentErrorFallback,
+          conflictFallback,
           error,
           errorFallback,
         }),

@@ -2,9 +2,11 @@ import { useState } from "react";
 
 import { Result } from "better-result";
 
+import { parseOutlookAIDraftResponse } from "@stll/api-contract";
+
 import { buildAIDraftRequest } from "@/hooks/ai-request.logic";
-import { api, withTimeout } from "@/lib/api";
-import { toAPIError, userErrorMessage } from "@/lib/api-error";
+import { requestOutlookApi } from "@/lib/api";
+import { APIError, userErrorMessage } from "@/lib/api-error";
 import type { MailSnapshot } from "@/types";
 
 const AI_REQUEST_TIMEOUT_MS = 70_000;
@@ -31,27 +33,26 @@ export const useAIDraft = (errorFallback: string): UseAIDraft => {
 
   const draftReply = async ({ intent, language, snapshot }: DraftArgs) => {
     setState({ type: "loading" });
-    const result = await Result.tryPromise(
-      async () =>
-        await api.ai["draft-email"].post(
-          buildAIDraftRequest({ intent, language, snapshot }),
-          withTimeout(AI_REQUEST_TIMEOUT_MS),
-        ),
+    const result = await Result.tryPromise(async () =>
+      requestOutlookApi({
+        body: buildAIDraftRequest({ intent, language, snapshot }),
+        method: "POST",
+        parse: parseOutlookAIDraftResponse,
+        path: "/ai/draft-email",
+        timeoutMs: AI_REQUEST_TIMEOUT_MS,
+      }),
     );
     if (Result.isError(result)) {
-      setState({ message: errorFallback, type: "error" });
-      return;
-    }
-    const { data, error } = result.value;
-    if (error) {
-      const apiError = toAPIError(error);
       setState({
-        message: userErrorMessage(apiError, errorFallback),
+        message:
+          result.error instanceof APIError
+            ? userErrorMessage(result.error, errorFallback)
+            : errorFallback,
         type: "error",
       });
       return;
     }
-    setState({ draft: data.draft, type: "ready" });
+    setState({ draft: result.value.draft, type: "ready" });
   };
 
   return {

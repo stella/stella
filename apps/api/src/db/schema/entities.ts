@@ -1066,14 +1066,30 @@ export const PENDING_UPLOAD_PURPOSES = [
   "email_ingest",
 ] as const;
 
-export type EmailIngestPostCommitKickoff = {
-  entityId: SafeId<"entity">;
-  fieldId: SafeId<"field">;
-  sourceUploadId: SafeId<"pendingUpload">;
-  fileName: string;
-  mimeType: string;
-  encrypted: boolean;
-};
+export const EMAIL_INGEST_EFFECT_KINDS = [
+  "extract",
+  "start_flows",
+  "pdf_derivative",
+  "thumbnail_derivative",
+] as const;
+export type EmailIngestEffectKind = (typeof EMAIL_INGEST_EFFECT_KINDS)[number];
+
+export const EMAIL_INGEST_EFFECT_STATUSES = [
+  "pending",
+  "processing",
+  "failed",
+  "completed",
+  "exhausted",
+] as const;
+export type EmailIngestEffectStatus =
+  (typeof EMAIL_INGEST_EFFECT_STATUSES)[number];
+
+const EMAIL_INGEST_EFFECT_KIND_SQL_VALUES = EMAIL_INGEST_EFFECT_KINDS.map(
+  (kind) => sql.raw(`'${kind}'`),
+);
+const EMAIL_INGEST_EFFECT_STATUS_SQL_VALUES = EMAIL_INGEST_EFFECT_STATUSES.map(
+  (status) => sql.raw(`'${status}'`),
+);
 
 export type PendingUploadPurposeData =
   | {
@@ -1107,10 +1123,10 @@ export type PendingUploadPurposeData =
       type: "email_ingest";
       propertyId: SafeId<"property">;
       parentId?: SafeId<"entity"> | null;
+      /** SHA-256 of the normalized mailbox and strongest available Outlook id. */
+      sourceKey: string;
       /** Exact deterministic final keys owned by this recoverable ingest. */
       recoveryObjectKeys?: string[];
-      /** Durable work descriptors replayed after the entity transaction commits. */
-      postCommitKickoffs?: EmailIngestPostCommitKickoff[];
     };
 
 export type PendingUploadFinalizedResult =
@@ -1222,7 +1238,107 @@ export const pendingUploads = p.pgTable(
           AND ${table.purpose} = 'email_ingest'
           AND jsonb_array_length(COALESCE(${table.purposeData}->'recoveryObjectKeys', '[]'::jsonb)) > 0`,
       ),
+    p
+      .uniqueIndex("pending_uploads_email_source_uidx")
+      .on(
+        table.organizationId,
+        table.workspaceId,
+        sql`(${table.purposeData}->>'sourceKey')`,
+      )
+      .where(
+        sql`${table.purpose} = 'email_ingest'
+          AND ${table.purposeData}->>'sourceKey' IS NOT NULL`,
+      ),
     ...wsOrganizationPolicies("pending_uploads"),
+  ],
+);
+
+/**
+ * Transactional outbox for effects required by a committed email ingest.
+ * Rows are inserted beside the entity and finalized upload, then claimed only
+ * by root workers. Target deletion intentionally cascades obsolete work; actor
+ * deletion does not, so a committed entity cannot lose its remaining effects.
+ */
+export const emailIngestEffects = p.pgTable(
+  "email_ingest_effects",
+  {
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    sourceUploadId: safeUuid<"pendingUpload">("source_upload_id").notNull(),
+    entityId: safeUuid<"entity">("entity_id")
+      .notNull()
+      .references(() => entities.id, { onDelete: "cascade" }),
+    fieldId: safeUuid<"field">("field_id")
+      .notNull()
+      .references(() => fields.id, { onDelete: "cascade" }),
+    userId: p.text("user_id").$type<SafeId<"user">>().notNull(),
+    kind: p
+      .text("kind", { enum: EMAIL_INGEST_EFFECT_KINDS })
+      .$type<EmailIngestEffectKind>()
+      .notNull(),
+    fileName: p.varchar("file_name", { length: 255 }).notNull(),
+    mimeType: p.varchar("mime_type", { length: 255 }).notNull(),
+    encrypted: p.boolean("encrypted").notNull(),
+    status: p
+      .text("status", { enum: EMAIL_INGEST_EFFECT_STATUSES })
+      .$type<EmailIngestEffectStatus>()
+      .notNull()
+      .default("pending"),
+    attemptCount: p.integer("attempt_count").notNull().default(0),
+    nextAttemptAt: timestamptz("next_attempt_at").notNull().defaultNow(),
+    claimedAt: timestamptz("claimed_at"),
+    claimToken: p.uuid("claim_token"),
+    lastErrorType: p.varchar("last_error_type", { length: 128 }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    completedAt: timestamptz("completed_at"),
+  },
+  (table) => [
+    p.primaryKey({
+      columns: [table.sourceUploadId, table.entityId, table.kind],
+    }),
+    p
+      .index("email_ingest_effects_due_idx")
+      .on(table.nextAttemptAt, table.createdAt, table.entityId)
+      .where(sql`${table.status} IN ('pending', 'failed')`),
+    p
+      .index("email_ingest_effects_processing_idx")
+      .on(table.claimedAt, table.entityId)
+      .where(sql`${table.status} = 'processing'`),
+    p.check(
+      "email_ingest_effects_kind_check",
+      sql`${table.kind} IN (${sql.join(EMAIL_INGEST_EFFECT_KIND_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "email_ingest_effects_status_check",
+      sql`${table.status} IN (${sql.join(EMAIL_INGEST_EFFECT_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "email_ingest_effects_attempt_count_check",
+      sql`${table.attemptCount} >= 0`,
+    ),
+    p.check(
+      "email_ingest_effects_claim_state_check",
+      sql`(${table.status} = 'processing') = (${table.claimedAt} IS NOT NULL AND ${table.claimToken} IS NOT NULL)`,
+    ),
+    p.check(
+      "email_ingest_effects_completion_state_check",
+      sql`(${table.status} = 'completed') = (${table.completedAt} IS NOT NULL)`,
+    ),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "email_ingest_effects_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
+    p.pgPolicy("email_ingest_effects_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: sql`${workspaceCheck} AND ${organizationCheck}`,
+    }),
   ],
 );
 

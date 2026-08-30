@@ -2,10 +2,16 @@ import { Result, TaggedError, panic } from "better-result";
 
 import {
   DOCUMENT_UPLOAD_POLICY,
+  parseOutlookFinalizeResponse,
+  parseOutlookPropertiesResponse,
+  parseOutlookPropertyCreatedResponse,
+  parseOutlookPresignResponse,
+  parseOutlookReconcileResponse,
+  parseOutlookWorkspacesResponse,
+  type SafeId,
   type OutlookIngestionDiagnostic,
 } from "@stll/api-contract";
 import { toSafeId } from "@stll/api-contract/safe-id";
-import type { SafeId } from "@stll/api/types";
 
 import type {
   AbortingEmailUpload,
@@ -15,13 +21,14 @@ import type {
   ReservedEmailUpload,
   UploadingEmailUpload,
 } from "@/ingestion-state";
-import { api, withTimeout } from "@/lib/api";
-import { APIError, toAPIError } from "@/lib/api-error";
+import { requestOutlookApi } from "@/lib/api";
+import { APIError } from "@/lib/api-error";
 import { buildEmlFile } from "@/lib/eml";
 import {
   diagnosticBase,
   ingestionDiagnostic,
 } from "@/lib/ingestion-diagnostics";
+import { OutlookError } from "@/lib/outlook-error";
 import type {
   AttachmentDownloadResult,
   MailSnapshot,
@@ -39,13 +46,13 @@ const entitiesQueryKey = (workspaceId: SafeId<"workspace">) => [
   workspaceId,
 ];
 export const readWorkspaces = async (): Promise<WorkspaceSummary[]> => {
-  const response = await api.workspaces.get(withTimeout());
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-  return response.data.workspaces.map((workspace) => ({
+  const response = await requestOutlookApi({
+    parse: parseOutlookWorkspacesResponse,
+    path: "/workspaces",
+  });
+  return response.workspaces.map((workspace) => ({
     clientName: workspace.client?.displayName ?? null,
-    id: workspace.id,
+    id: toSafeId<"workspace">(workspace.id),
     lastActivityAt: workspace.lastActivityAt,
     name: workspace.name,
     reference: workspace.reference,
@@ -65,29 +72,28 @@ const sha256Hex = async (file: File): Promise<string> => {
 const ensureFileProperty = async (
   workspaceId: SafeId<"workspace">,
 ): Promise<SafeId<"property">> => {
-  const existing = await api.properties({ workspaceId }).get(withTimeout());
-  if (existing.error) {
-    throw toAPIError(existing.error);
-  }
-  const fileProperty = existing.data.find(
+  const existing = await requestOutlookApi({
+    parse: parseOutlookPropertiesResponse,
+    path: `/properties/${encodeURIComponent(workspaceId)}`,
+  });
+  const fileProperty = existing.find(
     (property) => property.content.type === "file",
   );
   if (fileProperty) {
-    return fileProperty.id;
+    return toSafeId<"property">(fileProperty.id);
   }
 
-  const created = await api.properties({ workspaceId }).put(
-    {
+  const created = await requestOutlookApi({
+    body: {
       contentType: "file",
       name: EMAIL_FILE_PROPERTY_NAME,
       toolType: "manual-input",
     },
-    withTimeout(),
-  );
-  if (created.error) {
-    throw toAPIError(created.error);
-  }
-  return created.data.id;
+    method: "PUT",
+    parse: parseOutlookPropertyCreatedResponse,
+    path: `/properties/${encodeURIComponent(workspaceId)}`,
+  });
+  return toSafeId<"property">(created.id);
 };
 
 type PendingEmailUploadIdentity = {
@@ -117,12 +123,12 @@ export const abortEmailUploadReservation = async (
   uploadId: SafeId<"pendingUpload">,
   diagnostic?: OutlookIngestionDiagnostic,
 ): Promise<void> => {
-  const aborted = await api
-    .uploads({ workspaceId })({ uploadId })
-    .abort.post(diagnostic ? { diagnostic } : {}, withTimeout());
-  if (aborted.error) {
-    throw toAPIError(aborted.error);
-  }
+  await requestOutlookApi({
+    body: diagnostic ? { diagnostic } : {},
+    method: "POST",
+    parse: () => ({ output: undefined, success: true }),
+    path: `/uploads/${encodeURIComponent(workspaceId)}/${encodeURIComponent(uploadId)}/abort`,
+  });
 };
 
 const directEmailUploadDependencies: DirectEmailUploadDependencies = {
@@ -214,15 +220,25 @@ export const reserveEmailUpload = async ({
   diagnostic: OutlookIngestionDiagnostic;
   snapshot: MailSnapshot;
   workspaceId: string;
-}): Promise<ReservedEmailUpload> => {
+}): Promise<FinalizingEmailUpload | ReservedEmailUpload> => {
   const workspaceId = toSafeId<"workspace">(workspaceIdString);
   const propertyId = await ensureFileProperty(workspaceId);
 
   const eml = await buildEmlFile({ snapshot, attachments });
   const sha256 = await sha256Hex(eml);
+  if (!snapshot.userEmail || !snapshot.sourceId) {
+    throw new OutlookError({
+      code: "source-identity-unavailable",
+      message: "Outlook source identity is unavailable.",
+    });
+  }
+  const source = {
+    mailboxEmail: snapshot.userEmail,
+    sourceId: snapshot.sourceId,
+  };
 
-  const presign = await api.uploads({ workspaceId }).presign.post(
-    {
+  const presign = await requestOutlookApi({
+    body: {
       mimeType: "message/rfc822",
       name: eml.name,
       parentId: null,
@@ -230,25 +246,38 @@ export const reserveEmailUpload = async ({
       purpose: "email_ingest",
       sha256Hex: sha256,
       size: eml.size,
+      source,
       diagnostic,
     },
-    withTimeout(),
-  );
-  if (presign.error) {
-    throw toAPIError(presign.error);
+    method: "POST",
+    parse: parseOutlookPresignResponse,
+    path: `/uploads/${encodeURIComponent(workspaceId)}/presign`,
+  });
+
+  if (presign.state === "existing") {
+    return {
+      diagnostic,
+      skippedAttachments: attachments
+        .filter((attachment) => attachment.type === "skipped")
+        .map((attachment) => attachment.reason),
+      sourceItemInstanceKey: snapshot.itemInstanceKey,
+      type: "finalizing",
+      uploadId: toSafeId<"pendingUpload">(presign.uploadId),
+      workspaceId,
+    };
   }
 
   return {
     diagnostic,
     eml,
-    headers: presign.data.headers,
+    headers: presign.headers,
     skippedAttachments: attachments
       .filter((attachment) => attachment.type === "skipped")
       .map((attachment) => attachment.reason),
     sourceItemInstanceKey: snapshot.itemInstanceKey,
     type: "reserved",
-    uploadId: presign.data.uploadId,
-    url: presign.data.url,
+    uploadId: toSafeId<"pendingUpload">(presign.uploadId),
+    url: presign.url,
     workspaceId,
   };
 };
@@ -304,28 +333,20 @@ export const finalizeEmailUpload = async ({
   uploadId,
   workspaceId,
 }: FinalizingEmailUpload): Promise<IngestEmailResult> => {
-  const finalize = await api
-    .uploads({ workspaceId })({ uploadId })
-    .finalize.post(
-      { diagnostic, queryKey: entitiesQueryKey(workspaceId) },
-      withTimeout(EMAIL_FINALIZE_TIMEOUT_MS),
-    );
-  if (finalize.error) {
-    throw toAPIError(finalize.error);
-  }
+  const finalize = await requestOutlookApi({
+    body: { diagnostic, queryKey: entitiesQueryKey(workspaceId) },
+    method: "POST",
+    parse: parseOutlookFinalizeResponse,
+    path: `/uploads/${encodeURIComponent(workspaceId)}/${encodeURIComponent(uploadId)}/finalize`,
+    timeoutMs: EMAIL_FINALIZE_TIMEOUT_MS,
+  });
 
-  const result = finalize.data.finalizedResult;
-  if (result.type !== "email_ingest") {
-    throw new APIError({
-      message: `Unexpected upload result: ${result.type}`,
-      status: 500,
-    });
-  }
+  const result = finalize.finalizedResult;
 
   return {
     attachmentCount: result.attachmentEntityIds.length,
-    entityId: result.entityId,
-    fieldId: result.fieldId,
+    entityId: toSafeId<"entity">(result.entityId),
+    fieldId: toSafeId<"field">(result.fieldId),
     skippedAttachments,
     workspaceId,
   };
@@ -341,15 +362,12 @@ export type EmailUploadReconciliation =
 export const reconcileEmailUpload = async (
   pending: PendingEmailUpload,
 ): Promise<EmailUploadReconciliation> => {
-  const response = await api
-    .uploads({ workspaceId: pending.workspaceId })({
-      uploadId: pending.uploadId,
-    })
-    .reconcile.post({ diagnostic: pending.diagnostic }, withTimeout());
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-  const reconciliation = response.data;
+  const reconciliation = await requestOutlookApi({
+    body: { diagnostic: pending.diagnostic },
+    method: "POST",
+    parse: parseOutlookReconcileResponse,
+    path: `/uploads/${encodeURIComponent(pending.workspaceId)}/${encodeURIComponent(pending.uploadId)}/reconcile`,
+  });
   switch (reconciliation.state) {
     case "reserved":
       return { state: "reserved" };
@@ -361,17 +379,11 @@ export const reconcileEmailUpload = async (
       return { reason: reconciliation.reason, state: "rejected" };
     case "complete": {
       const result = reconciliation.finalizedResult;
-      if (result.type !== "email_ingest") {
-        throw new APIError({
-          message: `Unexpected upload result: ${result.type}`,
-          status: 500,
-        });
-      }
       return {
         result: {
           attachmentCount: result.attachmentEntityIds.length,
-          entityId: result.entityId,
-          fieldId: result.fieldId,
+          entityId: toSafeId<"entity">(result.entityId),
+          fieldId: toSafeId<"field">(result.fieldId),
           skippedAttachments:
             pending.type === "aborting" ? [] : pending.skippedAttachments,
           workspaceId: pending.workspaceId,
