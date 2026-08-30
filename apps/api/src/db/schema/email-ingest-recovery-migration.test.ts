@@ -4,7 +4,7 @@ import nodePath from "node:path";
 
 const MIGRATION = nodePath.resolve(
   import.meta.dir,
-  "../../../drizzle/20260830040000_email_ingest_recovery/migration.sql",
+  "../../../drizzle/20260830120000_email_ingest_recovery/migration.sql",
 );
 
 test("creates the email-ingest recovery index outside the migration transaction", () => {
