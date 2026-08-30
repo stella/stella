@@ -120,15 +120,11 @@ const immediatelyInvokedBody = (node: ts.Node): ts.ConciseBody | null => {
 };
 
 const isAssignmentOperator = (kind: ts.SyntaxKind): boolean =>
-  kind >= ts.SyntaxKind.FirstAssignment &&
-  kind <= ts.SyntaxKind.LastAssignment;
+  kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
 
 const hasEvaluatedProcessEnvMutation = (node: ts.Node): boolean => {
   const invokedBody = immediatelyInvokedBody(node);
-  if (
-    invokedBody !== null &&
-    hasEvaluatedProcessEnvMutation(invokedBody)
-  ) {
+  if (invokedBody !== null && hasEvaluatedProcessEnvMutation(invokedBody)) {
     return true;
   }
   if (isDeferredFunction(node)) {
