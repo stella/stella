@@ -186,6 +186,7 @@ const createBilingualRun = createSafeHandler(
             ordinal: unit.ordinal,
             kind: unit.kind,
             inTable: unit.inTable,
+            tableLayout: unit.tableLayout,
             disposition,
             dispositionOrigin: "user" as const,
             sourceParaId: unit.sourceParaId,

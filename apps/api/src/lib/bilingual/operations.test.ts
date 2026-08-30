@@ -229,6 +229,7 @@ describe("buildOperations applied to a bilingual document", () => {
         ordinal: unit.ordinal,
         kind: unit.kind,
         inTable: unit.inTable,
+        tableLayout: unit.tableLayout,
         sourceParaId: unit.sourceParaId,
         sourceText: unit.sourceText,
         disposition,
@@ -312,6 +313,20 @@ describe("buildOperations applied to a bilingual document", () => {
         preserveFormatting: true,
       },
     ]);
+    expect(
+      buildOperations(
+        [{ ...rows[0], sourceParaId: null }],
+        new Map([[label.rowId, "Nombre:"]]),
+      ),
+    ).toEqual([
+      {
+        id: "bilingual-1",
+        type: "replaceBlock",
+        blockId: label.rowId,
+        text: "Nombre:",
+        preserveFormatting: true,
+      },
+    ]);
 
     const formatted = await extractFormattedBilingualUnits(
       bilingual.buffer,
@@ -353,6 +368,7 @@ describe("buildOperations applied to a bilingual document", () => {
       ordinal: 1,
       kind: "paragraph",
       inTable: false,
+      tableLayout: null,
       sourceParaId: "left",
       sourceText: "Podpis:",
       disposition: "inline",
@@ -666,6 +682,7 @@ describe("buildOperations applied to a bilingual document", () => {
         kind: unit.kind,
         ordinal: unit.ordinal,
         rowId: unit.rowId,
+        tableLayout: unit.tableLayout,
         sourceParaId: unit.sourceParaId,
         sourceText: unit.sourceText,
         status: "pending",

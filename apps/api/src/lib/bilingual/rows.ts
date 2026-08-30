@@ -13,6 +13,7 @@ import type {
   BilingualGlossaryEntry,
   BilingualRowDisposition,
   BilingualRowKind,
+  BilingualTableLayout,
 } from "@/api/lib/bilingual/contract";
 
 /** One translatable unit as the pipeline sees it, flattened from folio's
@@ -22,6 +23,7 @@ export type BilingualUnit = {
   ordinal: number;
   kind: BilingualRowKind;
   inTable: boolean;
+  tableLayout: BilingualTableLayout | null;
   sourceParaId: string | null;
   sourceText: string;
 };
@@ -34,11 +36,8 @@ export type DispositionedUnit = BilingualUnit & {
 /** Stacked table rows keep distinct source and target paragraphs. Folio's
  * inline table layout addresses the source paragraph itself. */
 export const hasSeparateTableTarget = (
-  unit: Pick<BilingualUnit, "inTable" | "rowId" | "sourceParaId">,
-): boolean =>
-  unit.inTable &&
-  unit.sourceParaId !== null &&
-  unit.sourceParaId !== unit.rowId;
+  unit: Pick<BilingualUnit, "tableLayout">,
+): boolean => unit.tableLayout === "stacked";
 
 /** Flatten folio's manifest into units; rows without a usable handle or text
  *  beyond the limit are dropped, which the caller reports as a warning. */
@@ -68,6 +67,7 @@ export const flattenBilingualRows = (
               rowId: paragraph.paraId,
               kind: "table",
               inTable: true,
+              tableLayout: row.layout,
               sourceParaId: paragraph.paraId,
               sourceText: paragraph.sourceText,
             });
@@ -83,6 +83,7 @@ export const flattenBilingualRows = (
               rowId: paragraph.targetParaId,
               kind: "table",
               inTable: true,
+              tableLayout: row.layout,
               sourceParaId: paragraph.sourceParaId ?? null,
               sourceText: paragraph.sourceText,
             });
@@ -100,6 +101,7 @@ export const flattenBilingualRows = (
       rowId: row.rowId,
       kind: row.kind,
       inTable: false,
+      tableLayout: null,
       sourceParaId: row.sourceParaId ?? null,
       sourceText: row.sourceText,
     });

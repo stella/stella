@@ -8,6 +8,7 @@ import {
   BILINGUAL_RUN_ACTIVE_STATUSES,
   BILINGUAL_RUN_ERROR_CODES,
   BILINGUAL_RUN_STATUSES,
+  BILINGUAL_TABLE_LAYOUTS,
 } from "@/api/lib/bilingual/contract";
 import type {
   BilingualGlossaryEntry,
@@ -41,6 +42,7 @@ const ROW_DISPOSITION_SQL_VALUES = quoted(BILINGUAL_ROW_DISPOSITIONS);
 const ROW_ORIGIN_SQL_VALUES = quoted(BILINGUAL_DISPOSITION_ORIGINS);
 const ROW_KIND_SQL_VALUES = quoted(BILINGUAL_ROW_KINDS);
 const ROW_STATUS_SQL_VALUES = quoted(BILINGUAL_ROW_STATUSES);
+const TABLE_LAYOUT_SQL_VALUES = quoted(BILINGUAL_TABLE_LAYOUTS);
 
 /**
  * One translation of a bilingual document (a two-column table laid out by
@@ -152,6 +154,9 @@ export const bilingualTranslationRows = p.pgTable(
     kind: p.text("kind", { enum: BILINGUAL_ROW_KINDS }).notNull(),
     // A paragraph inside a kept (spanning) table has no right-column copy.
     inTable: p.boolean("in_table").notNull().default(false),
+    // Null identifies non-table rows and inline rows created before this
+    // discriminator was persisted.
+    tableLayout: p.text("table_layout", { enum: BILINGUAL_TABLE_LAYOUTS }),
     disposition: p
       .text("disposition", { enum: BILINGUAL_ROW_DISPOSITIONS })
       .notNull(),
@@ -195,6 +200,10 @@ export const bilingualTranslationRows = p.pgTable(
     p.check(
       "bilingual_translation_rows_status_values_check",
       sql`${table.status} IN (${ROW_STATUS_SQL_VALUES})`,
+    ),
+    p.check(
+      "bilingual_translation_rows_table_layout_values_check",
+      sql`${table.tableLayout} IS NULL OR ${table.tableLayout} IN (${TABLE_LAYOUT_SQL_VALUES})`,
     ),
     p
       .foreignKey({

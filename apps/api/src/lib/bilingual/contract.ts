@@ -130,6 +130,10 @@ export const BILINGUAL_LIMITS = {
   dispositionChunk: 160,
 } as const;
 
+export const BILINGUAL_TABLE_LAYOUTS = ["inline", "stacked"] as const;
+export type BilingualTableLayout = (typeof BILINGUAL_TABLE_LAYOUTS)[number];
+
 /** Source tables stay intact; their translations use a separate full-width
  * target table so legal forms are never squeezed into half-page columns. */
-export const BILINGUAL_TABLE_LAYOUT = "stacked" as const;
+export const BILINGUAL_TABLE_LAYOUT =
+  "stacked" as const satisfies BilingualTableLayout;
