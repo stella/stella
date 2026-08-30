@@ -150,7 +150,7 @@ const seedWork = async (work: SeedWork) => {
 const entityIdOf = (label: string) =>
   seeded.get(label) ?? expect.unreachable(`missing fixture row: ${label}`);
 
-const queueEntityIds = async (queue: MyWorkQueue) => {
+const queueEntityIds = async (queue?: MyWorkQueue) => {
   const scopedDb = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
   const safeDb = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
   const page = await myWork.handler(
@@ -159,7 +159,7 @@ const queueEntityIds = async (queue: MyWorkQueue) => {
       getAccessibleWorkspaces: async () => [{ id: ids.wsA1, status: "active" }],
       getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" }),
       memberRole: { role: "owner" },
-      query: { queue, asOf: AS_OF, limit: 100 },
+      query: { ...(queue && { queue }), asOf: AS_OF, limit: 100 },
       request: new Request("https://example.test/my-work"),
       route: "/test/my-work",
       safeDb,
@@ -170,7 +170,7 @@ const queueEntityIds = async (queue: MyWorkQueue) => {
   );
   if (!("items" in page)) {
     return expect.unreachable(
-      `my work ${queue} failed: ${JSON.stringify(page)}`,
+      `my work ${queue ?? "default"} failed: ${JSON.stringify(page)}`,
     );
   }
   return new Set(
@@ -233,6 +233,15 @@ describe("my work queues", () => {
     const openRows = [...inbox, ...upcoming, ...atRisk];
     expect(new Set(openRows).size).toBe(openRows.length);
     expect(openRows).toHaveLength(7);
+  });
+
+  test("an unnamed queue answers with the inbox", async () => {
+    expect(await queueEntityIds()).toEqual(
+      new Set([
+        entityIdOf("awaiting, no dates"),
+        entityIdOf("awaiting, working target in the future"),
+      ]),
+    );
   });
 
   test("completed work leaves the open queues", async () => {

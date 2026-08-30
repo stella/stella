@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -20,6 +21,7 @@ import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import type { AgendaItemKind } from "@/api/lib/entity-constants";
 import {
   AGENDA_ITEM_KINDS,
@@ -34,6 +36,7 @@ import {
   type TaskDeploymentFeatures,
 } from "@/api/lib/tasks/deployment-features";
 import { includes } from "@/api/lib/type-guards";
+import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 
@@ -236,6 +239,134 @@ type LockedWorkObligation = NonNullable<
   Awaited<ReturnType<typeof lockWorkObligation>>
 >;
 
+/**
+ * Only work nobody has taken up is still trivially derivable from the task
+ * itself. An owned, acknowledged or closed obligation carries accountability
+ * history that dropping the row would destroy.
+ */
+const isUnclaimedWorkObligation = (workflow: LockedWorkObligation): boolean =>
+  workflow.status === WORK_OBLIGATION_STATUS.UNASSIGNED &&
+  workflow.acknowledgedAt === null &&
+  workflow.ownerUserId === null;
+
+type ListItemTypeTransition =
+  | { type: "removes_obligation"; workflow: LockedWorkObligation }
+  | { type: "adds_obligation" }
+  | { type: "none" };
+
+type ListItemTypeTransitionOptions = {
+  entityId: SafeId<"entity">;
+  governedWorkflow: boolean;
+  nextListItemType: ListItemType | null;
+  tx: Transaction;
+  workflow: LockedWorkObligation | undefined;
+  workspaceId: SafeId<"workspace">;
+};
+
+/**
+ * The list discriminator decides whether a row may carry governed work at all,
+ * so a change across that boundary has to add or drop the sidecar in the same
+ * transaction: otherwise the row keeps a live obligation nothing surfaces, or
+ * stays actionable but ungoverned until the backfill sweep reaches it.
+ *
+ * The stored discriminator is read under the lock the update itself takes, so
+ * the value the decision moves away from is the one being written over. A
+ * read-only or missing task yields no row and no transition: the update matches
+ * nothing and the caller gets that answer instead.
+ */
+const listItemTypeTransition = async ({
+  entityId,
+  governedWorkflow,
+  nextListItemType,
+  tx,
+  workflow,
+  workspaceId,
+}: ListItemTypeTransitionOptions): Promise<ListItemTypeTransition> => {
+  if (nextListItemType === null) {
+    return { type: "none" };
+  }
+
+  const currentTasks = await tx
+    .select({ listItemType: entities.listItemType })
+    .from(entities)
+    .where(
+      and(
+        eq(entities.id, entityId),
+        eq(entities.workspaceId, workspaceId),
+        eq(entities.kind, "task"),
+        eq(entities.readOnly, false),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  const currentTask = currentTasks.at(0);
+  const nextEligible = isWorkObligationEligible(nextListItemType);
+  if (
+    !currentTask ||
+    isWorkObligationEligible(currentTask.listItemType) === nextEligible
+  ) {
+    return { type: "none" };
+  }
+
+  if (!nextEligible) {
+    return workflow
+      ? { type: "removes_obligation", workflow }
+      : { type: "none" };
+  }
+  return governedWorkflow && !workflow
+    ? { type: "adds_obligation" }
+    : { type: "none" };
+};
+
+type ApplyListItemTypeTransitionOptions = {
+  entityId: SafeId<"entity">;
+  recordAuditEvent: AuditRecorder;
+  transition: ListItemTypeTransition;
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+};
+
+const applyListItemTypeTransition = async ({
+  entityId,
+  recordAuditEvent,
+  transition,
+  tx,
+  workspaceId,
+}: ApplyListItemTypeTransitionOptions): Promise<void> => {
+  switch (transition.type) {
+    case "removes_obligation": {
+      await tx
+        .delete(workObligations)
+        .where(
+          and(
+            eq(workObligations.entityId, entityId),
+            eq(workObligations.workspaceId, workspaceId),
+          ),
+        );
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.DELETE,
+        resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+        resourceId: entityId,
+        metadata: { cause: "list_item_type_change" },
+      });
+      return;
+    }
+    case "adds_obligation": {
+      // Runs after the entity update: the bridge derives the obligation from
+      // the stored row, which only becomes eligible once the new discriminator
+      // is written.
+      await ensureLegacyWorkObligation({ tx, entityId, workspaceId });
+      return;
+    }
+    case "none":
+      return;
+    default: {
+      const exhaustive: never = transition;
+      return exhaustive;
+    }
+  }
+};
+
 type ResolveWorkflowStatusTransitionOptions = {
   governedWorkflow: boolean;
   requestedStatus: string | undefined;
@@ -366,12 +497,21 @@ export const updateTaskHandler = async function* ({
         body.dueDate !== undefined ||
         agendaKind === "task" ||
         agendaKind === "deadline";
-      let workflow = workflowRelevant
-        ? await lockWorkObligation(tx, {
-            entityId: body.taskId,
-            workspaceId,
-          })
-        : undefined;
+      const changesListItemType = listItemType !== null;
+      if (changesListItemType) {
+        // The workspace row before the obligation, then the entity: the order
+        // `lockWorkspacesForEntityCap`, the governed update path and the legacy
+        // bridge already agree on, so a discriminator change cannot deadlock
+        // against any of them.
+        await lockWorkspacesForEntityCap(tx, [workspaceId]);
+      }
+      let workflow =
+        workflowRelevant || changesListItemType
+          ? await lockWorkObligation(tx, {
+              entityId: body.taskId,
+              workspaceId,
+            })
+          : undefined;
       if (features.governedWorkflow && workflowRelevant && !workflow) {
         await ensureLegacyWorkObligation({
           tx,
@@ -392,12 +532,31 @@ export const updateTaskHandler = async function* ({
         });
       }
 
+      const eligibility = await listItemTypeTransition({
+        entityId: body.taskId,
+        governedWorkflow: features.governedWorkflow,
+        nextListItemType: listItemType,
+        tx,
+        workflow,
+        workspaceId,
+      });
+      if (
+        eligibility.type === "removes_obligation" &&
+        !isUnclaimedWorkObligation(eligibility.workflow)
+      ) {
+        throw new HandlerError({
+          status: 409,
+          message:
+            "Governed work must be unassigned and removed before this row can become reference material",
+        });
+      }
+
       const workflowSet: Partial<typeof workObligations.$inferInsert> = {};
       const workflowEvents: (typeof workObligationEvents.$inferInsert)[] = [];
       const workflowChanges: FieldDiffs = {};
       const now = new Date();
 
-      if (workflow) {
+      if (workflow && eligibility.type !== "removes_obligation") {
         const updatesLegacyDeadline =
           body.dueDate !== undefined &&
           (agendaKind === "deadline" ||
@@ -576,6 +735,15 @@ export const updateTaskHandler = async function* ({
             ...(workflowReason ? { metadata: { reason: workflowReason } } : {}),
           });
         }
+
+        await applyListItemTypeTransition({
+          entityId: body.taskId,
+          recordAuditEvent,
+          transition: eligibility,
+          tx,
+          workspaceId,
+        });
+
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
