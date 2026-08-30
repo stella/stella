@@ -13,10 +13,9 @@ export const rootKeys = {
  * at before anything renders. The QueryClient sets no `retry`, i.e. the
  * TanStack default of 3 attempts with exponential backoff — which would turn
  * one stalled connection into roughly four auth-request budgets plus backoff
- * before `beforeLoad` settles. On the boot path, failing fast and letting the
- * caller degrade (redirect to `/auth`, or mount chrome without role-gated
- * affordances) beats a minute-long pending component. Retries stay on for
- * everything downstream of boot.
+ * before `beforeLoad` settles. On the boot path, failing fast into the route
+ * error boundary's bounded recovery beats a minute-long pending component.
+ * Retries stay on for everything downstream of boot.
  */
 const BOOT_QUERY_RETRY = false;
 

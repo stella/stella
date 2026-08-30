@@ -1,4 +1,5 @@
 import { APIError } from "@/lib/errors/api";
+import { AuthClientError } from "@/lib/errors/auth";
 import { CriticalQueryTimeoutError } from "@/lib/react-query";
 
 /** Network errors that indicate a transient connectivity
@@ -123,7 +124,7 @@ export const isNetworkError = (error: unknown): boolean => {
   if (CriticalQueryTimeoutError.is(error)) {
     return true;
   }
-  if (APIError.is(error)) {
+  if (APIError.is(error) || AuthClientError.is(error)) {
     return error.status === 0;
   }
   return (

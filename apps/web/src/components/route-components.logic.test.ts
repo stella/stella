@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { APIError } from "@/lib/errors/api";
+import { AuthClientError } from "@/lib/errors/auth";
 import { CriticalQueryTimeoutError } from "@/lib/react-query";
 
 import {
@@ -93,12 +94,21 @@ describe("route network error classification", () => {
     expect(isNetworkError(new TypeError("Load failed"))).toBe(true);
   });
 
-  test("treats APIError status 0 as transient network failure", () => {
+  test("treats status 0 API and auth errors as transient network failures", () => {
     expect(
       isNetworkError(
         new APIError({
           status: 0,
           message: "Storage fetch failed before response (purpose=display)",
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isNetworkError(
+        new AuthClientError({
+          message: "Unknown error",
+          status: 0,
+          statusText: "",
         }),
       ),
     ).toBe(true);
