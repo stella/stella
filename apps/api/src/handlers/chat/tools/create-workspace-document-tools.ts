@@ -73,6 +73,7 @@ type CreateWorkspaceDocumentToolsProps = {
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
   refRegistry: ChatRefRegistry;
+  createEntityFromBuffer?: typeof createEntityFromBuffer;
 };
 
 const toChatToolError = (
@@ -135,6 +136,7 @@ export const createCreateWorkspaceDocumentTools = ({
   workspaceId,
   recordAuditEvent,
   refRegistry,
+  createEntityFromBuffer: createEntity = createEntityFromBuffer,
 }: CreateWorkspaceDocumentToolsProps) => ({
   [CREATE_WORKSPACE_DOCUMENT_TOOL_NAME]: toolDefinition({
     name: CREATE_WORKSPACE_DOCUMENT_TOOL_NAME,
@@ -187,7 +189,7 @@ export const createCreateWorkspaceDocumentTools = ({
       `${trimmedTitle}.docx`,
     );
 
-    const created = await createEntityFromBuffer({
+    const created = await createEntity({
       scopedDb,
       organizationId,
       workspaceId,

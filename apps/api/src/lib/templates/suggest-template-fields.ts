@@ -100,18 +100,23 @@ export const suggestTemplateFields = async ({
   orgAIConfig,
   organizationId,
   aiAnalytics,
+  generateObjectForRole,
 }: {
   documentText: string;
   instructions?: string | undefined;
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
   aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
+  /** External model-dispatch boundary; supplied by focused integration tests. */
+  generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
 }): Promise<SuggestedTemplateField[]> => {
   // No try/catch here: a call failure (BYOK misconfiguration, provider
   // outage, timeout) propagates to the caller, which decides whether to
   // surface it (suggest-fields.ts) or degrade to [] after capturing it
   // (prepare.ts) — see the module doc comment.
-  const { suggestions } = await generateTanStackObjectForRole({
+  const { suggestions } = await (
+    generateObjectForRole ?? generateTanStackObjectForRole
+  )({
     role: "fast",
     orgAIConfig,
     organizationId,

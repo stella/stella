@@ -65,278 +65,299 @@ const config = {
   body: translateBody,
 } satisfies HandlerConfig;
 
-const translateEntity = createSafeHandler(
-  config,
-  async function* ({
-    safeDb,
-    scopedDb,
-    session,
-    workspaceId,
-    user,
-    body,
-    recordAuditEvent,
-  }) {
-    // 1. Resolve the org's DeepL key.
-    const settingsRow = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.organizationSettings.findFirst({
-          where: { organizationId: { eq: session.activeOrganizationId } },
-          columns: {
-            deeplApiKeyEncrypted: true,
-            deeplApiKeyIv: true,
-          },
-        }),
-      ),
-    );
+type TranslateDependencies = {
+  createEntityFromBuffer: typeof createEntityFromBuffer;
+  getScanWarnings: typeof getScanWarnings;
+  scanFile: typeof scanFile;
+  translateDocument: typeof translateDocument;
+};
 
-    const ciphertext = settingsRow?.deeplApiKeyEncrypted;
-    const iv = settingsRow?.deeplApiKeyIv;
-    if (!ciphertext || !iv) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message:
-            "DeepL is not configured for this organisation. Add an API key in settings.",
-        }),
-      );
-    }
+const DEFAULT_TRANSLATE_DEPENDENCIES: TranslateDependencies = {
+  createEntityFromBuffer,
+  getScanWarnings,
+  scanFile,
+  translateDocument,
+};
 
-    const apiKey = await decryptContent(
-      session.activeOrganizationId,
-      ciphertext,
-      iv,
-    );
-
-    // 2. Look up the source field, scoped to this workspace.
-    const fileRows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({ content: fields.content })
-          .from(fields)
-          .innerJoin(
-            entityVersions,
-            and(
-              eq(fields.entityVersionId, entityVersions.id),
-              isNull(entityVersions.deletedAt),
-            ),
-          )
-          .innerJoin(
-            entities,
-            and(
-              eq(entityVersions.entityId, entities.id),
-              eq(entities.workspaceId, workspaceId),
-            ),
-          )
-          .where(eq(fields.id, body.fieldId))
-          .limit(1),
-      ),
-    );
-
-    const fileRow = fileRows.at(0);
-    if (!fileRow) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Source field not found" }),
-      );
-    }
-
-    if (fileRow.content.type !== "file") {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Field is not a file field",
-        }),
-      );
-    }
-
-    const sourceContent = fileRow.content;
-
-    if (sourceContent.encrypted) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Encrypted files cannot be translated",
-        }),
-      );
-    }
-
-    if (!isDocumentTranslationDeepLSupportedMimeType(sourceContent.mimeType)) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: `DeepL does not support ${sourceContent.mimeType}`,
-        }),
-      );
-    }
-
-    // 3. Fetch source bytes through a presigned GET to avoid Bun's leaking
-    // native S3 download path.
-    const sourceKey = createFileKey({
-      organizationId: session.activeOrganizationId,
+export const createTranslateEntity = (
+  dependencies: TranslateDependencies = DEFAULT_TRANSLATE_DEPENDENCIES,
+) =>
+  createSafeHandler(
+    config,
+    async function* ({
+      safeDb,
+      scopedDb,
+      session,
       workspaceId,
-      fileId: sourceContent.id,
-      mimeType: sourceContent.mimeType,
-    });
-
-    const sourceBytesResult = await Result.tryPromise({
-      try: async () => new Uint8Array(await readS3ArrayBuffer(sourceKey)),
-      catch: (error: unknown) => error,
-    });
-
-    if (sourceBytesResult.isErr()) {
-      captureError(sourceBytesResult.error);
-      return Result.err(
-        new HandlerError({
-          status: 502,
-          message: "Could not fetch the source file from storage",
-        }),
+      user,
+      body,
+      recordAuditEvent,
+    }) {
+      // 1. Resolve the org's DeepL key.
+      const settingsRow = yield* Result.await(
+        safeDb((tx) =>
+          tx.query.organizationSettings.findFirst({
+            where: { organizationId: { eq: session.activeOrganizationId } },
+            columns: {
+              deeplApiKeyEncrypted: true,
+              deeplApiKeyIv: true,
+            },
+          }),
+        ),
       );
-    }
 
-    const sourceBytes = sourceBytesResult.value;
-
-    // 4. Translate via DeepL.
-    const translationResult = await Result.tryPromise({
-      try: async () =>
-        await translateDocument({
-          apiKey,
-          file: sourceBytes,
-          fileName: sourceContent.fileName,
-          mimeType: sourceContent.mimeType,
-          targetLang: body.targetLang,
-          sourceLang: body.sourceLang,
-          // Pass `undefined` through when omitted so translateDocument applies
-          // its documented `prefer_more` default (legal register), which the
-          // translate dialog relies on. Do not default to "default" here.
-          formality: body.formality,
-        }),
-      catch: (error: unknown) => error,
-    });
-
-    if (translationResult.isErr()) {
-      const error = translationResult.error;
-      if (DeepLAuthError.is(error)) {
+      const ciphertext = settingsRow?.deeplApiKeyEncrypted;
+      const iv = settingsRow?.deeplApiKeyIv;
+      if (!ciphertext || !iv) {
         return Result.err(
           new HandlerError({
-            code: TRANSLATION_ERROR_CODE.deeplKeyRejected,
             status: 400,
             message:
-              "Stored DeepL key was rejected. Please rotate it in settings.",
+              "DeepL is not configured for this organisation. Add an API key in settings.",
           }),
         );
       }
-      if (DeepLQuotaError.is(error)) {
+
+      const apiKey = await decryptContent(
+        session.activeOrganizationId,
+        ciphertext,
+        iv,
+      );
+
+      // 2. Look up the source field, scoped to this workspace.
+      const fileRows = yield* Result.await(
+        safeDb((tx) =>
+          tx
+            .select({ content: fields.content })
+            .from(fields)
+            .innerJoin(
+              entityVersions,
+              and(
+                eq(fields.entityVersionId, entityVersions.id),
+                isNull(entityVersions.deletedAt),
+              ),
+            )
+            .innerJoin(
+              entities,
+              and(
+                eq(entityVersions.entityId, entities.id),
+                eq(entities.workspaceId, workspaceId),
+              ),
+            )
+            .where(eq(fields.id, body.fieldId))
+            .limit(1),
+        ),
+      );
+
+      const fileRow = fileRows.at(0);
+      if (!fileRow) {
+        return Result.err(
+          new HandlerError({ status: 404, message: "Source field not found" }),
+        );
+      }
+
+      if (fileRow.content.type !== "file") {
         return Result.err(
           new HandlerError({
-            code: TRANSLATION_ERROR_CODE.deeplQuotaExceeded,
-            status: 402,
-            message: "DeepL character quota exceeded for this organisation",
+            status: 400,
+            message: "Field is not a file field",
           }),
         );
       }
-      if (DeepLRateLimitError.is(error)) {
+
+      const sourceContent = fileRow.content;
+
+      if (sourceContent.encrypted) {
         return Result.err(
           new HandlerError({
-            status: 429,
-            message: "DeepL rate limit hit. Try again shortly.",
+            status: 400,
+            message: "Encrypted files cannot be translated",
           }),
         );
       }
-      if (DeepLTimeoutError.is(error)) {
+
+      if (
+        !isDocumentTranslationDeepLSupportedMimeType(sourceContent.mimeType)
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: `DeepL does not support ${sourceContent.mimeType}`,
+          }),
+        );
+      }
+
+      // 3. Fetch source bytes through a presigned GET to avoid Bun's leaking
+      // native S3 download path.
+      const sourceKey = createFileKey({
+        organizationId: session.activeOrganizationId,
+        workspaceId,
+        fileId: sourceContent.id,
+        mimeType: sourceContent.mimeType,
+      });
+
+      const sourceBytesResult = await Result.tryPromise({
+        try: async () => new Uint8Array(await readS3ArrayBuffer(sourceKey)),
+        catch: (error: unknown) => error,
+      });
+
+      if (sourceBytesResult.isErr()) {
+        captureError(sourceBytesResult.error);
         return Result.err(
           new HandlerError({
             status: 502,
-            message: "DeepL did not finish translating in time",
+            message: "Could not fetch the source file from storage",
           }),
         );
       }
-      if (DeepLDocumentError.is(error)) {
+
+      const sourceBytes = sourceBytesResult.value;
+
+      // 4. Translate via DeepL.
+      const translationResult = await Result.tryPromise({
+        try: async () =>
+          await dependencies.translateDocument({
+            apiKey,
+            file: sourceBytes,
+            fileName: sourceContent.fileName,
+            mimeType: sourceContent.mimeType,
+            targetLang: body.targetLang,
+            sourceLang: body.sourceLang,
+            // Pass `undefined` through when omitted so translateDocument applies
+            // its documented `prefer_more` default (legal register), which the
+            // translate dialog relies on. Do not default to "default" here.
+            formality: body.formality,
+          }),
+        catch: (error: unknown) => error,
+      });
+
+      if (translationResult.isErr()) {
+        const error = translationResult.error;
+        if (DeepLAuthError.is(error)) {
+          return Result.err(
+            new HandlerError({
+              code: TRANSLATION_ERROR_CODE.deeplKeyRejected,
+              status: 400,
+              message:
+                "Stored DeepL key was rejected. Please rotate it in settings.",
+            }),
+          );
+        }
+        if (DeepLQuotaError.is(error)) {
+          return Result.err(
+            new HandlerError({
+              code: TRANSLATION_ERROR_CODE.deeplQuotaExceeded,
+              status: 402,
+              message: "DeepL character quota exceeded for this organisation",
+            }),
+          );
+        }
+        if (DeepLRateLimitError.is(error)) {
+          return Result.err(
+            new HandlerError({
+              status: 429,
+              message: "DeepL rate limit hit. Try again shortly.",
+            }),
+          );
+        }
+        if (DeepLTimeoutError.is(error)) {
+          return Result.err(
+            new HandlerError({
+              status: 502,
+              message: "DeepL did not finish translating in time",
+            }),
+          );
+        }
+        if (DeepLDocumentError.is(error)) {
+          return Result.err(
+            new HandlerError({
+              status: 422,
+              message: error.detail ?? "DeepL could not translate the document",
+            }),
+          );
+        }
+        if (DeepLUpstreamError.is(error)) {
+          captureError(error);
+          return Result.err(
+            new HandlerError({
+              status: 502,
+              message: "DeepL request failed",
+            }),
+          );
+        }
+        throw error;
+      }
+
+      const translation = translationResult.value;
+      const translatedOutput = resolveTranslatedOutput({
+        sourceFileName: sourceContent.fileName,
+        sourceMimeType: sourceContent.mimeType,
+        targetLang: body.targetLang,
+      });
+      const scanResult = await dependencies.scanFile({
+        buffer: translation.bytes,
+        declaredMimeType: translatedOutput.mimeType,
+        fileName: translatedOutput.fileName,
+      });
+
+      if (Result.isError(scanResult)) {
+        captureError(scanResult.error, {
+          mimeType: translatedOutput.mimeType,
+          source: "deepl-document-translation",
+        });
         return Result.err(
           new HandlerError({
             status: 422,
-            message: error.detail ?? "DeepL could not translate the document",
+            message: "Translated file security scan failed",
           }),
         );
       }
-      if (DeepLUpstreamError.is(error)) {
-        captureError(error);
+
+      if (scanResult.value.verdict === "reject") {
+        const reasons = scanResult.value.findings.flatMap((finding) =>
+          finding.severity === "reject" ? [finding.message] : [],
+        );
         return Result.err(
           new HandlerError({
-            status: 502,
-            message: "DeepL request failed",
+            status: 422,
+            message: `Translated file rejected: ${reasons.join("; ")}`,
           }),
         );
       }
-      throw error;
-    }
 
-    const translation = translationResult.value;
-    const translatedOutput = resolveTranslatedOutput({
-      sourceFileName: sourceContent.fileName,
-      sourceMimeType: sourceContent.mimeType,
-      targetLang: body.targetLang,
-    });
-    const scanResult = await scanFile({
-      buffer: translation.bytes,
-      declaredMimeType: translatedOutput.mimeType,
-      fileName: translatedOutput.fileName,
-    });
+      const scanWarnings =
+        dependencies.getScanWarnings(scanResult.value) ?? undefined;
 
-    if (Result.isError(scanResult)) {
-      captureError(scanResult.error, {
+      // 5. Write the result back as a new entity.
+      const createResult = await dependencies.createEntityFromBuffer({
+        scopedDb,
+        organizationId: session.activeOrganizationId,
+        workspaceId,
+        userId: user.id,
+        recordAuditEvent,
+        buffer: translation.bytes,
+        fileName: translatedOutput.fileName,
         mimeType: translatedOutput.mimeType,
-        source: "deepl-document-translation",
+        scanWarnings,
       });
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "Translated file security scan failed",
-        }),
-      );
-    }
 
-    if (scanResult.value.verdict === "reject") {
-      const reasons = scanResult.value.findings.flatMap((finding) =>
-        finding.severity === "reject" ? [finding.message] : [],
-      );
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: `Translated file rejected: ${reasons.join("; ")}`,
-        }),
-      );
-    }
+      if (Result.isError(createResult)) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: createResult.error.message,
+          }),
+        );
+      }
 
-    const scanWarnings = getScanWarnings(scanResult.value) ?? undefined;
+      return Result.ok({
+        entityId: createResult.value.entityId,
+        fieldId: createResult.value.fieldId,
+        fileName: createResult.value.fileName,
+        billedCharacters: translation.billedCharacters,
+      });
+    },
+  );
 
-    // 5. Write the result back as a new entity.
-    const createResult = await createEntityFromBuffer({
-      scopedDb,
-      organizationId: session.activeOrganizationId,
-      workspaceId,
-      userId: user.id,
-      recordAuditEvent,
-      buffer: translation.bytes,
-      fileName: translatedOutput.fileName,
-      mimeType: translatedOutput.mimeType,
-      scanWarnings,
-    });
-
-    if (Result.isError(createResult)) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: createResult.error.message,
-        }),
-      );
-    }
-
-    return Result.ok({
-      entityId: createResult.value.entityId,
-      fieldId: createResult.value.fieldId,
-      fileName: createResult.value.fileName,
-      billedCharacters: translation.billedCharacters,
-    });
-  },
-);
-
+const translateEntity = createTranslateEntity();
 export default translateEntity;

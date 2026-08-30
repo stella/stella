@@ -4,14 +4,21 @@ import { describe, expect, mock, test } from "bun:test";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CreateStoredTemplateOptions } from "@/api/lib/templates/create-template";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-// The real `createStoredTemplate` cannot be exercised here: the MCP template
-// tools test mocks its module, and Bun's `mock.module` poisons the module for
-// the whole test process regardless of file order. Test the handler at the
-// service seam instead — the manifest-fidelity regression this file guards
-// (verbatim registry manifest, no discovery merge) lives entirely in what the
-// handler PASSES to the service.
+import {
+  DD_REPORT_KEY,
+  DD_REPORT_MANIFEST,
+  getBuiltinReportTemplate,
+  initBuiltinReportTemplates,
+} from "./builtin-templates";
+import { createCloneBuiltinReportTemplate } from "./clone-builtin";
+import type { CloneBuiltinReportTemplateDependencies } from "./clone-builtin";
+
+// The manifest-fidelity regression this file guards (verbatim registry
+// manifest, no discovery merge) lives entirely in what the handler passes to
+// the storage service, so exercise it through the injected service seam.
 const capturedOptions: CreateStoredTemplateOptions[] = [];
 const createStoredTemplateMock = mock(function* (
   options: CreateStoredTemplateOptions,
@@ -27,17 +34,11 @@ const createStoredTemplateMock = mock(function* (
   });
 });
 
-void mock.module("@/api/lib/templates/create-template", () => ({
-  createStoredTemplate: createStoredTemplateMock,
-}));
-
-const { default: cloneBuiltinReportTemplate } = await import("./clone-builtin");
-const {
-  DD_REPORT_KEY,
-  DD_REPORT_MANIFEST,
-  getBuiltinReportTemplate,
-  initBuiltinReportTemplates,
-} = await import("./builtin-templates");
+const cloneBuiltinReportTemplate = createCloneBuiltinReportTemplate({
+  createStoredTemplate: asTestRaw<
+    CloneBuiltinReportTemplateDependencies["createStoredTemplate"]
+  >(createStoredTemplateMock),
+});
 await initBuiltinReportTemplates();
 
 const workspaceId = toSafeId<"workspace">("workspace_1");

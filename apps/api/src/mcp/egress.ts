@@ -49,30 +49,48 @@ type FinalizeToolEgressOptions<TResponse extends McpToolResponse> = {
   response: TResponse;
 };
 
+type EgressDependencies = {
+  /** Provider boundary for anonymizing tenant-authored text. */
+  anonymizeTextFields?: typeof anonymizeTextFields | undefined;
+};
+
 export function finalizeToolEgress<TData>(
   options: FinalizeToolEgressOptions<TypedMcpToolResponse<TData>>,
+  dependencies?: EgressDependencies,
 ): Promise<InternalToolResult<TData>>;
 export function finalizeToolEgress(
   options: FinalizeToolEgressOptions<McpToolResponse>,
+  dependencies?: EgressDependencies,
 ): Promise<InternalToolResult>;
-export async function finalizeToolEgress({
-  context,
-  mode,
-  response,
-}: FinalizeToolEgressOptions<McpToolResponse>): Promise<InternalToolResult> {
+export async function finalizeToolEgress(
+  { context, mode, response }: FinalizeToolEgressOptions<McpToolResponse>,
+  {
+    anonymizeTextFields: anonymize = anonymizeTextFields,
+  }: EgressDependencies = {},
+): Promise<InternalToolResult> {
   if (!isMcpEgressPlan(response)) {
     return response;
   }
 
   if (response.egress === "compatSearch") {
-    return await finalizeCompatSearch({ context, mode, plan: response });
+    return await finalizeCompatSearch({
+      anonymize,
+      context,
+      mode,
+      plan: response,
+    });
   }
 
   if (response.egress === "compatFetch") {
-    return await finalizeCompatFetch({ context, mode, plan: response });
+    return await finalizeCompatFetch({
+      anonymize,
+      context,
+      mode,
+      plan: response,
+    });
   }
 
-  return await finalizeStructured({ context, mode, plan: response });
+  return await finalizeStructured({ anonymize, context, mode, plan: response });
 }
 
 /**
@@ -89,9 +107,11 @@ export async function finalizeToolEgress({
  * alone and drop workspace-scoped terms.
  */
 const anonymizeTextFieldsByWorkspace = async ({
+  anonymize,
   context,
   fields,
 }: {
+  anonymize: typeof anonymizeTextFields;
   context: McpRequestContext;
   fields: readonly McpStructuredTextField[];
 }): Promise<void> => {
@@ -111,7 +131,7 @@ const anonymizeTextFieldsByWorkspace = async ({
 
   for (const [workspaceId, group] of byWorkspace) {
     // oxlint-disable-next-line no-await-in-loop -- per-workspace anonymization bounds gazetteer/DB load across tenants
-    const anonymized = await anonymizeTextFields({
+    const anonymized = await anonymize({
       fields: group.map((field) => field.value),
       organizationId: context.organizationId,
       scopedDb: context.scopedDb,
@@ -132,10 +152,12 @@ const anonymizeTextFieldsByWorkspace = async ({
 };
 
 const finalizeStructured = async ({
+  anonymize,
   context,
   mode,
   plan,
 }: {
+  anonymize: typeof anonymizeTextFields;
   context: McpRequestContext;
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "structured" }>;
@@ -144,7 +166,11 @@ const finalizeStructured = async ({
   // mode only), THEN window, so an entity name can never straddle a window edge
   // and placeholders stay stable across windows of one field.
   if (mode === "anonymized") {
-    await anonymizeTextFieldsByWorkspace({ context, fields: plan.textFields });
+    await anonymizeTextFieldsByWorkspace({
+      anonymize,
+      context,
+      fields: plan.textFields,
+    });
   }
 
   if (plan.window) {
@@ -163,10 +189,12 @@ const finalizeStructured = async ({
 };
 
 const finalizeCompatSearch = async ({
+  anonymize,
   context,
   mode,
   plan,
 }: {
+  anonymize: typeof anonymizeTextFields;
   context: McpRequestContext;
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "compatSearch" }>;
@@ -183,6 +211,7 @@ const finalizeCompatSearch = async ({
   // leave Stella for the AI client.
   if (mode === "anonymized") {
     await anonymizeTextFieldsByWorkspace({
+      anonymize,
       context,
       fields: plan.results.map((hit, index) => ({
         apply: (value) => {
@@ -201,10 +230,12 @@ const finalizeCompatSearch = async ({
 };
 
 const finalizeCompatFetch = async ({
+  anonymize,
   context,
   mode,
   plan,
 }: {
+  anonymize: typeof anonymizeTextFields;
   context: McpRequestContext;
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "compatFetch" }>;
@@ -215,6 +246,7 @@ const finalizeCompatFetch = async ({
     // Anonymize the whole document first, then window the redacted text so no
     // entity name is split across a window edge.
     const anonymized = await anonymizeCompatFetchPayload({
+      anonymize,
       context,
       text: plan.text,
       title: plan.title,
@@ -272,17 +304,19 @@ const finalizeCompatFetch = async ({
 };
 
 const anonymizeCompatFetchPayload = async ({
+  anonymize,
   context,
   text,
   title,
   workspaceId,
 }: {
+  anonymize: typeof anonymizeTextFields;
   context: McpRequestContext;
   text: string;
   title: string;
   workspaceId: string;
 }) => {
-  const anonymized = await anonymizeTextFields({
+  const anonymized = await anonymize({
     fields: [title, text],
     organizationId: context.organizationId,
     scopedDb: context.scopedDb,

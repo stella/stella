@@ -23,13 +23,14 @@ const config = {
   body: requestBody,
 } satisfies SessionHandlerConfig;
 
-const updateGuideProgress = createSafeSessionHandler(
-  config,
-  async function* ({ body, user }) {
+export const createUpdateGuideProgressHandler = (
+  updateGuideProgress: typeof patchUserGuideProgress = patchUserGuideProgress,
+) =>
+  createSafeSessionHandler(config, async function* ({ body, user }) {
     const guideProgress = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await patchUserGuideProgress({
+          await updateGuideProgress({
             status: body.status,
             tourId: body.tourId,
             userId: user.id,
@@ -50,7 +51,7 @@ const updateGuideProgress = createSafeSessionHandler(
     }
 
     return Result.ok({ guideProgress });
-  },
-);
+  });
 
+const updateGuideProgress = createUpdateGuideProgressHandler();
 export default updateGuideProgress;

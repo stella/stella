@@ -1,17 +1,17 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
-import sharepointOAuthCallback from "@/api/handlers/sharepoint/oauth-callback";
+import { createSharepointOAuthCallback } from "@/api/handlers/sharepoint/oauth-callback";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // The deployment flag is read at env import time; the gate itself is not
 // under test here, so replace it wholesale (a full module mock, no partial).
-void mock.module("@/api/handlers/sharepoint/enablement", () => ({
+const sharepointOAuthCallback = createSharepointOAuthCallback({
   assertSharepointConnectionEnabled: async () =>
     await Promise.resolve(Result.ok(undefined)),
-}));
+});
 
 type CallbackCtx = Parameters<typeof sharepointOAuthCallback.handler>[0];
 

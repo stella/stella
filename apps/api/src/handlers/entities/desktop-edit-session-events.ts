@@ -102,10 +102,27 @@ type DesktopEditSessionEventsHandlerProps = {
   sessionId: SafeId<"desktopEditSession">;
 };
 
-export const desktopEditSessionEventsHandler = async ({
-  headers: { authorization },
-  sessionId,
-}: DesktopEditSessionEventsHandlerProps) => {
+export type DesktopEditSessionEventsDependencies = {
+  authorizeDesktopEditSession: typeof authorizeDesktopEditSession;
+  livenessRefreshIntervalMs: number;
+  readDesktopEditSessionEventState: typeof readDesktopEditSessionEventState;
+  refreshDesktopEditSessionLiveness: typeof refreshDesktopEditSessionLiveness;
+};
+
+const defaultDesktopEditSessionEventsDependencies = {
+  authorizeDesktopEditSession,
+  livenessRefreshIntervalMs: DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS,
+  readDesktopEditSessionEventState,
+  refreshDesktopEditSessionLiveness,
+} satisfies DesktopEditSessionEventsDependencies;
+
+export const desktopEditSessionEventsHandler = async (
+  {
+    headers: { authorization },
+    sessionId,
+  }: DesktopEditSessionEventsHandlerProps,
+  dependencies: DesktopEditSessionEventsDependencies = defaultDesktopEditSessionEventsDependencies,
+) => {
   const sessionToken = getSessionToken(authorization);
 
   if (!sessionToken) {
@@ -115,7 +132,7 @@ export const desktopEditSessionEventsHandler = async ({
     });
   }
 
-  const authorized = await authorizeDesktopEditSession({
+  const authorized = await dependencies.authorizeDesktopEditSession({
     sessionId,
     sessionToken,
   });
@@ -146,7 +163,8 @@ export const desktopEditSessionEventsHandler = async ({
     });
   }
 
-  const eventState = await readDesktopEditSessionEventState(sessionId);
+  const eventState =
+    await dependencies.readDesktopEditSessionEventState(sessionId);
 
   if (!eventState) {
     return status(404, {
@@ -169,7 +187,7 @@ export const desktopEditSessionEventsHandler = async ({
   };
 
   const refreshLiveness = async (): Promise<boolean> =>
-    await refreshDesktopEditSessionLiveness({
+    await dependencies.refreshDesktopEditSessionLiveness({
       sessionId,
       sessionToken,
       userId,
@@ -192,7 +210,7 @@ export const desktopEditSessionEventsHandler = async ({
     start(controller) {
       livenessRefreshTimer = setInterval(
         refreshLivenessInBackground,
-        DESKTOP_EDIT_SESSION_LIVENESS_REFRESH_INTERVAL_MS,
+        dependencies.livenessRefreshIntervalMs,
       );
 
       conn = { cleanup: cleanupLivenessRefresh, controller, sessionId };

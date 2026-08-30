@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -12,17 +11,25 @@ import JSZip from "jszip";
 
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
-// Imported for the double below: only the resolver is replaced, and the rest
-// of the module keeps its real behaviour rather than being dropped.
-import * as publicSubject from "@/api/handlers/case-law/decisions/public-subject";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
 import { encodePaginationCursor } from "@/api/lib/pagination";
+import { pgFtsProvider } from "@/api/lib/search/pg-fts-provider";
+import type { SearchHit, SearchResult } from "@/api/lib/search/types";
+import type { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
+import {
+  getMcpToolDefinition,
+  getMcpToolRequiredScopesHint,
+  handleMcpToolCall,
+  isDocumentsMcpCapabilityAllowed,
+  listMcpTools,
+} from "@/api/mcp/tools";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -111,9 +118,7 @@ const seedDocxFile = async (fileId: string, workspaceId = "ws_1") => {
 const withTimeoutMock = mock(
   async (operation: () => Promise<unknown>) => await operation(),
 );
-void mock.module("@/api/lib/with-timeout", () => ({
-  withTimeout: withTimeoutMock,
-}));
+const withTimeoutDependency = asTestRaw<typeof withTimeout>(withTimeoutMock);
 
 const anonymizeTextFieldsMock = mock();
 const loadAnonymizationGazetteerEntriesMock = mock();
@@ -123,13 +128,13 @@ const readContactExecute = mock();
 type MockSearchHit = {
   entityId: string;
   headline?: string | null;
-  kind?: string;
+  kind?: SearchHit["kind"];
   name: string;
   workspaceId: string;
   workspaceName?: string;
 };
 const searchProviderSearchMock = mock(
-  async (input: { limit: number; query: string }) => {
+  async (input: { limit: number; query: string }): Promise<SearchResult> => {
     const result = await searchAcrossMattersExecute(
       {
         limit: input.limit,
@@ -149,6 +154,7 @@ const searchProviderSearchMock = mock(
         : [];
 
     return {
+      facets: { kind: [], workspace: [] },
       totalCount:
         typeof result === "object" &&
         result !== null &&
@@ -157,17 +163,18 @@ const searchProviderSearchMock = mock(
           ? result.totalCount
           : hits.length,
       hits: hits.map((hit) => ({
-        entityId: hit.entityId,
-        workspaceId: hit.workspaceId,
+        entityId: toSafeId<"entity">(hit.entityId),
+        workspaceId: toSafeId<"workspace">(hit.workspaceId),
         workspaceName: hit.workspaceName ?? "Matter Alpha",
         title: hit.name,
         kind: hit.kind ?? "document",
         headline: hit.headline ?? null,
+        updatedAt: "2026-01-01T00:00:00.000Z",
       })),
+      nextCursor: null,
     };
   },
 );
-const rehydrateCaseLawCandidatesMock = mock();
 const searchDecisionsHandlerMock = mock();
 const readDecisionHandlerMock = mock();
 /** The gate-and-read the tool calls; null is a denied or missing subject. */
@@ -176,128 +183,10 @@ const readGatedDecisionMock = mock();
 const withRedistributableSubjectMock = mock();
 const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/u, "");
 
-type AnonymizationBlacklistEntryInput = {
-  canonical: string;
-  enabled?: boolean | undefined;
-  label: string;
-  variants?: string[] | undefined;
-};
-
-const normalizeAnonymizationBlacklistEntryMock = ({
-  canonical,
-  enabled,
-  label,
-  variants,
-}: AnonymizationBlacklistEntryInput) => ({
-  canonical: canonical.trim(),
-  enabled: enabled ?? true,
-  label: label.trim(),
-  variants: [...new Set((variants ?? []).map((value) => value.trim()))].filter(
-    (value) => value.length > 0,
-  ),
-});
-
-const normalizeAnonymizationBlacklistEntriesMock = (
-  entries: AnonymizationBlacklistEntryInput[],
-) => {
-  const seenCanonical = new Set<string>();
-  const normalized = [];
-
-  for (const entry of entries) {
-    const next = normalizeAnonymizationBlacklistEntryMock(entry);
-    if (next.canonical.length === 0 || next.label.length === 0) {
-      return Result.err({
-        status: 400,
-        message: "Anonymization blacklist terms cannot be blank",
-      });
-    }
-
-    const canonicalKey = next.canonical.toLocaleLowerCase();
-    if (seenCanonical.has(canonicalKey)) {
-      return Result.err({
-        status: 400,
-        message: "Duplicate anonymization blacklist term",
-      });
-    }
-
-    seenCanonical.add(canonicalKey);
-    normalized.push(next);
-  }
-
-  return Result.ok(normalized);
-};
-
-void mock.module("@/api/lib/search/provider", () => ({
-  getSearchProvider: () => ({
-    search: searchProviderSearchMock,
-  }),
-}));
-
-void mock.module("@/api/mcp/anonymization", () => ({
-  anonymizeTextFields: anonymizeTextFieldsMock,
-}));
-
-void mock.module("@/api/lib/anonymization-blacklist", () => ({
-  loadAnonymizationGazetteerEntries: loadAnonymizationGazetteerEntriesMock,
-  normalizeAnonymizationBlacklistEntries:
-    normalizeAnonymizationBlacklistEntriesMock,
-  normalizeAnonymizationBlacklistEntry:
-    normalizeAnonymizationBlacklistEntryMock,
-}));
-
-void mock.module("@/api/handlers/case-law/decisions/search", () => ({
-  rehydrateCaseLawCandidates: rehydrateCaseLawCandidatesMock,
-  searchDecisionsHandler: searchDecisionsHandlerMock,
-}));
-
-// The tool reads through the hydrating wrapper, so that is the module
-// the double replaces.
-void mock.module(
-  "@/api/handlers/case-law/decisions/get-deferred-document",
-  () => ({
-    hydrateDeferredDocument: async (read: unknown) => read,
-    readGatedDecisionWithDocument: readGatedDecisionMock,
-  }),
-);
-
-// The subject gate runs before the read; the double stands in for the
-// database lookup and hands back the id as an already-gated subject.
-// Every export is declared: the module builds the public routes at import
-// time, so dropping the factory here would leave them unhandled, and the
-// spread idiom deadlocks on a module that imports the handler factories.
-void mock.module("@/api/handlers/case-law/decisions/public-subject", () => ({
-  DECISION_NOT_FOUND: publicSubject.DECISION_NOT_FOUND,
-  createSafePublicSubjectHandler: publicSubject.createSafePublicSubjectHandler,
-  createSafePublicSubjectFollowUpHandler:
-    publicSubject.createSafePublicSubjectFollowUpHandler,
-  isSubjectGatedHandler: publicSubject.isSubjectGatedHandler,
-  normalizePublicDecisionLanguage:
-    publicSubject.normalizePublicDecisionLanguage,
-  withRedistributableSubject: withRedistributableSubjectMock,
-  subjectGatedHandlers: publicSubject.subjectGatedHandlers,
-}));
-
-void mock.module("@/api/handlers/workspaces/get", () => ({
-  readWorkspaceHandler: mock(),
-}));
-
-void mock.module("@/api/handlers/workspaces/read-overview", () => ({
-  readOverviewHandler: mock(),
-}));
-
-void mock.module("@/api/handlers/workspaces/workspace-contacts-read", () => ({
-  readWorkspaceContactsHandler: mock(),
-}));
-
-const {
-  getMcpToolDefinition,
-  getMcpToolRequiredScopesHint,
-  handleMcpToolCall,
-  isDocumentsMcpCapabilityAllowed,
-  listMcpTools,
-} = await import("@/api/mcp/tools");
-const { caseLawPublicReadDb } =
-  await import("@/api/lib/case-law-public-read-db");
+const readWorkspaceHandlerMock = mock();
+const readOverviewHandlerMock = mock();
+const readWorkspaceContactsHandlerMock = mock();
+const readWorkspaceMembersHandlerMock = mock();
 
 const parseToolPayload = (
   result: Awaited<ReturnType<typeof handleMcpToolCall>>,
@@ -776,6 +665,21 @@ const createContext = ({
   recordAuditEvent,
   safeDb: toSafeDbMock(scopedDb),
   scopedDb,
+  testDependencies: {
+    anonymizeTextFields: anonymizeTextFieldsMock,
+    getSearchProvider: () => ({
+      ...pgFtsProvider,
+      search: searchProviderSearchMock,
+    }),
+    loadAnonymizationGazetteerEntries: loadAnonymizationGazetteerEntriesMock,
+    readGatedDecisionWithDocument: readGatedDecisionMock,
+    readOverviewHandler: readOverviewHandlerMock,
+    readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
+    readWorkspaceHandler: readWorkspaceHandlerMock,
+    readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
+    searchDecisionsHandler: searchDecisionsHandlerMock,
+    withTimeout: withTimeoutDependency,
+  },
   userId: toSafeId<"user">("user_1"),
 });
 
@@ -1104,6 +1008,7 @@ describe("OpenAI-compatible MCP tools", () => {
     );
 
     expect(parseToolPayload(result)).toEqual({
+      nextCursor: null,
       results: [
         {
           id: "entity_1",
@@ -2264,6 +2169,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(parseToolPayload(result)).toEqual({
+      nextCursor: null,
       results: [
         {
           id: "entity_1",
@@ -2326,6 +2232,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(parseToolPayload(result)).toEqual({
+      nextCursor: null,
       results: [
         {
           id: "entity_1",
@@ -2377,6 +2284,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(parseToolPayload(result)).toEqual({
+      nextCursor: null,
       results: [
         {
           id: "entity_1",
@@ -2418,6 +2326,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(parseToolPayload(result)).toEqual({
+      nextCursor: null,
       results: [
         {
           id: "entity_1",

@@ -252,6 +252,7 @@ type StartWorkflowArgs = {
    */
   propertyIds?: SafeId<"property">[];
   serviceTier?: AIRequestServiceTier;
+  runStateStore?: ReturnType<typeof getRootWorkflowRunStateStore> | undefined;
 };
 
 /**
@@ -422,8 +423,8 @@ export const startWorkflow = async ({
   entityIdsOrder: inputOrder,
   propertyIds: inputPropertyIds,
   serviceTier = "standard",
+  runStateStore = getRootWorkflowRunStateStore(),
 }: StartWorkflowArgs): Promise<StartWorkflowResult> => {
-  const runStateStore = getRootWorkflowRunStateStore();
   const requestId = createSafeId<"extractionRun">();
   const runKey = { id: requestId, organizationId, workspaceId };
 

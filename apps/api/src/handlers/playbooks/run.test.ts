@@ -10,31 +10,12 @@ const loadLatestApprovedVersionMock = mock();
 const openPlaybookRunMock = mock();
 const startWorkflowMock = mock();
 
-const realApprovedVersions =
-  await import("@/api/lib/document-review/approved-playbook-versions");
-const realOpenPlaybookRun =
-  await import("@/api/lib/document-review/open-playbook-run");
-const realWorkflowQueue = await import("@/api/lib/workflow-queue");
-
-void mock.module(
-  "@/api/lib/document-review/approved-playbook-versions",
-  () => ({
-    ...realApprovedVersions,
-    loadLatestApprovedVersion: loadLatestApprovedVersionMock,
-  }),
-);
-
-void mock.module("@/api/lib/document-review/open-playbook-run", () => ({
-  ...realOpenPlaybookRun,
+const { createRunPlaybook } = await import("./run");
+const runPlaybook = createRunPlaybook({
+  loadLatestApprovedVersion: loadLatestApprovedVersionMock,
   openPlaybookRun: openPlaybookRunMock,
-}));
-
-void mock.module("@/api/lib/workflow-queue", () => ({
-  ...realWorkflowQueue,
   startWorkflow: startWorkflowMock,
-}));
-
-const { default: runPlaybook } = await import("./run");
+});
 
 type RunPlaybookCtx = Parameters<typeof runPlaybook.handler>[0];
 

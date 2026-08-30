@@ -18,8 +18,17 @@ import {
 
 import type { CachingDecision } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
-import * as realTanStackAIModels from "@/api/lib/tanstack-ai-models";
+import {
+  generateTanStackObjectForRole,
+  generateTanStackTextForRole,
+  mergeGenerationOptions,
+  streamTanStackObjectForRole,
+  streamTanStackTextForRole,
+} from "@/api/lib/tanstack-ai-generate";
+import {
+  type ResolvedTanStackTextModel,
+  tanStackModelOptionsForRole,
+} from "@/api/lib/tanstack-ai-models";
 import {
   projectSchemaInputJsonSchema,
   toTanStackValibotSchema,
@@ -69,27 +78,30 @@ void mock.module("@tanstack/ai", () => ({
   chat,
 }));
 
-void mock.module("@/api/lib/tanstack-ai-models", () => ({
-  ...realTanStackAIModels,
-  getTanStackTextModelById: () => testModel,
-  getTanStackTextModelForRole: () => testModel,
-}));
-
-const {
-  generateTanStackTextForRole,
-  generateTanStackObjectForRole,
-  mergeGenerationOptions,
-  streamTanStackTextForRole,
-  streamTanStackObjectForRole,
-} = await import("@/api/lib/tanstack-ai-generate");
-
+// SAFETY: `chat` is replaced at the provider boundary, so this suite never
+// invokes the adapter; it only verifies the options assembled around it.
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const testModel = {
   adapter: {},
   keySource: "instance",
   modelId: "test-model",
   modelOptions: {},
   provider: "openai",
-};
+} as ResolvedTanStackTextModel;
+
+const resolveTextModel = () => testModel;
+const generateTextForTestModel = async (
+  options: Parameters<typeof generateTanStackTextForRole>[0],
+) => await generateTanStackTextForRole({ ...options, resolveTextModel });
+const generateObjectForTestModel = async <TSchema extends v.GenericSchema>(
+  options: Parameters<typeof generateTanStackObjectForRole<TSchema>>[0],
+) => await generateTanStackObjectForRole({ ...options, resolveTextModel });
+const streamTextForTestModel = (
+  options: Parameters<typeof streamTanStackTextForRole>[0],
+) => streamTanStackTextForRole({ ...options, resolveTextModel });
+const streamObjectForTestModel = <TSchema extends v.GenericSchema>(
+  options: Parameters<typeof streamTanStackObjectForRole<TSchema>>[0],
+) => streamTanStackObjectForRole({ ...options, resolveTextModel });
 
 const noCaching = {
   enabled: false,
@@ -194,7 +206,7 @@ describe("TanStack AI structured output generation", () => {
     nextChatResult = { answer: "ok" };
     const rawSchema = v.strictObject({ answer: v.string() });
 
-    const result = await generateTanStackObjectForRole({
+    const result = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
       orgAIConfig: null,
@@ -221,7 +233,7 @@ describe("TanStack AI structured output generation", () => {
     });
 
     const events = [];
-    for await (const event of streamTanStackObjectForRole({
+    for await (const event of streamObjectForTestModel({
       caching: noCaching,
       organizationId: null,
       orgAIConfig: null,
@@ -257,7 +269,7 @@ describe("TanStack AI structured output generation", () => {
     capturedChatOptions.length = 0;
     nextChatResult = { answer: 123 };
 
-    const validationFailure = await generateTanStackObjectForRole({
+    const validationFailure = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
       orgAIConfig: null,
@@ -466,7 +478,7 @@ describe("TanStack AI structured output generation", () => {
     });
     nextChatResult = { answer: "ok" };
 
-    const result = await generateTanStackObjectForRole({
+    const result = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
       orgAIConfig: null,
@@ -496,7 +508,7 @@ describe("TanStack AI structured output generation", () => {
     });
     nextChatError = apiError;
 
-    const caught = await generateTanStackObjectForRole({
+    const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
       orgAIConfig: null,
@@ -531,7 +543,7 @@ describe("TanStack AI structured output generation", () => {
     );
 
     const events = [];
-    for await (const event of streamTanStackObjectForRole({
+    for await (const event of streamObjectForTestModel({
       caching: noCaching,
       organizationId: null,
       orgAIConfig: null,
@@ -581,7 +593,7 @@ describe("TanStack AI model-ingress guard", () => {
     capturedChatOptions.length = 0;
     nextChatResult = createTextStream(["ok"]);
 
-    await generateTanStackTextForRole({
+    await generateTextForTestModel({
       caching: noCaching,
       organizationId: null,
       orgAIConfig: null,
@@ -612,7 +624,7 @@ describe("TanStack AI model-ingress guard", () => {
     capturedChatOptions.length = 0;
     nextChatResult = createTextStream(["ok"]);
 
-    await generateTanStackTextForRole({
+    await generateTextForTestModel({
       caching: noCaching,
       organizationId: null,
       orgAIConfig: null,
@@ -637,7 +649,7 @@ describe("TanStack AI model-ingress guard", () => {
     capturedChatOptions.length = 0;
     nextChatResult = createTextStream(["ok"]);
 
-    await generateTanStackTextForRole({
+    await generateTextForTestModel({
       caching: noCaching,
       organizationId: null,
       orgAIConfig: null,
@@ -667,7 +679,7 @@ describe("TanStack AI model-ingress guard", () => {
 
     capturedChatOptions.length = 0;
     nextChatResult = createTextStream(["ok"]);
-    const serverBuiltFailure = await generateTanStackTextForRole({
+    const serverBuiltFailure = await generateTextForTestModel({
       caching: noCaching,
       organizationId: null,
       orgAIConfig: null,
@@ -704,7 +716,7 @@ describe("TanStack AI text generation", () => {
     capturedChatOptions.length = 0;
     nextChatResult = createTextStream(["partial"], "length");
 
-    const caught = await generateTanStackTextForRole({
+    const caught = await generateTextForTestModel({
       caching: noCaching,
       finishPolicy: "require-complete",
       organizationId: null,
@@ -725,7 +737,7 @@ describe("TanStack AI text generation", () => {
     capturedChatOptions.length = 0;
     nextChatResult = createTextStream(["hello", " world"]);
 
-    const output = await generateTanStackTextForRole({
+    const output = await generateTextForTestModel({
       caching: noCaching,
       organizationId: null,
       orgAIConfig: null,
@@ -746,7 +758,7 @@ describe("TanStack AI text generation", () => {
       message: "OpenAI rejected the request.",
     });
 
-    const caught = await generateTanStackTextForRole({
+    const caught = await generateTextForTestModel({
       caching: noCaching,
       organizationId: null,
       orgAIConfig: null,
@@ -774,7 +786,7 @@ describe("TanStack AI text generation", () => {
     });
 
     const consume = async (): Promise<void> => {
-      for await (const _delta of streamTanStackTextForRole({
+      for await (const _delta of streamTextForTestModel({
         caching: noCaching,
         organizationId: null,
         orgAIConfig: null,
@@ -812,15 +824,13 @@ describe("Anthropic extended-thinking budgets", () => {
     for (const modelId of BYOK_MODEL_OPTIONS.anthropic) {
       for (const role of MODEL_ROLES) {
         for (const reasoningEffort of [undefined, ...REASONING_EFFORTS]) {
-          const modelOptions = realTanStackAIModels.tanStackModelOptionsForRole(
-            {
-              modelId,
-              organizationId: null,
-              provider: "anthropic",
-              reasoningEffort,
-              role,
-            },
-          );
+          const modelOptions = tanStackModelOptionsForRole({
+            modelId,
+            organizationId: null,
+            provider: "anthropic",
+            reasoningEffort,
+            role,
+          });
           // SAFETY: mergeGenerationOptions only reads
           // provider/modelOptions/modelId. The adapter is irrelevant for this
           // pure option-merge invariant.

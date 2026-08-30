@@ -476,7 +476,11 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     if (input.block_id !== undefined) {
       const blockId = input.block_id;
       const block = await Result.tryPromise({
-        try: async () => await getLawTextBlock(lawId, blockId),
+        try: async () =>
+          await (context.testDependencies?.getLawTextBlock ?? getLawTextBlock)(
+            lawId,
+            blockId,
+          ),
         catch: mapBoeError,
       });
       if (Result.isError(block)) {
@@ -524,7 +528,10 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     input.cursor === undefined ? undefined : Number.parseInt(input.cursor, 10);
   const result = await Result.tryPromise({
     try: async () =>
-      await searchConsolidatedLegislation({
+      await (
+        context.testDependencies?.searchConsolidatedLegislation ??
+        searchConsolidatedLegislation
+      )({
         ...(input.query === undefined ? {} : { text: input.query }),
         ...(input.title === undefined ? {} : { title: input.title }),
         ...(input.department_code === undefined

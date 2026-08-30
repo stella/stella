@@ -1,4 +1,5 @@
 import { TaggedError } from "better-result";
+import type { RedisOptions } from "bun";
 
 import {
   parseDesktopEditSessionRealtimeEvent,
@@ -138,8 +139,6 @@ export const parseRedisPayload = (raw: string): RedisPayload | null => {
     : null;
 };
 
-let publisher: ReturnType<typeof createRedisClient> | null = null;
-
 /**
  * Bound the publisher the way every other coordination facade is bounded. On
  * the client's defaults an unreachable Valkey buffers the PUBLISH in the
@@ -163,80 +162,96 @@ const PUBLISH_CONNECT_TIMEOUT_MS = 2000;
  */
 const PUBLISH_COMMAND_TIMEOUT_MS = 2000;
 
-const getPublisher = (): ReturnType<typeof createRedisClient> => {
-  publisher ??= createRedisClient({
-    connectionTimeout: PUBLISH_CONNECT_TIMEOUT_MS,
-    enableOfflineQueue: false,
-  });
-  return publisher;
-};
+type PublisherClient = Pick<ReturnType<typeof createRedisClient>, "publish">;
+type CreatePublisherClient = (options: RedisOptions) => PublisherClient;
 
-const publishRedisPayload = async (payload: RedisPayload): Promise<void> => {
-  try {
-    await withCommandTimeout({
-      command: getPublisher().publish(REDIS_CHANNEL, JSON.stringify(payload)),
-      commandTimeoutMs: PUBLISH_COMMAND_TIMEOUT_MS,
-      label: "SSE broadcast publish",
+export const createSseBroadcastPublisher = ({
+  createClient = createRedisClient,
+}: { createClient?: CreatePublisherClient | undefined } = {}) => {
+  let publisher: PublisherClient | null = null;
+  const getPublisher = (): PublisherClient => {
+    publisher ??= createClient({
+      connectionTimeout: PUBLISH_CONNECT_TIMEOUT_MS,
+      enableOfflineQueue: false,
     });
-  } catch (error: unknown) {
-    throw new SSEBroadcastError({
-      message: "SSE broadcast publish failed.",
-      cause: error,
-      scope: payload.scope,
-    });
-  }
+    return publisher;
+  };
+
+  const publishRedisPayload = async (payload: RedisPayload): Promise<void> => {
+    try {
+      await withCommandTimeout({
+        command: getPublisher().publish(REDIS_CHANNEL, JSON.stringify(payload)),
+        commandTimeoutMs: PUBLISH_COMMAND_TIMEOUT_MS,
+        label: "SSE broadcast publish",
+      });
+    } catch (error: unknown) {
+      throw new SSEBroadcastError({
+        message: "SSE broadcast publish failed.",
+        cause: error,
+        scope: payload.scope,
+      });
+    }
+  };
+
+  return {
+    publishSessionEvent: async (
+      sessionId: SafeId<"desktopEditSession">,
+      event: DesktopEditSessionRealtimeEvent,
+      options: { originInstanceId?: string | undefined } = {},
+    ): Promise<void> => {
+      await publishRedisPayload({
+        scope: "session",
+        id: sessionId,
+        event,
+        originInstanceId: options.originInstanceId,
+      });
+    },
+    publishWorkspaceEvent: async (
+      workspaceId: SafeId<"workspace">,
+      event: WorkspaceRealtimeEvent,
+      options: PublishOptions = {},
+    ): Promise<void> => {
+      await publishRedisPayload({
+        scope: "workspace",
+        id: workspaceId,
+        event,
+        originInstanceId: options.originInstanceId,
+        deliveredInline: options.deliveredInline,
+      });
+    },
+    publishWorkspaceAccessRevoked: async (
+      workspaceId: SafeId<"workspace">,
+      userId: SafeId<"user">,
+      options: { originInstanceId?: string | undefined } = {},
+    ): Promise<void> => {
+      await publishRedisPayload({
+        scope: "workspace-access-revoked",
+        id: workspaceId,
+        userId,
+        originInstanceId: options.originInstanceId,
+      });
+    },
+    publishOrganizationEvent: async (
+      organizationId: SafeId<"organization">,
+      event: OrganizationRealtimeEvent,
+      options: PublishOptions = {},
+    ): Promise<void> => {
+      await publishRedisPayload({
+        scope: "organization",
+        id: organizationId,
+        event,
+        originInstanceId: options.originInstanceId,
+        deliveredInline: options.deliveredInline,
+      });
+    },
+  };
 };
 
-export const publishWorkspaceEvent = async (
-  workspaceId: SafeId<"workspace">,
-  event: WorkspaceRealtimeEvent,
-  options: PublishOptions = {},
-): Promise<void> => {
-  await publishRedisPayload({
-    scope: "workspace",
-    id: workspaceId,
-    event,
-    originInstanceId: options.originInstanceId,
-    deliveredInline: options.deliveredInline,
-  });
-};
+const defaultPublisher = createSseBroadcastPublisher();
 
-export const publishWorkspaceAccessRevoked = async (
-  workspaceId: SafeId<"workspace">,
-  userId: SafeId<"user">,
-  options: { originInstanceId?: string | undefined } = {},
-): Promise<void> => {
-  await publishRedisPayload({
-    scope: "workspace-access-revoked",
-    id: workspaceId,
-    userId,
-    originInstanceId: options.originInstanceId,
-  });
-};
-
-export const publishOrganizationEvent = async (
-  organizationId: SafeId<"organization">,
-  event: OrganizationRealtimeEvent,
-  options: PublishOptions = {},
-): Promise<void> => {
-  await publishRedisPayload({
-    scope: "organization",
-    id: organizationId,
-    event,
-    originInstanceId: options.originInstanceId,
-    deliveredInline: options.deliveredInline,
-  });
-};
-
-export const publishSessionEvent = async (
-  sessionId: SafeId<"desktopEditSession">,
-  event: DesktopEditSessionRealtimeEvent,
-  options: { originInstanceId?: string | undefined } = {},
-): Promise<void> => {
-  await publishRedisPayload({
-    scope: "session",
-    id: sessionId,
-    event,
-    originInstanceId: options.originInstanceId,
-  });
-};
+export const {
+  publishOrganizationEvent,
+  publishSessionEvent,
+  publishWorkspaceAccessRevoked,
+  publishWorkspaceEvent,
+} = defaultPublisher;

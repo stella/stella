@@ -6,9 +6,14 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   clearRootDbMocks,
   rootDbExecuteMock,
+  rootDbTestDouble,
 } from "@/api/tests/helpers/mock-root-db";
 
-const { searchGlobal } = await import("@/api/lib/search/index-global");
+const { searchGlobal: searchGlobalWithDatabase } =
+  await import("@/api/lib/search/index-global");
+const searchGlobal = async (
+  query: Parameters<typeof searchGlobalWithDatabase>[0],
+) => await searchGlobalWithDatabase(query, rootDbTestDouble);
 
 beforeEach(() => {
   clearRootDbMocks();

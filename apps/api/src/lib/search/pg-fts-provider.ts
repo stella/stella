@@ -43,6 +43,7 @@ const currentVersionProjectionFilter = sql`
 `;
 
 type RawRow = Record<string, unknown>;
+type SearchDatabase = Pick<typeof rootDb, "execute">;
 
 const mapHitRow = (row: RawRow): SearchHit => ({
   entityId: String(row["entity_id"]),
@@ -60,7 +61,10 @@ const mapHitRow = (row: RawRow): SearchHit => ({
       : String(row["updated_at"]),
 });
 
-const search = async (query: SearchQuery): Promise<SearchResult> => {
+const search = async (
+  query: SearchQuery,
+  database: SearchDatabase = rootDb,
+): Promise<SearchResult> => {
   assertAuthorizedSearchScope(query);
 
   const { organizationId, limit } = query;
@@ -177,10 +181,10 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
 
   // All four queries are independent; run in parallel.
   const [hitsResult, countResult, kindResult, wsResult] = await Promise.all([
-    rootDb.execute(hitsQuery),
-    rootDb.execute(countQuery),
-    rootDb.execute(kindFacetQuery),
-    rootDb.execute(workspaceFacetQuery),
+    database.execute(hitsQuery),
+    database.execute(countQuery),
+    database.execute(kindFacetQuery),
+    database.execute(workspaceFacetQuery),
   ]);
 
   const hasMore = hitsResult.length > limit;
@@ -224,6 +228,7 @@ const CONTENT_HEADLINE_CONFIG =
 
 const searchContent = async (
   query: ContentSearchQuery,
+  database: SearchDatabase = rootDb,
 ): Promise<ContentSearchResult> => {
   const { organizationId, workspaceId, limit } = query;
   const tsQuery = buildSearchTsQuery(query.query);
@@ -233,7 +238,7 @@ const searchContent = async (
   });
 
   const [hitsResult, countResult] = await Promise.all([
-    rootDb.execute(sql`
+    database.execute(sql`
       SELECT
         sd.entity_id,
         sd.kind,
@@ -255,7 +260,7 @@ const searchContent = async (
       ORDER BY score DESC, sd.entity_id DESC
       LIMIT ${limit}
     `),
-    rootDb.execute(sql`
+    database.execute(sql`
       SELECT count(*)::int AS total
       FROM search_documents sd
       JOIN entities e ON e.id = sd.entity_id
@@ -345,3 +350,11 @@ export const pgFtsProvider: SearchProvider = {
   removeEntity,
   rebuildIndex,
 };
+
+export const createPgFtsProvider = (
+  database: SearchDatabase,
+): SearchProvider => ({
+  ...pgFtsProvider,
+  search: async (query) => await search(query, database),
+  searchContent: async (query) => await searchContent(query, database),
+});

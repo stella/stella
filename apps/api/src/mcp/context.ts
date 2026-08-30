@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
+import type { getLawTextBlock, searchConsolidatedLegislation } from "@stll/boe";
 import type { PermissionInput } from "@stll/permissions";
 
 import { rlsDb } from "@/api/db/root";
@@ -12,14 +13,32 @@ import {
   createSafeDb,
   createScopedDb,
 } from "@/api/db/scoped";
+import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
+import type { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
+import type { createTimeEntryHandler } from "@/api/handlers/time-entries/create";
+import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
+import type { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
+import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
+import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
 import { resolveAgentAuditExecution } from "@/api/lib/agent-audit-principal";
+import type {
+  loadOrgAIConfig,
+  loadOrgSettingsForAuth,
+} from "@/api/lib/ai-config-loader";
+import type { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
-import { enabledRegistryHandlersForOrg } from "@/api/lib/business-registries/dispatch";
-import type { BusinessRegistrySlug } from "@/api/lib/business-registries/dispatch";
+import {
+  enabledRegistryHandlersForOrg,
+  type BusinessRegistrySlug,
+  type executeRegistryLookup,
+} from "@/api/lib/business-registries/dispatch";
+import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
+import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
@@ -27,8 +46,33 @@ import {
   brandActorSessionIdentity,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import type { getSearchProvider } from "@/api/lib/search/provider";
+import type { createStoredTemplate } from "@/api/lib/templates/create-template";
+import type {
+  recordTemplateFill,
+  recordTemplateUse,
+} from "@/api/lib/templates/record-use";
+import type {
+  describeStoredTemplate,
+  fillStoredTemplateDocx,
+  fillStoredTemplateWithText,
+  fillStoredTemplateWithTextStrict,
+} from "@/api/lib/templates/template-fill-service";
+import type { withTimeout } from "@/api/lib/with-timeout";
+import type { startWorkflow } from "@/api/lib/workflow-queue";
+import type { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
+import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpSession } from "@/api/mcp/auth";
+import type { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
+import type {
+  claimTemplatePersistenceRequest,
+  fingerprintTemplatePersistenceRequest,
+  persistFilledTemplateDocument,
+  persistFilledTemplateVersion,
+  recordTemplatePersistenceReceipt,
+  releaseTemplatePersistenceClaim,
+} from "@/api/mcp/template-persistence";
 import { createWorkspaceAccessBoundary } from "@/api/mcp/workspace-access-boundary";
 import { filterUsableMcpWorkspaces } from "@/api/mcp/workspace-session-scope";
 
@@ -43,6 +87,46 @@ export type McpOperationDatabaseScope = {
 };
 
 export type McpRequestContext = {
+  /** Explicit seams used by focused MCP tests; production contexts leave these unset. */
+  testDependencies?: {
+    loadOrgSettingsForAuth?: typeof loadOrgSettingsForAuth;
+    loadOrgAIConfig?: typeof loadOrgAIConfig;
+    configureTemplateFields?: typeof configureTemplateFields;
+    consumeInvokeCapabilityRateLimit?: typeof consumeInvokeCapabilityRateLimit;
+    isCapabilityFeatureEnabled?: (feature: string | undefined) => boolean;
+    contextFidelityWaivers?: ReadonlyMap<string, string>;
+    materializePlaybookRun?: typeof materializePlaybookRun;
+    startWorkflow?: typeof startWorkflow;
+    loadLatestApprovedVersion?: typeof loadLatestApprovedVersion;
+    createPlaybookTableRuns?: typeof createPlaybookTableRuns;
+    createTimeEntryHandler?: typeof createTimeEntryHandler;
+    searchDecisionsHandler?: typeof searchDecisionsHandler;
+    readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;
+    readWorkspaceHandler?: typeof readWorkspaceHandler;
+    readOverviewHandler?: typeof readOverviewHandler;
+    readWorkspaceContactsHandler?: typeof readWorkspaceContactsHandler;
+    readWorkspaceMembersHandler?: typeof readWorkspaceMembersHandler;
+    getSearchProvider?: typeof getSearchProvider;
+    describeStoredTemplate?: typeof describeStoredTemplate;
+    executeRegistryLookup?: typeof executeRegistryLookup;
+    searchConsolidatedLegislation?: typeof searchConsolidatedLegislation;
+    getLawTextBlock?: typeof getLawTextBlock;
+    withTimeout?: typeof withTimeout;
+    anonymizeTextFields?: typeof anonymizeTextFields;
+    loadAnonymizationGazetteerEntries?: typeof loadAnonymizationGazetteerEntries;
+    fillStoredTemplateDocx?: typeof fillStoredTemplateDocx;
+    fillStoredTemplateWithText?: typeof fillStoredTemplateWithText;
+    fillStoredTemplateWithTextStrict?: typeof fillStoredTemplateWithTextStrict;
+    createStoredTemplate?: typeof createStoredTemplate;
+    recordTemplateFill?: typeof recordTemplateFill;
+    recordTemplateUse?: typeof recordTemplateUse;
+    claimTemplatePersistenceRequest?: typeof claimTemplatePersistenceRequest;
+    fingerprintTemplatePersistenceRequest?: typeof fingerprintTemplatePersistenceRequest;
+    persistFilledTemplateDocument?: typeof persistFilledTemplateDocument;
+    persistFilledTemplateVersion?: typeof persistFilledTemplateVersion;
+    recordTemplatePersistenceReceipt?: typeof recordTemplatePersistenceReceipt;
+    releaseTemplatePersistenceClaim?: typeof releaseTemplatePersistenceClaim;
+  };
   auditExecution?: AuditExecutionContext;
   accessibleWorkspaceIds: SafeId<"workspace">[];
   accessibleWorkspaceIdSet: ReadonlySet<string>;

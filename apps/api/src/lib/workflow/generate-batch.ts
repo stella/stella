@@ -46,6 +46,14 @@ import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 // workflow uses, instead of forking a parallel DOCX→blocks / PDF→bates path.
 export { isAISupportedFile };
 
+export type GenerateBatchDependencies = {
+  fetchInputFieldsForBatch: typeof fetchInputFieldsForBatch;
+};
+
+const defaultGenerateBatchDependencies = {
+  fetchInputFieldsForBatch,
+} satisfies GenerateBatchDependencies;
+
 const addBatesNumbers = async (
   pdfBuffer: ArrayBuffer,
   simplifiedName: string,
@@ -237,21 +245,24 @@ export const buildJustificationFilenames = (
   return filenames;
 };
 
-export const generateBatch = async ({
-  abortSignal,
-  batch,
-  entityVersionId,
-  organizationId,
-  workspaceId,
-  scopedDb,
-  orgAIConfig,
-  promptCachingEnabled,
-  serviceTier,
-  usageMetering,
-  onPartialAnswer,
-}: GenerateBatchProps): Promise<GenerateBatchResult> =>
+export const generateBatch = async (
+  {
+    abortSignal,
+    batch,
+    entityVersionId,
+    organizationId,
+    workspaceId,
+    scopedDb,
+    orgAIConfig,
+    promptCachingEnabled,
+    serviceTier,
+    usageMetering,
+    onPartialAnswer,
+  }: GenerateBatchProps,
+  dependencies: GenerateBatchDependencies = defaultGenerateBatchDependencies,
+): Promise<GenerateBatchResult> =>
   await Result.gen(async function* () {
-    const inputFields = await fetchInputFieldsForBatch({
+    const inputFields = await dependencies.fetchInputFieldsForBatch({
       entityVersionId,
       inputPropertyIds: batch.inputs,
       scopedDb,

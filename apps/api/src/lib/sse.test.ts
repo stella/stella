@@ -110,12 +110,6 @@ const simulateDeafReconnect = (client: FakeRedisClient): void => {
 
 const createRedisClientMock = mock(() => makeFakeRedisClient());
 
-const realRedisClient = await import("@/api/lib/redis-client");
-void mock.module("@/api/lib/redis-client", () => ({
-  ...realRedisClient,
-  createRedisClient: createRedisClientMock,
-}));
-
 // setInterval/clearInterval are spied (not replaced) so startSse/stopSse
 // still schedule and clear a real timer; the spies only let the tests
 // observe whether the module called them, matching how sse.ts calls the
@@ -136,13 +130,39 @@ const flushMicrotasks = async (): Promise<void> => {
 const workspaceId = toSafeId<"workspace">("ws_1");
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");
+const publishWorkspaceEventMock = async (
+  targetWorkspaceId: SafeId<"workspace">,
+  event: WorkspaceRealtimeEvent,
+  options: {
+    deliveredInline?: boolean | undefined;
+    originInstanceId?: string | undefined;
+  } = {},
+): Promise<void> => {
+  const message = JSON.stringify({
+    deliveredInline: options.deliveredInline,
+    event,
+    id: targetWorkspaceId,
+    originInstanceId: options.originInstanceId,
+    scope: "workspace",
+  });
+  for (const peer of createdClients) {
+    if (peer.subscribedLive && peer.messageHandler) {
+      peer.messageHandler(message);
+    }
+  }
+};
+const publishWorkspaceAccessRevokedMock = async (): Promise<void> => {};
 const authorizeAllWorkspaceConnections = async ({
   userIds,
 }: {
   userIds: readonly SafeId<"user">[];
 }) => new Set(userIds);
 const startTestSse = (): void => {
-  startSse(authorizeAllWorkspaceConnections);
+  startSse(authorizeAllWorkspaceConnections, {
+    createClient: createRedisClientMock,
+    publishAccessRevoked: publishWorkspaceAccessRevokedMock,
+    publishWorkspace: publishWorkspaceEventMock,
+  });
 };
 const subscribeToWorkspace = (
   signal: AbortSignal,
@@ -161,6 +181,14 @@ const testEvent = (marker: string): WorkspaceRealtimeEvent =>
       id: toSafeId<"entity">(`sse-test-${marker}`),
     }),
   );
+const broadcastTestEvent = (
+  targetWorkspaceId: SafeId<"workspace">,
+  event: WorkspaceRealtimeEvent,
+): void => {
+  broadcast(targetWorkspaceId, event, {
+    publishWorkspace: publishWorkspaceEventMock,
+  });
+};
 
 describe("sse module import", () => {
   test("importing the module opens no Redis connection and starts no timer", () => {
@@ -179,7 +207,7 @@ describe("sse module import", () => {
 
   test("broadcasting before startSse does not throw", async () => {
     expect(() =>
-      broadcast(workspaceId, testEvent("before-start")),
+      broadcastTestEvent(workspaceId, testEvent("before-start")),
     ).not.toThrow();
 
     await flushMicrotasks();
@@ -329,7 +357,7 @@ describe("subscribe: already-aborted signal", () => {
 
     // A subsequent broadcast must not resurrect or feed the dead stream:
     // nothing was registered, so there is nothing to enqueue into.
-    broadcast(workspaceId, testEvent("after-abort"));
+    broadcastTestEvent(workspaceId, testEvent("after-abort"));
     await flushMicrotasks();
 
     const second = await reader.read();
@@ -349,7 +377,7 @@ describe("broadcast: local delivery without an attached subscriber", () => {
     const stream = subscribeToWorkspace(controller.signal);
     const reader = stream.getReader();
 
-    broadcast(workspaceId, testEvent("local-only"));
+    broadcastTestEvent(workspaceId, testEvent("local-only"));
 
     const { value } = await reader.read();
     const text = new TextDecoder().decode(value);
@@ -369,7 +397,7 @@ describe("broadcast: local delivery without an attached subscriber", () => {
     const reader = stream.getReader();
     const entityId = toSafeId<"entity">("entity-semantic-event");
 
-    broadcast(
+    broadcastTestEvent(
       workspaceId,
       resourceUpdatedRealtimeEvent(
         resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
@@ -390,6 +418,10 @@ describe("workspace access revocation", () => {
     startSse(
       async ({ userIds }) =>
         new Set(userIds.filter((candidate) => candidate === retainedUserId)),
+      {
+        createClient: createRedisClientMock,
+        publishWorkspace: publishWorkspaceEventMock,
+      },
     );
     stopSse();
     await flushMicrotasks();
@@ -404,7 +436,7 @@ describe("workspace access revocation", () => {
       retainedUserId,
     ).getReader();
 
-    broadcast(workspaceId, testEvent("after-missed-revocation"));
+    broadcastTestEvent(workspaceId, testEvent("after-missed-revocation"));
 
     expect((await removedReader.read()).done).toBe(true);
     const retainedEvent = new TextDecoder().decode(
@@ -422,6 +454,8 @@ describe("workspace access revocation", () => {
   test("closes only the removed member's streams before later events", async () => {
     stopSse();
     await flushMicrotasks();
+    startTestSse();
+    await flushMicrotasks();
 
     const removedController = new AbortController();
     const retainedController = new AbortController();
@@ -437,7 +471,7 @@ describe("workspace access revocation", () => {
 
     expect((await removedReader.read()).done).toBe(true);
 
-    broadcast(workspaceId, testEvent("after-access-revocation"));
+    broadcastTestEvent(workspaceId, testEvent("after-access-revocation"));
     const retainedEvent = new TextDecoder().decode(
       (await retainedReader.read()).value,
     );
@@ -445,6 +479,7 @@ describe("workspace access revocation", () => {
 
     removedController.abort();
     retainedController.abort();
+    stopSse();
     await flushMicrotasks();
   });
 
@@ -492,8 +527,8 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     // loopback (publish -> subscriber handler -> local delivery), never a
     // second inline copy. Reading two events in order proves the first was
     // delivered exactly once.
-    broadcast(workspaceId, testEvent("event-a"));
-    broadcast(workspaceId, testEvent("event-b"));
+    broadcastTestEvent(workspaceId, testEvent("event-a"));
+    broadcastTestEvent(workspaceId, testEvent("event-b"));
 
     expect(decode((await reader.read()).value)).toContain("event-a");
     expect(decode((await reader.read()).value)).toContain("event-b");
@@ -509,20 +544,26 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     subscribeBehavior = "resolve";
     const firstAuthorization = Promise.withResolvers<undefined>();
     let authorizationCalls = 0;
-    startSse(async ({ userIds }) => {
-      authorizationCalls += 1;
-      if (authorizationCalls === 1) {
-        await firstAuthorization.promise;
-      }
-      return new Set(userIds);
-    });
+    startSse(
+      async ({ userIds }) => {
+        authorizationCalls += 1;
+        if (authorizationCalls === 1) {
+          await firstAuthorization.promise;
+        }
+        return new Set(userIds);
+      },
+      {
+        createClient: createRedisClientMock,
+        publishWorkspace: publishWorkspaceEventMock,
+      },
+    );
     await flushMicrotasks();
 
     const controller = new AbortController();
     const reader = subscribeToWorkspace(controller.signal).getReader();
 
-    broadcast(workspaceId, testEvent("ordered-a"));
-    broadcast(workspaceId, testEvent("ordered-b"));
+    broadcastTestEvent(workspaceId, testEvent("ordered-a"));
+    broadcastTestEvent(workspaceId, testEvent("ordered-b"));
     await flushMicrotasks();
     expect(authorizationCalls).toBe(1);
 
@@ -551,7 +592,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     const reader = stream.getReader();
 
     // Baseline: loopback delivery works while subscribed.
-    broadcast(workspaceId, testEvent("before-drop"));
+    broadcastTestEvent(workspaceId, testEvent("before-drop"));
     expect(decode((await reader.read()).value)).toContain("before-drop");
 
     // Bun reconnects the socket but does NOT re-issue SUBSCRIBE: the client is
@@ -573,8 +614,8 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     // old code kept treating the reconnected client as attached, no loopback
     // would arrive and these reads would hang; if it re-subscribed on the same
     // client, each event would be delivered twice.
-    broadcast(workspaceId, testEvent("after-reconnect-1"));
-    broadcast(workspaceId, testEvent("after-reconnect-2"));
+    broadcastTestEvent(workspaceId, testEvent("after-reconnect-1"));
+    broadcastTestEvent(workspaceId, testEvent("after-reconnect-2"));
     expect(decode((await reader.read()).value)).toContain("after-reconnect-1");
     expect(decode((await reader.read()).value)).toContain("after-reconnect-2");
 
@@ -606,7 +647,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     }
     await flushMicrotasks();
 
-    broadcast(workspaceId, testEvent("deaf-window"));
+    broadcastTestEvent(workspaceId, testEvent("deaf-window"));
     expect(decode((await reader.read()).value)).toContain("deaf-window");
 
     subscribeBehavior = "resolve";
@@ -643,14 +684,14 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     // Broadcast our own event in the window: delivered inline AND published with
     // our origin id + deliveredInline=true, so the copy that loops back through
     // the already-live subscription must be suppressed.
-    broadcast(workspaceId, testEvent("own-in-window"));
+    broadcastTestEvent(workspaceId, testEvent("own-in-window"));
 
     // Exactly one copy (the inline one). Attaching the replacement and then
     // broadcasting a steady event that rides loopback only; reading it second
     // proves the windowed event was not delivered twice.
     expect(decode((await reader.read()).value)).toContain("own-in-window");
     await flushMicrotasks();
-    broadcast(workspaceId, testEvent("after-window"));
+    broadcastTestEvent(workspaceId, testEvent("after-window"));
     expect(decode((await reader.read()).value)).toContain("after-window");
 
     controller.abort();

@@ -11,6 +11,7 @@ import { entities, workspaces } from "@/api/db/schema";
 import {
   collectFileCopySources,
   copyEntities,
+  type CopyEntitiesDependencies,
   copyFileObjects,
   type EntitySnapshot,
   type FileMapping,
@@ -25,6 +26,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -41,8 +43,14 @@ import { LIMITS } from "@/api/lib/limits";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
-import { SEARCH_INDEX_OWNER } from "@/api/lib/search/process-extraction";
-import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import {
+  requestNativeExtractionRuns,
+  SEARCH_INDEX_OWNER,
+} from "@/api/lib/search/process-extraction";
+import {
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs,
+} from "@/api/lib/search/projection-repair-queue";
 
 const copyToWorkspaceBodySchema = t.Object({
   entityId: tSafeId("entity"),
@@ -64,7 +72,26 @@ type CopyToWorkspaceHandlerProps = {
   /** Recorder bound to targetWorkspaceId — for create events on copy. */
   recordTargetAuditEvent: AuditRecorder;
   body: CopyToWorkspaceBody;
+  dependencies: CopyToWorkspaceDependencies;
 };
+
+export type CopyToWorkspaceDependencies = CopyEntitiesDependencies & {
+  enqueueDocumentProcessingRun: typeof enqueueDocumentProcessingRun;
+  enqueueImageThumbnailOrMarkFailed: typeof enqueueImageThumbnailOrMarkFailed;
+  enqueuePdfDerivativeOrMarkFailed: typeof enqueuePdfDerivativeOrMarkFailed;
+  flushEntitySearchRepairs: typeof flushEntitySearchRepairs;
+  syncWorkspaceSearchActivity: typeof syncWorkspaceSearchActivity;
+};
+
+const defaultCopyToWorkspaceDependencies = {
+  enqueueDocumentProcessingRun,
+  enqueueEntitySearchRepairs,
+  enqueueImageThumbnailOrMarkFailed,
+  enqueuePdfDerivativeOrMarkFailed,
+  flushEntitySearchRepairs,
+  requestNativeExtractionRuns,
+  syncWorkspaceSearchActivity,
+} satisfies CopyToWorkspaceDependencies;
 
 /**
  * Collect all unique property IDs used by source entities.
@@ -268,6 +295,7 @@ const copyToWorkspaceHandler = async function* ({
   recordSourceAuditEvent,
   recordTargetAuditEvent,
   body: { entityId: sourceEntityId, targetParentId, deleteSource },
+  dependencies,
 }: CopyToWorkspaceHandlerProps) {
   // Fetch source entity
   const source = yield* Result.await(
@@ -487,6 +515,7 @@ const copyToWorkspaceHandler = async function* ({
       sourceEntities: remappedEntities,
       sourceWorkspaceId,
       deleteSource,
+      dependencies,
     });
 
     // For move operations, delete source entities in the same transaction
@@ -544,41 +573,52 @@ const copyToWorkspaceHandler = async function* ({
 
   // Acceleration only: the marks are already committed, and the standing
   // drain repairs whatever a lost flush leaves behind.
-  flushEntitySearchRepairs(
-    txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
-  ).catch(captureError);
+  dependencies
+    .flushEntitySearchRepairs(
+      txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
+    )
+    .catch(captureError);
 
   // Acceleration only: each run already committed with its copied source.
   handoffCommittedDocumentProcessingRuns({
+    enqueue: dependencies.enqueueDocumentProcessingRun,
     runIds: txResult.nativeExtractionRunIds,
   }).catch(captureError);
 
   // Enqueue PDF derivative generation for copied file fields
   for (const fileField of txResult.fileFields) {
-    enqueuePdfDerivativeOrMarkFailed({
-      entityId: fileField.entityId,
-      fieldId: fileField.fieldId,
-      mimeType: fileField.mimeType,
-      encrypted: fileField.encrypted,
-      organizationId,
-      userId,
-      workspaceId: targetWorkspaceId,
-    }).catch(captureError);
-    enqueueImageThumbnailOrMarkFailed({
-      entityId: fileField.entityId,
-      fieldId: fileField.fieldId,
-      mimeType: fileField.mimeType,
-      encrypted: fileField.encrypted,
-      organizationId,
-      userId,
-      workspaceId: targetWorkspaceId,
-    }).catch(captureError);
+    dependencies
+      .enqueuePdfDerivativeOrMarkFailed({
+        entityId: fileField.entityId,
+        fieldId: fileField.fieldId,
+        mimeType: fileField.mimeType,
+        encrypted: fileField.encrypted,
+        organizationId,
+        userId,
+        workspaceId: targetWorkspaceId,
+      })
+      .catch(captureError);
+    dependencies
+      .enqueueImageThumbnailOrMarkFailed({
+        entityId: fileField.entityId,
+        fieldId: fileField.fieldId,
+        mimeType: fileField.mimeType,
+        encrypted: fileField.encrypted,
+        organizationId,
+        userId,
+        workspaceId: targetWorkspaceId,
+      })
+      .catch(captureError);
   }
 
   // Sync search indexes
-  syncWorkspaceSearchActivity(targetWorkspaceId).catch(captureError);
+  dependencies
+    .syncWorkspaceSearchActivity(targetWorkspaceId)
+    .catch(captureError);
   if (deleteSource) {
-    syncWorkspaceSearchActivity(sourceWorkspaceId).catch(captureError);
+    dependencies
+      .syncWorkspaceSearchActivity(sourceWorkspaceId)
+      .catch(captureError);
   }
 
   // The source workspace event is emitted by the route macro. This explicit
@@ -604,59 +644,65 @@ const config = {
   body: copyToWorkspaceBodySchema,
 } satisfies HandlerConfig;
 
-const copyToWorkspace = createSafeHandler(
-  config,
-  async function* ({
-    safeDb,
-    session,
-    user,
-    body,
-    workspaceId: sourceWorkspaceId,
-    getWorkspaceAccess,
-    recordAuditEvent,
-    createAuditRecorder,
-  }) {
-    const { targetWorkspaceId } = body;
-
-    if (sourceWorkspaceId === targetWorkspaceId) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Cannot copy to the same workspace; use duplicate instead",
-        }),
-      );
-    }
-
-    // Validate access to target workspace
-    const targetWorkspace = yield* Result.await(
-      Result.tryPromise(
-        async () => await getWorkspaceAccess(targetWorkspaceId),
-      ),
-    );
-    if (!targetWorkspace || targetWorkspace.status !== "active") {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: "Target workspace not found",
-        }),
-      );
-    }
-
-    return yield* copyToWorkspaceHandler({
+export const createCopyToWorkspace = (
+  dependencies: CopyToWorkspaceDependencies = defaultCopyToWorkspaceDependencies,
+) =>
+  createSafeHandler(
+    config,
+    async function* ({
       safeDb,
-      organizationId: session.activeOrganizationId,
-      sourceWorkspaceId,
-      targetWorkspaceId,
-      userId: user.id,
-      // ctx.workspaceId === sourceWorkspaceId (validated path param),
-      // so the default-bound recorder writes to the source workspace.
-      recordSourceAuditEvent: recordAuditEvent,
-      recordTargetAuditEvent: createAuditRecorder({
-        workspaceId: targetWorkspaceId,
-      }),
+      session,
+      user,
       body,
-    });
-  },
-);
+      workspaceId: sourceWorkspaceId,
+      getWorkspaceAccess,
+      recordAuditEvent,
+      createAuditRecorder,
+    }) {
+      const { targetWorkspaceId } = body;
+
+      if (sourceWorkspaceId === targetWorkspaceId) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Cannot copy to the same workspace; use duplicate instead",
+          }),
+        );
+      }
+
+      // Validate access to target workspace
+      const targetWorkspace = yield* Result.await(
+        Result.tryPromise(
+          async () => await getWorkspaceAccess(targetWorkspaceId),
+        ),
+      );
+      if (!targetWorkspace || targetWorkspace.status !== "active") {
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            message: "Target workspace not found",
+          }),
+        );
+      }
+
+      return yield* copyToWorkspaceHandler({
+        safeDb,
+        organizationId: session.activeOrganizationId,
+        sourceWorkspaceId,
+        targetWorkspaceId,
+        userId: user.id,
+        // ctx.workspaceId === sourceWorkspaceId (validated path param),
+        // so the default-bound recorder writes to the source workspace.
+        recordSourceAuditEvent: recordAuditEvent,
+        recordTargetAuditEvent: createAuditRecorder({
+          workspaceId: targetWorkspaceId,
+        }),
+        body,
+        dependencies,
+      });
+    },
+  );
+
+const copyToWorkspace = createCopyToWorkspace();
 
 export default copyToWorkspace;

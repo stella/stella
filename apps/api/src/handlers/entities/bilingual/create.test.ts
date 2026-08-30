@@ -99,29 +99,13 @@ const createEntityFromBufferMock = mock(
     }),
 );
 
-// Spread the real modules: mock.module is process-global; a partial mock
-// would delete the other exports for later test files.
-const realLoad =
-  await import("@/api/lib/entity-versions/load-entity-version-docx-buffer");
-void mock.module(
-  "@/api/lib/entity-versions/load-entity-version-docx-buffer",
-  () => ({
-    ...realLoad,
-    loadEntityVersionDocxBuffer: loadEntityVersionDocxBufferMock,
-  }),
-);
-const realScan = await import("@/api/lib/file-scan/scan");
-void mock.module("@/api/lib/file-scan/scan", () => ({
-  ...realScan,
+const { createBilingualEntityHandler } = await import("./create");
+const createBilingualEntity = createBilingualEntityHandler({
+  createEntityFromBuffer: asTestRaw(createEntityFromBufferMock),
   getScanWarnings: () => null,
-  scanFile: scanFileMock,
-}));
-const realCreate = await import("@/api/lib/entities/create-from-buffer");
-void mock.module("@/api/lib/entities/create-from-buffer", () => ({
-  ...realCreate,
-  createEntityFromBuffer: createEntityFromBufferMock,
-}));
-const createBilingualEntity = (await import("./create")).default;
+  loadEntityVersionDocxBuffer: loadEntityVersionDocxBufferMock,
+  scanFile: asTestRaw(scanFileMock),
+});
 
 type Ctx = Parameters<typeof createBilingualEntity.handler>[0];
 

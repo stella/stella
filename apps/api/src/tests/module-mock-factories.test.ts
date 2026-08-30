@@ -74,14 +74,6 @@ describe("module mock factories", () => {
     expect(unresolved).toEqual([]);
   });
 
-  test("scans the repository's factories rather than silently finding none", () => {
-    const callSites = apiSourceFiles.filter((filePath) =>
-      readFileSync(path.join(API_ROOT, filePath), "utf-8").includes(MOCK_CALL),
-    );
-
-    expect(allFactories.length).toBeGreaterThanOrEqual(callSites.length);
-  });
-
   test("returns one factory per call site, in every file", () => {
     // A file may hold many mocks, so a repository-wide count has slack: the
     // reader could stop recognizing a body shape and stay above any floor.

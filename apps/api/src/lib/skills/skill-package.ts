@@ -141,6 +141,7 @@ export type GithubTreeItem = {
 
 type SkillSourceRequestBudget = {
   deadlineAt: number;
+  fetchBytes?: typeof safeOutboundFetchBytes;
   remainingRequests?: number;
   timeoutMessage?: string;
 };
@@ -151,14 +152,18 @@ export type SkillPackageFetchContext = {
   githubTrees: Map<string, Promise<GithubTreeItem[]>>;
 };
 
-export const createSkillPackageFetchContext = (limits?: {
-  deadlineAt: number;
-  maxRequests: number;
-}): SkillPackageFetchContext => ({
+export const createSkillPackageFetchContext = (
+  limits?: {
+    deadlineAt: number;
+    maxRequests: number;
+  },
+  fetchBytes: typeof safeOutboundFetchBytes = safeOutboundFetchBytes,
+): SkillPackageFetchContext => ({
   ...(limits
     ? {
         requestBudget: {
           deadlineAt: limits.deadlineAt,
+          fetchBytes,
           remainingRequests: limits.maxRequests,
           timeoutMessage: "Skill import timed out",
         },
@@ -281,11 +286,13 @@ export const fetchGithubCatalogueSkillPackage = async ({
 
 export const discoverSkillPackagesFromUrl = async (
   rawUrl: string,
+  fetchBytes: typeof safeOutboundFetchBytes = safeOutboundFetchBytes,
 ): Promise<Result<SkillPackageDiscovery, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
       const budget = {
         deadlineAt: Date.now() + GITHUB_DISCOVERY_TIMEOUT_MS,
+        fetchBytes,
       };
       const githubTarget = await parseGithubDiscoveryPath(rawUrl, budget);
       if (!githubTarget) {
@@ -1180,7 +1187,7 @@ const fetchSafeBytes = async (
   access: GithubSkillFetchAccess = USER_GITHUB_FETCH_ACCESS,
 ) => {
   consumeSkillSourceRequestBudget(budget);
-  const response = await safeOutboundFetchBytes({
+  const response = await (budget?.fetchBytes ?? safeOutboundFetchBytes)({
     headers: githubSkillFetchHeaders({ access, hostname: url.hostname }),
     maxBytes,
     timeoutMs: githubRequestTimeoutMs(budget),
@@ -1257,7 +1264,7 @@ const githubRefKindExists = async ({
   repo: string;
 }): Promise<boolean> => {
   consumeSkillSourceRequestBudget(budget);
-  const response = await safeOutboundFetchBytes({
+  const response = await (budget?.fetchBytes ?? safeOutboundFetchBytes)({
     headers: GITHUB_FETCH_HEADERS,
     maxBytes: FILE_SIZE_LIMIT_BYTES.skillPack,
     timeoutMs: githubRequestTimeoutMs(budget),
@@ -1798,7 +1805,7 @@ const fetchGithubSkillSourceBytes = async ({
   repo: string;
 }): Promise<ArrayBuffer | null> => {
   consumeSkillSourceRequestBudget(budget);
-  const response = await safeOutboundFetchBytes({
+  const response = await (budget?.fetchBytes ?? safeOutboundFetchBytes)({
     headers: GITHUB_FETCH_HEADERS,
     maxBytes: GITHUB_SKILL_FILE_MAX_BYTES,
     timeoutMs: githubRequestTimeoutMs(budget),

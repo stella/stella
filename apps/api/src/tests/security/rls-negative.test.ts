@@ -1,5 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, getTableName, sql, TransactionRollbackError } from "drizzle-orm";
+import {
+  eq,
+  getTableName,
+  inArray,
+  sql,
+  TransactionRollbackError,
+} from "drizzle-orm";
 
 import { stella } from "@/api/db/rls";
 import {
@@ -35,6 +41,7 @@ import {
   templates,
   templateVersions,
   timeEntries,
+  userFiles,
   workspaceContacts,
   workspaceMembers,
   workspaces,
@@ -374,6 +381,18 @@ describe("chat SELECT — wrong user or workspace", () => {
           .update(workspaces)
           .set({ status: "deleting" })
           .where(eq(workspaces.id, ids.wsA1));
+
+        const workspaceThreadIds = tx
+          .select({ id: chatThreads.id })
+          .from(chatThreads)
+          .where(eq(chatThreads.workspaceId, ids.wsA1));
+        const deletedFiles = await tx
+          .delete(userFiles)
+          .where(inArray(userFiles.threadId, workspaceThreadIds))
+          .returning({ id: userFiles.id });
+        expect(deletedFiles.map((file) => file.id)).toContain(
+          ids.userFileWorkspaceA1,
+        );
 
         const deletedThreads = await tx
           .delete(chatThreads)

@@ -60,9 +60,10 @@ type MachineApiKeySummary = {
  *
  * No plaintext is returned, and no endpoint returns it after creation.
  */
-const listMachineApiKeys = createSafeRootHandler(
-  config,
-  async function* ({ session, query }) {
+export const createListMachineApiKeysHandler = (
+  listMachineApiKeys: typeof listOrganizationMachineApiKeys = listOrganizationMachineApiKeys,
+) =>
+  createSafeRootHandler(config, async function* ({ session, query }) {
     const limit = query.limit ?? MACHINE_API_KEY_PAGE_SIZE_DEFAULT;
 
     // A malformed cursor is rejected rather than silently treated as "first
@@ -79,7 +80,7 @@ const listMachineApiKeys = createSafeRootHandler(
     const rows = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await listOrganizationMachineApiKeys({
+          await listMachineApiKeys({
             cursor,
             limit,
             organizationId: session.activeOrganizationId,
@@ -130,7 +131,7 @@ const listMachineApiKeys = createSafeRootHandler(
       limit: page.limit,
       nextCursor: page.nextCursor,
     });
-  },
-);
+  });
 
+const listMachineApiKeys = createListMachineApiKeysHandler();
 export default listMachineApiKeys;

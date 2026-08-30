@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { MACHINE_API_KEY_PREFIX } from "@/api/lib/machine-api-key-config";
+import { resolveMachineApiKeySession as resolveMachineApiKeySessionWithDependencies } from "@/api/mcp/api-key-auth";
+import { extractMcpSession } from "@/api/mcp/auth";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type { McpEffectiveAuthority } from "@/api/mcp/effective-authority";
 
@@ -22,13 +24,11 @@ import type { McpEffectiveAuthority } from "@/api/mcp/effective-authority";
 const verifyApiKey = mock();
 const resolveMemberAuthorization = mock();
 
-void mock.module("@/api/lib/auth", () => ({
-  getAuth: () => ({ api: { verifyApiKey } }),
-  resolveMemberAuthorization,
-}));
-
-const { resolveMachineApiKeySession } = await import("@/api/mcp/api-key-auth");
-const { extractMcpSession } = await import("@/api/mcp/auth");
+const resolveMachineApiKeySession = async (credential: string) =>
+  await resolveMachineApiKeySessionWithDependencies(credential, {
+    verifyApiKey,
+    resolveAuthorization: resolveMemberAuthorization,
+  });
 
 const OWNER_USER_ID = "user-machine-owner";
 const ORG_ID = "org-owning-the-key";
@@ -366,7 +366,9 @@ describe("authenticateMcpRequest credential dispatch", () => {
     givenKey();
     givenMemberRole("member");
 
-    const session = await authenticateMcpRequest(CREDENTIAL);
+    const session = await authenticateMcpRequest(CREDENTIAL, {
+      resolveApiKeySession: resolveMachineApiKeySession,
+    });
 
     expect(session.userId).toBe(OWNER_USER_ID);
     expect(verifyApiKey).toHaveBeenCalled();

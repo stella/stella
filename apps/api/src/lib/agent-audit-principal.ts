@@ -10,6 +10,7 @@ type ResolveAgentAuditExecutionOptions = {
   credential: McpSession["credential"];
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  db?: Pick<typeof rootDb, "select">;
 };
 
 /**
@@ -22,6 +23,7 @@ export const resolveAgentAuditExecution = async ({
   credential,
   organizationId,
   userId,
+  db = rootDb,
 }: ResolveAgentAuditExecutionOptions): Promise<
   AuditExecutionContext | undefined
 > => {
@@ -65,7 +67,7 @@ export const resolveAgentAuditExecution = async ({
         },
       };
     case "oauth_client": {
-      const registration = await rootDb
+      const registration = await db
         .select({ id: agentRegistration.id })
         .from(agentRegistration)
         .where(

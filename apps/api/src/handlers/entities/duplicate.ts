@@ -7,6 +7,7 @@ import { transactionAbortError } from "@/api/db/safe-db";
 import {
   collectFileCopySources,
   copyEntities,
+  type CopyEntitiesDependencies,
   copyFileObjects,
   type EntitySnapshot,
   type FileMapping,
@@ -20,6 +21,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -27,8 +29,14 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { LIMITS } from "@/api/lib/limits";
-import { SEARCH_INDEX_OWNER } from "@/api/lib/search/process-extraction";
-import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import {
+  requestNativeExtractionRuns,
+  SEARCH_INDEX_OWNER,
+} from "@/api/lib/search/process-extraction";
+import {
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs,
+} from "@/api/lib/search/projection-repair-queue";
 
 const duplicateEntityBodySchema = t.Object({
   entityId: tSafeId("entity"),
@@ -41,7 +49,20 @@ type DuplicateEntityHandlerProps = {
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: Static<typeof duplicateEntityBodySchema>;
+  dependencies: DuplicateEntityDependencies;
 };
+
+export type DuplicateEntityDependencies = CopyEntitiesDependencies & {
+  enqueueDocumentProcessingRun: typeof enqueueDocumentProcessingRun;
+  flushEntitySearchRepairs: typeof flushEntitySearchRepairs;
+};
+
+const defaultDuplicateEntityDependencies = {
+  enqueueDocumentProcessingRun,
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs,
+  requestNativeExtractionRuns,
+} satisfies DuplicateEntityDependencies;
 
 const duplicateEntityHandler = async function* ({
   safeDb,
@@ -50,6 +71,7 @@ const duplicateEntityHandler = async function* ({
   userId,
   recordAuditEvent,
   body: { entityId: sourceEntityId },
+  dependencies,
 }: DuplicateEntityHandlerProps) {
   const source = yield* Result.await(
     safeDb((tx) =>
@@ -172,6 +194,7 @@ const duplicateEntityHandler = async function* ({
         // Same-workspace duplicate never deletes the source; the
         // lock set is target-only regardless (see `copyEntities`).
         deleteSource: false,
+        dependencies,
       }),
   );
 
@@ -186,11 +209,14 @@ const duplicateEntityHandler = async function* ({
 
   // Acceleration only: the marks are already committed, and the standing
   // drain repairs whatever a lost flush leaves behind.
-  flushEntitySearchRepairs(
-    txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
-  ).catch(captureError);
+  dependencies
+    .flushEntitySearchRepairs(
+      txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
+    )
+    .catch(captureError);
 
   handoffCommittedDocumentProcessingRuns({
+    enqueue: dependencies.enqueueDocumentProcessingRun,
     runIds: txResult.nativeExtractionRunIds,
   }).catch(captureError);
 
@@ -232,25 +258,31 @@ const config = {
   body: duplicateEntityBodySchema,
 } satisfies HandlerConfig;
 
-const duplicateEntity = createSafeHandler(
-  config,
-  async function* ({
-    safeDb,
-    session,
-    user,
-    workspaceId,
-    body,
-    recordAuditEvent,
-  }) {
-    return yield* duplicateEntityHandler({
+export const createDuplicateEntity = (
+  dependencies: DuplicateEntityDependencies = defaultDuplicateEntityDependencies,
+) =>
+  createSafeHandler(
+    config,
+    async function* ({
       safeDb,
-      organizationId: session.activeOrganizationId,
+      session,
+      user,
       workspaceId,
-      userId: user.id,
-      recordAuditEvent,
       body,
-    });
-  },
-);
+      recordAuditEvent,
+    }) {
+      return yield* duplicateEntityHandler({
+        safeDb,
+        organizationId: session.activeOrganizationId,
+        workspaceId,
+        userId: user.id,
+        recordAuditEvent,
+        body,
+        dependencies,
+      });
+    },
+  );
+
+const duplicateEntity = createDuplicateEntity();
 
 export default duplicateEntity;

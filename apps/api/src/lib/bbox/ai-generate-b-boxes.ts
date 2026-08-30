@@ -27,6 +27,8 @@ type GenerateBBoxDataProps = {
   workspaceId: SafeId<"workspace">;
   orgAIConfig?: OrgAIConfig | null;
   promptCachingEnabled: boolean;
+  /** External model-dispatch boundary; supplied by focused integration tests. */
+  generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
 };
 
 export const generateBBoxData = async ({
@@ -41,6 +43,7 @@ export const generateBBoxData = async ({
   workspaceId,
   orgAIConfig,
   promptCachingEnabled,
+  generateObjectForRole = generateTanStackObjectForRole,
 }: GenerateBBoxDataProps): Promise<
   Result<BBoxItem[], WorkflowIntegrationError>
 > => {
@@ -74,7 +77,7 @@ export const generateBBoxData = async ({
           mimeType: "application/pdf",
         },
       };
-      const result = await generateTanStackObjectForRole({
+      const result = await generateObjectForRole({
         role: "pdf",
         serviceTier: "standard",
         orgAIConfig,

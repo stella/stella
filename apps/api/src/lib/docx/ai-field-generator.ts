@@ -87,6 +87,7 @@ type FieldChatInput = {
   prompt: string;
   skillTools: ChatToolMap | undefined;
   system: string | undefined;
+  resolveTextModel: typeof resolveTanStackTextModel;
   /**
    * Tenant set for the model-ingress guard. Field prompts carry document text
    * and stored values, so a hit is redacted and reported, never fatal.
@@ -107,6 +108,7 @@ const resolveFieldChat = ({
   orgAIConfig,
   organizationId,
   prompt,
+  resolveTextModel,
   system,
   tenantWorkspaceIds,
 }: FieldChatInput): ResolvedFieldChat => ({
@@ -120,7 +122,7 @@ const resolveFieldChat = ({
     messages: [{ role: "user", content: prompt }],
     workspaceIds: tenantWorkspaceIds,
   }),
-  model: resolveTanStackTextModel({
+  model: resolveTextModel({
     role: "fast",
     orgAIConfig,
     organizationId,
@@ -197,6 +199,7 @@ export const buildAiFieldGenerator = ({
   skillContext,
   aiAnalytics,
   operationSignal,
+  resolveTextModel = resolveTanStackTextModel,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
@@ -208,6 +211,8 @@ export const buildAiFieldGenerator = ({
   aiAnalytics?: AiFieldAnalytics | undefined;
   /** Whole-fill cancellation/deadline, composed with each per-call bound. */
   operationSignal?: AbortSignal | undefined;
+  /** External model-resolution boundary; supplied by focused integration tests. */
+  resolveTextModel?: typeof resolveTanStackTextModel | undefined;
 }): AiFieldGenerator | undefined => {
   // Resolve via org BYOK or the deployment's instance provider; skip (leave AI
   // fields unfilled) only when neither can supply a model.
@@ -242,6 +247,7 @@ ${JSON.stringify(values)}
 
 Reply with only the text for this field — no preamble, no quotes, no markdown.`,
         skillTools,
+        resolveTextModel,
         system: skillTools ? SKILL_REF_GENERATOR_GUIDANCE : undefined,
         tenantWorkspaceIds,
       });
@@ -276,6 +282,7 @@ export const buildAiConditionDecider = ({
   skillContext,
   aiAnalytics,
   operationSignal,
+  resolveTextModel = resolveTanStackTextModel,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
@@ -287,6 +294,8 @@ export const buildAiConditionDecider = ({
   aiAnalytics?: AiFieldAnalytics | undefined;
   /** Whole-fill cancellation/deadline, composed with each per-call bound. */
   operationSignal?: AbortSignal | undefined;
+  /** External model-resolution boundary; supplied by focused integration tests. */
+  resolveTextModel?: typeof resolveTanStackTextModel | undefined;
 }): AiConditionDecider | undefined => {
   // Resolve via org BYOK or the deployment's instance provider; skip (leave AI
   // fields unfilled) only when neither can supply a model.
@@ -310,6 +319,7 @@ ${JSON.stringify(values)}
 
 Decide true (yes) or false (no) for this condition.`,
         skillTools,
+        resolveTextModel,
         system: skillTools ? SKILL_REF_GENERATOR_GUIDANCE : undefined,
         tenantWorkspaceIds,
       });
@@ -380,6 +390,7 @@ export const buildAiOccurrenceAdapter = ({
   skillContext,
   aiAnalytics,
   operationSignal,
+  resolveTextModel = resolveTanStackTextModel,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
@@ -395,6 +406,8 @@ export const buildAiOccurrenceAdapter = ({
   aiAnalytics?: AiFieldAnalytics | undefined;
   /** Whole-fill cancellation/deadline, composed with each per-call bound. */
   operationSignal?: AbortSignal | undefined;
+  /** External model-resolution boundary; supplied by focused integration tests. */
+  resolveTextModel?: typeof resolveTanStackTextModel | undefined;
 }): AiOccurrenceAdapter | undefined => {
   // Resolve via org BYOK or the deployment's instance provider; skip (leave AI
   // fields unfilled) only when neither can supply a model.
@@ -413,6 +426,7 @@ export const buildAiOccurrenceAdapter = ({
         outputSchema: occurrenceRenderingsSchema,
         prompt: buildAdaptPrompt(input, documentLanguages),
         skillTools,
+        resolveTextModel,
         system: skillTools
           ? `${ADAPT_SYSTEM_PROMPT} ${SKILL_REF_GENERATOR_GUIDANCE}`
           : ADAPT_SYSTEM_PROMPT,

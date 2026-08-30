@@ -1,6 +1,7 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const organizationId = toSafeId<"organization">("org_from_database");
 const roomId = toSafeId<"folioCollabRoom">("room_from_database");
@@ -16,28 +17,27 @@ const query = {
   where: () => query,
 };
 
-void mock.module("@/api/db/root", () => ({
-  rlsDb: {},
-  rootDb: {
-    select: () => query,
-    transaction: async (
-      callback: (tx: typeof transactionSentinel) => unknown,
-    ) => {
-      transactionCalls += 1;
-      return await callback(transactionSentinel);
-    },
-  },
-}));
-
 const { resolveFolioCollabServiceRoom } =
   await import("./folio-collab-service-room");
+
+const database = asTestRaw<
+  NonNullable<Parameters<typeof resolveFolioCollabServiceRoom>[1]>
+>({
+  select: () => query,
+  transaction: async (
+    callback: (tx: typeof transactionSentinel) => unknown,
+  ) => {
+    transactionCalls += 1;
+    return await callback(transactionSentinel);
+  },
+});
 
 describe("collaboration service room resolution", () => {
   test("derives every tenant boundary from the stored room", async () => {
     rows = [{ organizationId, roomId, workspaceId }];
     transactionCalls = 0;
 
-    const result = await resolveFolioCollabServiceRoom(roomId);
+    const result = await resolveFolioCollabServiceRoom(roomId, database);
 
     expect(result.status).toBe("ok");
     if (result.status !== "ok") {
@@ -57,7 +57,7 @@ describe("collaboration service room resolution", () => {
   test("does not mint a snapshot target for an unknown room", async () => {
     rows = [];
 
-    const result = await resolveFolioCollabServiceRoom(roomId);
+    const result = await resolveFolioCollabServiceRoom(roomId, database);
 
     expect(result.status).toBe("error");
     if (result.status === "error") {

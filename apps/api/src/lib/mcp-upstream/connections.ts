@@ -40,6 +40,32 @@ const MCP_HTTP_REQUEST_TIMEOUT_MS = 10_000;
 const MCP_HTTP_RESPONSE_MAX_BYTES = 10_000_000;
 const TOKEN_REFRESH_SKEW_MS = 60_000;
 
+type OutboundFetchDependencies = {
+  safeOutboundFetchStream: typeof safeOutboundFetchStream;
+  validateOutboundFetchTarget: typeof validateOutboundFetchTarget;
+};
+
+type ConnectionDependencies = {
+  createMCPClient: typeof createMCPClient;
+  decryptMcpSecret: typeof decryptMcpSecret;
+  encryptMcpSecret: typeof encryptMcpSecret;
+  refreshOAuthToken: typeof refreshOAuthToken;
+  tokenExpiresAt: typeof tokenExpiresAt;
+};
+
+const DEFAULT_CONNECTION_DEPENDENCIES: ConnectionDependencies = {
+  createMCPClient,
+  decryptMcpSecret,
+  encryptMcpSecret,
+  refreshOAuthToken,
+  tokenExpiresAt,
+};
+
+const DEFAULT_OUTBOUND_FETCH_DEPENDENCIES: OutboundFetchDependencies = {
+  safeOutboundFetchStream,
+  validateOutboundFetchTarget,
+};
+
 type RawConnectionRow = {
   accessTokenEncrypted: Buffer | null;
   accessTokenIv: Buffer | null;
@@ -242,11 +268,15 @@ const normalizeConnectionRows = async ({
 
 export const createMcpClientForConnection = async ({
   organizationId,
+  dependencies = DEFAULT_CONNECTION_DEPENDENCIES,
+  outboundFetch = DEFAULT_OUTBOUND_FETCH_DEPENDENCIES,
   row,
   safeDb,
   userId,
 }: {
   organizationId: SafeId<"organization">;
+  outboundFetch?: OutboundFetchDependencies;
+  dependencies?: ConnectionDependencies;
   row: LoadedMcpConnection;
   safeDb: SafeDb;
   userId: SafeId<"user">;
@@ -256,12 +286,13 @@ export const createMcpClientForConnection = async ({
     row,
     safeDb,
     userId,
+    dependencies,
   });
   if (token.type === "skip") {
     return null;
   }
 
-  const target = await validateOutboundFetchTarget(row.url);
+  const target = await outboundFetch.validateOutboundFetchTarget(row.url);
   if (Result.isError(target)) {
     captureError(target.error, {
       source: "mcp-upstream-client",
@@ -270,11 +301,14 @@ export const createMcpClientForConnection = async ({
     return null;
   }
 
-  return await createMCPClient({
+  return await dependencies.createMCPClient({
     transport: {
       type: "http",
       url: target.value.url.toString(),
-      fetch: createSafeMcpFetch(MCP_HTTP_REQUEST_TIMEOUT_MS),
+      fetch: createSafeMcpFetch(
+        MCP_HTTP_REQUEST_TIMEOUT_MS,
+        outboundFetch.safeOutboundFetchStream,
+      ),
       ...(token.value === null
         ? {}
         : { headers: { Authorization: `Bearer ${token.value}` } }),
@@ -407,6 +441,8 @@ const asCallToolResult = (value: unknown): CallToolResult =>
 export const proxyMcpToolCall = async ({
   args,
   cachedTool,
+  dependencies,
+  outboundFetch,
   organizationId,
   row,
   safeDb,
@@ -414,6 +450,8 @@ export const proxyMcpToolCall = async ({
 }: {
   args: Record<string, unknown>;
   cachedTool: CachedMcpToolDefinition;
+  dependencies?: ConnectionDependencies;
+  outboundFetch?: OutboundFetchDependencies;
   organizationId: SafeId<"organization">;
   row: LoadedMcpConnection;
   safeDb: SafeDb;
@@ -421,6 +459,8 @@ export const proxyMcpToolCall = async ({
 }): Promise<CallToolResult> => {
   const client = await createMcpClientForConnection({
     organizationId,
+    ...(dependencies === undefined ? {} : { dependencies }),
+    ...(outboundFetch === undefined ? {} : { outboundFetch }),
     row,
     safeDb,
     userId,
@@ -454,7 +494,10 @@ export const proxyMcpToolCall = async ({
   }
 };
 
-const createSafeMcpFetch = (timeoutMs: number): typeof fetch => {
+const createSafeMcpFetch = (
+  timeoutMs: number,
+  safeOutboundFetchStreamImpl: typeof safeOutboundFetchStream,
+): typeof fetch => {
   const safeFetch: typeof fetch = Object.assign(
     async (
       input: Parameters<typeof fetch>[0],
@@ -465,7 +508,7 @@ const createSafeMcpFetch = (timeoutMs: number): typeof fetch => {
       }
 
       const url = mcpFetchUrl(input);
-      const response = await safeOutboundFetchStream({
+      const response = await safeOutboundFetchStreamImpl({
         body: await mcpFetchBody(input, init),
         headers: mcpFetchHeaders(input, init),
         maxBytes: MCP_HTTP_RESPONSE_MAX_BYTES,
@@ -540,11 +583,13 @@ const normalizeMcpFetchBody = (body: unknown): SafeOutboundFetchBody => {
 };
 
 const resolveAuthorizationToken = async ({
+  dependencies,
   organizationId,
   row,
   safeDb,
   userId,
 }: {
+  dependencies: ConnectionDependencies;
   organizationId: SafeId<"organization">;
   row: LoadedMcpConnection;
   safeDb: SafeDb;
@@ -557,7 +602,7 @@ const resolveAuthorizationToken = async ({
   if (row.type === "bearer") {
     return {
       type: "ok",
-      value: await decryptMcpSecret({
+      value: await dependencies.decryptMcpSecret({
         ciphertext: row.staticTokenEncrypted,
         connectorId: row.connectorId,
         iv: row.staticTokenIv,
@@ -574,7 +619,7 @@ const resolveAuthorizationToken = async ({
   ) {
     return {
       type: "ok",
-      value: await decryptMcpSecret({
+      value: await dependencies.decryptMcpSecret({
         ciphertext: row.accessTokenEncrypted,
         connectorId: row.connectorId,
         iv: row.accessTokenIv,
@@ -590,7 +635,7 @@ const resolveAuthorizationToken = async ({
     return { type: "skip" };
   }
 
-  const refreshToken = await decryptMcpSecret({
+  const refreshToken = await dependencies.decryptMcpSecret({
     ciphertext: row.refreshTokenEncrypted,
     connectorId: row.connectorId,
     iv: row.refreshTokenIv,
@@ -600,7 +645,7 @@ const resolveAuthorizationToken = async ({
   });
   const clientSecret =
     row.oauthClientSecretEncrypted && row.oauthClientSecretIv
-      ? await decryptMcpSecret({
+      ? await dependencies.decryptMcpSecret({
           ciphertext: row.oauthClientSecretEncrypted,
           connectorId: row.connectorId,
           iv: row.oauthClientSecretIv,
@@ -608,7 +653,7 @@ const resolveAuthorizationToken = async ({
           purpose: "mcp_client_secret",
         })
       : null;
-  const refreshed = await refreshOAuthToken({
+  const refreshed = await dependencies.refreshOAuthToken({
     authorizationServerUrl: row.oauthAuthorizationServerUrl,
     clientId: row.oauthClientId,
     clientSecret,
@@ -621,7 +666,7 @@ const resolveAuthorizationToken = async ({
     return { type: "skip" };
   }
 
-  const encryptedAccess = await encryptMcpSecret({
+  const encryptedAccess = await dependencies.encryptMcpSecret({
     connectorId: row.connectorId,
     organizationId,
     purpose: "mcp_access_token",
@@ -629,7 +674,7 @@ const resolveAuthorizationToken = async ({
     userId,
   });
   const encryptedRefresh = refreshed.value.refresh_token
-    ? await encryptMcpSecret({
+    ? await dependencies.encryptMcpSecret({
         connectorId: row.connectorId,
         organizationId,
         purpose: "mcp_refresh_token",
@@ -649,7 +694,7 @@ const resolveAuthorizationToken = async ({
         refreshTokenEncrypted:
           encryptedRefresh?.ciphertext ?? row.refreshTokenEncrypted,
         refreshTokenIv: encryptedRefresh?.iv ?? row.refreshTokenIv,
-        expiresAt: tokenExpiresAt(refreshed.value),
+        expiresAt: dependencies.tokenExpiresAt(refreshed.value),
         status: "connected",
         updatedAt: new Date(),
       })

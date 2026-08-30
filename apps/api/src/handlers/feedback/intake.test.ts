@@ -1,10 +1,13 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import Elysia from "elysia";
 
-// Replace the whole email module: importing the real one pulls in the
-// transactional template package, which the shared node_modules may resolve to
-// a checkout without this branch's template. Stub every export the wider test
-// graph consumes so no other importer breaks.
+import {
+  MAX_RAW_FEEDBACK_BODY_CHARS,
+  receivePublicFeedback,
+} from "@/api/handlers/feedback/intake";
+import { createFeedbackIntakeGuards } from "@/api/handlers/feedback/intake-guards";
+import { feedbackPublicRoute } from "@/api/handlers/feedback/routes";
+
 const sendFeedbackEmailMock = mock(
   async (_args: {
     to: string;
@@ -15,19 +18,21 @@ const sendFeedbackEmailMock = mock(
   }): Promise<undefined> => undefined,
 );
 let transactionalEmailConfigured = true;
-void mock.module("@/api/lib/email/email", () => ({
-  isTransactionalEmailConfigured: () => transactionalEmailConfigured,
-  sendOTPEmail: mock(async () => undefined),
-  sendNewDeviceLoginEmail: mock(async () => undefined),
-  sendOrganizationInvitation: mock(async () => undefined),
-  sendFeedbackEmail: sendFeedbackEmailMock,
-}));
 
-const { createFeedbackIntakeGuards } =
-  await import("@/api/handlers/feedback/intake-guards");
-const { MAX_RAW_FEEDBACK_BODY_CHARS, receivePublicFeedback } =
-  await import("@/api/handlers/feedback/intake");
-const { feedbackPublicRoute } = await import("@/api/handlers/feedback/routes");
+const receivePublicFeedbackForTest = async ({
+  deps,
+  ...input
+}: Parameters<typeof receivePublicFeedback>[0]) =>
+  await receivePublicFeedback({
+    ...input,
+    deps: {
+      ...deps,
+      email: {
+        isConfigured: () => transactionalEmailConfigured,
+        send: sendFeedbackEmailMock,
+      },
+    },
+  });
 
 // In-memory-only guards: force the Redis path to throw so every call falls back
 // to the deterministic in-process counters/dedup.
@@ -80,12 +85,8 @@ describe("public feedback intake", () => {
     transactionalEmailConfigured = true;
   });
 
-  afterAll(() => {
-    mock.restore();
-  });
-
   test("delivers via email when FEEDBACK_EMAIL_TO is set, re-sanitizing content", async () => {
-    const response = await receivePublicFeedback({
+    const response = await receivePublicFeedbackForTest({
       rawBody: raw({
         title: "empty for jane@example.com",
         body: "Reported by jane@example.com on a matter.",
@@ -113,7 +114,7 @@ describe("public feedback intake", () => {
   });
 
   test("delivers via email with an intake reporter block", async () => {
-    const response = await receivePublicFeedback({
+    const response = await receivePublicFeedbackForTest({
       rawBody: raw({ source: { instance: "hosted", version: "9.9.9" } }),
       clientIp: "203.0.113.6",
       deps: {
@@ -133,7 +134,7 @@ describe("public feedback intake", () => {
   });
 
   test("sanitizes source metadata before email delivery", async () => {
-    const response = await receivePublicFeedback({
+    const response = await receivePublicFeedbackForTest({
       rawBody: raw({
         source: {
           instance: "jane@example.com",
@@ -162,7 +163,7 @@ describe("public feedback intake", () => {
   });
 
   test("refuses with feature_disabled when no email is configured", async () => {
-    const response = await receivePublicFeedback({
+    const response = await receivePublicFeedbackForTest({
       rawBody: raw(),
       clientIp: "203.0.113.7",
       deps: {
@@ -177,7 +178,7 @@ describe("public feedback intake", () => {
   test("refuses with feature_disabled when email transport is not configured", async () => {
     transactionalEmailConfigured = false;
 
-    const response = await receivePublicFeedback({
+    const response = await receivePublicFeedbackForTest({
       rawBody: raw(),
       clientIp: "203.0.113.17",
       deps: {
@@ -201,7 +202,7 @@ describe("public feedback intake", () => {
 
     for (let i = 0; i < 5; i += 1) {
       // oxlint-disable-next-line no-await-in-loop -- sequential rate-limit probe: each submission must increment the per-IP counter before the next so the 6th trips the limit
-      const ok = await receivePublicFeedback({
+      const ok = await receivePublicFeedbackForTest({
         // Unique content each time so dedup never fires before the rate limit.
         rawBody: raw({ title: `report ${i}`, body: `distinct body ${i}` }),
         clientIp: ip,
@@ -210,7 +211,7 @@ describe("public feedback intake", () => {
       expect(ok.status).toBe(200);
     }
 
-    const blocked = await receivePublicFeedback({
+    const blocked = await receivePublicFeedbackForTest({
       rawBody: raw({ title: "report 6", body: "distinct body 6" }),
       clientIp: ip,
       deps,
@@ -226,14 +227,14 @@ describe("public feedback intake", () => {
       emailTo: "maintainer@example.com",
     };
 
-    const first = await receivePublicFeedback({
+    const first = await receivePublicFeedbackForTest({
       rawBody: raw(),
       clientIp: "203.0.113.9",
       deps,
     });
     expect(first.status).toBe(200);
 
-    const duplicate = await receivePublicFeedback({
+    const duplicate = await receivePublicFeedbackForTest({
       rawBody: raw(),
       clientIp: "203.0.113.9",
       deps,
@@ -251,12 +252,12 @@ describe("public feedback intake", () => {
       emailTo: "maintainer@example.com",
     };
 
-    const first = await receivePublicFeedback({
+    const first = await receivePublicFeedbackForTest({
       rawBody: raw({ title: "A", body: "B\nC" }),
       clientIp: "203.0.113.15",
       deps,
     });
-    const second = await receivePublicFeedback({
+    const second = await receivePublicFeedbackForTest({
       rawBody: raw({ title: "A\nB", body: "C" }),
       clientIp: "203.0.113.15",
       deps,
@@ -268,7 +269,7 @@ describe("public feedback intake", () => {
   });
 
   test("schema rejects an oversized body (422)", async () => {
-    const response = await receivePublicFeedback({
+    const response = await receivePublicFeedbackForTest({
       rawBody: raw({ body: "x".repeat(8001) }),
       clientIp: "203.0.113.10",
       deps: { guards: memoryGuards(), emailTo: "maintainer@example.com" },
@@ -278,7 +279,7 @@ describe("public feedback intake", () => {
   });
 
   test("schema rejects unknown keys (422)", async () => {
-    const response = await receivePublicFeedback({
+    const response = await receivePublicFeedbackForTest({
       rawBody: raw({ severity: "high" }),
       clientIp: "203.0.113.11",
       deps: { guards: memoryGuards(), emailTo: "maintainer@example.com" },
@@ -288,7 +289,7 @@ describe("public feedback intake", () => {
   });
 
   test("rejects a malformed JSON body (400)", async () => {
-    const response = await receivePublicFeedback({
+    const response = await receivePublicFeedbackForTest({
       rawBody: "{not json",
       clientIp: "203.0.113.12",
       deps: { guards: memoryGuards(), emailTo: "maintainer@example.com" },

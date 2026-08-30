@@ -1267,12 +1267,13 @@ const isSameNativeExtractionSource = (
 
 const persistMissingNativeExtractionRuns = async (
   candidates: DocumentProcessingCandidate[],
+  database: typeof rootDb = rootDb,
 ): Promise<SafeId<"documentProcessingRun">[]> => {
   if (candidates.length === 0) {
     return [];
   }
 
-  return await rootDb.transaction(async (tx) => {
+  return await database.transaction(async (tx) => {
     const lockedEntities = await tx
       .select({
         currentVersionId: entities.currentVersionId,
@@ -1515,6 +1516,19 @@ type ReconciliationPhaseResult = {
   hasMore: boolean;
 };
 
+export type DocumentProcessingReconciliationDependencies = {
+  broadcastWorkspaceResourceUpdated: typeof broadcastWorkspaceResourceUpdated;
+  database: typeof rootDb;
+  enqueueDocumentProcessingRun: typeof enqueueDocumentProcessingRun;
+  indexEntity: (entityId: SafeId<"entity">) => Promise<void>;
+  readRepairScanCursor: () => Promise<SafeId<"field"> | null>;
+  readyRepairCursor: () => Promise<unknown>;
+  writeRepairScanCursor: (input: {
+    expectedCursor: SafeId<"field"> | null;
+    nextCursor: SafeId<"field"> | null;
+  }) => Promise<boolean>;
+};
+
 /**
  * A capped selection that came back full stopped at the cap, not at the
  * end of the backlog. Every phase computes this from the rows it selected,
@@ -1564,16 +1578,18 @@ export const resolveRepairScanPage = ({
 // Return types are inferred so each producer's own `hasMore` reasoning
 // stays visible at the `return`, and the `ReconciliationPhase` contract
 // checks the shape where the phases are declared.
-const recoverMissingNativeExtractionRuns = async () => {
+const recoverMissingNativeExtractionRuns = async (
+  dependencies: DocumentProcessingReconciliationDependencies,
+) => {
   // Take the connection before the cursor commands rather than inside
   // them: their deadlines bound command latency and are far shorter than a
   // cold-start retry ladder. A connect that fails here fails this phase,
   // which is the only phase that needs Redis at all; the rest of the tick
   // runs on the database alone and is not held to this.
-  await reconciliationRedis.ready();
+  await dependencies.readyRepairCursor();
   const settledBefore = new Date(Date.now() - REPAIR_SETTLE_DELAY_MS);
-  const cursor = await readRepairScanCursor();
-  const candidates = await rootDb
+  const cursor = await dependencies.readRepairScanCursor();
+  const candidates = await dependencies.database
     .select({
       content: fields.content,
       entityId: entities.id,
@@ -1609,7 +1625,7 @@ const recoverMissingNativeExtractionRuns = async () => {
         sql`${fields.content}->>'type' = 'file'
           AND ${fields.content}->>'encrypted' = 'false'`,
         notExists(
-          rootDb
+          dependencies.database
             .select({ id: earlierFileFields.id })
             .from(earlierFileFields)
             .where(
@@ -1628,7 +1644,10 @@ const recoverMissingNativeExtractionRuns = async () => {
 
   if (candidates.length === 0) {
     if (cursor !== null) {
-      await writeRepairScanCursor({ expectedCursor: cursor, nextCursor: null });
+      await dependencies.writeRepairScanCursor({
+        expectedCursor: cursor,
+        nextCursor: null,
+      });
     }
     return { count: 0, hasMore: false };
   }
@@ -1642,12 +1661,15 @@ const recoverMissingNativeExtractionRuns = async () => {
     }
     return [{ ...candidate, content: candidate.content }];
   });
-  const runIds = await persistMissingNativeExtractionRuns(repairCandidates);
+  const runIds = await persistMissingNativeExtractionRuns(
+    repairCandidates,
+    dependencies.database,
+  );
   const page = resolveRepairScanPage({
     createdRunCount: runIds.length,
     scannedFieldIds: candidates.map(({ fieldId }) => fieldId),
   });
-  await writeRepairScanCursor({
+  await dependencies.writeRepairScanCursor({
     expectedCursor: cursor,
     nextCursor: page.nextCursor,
   });
@@ -1655,10 +1677,12 @@ const recoverMissingNativeExtractionRuns = async () => {
 };
 
 const updateQueuedRunSchedule = async ({
+  database,
   delayMs,
   runIds,
   updatedAt,
 }: {
+  database: typeof rootDb;
   delayMs: number;
   runIds: SafeId<"documentProcessingRun">[];
   updatedAt: Date;
@@ -1666,7 +1690,7 @@ const updateQueuedRunSchedule = async ({
   if (runIds.length === 0) {
     return;
   }
-  await rootDb
+  await database
     .update(documentProcessingRuns)
     .set({
       nextAttemptAt: new Date(updatedAt.getTime() + delayMs),
@@ -1681,9 +1705,13 @@ const updateQueuedRunSchedule = async ({
 };
 
 export const dispatchQueuedDocumentProcessingRuns = async ({
+  database = rootDb,
+  enqueue = enqueueDocumentProcessingRun,
   limit = RECONCILE_BATCH_SIZE,
   selection = QUEUED_OCR_SELECTION.ALL_DUE,
 }: {
+  database?: typeof rootDb;
+  enqueue?: typeof enqueueDocumentProcessingRun;
   limit?: number;
   selection?:
     | typeof QUEUED_OCR_SELECTION.ALL_DUE
@@ -1694,7 +1722,7 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
   retryAt: Date | null;
 }> => {
   const now = new Date();
-  const runs = await rootDb
+  const runs = await database
     .select({ id: documentProcessingRuns.id })
     .from(documentProcessingRuns)
     .where(
@@ -1718,7 +1746,8 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
 
   const attempts = await Promise.all(
     runs.map(
-      async ({ id }) => await tryEnqueueDocumentProcessingRun({ runId: id }),
+      async ({ id }) =>
+        await tryEnqueueDocumentProcessingRun({ enqueue, runId: id }),
     ),
   );
   const enqueuedIds: SafeId<"documentProcessingRun">[] = [];
@@ -1738,11 +1767,13 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
 
   const updatedAt = new Date();
   await updateQueuedRunSchedule({
+    database,
     delayMs: ENQUEUE_VISIBILITY_TIMEOUT_MS,
     runIds: enqueuedIds,
     updatedAt,
   });
   await updateQueuedRunSchedule({
+    database,
     delayMs: ENQUEUE_FAILURE_RETRY_MS,
     runIds: failedIds,
     updatedAt,
@@ -1775,9 +1806,13 @@ export const resolveScheduledDeliveryBatch = ({
   hasMore: saturated || retryAt !== null,
 });
 
-const dispatchScheduledDocumentProcessingRetries = async () => {
+const dispatchScheduledDocumentProcessingRetries = async (
+  dependencies: DocumentProcessingReconciliationDependencies,
+) => {
   const { attempted, hasMore, retryAt } =
     await dispatchQueuedDocumentProcessingRuns({
+      database: dependencies.database,
+      enqueue: dependencies.enqueueDocumentProcessingRun,
       selection: QUEUED_OCR_SELECTION.SCHEDULED_RETRIES,
     });
   return resolveScheduledDeliveryBatch({
@@ -1798,9 +1833,11 @@ const retryableOcrFailureCondition = () =>
     eq(documentProcessingRuns.errorCode, SEARCHABLE_PDF_FAILURE_CODE),
   );
 
-const recoverRetryableOcrFailures = async () => {
+const recoverRetryableOcrFailures = async (
+  dependencies: DocumentProcessingReconciliationDependencies,
+) => {
   const now = new Date();
-  const retryableRuns = await rootDb
+  const retryableRuns = await dependencies.database
     .select({
       attemptCount: documentProcessingRuns.attemptCount,
       id: documentProcessingRuns.id,
@@ -1854,7 +1891,7 @@ const recoverRetryableOcrFailures = async () => {
     return { count: 0, hasMore };
   }
 
-  const recovered = await rootDb
+  const recovered = await dependencies.database
     .update(documentProcessingRuns)
     .set({
       nextAttemptAt: now,
@@ -1946,18 +1983,21 @@ export const runSearchIndexReplayAttempt = async ({
   });
 };
 
-const recoverFailedSearchIndex = async ({
-  attemptCount,
-  claimToken,
-  entityId,
-  id,
-  workspaceId,
-}: FailedSearchIndexCandidate): Promise<boolean> =>
+const recoverFailedSearchIndex = async (
+  {
+    attemptCount,
+    claimToken,
+    entityId,
+    id,
+    workspaceId,
+  }: FailedSearchIndexCandidate,
+  dependencies: DocumentProcessingReconciliationDependencies,
+): Promise<boolean> =>
   await runSearchIndexReplayAttempt({
-    indexEntity: async () => await getSearchProvider().indexEntity(entityId),
+    indexEntity: async () => await dependencies.indexEntity(entityId),
     onFailure: async (error) => {
       captureError(error, { entityId, runId: id });
-      await rootDb
+      await dependencies.database
         .update(documentProcessingRuns)
         .set({
           attemptCount: sql`${documentProcessingRuns.attemptCount} + 1`,
@@ -1982,7 +2022,7 @@ const recoverFailedSearchIndex = async ({
         );
     },
     onSuccess: async () => {
-      const completed = await rootDb
+      const completed = await dependencies.database
         .update(documentProcessingRuns)
         .set({
           claimedAt: null,
@@ -2008,7 +2048,7 @@ const recoverFailedSearchIndex = async ({
         return false;
       }
 
-      broadcastWorkspaceResourceUpdated(
+      dependencies.broadcastWorkspaceResourceUpdated(
         workspaceId,
         resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),
       );
@@ -2036,13 +2076,15 @@ export const resolveSearchIndexReplayBatch = ({
   hasMore: saturated || recoveredCount < claimedCount,
 });
 
-const recoverFailedOcrSearchIndexes = async () => {
+const recoverFailedOcrSearchIndexes = async (
+  dependencies: DocumentProcessingReconciliationDependencies,
+) => {
   const now = new Date();
   // The failed run is the durable retry token, but the entity projection is
   // the indexing source of truth. Automatic OCR may have preserved valid text
   // from another current field, so replay validates that projection's own
   // provenance instead of requiring it to match the failed run's source.
-  const candidates = await rootDb
+  const candidates = await dependencies.database
     .select({
       attemptCount: documentProcessingRuns.attemptCount,
       entityId: documentProcessingRuns.entityId,
@@ -2160,7 +2202,7 @@ const recoverFailedOcrSearchIndexes = async () => {
   }
 
   const claimToken = `search-index-replay:${Bun.randomUUIDv7()}`;
-  const claimed = await rootDb
+  const claimed = await dependencies.database
     .update(documentProcessingRuns)
     .set({
       claimedAt: new Date(),
@@ -2190,7 +2232,8 @@ const recoverFailedOcrSearchIndexes = async () => {
       workspaceId: candidate.workspaceId,
     })),
     limit: SEARCH_INDEX_REPLAY_CONCURRENCY,
-    operation: recoverFailedSearchIndex,
+    operation: async (candidate) =>
+      await recoverFailedSearchIndex(candidate, dependencies),
   });
   return resolveSearchIndexReplayBatch({
     claimedCount: claimed.length,
@@ -2199,10 +2242,12 @@ const recoverFailedOcrSearchIndexes = async () => {
   });
 };
 
-const recoverStaleDocumentProcessingRuns = async () => {
+const recoverStaleDocumentProcessingRuns = async (
+  dependencies: DocumentProcessingReconciliationDependencies,
+) => {
   const staleBefore = new Date(Date.now() - WORKER_LEASE_TIMEOUT_MS);
   const recoveredAt = new Date();
-  const staleRuns = await rootDb
+  const staleRuns = await dependencies.database
     .select({
       attemptCount: documentProcessingRuns.attemptCount,
       errorCode: documentProcessingRuns.errorCode,
@@ -2240,7 +2285,7 @@ const recoverStaleDocumentProcessingRuns = async () => {
   const exhausted =
     exhaustedAutomaticIds.length === 0
       ? []
-      : await rootDb
+      : await dependencies.database
           .update(documentProcessingRuns)
           .set({
             claimedAt: null,
@@ -2272,7 +2317,7 @@ const recoverStaleDocumentProcessingRuns = async () => {
   const searchReplays =
     searchReplayIds.length === 0
       ? []
-      : await rootDb
+      : await dependencies.database
           .update(documentProcessingRuns)
           .set({
             claimedAt: null,
@@ -2293,7 +2338,7 @@ const recoverStaleDocumentProcessingRuns = async () => {
           )
           .returning({ id: documentProcessingRuns.id });
   const ids = staleRuns.map(({ id }) => id);
-  const recovered = await rootDb
+  const recovered = await dependencies.database
     .update(documentProcessingRuns)
     .set({
       claimedAt: null,
@@ -2366,17 +2411,36 @@ type ReconciliationPhase = {
 
 const RECONCILIATION_PHASE_NAMES = Object.values(RECONCILIATION_PHASE);
 
+const DEFAULT_RECONCILIATION_DEPENDENCIES = {
+  broadcastWorkspaceResourceUpdated,
+  database: rootDb,
+  enqueueDocumentProcessingRun,
+  indexEntity: async (entityId: SafeId<"entity">) =>
+    await getSearchProvider().indexEntity(entityId),
+  readRepairScanCursor: async () => await readRepairScanCursor(),
+  readyRepairCursor: async () => await reconciliationRedis.ready(),
+  writeRepairScanCursor: async (input: {
+    expectedCursor: SafeId<"field"> | null;
+    nextCursor: SafeId<"field"> | null;
+  }) => await writeRepairScanCursor(input),
+} satisfies DocumentProcessingReconciliationDependencies;
+
 /** Total by type: a declared phase cannot exist without a producer. */
-const RECONCILIATION_PHASE_RUNNERS = {
-  [RECONCILIATION_PHASE.DELIVERY]: dispatchScheduledDocumentProcessingRetries,
-  [RECONCILIATION_PHASE.REINDEX]: recoverFailedOcrSearchIndexes,
-  [RECONCILIATION_PHASE.REPAIR]: recoverMissingNativeExtractionRuns,
-  [RECONCILIATION_PHASE.RETRY]: recoverRetryableOcrFailures,
-  [RECONCILIATION_PHASE.STALE_LEASE]: recoverStaleDocumentProcessingRuns,
-} as const satisfies Record<
-  ReconciliationPhaseName,
-  ReconciliationPhase["run"]
->;
+const createReconciliationPhaseRunners = (
+  dependencies: DocumentProcessingReconciliationDependencies,
+) =>
+  ({
+    [RECONCILIATION_PHASE.DELIVERY]: async () =>
+      await dispatchScheduledDocumentProcessingRetries(dependencies),
+    [RECONCILIATION_PHASE.REINDEX]: async () =>
+      await recoverFailedOcrSearchIndexes(dependencies),
+    [RECONCILIATION_PHASE.REPAIR]: async () =>
+      await recoverMissingNativeExtractionRuns(dependencies),
+    [RECONCILIATION_PHASE.RETRY]: async () =>
+      await recoverRetryableOcrFailures(dependencies),
+    [RECONCILIATION_PHASE.STALE_LEASE]: async () =>
+      await recoverStaleDocumentProcessingRuns(dependencies),
+  }) satisfies Record<ReconciliationPhaseName, ReconciliationPhase["run"]>;
 
 /**
  * Which phases each phase's transitions feed, read off its writes against
@@ -2429,16 +2493,28 @@ export const DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS = {
  * unrun is to leave it out of this order, which the reconciliation tests
  * check against both the declared names and the edges above.
  */
-export const DOCUMENT_PROCESSING_RECONCILIATION_PHASES = [
+const RECONCILIATION_PHASE_ORDER = [
   RECONCILIATION_PHASE.REPAIR,
   RECONCILIATION_PHASE.RETRY,
   RECONCILIATION_PHASE.STALE_LEASE,
   RECONCILIATION_PHASE.REINDEX,
   RECONCILIATION_PHASE.DELIVERY,
-].map((name) => ({
-  name,
-  run: RECONCILIATION_PHASE_RUNNERS[name],
-})) satisfies readonly ReconciliationPhase[];
+] as const;
+
+export const createDocumentProcessingReconciliationPhases = (
+  dependencies: DocumentProcessingReconciliationDependencies,
+): readonly ReconciliationPhase[] => {
+  const runners = createReconciliationPhaseRunners(dependencies);
+  return RECONCILIATION_PHASE_ORDER.map((name) => ({
+    name,
+    run: runners[name],
+  }));
+};
+
+export const DOCUMENT_PROCESSING_RECONCILIATION_PHASES =
+  createDocumentProcessingReconciliationPhases(
+    DEFAULT_RECONCILIATION_DEPENDENCIES,
+  );
 
 /**
  * Whether the tick stopped short of draining every backlog. Each phase

@@ -6,10 +6,17 @@ import type {
   TanStackAIAnalyticsCallbacks,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { BilingualAIDocumentContext } from "@/api/lib/bilingual/ai";
+import {
+  buildBilingualDocumentRequest,
+  SOURCE_DOCUMENT_CACHE_CHARS_MAX,
+  translateFormattedBatch,
+} from "@/api/lib/bilingual/ai";
 import type { FormattedBilingualUnit } from "@/api/lib/bilingual/formatting";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type GenerateOptions = {
   analytics: TanStackAIAnalyticsCallbacks;
@@ -33,23 +40,8 @@ const generateObjectMock = mock(
     return await Promise.resolve(output);
   },
 );
-
-void mock.module("@/api/lib/tanstack-ai-generate", () => ({
-  abortControllerFromSignal: mock(),
-  generateTanStackObjectForRole: generateObjectMock,
-  generateTanStackTextForRole: mock(),
-  mergeGenerationOptions: mock(),
-  resolveTanStackTextModel: mock(),
-  streamTanStackObjectForRole: mock(),
-  streamTanStackTextForRole: mock(),
-  systemPromptsPatch: mock(),
-}));
-
-const {
-  buildBilingualDocumentRequest,
-  SOURCE_DOCUMENT_CACHE_CHARS_MAX,
-  translateFormattedBatch,
-} = await import("@/api/lib/bilingual/ai");
+const generateObjectForTest =
+  asTestRaw<typeof generateTanStackObjectForRole>(generateObjectMock);
 
 const organizationId = toSafeId<"organization">("organization-fixture");
 const workspaceId = toSafeId<"workspace">("workspace-fixture");
@@ -82,6 +74,7 @@ const context = {
       sourceText: "Stable source",
     },
   ],
+  generateObjectForRole: generateObjectForTest,
 } satisfies BilingualAIDocumentContext;
 
 const formattedUnit = (

@@ -72,6 +72,8 @@ type GenerateTanStackBaseOptions = {
   caching: CachingDecision;
   maxOutputTokens?: number | undefined;
   modelId?: string | undefined;
+  /** External model-resolution boundary; supplied by focused integration tests. */
+  resolveTextModel?: typeof resolveTanStackTextModel | undefined;
   organizationId: SafeId<"organization"> | null;
   orgAIConfig: OrgAIConfig | null | undefined;
   reasoningEffort?: ReasoningEffort | undefined;
@@ -136,7 +138,7 @@ type ResolveTextModelOptions = Pick<
 export const generateTanStackTextForRole = async (
   options: GenerateTanStackTextForRoleOptions,
 ): Promise<string> => {
-  const model = resolveTanStackTextModel(options);
+  const model = (options.resolveTextModel ?? resolveTanStackTextModel)(options);
   const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
@@ -179,7 +181,7 @@ export const generateTanStackTextForRole = async (
 export const streamTanStackTextForRole = (
   options: GenerateTanStackTextForRoleOptions,
 ): AsyncIterable<string> => {
-  const model = resolveTanStackTextModel(options);
+  const model = (options.resolveTextModel ?? resolveTanStackTextModel)(options);
   const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
@@ -413,7 +415,7 @@ export const generateTanStackObjectForRole = async <
 }: GenerateTanStackObjectForRoleOptions<TSchema>): Promise<
   v.InferOutput<TSchema>
 > => {
-  const model = resolveTanStackTextModel(options);
+  const model = (options.resolveTextModel ?? resolveTanStackTextModel)(options);
   const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
@@ -459,7 +461,7 @@ export const streamTanStackObjectForRole = <TSchema extends v.GenericSchema>({
 }: GenerateTanStackObjectForRoleOptions<TSchema>): AsyncIterable<
   TanStackStructuredOutputEvent<v.InferOutput<TSchema>>
 > => {
-  const model = resolveTanStackTextModel(options);
+  const model = (options.resolveTextModel ?? resolveTanStackTextModel)(options);
   const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)

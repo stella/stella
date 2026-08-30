@@ -700,7 +700,9 @@ const describeTemplateDetail: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
 
-  const result = await describeStoredTemplate({
+  const result = await (
+    context.testDependencies?.describeStoredTemplate ?? describeStoredTemplate
+  )({
     templateId: brandPersistedTemplateId(parsed.output.template_id),
     scopedDb: context.scopedDb,
   });
@@ -755,7 +757,9 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   // Load the org's AI config so AI-fillable / aiAdapt fields behave exactly as
   // they do in the chat tools and web fill routes; a missing config simply
   // leaves those fields unfilled rather than erroring.
-  const orgAIConfig = await loadOrgAIConfig(context.organizationId);
+  const orgAIConfig = await (
+    context.testDependencies?.loadOrgAIConfig ?? loadOrgAIConfig
+  )(context.organizationId);
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     usageMetering: {
       actionType: "chat",
@@ -813,8 +817,10 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
 
   const fillStoredTemplate =
     parsed.output.allow_unused_values === true
-      ? fillStoredTemplateWithText
-      : fillStoredTemplateWithTextStrict;
+      ? (context.testDependencies?.fillStoredTemplateWithText ??
+        fillStoredTemplateWithText)
+      : (context.testDependencies?.fillStoredTemplateWithTextStrict ??
+        fillStoredTemplateWithTextStrict);
   const filled = await fillStoredTemplate({
     templateId: brandPersistedTemplateId(parsed.output.template_id),
     values: parsed.output.values,
@@ -852,7 +858,9 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   await context
     .scopedDb(
       async (tx) =>
-        await recordTemplateFill({
+        await (
+          context.testDependencies?.recordTemplateFill ?? recordTemplateFill
+        )({
           tx,
           templateId: brandPersistedTemplateId(parsed.output.template_id),
           organizationId: context.organizationId,
@@ -1073,7 +1081,10 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
   const templateId = brandPersistedTemplateId(input.template_id);
 
-  const requestFingerprint = fingerprintTemplatePersistenceRequest({
+  const requestFingerprint = (
+    context.testDependencies?.fingerprintTemplatePersistenceRequest ??
+    fingerprintTemplatePersistenceRequest
+  )({
     action: input.action,
     templateId: input.template_id,
     workspaceId,
@@ -1082,7 +1093,10 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     name: input.name,
     values: input.values,
   });
-  const claim = await claimTemplatePersistenceRequest({
+  const claim = await (
+    context.testDependencies?.claimTemplatePersistenceRequest ??
+    claimTemplatePersistenceRequest
+  )({
     safeDb: context.safeDb,
     organizationId: context.organizationId,
     workspaceId,
@@ -1124,7 +1138,10 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     return claimToken;
   }
   const releaseClaim = async (): Promise<void> => {
-    const released = await releaseTemplatePersistenceClaim({
+    const released = await (
+      context.testDependencies?.releaseTemplatePersistenceClaim ??
+      releaseTemplatePersistenceClaim
+    )({
       safeDb: context.safeDb,
       organizationId: context.organizationId,
       userId: context.userId,
@@ -1157,7 +1174,9 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     return errorResult(destinationError);
   }
 
-  const orgAIConfig = await loadOrgAIConfig(context.organizationId);
+  const orgAIConfig = await (
+    context.testDependencies?.loadOrgAIConfig ?? loadOrgAIConfig
+  )(context.organizationId);
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     usageMetering: {
       actionType: "chat",
@@ -1202,7 +1221,10 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     async () =>
       await withTimeout(
         async () =>
-          await fillStoredTemplateDocx({
+          await (
+            context.testDependencies?.fillStoredTemplateDocx ??
+            fillStoredTemplateDocx
+          )({
             templateId,
             values: input.values,
             scopedDb: context.scopedDb,
@@ -1270,8 +1292,11 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     tx: Transaction,
     result: TemplatePersistenceResult,
   ): Promise<void> => {
-    await recordTemplateUse({ tx, templateId });
-    await recordTemplateFill({
+    await (context.testDependencies?.recordTemplateUse ?? recordTemplateUse)({
+      tx,
+      templateId,
+    });
+    await (context.testDependencies?.recordTemplateFill ?? recordTemplateFill)({
       tx,
       templateId,
       organizationId: context.organizationId,
@@ -1285,7 +1310,10 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
       entityVersionId: result.entityVersionId,
       recordAuditEvent,
     });
-    await recordTemplatePersistenceReceipt({
+    await (
+      context.testDependencies?.recordTemplatePersistenceReceipt ??
+      recordTemplatePersistenceReceipt
+    )({
       tx,
       organizationId: context.organizationId,
       workspaceId,
@@ -1303,7 +1331,10 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     > => {
       if (input.action === "create_document") {
         let result: TemplatePersistenceResult | undefined;
-        const created = await persistFilledTemplateDocument({
+        const created = await (
+          context.testDependencies?.persistFilledTemplateDocument ??
+          persistFilledTemplateDocument
+        )({
           scopedDb: context.scopedDb,
           organizationId: context.organizationId,
           workspaceId,
@@ -1341,7 +1372,10 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
         input.entity_id ?? panic("create_version reached without an entity_id"),
       );
       let result: TemplatePersistenceResult | undefined;
-      const created = await persistFilledTemplateVersion({
+      const created = await (
+        context.testDependencies?.persistFilledTemplateVersion ??
+        persistFilledTemplateVersion
+      )({
         safeDb: context.safeDb,
         organizationId: context.organizationId,
         workspaceId,
@@ -1459,7 +1493,7 @@ const createTemplateFromDocx = async ({
   }
 
   const created = await Result.gen(() =>
-    createStoredTemplate({
+    (context.testDependencies?.createStoredTemplate ?? createStoredTemplate)({
       safeDb: context.safeDb,
       organizationId: context.organizationId,
       userId: context.userId,
@@ -1504,7 +1538,10 @@ const configureExistingTemplate = async ({
   const templateId = brandPersistedTemplateId(rawTemplateId);
 
   const configured = await Result.gen(() =>
-    configureTemplateFields({
+    (
+      context.testDependencies?.configureTemplateFields ??
+      configureTemplateFields
+    )({
       safeDb: context.safeDb,
       organizationId: context.organizationId,
       templateId,
@@ -1519,7 +1556,9 @@ const configureExistingTemplate = async ({
   // Echo the updated field list in the same shape the list_templates detail
   // mode returns, so the agent sees exactly what is now configured (a complete
   // round-trip).
-  const described = await describeStoredTemplate({
+  const described = await (
+    context.testDependencies?.describeStoredTemplate ?? describeStoredTemplate
+  )({
     templateId,
     scopedDb: context.scopedDb,
   });

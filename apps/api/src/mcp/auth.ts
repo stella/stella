@@ -12,7 +12,7 @@ import {
 } from "@/api/lib/machine-api-key-config";
 import { isRecord } from "@/api/lib/type-guards";
 import { AGENT_RUN_TOKEN_PURPOSE } from "@/api/mcp/agent-run-token";
-import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
+import { resolveMachineApiKeySession as defaultResolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import type { McpMode } from "@/api/mcp/constants";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import {
@@ -243,11 +243,19 @@ export const classifyMcpTokenVerificationError = (
  */
 export const authenticateMcpRequest = async (
   bearerToken: string,
-  mode: McpMode = "default",
+  {
+    mode = "default",
+    resolveApiKeySession = defaultResolveMachineApiKeySession,
+  }: {
+    mode?: McpMode | undefined;
+    resolveApiKeySession?:
+      | typeof defaultResolveMachineApiKeySession
+      | undefined;
+  } = {},
 ): Promise<McpSession> => {
   if (isMachineApiKeyCredential(bearerToken)) {
     try {
-      return await resolveMachineApiKeySession(bearerToken);
+      return await resolveApiKeySession(bearerToken);
     } catch (error) {
       throw classifyMcpTokenVerificationError(error);
     }

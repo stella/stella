@@ -516,7 +516,19 @@ type CopyEntitiesProps = {
    * needs the source row locked — see the lock-set comment below.
    */
   deleteSource: boolean;
+  dependencies?: CopyEntitiesDependencies | undefined;
 };
+
+export type CopyEntitiesDependencies = {
+  enqueueEntitySearchRepairs: typeof enqueueEntitySearchRepairs;
+  requestNativeExtractionRuns: typeof requestNativeExtractionRuns;
+};
+
+const defaultCopyEntitiesDependencies = {
+  enqueueEntitySearchRepairs,
+  requestNativeExtractionRuns: async (options) =>
+    await requestNativeExtractionRuns(options),
+} satisfies CopyEntitiesDependencies;
 
 /**
  * Copy entities to a target workspace. Used by both duplicate
@@ -542,6 +554,7 @@ export const copyEntities = async ({
   sourceEntities,
   sourceWorkspaceId,
   deleteSource,
+  dependencies = defaultCopyEntitiesDependencies,
 }: CopyEntitiesProps): Promise<CopyEntitiesResult> => {
   // Same-workspace duplicate and cross-workspace copy both lock the
   // target only: a pure copy never mutates the source workspace's
@@ -771,14 +784,16 @@ export const copyEntities = async ({
 
   // Written here, inside the copy transaction: the mark commits or rolls back
   // with the copies themselves, so a lost post-commit flush costs nothing.
-  await enqueueEntitySearchRepairs(
+  await dependencies.enqueueEntitySearchRepairs(
     tx,
     copiedEntityIds[SEARCH_INDEX_OWNER.searchMark],
   );
-  const nativeExtractionRunIds = await requestNativeExtractionRuns({
-    requests: nativeExtractionRequests,
-    tx,
-  });
+  const nativeExtractionRunIds = await dependencies.requestNativeExtractionRuns(
+    {
+      requests: nativeExtractionRequests,
+      tx,
+    },
+  );
 
   return {
     entityId: rootEntityId,

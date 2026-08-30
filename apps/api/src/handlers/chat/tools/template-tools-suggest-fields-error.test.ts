@@ -9,17 +9,13 @@
  * module graph, and `template-tools.test.ts` already imports it statically.
  */
 
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  test,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import {
+  createTemplateAuthoringTools,
+  SUGGEST_TEMPLATE_FIELDS_TOOL_NAME,
+} from "@/api/handlers/chat/tools/template-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -33,18 +29,6 @@ const suggestTemplateFieldsMock = mock(async () => {
   throw PROVIDER_ERROR;
 });
 
-void mock.module("@/api/lib/templates/suggest-template-fields", () => ({
-  suggestTemplateFields: suggestTemplateFieldsMock,
-}));
-
-// Bun runs every test file in one process, and `mock.module` mutates a
-// shared registry: without restoring here, this `mock.module` call (for
-// `suggest-template-fields`) would leak into whichever other test file runs
-// next in the same process.
-afterAll(() => {
-  mock.restore();
-});
-
 // The real capture path runs; only the sink is in memory, so the assertion
 // below is on the `$exception` event that would have shipped.
 let analytics: RecordingAnalytics;
@@ -56,9 +40,6 @@ beforeEach(() => {
 afterEach(() => {
   analytics.restore();
 });
-
-const { createTemplateAuthoringTools, SUGGEST_TEMPLATE_FIELDS_TOOL_NAME } =
-  await import("@/api/handlers/chat/tools/template-tools");
 
 const organizationId = toSafeId<"organization">("org-test");
 const userId = toSafeId<"user">("user-test");
@@ -82,6 +63,7 @@ describe("suggest_template_fields tool error handling", () => {
       orgAIConfig: null,
       safeDb: stubSafeDb,
       userId,
+      dependencies: { suggestTemplateFields: suggestTemplateFieldsMock },
     });
 
     // SAFETY: invoke the tool's execute directly with a stub call context.

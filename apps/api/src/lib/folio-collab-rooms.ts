@@ -411,7 +411,11 @@ export const decideFolioCollabRoomAuthorization = ({
 export const authorizeFolioCollabRoom = async ({
   roomId,
   token,
+  db = rootDb,
+  createScopedDb = createRootScopedDb,
 }: {
+  db?: Pick<typeof rootDb, "select">;
+  createScopedDb?: typeof createRootScopedDb;
   roomId: SafeId<"folioCollabRoom">;
   token: string;
 }): Promise<FolioCollabRoomAuthorizationResult> => {
@@ -420,7 +424,7 @@ export const authorizeFolioCollabRoom = async ({
   // The token hash is the only trusted lookup key before its tenant is known.
   // This owner-level read derives one workspace, then every subsequent room
   // operation uses the scoped database capability returned below.
-  const rows = await rootDb
+  const rows = await db
     .select({
       entityId: folioCollabRooms.entityId,
       expiresAt: folioCollabRoomTokens.expiresAt,
@@ -501,7 +505,7 @@ export const authorizeFolioCollabRoom = async ({
       organizationId: row.organizationId,
       propertyId: row.propertyId,
       roomId,
-      scopedDb: createRootScopedDb({
+      scopedDb: createScopedDb({
         organizationId: row.organizationId,
         userId: brandPersistedUserId(row.userId),
         workspaceIds: [row.workspaceId],

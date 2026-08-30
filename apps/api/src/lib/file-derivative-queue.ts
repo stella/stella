@@ -745,27 +745,48 @@ type RequeueFileDerivativeArgs = {
   workspaceId: SafeId<"workspace">;
 };
 
+export type RequeueFileDerivativeDependencies = {
+  allocateFileObject?: typeof allocateFileObject | undefined;
+  createRootScopedDb?: typeof createRootScopedDb | undefined;
+  getQueue?: typeof getQueue | undefined;
+  markFailed?:
+    | ((
+        kind: FileDerivativeKind,
+        data: FileDerivativeJobData,
+        reason: DerivativeFailureReason,
+      ) => Promise<void>)
+    | undefined;
+};
+
 /**
  * Retry one stuck derivative. The row is claimed first: the update only
  * matches a derivative that is still `pending` or failed on enqueue, so a
  * derivative that reached `ready`, `not-required`, or a processing failure
  * between the reconciler's read and this call is left exactly as it is.
  */
-export const requeueFileDerivative = async ({
-  entityId,
-  fieldId,
-  kind,
-  organizationId,
-  userId,
-  workspaceId,
-}: RequeueFileDerivativeArgs): Promise<FileDerivativeRequeueOutcome> => {
-  const { claim, jobName, markFailed, pendingContent } =
-    DERIVATIVE_REQUEUE[kind];
+export const requeueFileDerivative = async (
+  {
+    entityId,
+    fieldId,
+    kind,
+    organizationId,
+    userId,
+    workspaceId,
+  }: RequeueFileDerivativeArgs,
+  {
+    allocateFileObject: allocateDerivativeFile = allocateFileObject,
+    createRootScopedDb: createScopedDb = createRootScopedDb,
+    getQueue: getDerivativeQueue = getQueue,
+    markFailed = async (targetKind, data, reason) =>
+      await DERIVATIVE_REQUEUE[targetKind].markFailed(data, reason),
+  }: RequeueFileDerivativeDependencies = {},
+): Promise<FileDerivativeRequeueOutcome> => {
+  const { claim, jobName, pendingContent } = DERIVATIVE_REQUEUE[kind];
   const branded = brandValidatedWorkflowActorKey({
     organizationId,
     workspaceId,
   });
-  const scopedDb = createRootScopedDb({
+  const scopedDb = createScopedDb({
     organizationId: branded.organizationId,
     userId: brandPersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
@@ -796,9 +817,9 @@ export const requeueFileDerivative = async ({
   // id so the retry writes over what the previous attempt left in storage
   // instead of orphaning it.
   const jobId = createBullMqJobId(workspaceId, fieldId, kind);
-  const derivativeQueue = getQueue();
+  const derivativeQueue = getDerivativeQueue();
   const priorJob = await derivativeQueue.getJob(jobId);
-  let derivativeFileId = allocateFileObject();
+  let derivativeFileId = allocateDerivativeFile();
   if (priorJob) {
     const state = await priorJob.getState();
     if (state !== "completed" && state !== "failed") {
@@ -820,7 +841,7 @@ export const requeueFileDerivative = async ({
   try {
     await derivativeQueue.add(jobName, jobData, { jobId });
   } catch (error) {
-    await markFailed(jobData, DERIVATIVE_FAILURE_REASON.ENQUEUE).catch(
+    await markFailed(kind, jobData, DERIVATIVE_FAILURE_REASON.ENQUEUE).catch(
       (markError: unknown) => {
         captureError(markError, { entityId, fieldId, workspaceId });
       },

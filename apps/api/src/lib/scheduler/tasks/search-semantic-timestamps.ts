@@ -29,6 +29,8 @@ type RepairPageRow = {
 };
 
 type RepairSearchSemanticTimestampsOptions = {
+  db?: Pick<typeof rootDb, "execute">;
+  indexEntity?: typeof upsertSearchDocument;
   jobId: string;
   leaseToken: string;
   now?: Date;
@@ -96,6 +98,8 @@ export const repairSearchSemanticTimestamps = async ({
   now = new Date(),
   payload,
   signal,
+  db = rootDb,
+  indexEntity = upsertSearchDocument,
 }: RepairSearchSemanticTimestampsOptions): Promise<RepairSearchSemanticTimestampsOutcome> => {
   const isAborted = () => signal.aborted;
   if (isAborted()) {
@@ -105,7 +109,7 @@ export const repairSearchSemanticTimestamps = async ({
   const state = repairState(payload);
   // audit: skip — this changes only a derived search projection; the
   // scheduler run and versioned job cursor are the durable operator trail.
-  const pageRows = await rootDb.execute<RepairPageRow>(sql`
+  const pageRows = await db.execute<RepairPageRow>(sql`
     WITH source_page AS MATERIALIZED (
       SELECT
         e.id AS entity_id,
@@ -160,7 +164,7 @@ export const repairSearchSemanticTimestamps = async ({
       // Old application instances can still write reindex time during a
       // rolling deployment. Persist a quiet-window start, then require two
       // complete clean passes before disabling this one-shot repair.
-      await rootDb.execute(sql`
+      await db.execute(sql`
         UPDATE scheduler_jobs
         SET payload = jsonb_build_object(
           'pass', ${REPAIR_PASS.verify}::text,
@@ -189,7 +193,7 @@ export const repairSearchSemanticTimestamps = async ({
       cleanPasses < REQUIRED_CLEAN_VERIFICATION_PASSES ||
       !passStartedAfterQuiet
     ) {
-      await rootDb.execute(sql`
+      await db.execute(sql`
         UPDATE scheduler_jobs
         SET payload = jsonb_build_object(
           'pass', ${REPAIR_PASS.verify}::text,
@@ -206,7 +210,7 @@ export const repairSearchSemanticTimestamps = async ({
 
     // audit: skip — this only disables a versioned repair of a derived search
     // projection; scheduler_job_runs is the durable operator trail.
-    await rootDb.execute(sql`
+    await db.execute(sql`
       UPDATE scheduler_jobs
       SET enabled = false
       WHERE id = ${jobId}
@@ -233,7 +237,7 @@ export const repairSearchSemanticTimestamps = async ({
 
     // Mark the pass dirty before external projection work. A crash can replay
     // the page, but cannot lose the quiet-window reset.
-    await rootDb.execute(sql`
+    await db.execute(sql`
       UPDATE scheduler_jobs
       SET payload = jsonb_build_object(
         'cursor', ${state.cursor}::text,
@@ -261,7 +265,7 @@ export const repairSearchSemanticTimestamps = async ({
       return;
     }
     const reindexResult = await Result.tryPromise({
-      try: async () => await upsertSearchDocument(entityId),
+      try: async () => await indexEntity(entityId),
       catch: (error: unknown) => error,
     });
     if (isAborted()) {
@@ -292,7 +296,7 @@ export const repairSearchSemanticTimestamps = async ({
   }
 
   if (state.pass === REPAIR_PASS.verify) {
-    await rootDb.execute(sql`
+    await db.execute(sql`
       UPDATE scheduler_jobs
       SET payload = jsonb_build_object(
         'cursor', ${last.entityId}::text,
@@ -308,7 +312,7 @@ export const repairSearchSemanticTimestamps = async ({
   } else {
     // Checkpoint last: a replay after the projection update but before this
     // write safely finds no mismatch and advances again.
-    await rootDb.execute(sql`
+    await db.execute(sql`
       UPDATE scheduler_jobs
       SET payload = jsonb_build_object(
         'cursor', ${last.entityId}::text,

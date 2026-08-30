@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { InfoSoudClient } from "@stll/infosoud";
 
@@ -83,11 +83,8 @@ const createGatedCourtsClient = (): {
 
 let activeClient: InfoSoudClient = createFailingFirstCallClient().client;
 
-void mock.module("@/api/handlers/workspaces/infosoud-common", () => ({
-  getInfoSoudClient: () => activeClient,
-}));
-
-const { default: infosoudCourts } = await import("./infosoud-courts");
+const { createInfosoudCourts } = await import("./infosoud-courts");
+const infosoudCourts = createInfosoudCourts(() => activeClient);
 
 type InfosoudCourtsContext = Parameters<typeof infosoudCourts.handler>[0];
 

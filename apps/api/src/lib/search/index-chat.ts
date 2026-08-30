@@ -232,8 +232,9 @@ type ChatSearchMessageRow = {
  *  mutation, not on the request hot path. */
 export const upsertChatThreadSearchDocument = async (
   threadId: SafeId<"chatThread">,
+  database: Pick<typeof rootDb, "execute" | "select"> = rootDb,
 ): Promise<void> => {
-  const [thread] = await rootDb
+  const [thread] = await database
     .select({
       id: chatThreads.id,
       title: chatThreads.title,
@@ -248,10 +249,11 @@ export const upsertChatThreadSearchDocument = async (
   }
 
   const searchableText = await rollUpThreadText({
+    database,
     threadId: thread.id,
     threadUpdatedAtToken: thread.updatedAtToken,
   });
-  await rootDb.execute(sql`
+  await database.execute(sql`
     INSERT INTO chat_thread_search_documents (
       thread_id, title, searchable_text, preview_generation, updated_at, tsv
     ) VALUES (
@@ -278,7 +280,7 @@ export const upsertChatThreadSearchDocument = async (
       tsv = EXCLUDED.tsv
     WHERE EXCLUDED.updated_at >= chat_thread_search_documents.updated_at
   `);
-  await rootDb.execute(sql`
+  await database.execute(sql`
     UPDATE chat_thread_search_documents
     SET preview_generation = ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
     WHERE thread_id = ${thread.id}
@@ -305,9 +307,11 @@ export const upsertChatThreadSearchDocument = async (
  *  tiebreaker only makes that order stable; there is no defined prior
  *  order to diverge from. */
 const rollUpThreadText = async ({
+  database,
   threadId,
   threadUpdatedAtToken,
 }: {
+  database: Pick<typeof rootDb, "execute">;
   threadId: SafeId<"chatThread">;
   threadUpdatedAtToken: TimestampCasToken;
 }): Promise<string> => {
@@ -327,7 +331,7 @@ const rollUpThreadText = async ({
       : sql`thread_id = ${threadId}`;
 
     // eslint-disable-next-line no-await-in-loop -- sequential keyset pagination: each page's WHERE depends on the previous page's last (created_at, id) cursor.
-    const page = await rootDb.execute<ChatSearchMessageRow>(sql`
+    const page = await database.execute<ChatSearchMessageRow>(sql`
       SELECT id, role, content, created_at::text AS "createdAtToken"
       FROM chat_messages
       WHERE ${where}
@@ -341,6 +345,7 @@ const rollUpThreadText = async ({
 
     // eslint-disable-next-line no-await-in-loop -- sequential keyset pagination: per-page writes are ordered with the cursor advance above.
     await upsertChatMessageSearchDocuments({
+      database,
       messages: page,
       threadId,
       threadUpdatedAtToken,
@@ -375,10 +380,12 @@ const rollUpThreadText = async ({
 };
 
 const upsertChatMessageSearchDocuments = async ({
+  database,
   messages,
   threadId,
   threadUpdatedAtToken,
 }: {
+  database: Pick<typeof rootDb, "execute">;
   messages: readonly ChatSearchMessageRow[];
   threadId: SafeId<"chatThread">;
   threadUpdatedAtToken: TimestampCasToken;
@@ -400,7 +407,7 @@ const upsertChatMessageSearchDocuments = async ({
     )`;
   });
 
-  await rootDb.execute(sql`
+  await database.execute(sql`
     INSERT INTO chat_message_search_documents (
       message_id, thread_id, role, searchable_text, tsv, created_at, updated_at
     ) VALUES ${sql.join(values, sql`, `)}
@@ -421,10 +428,12 @@ const upsertChatMessageSearchDocuments = async ({
  *  looping. */
 type BackfillChatThreadSearchIndexOptions = {
   signal?: AbortSignal;
+  database?: Pick<typeof rootDb, "execute" | "select">;
 };
 
 export const backfillChatThreadSearchIndex = async ({
   signal,
+  database = rootDb,
 }: BackfillChatThreadSearchIndexOptions = {}): Promise<number> => {
   let cursor = ZERO_UUID;
   let total = 0;
@@ -434,7 +443,7 @@ export const backfillChatThreadSearchIndex = async ({
       return total;
     }
     // oxlint-disable-next-line no-await-in-loop, require-search-scope/require-search-scope -- system backfill repairs derived search documents across all threads; it does not return request data
-    const batch = await rootDb.execute<{ id: SafeId<"chatThread"> }>(sql`
+    const batch = await database.execute<{ id: SafeId<"chatThread"> }>(sql`
       SELECT t.id
       FROM chat_threads t
       LEFT JOIN chat_thread_search_documents d ON d.thread_id = t.id
@@ -470,7 +479,7 @@ export const backfillChatThreadSearchIndex = async ({
       }
       try {
         // oxlint-disable-next-line no-await-in-loop -- sequential by design: sequential per-thread backfill writes bound DB load
-        await upsertChatThreadSearchDocument(row.id);
+        await upsertChatThreadSearchDocument(row.id, database);
       } catch (error) {
         captureError(error, {
           feature: "chat_search.backfill",

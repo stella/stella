@@ -124,7 +124,7 @@ describe("matter list member identities", () => {
     expect(emailsIn(workspaces)).not.toContain(`${ids.userB1}@test.local`);
   });
 
-  test("the other tenant sees its own matter with its own member", async () => {
+  test("the other tenant sees its own matter with its own members", async () => {
     const workspaces = await listWorkspacesAs({
       organizationId: ids.orgB,
       userId: ids.userB1,
@@ -132,6 +132,13 @@ describe("matter list member identities", () => {
     });
 
     expect(workspaces.map((workspace) => workspace.id)).toEqual([ids.wsB1]);
-    expect(emailsIn(workspaces)).toEqual([`${ids.userB1}@test.local`]);
+    const memberEmails = emailsIn(workspaces);
+    expect(memberEmails).toHaveLength(2);
+    expect(memberEmails).toEqual(
+      expect.arrayContaining([
+        `${ids.userA1}@test.local`,
+        `${ids.userB1}@test.local`,
+      ]),
+    );
   });
 });

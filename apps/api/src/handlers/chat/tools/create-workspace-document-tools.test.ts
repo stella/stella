@@ -10,8 +10,15 @@ import {
   pendingUploads,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
+import {
+  CREATE_WORKSPACE_DOCUMENT_TOOL_NAME,
+  createCreateWorkspaceDocumentTools,
+  markdownToStellaDocx,
+} from "@/api/handlers/chat/tools/create-workspace-document-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
+import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -22,23 +29,19 @@ const processExtractionMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 
-void mock.module("@/api/lib/search/process-extraction", () => ({
-  processExtraction: processExtractionMock,
-  requestNativeExtractionRun: mock(async () => null),
-}));
-
-const realFileDerivativeQueue = await import("@/api/lib/file-derivative-queue");
-void mock.module("@/api/lib/file-derivative-queue", () => ({
-  ...realFileDerivativeQueue,
+const createEntityDependencies = {
+  broadcastWorkspaceResourceUpdated: () => undefined,
   enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
   enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
-}));
+  processExtraction: processExtractionMock,
+  requestNativeExtractionRun: mock(async () => null),
+} satisfies CreateEntityFromBufferDependencies;
 
-const {
-  CREATE_WORKSPACE_DOCUMENT_TOOL_NAME,
-  createCreateWorkspaceDocumentTools,
-  markdownToStellaDocx,
-} = await import("./create-workspace-document-tools");
+const createEntityForTest: typeof createEntityFromBuffer = async (input) =>
+  await createEntityFromBuffer({
+    ...input,
+    dependencies: createEntityDependencies,
+  });
 
 const organizationId = toSafeId<"organization">(
   "00000000-0000-0000-0000-000000000001",
@@ -209,6 +212,7 @@ describe("createCreateWorkspaceDocumentTools", () => {
       workspaceId,
       recordAuditEvent: async () => undefined,
       refRegistry: createChatRefRegistry(),
+      createEntityFromBuffer: createEntityForTest,
     });
 
     expect(Object.keys(tools)).toEqual([CREATE_WORKSPACE_DOCUMENT_TOOL_NAME]);
@@ -230,6 +234,7 @@ describe("createCreateWorkspaceDocumentTools", () => {
         recordedAuditEvents.push(event);
       },
       refRegistry: createChatRefRegistry(),
+      createEntityFromBuffer: createEntityForTest,
     });
     const execute = tools[CREATE_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
     if (!execute) {
@@ -278,6 +283,7 @@ describe("createCreateWorkspaceDocumentTools", () => {
       workspaceId,
       recordAuditEvent: async () => undefined,
       refRegistry: createChatRefRegistry(),
+      createEntityFromBuffer: createEntityForTest,
     });
     const execute = tools[CREATE_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
     if (!execute) {

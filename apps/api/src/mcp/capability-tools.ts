@@ -669,8 +669,18 @@ const successEgress = (
 
 const CAPABILITY_LIST_CURSOR = "cursor";
 
+const contextFeatureEnabled = (
+  feature: string | undefined,
+  context: McpRequestContext | undefined,
+): boolean =>
+  (
+    context?.testDependencies?.isCapabilityFeatureEnabled ??
+    isCapabilityFeatureEnabled
+  )(feature);
+
 const listCapabilitiesHandler = ({
   args,
+  context,
 }: {
   args: Record<string, unknown>;
   context: McpRequestContext;
@@ -722,7 +732,7 @@ const listCapabilitiesHandler = ({
   // them, closing the guess-the-id bypass).
   const filtered = CATALOG.filter(
     (entry) =>
-      isCapabilityFeatureEnabled(entry.feature) &&
+      contextFeatureEnabled(entry.feature, context) &&
       (domain === undefined || capabilityDomain(entry.id) === domain) &&
       (access === "all" || entry.access === access) &&
       (afterId === undefined || entry.id > afterId),
@@ -833,6 +843,7 @@ const loadEndpointGuarded = async (
 
 const describeCapabilityHandler = async ({
   args,
+  context,
 }: {
   args: Record<string, unknown>;
   context: McpRequestContext;
@@ -849,7 +860,7 @@ const describeCapabilityHandler = async ({
   // Match the static-tool surface: a gated-off tool is hidden from the list
   // AND rejected on direct dispatch, so describing a gated-off capability is
   // refused too (never leak a disabled feature's schema by direct id).
-  if (!isCapabilityFeatureEnabled(entry.feature)) {
+  if (!contextFeatureEnabled(entry.feature, context)) {
     return featureDisabledResult();
   }
 
@@ -1120,7 +1131,7 @@ const invokeCapabilityHandler = async ({
   // (tools.ts): the list surface hides a gated-off entry, and this closes the
   // guess-the-id bypass. Runs before every other gate (validateOnly included)
   // so a disabled feature leaks nothing about its capabilities.
-  if (!isCapabilityFeatureEnabled(entry.feature)) {
+  if (!contextFeatureEnabled(entry.feature, context)) {
     return featureDisabledResult();
   }
 
@@ -1133,7 +1144,9 @@ const invokeCapabilityHandler = async ({
       "This operation authorizes itself differently; use its dedicated surface.",
     );
   }
-  const waiver = CONTEXT_FIDELITY_WAIVERS.get(id);
+  const waiver = (
+    context.testDependencies?.contextFidelityWaivers ?? CONTEXT_FIDELITY_WAIVERS
+  ).get(id);
   if (waiver !== undefined) {
     return structuredErrorResult({
       code: "feature_disabled",
@@ -1418,7 +1431,10 @@ const executeInvoke = async ({
   // and capability; skill-source calls share the REST client-IP budget. Capping
   // before execution prevents a runaway agent from driving backend cost through
   // the generic path. validateOnly (above) is exempt: it never executes.
-  const rate = await consumeInvokeCapabilityRateLimit({
+  const rate = await (
+    context.testDependencies?.consumeInvokeCapabilityRateLimit ??
+    consumeInvokeCapabilityRateLimit
+  )({
     capabilityId: id,
     clientIp: context.clientIp ?? null,
     organizationId: context.organizationId,

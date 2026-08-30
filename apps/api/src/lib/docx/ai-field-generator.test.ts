@@ -4,7 +4,11 @@ import { afterAll, describe, expect, mock, test } from "bun:test";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
-import * as realTanStackAIModels from "@/api/lib/tanstack-ai-models";
+import {
+  buildAiFieldGenerator,
+  buildAiOccurrenceAdapter,
+} from "@/api/lib/docx/ai-field-generator";
+import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 
 // Capture the args each chat() call receives so we can assert whether the skill
 // tools were wired and how the prompt was assembled. The model itself is
@@ -38,26 +42,23 @@ const chat = (options: {
   return Promise.resolve("drafted value");
 };
 
+// SAFETY: `chat` is replaced at the provider boundary, so this suite never
+// invokes the adapter; it only verifies the options assembled around it.
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const testModel = {
   adapter: {},
   keySource: "instance",
   modelId: "test-model",
   modelOptions: {},
   provider: "openai",
-};
+} as ResolvedTanStackTextModel;
+
+const resolveTextModel = () => testModel;
 
 void mock.module("@tanstack/ai", () => ({
   ...realTanStackAI,
   chat,
 }));
-
-void mock.module("@/api/lib/tanstack-ai-models", () => ({
-  ...realTanStackAIModels,
-  getTanStackTextModelForRole: () => testModel,
-}));
-
-const { buildAiFieldGenerator, buildAiOccurrenceAdapter } =
-  await import("@/api/lib/docx/ai-field-generator");
 
 afterAll(() => {
   mock.restore();
@@ -80,10 +81,16 @@ const PLAIN_PROMPT = "Draft the scope of this power of attorney.";
 
 const lastChat = () => chatArgs.at(-1);
 const lastToolNames = () => (lastChat()?.tools ?? []).map((tool) => tool.name);
+const buildTestAiFieldGenerator = (
+  options: Parameters<typeof buildAiFieldGenerator>[0],
+) => buildAiFieldGenerator({ ...options, resolveTextModel });
+const buildTestAiOccurrenceAdapter = (
+  options: Parameters<typeof buildAiOccurrenceAdapter>[0],
+) => buildAiOccurrenceAdapter({ ...options, resolveTextModel });
 
 describe("buildAiFieldGenerator skill-tool wiring", () => {
   test("does not advertise skill tools for a ref when the catalog is empty", async () => {
-    const generate = buildAiFieldGenerator({
+    const generate = buildTestAiFieldGenerator({
       orgAIConfig,
       organizationId,
       skillContext,
@@ -101,7 +108,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
   });
 
   test("passes no tools when the prompt has no skill reference", async () => {
-    const generate = buildAiFieldGenerator({
+    const generate = buildTestAiFieldGenerator({
       orgAIConfig,
       organizationId,
       skillContext,
@@ -113,7 +120,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
   });
 
   test("passes no tools without a skill context, even with a ref", async () => {
-    const generate = buildAiFieldGenerator({
+    const generate = buildTestAiFieldGenerator({
       orgAIConfig,
       organizationId,
       tenantWorkspaceIds: [],
@@ -130,7 +137,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
 
 describe("buildAiFieldGenerator document-text injection", () => {
   test("injects a Document section when documentText is supplied", async () => {
-    const generate = buildAiFieldGenerator({
+    const generate = buildTestAiFieldGenerator({
       orgAIConfig,
       organizationId,
       tenantWorkspaceIds: [],
@@ -147,7 +154,7 @@ describe("buildAiFieldGenerator document-text injection", () => {
   });
 
   test("omits the Document section when no documentText is supplied", async () => {
-    const generate = buildAiFieldGenerator({
+    const generate = buildTestAiFieldGenerator({
       orgAIConfig,
       organizationId,
       tenantWorkspaceIds: [],
@@ -158,7 +165,7 @@ describe("buildAiFieldGenerator document-text injection", () => {
   });
 
   test("omits the Document section for blank documentText", async () => {
-    const generate = buildAiFieldGenerator({
+    const generate = buildTestAiFieldGenerator({
       orgAIConfig,
       organizationId,
       tenantWorkspaceIds: [],
@@ -178,7 +185,7 @@ describe("buildAiOccurrenceAdapter skill-tool wiring", () => {
   const occurrences = [{ context: "see {{scope}} herein" }];
 
   test("does not advertise skill tools for a ref when the catalog is empty", async () => {
-    const adapt = buildAiOccurrenceAdapter({
+    const adapt = buildTestAiOccurrenceAdapter({
       orgAIConfig,
       organizationId,
       skillContext,
@@ -198,7 +205,7 @@ describe("buildAiOccurrenceAdapter skill-tool wiring", () => {
   });
 
   test("passes no tools when the instruction has no skill reference", async () => {
-    const adapt = buildAiOccurrenceAdapter({
+    const adapt = buildTestAiOccurrenceAdapter({
       orgAIConfig,
       organizationId,
       skillContext,

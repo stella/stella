@@ -440,7 +440,7 @@ describe("policy coverage", () => {
     }
   });
 
-  test("user_files has user policies", async () => {
+  test("user_files policies derive full scope from the owning thread", async () => {
     const policies = await fetchStellaPolicies(testDb);
     const tablePolicies = policies.filter((p) => p.table_name === "user_files");
     const cmds = new Set(tablePolicies.map((p) => p.command));
@@ -449,10 +449,24 @@ describe("policy coverage", () => {
     expect(cmds).toContain("w");
     expect(cmds).toContain("d");
 
-    for (const pol of tablePolicies) {
-      const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
-      expect(expr).toContain("user_id");
-      expect(expr).toContain(SETTING_USER_ID);
+    for (const policy of tablePolicies) {
+      const expressions = [
+        policy.command === "a" ? policy.check_expr : policy.using_expr,
+      ];
+      if (policy.command === "w") {
+        expressions.push(policy.check_expr);
+      }
+
+      for (const expression of expressions) {
+        expect(expression).toContain("user_id");
+        expect(expression).toContain("user_files.thread_id");
+        expect(expression).toContain("chat_threads");
+        expect(expression).toContain(SETTING_USER_ID);
+        expect(expression).toContain(SETTING_ORGANIZATION_ID);
+        expect(expression).toContain(SETTING_WORKSPACE_IDS);
+        expect(expression).toContain(WORKSPACE_ACCESS_VIEW_NAME);
+        expect(expression).toContain("data_workspace_ids");
+      }
     }
   });
 

@@ -16,6 +16,7 @@ import { createWorkspaceAccessBoundary } from "@/api/mcp/workspace-access-bounda
  * without touching live chat.
  */
 export type ChatRegistryContextDeps = {
+  testDependencies?: McpRequestContext["testDependencies"];
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   memberRole: MemberRole;
@@ -104,6 +105,9 @@ export const buildMcpContextFromChat = (
       )
     : undefined;
   return {
+    ...(deps.testDependencies === undefined
+      ? {}
+      : { testDependencies: deps.testDependencies }),
     accessibleWorkspaceIds,
     accessibleWorkspaceIdSet: workspaceAccessBoundary.accessibleWorkspaceIdSet,
     accessibleWorkspaceStatusById,

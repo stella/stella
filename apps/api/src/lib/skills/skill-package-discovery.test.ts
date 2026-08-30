@@ -1,12 +1,16 @@
 import { Result } from "better-result";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 
 import { LIMITS } from "@/api/lib/limits";
-import * as realSafeFetch from "@/api/lib/safe-outbound-fetch";
 import {
   SafeOutboundFetchError,
   type SafeOutboundFetchResponse,
 } from "@/api/lib/safe-outbound-fetch";
+import {
+  createSkillPackageFetchContext as createSkillPackageFetchContextWithDependencies,
+  discoverSkillPackagesFromUrl as discoverSkillPackagesFromUrlWithDependencies,
+  fetchSkillPackageFromUrl as fetchSkillPackageFromUrlWithContext,
+} from "@/api/lib/skills/skill-package";
 
 const COMMIT_SHA = "a".repeat(40);
 const SMALL_TREE_SHA = "b".repeat(40);
@@ -52,174 +56,188 @@ const invalidSkillStatus = (): number => {
   return 404;
 };
 
-void mock.module("@/api/lib/safe-outbound-fetch", () => ({
-  ...realSafeFetch,
-  safeOutboundFetchBytes: async ({ url }: { url: URL }) => {
-    outboundRequestCount += 1;
-    if (url.hostname === "raw.githubusercontent.com") {
-      requestedRawUrls.push(url.toString());
-      if (treeScenario === "discovery-failure") {
-        if (url.pathname.endsWith("/failure/SKILL.md")) {
-          return Result.err(
-            new SafeOutboundFetchError({ message: "Request timed out" }),
-          );
-        }
-        activeRawRequests += 1;
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 5);
-        });
-        activeRawRequests -= 1;
+const safeOutboundFetchBytesMock: NonNullable<
+  Parameters<typeof createSkillPackageFetchContextWithDependencies>[1]
+> = async ({ url }) => {
+  const requestUrl = typeof url === "string" ? new URL(url) : url;
+  outboundRequestCount += 1;
+  if (requestUrl.hostname === "raw.githubusercontent.com") {
+    requestedRawUrls.push(requestUrl.toString());
+    if (treeScenario === "discovery-failure") {
+      if (requestUrl.pathname.endsWith("/failure/SKILL.md")) {
+        return Result.err(
+          new SafeOutboundFetchError({ message: "Request timed out" }),
+        );
       }
-      if (url.pathname.endsWith("/invalid/SKILL.md")) {
-        if (invalidSkillScenario === "timeout") {
-          return Result.err(
-            new SafeOutboundFetchError({ message: "Request timed out" }),
-          );
-        }
-        return response("", invalidSkillStatus());
+      activeRawRequests += 1;
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 5);
+      });
+      activeRawRequests -= 1;
+    }
+    if (requestUrl.pathname.endsWith("/invalid/SKILL.md")) {
+      if (invalidSkillScenario === "timeout") {
+        return Result.err(
+          new SafeOutboundFetchError({ message: "Request timed out" }),
+        );
       }
-      if (url.pathname.endsWith(`/${COMMIT_SHA}/SKILL.md`)) {
-        return response(`---
+      return response("", invalidSkillStatus());
+    }
+    if (requestUrl.pathname.endsWith(`/${COMMIT_SHA}/SKILL.md`)) {
+      return response(`---
 name: root-skill
 description: A selected repository-root skill.
 ---
 
 Instructions.`);
-      }
-      if (url.pathname.endsWith(`/${COMMIT_SHA}/small/SKILL.md`)) {
-        return response(`---
+    }
+    if (requestUrl.pathname.endsWith(`/${COMMIT_SHA}/small/SKILL.md`)) {
+      return response(`---
 name: small-skill
 description: A skill inside a large repository.
 ---
 
 Instructions.`);
-      }
-      if (url.pathname.endsWith("/small/scripts/helper.ts")) {
-        return response("export const helper = true;");
-      }
-      if (
-        treeScenario === "max-depth-selected-skill" &&
-        url.pathname.endsWith("/scripts/helper.ts")
-      ) {
-        return response("export const helper = true;");
-      }
-      if (
-        treeScenario === "max-depth-selected-skill" &&
-        url.pathname.endsWith("/SKILL.md")
-      ) {
-        return response(`---
+    }
+    if (requestUrl.pathname.endsWith("/small/scripts/helper.ts")) {
+      return response("export const helper = true;");
+    }
+    if (
+      treeScenario === "max-depth-selected-skill" &&
+      requestUrl.pathname.endsWith("/scripts/helper.ts")
+    ) {
+      return response("export const helper = true;");
+    }
+    if (
+      treeScenario === "max-depth-selected-skill" &&
+      requestUrl.pathname.endsWith("/SKILL.md")
+    ) {
+      return response(`---
 name: max-depth-skill
 description: A selected skill at the directory-depth boundary.
 ---
 
 Instructions.`);
-      }
-      return response(`---
+    }
+    return response(`---
 name: valid-skill
 description: A valid discovered skill.
 ---
 
 Instructions.`);
+  }
+  if (requestUrl.pathname.endsWith("/commits/main")) {
+    return response({ sha: COMMIT_SHA });
+  }
+  if (requestUrl.pathname.includes("/git/trees/")) {
+    requestedTreeUrls.push(requestUrl.toString());
+    const treeish = requestUrl.pathname.split("/").at(-1);
+    const recursive = requestUrl.searchParams.get("recursive") === "1";
+    if (treeScenario === "discovery-failure") {
+      return response({
+        tree: Array.from({ length: 12 }, (_, index) => ({
+          path: `${index === 0 ? "failure" : `skill-${index}`}/SKILL.md`,
+          type: "blob",
+        })),
+      });
     }
-    if (url.pathname.endsWith("/commits/main")) {
-      return response({ sha: COMMIT_SHA });
-    }
-    if (url.pathname.includes("/git/trees/")) {
-      requestedTreeUrls.push(url.toString());
-      const treeish = url.pathname.split("/").at(-1);
-      const recursive = url.searchParams.get("recursive") === "1";
-      if (treeScenario === "discovery-failure") {
-        return response({
-          tree: Array.from({ length: 12 }, (_, index) => ({
-            path: `${index === 0 ? "failure" : `skill-${index}`}/SKILL.md`,
-            type: "blob",
-          })),
-        });
+    if (treeScenario === "max-depth-selected-skill") {
+      if (treeish === MAX_DEPTH_SCRIPTS_TREE_SHA && recursive) {
+        return response({ tree: [{ path: "helper.ts", type: "blob" }] });
       }
-      if (treeScenario === "max-depth-selected-skill") {
-        if (treeish === MAX_DEPTH_SCRIPTS_TREE_SHA && recursive) {
-          return response({ tree: [{ path: "helper.ts", type: "blob" }] });
-        }
-        if (
-          treeish === maxDepthTreeSha(LIMITS.agentSkillGithubDirectoriesMax)
-        ) {
-          return response({
-            tree: [
-              { path: "SKILL.md", type: "blob" },
-              {
-                path: "scripts",
-                sha: MAX_DEPTH_SCRIPTS_TREE_SHA,
-                type: "tree",
-              },
-            ],
-          });
-        }
-        const currentDepth =
-          treeish === COMMIT_SHA ? 0 : Number.parseInt(treeish ?? "", 16);
+      if (treeish === maxDepthTreeSha(LIMITS.agentSkillGithubDirectoriesMax)) {
         return response({
           tree: [
+            { path: "SKILL.md", type: "blob" },
             {
-              path: `directory-${currentDepth}`,
-              sha: maxDepthTreeSha(currentDepth + 1),
+              path: "scripts",
+              sha: MAX_DEPTH_SCRIPTS_TREE_SHA,
               type: "tree",
             },
           ],
         });
       }
-      if (treeScenario !== "default") {
-        if (treeish === COMMIT_SHA && recursive) {
-          return response({ truncated: true, tree: [] });
-        }
-        if (treeish === COMMIT_SHA) {
-          return response({
-            tree: [{ path: "small", sha: SMALL_TREE_SHA, type: "tree" }],
-          });
-        }
-        if (treeish === SMALL_TREE_SHA && recursive) {
-          return response({
-            tree:
-              treeScenario === "scoped-folder"
-                ? [{ path: "SKILL.md", type: "blob" }]
-                : [
-                    { path: "SKILL.md", type: "blob" },
-                    {
-                      path: "scripts/helper.ts",
-                      type: "blob",
-                    },
-                  ],
-          });
-        }
-        if (treeish === SMALL_TREE_SHA) {
-          return response({
-            tree: [
-              { path: "SKILL.md", type: "blob" },
-              { path: "scripts", sha: SCRIPTS_TREE_SHA, type: "tree" },
-            ],
-          });
-        }
-        if (treeish === SCRIPTS_TREE_SHA && recursive) {
-          return response({
-            tree: [{ path: "helper.ts", type: "blob" }],
-          });
-        }
-      }
+      const currentDepth =
+        treeish === COMMIT_SHA ? 0 : Number.parseInt(treeish ?? "", 16);
       return response({
         tree: [
-          { path: "SKILL.md", type: "blob" },
-          { path: "invalid/SKILL.md", type: "blob" },
-          { path: "valid/SKILL.md", type: "blob" },
+          {
+            path: `directory-${currentDepth}`,
+            sha: maxDepthTreeSha(currentDepth + 1),
+            type: "tree",
+          },
         ],
       });
     }
-    return response({ default_branch: "main" });
-  },
-}));
+    if (treeScenario !== "default") {
+      if (treeish === COMMIT_SHA && recursive) {
+        return response({ truncated: true, tree: [] });
+      }
+      if (treeish === COMMIT_SHA) {
+        return response({
+          tree: [{ path: "small", sha: SMALL_TREE_SHA, type: "tree" }],
+        });
+      }
+      if (treeish === SMALL_TREE_SHA && recursive) {
+        return response({
+          tree:
+            treeScenario === "scoped-folder"
+              ? [{ path: "SKILL.md", type: "blob" }]
+              : [
+                  { path: "SKILL.md", type: "blob" },
+                  {
+                    path: "scripts/helper.ts",
+                    type: "blob",
+                  },
+                ],
+        });
+      }
+      if (treeish === SMALL_TREE_SHA) {
+        return response({
+          tree: [
+            { path: "SKILL.md", type: "blob" },
+            { path: "scripts", sha: SCRIPTS_TREE_SHA, type: "tree" },
+          ],
+        });
+      }
+      if (treeish === SCRIPTS_TREE_SHA && recursive) {
+        return response({
+          tree: [{ path: "helper.ts", type: "blob" }],
+        });
+      }
+    }
+    return response({
+      tree: [
+        { path: "SKILL.md", type: "blob" },
+        { path: "invalid/SKILL.md", type: "blob" },
+        { path: "valid/SKILL.md", type: "blob" },
+      ],
+    });
+  }
+  return response({ default_branch: "main" });
+};
 
-const {
-  createSkillPackageFetchContext,
-  discoverSkillPackagesFromUrl,
-  fetchSkillPackageFromUrl,
-} = await import("./skill-package");
+const createSkillPackageFetchContext = (
+  limits: Parameters<typeof createSkillPackageFetchContextWithDependencies>[0],
+) =>
+  createSkillPackageFetchContextWithDependencies(
+    limits,
+    safeOutboundFetchBytesMock,
+  );
+
+const discoverSkillPackagesFromUrl = async (rawUrl: string) =>
+  await discoverSkillPackagesFromUrlWithDependencies(
+    rawUrl,
+    safeOutboundFetchBytesMock,
+  );
+
+const fetchSkillPackageFromUrl = async (
+  rawUrl: string,
+  context = createSkillPackageFetchContext({
+    deadlineAt: Date.now() + 30_000,
+    maxRequests: 1000,
+  }),
+) => await fetchSkillPackageFromUrlWithContext(rawUrl, context);
 
 describe("GitHub skill package discovery", () => {
   beforeEach(() => {

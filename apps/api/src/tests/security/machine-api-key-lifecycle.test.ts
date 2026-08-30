@@ -2,6 +2,10 @@ import { describe, expect, mock, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import {
+  disableMachineApiKey,
+  loadOrganizationMachineApiKey,
+} from "@/api/handlers/api-keys/mint";
 import { toSafeId } from "@/api/lib/branded-types";
 
 /**
@@ -17,19 +21,6 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 const findOrganizationMachineApiKey = mock();
 const updateApiKey = mock();
-
-void mock.module("@/api/lib/machine-api-key-queries", () => ({
-  findOrganizationMachineApiKey,
-  listOrganizationMachineApiKeys: mock(),
-}));
-
-void mock.module("@/api/lib/auth", () => ({
-  getAuth: () => ({ api: { updateApiKey } }),
-  resolveMemberAuthorization: mock(),
-}));
-
-const { disableMachineApiKey, loadOrganizationMachineApiKey } =
-  await import("@/api/handlers/api-keys/mint");
 
 const ORG_ID = toSafeId<"organization">("org-acme");
 const ADMIN_A = "user-admin-a";
@@ -59,10 +50,10 @@ describe("organization-scoped machine key lifecycle", () => {
     // scoped by organization, so B's key resolves for A.
     findOrganizationMachineApiKey.mockResolvedValue(keyRow());
 
-    const loaded = await loadOrganizationMachineApiKey({
-      keyId: KEY_ID,
-      organizationId: ORG_ID,
-    });
+    const loaded = await loadOrganizationMachineApiKey(
+      { keyId: KEY_ID, organizationId: ORG_ID },
+      findOrganizationMachineApiKey,
+    );
 
     expect(loaded.isOk()).toBe(true);
     if (loaded.isOk()) {
@@ -75,10 +66,10 @@ describe("organization-scoped machine key lifecycle", () => {
     findOrganizationMachineApiKey.mockClear();
     findOrganizationMachineApiKey.mockResolvedValue(keyRow());
 
-    await loadOrganizationMachineApiKey({
-      keyId: KEY_ID,
-      organizationId: ORG_ID,
-    });
+    await loadOrganizationMachineApiKey(
+      { keyId: KEY_ID, organizationId: ORG_ID },
+      findOrganizationMachineApiKey,
+    );
 
     expect(findOrganizationMachineApiKey).toHaveBeenCalledWith({
       keyId: KEY_ID,
@@ -93,10 +84,10 @@ describe("organization-scoped machine key lifecycle", () => {
     updateApiKey.mockClear();
     updateApiKey.mockResolvedValue({});
 
-    const revoked = await disableMachineApiKey({
-      keyId: KEY_ID,
-      ownerUserId: ADMIN_B,
-    });
+    const revoked = await disableMachineApiKey(
+      { keyId: KEY_ID, ownerUserId: ADMIN_B },
+      updateApiKey,
+    );
 
     expect(revoked.isOk()).toBe(true);
     const call = updateApiKey.mock.calls[0]?.[0];
@@ -115,7 +106,10 @@ describe("organization-scoped machine key lifecycle", () => {
     updateApiKey.mockClear();
     updateApiKey.mockResolvedValue({});
 
-    await disableMachineApiKey({ keyId: KEY_ID, ownerUserId: ADMIN_B });
+    await disableMachineApiKey(
+      { keyId: KEY_ID, ownerUserId: ADMIN_B },
+      updateApiKey,
+    );
 
     expect(updateApiKey.mock.calls[0]?.[0]?.headers).toBeUndefined();
   });
@@ -125,10 +119,10 @@ describe("organization-scoped machine key lifecycle", () => {
     // 404 over 403 keeps id probing from confirming that a key exists elsewhere.
     findOrganizationMachineApiKey.mockResolvedValue(null);
 
-    const loaded = await loadOrganizationMachineApiKey({
-      keyId: "key-in-another-org",
-      organizationId: ORG_ID,
-    });
+    const loaded = await loadOrganizationMachineApiKey(
+      { keyId: "key-in-another-org", organizationId: ORG_ID },
+      findOrganizationMachineApiKey,
+    );
 
     expect(loaded.isErr()).toBe(true);
     if (loaded.isErr()) {
@@ -141,10 +135,10 @@ describe("organization-scoped machine key lifecycle", () => {
       keyRow({ metadata: "not-json" }),
     );
 
-    const loaded = await loadOrganizationMachineApiKey({
-      keyId: KEY_ID,
-      organizationId: ORG_ID,
-    });
+    const loaded = await loadOrganizationMachineApiKey(
+      { keyId: KEY_ID, organizationId: ORG_ID },
+      findOrganizationMachineApiKey,
+    );
 
     expect(loaded.isErr()).toBe(true);
   });

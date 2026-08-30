@@ -11,7 +11,6 @@ import {
   beforeEach,
   describe,
   expect,
-  mock,
   test,
 } from "bun:test";
 
@@ -19,29 +18,29 @@ import { organization } from "@/api/db/auth-schema";
 import { flowRuns, workspaces } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { reconcileOrphanedFlowRuns } from "@/api/lib/flows/flow-run-worker";
 import type {
   FlowDefinitionSnapshot,
   FlowStep,
   FlowTriggerSource,
 } from "@/api/lib/flows/flow-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 const testDb: TestDatabase = await getTestDb();
 
-void mock.module("@/api/db/root", () => ({ rootDb: testDb, rlsDb: testDb }));
-
 const enqueuedRunIds: string[] = [];
-void mock.module("@/api/lib/flows/flow-run-queue", () => ({
-  FLOW_RUN_QUEUE_NAME: "flow-run",
-  enqueueFlowStep: mock(async ({ runId }: { runId: string }) => {
-    enqueuedRunIds.push(runId);
-  }),
-}));
 
-const { reconcileOrphanedFlowRuns } =
-  await import("@/api/lib/flows/flow-run-worker");
+const reconcileDependencies = asTestRaw<
+  NonNullable<Parameters<typeof reconcileOrphanedFlowRuns>[1]>
+>({
+  database: testDb,
+  enqueueStep: async ({ runId }: { runId: SafeId<"flowRun"> }) => {
+    enqueuedRunIds.push(runId);
+  },
+});
 
 const SNAPSHOT: FlowDefinitionSnapshot = {
   name: "Reconcile test flow",
@@ -134,7 +133,7 @@ describe("reconcileOrphanedFlowRuns", () => {
   });
 
   test("re-enqueues every pending/running run across batch boundaries", async () => {
-    await reconcileOrphanedFlowRuns({ batchSize: 2 });
+    await reconcileOrphanedFlowRuns({ batchSize: 2 }, reconcileDependencies);
 
     expect(enqueuedRunIds.toSorted()).toEqual(
       [...nonTerminalRunIds].toSorted(),
@@ -142,10 +141,13 @@ describe("reconcileOrphanedFlowRuns", () => {
   });
 
   test("the standing sweep skips runs inside the stall window", async () => {
-    await reconcileOrphanedFlowRuns({
-      batchSize: 2,
-      stalledBefore: new Date(Date.now() - STALL_WINDOW_MS),
-    });
+    await reconcileOrphanedFlowRuns(
+      {
+        batchSize: 2,
+        stalledBefore: new Date(Date.now() - STALL_WINDOW_MS),
+      },
+      reconcileDependencies,
+    );
 
     expect(enqueuedRunIds.toSorted()).toEqual([...stalledRunIds].toSorted());
   });

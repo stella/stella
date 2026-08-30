@@ -1,7 +1,6 @@
 import { Result, TaggedError } from "better-result";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 
-import * as realSafeFetch from "@/api/lib/safe-outbound-fetch";
 import type {
   SafeOutboundFetchBody,
   SafeOutboundFetchError,
@@ -74,12 +73,26 @@ const mockSafeOutboundFetchBytes = async (opts: {
   });
 };
 
-void mock.module("@/api/lib/safe-outbound-fetch", () => ({
-  ...realSafeFetch,
-  safeOutboundFetchBytes: mockSafeOutboundFetchBytes,
-}));
+const { probeProvider: probeProviderImpl } =
+  await import("@/api/lib/ai-provider-probe");
 
-const { probeProvider } = await import("@/api/lib/ai-provider-probe");
+const probeProvider = async (
+  provider: Parameters<typeof probeProviderImpl>[0],
+  apiKey: string,
+  endpoint?: string,
+  apiVersion?: string,
+  expectedAzureDeployments?: readonly string[],
+  timeoutMs?: number,
+) =>
+  await probeProviderImpl(
+    provider,
+    apiKey,
+    endpoint,
+    apiVersion,
+    expectedAzureDeployments,
+    timeoutMs,
+    mockSafeOutboundFetchBytes,
+  );
 
 beforeEach(() => {
   calls.length = 0;
@@ -88,10 +101,6 @@ beforeEach(() => {
     status: 200,
     body: { object: "list", data: [] },
   };
-});
-
-afterEach(() => {
-  mock.restore();
 });
 
 describe("probeProvider", () => {

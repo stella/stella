@@ -7,6 +7,7 @@ import {
   clearRootDbMocks,
   rootDbChatThreadFindFirstMock,
   rootDbExecuteMock,
+  rootDbTestDouble,
 } from "@/api/tests/helpers/mock-root-db";
 
 /** Drive the keyset page read: the first `execute` (the message-page
@@ -195,7 +196,10 @@ describe("chat search indexing", () => {
   test("does not let stale upserts overwrite a newer search document", async () => {
     const { upsertChatThreadSearchDocument } = await import("./index-chat");
 
-    await upsertChatThreadSearchDocument(toSafeId<"chatThread">("thread_1"));
+    await upsertChatThreadSearchDocument(
+      toSafeId<"chatThread">("thread_1"),
+      rootDbTestDouble,
+    );
 
     const sqlText = findExecutedQuery(
       "INSERT INTO chat_thread_search_documents",
@@ -215,7 +219,10 @@ describe("chat search indexing", () => {
   test("does not let stale upserts overwrite newer message search documents", async () => {
     const { upsertChatThreadSearchDocument } = await import("./index-chat");
 
-    await upsertChatThreadSearchDocument(toSafeId<"chatThread">("thread_1"));
+    await upsertChatThreadSearchDocument(
+      toSafeId<"chatThread">("thread_1"),
+      rootDbTestDouble,
+    );
 
     const sqlText = findExecutedQuery(
       "INSERT INTO chat_message_search_documents",
@@ -248,7 +255,10 @@ describe("chat search indexing", () => {
     ]);
     const { upsertChatThreadSearchDocument } = await import("./index-chat");
 
-    await upsertChatThreadSearchDocument(toSafeId<"chatThread">("thread_1"));
+    await upsertChatThreadSearchDocument(
+      toSafeId<"chatThread">("thread_1"),
+      rootDbTestDouble,
+    );
 
     expect(
       findExecutedQuery("INSERT INTO chat_message_search_documents"),
@@ -261,7 +271,7 @@ describe("chat search indexing", () => {
   test("backfills threads missing per-message search documents", async () => {
     const { backfillChatThreadSearchIndex } = await import("./index-chat");
 
-    await backfillChatThreadSearchIndex();
+    await backfillChatThreadSearchIndex({ database: rootDbTestDouble });
 
     const query = rootDbExecuteMock.mock.calls.at(0)?.[0];
     expect(query).toBeDefined();

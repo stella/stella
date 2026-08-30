@@ -620,11 +620,13 @@ export const createSearchSummaryChatThread = async ({
   safeDb,
   scopedDb,
   search = searchGlobal,
+  upsertSearchDocument = upsertChatThreadSearchDocument,
   userId,
   recordAuditEvent,
 }: SearchSummaryChatContext & {
   body: SearchSummaryChatBody;
   search?: typeof searchGlobal;
+  upsertSearchDocument?: typeof upsertChatThreadSearchDocument;
 }) => {
   const resolved = await resolveSelectedWorkspaceIds({
     scopedDb,
@@ -775,7 +777,7 @@ export const createSearchSummaryChatThread = async ({
 
   // Index the freshly seeded summary thread so it is findable in
   // global search. Fire-and-forget: indexing must not fail the create.
-  upsertChatThreadSearchDocument(threadId).catch(captureError);
+  upsertSearchDocument(threadId).catch(captureError);
 
   return { threadId };
 };

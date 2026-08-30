@@ -1,12 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  test,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { env } from "@/api/env";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -17,37 +9,12 @@ import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-const rehydrateCaseLawCandidatesMock = mock();
 const searchDecisionsHandlerMock = mock();
 const readDecisionHandlerMock = mock();
+const readWorkspaceHandlerMock = mock();
+const readOverviewHandlerMock = mock();
+const readWorkspaceContactsHandlerMock = mock();
 const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/u, "");
-
-void mock.module("@/api/handlers/case-law/decisions/search", () => ({
-  rehydrateCaseLawCandidates: rehydrateCaseLawCandidatesMock,
-  searchDecisionsHandler: searchDecisionsHandlerMock,
-}));
-
-// The tool reads through the hydrating wrapper, so that is the module
-// the double replaces.
-void mock.module(
-  "@/api/handlers/case-law/decisions/get-deferred-document",
-  () => ({
-    hydrateDeferredDocument: async (read: unknown) => read,
-    readGatedDecisionWithDocument: readDecisionHandlerMock,
-  }),
-);
-
-void mock.module("@/api/handlers/workspaces/get", () => ({
-  readWorkspaceHandler: mock(),
-}));
-
-void mock.module("@/api/handlers/workspaces/read-overview", () => ({
-  readOverviewHandler: mock(),
-}));
-
-void mock.module("@/api/handlers/workspaces/workspace-contacts-read", () => ({
-  readWorkspaceContactsHandler: mock(),
-}));
 
 const { getMcpToolDefinition, handleMcpToolCall, listMcpTools } =
   await import("@/api/mcp/tools");
@@ -153,6 +120,13 @@ const createContext = ({
   memberRole,
   organizationId: toSafeId<"organization">("org_1"),
   recordAuditEvent,
+  testDependencies: {
+    searchDecisionsHandler: searchDecisionsHandlerMock,
+    readGatedDecisionWithDocument: readDecisionHandlerMock,
+    readWorkspaceHandler: readWorkspaceHandlerMock,
+    readOverviewHandler: readOverviewHandlerMock,
+    readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
+  },
   safeDb: toSafeDbMock(scopedDb),
   scopedDb,
   userId: toSafeId<"user">("user_1"),
@@ -180,10 +154,6 @@ describe("set_practice_jurisdictions MCP tool", () => {
 
   afterEach(() => {
     analytics.restore();
-  });
-
-  afterAll(() => {
-    mock.restore();
   });
 
   test("requires the stella:onboarding scope", async () => {

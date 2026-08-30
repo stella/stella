@@ -45,16 +45,62 @@ export type StartAutomatedFlowRunArgs = {
   logContext: Record<string, string>;
 };
 
-export const startAutomatedFlowRun = async ({
-  definitionId,
-  organizationId,
-  workspaceId,
-  createdByUserId,
-  triggerSource,
-  inputEntityIds,
-  enqueueDelayMs,
-  logContext,
-}: StartAutomatedFlowRunArgs): Promise<void> => {
+type FindFlowDefinitionArgs = {
+  definitionId: SafeId<"flowDefinition">;
+  organizationId: SafeId<"organization">;
+};
+
+type StartAutomatedFlowRunDependencies = {
+  findDefinition: (args: FindFlowDefinitionArgs) => Promise<
+    | {
+        enabled: boolean;
+        id: SafeId<"flowDefinition">;
+        name: string;
+        steps: Parameters<typeof buildFlowRunRows>[0]["definition"]["steps"];
+      }
+    | undefined
+  >;
+  resolveAuthorization: typeof resolveMemberAuthorization;
+  insertWithinCap: typeof insertAutomatedFlowRunWithinCap;
+  enqueueStep: typeof enqueueFlowStep;
+};
+
+const START_AUTOMATED_FLOW_RUN_DEPENDENCIES: StartAutomatedFlowRunDependencies =
+  {
+    findDefinition: async ({
+      definitionId,
+      organizationId,
+    }: FindFlowDefinitionArgs) =>
+      await rootDb.query.flowDefinitions.findFirst({
+        where: {
+          id: { eq: definitionId },
+          organizationId: { eq: organizationId },
+        },
+        columns: { id: true, name: true, steps: true, enabled: true },
+      }),
+    resolveAuthorization: resolveMemberAuthorization,
+    insertWithinCap: insertAutomatedFlowRunWithinCap,
+    enqueueStep: enqueueFlowStep,
+  };
+
+export const startAutomatedFlowRun = async (
+  {
+    definitionId,
+    organizationId,
+    workspaceId,
+    createdByUserId,
+    triggerSource,
+    inputEntityIds,
+    enqueueDelayMs,
+    logContext,
+  }: StartAutomatedFlowRunArgs,
+  {
+    findDefinition,
+    resolveAuthorization,
+    insertWithinCap,
+    enqueueStep,
+  }: StartAutomatedFlowRunDependencies = START_AUTOMATED_FLOW_RUN_DEPENDENCIES,
+): Promise<void> => {
   if (createdByUserId === null) {
     logger.warn("flow.automated_run_skipped_no_actor", logContext);
     return;
@@ -63,14 +109,7 @@ export const startAutomatedFlowRun = async ({
   // Snapshot fields (name, steps) come from a root read: the automated triggers
   // run in a background context and the cap is an org-wide rail.
   const definitionResult = await Result.tryPromise({
-    try: async () =>
-      await rootDb.query.flowDefinitions.findFirst({
-        where: {
-          id: { eq: definitionId },
-          organizationId: { eq: organizationId },
-        },
-        columns: { id: true, name: true, steps: true, enabled: true },
-      }),
+    try: async () => await findDefinition({ definitionId, organizationId }),
     catch: (cause) => cause,
   });
   if (Result.isError(definitionResult)) {
@@ -101,7 +140,7 @@ export const startAutomatedFlowRun = async ({
   // actor is authorized for.
   const authorization = await Result.tryPromise({
     try: async () =>
-      await resolveMemberAuthorization({
+      await resolveAuthorization({
         organizationId,
         userId: brandPersistedUserId(createdByUserId),
         workspaceId,
@@ -133,8 +172,7 @@ export const startAutomatedFlowRun = async ({
   });
 
   const insertResult = await Result.tryPromise({
-    try: async () =>
-      await insertAutomatedFlowRunWithinCap({ definitionId, rows }),
+    try: async () => await insertWithinCap({ definitionId, rows }),
     catch: (cause) => cause,
   });
   if (Result.isError(insertResult)) {
@@ -158,7 +196,7 @@ export const startAutomatedFlowRun = async ({
   // permanently stranded.
   const enqueued = await Result.tryPromise({
     try: async () =>
-      await enqueueFlowStep({
+      await enqueueStep({
         runId,
         stepIndex: 0,
         ...(enqueueDelayMs !== undefined && { delayMs: enqueueDelayMs }),

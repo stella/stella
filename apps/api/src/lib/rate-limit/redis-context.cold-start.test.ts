@@ -7,13 +7,10 @@
  * the first requests after a process start on Redis; this suite pins that the
  * first increment after the connect settles is answered by the peer, not by
  * the fallback. `redis-outage.test.ts` covers the unreachable side.
- *
- * Its own file because it fixes the process-global REDIS_URL, as the outage
- * suite does with a different value; mocking the same module keeps the runner
- * from co-batching the two.
  */
 
-import { afterAll, describe, expect, mock, test } from "bun:test";
+import { RedisClient } from "bun";
+import { afterAll, describe, expect, test } from "bun:test";
 
 import type { RateLimitOptions } from "@/api/lib/rate-limit/rate-limit";
 
@@ -38,15 +35,6 @@ const peer = Bun.listen({
   },
 });
 
-const realEnv = await import("@/api/env-document-processing-worker");
-void mock.module("@/api/env-document-processing-worker", () => ({
-  envDocumentProcessingWorker: {
-    ...realEnv.envDocumentProcessingWorker,
-    REDIS_URL: `redis://127.0.0.1:${peer.port}`,
-  },
-}));
-
-const { createRedisClient } = await import("@/api/lib/redis-client");
 const { RedisRateLimitContext } =
   await import("@/api/lib/rate-limit/redis-context");
 
@@ -73,7 +61,10 @@ describe("rate limiter cold start against a reachable Valkey", () => {
 
     const context = new RedisRateLimitContext({
       createRedis: () => {
-        const client = createRedisClient({
+        // Inject the peer at the client boundary: shared-process test batches
+        // may already have evaluated the validated env module for another
+        // file, so mutating process.env here would depend on import order.
+        const client = new RedisClient(`redis://127.0.0.1:${peer.port}`, {
           connectionTimeout: 500,
           enableOfflineQueue: false,
         });

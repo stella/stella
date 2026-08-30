@@ -13,11 +13,23 @@ import {
   normalizeAzureFoundryBaseURL,
 } from "@/api/lib/azure-foundry";
 import { normalizeHuggingFaceBaseURL } from "@/api/lib/huggingface";
-import type { SafeOutboundFetchResponse } from "@/api/lib/safe-outbound-fetch";
+import type {
+  SafeOutboundFetchResponse,
+  SafeOutboundFetchBody,
+  SafeOutboundHeaders,
+} from "@/api/lib/safe-outbound-fetch";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 const DEFAULT_VALIDATION_TIMEOUT_MS = 5000;
 const PROBE_MAX_BYTES = 1_000_000;
+type ProbeFetch = (opts: {
+  body?: SafeOutboundFetchBody;
+  headers?: SafeOutboundHeaders;
+  maxBytes: number;
+  method?: string;
+  timeoutMs: number;
+  url: string | URL;
+}) => ReturnType<typeof safeOutboundFetchBytes>;
 
 export const PROVIDER_PROBE_VALUES = [
   "google",
@@ -127,6 +139,7 @@ export const probeProvider = async (
   apiVersion?: string,
   expectedAzureDeployments?: readonly string[],
   timeoutMs: number = DEFAULT_VALIDATION_TIMEOUT_MS,
+  fetchBytes: ProbeFetch = safeOutboundFetchBytes,
 ): Promise<ProviderProbeResult> => {
   if (provider === "azure_foundry") {
     return await probeAzureFoundry(
@@ -135,17 +148,18 @@ export const probeProvider = async (
       apiVersion,
       expectedAzureDeployments,
       timeoutMs,
+      fetchBytes,
     );
   }
 
   if (provider === "huggingface") {
-    return await probeHuggingFace(apiKey, endpoint, timeoutMs);
+    return await probeHuggingFace(apiKey, endpoint, timeoutMs, fetchBytes);
   }
 
   const target = PROBE_TARGETS[provider](apiKey);
-  const response = await safeOutboundFetchBytes({
+  const response = await fetchBytes({
     url: target.url,
-    headers: target.headers,
+    ...(target.headers === undefined ? {} : { headers: target.headers }),
     maxBytes: PROBE_MAX_BYTES,
     method: "GET",
     timeoutMs,
@@ -173,6 +187,7 @@ const probeHuggingFace = async (
   apiKey: string,
   endpoint: string | undefined,
   timeoutMs: number,
+  fetchBytes: ProbeFetch,
 ): Promise<ProviderProbeResult> => {
   const trimmed = endpoint?.trim();
   if (!trimmed) {
@@ -188,7 +203,7 @@ const probeHuggingFace = async (
   }
   const url = new URL(`${normalized.baseURL}/models`);
 
-  const response = await safeOutboundFetchBytes({
+  const response = await fetchBytes({
     url,
     headers: { Authorization: `Bearer ${apiKey}` },
     maxBytes: PROBE_MAX_BYTES,
@@ -219,6 +234,7 @@ const probeAzureFoundry = async (
   apiVersion: string | undefined,
   expectedDeployments: readonly string[] | undefined,
   timeoutMs: number,
+  fetchBytes: ProbeFetch,
 ): Promise<ProviderProbeResult> => {
   if (!endpoint?.trim()) {
     return {
@@ -234,7 +250,7 @@ const probeAzureFoundry = async (
 
   const url = new URL(`${normalized.baseURL}/v1/models`);
   url.searchParams.set("api-version", resolveAzureApiVersion(apiVersion));
-  const response = await safeOutboundFetchBytes({
+  const response = await fetchBytes({
     url,
     headers: { "api-key": apiKey },
     maxBytes: PROBE_MAX_BYTES,

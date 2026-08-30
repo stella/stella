@@ -115,6 +115,14 @@ export type RunRegistryWriteToolProps = {
   refRegistry: ChatRefRegistry;
 };
 
+export type RunRegistryWriteToolDependencies = {
+  isMcpToolFeatureEnabled: typeof isMcpToolFeatureEnabled;
+};
+
+const defaultRunRegistryWriteToolDependencies = {
+  isMcpToolFeatureEnabled,
+} satisfies RunRegistryWriteToolDependencies;
+
 export const applyChatApprovalConfirmation = ({
   args,
   toolName,
@@ -152,12 +160,10 @@ export const applyChatApprovalConfirmation = ({
  * fail-closed UUID backstop still runs so no raw tenant id can reach the model
  * through a write result either.
  */
-export const runRegistryWriteTool = async ({
-  toolName,
-  args,
-  context,
-  refRegistry,
-}: RunRegistryWriteToolProps): Promise<Result<unknown, ChatToolError>> => {
+export const runRegistryWriteTool = async (
+  { toolName, args, context, refRegistry }: RunRegistryWriteToolProps,
+  dependencies: RunRegistryWriteToolDependencies = defaultRunRegistryWriteToolDependencies,
+): Promise<Result<unknown, ChatToolError>> => {
   if (!isProjectableRegistryWriteToolName(toolName)) {
     return Result.err(
       new ChatToolError({
@@ -171,7 +177,7 @@ export const runRegistryWriteTool = async ({
   const staticDefinition =
     getStaticMcpToolDefinition(toolName) ??
     panic(`Write tool ${toolName} is missing from the static registry`);
-  if (!isMcpToolFeatureEnabled(staticDefinition.feature)) {
+  if (!dependencies.isMcpToolFeatureEnabled(staticDefinition.feature)) {
     return Result.err(
       new ChatToolError({
         kind: "unavailable",

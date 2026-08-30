@@ -1,18 +1,23 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 
+import type { rootDb } from "@/api/db/root";
 import { toSafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 let registrationRows: { id: string }[] = [];
-const selectMock = mock(() => queryBuilder);
+let selectCalls = 0;
+const selectMock = () => {
+  selectCalls += 1;
+  return queryBuilder;
+};
 const queryBuilder = {
   from: () => queryBuilder,
   limit: async () => registrationRows,
   where: () => queryBuilder,
 };
-
-void mock.module("@/api/db/root", () => ({
-  rootDb: { select: selectMock },
-}));
+const database = asTestRaw<Pick<typeof rootDb, "select">>({
+  select: selectMock,
+});
 
 const { resolveAgentAuditExecution } = await import("./agent-audit-principal");
 
@@ -24,7 +29,7 @@ const userId = toSafeId<"user">("00000000-0000-0000-0000-000000000002");
 describe("resolveAgentAuditExecution", () => {
   beforeEach(() => {
     registrationRows = [];
-    selectMock.mockClear();
+    selectCalls = 0;
   });
 
   test("attributes an unregistered OAuth client to its user through MCP", async () => {
@@ -32,6 +37,7 @@ describe("resolveAgentAuditExecution", () => {
       credential: { clientId: "first-party-cli", type: "oauth_client" },
       organizationId,
       userId,
+      db: database,
     });
 
     expect(execution).toEqual({
@@ -45,13 +51,14 @@ describe("resolveAgentAuditExecution", () => {
       credential: { type: "delegated_user" },
       organizationId,
       userId,
+      db: database,
     });
 
     expect(execution).toEqual({
       performer: { id: userId, type: "user" },
       trigger: { source: "mcp", type: "direct" },
     });
-    expect(selectMock).not.toHaveBeenCalled();
+    expect(selectCalls).toBe(0);
   });
 
   test("binds an agent run to its human owner and run id", async () => {
@@ -59,6 +66,7 @@ describe("resolveAgentAuditExecution", () => {
       credential: { runId: "run-1", type: "agent_run" },
       organizationId,
       userId,
+      db: database,
     });
 
     expect(execution).toEqual({
@@ -84,6 +92,7 @@ describe("resolveAgentAuditExecution", () => {
       credential: { clientId: "registered-agent", type: "oauth_client" },
       organizationId,
       userId,
+      db: database,
     });
 
     expect(execution).toEqual({

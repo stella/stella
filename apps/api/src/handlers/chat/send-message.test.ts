@@ -9,6 +9,13 @@ import { CHAT_TURN_INTENT } from "@stll/api-contract";
 import type { SafeDb } from "@/api/db/safe-db";
 import { chatThreads, chatTurns } from "@/api/db/schema";
 import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
+import {
+  createSendMessage,
+  shouldLoadExternalMcpToolsForStreaming,
+} from "@/api/handlers/chat/send-message";
+import * as chatSideEffectsModule from "@/api/handlers/chat/send-message-side-effects";
+import { streamChat } from "@/api/handlers/chat/stream-chat";
+import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -27,19 +34,7 @@ const loadWebSearchProvidersForOrgMock = mock(async () => {
     webSearchProvider: null,
   };
 });
-const loadOrgKeysModule = await import("@/api/lib/web-search/load-org-keys");
-void mock.module("@/api/lib/web-search/load-org-keys", () => ({
-  ...loadOrgKeysModule,
-  loadWebSearchProvidersForOrg: loadWebSearchProvidersForOrgMock,
-}));
-
 const upsertChatThreadSearchDocumentMock = mock(async () => undefined);
-void mock.module("@/api/lib/search/index-chat", () => ({
-  upsertChatThreadSearchDocument: upsertChatThreadSearchDocumentMock,
-}));
-
-const externalMcpToolsModule =
-  await import("@/api/handlers/chat/tools/external-mcp-tools");
 let externalMcpToolsLoadHook: (() => void) | undefined;
 const loadExternalMcpToolsForUserMock = mock(async () => {
   const hook = externalMcpToolsLoadHook;
@@ -59,12 +54,6 @@ const loadExternalMcpToolsForUserMock = mock(async () => {
     tools: {},
   };
 });
-void mock.module("@/api/handlers/chat/tools/external-mcp-tools", () => ({
-  ...externalMcpToolsModule,
-  loadExternalMcpToolsForUser: loadExternalMcpToolsForUserMock,
-}));
-
-const chatSideEffectsModule = await import("./send-message-side-effects");
 const realRollbackUnpersistedChatSideEffects =
   chatSideEffectsModule.rollbackUnpersistedChatSideEffects;
 const uploadMessageFilesWithRollbackMock = mock(
@@ -86,14 +75,14 @@ const rollbackUnpersistedChatSideEffectsMock = mock(
     >[0],
   ) => await realRollbackUnpersistedChatSideEffects(options),
 );
-void mock.module("./send-message-side-effects", () => ({
-  ...chatSideEffectsModule,
-  rollbackUnpersistedChatSideEffects: rollbackUnpersistedChatSideEffectsMock,
-  uploadMessageFilesWithRollback: uploadMessageFilesWithRollbackMock,
-}));
-
-const { default: sendMessage, shouldLoadExternalMcpToolsForStreaming } =
-  await import("./send-message");
+const sendMessage = createSendMessage({
+  indexThread: upsertChatThreadSearchDocumentMock,
+  loadExternalMcpTools: loadExternalMcpToolsForUserMock,
+  loadWebSearchProviders: loadWebSearchProvidersForOrgMock,
+  rollbackSideEffects: rollbackUnpersistedChatSideEffectsMock,
+  streamResponse: streamChat,
+  uploadMessageFiles: uploadMessageFilesWithRollbackMock,
+});
 
 // The real analytics callbacks run through the handler; only the sink is in
 // memory, so no test here ships an event to the provider.

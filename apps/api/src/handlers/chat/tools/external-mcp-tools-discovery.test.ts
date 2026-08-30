@@ -1,20 +1,14 @@
 import type { MCPClient } from "@tanstack/ai-mcp";
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  test,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { loadExternalMcpToolsForUser } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const loadActiveMcpConnectionsForUserMock = mock();
 const createMcpClientForConnectionMock = mock();
@@ -26,17 +20,20 @@ const withTimeoutMock =
     ) => Promise<unknown>
   >();
 
-void mock.module("@/api/lib/mcp-upstream/connections", () => ({
+const dependencies = asTestRaw<
+  NonNullable<Parameters<typeof loadExternalMcpToolsForUser>[0]["dependencies"]>
+>({
   createMcpClientForConnection: createMcpClientForConnectionMock,
   loadActiveMcpConnectionsForUser: loadActiveMcpConnectionsForUserMock,
-}));
-
-void mock.module("@/api/lib/with-timeout", () => ({
   withTimeout: withTimeoutMock,
-}));
+});
 
-const { loadExternalMcpToolsForUser } =
-  await import("@/api/handlers/chat/tools/external-mcp-tools");
+const loadExternalMcpToolsForUserForTest = async (
+  input: Omit<
+    Parameters<typeof loadExternalMcpToolsForUser>[0],
+    "dependencies"
+  >,
+) => await loadExternalMcpToolsForUser({ ...input, dependencies });
 
 const orgId = toSafeId<"organization">("org-test");
 const userId = toSafeId<"user">("user-test");
@@ -110,14 +107,6 @@ afterEach(() => {
   analytics.restore();
 });
 
-// Bun runs every test file in one process, and `mock.module` mutates a
-// shared registry: without restoring here, these `mock.module` calls (for
-// `mcp-upstream/connections` and `with-timeout`) would leak into whichever
-// other test file runs next in the same process.
-afterAll(() => {
-  mock.restore();
-});
-
 describe("loadExternalMcpToolsForUser client lifecycle", () => {
   test("closes the MCP client when discovery fails after the client is created", async () => {
     const row = buildRow();
@@ -130,7 +119,7 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
     });
     createMcpClientForConnectionMock.mockResolvedValue(asMcpClient(fakeClient));
 
-    const loaded = await loadExternalMcpToolsForUser({
+    const loaded = await loadExternalMcpToolsForUserForTest({
       nullUnionStrategy: "json-schema",
       organizationId: orgId,
       safeDb: stubSafeDb,
@@ -180,7 +169,7 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
       });
     });
 
-    const loaded = await loadExternalMcpToolsForUser({
+    const loaded = await loadExternalMcpToolsForUserForTest({
       nullUnionStrategy: "json-schema",
       organizationId: orgId,
       safeDb: stubSafeDb,
@@ -229,7 +218,7 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
       });
     });
 
-    const loaded = await loadExternalMcpToolsForUser({
+    const loaded = await loadExternalMcpToolsForUserForTest({
       nullUnionStrategy: "json-schema",
       organizationId: orgId,
       safeDb: stubSafeDb,

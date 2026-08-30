@@ -26,6 +26,8 @@ const DOCUMENT_OCR_WORKER_READINESS_TTL_SECONDS = 90;
 const DOCUMENT_OCR_WORKER_HEARTBEAT_INTERVAL_MS = 30_000;
 const DOCUMENT_OCR_REDIS_COMMAND_TIMEOUT_MS = 2000;
 
+type DocumentOcrReadinessClient = ReturnType<typeof createRedisClient>;
+
 const createDocumentOcrReadinessClient = () =>
   createRedisClient({
     connectionTimeout: DOCUMENT_OCR_REDIS_COMMAND_TIMEOUT_MS,
@@ -48,12 +50,21 @@ export const readDocumentOcrWorkerAvailability = async (
     timeoutMs,
   })) === DOCUMENT_OCR_WORKER_READINESS_VALUE;
 
-export const isDocumentOcrWorkerAvailable = async (): Promise<boolean> => {
+export const isDocumentOcrWorkerAvailable = async (
+  createClient: () => Pick<
+    DocumentOcrReadinessClient,
+    "get"
+  > = createDocumentOcrReadinessClient,
+): Promise<boolean> => {
   const availability = await Result.tryPromise({
     try: async () =>
       await readDocumentOcrWorkerAvailability(
         async () =>
-          await getReadinessReader().get(DOCUMENT_OCR_WORKER_READINESS_KEY),
+          await (
+            createClient === createDocumentOcrReadinessClient
+              ? getReadinessReader()
+              : createClient()
+          ).get(DOCUMENT_OCR_WORKER_READINESS_KEY),
       ),
     catch: (cause) => cause,
   });

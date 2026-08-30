@@ -59,11 +59,16 @@ const sourceOf = (file: string): string => {
   return source;
 };
 
-/** Files that call `name({ ... })` somewhere other than where it is defined. */
+/** Direct calls and calls through an explicit injected-or-default seam. */
+const callsDependency = (source: string, name: string): boolean =>
+  source.includes(`${name}({`) ||
+  new RegExp(String.raw`\?\? ${name}\s*\)\(\{`, "u").test(source);
+
+/** Files that call `name` somewhere other than where it is defined. */
 const callersOf = (name: string, declaredIn: string): string[] =>
   [...sources]
-    .filter(
-      ([file, source]) => file !== declaredIn && source.includes(`${name}({`),
+    .filter(([file, source]) =>
+      file !== declaredIn ? callsDependency(source, name) : false,
     )
     .map(([file]) => file);
 
@@ -74,7 +79,7 @@ describe("starting a playbook run", () => {
       // Both directions: the opener must actually call it (a step it stopped
       // driving would otherwise pass by being called nowhere at all), and no
       // one else may.
-      expect(sourceOf(OPENER)).toContain(`${name}({`);
+      expect(callsDependency(sourceOf(OPENER), name)).toBe(true);
       expect(callersOf(name, declaredIn)).toEqual([OPENER]);
     },
   );
@@ -98,7 +103,7 @@ describe("starting a playbook run", () => {
       // a status rather than a throw, so a surface that reads the result
       // without classifying it answers success for a review nothing grades.
       const source = sourceOf(file);
-      expect(source).toContain("startWorkflow({");
+      expect(callsDependency(source, "startWorkflow")).toBe(true);
       expect(source).toContain("playbookRunStartOutcome(");
     },
   );

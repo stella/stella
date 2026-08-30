@@ -58,157 +58,176 @@ type RunSuccess = {
   tableRuns: CreatePlaybookTableRunsResult;
 };
 
-const runPlaybook = createSafeHandler(
-  config,
-  async function* ({
-    body,
-    safeDb,
-    scopedDb,
-    workspaceId,
-    params,
-    session,
-    user,
-    recordAuditEvent,
-  }) {
-    const organizationId = session.activeOrganizationId;
-    const { projection } = body;
+type RunDependencies = {
+  loadLatestApprovedVersion: typeof loadLatestApprovedVersion;
+  openPlaybookRun: typeof openPlaybookRun;
+  startWorkflow: typeof startWorkflow;
+};
 
-    const txResult = yield* Result.await(
-      safeDb(async (tx): Promise<RunFailure | RunSuccess> => {
-        const definition = await tx.query.playbookDefinitions.findFirst({
-          where: {
-            id: { eq: params.playbookId },
-            organizationId: { eq: organizationId },
-          },
-          columns: { id: true, name: true, positions: true, scope: true },
-        });
-        if (!definition) {
-          return { ok: false, status: 404, message: "Playbook not found" };
-        }
+const DEFAULT_RUN_DEPENDENCIES: RunDependencies = {
+  loadLatestApprovedVersion,
+  openPlaybookRun,
+  startWorkflow,
+};
 
-        const opened = await openPlaybookRun({
-          tx,
-          workspaceId,
-          organizationId,
-          userId: user.id,
-          definition,
-          latestApprovedVersion: await loadLatestApprovedVersion({
+export const createRunPlaybook = (
+  dependencies: RunDependencies = DEFAULT_RUN_DEPENDENCIES,
+) =>
+  createSafeHandler(
+    config,
+    async function* ({
+      body,
+      safeDb,
+      scopedDb,
+      workspaceId,
+      params,
+      session,
+      user,
+      recordAuditEvent,
+    }) {
+      const organizationId = session.activeOrganizationId;
+      const { projection } = body;
+
+      const txResult = yield* Result.await(
+        safeDb(async (tx): Promise<RunFailure | RunSuccess> => {
+          const definition = await tx.query.playbookDefinitions.findFirst({
+            where: {
+              id: { eq: params.playbookId },
+              organizationId: { eq: organizationId },
+            },
+            columns: { id: true, name: true, positions: true, scope: true },
+          });
+          if (!definition) {
+            return { ok: false, status: 404, message: "Playbook not found" };
+          }
+
+          const opened = await dependencies.openPlaybookRun({
             tx,
+            workspaceId,
             organizationId,
-            playbookDefinitionId: params.playbookId,
-          }),
-          projection,
-          recordAuditEvent,
-        });
-        if (!opened.ok) {
-          return opened;
-        }
-
-        return {
-          ok: true,
-          materializedPropertyIds: opened.materializedPropertyIds,
-          tableRuns: opened.tableRuns,
-        };
-      }),
-    );
-
-    if (!txResult.ok) {
-      return Result.err(
-        new HandlerError({
-          status: txResult.status,
-          message: txResult.message,
-        }),
-      );
-    }
-
-    const { tableRuns } = txResult;
-    // Without columns the runs are the only record of the review, so covering
-    // part of the matter is a refusal, not a partial success.
-    if (
-      projection === PLAYBOOK_RUN_PROJECTION.NONE &&
-      tableRuns.uncoveredCount > 0
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: `This matter holds more documents than one playbook run can review (${PLAYBOOK_RUN_DOCUMENTS_MAX}). Review them in smaller matters.`,
-        }),
-      );
-    }
-
-    if (projection === PLAYBOOK_RUN_PROJECTION.NONE) {
-      yield* Result.await(
-        Result.tryPromise({
-          try: async () =>
-            await enqueueDocumentReviewRuns(
-              tableRuns.runs.map((run) => ({
-                runId: run.runId,
-                workspaceId,
+            userId: user.id,
+            definition,
+            latestApprovedVersion: await dependencies.loadLatestApprovedVersion(
+              {
+                tx,
                 organizationId,
-                userId: user.id,
-              })),
+                playbookDefinitionId: params.playbookId,
+              },
             ),
-          // A run whose job never arrived stays `queued` and is reconciled to
-          // `failed` by the review queue's janitor, so a partial enqueue never
-          // leaves a document blocked forever.
-          catch: (cause) =>
-            new HandlerError({
-              status: 500,
-              message: "Failed to start the review.",
-              cause,
-            }),
-        }),
-      );
-      return Result.ok({
-        runPropertyCount: 0,
-        documentRunCount: tableRuns.runs.length,
-        documentsWithoutRun: tableRuns.skippedActiveCount,
-      });
-    }
+            projection,
+            recordAuditEvent,
+          });
+          if (!opened.ok) {
+            return opened;
+          }
 
-    if (txResult.materializedPropertyIds.length > 0) {
-      const started = yield* Result.await(
-        Result.tryPromise({
-          try: async () =>
-            await startWorkflow({
-              workspaceId,
-              organizationId,
-              userId: user.id,
-              scopedDb,
-              propertyIds: txResult.materializedPropertyIds,
-            }),
-          catch: (cause) =>
-            new HandlerError({
-              status: 500,
-              message: "Internal server error",
-              cause,
-            }),
+          return {
+            ok: true,
+            materializedPropertyIds: opened.materializedPropertyIds,
+            tableRuns: opened.tableRuns,
+          };
         }),
       );
-      // Answering 200 on a start that never happened would leave a run
-      // nothing drives. Nothing is unwound: the columns are upserted by
-      // playbook source id and left stale, and the runs this request opened
-      // stay claimed, so a retry maps back to both.
-      if (
-        playbookRunStartOutcome(started.status) ===
-        PLAYBOOK_RUN_START_OUTCOME.NOT_STARTED
-      ) {
+
+      if (!txResult.ok) {
         return Result.err(
           new HandlerError({
-            status: 500,
-            message: "Failed to start the review.",
+            status: txResult.status,
+            message: txResult.message,
           }),
         );
       }
-    }
 
-    return Result.ok({
-      runPropertyCount: txResult.materializedPropertyIds.length,
-      documentRunCount: tableRuns.runs.length,
-      documentsWithoutRun:
-        tableRuns.skippedActiveCount + tableRuns.uncoveredCount,
-    });
-  },
-);
+      const { tableRuns } = txResult;
+      // Without columns the runs are the only record of the review, so covering
+      // part of the matter is a refusal, not a partial success.
+      if (
+        projection === PLAYBOOK_RUN_PROJECTION.NONE &&
+        tableRuns.uncoveredCount > 0
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: `This matter holds more documents than one playbook run can review (${PLAYBOOK_RUN_DOCUMENTS_MAX}). Review them in smaller matters.`,
+          }),
+        );
+      }
+
+      if (projection === PLAYBOOK_RUN_PROJECTION.NONE) {
+        yield* Result.await(
+          Result.tryPromise({
+            try: async () =>
+              await enqueueDocumentReviewRuns(
+                tableRuns.runs.map((run) => ({
+                  runId: run.runId,
+                  workspaceId,
+                  organizationId,
+                  userId: user.id,
+                })),
+              ),
+            // A run whose job never arrived stays `queued` and is reconciled to
+            // `failed` by the review queue's janitor, so a partial enqueue never
+            // leaves a document blocked forever.
+            catch: (cause) =>
+              new HandlerError({
+                status: 500,
+                message: "Failed to start the review.",
+                cause,
+              }),
+          }),
+        );
+        return Result.ok({
+          runPropertyCount: 0,
+          documentRunCount: tableRuns.runs.length,
+          documentsWithoutRun: tableRuns.skippedActiveCount,
+        });
+      }
+
+      if (txResult.materializedPropertyIds.length > 0) {
+        const started = yield* Result.await(
+          Result.tryPromise({
+            try: async () =>
+              await dependencies.startWorkflow({
+                workspaceId,
+                organizationId,
+                userId: user.id,
+                scopedDb,
+                propertyIds: txResult.materializedPropertyIds,
+              }),
+            catch: (cause) =>
+              new HandlerError({
+                status: 500,
+                message: "Internal server error",
+                cause,
+              }),
+          }),
+        );
+        // Answering 200 on a start that never happened would leave a run
+        // nothing drives. Nothing is unwound: the columns are upserted by
+        // playbook source id and left stale, and the runs this request opened
+        // stay claimed, so a retry maps back to both.
+        if (
+          playbookRunStartOutcome(started.status) ===
+          PLAYBOOK_RUN_START_OUTCOME.NOT_STARTED
+        ) {
+          return Result.err(
+            new HandlerError({
+              status: 500,
+              message: "Failed to start the review.",
+            }),
+          );
+        }
+      }
+
+      return Result.ok({
+        runPropertyCount: txResult.materializedPropertyIds.length,
+        documentRunCount: tableRuns.runs.length,
+        documentsWithoutRun:
+          tableRuns.skippedActiveCount + tableRuns.uncoveredCount,
+      });
+    },
+  );
+
+const runPlaybook = createRunPlaybook();
 
 export default runPlaybook;

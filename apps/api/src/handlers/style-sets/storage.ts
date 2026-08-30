@@ -30,6 +30,7 @@ type CreateStoredStyleSetOptions = {
   name: string;
   buffer: Buffer;
   recordAuditEvent: AuditRecorder;
+  enqueueCleanup?: typeof enqueueStyleSetPackageCleanup | undefined;
 };
 
 /**
@@ -45,10 +46,11 @@ type CreateStoredStyleSetOptions = {
 const claimPackageCleanup = async (
   s3Key: string,
   styleSetId: SafeId<"styleSet">,
+  enqueueCleanup: typeof enqueueStyleSetPackageCleanup = enqueueStyleSetPackageCleanup,
 ) =>
   await Result.tryPromise({
     try: async () =>
-      await enqueueStyleSetPackageCleanup({
+      await enqueueCleanup({
         s3Key,
         styleSetId,
         delayMs: STYLE_SET_PACKAGE_ABANDON_DELAY_MS,
@@ -68,12 +70,13 @@ export const createStoredStyleSet = async ({
   name,
   buffer,
   recordAuditEvent,
+  enqueueCleanup,
 }: CreateStoredStyleSetOptions) =>
   await Result.gen(async function* () {
     const styleSetId = createSafeId<"styleSet">();
     const s3Key = buildStyleSetKey({ organizationId, styleSetId });
 
-    yield* Result.await(claimPackageCleanup(s3Key, styleSetId));
+    yield* Result.await(claimPackageCleanup(s3Key, styleSetId, enqueueCleanup));
     yield* Result.await(
       Result.tryPromise({
         try: async () =>

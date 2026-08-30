@@ -261,6 +261,7 @@ export type PersistMessageProps = {
   persistencePlan: MessagePersistencePlan;
   deleteMessageIds?: SafeId<"chatMessage">[];
   dataScopeReplacement?: ChatDataScopeReplacement | undefined;
+  indexThread?: typeof upsertChatThreadSearchDocument | undefined;
 };
 
 export const persistMessage = async (props: PersistMessageProps) => {
@@ -269,7 +270,9 @@ export const persistMessage = async (props: PersistMessageProps) => {
   // actually changed. Fire-and-forget: indexing must never block or
   // fail a chat turn.
   if (Result.isOk(result) && props.persistencePlan.type !== "none") {
-    upsertChatThreadSearchDocument(props.threadId).catch(captureError);
+    (props.indexThread ?? upsertChatThreadSearchDocument)(props.threadId).catch(
+      captureError,
+    );
   }
   return result;
 };
@@ -292,6 +295,7 @@ export const finalizeAssistantTurn = async ({
   threadId,
   userId,
   workspaceId,
+  indexThread = upsertChatThreadSearchDocument,
 }: {
   acceptedSendMode: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
@@ -304,6 +308,7 @@ export const finalizeAssistantTurn = async ({
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
+  indexThread?: typeof upsertChatThreadSearchDocument;
 }) => {
   const persistencePlan = planAssistantFinishPersistence({
     existingIds,
@@ -332,6 +337,7 @@ export const finalizeAssistantTurn = async ({
     },
     userId,
     workspaceId,
+    indexThread,
   });
   if (Result.isError(persistResult)) {
     return Result.err(persistResult.error);
@@ -818,7 +824,9 @@ export const persistAcceptedMessageWithClaim = async ({
   if (Result.isError(result.value)) {
     return Result.err(result.value.error);
   }
-  upsertChatThreadSearchDocument(persistenceProps.threadId).catch(captureError);
+  (persistenceProps.indexThread ?? upsertChatThreadSearchDocument)(
+    persistenceProps.threadId,
+  ).catch(captureError);
   return Result.ok(result.value.value);
 };
 
@@ -853,6 +861,8 @@ export const persistClaimedReplayMessage = async ({
   if (result.value === null) {
     return Result.ok(null);
   }
-  upsertChatThreadSearchDocument(persistenceProps.threadId).catch(captureError);
+  (persistenceProps.indexThread ?? upsertChatThreadSearchDocument)(
+    persistenceProps.threadId,
+  ).catch(captureError);
   return Result.ok(result.value.execution);
 };

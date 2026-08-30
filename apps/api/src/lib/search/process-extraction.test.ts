@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import type { rootDb } from "@/api/db/root";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -12,17 +13,21 @@ import {
   ExtractionWorkerError,
 } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  executeNativeExtraction as executeNativeExtractionWithDependencies,
+  persistNativeExtractionProjection as persistNativeExtractionProjectionWithDatabase,
+  processExtraction as processExtractionWithDependencies,
+  requiresDurableNativeExtraction,
+} from "@/api/lib/search/process-extraction";
+import type {
+  ExecuteNativeExtractionDependencies,
+  ProcessExtractionDependencies,
+} from "@/api/lib/search/process-extraction";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-// `processExtraction` reads through the `rootDb` module-level singleton
-// directly (no injected `safeDb`), so the query call is captured by mocking
-// that module, matching the established pattern (see
-// apps/api/src/lib/folio-collab-rooms.test.ts). Resolving `findFirst`
-// with `null` (entity not found) short-circuits the function right after
-// the query, before it would otherwise reach S3/search-provider calls this
-// test does not need to stub.
 const entityId = toSafeId<"entity">("entity_1");
 const entityVersionId = toSafeId<"entityVersion">("entity_version_1");
 const fieldId = toSafeId<"field">("field_1");
@@ -79,7 +84,7 @@ const extractFileTextResultMock = mock(
   async (
     _buffer: ArrayBuffer,
     _mimeType: string,
-    _options: { signal: AbortSignal; timeoutMs: number },
+    _options?: { signal?: AbortSignal; timeoutMs?: number },
   ): Promise<Result<string | null, ExtractionWorkerError>> =>
     Result.ok("native text"),
 );
@@ -88,62 +93,52 @@ const restoreManualOcrRunAfterProjectionLossMock = mock(async () => undefined);
 const enqueueDocumentProcessingRunMock = mock(async () => undefined);
 const indexEntityMock = mock(async () => undefined);
 
-void mock.module("@/api/db/root", () => ({
-  rootDb: {
-    execute: executeMock,
-    insert: insertMock,
-    query: {
-      entities: { findFirst: findFirstMock },
-      extractedContent: { findFirst: extractedContentFindFirstMock },
-    },
-    select: selectMock,
-    transaction: transactionMock,
-    update: updateMock,
+const database = asTestRaw<
+  NonNullable<ProcessExtractionDependencies["database"]>
+>({
+  insert: insertMock,
+  query: {
+    entities: { findFirst: findFirstMock },
+    extractedContent: { findFirst: extractedContentFindFirstMock },
   },
-}));
-void mock.module("@/api/lib/document-processing-automatic-request", () => ({
-  requestAutomaticDocumentOcr: requestAutomaticDocumentOcrMock,
-}));
-void mock.module("@/api/lib/document-processing-manual-ocr-restore", () => ({
-  restoreManualOcrRunAfterProjectionLoss:
-    restoreManualOcrRunAfterProjectionLossMock,
-}));
-void mock.module("@/api/lib/document-processing-enqueue", () => ({
-  enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
-}));
-// `canExtractMimeType` is exported by extractable-mime-types, and that is the
-// module `process-extraction` imports it from, so the override has to land
-// there. Spread the real module: the rest of it is shared with every other
-// extraction consumer.
-const realExtractableMimeTypes =
-  await import("@/api/lib/search/extractable-mime-types");
-void mock.module("@/api/lib/search/extractable-mime-types", () => ({
-  ...realExtractableMimeTypes,
-  canExtractMimeType: () => true,
-}));
-void mock.module("@/api/lib/search/extract-content", () => ({
-  extractFileTextResult: extractFileTextResultMock,
-  resolveExtractionMimeType: ({
-    fileName,
-    mimeType,
-  }: {
-    fileName: string;
-    mimeType: string;
-  }) =>
-    mimeType === "application/octet-stream" && fileName.endsWith(".pdf")
-      ? PDF_MIME_TYPE
-      : mimeType,
-}));
-void mock.module("@/api/lib/search/provider", () => ({
-  getSearchProvider: () => ({ indexEntity: indexEntityMock }),
-}));
+  select: selectMock,
+  transaction: transactionMock,
+  update: updateMock,
+});
+const transactionDatabase = asTestRaw<Pick<typeof rootDb, "transaction">>({
+  transaction: transactionMock,
+});
 
-const {
-  executeNativeExtraction,
-  persistNativeExtractionProjection,
-  processExtraction,
-  requiresDurableNativeExtraction,
-} = await import("@/api/lib/search/process-extraction");
+const persistNativeExtractionProjection: typeof persistNativeExtractionProjectionWithDatabase =
+  async (options) =>
+    await persistNativeExtractionProjectionWithDatabase(
+      options,
+      transactionDatabase,
+    );
+
+const executeDependencies = {
+  extractText: extractFileTextResultMock,
+  persistProjection: persistNativeExtractionProjection,
+  requestAutomaticOcr: requestAutomaticDocumentOcrMock,
+  restoreManualOcr: restoreManualOcrRunAfterProjectionLossMock,
+} satisfies ExecuteNativeExtractionDependencies;
+
+const executeNativeExtraction: typeof executeNativeExtractionWithDependencies =
+  async (input) =>
+    await executeNativeExtractionWithDependencies({
+      ...input,
+      dependencies: executeDependencies,
+    });
+
+const processExtraction: typeof processExtractionWithDependencies = async (
+  targetEntityId,
+  options,
+) =>
+  await processExtractionWithDependencies(targetEntityId, options, {
+    database,
+    enqueueRun: enqueueDocumentProcessingRunMock,
+    indexEntity: indexEntityMock,
+  });
 
 // The bytes the extraction is expected to hand the extractor, and the keys
 // they are stored under. Written out rather than derived through

@@ -9,44 +9,18 @@
  * statically for the schema tests.
  */
 
-import * as realTanStackAI from "@tanstack/ai";
-import { afterAll, describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import * as realTanStackAIModels from "@/api/lib/tanstack-ai-models";
+import {
+  suggestTemplateFields,
+  suggestTemplateFieldsOrEmpty,
+} from "@/api/lib/templates/suggest-template-fields";
 
 const FAILURE = new Error("provider unavailable");
 
-const chat = async (): Promise<never> => {
-  throw FAILURE;
-};
-
-const testModel = {
-  adapter: {},
-  keySource: "instance",
-  modelId: "test-model",
-  modelOptions: {},
-  provider: "openai",
-};
-
-void mock.module("@tanstack/ai", () => ({
-  ...realTanStackAI,
-  chat,
-}));
-
-void mock.module("@/api/lib/tanstack-ai-models", () => ({
-  ...realTanStackAIModels,
-  getTanStackTextModelForRole: () => testModel,
-}));
-
-const { suggestTemplateFields, suggestTemplateFieldsOrEmpty } =
-  await import("./suggest-template-fields");
 const { createTanStackAIAnalyticsCallbacks } =
   await import("@/api/lib/analytics/tanstack-ai");
-
-afterAll(() => {
-  mock.restore();
-});
 
 const organizationId = toSafeId<"organization">("org_test");
 
@@ -72,6 +46,9 @@ describe("suggestTemplateFields", () => {
       orgAIConfig: null,
       organizationId,
       aiAnalytics,
+      generateObjectForRole: async () => {
+        throw FAILURE;
+      },
     }).then(
       () => null,
       (error: unknown) => error,
@@ -101,6 +78,9 @@ describe("suggestTemplateFieldsOrEmpty", () => {
       orgAIConfig: null,
       organizationId,
       aiAnalytics,
+      generateObjectForRole: async () => {
+        throw FAILURE;
+      },
     });
 
     expect(suggestions).toEqual([]);

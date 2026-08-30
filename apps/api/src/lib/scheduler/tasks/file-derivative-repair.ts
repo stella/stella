@@ -186,8 +186,16 @@ const DERIVATIVE_UNSETTLED = sql`(
     not in ('ready', 'not-required')
 )`;
 
-const selectRepairPage = async (cursor: SafeId<"field"> | null) =>
-  await rootDb
+type RepairDependencies = {
+  db?: Pick<typeof rootDb, "select" | "update">;
+  requeue?: typeof requeueFileDerivative;
+};
+
+const selectRepairPage = async (
+  cursor: SafeId<"field"> | null,
+  db: Pick<typeof rootDb, "select" | "update">,
+) =>
+  await db
     .select({
       content: fields.content,
       createdBy: entities.createdBy,
@@ -240,7 +248,10 @@ type RowRepairResult = {
   unrecognized: FileDerivativeKind[];
 };
 
-const requeueRow = async (row: RepairPageRow): Promise<RowRepairResult> => {
+const requeueRow = async (
+  row: RepairPageRow,
+  requeue: typeof requeueFileDerivative,
+): Promise<RowRepairResult> => {
   if (row.content.type !== "file") {
     return { requeued: 0, unattributed: false, unrecognized: [] };
   }
@@ -267,7 +278,7 @@ const requeueRow = async (row: RepairPageRow): Promise<RowRepairResult> => {
     if (kind === undefined) {
       return;
     }
-    const outcome = await requeueFileDerivative({
+    const outcome = await requeue({
       entityId: row.entityId,
       fieldId: row.fieldId,
       kind,
@@ -289,12 +300,14 @@ const persistCursor = async ({
   jobId,
   leaseToken,
   nextCursor,
+  db,
 }: {
+  db: Pick<typeof rootDb, "select" | "update">;
   jobId: string;
   leaseToken: string;
   nextCursor: SafeId<"field"> | null;
 }): Promise<void> => {
-  await rootDb
+  await db
     .update(schedulerJobs)
     .set({ payload: { cursor: nextCursor } })
     .where(
@@ -313,83 +326,95 @@ const persistCursor = async ({
  * Resetting the cursor after a full pass is what makes it a standing
  * reconciler rather than a one-time backfill.
  */
-export const repairFileDerivatives: SchedulerTask = async ({
-  job,
-  logger,
-  signal,
-}) => {
-  signal.throwIfAborted();
-  const leaseToken =
-    job.lockedBy ?? panic("File-derivative repair requires a scheduler lease");
-  const cursor = repairCursor(job.payload);
-  const page = await selectRepairPage(cursor);
+export const createRepairFileDerivativesTask =
+  ({
+    db = rootDb,
+    requeue = requeueFileDerivative,
+  }: RepairDependencies = {}): SchedulerTask =>
+  async ({ job, logger, signal }) => {
+    signal.throwIfAborted();
+    const leaseToken =
+      job.lockedBy ??
+      panic("File-derivative repair requires a scheduler lease");
+    const cursor = repairCursor(job.payload);
+    const page = await selectRepairPage(cursor, db);
 
-  if (page.length === 0) {
-    if (cursor !== null) {
-      await persistCursor({ jobId: job.id, leaseToken, nextCursor: null });
-    }
-    return;
-  }
-
-  let requeued = 0;
-  let scanned = 0;
-  let unattributed = 0;
-  let unrecognized = 0;
-
-  const repairFrom = async (index: number): Promise<void> => {
-    const row = page.at(index);
-    if (row === undefined || signal.aborted || requeued >= REQUEUE_LIMIT) {
+    if (page.length === 0) {
+      if (cursor !== null) {
+        await persistCursor({
+          db,
+          jobId: job.id,
+          leaseToken,
+          nextCursor: null,
+        });
+      }
       return;
     }
-    const outcome = await Result.tryPromise(async () => await requeueRow(row));
-    // The row counts as scanned either way: the cursor must advance past a
-    // row whose repair fails deterministically, or the sweep pins itself
-    // there, re-captures every tick, and starves every field after it.
-    scanned += 1;
-    if (Result.isError(outcome)) {
-      // The queue is unreachable, or this one row cannot be repaired. Stop
-      // the tick; the next full pass retries the row.
-      captureError(
-        new FileDerivativeRepairError({
-          message: "Requeueing one stuck file derivative failed",
-          cause: outcome.error,
-        }),
-        { fieldId: row.fieldId, workspaceId: row.workspaceId },
+
+    let requeued = 0;
+    let scanned = 0;
+    let unattributed = 0;
+    let unrecognized = 0;
+
+    const repairFrom = async (index: number): Promise<void> => {
+      const row = page.at(index);
+      if (row === undefined || signal.aborted || requeued >= REQUEUE_LIMIT) {
+        return;
+      }
+      const outcome = await Result.tryPromise(
+        async () => await requeueRow(row, requeue),
       );
-      return;
-    }
-    requeued += outcome.value.requeued;
-    unattributed += outcome.value.unattributed ? 1 : 0;
-    unrecognized += outcome.value.unrecognized.length;
-    // Capture dedups identical errors inside its window, so with several
-    // unreadable rows in one page only the first field id reaches
-    // analytics. This log line is the per-row audit record; the rows also
-    // stay enumerable in SQL by their unreadable state.
-    for (const kind of outcome.value.unrecognized) {
-      logger.error("file_derivative.unrecognized_state", {
-        fieldId: row.fieldId,
-        kind,
-        workspaceId: row.workspaceId,
-      });
-    }
-    await repairFrom(index + 1);
+      // The row counts as scanned either way: the cursor must advance past a
+      // row whose repair fails deterministically, or the sweep pins itself
+      // there, re-captures every tick, and starves every field after it.
+      scanned += 1;
+      if (Result.isError(outcome)) {
+        // The queue is unreachable, or this one row cannot be repaired. Stop
+        // the tick; the next full pass retries the row.
+        captureError(
+          new FileDerivativeRepairError({
+            message: "Requeueing one stuck file derivative failed",
+            cause: outcome.error,
+          }),
+          { fieldId: row.fieldId, workspaceId: row.workspaceId },
+        );
+        return;
+      }
+      requeued += outcome.value.requeued;
+      unattributed += outcome.value.unattributed ? 1 : 0;
+      unrecognized += outcome.value.unrecognized.length;
+      // Capture dedups identical errors inside its window, so with several
+      // unreadable rows in one page only the first field id reaches
+      // analytics. This log line is the per-row audit record; the rows also
+      // stay enumerable in SQL by their unreadable state.
+      for (const kind of outcome.value.unrecognized) {
+        logger.error("file_derivative.unrecognized_state", {
+          fieldId: row.fieldId,
+          kind,
+          workspaceId: row.workspaceId,
+        });
+      }
+      await repairFrom(index + 1);
+    };
+
+    await repairFrom(0);
+
+    // Advance only over rows this tick actually visited, so a page cut short
+    // by the requeue bound or an unreachable queue is resumed, not skipped.
+    const lastScanned = scanned === 0 ? undefined : page.at(scanned - 1);
+    await persistCursor({
+      db,
+      jobId: job.id,
+      leaseToken,
+      nextCursor: lastScanned?.fieldId ?? cursor,
+    });
+
+    logger.info("scheduler.file_derivatives_repaired", {
+      "fileDerivatives.requeued": requeued,
+      "fileDerivatives.scanned": scanned,
+      "fileDerivatives.unattributed": unattributed,
+      "fileDerivatives.unrecognized": unrecognized,
+    });
   };
 
-  await repairFrom(0);
-
-  // Advance only over rows this tick actually visited, so a page cut short
-  // by the requeue bound or an unreachable queue is resumed, not skipped.
-  const lastScanned = scanned === 0 ? undefined : page.at(scanned - 1);
-  await persistCursor({
-    jobId: job.id,
-    leaseToken,
-    nextCursor: lastScanned?.fieldId ?? cursor,
-  });
-
-  logger.info("scheduler.file_derivatives_repaired", {
-    "fileDerivatives.requeued": requeued,
-    "fileDerivatives.scanned": scanned,
-    "fileDerivatives.unattributed": unattributed,
-    "fileDerivatives.unrecognized": unrecognized,
-  });
-};
+export const repairFileDerivatives = createRepairFileDerivativesTask();

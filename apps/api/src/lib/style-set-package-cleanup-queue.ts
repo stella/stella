@@ -135,8 +135,9 @@ export const deleteQueuedStyleSetPackages = async (
  */
 export const deleteUnreferencedStyleSetPackage = async (
   s3Key: string,
+  db: Pick<typeof rootDb, "select"> = rootDb,
 ): Promise<void> => {
-  const [referencing] = await rootDb
+  const [referencing] = await db
     .select({ id: styleSets.id })
     .from(styleSets)
     .where(or(eq(styleSets.s3Key, s3Key), eq(styleSets.cleanupS3Key, s3Key)))

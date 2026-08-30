@@ -1,11 +1,6 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
-void mock.module("@/api/env", () => ({
-  env: { STELLA_COLLAB_SERVICE_TOKEN: undefined },
-}));
-
-const { toFolioCollabServiceAuthorization } =
-  await import("./service-credentials");
+import { toFolioCollabServiceAuthorization } from "./service-credentials";
 
 describe("collaboration service authorization", () => {
   test.each([

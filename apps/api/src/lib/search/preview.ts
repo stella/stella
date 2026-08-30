@@ -539,9 +539,10 @@ const isSearchPreviewRow = (value: unknown): value is SearchPreviewRow =>
 
 export const readSearchPreview = async (
   input: SearchPreviewQuery,
+  database: Pick<typeof rootDb, "execute"> = rootDb,
 ): Promise<SearchPreview | null> => {
   if (input.type === "chat") {
-    const rows = await rootDb.execute<SearchPreviewChatRow>(
+    const rows = await database.execute<SearchPreviewChatRow>(
       buildSearchPreviewQuery(input),
     );
     const row = rows.at(0);
@@ -631,7 +632,7 @@ export const readSearchPreview = async (
     };
   }
 
-  const rows = await rootDb.execute(buildSearchPreviewQuery(input));
+  const rows = await database.execute(buildSearchPreviewQuery(input));
   const preview = rows.at(0)?.["preview"];
   if (!isSearchPreviewRow(preview)) {
     return null;

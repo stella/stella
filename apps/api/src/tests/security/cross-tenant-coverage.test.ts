@@ -58,8 +58,8 @@ type WaiverReason = (typeof WAIVER_REASON)[keyof typeof WAIVER_REASON];
  * entry here is the natural act once a domain gains a matrix case: the
  * "no covered domain stays waived" test below fails on a stale waiver, forcing
  * it out. Most `preExistingGap` rows are genuine read handlers awaiting a
- * matrix case (e.g. `usage`, `properties`, `fields`, `user-files`
- * read-content/read-thumbnail); adding those is incremental follow-up work.
+ * matrix case (e.g. `usage`, `properties`, and `fields`); adding those is
+ * incremental follow-up work.
  */
 const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // Machine API keys live in better-auth's `apikey` table, which the scoped
@@ -101,7 +101,6 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "template-packs": WAIVER_REASON.contentConditionedRead,
   "template-recipes": WAIVER_REASON.preExistingGap,
   usage: WAIVER_REASON.preExistingGap,
-  "user-files": WAIVER_REASON.preExistingGap,
   "view-templates": WAIVER_REASON.preExistingGap,
   views: WAIVER_REASON.preExistingGap,
   workspaces: WAIVER_REASON.preExistingGap,

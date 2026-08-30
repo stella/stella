@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -14,37 +14,6 @@ const startWorkflowMock = mock();
 // this suite checks the tool for.
 const loadLatestApprovedVersionMock = mock();
 const createPlaybookTableRunsMock = mock();
-
-const realMaterializeRun =
-  await import("@/api/lib/workflow/materialize-playbook-run");
-const realWorkflowQueue = await import("@/api/lib/workflow-queue");
-const realApprovedVersions =
-  await import("@/api/lib/document-review/approved-playbook-versions");
-const realTableRunCreate =
-  await import("@/api/lib/document-review/table-run-create");
-
-void mock.module("@/api/lib/workflow/materialize-playbook-run", () => ({
-  ...realMaterializeRun,
-  materializePlaybookRun: materializePlaybookRunMock,
-}));
-
-void mock.module("@/api/lib/workflow-queue", () => ({
-  ...realWorkflowQueue,
-  startWorkflow: startWorkflowMock,
-}));
-
-void mock.module(
-  "@/api/lib/document-review/approved-playbook-versions",
-  () => ({
-    ...realApprovedVersions,
-    loadLatestApprovedVersion: loadLatestApprovedVersionMock,
-  }),
-);
-
-void mock.module("@/api/lib/document-review/table-run-create", () => ({
-  ...realTableRunCreate,
-  createPlaybookTableRuns: createPlaybookTableRunsMock,
-}));
 
 const { handleMcpToolCall, listMcpTools } = await import("@/api/mcp/tools");
 const { KNOWLEDGE_TOOL_HANDLERS } = await import("@/api/mcp/knowledge-tools");
@@ -144,6 +113,12 @@ const createContext = ({
   recordAuditEvent: asTestRaw<AuditRecorder & ReturnType<typeof mock>>(
     mock(async () => undefined),
   ),
+  testDependencies: {
+    materializePlaybookRun: materializePlaybookRunMock,
+    startWorkflow: startWorkflowMock,
+    loadLatestApprovedVersion: loadLatestApprovedVersionMock,
+    createPlaybookTableRuns: createPlaybookTableRunsMock,
+  },
   safeDb: toSafeDbMock(scopedDb),
   scopedDb,
   userId: toSafeId<"user">("user_1"),
@@ -155,10 +130,6 @@ describe("MCP knowledge tools", () => {
     startWorkflowMock.mockReset();
     loadLatestApprovedVersionMock.mockReset();
     createPlaybookTableRunsMock.mockReset();
-  });
-
-  afterAll(() => {
-    mock.restore();
   });
 
   test("read tools project onto the anonymized surface; writes do not", async () => {

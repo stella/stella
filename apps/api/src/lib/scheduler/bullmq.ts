@@ -16,13 +16,19 @@ type BullMqSchedulerPayload = {
   queueName: string;
 };
 
+type BullMqDispatchTaskOptions = {
+  createConnection?: typeof createBullMqConnection;
+};
+
 const cache: QueueCache = {
   connection: null,
   queues: new Map(),
 };
 
 export const createBullMqDispatchTask =
-  (): SchedulerTask =>
+  ({
+    createConnection = createBullMqConnection,
+  }: BullMqDispatchTaskOptions = {}): SchedulerTask =>
   async ({ job, payload, runId }) => {
     if (!isBullMqSchedulerPayload(payload)) {
       throw new ConfigurationError({
@@ -30,7 +36,7 @@ export const createBullMqDispatchTask =
       });
     }
 
-    const queue = getSchedulerQueue(payload.queueName);
+    const queue = getSchedulerQueue(payload.queueName, createConnection);
     const scheduledFor = job.nextRunAt.toISOString();
     // Deterministic per scheduled occurrence: if the runner crashes after
     // enqueue but before recording success, the retry run uses the same id.
@@ -45,19 +51,22 @@ export const createBullMqDispatchTask =
     );
   };
 
-const getConnection = () => {
-  cache.connection ??= createBullMqConnection();
+const getConnection = (createConnection: typeof createBullMqConnection) => {
+  cache.connection ??= createConnection();
   return cache.connection;
 };
 
-const getSchedulerQueue = (queueName: string): Queue => {
+const getSchedulerQueue = (
+  queueName: string,
+  createConnection: typeof createBullMqConnection,
+): Queue => {
   const existing = cache.queues.get(queueName);
   if (existing) {
     return existing;
   }
 
   const queue = new Queue(queueName, {
-    connection: getConnection(),
+    connection: getConnection(createConnection),
     defaultJobOptions: {
       attempts: 3,
       backoff: { type: "exponential", delay: 30_000 },

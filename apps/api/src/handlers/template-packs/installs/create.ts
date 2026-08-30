@@ -77,6 +77,7 @@ export type InstallTemplatePackProps = {
   packId: string;
   body: { templateSlugs: string[]; categoryId?: SafeId<"templateCategory"> };
   recordAuditEvent: AuditRecorder;
+  createStoredTemplate?: typeof createStoredTemplate;
 };
 
 export const installTemplatePackHandler = async function* ({
@@ -88,6 +89,7 @@ export const installTemplatePackHandler = async function* ({
   packId,
   body,
   recordAuditEvent,
+  createStoredTemplate: createTemplate = createStoredTemplate,
 }: InstallTemplatePackProps): SafeHandlerGenerator<{
   items: TemplatePackInstallItem[];
 }> {
@@ -165,7 +167,7 @@ export const installTemplatePackHandler = async function* ({
         }),
       );
     }
-    const created = yield* createStoredTemplate({
+    const created = yield* createTemplate({
       safeDb,
       organizationId,
       userId,

@@ -14,7 +14,7 @@
  * timing-dependent to exercise.
  */
 
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -26,13 +26,7 @@ import type { RateLimitOptions } from "@/api/lib/rate-limit/rate-limit";
 // is exactly what is under test.
 const UNREACHABLE_REDIS_URL = "redis://127.0.0.1:1";
 
-const realEnv = await import("@/api/env-document-processing-worker");
-void mock.module("@/api/env-document-processing-worker", () => ({
-  envDocumentProcessingWorker: {
-    ...realEnv.envDocumentProcessingWorker,
-    REDIS_URL: UNREACHABLE_REDIS_URL,
-  },
-}));
+process.env["REDIS_URL"] = UNREACHABLE_REDIS_URL;
 
 // Imported directly, not only through the facades. The batching runner pairs
 // test files by the modules they name, so naming the connection module here is

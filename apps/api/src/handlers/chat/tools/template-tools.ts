@@ -248,7 +248,16 @@ type CreateTemplateAuthoringToolsArgs = {
   userId: SafeId<"user">;
   /** Org AI config from the chat turn; see `createTemplateTools`. */
   orgAIConfig: OrgAIConfig | null;
+  dependencies?: TemplateAuthoringToolDependencies | undefined;
 };
+
+export type TemplateAuthoringToolDependencies = {
+  suggestTemplateFields: typeof suggestTemplateFields;
+};
+
+const defaultTemplateAuthoringToolDependencies = {
+  suggestTemplateFields,
+} satisfies TemplateAuthoringToolDependencies;
 
 /**
  * Chat (MCP) tool for *authoring* templates: `suggest_template_fields` proposes
@@ -262,6 +271,7 @@ export const createTemplateAuthoringTools = ({
   organizationId,
   userId,
   orgAIConfig,
+  dependencies = defaultTemplateAuthoringToolDependencies,
 }: CreateTemplateAuthoringToolsArgs) => {
   const aiAnalytics = buildTemplateAiAnalytics({
     safeDb,
@@ -310,7 +320,7 @@ export const createTemplateAuthoringTools = ({
       // rethrowing it — the raw provider error can carry internals (key
       // names, quota details) that must not reach the model verbatim.
       try {
-        const suggestions = await suggestTemplateFields({
+        const suggestions = await dependencies.suggestTemplateFields({
           documentText: text,
           instructions: instructions ?? undefined,
           orgAIConfig: orgAIConfig ?? null,

@@ -1,25 +1,73 @@
-import { panic } from "better-result";
-import { mock } from "bun:test";
-
 import { oauthResource } from "@/api/db/auth-schema";
+import { rlsDb, rootDb } from "@/api/db/root";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 // The agent-auth handler suite drives the real better-auth flow (email-OTP
 // sign-in, org creation, sessions) plus direct control-plane writes, all
-// through the `rootDb`/`rlsDb` singletons. The api test job runs with no
-// external Postgres — every other DB-backed test uses the in-memory PGlite
-// singleton — so point rootDb/rlsDb at that same instance here. Without this
-// the agent-auth requests hit a non-existent localhost:5432 and fail with
-// `ERR_POSTGRES_CONNECTION_CLOSED`.
-//
-// Importing this helper also marks the test file for process isolation:
-// run-tests.ts detects the `mock.module` (directly or through a helper) and
-// runs the importer in its own process, so this module mock cannot leak into
-// the shared-process batch.
+// through the root database adapter boundary. The api test job runs with no
+// external Postgres, so the boundary delegates to the real PGlite test
+// database for the lifetime of this suite.
 
 let testDb: TestDatabase | undefined;
+const ROOT_DATABASE_MEMBERS = [
+  "delete",
+  "execute",
+  "insert",
+  "query",
+  "select",
+  "transaction",
+  "update",
+] as const;
+const originalRootDescriptors = new Map(
+  ROOT_DATABASE_MEMBERS.map((member) => [
+    member,
+    Object.getOwnPropertyDescriptor(rootDb, member),
+  ]),
+);
+const originalRlsTransactionDescriptor = Object.getOwnPropertyDescriptor(
+  rlsDb,
+  "transaction",
+);
+
+const installDatabaseBoundary = (database: TestDatabase) => {
+  Object.defineProperties(rootDb, {
+    delete: { configurable: true, value: database.delete.bind(database) },
+    execute: { configurable: true, value: database.execute.bind(database) },
+    insert: { configurable: true, value: database.insert.bind(database) },
+    query: { configurable: true, value: database.query },
+    select: { configurable: true, value: database.select.bind(database) },
+    transaction: {
+      configurable: true,
+      value: database.transaction.bind(database),
+    },
+    update: { configurable: true, value: database.update.bind(database) },
+  });
+  Object.defineProperty(rlsDb, "transaction", {
+    configurable: true,
+    value: database.transaction.bind(database),
+  });
+};
+
+const restoreDatabaseBoundary = () => {
+  for (const [member, descriptor] of originalRootDescriptors) {
+    if (descriptor) {
+      Object.defineProperty(rootDb, member, descriptor);
+      continue;
+    }
+    Reflect.deleteProperty(rootDb, member);
+  }
+  if (originalRlsTransactionDescriptor) {
+    Object.defineProperty(
+      rlsDb,
+      "transaction",
+      originalRlsTransactionDescriptor,
+    );
+  } else {
+    Reflect.deleteProperty(rlsDb, "transaction");
+  }
+};
 
 /**
  * Create (once) and return the PGlite-backed database the agent-auth tests run
@@ -40,6 +88,7 @@ export const initAgentAuthTestDb = async (): Promise<TestDatabase> => {
     })),
   );
   testDb = db;
+  installDatabaseBoundary(db);
   return testDb;
 };
 
@@ -52,39 +101,7 @@ export const releaseAgentAuthTestDb = async (): Promise<void> => {
   if (testDb === undefined) {
     return;
   }
+  restoreDatabaseBoundary();
   testDb = undefined;
   await releaseTestDb();
 };
-
-const requireTestDb = (): TestDatabase =>
-  testDb ??
-  panic("initAgentAuthTestDb() must run in beforeAll before rootDb is used");
-
-// A stable proxy that forwards every access to the PGlite database resolved at
-// call time. A plain getter cannot be used: bun captures a mocked binding's
-// value once (before `initAgentAuthTestDb` has run), so a statically-imported
-// `rootDb` would freeze to `undefined`. The proxy defers resolution to each
-// property read and binds methods to the real db so drizzle's `this` is intact.
-//
-// SAFETY (assertion below): the proxy delegates every access to a real
-// TestDatabase, so the branded type is sound; there is no non-cast way to type
-// a forwarding proxy.
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const lazyDbProxy = new Proxy(
-  {},
-  {
-    get: (_target, property) => {
-      const db = requireTestDb();
-      const value: unknown = Reflect.get(db, property, db);
-      // SAFETY: forwarding an arbitrary drizzle member is dynamic by nature;
-      // methods are bound to the real db so `this` stays intact.
-      // oxlint-disable-next-line typescript/no-unsafe-return
-      return typeof value === "function" ? value.bind(db) : value;
-    },
-  },
-) as TestDatabase;
-
-void mock.module("@/api/db/root", () => ({
-  rootDb: lazyDbProxy,
-  rlsDb: lazyDbProxy,
-}));

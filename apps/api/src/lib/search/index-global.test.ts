@@ -9,7 +9,7 @@ import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import { contactWorkspaceAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
 import { encodeCursor } from "@/api/lib/search/cursor";
 import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
-import { searchGlobal } from "@/api/lib/search/index-global";
+import { searchGlobal as searchGlobalWithDatabase } from "@/api/lib/search/index-global";
 import {
   decodeGlobalSearchCursor,
   encodeGlobalSearchCursor,
@@ -17,7 +17,12 @@ import {
 import {
   clearRootDbMocks,
   rootDbExecuteMock,
+  rootDbTestDouble,
 } from "@/api/tests/helpers/mock-root-db";
+
+const searchGlobal = async (
+  query: Parameters<typeof searchGlobalWithDatabase>[0],
+) => await searchGlobalWithDatabase(query, rootDbTestDouble);
 
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
 process.env["S3_BUCKET"] ??= "test";

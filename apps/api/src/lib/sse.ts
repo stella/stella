@@ -353,7 +353,9 @@ export const revokeWorkspaceSseAccess = async (
   userId: SafeId<"user">,
 ): Promise<void> => {
   closeLocalWorkspaceUserConnections(workspaceId, userId);
-  await publishWorkspaceAccessRevoked(workspaceId, userId, {
+  const publishAccessRevoked =
+    activeLifecycle?.publishAccessRevoked ?? publishWorkspaceAccessRevoked;
+  await publishAccessRevoked(workspaceId, userId, {
     originInstanceId: INSTANCE_ID,
   }).catch((error: unknown) => {
     logger.error("sse.access_revocation_publish_failed", {
@@ -370,6 +372,11 @@ export const revokeWorkspaceSseAccess = async (
 export const broadcast = (
   workspaceId: SafeId<"workspace">,
   event: WorkspaceRealtimeEvent,
+  {
+    publishWorkspace: publishWorkspaceOverride,
+  }: {
+    publishWorkspace?: typeof publishWorkspaceEvent | undefined;
+  } = {},
 ): void => {
   // When this instance has no attached subscriber it never receives its
   // own published message back through the Redis loopback, so deliver
@@ -390,7 +397,11 @@ export const broadcast = (
     );
   }
 
-  publishWorkspaceEvent(workspaceId, event, {
+  const publishWorkspace =
+    publishWorkspaceOverride ??
+    activeLifecycle?.publishWorkspace ??
+    publishWorkspaceEvent;
+  publishWorkspace(workspaceId, event, {
     originInstanceId: INSTANCE_ID,
     deliveredInline: deliveredLocally,
   }).catch((error: unknown) => {
@@ -511,9 +522,23 @@ const sendKeepAlive = () => {
  * lifecycle is active now," including a stop+restart that happens between
  * the connect's await points.
  */
+type SseRedisClient = Pick<
+  ReturnType<typeof createRedisClient>,
+  "close" | "connected" | "onReconnect" | "subscribe"
+>;
+type CreateSseRedisClient = () => SseRedisClient;
+type StartSseDependencies = {
+  createClient?: CreateSseRedisClient | undefined;
+  publishAccessRevoked?: typeof publishWorkspaceAccessRevoked | undefined;
+  publishWorkspace?: typeof publishWorkspaceEvent | undefined;
+};
+
 type SseLifecycle = {
+  createClient: CreateSseRedisClient;
   keepAliveTimer: ReturnType<typeof setInterval>;
-  subscriber: ReturnType<typeof createRedisClient> | null;
+  publishAccessRevoked: typeof publishWorkspaceAccessRevoked;
+  publishWorkspace: typeof publishWorkspaceEvent;
+  subscriber: SseRedisClient | null;
   /**
    * Whether `subscriber` currently holds a live SUBSCRIBE on its present
    * connection. Set true only after a confirmed subscribe on the active
@@ -590,9 +615,7 @@ const SUBSCRIBER_ATTACH_STEADY_LOG_EVERY = 12;
  * on the attach-failure and reconnect-teardown paths, where an exception here
  * would skip the retry scheduling and leave the instance permanently deaf.
  */
-const closeSubscriberQuietly = (
-  client: ReturnType<typeof createRedisClient>,
-): void => {
+const closeSubscriberQuietly = (client: SseRedisClient): void => {
   try {
     client.close();
   } catch (error: unknown) {
@@ -618,9 +641,9 @@ const runAttachAttempt = async (
 
   // The client is constructed inside the try so a throwing constructor hits
   // the fail-soft catch below instead of escaping as an unhandled rejection.
-  let subscriber: ReturnType<typeof createRedisClient> | undefined;
+  let subscriber: SseRedisClient | undefined;
   try {
-    subscriber = createRedisClient();
+    subscriber = lifecycle.createClient();
     const attached = subscriber;
     // Capture the generation this client is attaching under. The callback stays
     // authorized to deliver only while the lifecycle's generation still matches;
@@ -760,14 +783,21 @@ const scheduleAttachAttempt = (
  * window closed in practice, matching the timing the previous
  * import-time `void initRedis()` had.
  */
-export const startSse = (authorizer: WorkspaceConnectionAuthorizer): void => {
+export const startSse = (
+  authorizer: WorkspaceConnectionAuthorizer,
+  dependencies: StartSseDependencies = {},
+): void => {
   authorizeWorkspaceConnections = authorizer;
   if (activeLifecycle) {
     return;
   }
 
   const lifecycle: SseLifecycle = {
+    createClient: dependencies.createClient ?? createRedisClient,
     keepAliveTimer: setInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL_MS),
+    publishAccessRevoked:
+      dependencies.publishAccessRevoked ?? publishWorkspaceAccessRevoked,
+    publishWorkspace: dependencies.publishWorkspace ?? publishWorkspaceEvent,
     subscriber: null,
     subscriptionLive: false,
     attachTimer: null,

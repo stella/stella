@@ -11,20 +11,21 @@ import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
+import {
+  callGatewayExternalMcpTool,
+  listGatewayExternalMcpTools,
+} from "@/api/mcp/gateway/external-tools";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const loadActiveMcpConnectionsForUserMock = mock();
 const refreshCachedMcpToolsForConnectionMock = mock(async () => undefined);
 const proxyMcpToolCallMock = mock();
 
-void mock.module("@/api/lib/mcp-upstream/connections", () => ({
+const dependencies = {
   loadActiveMcpConnectionsForUser: loadActiveMcpConnectionsForUserMock,
   proxyMcpToolCall: proxyMcpToolCallMock,
   refreshCachedMcpToolsForConnection: refreshCachedMcpToolsForConnectionMock,
-}));
-
-const { callGatewayExternalMcpTool, listGatewayExternalMcpTools } =
-  await import("@/api/mcp/gateway/external-tools");
+};
 
 type GatewayConnectionToolRow = {
   allowedTools: string[] | null;
@@ -128,7 +129,7 @@ describe("external MCP gateway tools", () => {
       [row({ cachedTools: [cachedTool] })],
     ]);
 
-    const tools = await listGatewayExternalMcpTools({ context });
+    const tools = await listGatewayExternalMcpTools({ context, dependencies });
 
     expect(refreshCachedMcpToolsForConnectionMock).toHaveBeenCalledWith({
       connectionId,
@@ -151,6 +152,7 @@ describe("external MCP gateway tools", () => {
     // type-aware lint; capture the rejection explicitly instead.
     const rejection: unknown = await listGatewayExternalMcpTools({
       context,
+      dependencies,
     }).then(
       () => null,
       (error: unknown) => error,
@@ -166,6 +168,7 @@ describe("external MCP gateway tools", () => {
       args: {},
       context,
       toolName: "mcp__registry__lookup",
+      dependencies,
     });
 
     const item = result.content.at(0);

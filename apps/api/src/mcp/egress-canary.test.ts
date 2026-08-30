@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { pgFtsProvider } from "@/api/lib/search/pg-fts-provider";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { AnonymizingMcpToolName } from "@/api/mcp/static-tool-definitions";
 import { isMcpEgressPlan, type McpEgressPlan } from "@/api/mcp/tool-types";
@@ -65,10 +66,9 @@ const anonymizeTextFieldsMock = mock(
   async ({ fields }: AnonymizeTextFieldsInput) => ({
     entityCount: fields.length,
     fields: fields.map((_field, index) => `[ANON_${index}]`),
+    redactionMap: new Map<string, string>(),
   }),
 );
-
-const loadAnonymizationGazetteerEntriesMock = mock(async () => []);
 
 type SearchProviderHit = {
   entityId: string;
@@ -93,50 +93,16 @@ const readWorkspaceContactsHandlerMock = mock();
 const readWorkspaceMembersHandlerMock = mock();
 const describeStoredTemplateMock = mock();
 
-const realAnonymizationBlacklist =
-  await import("@/api/lib/anonymization-blacklist");
-const realTemplateFillService =
-  await import("@/api/lib/templates/template-fill-service");
-
-void mock.module("@/api/mcp/anonymization", () => ({
-  anonymizeTextFields: anonymizeTextFieldsMock,
-}));
-
-void mock.module("@/api/lib/anonymization-blacklist", () => ({
-  ...realAnonymizationBlacklist,
-  loadAnonymizationGazetteerEntries: loadAnonymizationGazetteerEntriesMock,
-}));
-
-void mock.module("@/api/lib/search/provider", () => ({
-  getSearchProvider: () => ({ search: searchProviderSearchMock }),
-}));
-
-void mock.module("@/api/handlers/workspaces/get", () => ({
-  readWorkspaceHandler: readWorkspaceHandlerMock,
-}));
-
-void mock.module("@/api/handlers/workspaces/read-overview", () => ({
-  readOverviewHandler: readOverviewHandlerMock,
-}));
-
-void mock.module("@/api/handlers/workspaces/workspace-contacts-read", () => ({
-  readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
-}));
-
-void mock.module("@/api/handlers/workspaces/workspace-members-read", () => ({
-  readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
-}));
-
-void mock.module("@/api/lib/templates/template-fill-service", () => ({
-  ...realTemplateFillService,
-  describeStoredTemplate: describeStoredTemplateMock,
-}));
-
 const { finalizeToolEgress } = await import("@/api/mcp/egress");
 const { serializeToolResult } = await import("@/api/mcp/tool-utils");
 const finalizeMcpEgress = async (
   options: Parameters<typeof finalizeToolEgress>[0],
-) => serializeToolResult(await finalizeToolEgress(options));
+) =>
+  serializeToolResult(
+    await finalizeToolEgress(options, {
+      anonymizeTextFields: anonymizeTextFieldsMock,
+    }),
+  );
 const { ANONYMIZED_MCP_TOOL_DEFINITIONS } =
   await import("@/api/mcp/static-tool-definitions");
 const { COMPAT_TOOL_HANDLERS } = await import("@/api/mcp/compat-tools");
@@ -263,6 +229,15 @@ const buildContext = ({
     memberRole,
     organizationId: toSafeId<"organization">(organizationId),
     recordAuditEvent: asTestRaw(mock(async () => undefined)),
+    testDependencies: {
+      getSearchProvider: () =>
+        asTestRaw({ ...pgFtsProvider, search: searchProviderSearchMock }),
+      readWorkspaceHandler: readWorkspaceHandlerMock,
+      readOverviewHandler: readOverviewHandlerMock,
+      readWorkspaceContactsHandler: readWorkspaceContactsHandlerMock,
+      readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
+      describeStoredTemplate: describeStoredTemplateMock,
+    },
     safeDb,
     scopedDb,
     userId: toSafeId<"user">("user_1"),
@@ -317,8 +292,6 @@ const expectSeedsQueuedForAnonymization = (seeds: readonly string[]): void => {
 
 beforeEach(() => {
   anonymizeTextFieldsMock.mockClear();
-  loadAnonymizationGazetteerEntriesMock.mockReset();
-  loadAnonymizationGazetteerEntriesMock.mockResolvedValue([]);
   searchProviderSearchMock.mockReset();
   searchProviderSearchMock.mockResolvedValue({
     hits: [],

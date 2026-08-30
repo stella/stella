@@ -39,6 +39,7 @@ export type InsertAutomatedFlowRunWithinCapInput = {
   /** Pre-built run + step rows (see `buildFlowRunRows`). */
   rows: FlowRunRows;
   now?: Date;
+  database?: Pick<typeof rootDb, "transaction">;
 };
 
 /**
@@ -55,8 +56,9 @@ export const insertAutomatedFlowRunWithinCap = async ({
   definitionId,
   rows,
   now = new Date(),
+  database = rootDb,
 }: InsertAutomatedFlowRunWithinCapInput): Promise<InsertAutomatedFlowRunWithinCapResult> =>
-  await rootDb.transaction(async (tx) => {
+  await database.transaction(async (tx) => {
     // Serialize concurrent automated starts for this definition. The xact lock
     // releases on commit/rollback, after the prior holder's run row is visible,
     // so the count below can never miss a committed sibling.

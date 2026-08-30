@@ -10,7 +10,6 @@ import {
   beforeAll,
   describe,
   expect,
-  mock,
   setDefaultTimeout,
   test,
 } from "bun:test";
@@ -25,23 +24,24 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
 import type { FlowStep, FlowTriggerSource } from "@/api/lib/flows/flow-types";
 import { MAX_AUTOMATED_FLOW_RUNS_PER_DEFINITION_PER_DAY } from "@/api/lib/flows/flow-types";
+import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(60_000);
 
 const testDb: TestDatabase = await getTestDb();
-
-// The cap gate runs through `rootDb`; route it at the test database so the
-// advisory lock, cross-workspace count, and insert run as real SQL.
-void mock.module("@/api/db/root", () => ({ rootDb: testDb, rlsDb: testDb }));
-
-const { insertAutomatedFlowRunWithinCap } =
-  await import("@/api/lib/flows/automated-run-cap");
-const { buildFlowRunRows } = await import("@/api/lib/flows/start-flow-run");
+const capDatabase =
+  asTestRaw<
+    NonNullable<
+      Parameters<typeof insertAutomatedFlowRunWithinCap>[0]["database"]
+    >
+  >(testDb);
 
 const CAP = MAX_AUTOMATED_FLOW_RUNS_PER_DEFINITION_PER_DAY;
 
@@ -116,6 +116,7 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     const result = await insertAutomatedFlowRunWithinCap({
       definitionId,
       rows,
+      database: capDatabase,
     });
     return { runId, result };
   };

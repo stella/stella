@@ -437,10 +437,9 @@ describe("handleMcpHttpRequest", () => {
         entityId: "entity_1",
         workspaceId: "workspace_1",
       });
-      expect(authenticateMcpRequestMock).toHaveBeenCalledWith(
-        "token",
-        "documents",
-      );
+      expect(authenticateMcpRequestMock).toHaveBeenCalledWith("token", {
+        mode: "documents",
+      });
       expect(listMcpToolsMock).toHaveBeenCalledWith(context, "documents", [
         "stella:read",
         "stella:documents_write",
