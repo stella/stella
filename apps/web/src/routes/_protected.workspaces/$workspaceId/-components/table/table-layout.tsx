@@ -194,15 +194,6 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   return (
     <MobileTableOrientationGate>
       <WorkspaceTable
-        calculations={{
-          selections: view.layout.calculations,
-          properties,
-          onChange: (selections) =>
-            updateView.mutate({
-              viewId: view.id,
-              layout: mergeLayout(view.layout, { calculations: selections }),
-            }),
-        }}
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
         onLoadMore={() => {
