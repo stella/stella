@@ -65,6 +65,49 @@ enum PreparedLowercaseBridge {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+struct PreparedRolePhraseIndex {
+  by_first: HashMap<String, Vec<Vec<String>>>,
+}
+
+impl PreparedRolePhraseIndex {
+  fn new(role_heads: &HashSet<String>) -> Self {
+    let mut by_first = HashMap::<String, Vec<Vec<String>>>::new();
+    for role_head in role_heads {
+      let phrase = role_head
+        .split(|ch: char| !ch.is_alphabetic())
+        .filter(|word| !word.is_empty())
+        .map(str::to_lowercase)
+        .collect::<Vec<_>>();
+      let Some(first) = phrase.first() else {
+        continue;
+      };
+      by_first.entry(first.clone()).or_default().push(phrase);
+    }
+    for phrases in by_first.values_mut() {
+      phrases.sort_by(|left, right| right.len().cmp(&left.len()));
+    }
+    Self { by_first }
+  }
+
+  fn contains_sequence(&self, words: &[String]) -> bool {
+    words.iter().enumerate().any(|(start, first)| {
+      self.by_first.get(first).is_some_and(|phrases| {
+        phrases
+          .iter()
+          .any(|phrase| words[start..].starts_with(phrase))
+      })
+    })
+  }
+
+  fn longest_prefix(&self, words: &[String]) -> Option<usize> {
+    let first = words.first()?;
+    self.by_first.get(first)?.iter().find_map(|phrase| {
+      words.starts_with(phrase).then_some(phrase.len())
+    })
+  }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PreparedLegalFormData {
   suffixes: Vec<String>,
   non_ascii_name_short_suffixes: HashSet<String>,
@@ -74,7 +117,7 @@ pub(crate) struct PreparedLegalFormData {
   normalized_in_name_words: HashSet<String>,
   normalized_suffix_words: HashSet<String>,
   role_heads: HashSet<String>,
-  subject_clause_role_phrases: HashSet<String>,
+  role_phrase_index: PreparedRolePhraseIndex,
   soft_wrap_boundary_labels: HashSet<String>,
   sentence_verb_indicators: HashSet<String>,
   clause_noun_heads: HashSet<String>,
@@ -150,11 +193,7 @@ impl PreparedLegalFormData {
       });
     let suffix_indices_by_last_char = suffix_indices_by_last_char(&suffixes);
     let role_heads = lower_set(role_heads);
-    let subject_clause_role_phrases = role_heads
-      .iter()
-      .map(|role_head| normalize_word_phrase(role_head))
-      .filter(|role_head| !role_head.is_empty())
-      .collect();
+    let role_phrase_index = PreparedRolePhraseIndex::new(&role_heads);
 
     Self {
       suffixes,
@@ -165,7 +204,7 @@ impl PreparedLegalFormData {
       normalized_in_name_words: lower_set(normalized_in_name_words),
       normalized_suffix_words: lower_set(normalized_suffix_words),
       role_heads,
-      subject_clause_role_phrases,
+      role_phrase_index,
       soft_wrap_boundary_labels: lower_set(soft_wrap_boundary_labels),
       sentence_verb_indicators: lower_set(sentence_verb_indicators),
       clause_noun_heads: lower_set(clause_noun_heads),
@@ -218,11 +257,11 @@ impl PreparedLegalFormData {
     if !contains_lowercase(&self.sentence_verb_indicators, verb) {
       return false;
     }
-    let tail = words.take(4).collect::<Vec<_>>().join(" ").to_lowercase();
-    self
-      .subject_clause_role_phrases
-      .iter()
-      .any(|role| contains_bounded_phrase(&tail, role))
+    let tail = words
+      .take(4)
+      .map(str::to_lowercase)
+      .collect::<Vec<_>>();
+    self.role_phrase_index.contains_sequence(&tail)
   }
 
   pub(crate) fn is_party_label_prefix(&self, text: &str) -> bool {
@@ -238,22 +277,10 @@ impl PreparedLegalFormData {
       .split(|ch: char| !ch.is_alphanumeric())
       .filter(|word| !word.is_empty())
       .collect::<Vec<_>>();
-    let Some(role_word_count) = self
-      .subject_clause_role_phrases
-      .iter()
-      .filter_map(|role| {
-        let role_word_count = role.split_whitespace().count();
-        words
-          .get(..role_word_count)
-          .filter(|prefix| {
-            prefix
-              .iter()
-              .zip(role.split_whitespace())
-              .all(|(word, role_word)| word.to_lowercase() == role_word)
-          })
-          .map(|_| role_word_count)
-      })
-      .max()
+    let normalized_words =
+      words.iter().map(|word| word.to_lowercase()).collect::<Vec<_>>();
+    let Some(role_word_count) =
+      self.role_phrase_index.longest_prefix(&normalized_words)
     else {
       return false;
     };
@@ -3090,15 +3117,6 @@ fn lower_vec(values: Vec<String>) -> Vec<String> {
     .filter(|value| !value.is_empty())
     .map(|value| value.to_lowercase())
     .collect()
-}
-
-fn normalize_word_phrase(text: &str) -> String {
-  text
-    .split(|ch: char| !ch.is_alphabetic())
-    .filter(|word| !word.is_empty())
-    .map(str::to_lowercase)
-    .collect::<Vec<_>>()
-    .join(" ")
 }
 
 fn lowercase_lookup(text: &str) -> Cow<'_, str> {
