@@ -18,6 +18,11 @@ import {
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
   corpusIndexUnknownAppendBarrierAt,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import {
+  CORPUS_PROJECTION_GENERATION_SCOPE,
+  entityIdsForCorpusProjectionWorkScope,
+  type CorpusProjectionScopedWorkOptions,
+} from "@/api/lib/legal-search/corpus-index-projection-scope";
 import { corpusIndexProjectionNeedsWork } from "@/api/lib/legal-search/corpus-index-projection-sql";
 
 export const CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE =
@@ -39,16 +44,16 @@ export type CorpusProjectionIntentLease = {
   leaseExpiresAt: Date;
 };
 
-type ReserveCorpusProjectionIntentsOptions = {
-  family: CorpusFamily;
-  generation: string;
-  limit: number;
-  leaseMs: number;
-  /** Deterministic database-test clock; production expiry uses PostgreSQL. */
-  testNow?: Date;
-  newIntentId?: () => ProjectionIntentId;
-  newLeaseToken?: () => string;
-};
+type ReserveCorpusProjectionIntentsOptions<Family extends CorpusFamily> =
+  CorpusProjectionScopedWorkOptions<Family> & {
+    generation: string;
+    limit: number;
+    leaseMs: number;
+    /** Deterministic database-test clock; production expiry uses PostgreSQL. */
+    testNow?: Date;
+    newIntentId?: () => ProjectionIntentId;
+    newLeaseToken?: () => string;
+  };
 
 const validateBatchSize = (limit: number): number => {
   if (
@@ -115,20 +120,24 @@ const noOutstandingIntent = sql`NOT EXISTS (
  * entity is terminal. This enforces delete-old, settle, then append-new; Plane
  * controls how often and how broadly this bounded primitive runs.
  */
-export const reserveCorpusProjectionIntentsTx = async (
+export const reserveCorpusProjectionIntentsTx = async <
+  Family extends CorpusFamily,
+>(
   tx: Transaction,
   {
     family,
     generation,
     limit: requestedLimit,
     leaseMs: requestedLeaseMs,
+    scope = CORPUS_PROJECTION_GENERATION_SCOPE,
     testNow,
     newIntentId = () => createSafeId<"corpusIndexProjectionIntent">(),
     newLeaseToken = () => Bun.randomUUIDv7(),
-  }: ReserveCorpusProjectionIntentsOptions,
+  }: ReserveCorpusProjectionIntentsOptions<Family>,
 ): Promise<CorpusProjectionIntentLease[]> => {
   const limit = validateBatchSize(requestedLimit);
   const leaseMs = validateLeaseMs(requestedLeaseMs);
+  const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
   await readActiveCorpusProjectionManifest(tx, family, generation, true);
   const eligibilityAt = testNow ?? (await readPostgresClock(tx));
   const runnableAt = sql<Date>`coalesce(
@@ -158,6 +167,9 @@ export const reserveCorpusProjectionIntentsTx = async (
       and(
         eq(corpusIndexProjectionStates.family, family),
         eq(corpusIndexProjectionStates.generation, generation),
+        scopedEntityIds === null
+          ? undefined
+          : inArray(corpusIndexProjectionStates.entityId, scopedEntityIds),
         eq(corpusIndexProjectionStates.desiredAction, "upsert"),
         inArray(corpusIndexProjectionStates.workStatus, [
           "eligible",
@@ -275,28 +287,32 @@ export type CorpusProjectionReplacementCleanup = {
   indexId: string;
 };
 
-type PrepareCorpusProjectionReplacementsOptions = {
-  family: CorpusFamily;
-  generation: string;
-  limit: number;
-  testNow?: Date;
-};
+type PrepareCorpusProjectionReplacementsOptions<Family extends CorpusFamily> =
+  CorpusProjectionScopedWorkOptions<Family> & {
+    generation: string;
+    limit: number;
+    testNow?: Date;
+  };
 
 /**
  * Move current but superseded revisions to cleanup before a replacement can
  * be reserved. Applied revisions are known published, so no unknown-append
  * delay is needed; delete settlement remains mandatory.
  */
-export const prepareCorpusProjectionReplacementsTx = async (
+export const prepareCorpusProjectionReplacementsTx = async <
+  Family extends CorpusFamily,
+>(
   tx: Transaction,
   {
     family,
     generation,
     limit: requestedLimit,
+    scope = CORPUS_PROJECTION_GENERATION_SCOPE,
     testNow,
-  }: PrepareCorpusProjectionReplacementsOptions,
+  }: PrepareCorpusProjectionReplacementsOptions<Family>,
 ): Promise<CorpusProjectionReplacementCleanup[]> => {
   const limit = validateBatchSize(requestedLimit);
+  const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
   await readActiveCorpusProjectionManifest(tx, family, generation, true);
   const candidates = await tx
     .select({
@@ -309,6 +325,9 @@ export const prepareCorpusProjectionReplacementsTx = async (
       and(
         eq(corpusIndexProjectionStates.family, family),
         eq(corpusIndexProjectionStates.generation, generation),
+        scopedEntityIds === null
+          ? undefined
+          : inArray(corpusIndexProjectionStates.entityId, scopedEntityIds),
         eq(corpusIndexProjectionStates.desiredAction, "upsert"),
         eq(corpusIndexProjectionStates.appliedAction, "upsert"),
         isNotNull(corpusIndexProjectionStates.appliedRevision),

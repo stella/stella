@@ -5,6 +5,7 @@ import {
   classifyTestBatch,
   composeTestBatches,
   dbTestBatchSize,
+  hasModuleScopeProcessEnvMutation,
   isDbTest,
   TEST_BATCH_KIND,
 } from "../../scripts/test-batch-plan";
@@ -115,5 +116,30 @@ describe("API test batch planning", () => {
     }
 
     expect(isDbTest("src/example.db.test.ts", "")).toBe(true);
+  });
+
+  test("isolates only module-scope process environment mutations", () => {
+    const testPath = "src/example.test.ts";
+    for (const source of [
+      'process.env["REDIS_URL"] = "redis://127.0.0.1:1";',
+      'process.env.REDIS_URL = "redis://127.0.0.1:1";',
+      'process.env.REDIS_URL ??= "redis://127.0.0.1:1";',
+      'process.env.REDIS_URL += "?isolated=true";',
+      'if (enabled) { process.env.REDIS_URL = "redis://127.0.0.1:1"; }',
+      'const configured = (process.env.REDIS_URL = "redis://127.0.0.1:1");',
+      '(() => { process.env.REDIS_URL = "redis://127.0.0.1:1"; })();',
+      '(function () { process.env.REDIS_URL = "redis://127.0.0.1:1"; })();',
+    ]) {
+      expect(hasModuleScopeProcessEnvMutation(testPath, source)).toBe(true);
+    }
+    for (const source of [
+      'const value = process.env["REDIS_URL"];',
+      'test("scoped", () => { process.env["REDIS_URL"] = "value"; });',
+      'const deferred = () => { process.env.REDIS_URL = "value"; };',
+      'function deferred() { process.env.REDIS_URL = "value"; }',
+      '// process.env["REDIS_URL"] = "value";',
+    ]) {
+      expect(hasModuleScopeProcessEnvMutation(testPath, source)).toBe(false);
+    }
   });
 });

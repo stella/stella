@@ -15,6 +15,7 @@ import {
   classifyTestBatch,
   composeTestBatches,
   dbTestBatchSize,
+  hasModuleScopeProcessEnvMutation,
   isDbTest,
   TEST_BATCH_KIND,
 } from "./test-batch-plan";
@@ -191,7 +192,8 @@ for (const { source, testPath } of classifiedTests) {
     dbBacked: isDbTest(testPath, source),
     heavyLogic:
       HEAVY_LOGIC_SOURCE_MARKERS.some((marker) => source.includes(marker)) ||
-      HEAVY_LOGIC_PATH_MARKERS.some((marker) => testPath.includes(marker)),
+      HEAVY_LOGIC_PATH_MARKERS.some((marker) => testPath.includes(marker)) ||
+      hasModuleScopeProcessEnvMutation(testPath, source),
     installsModuleMock: installsModuleMock(source),
     propertyOnly,
   });
