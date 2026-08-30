@@ -1773,10 +1773,7 @@ mod tests {
       vec![String::from("seller")],
     );
     let names = PreparedNameCorpusData::new(NameCorpusData {
-      first_names: vec![
-        String::from("Abdul-Malik"),
-        String::from("Imani"),
-      ],
+      first_names: vec![String::from("Abdul-Malik"), String::from("Imani")],
       ..NameCorpusData::default()
     });
 
@@ -1789,7 +1786,7 @@ mod tests {
         data: &data,
         first_names: None,
         name_corpus: Some(&names),
-        title_tokens: &BTreeSet::new(),
+          title_tokens: &BTreeSet::new(),
       });
       assert_eq!(
         detected

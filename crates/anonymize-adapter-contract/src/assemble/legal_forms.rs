@@ -499,10 +499,12 @@ fn scoped_sentence_verb_indicators(
 ) -> Result<Vec<String>, AssembleError> {
   let configured: OrderedMap<Value> =
     parse_ordered_data_file("sentence-verb-indicators.json")?;
-  Ok(language::language_keyed_terms(&configured, selected)
-    .into_iter()
-    .map(|word| word.to_lowercase())
-    .collect())
+  Ok(
+    language::language_keyed_terms(&configured, selected)
+      .into_iter()
+      .map(|word| word.to_lowercase())
+      .collect(),
+  )
 }
 
 /// Mirrors `getLegalRoleHeadsSync` (post-warm).
@@ -897,8 +899,7 @@ mod tests {
     leading_clause_trims, non_ascii_name_short_suffixes,
     organization_detection_suffixes, parse_data_file, role_heads,
     scoped_clause_noun_heads, scoped_connector_words,
-    scoped_sentence_verb_indicators,
-    validate_institutional_terms,
+    scoped_sentence_verb_indicators, validate_institutional_terms,
   };
 
   #[test]

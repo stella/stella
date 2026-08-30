@@ -16,8 +16,9 @@ use crate::prepared_metadata::{
 };
 use crate::processors::{
   DenyListFilterData, DenyListMatchData, PatternSlice,
-  process_deny_list_matches_with_field_labels, process_prepared_country_matches,
-  process_prepared_gazetteer_matches, process_prepared_regex_matches,
+  process_deny_list_matches_with_field_labels,
+  process_prepared_country_matches, process_prepared_gazetteer_matches,
+  process_prepared_regex_matches,
 };
 use crate::resolution::{PipelineEntity, ResolutionDocument};
 use crate::signatures::{
@@ -527,9 +528,7 @@ impl<'a> StaticDetectorContext<'a> {
     )
   }
 
-  fn false_positive_filters(
-    &self,
-  ) -> Result<Option<&'a DenyListFilterData>> {
+  fn false_positive_filters(&self) -> Result<Option<&'a DenyListFilterData>> {
     self.require(StaticDetectorInput::FalsePositiveFilters)?;
     Ok(self.engine.data.effective_false_positive_filters())
   }
