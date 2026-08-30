@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
