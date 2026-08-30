@@ -1,6 +1,9 @@
 import { createRoot } from "react-dom/client";
 
+import { panic } from "better-result";
+
 import {
+  KanbanCardDragSurface,
   KanbanDragHandle,
   KanbanSortableBoard,
   KanbanSortableColumns,
@@ -46,31 +49,32 @@ const cells = [
 
 const SortableItem = ({ id }: { id: string }) => {
   const { activator, setNodeRef, style } = useKanbanSortable({
-    activation: { type: id === "whole-item" ? "item" : "handle" },
+    activation: { type: id === "whole-item" ? "card" : "handle" },
     id,
   });
 
-  if (activator.type === "item") {
+  if (activator.type === "card") {
     return (
-      <div
-        {...activator.attributes}
-        {...activator.listeners}
-        aria-label={`Move ${id}`}
-        data-sortable-item={id}
-        data-whole-item=""
-        ref={setNodeRef}
-        style={style}
-      >
-        {id}
+      <div data-sortable-item={id} ref={setNodeRef} style={style}>
+        <KanbanCardDragSurface bindings={activator.bindings}>
+          <p data-card-content="">{id}</p>
+          <button data-card-control="" type="button">
+            Keep {id} control interactive
+          </button>
+        </KanbanCardDragSurface>
       </div>
     );
   }
 
-  return (
-    <div data-sortable-item={id} ref={setNodeRef} style={style}>
-      <KanbanDragHandle bindings={activator.bindings} label={`Move ${id}`} />
-    </div>
-  );
+  if (activator.type === "handle") {
+    return (
+      <div data-sortable-item={id} ref={setNodeRef} style={style}>
+        <KanbanDragHandle bindings={activator.bindings} label={`Move ${id}`} />
+      </div>
+    );
+  }
+
+  return panic("fixture cards use card or handle activation");
 };
 
 const SortableVirtualCell = ({

@@ -339,7 +339,7 @@ test("exposes explicit whole-item and 44px handle activation surfaces", async ({
   page,
 }) => {
   const handle = await openFixture(page);
-  const wholeItem = page.getByRole("button", { name: "Move whole-item" });
+  const wholeItem = page.locator('[data-card-content=""]');
 
   await expect(handle).toHaveCSS("width", "44px");
   await expect(handle).toHaveCSS("height", "44px");
@@ -347,12 +347,19 @@ test("exposes explicit whole-item and 44px handle activation surfaces", async ({
   await expect(
     handle.locator("xpath=ancestor::*[@data-sortable-item]"),
   ).toHaveCSS("touch-action", "auto");
-  await expect(wholeItem).toHaveCSS("touch-action", "none");
-
-  await wholeItem.focus();
-  await page.keyboard.press("Space");
-  await expect(page.locator("[data-overlay]")).toHaveText("whole-item");
-  await page.keyboard.press("Escape");
+  await expect(wholeItem).toHaveCSS("touch-action", "auto");
+  const control = page.getByRole("button", {
+    name: "Keep whole-item control interactive",
+  });
+  const controlBox = await control.boundingBox();
+  if (!controlBox) {
+    throw new Error("Missing whole-card control bounds");
+  }
+  await page.mouse.move(controlBox.x + 4, controlBox.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(controlBox.x + 16, controlBox.y + 4);
+  await page.mouse.up();
+  await expect(page.locator("[data-overlay]")).toHaveCount(0);
 });
 
 test("keeps the drag overlay above sticky board chrome", async ({ page }) => {
@@ -405,10 +412,10 @@ test("drops a whole-item touch drag across a virtual column", async ({
   page,
 }) => {
   await openFixture(page);
-  const wholeItem = page.getByRole("button", { name: "Move whole-item" });
+  const wholeItem = page.locator('[data-card-content=""]');
   const sourceCell = page.locator('[data-kanban-cell="cell-d"]');
   await sourceCell.evaluate((element) => {
-    element.scrollTop = 96;
+    element.scrollTop = element.scrollHeight;
   });
   await expect
     .poll(async () => await sourceCell.evaluate((element) => element.scrollTop))
@@ -431,6 +438,38 @@ test("drops a whole-item touch drag across a virtual column", async ({
     )
     .toBe("lane-second");
   await endNativeTouch(nativeTouch);
+
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["droppedOn"] ?? "",
+        ),
+    )
+    .toBe("lane-second");
+});
+
+test("drops a whole-card pointer drag across a virtual column", async ({
+  page,
+}) => {
+  await openFixture(page);
+  const cardContent = page.locator('[data-card-content=""]');
+  await page.locator('[data-kanban-cell="cell-d"]').evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  const target = page.getByRole("button", { name: "Move lane-second" });
+  const sourceBox = await cardContent.boundingBox();
+  const targetBox = await target.boundingBox();
+  if (!sourceBox || !targetBox) {
+    throw new Error("Missing whole-card drag bounds");
+  }
+
+  await page.mouse.move(sourceBox.x + 4, sourceBox.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(sourceBox.x + 16, sourceBox.y + 4);
+  await expect(page.locator("[data-overlay]")).toHaveText("whole-item");
+  await page.mouse.move(targetBox.x + 12, targetBox.y + 12);
+  await page.mouse.up();
 
   await expect
     .poll(

@@ -75,6 +75,7 @@ export const KANBAN_BOARD_AUTO_SCROLL_OPTIONS = {
 } as const satisfies AutoScrollOptions;
 
 export const KANBAN_SORTABLE_ACTIVATION_MODES = {
+  CARD: "card",
   HANDLE: "handle",
   ITEM: "item",
 } as const;
@@ -98,7 +99,6 @@ const KANBAN_KEYBOARD_CODES = {
   cancel: ["Escape"],
   end: ["Space", "Enter", "Tab"],
 } as const;
-const KANBAN_KEYBOARD_LISTENER_DELAY_MS = 0;
 const KANBAN_KEYBOARD_TARGET_RETRY_LIMIT = 60;
 /** A render commit, not a virtual scroll, so the budget stays short. */
 const KANBAN_DROP_SETTLE_FRAME_LIMIT = 10;
@@ -287,14 +287,9 @@ class KanbanKeyboardSensor implements SensorInstance {
     ownerDocument.defaultView?.addEventListener("resize", this.handleCancel, {
       signal: this.listeners.signal,
     });
-    setTimeout(() => {
-      if (this.listeners.signal.aborted) {
-        return;
-      }
-      ownerDocument.addEventListener("keydown", this.handleKeyDown, {
-        signal: this.listeners.signal,
-      });
-    }, KANBAN_KEYBOARD_LISTENER_DELAY_MS);
+    ownerDocument.addEventListener("keydown", this.handleKeyDown, {
+      signal: this.listeners.signal,
+    });
   }
 
   private readonly handleCancel = () => {
@@ -315,6 +310,17 @@ class KanbanKeyboardSensor implements SensorInstance {
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent) => {
+    // The sensor can be constructed while the activation key is still
+    // bubbling. Ignore that exact native event even when React has wrapped it
+    // before passing it to the sensor; the next key must be observed without
+    // waiting for another task.
+    if (
+      event === this.props.event ||
+      (event.target === this.props.event.target &&
+        event.timeStamp === this.props.event.timeStamp)
+    ) {
+      return;
+    }
     const keyboardCodes = this.props.options.keyboardCodes;
     const cancelCodes = keyboardCodes?.cancel ?? KANBAN_KEYBOARD_CODES.cancel;
     const endCodes = keyboardCodes?.end ?? KANBAN_KEYBOARD_CODES.end;
@@ -640,6 +646,7 @@ export type KanbanSortableBindings = Pick<
 >;
 
 export type KanbanSortableActivationMode =
+  | { type: "card" }
   | { type: "handle" }
   | { type: "item" };
 
@@ -648,6 +655,21 @@ export type UseKanbanSortableOptions = {
   id: UniqueIdentifier;
   disabled?: boolean | undefined;
 };
+
+type KanbanSortableActivator =
+  | {
+      bindings: KanbanSortableBindings;
+      type: typeof KANBAN_SORTABLE_ACTIVATION_MODES.HANDLE;
+    }
+  | {
+      bindings: KanbanSortableBindings;
+      type: typeof KANBAN_SORTABLE_ACTIVATION_MODES.CARD;
+    }
+  | {
+      attributes: ReturnType<typeof useSortable>["attributes"];
+      listeners: ReturnType<typeof useSortable>["listeners"];
+      type: typeof KANBAN_SORTABLE_ACTIVATION_MODES.ITEM;
+    };
 
 /**
  * Connect a sortable item and its separate drag handle without making the
@@ -687,14 +709,18 @@ export const useKanbanSortable = ({
     setActivatorNodeRef: sortable.setActivatorNodeRef,
   };
 
-  const activator =
-    activation.type === KANBAN_SORTABLE_ACTIVATION_MODES.HANDLE
-      ? { bindings, type: KANBAN_SORTABLE_ACTIVATION_MODES.HANDLE }
-      : {
-          attributes: sortable.attributes,
-          listeners: sortable.listeners,
-          type: KANBAN_SORTABLE_ACTIVATION_MODES.ITEM,
-        };
+  let activator: KanbanSortableActivator;
+  if (activation.type === KANBAN_SORTABLE_ACTIVATION_MODES.HANDLE) {
+    activator = { bindings, type: KANBAN_SORTABLE_ACTIVATION_MODES.HANDLE };
+  } else if (activation.type === KANBAN_SORTABLE_ACTIVATION_MODES.CARD) {
+    activator = { bindings, type: KANBAN_SORTABLE_ACTIVATION_MODES.CARD };
+  } else {
+    activator = {
+      attributes: sortable.attributes,
+      listeners: sortable.listeners,
+      type: KANBAN_SORTABLE_ACTIVATION_MODES.ITEM,
+    };
+  }
 
   return {
     activator,
@@ -747,3 +773,71 @@ export const KanbanDragHandle = ({
     <GripVerticalIcon aria-hidden="true" />
   </Button>
 );
+
+const KANBAN_CARD_DRAG_SURFACE_INTERACTIVE_SELECTOR =
+  "a,button,input,select,textarea,[contenteditable=true],[role=button],[data-kanban-drag-exempt]";
+
+const isKanbanCardDragSurfaceInteractiveTarget = (
+  target: EventTarget | null,
+  activator: EventTarget | null,
+) => {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  const interactiveTarget = target.closest(
+    KANBAN_CARD_DRAG_SURFACE_INTERACTIVE_SELECTOR,
+  );
+  return interactiveTarget !== null && interactiveTarget !== activator;
+};
+
+const getKanbanCardDragSurfaceAttributes = ({
+  "aria-describedby": _describedBy,
+  "aria-disabled": _disabled,
+  "aria-pressed": _pressed,
+  "aria-roledescription": _roleDescription,
+  role: _role,
+  tabIndex: _tabIndex,
+  ...attributes
+}: KanbanSortableBindings["attributes"]) => attributes;
+
+const stopKanbanCardDragAtInteractiveDescendant = (
+  event: React.SyntheticEvent<HTMLDivElement>,
+) => {
+  if (
+    isKanbanCardDragSurfaceInteractiveTarget(event.target, event.currentTarget)
+  ) {
+    event.stopPropagation();
+  }
+};
+
+export type KanbanCardDragSurfaceProps = {
+  bindings: KanbanSortableBindings;
+} & Omit<React.ComponentProps<"div">, "ref">;
+
+/** A whole-card drag activator that preserves descendant controls and scrolling. */
+export const KanbanCardDragSurface = ({
+  bindings,
+  className,
+  ...props
+}: KanbanCardDragSurfaceProps) => {
+  const { setActivatorNodeRef: setCardActivatorNodeRef } = bindings;
+  const setActivatorNodeRef = React.useCallback(
+    (element: HTMLDivElement | null) => {
+      setCardActivatorNodeRef(element);
+    },
+    [setCardActivatorNodeRef],
+  );
+
+  return (
+    <div
+      {...props}
+      {...getKanbanCardDragSurfaceAttributes(bindings.attributes)}
+      {...bindings.listeners}
+      className={cn("touch-auto", className)}
+      onMouseDownCapture={stopKanbanCardDragAtInteractiveDescendant}
+      onPointerDownCapture={stopKanbanCardDragAtInteractiveDescendant}
+      onTouchStartCapture={stopKanbanCardDragAtInteractiveDescendant}
+      ref={setActivatorNodeRef}
+    />
+  );
+};
