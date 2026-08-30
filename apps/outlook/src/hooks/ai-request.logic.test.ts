@@ -21,6 +21,7 @@ const snapshot = {
   itemId: null,
   mode: "read",
   sentAt: null,
+  sourceId: "00000000-0000-7000-8000-000000000001",
   subject: "Subject",
   to: [],
   userEmail: null,

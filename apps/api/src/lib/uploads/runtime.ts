@@ -32,6 +32,11 @@ export const PRESIGN_URL_EXPIRY_SECONDS =
  */
 export const FINALIZE_CLAIM_TIMEOUT_MS = 60_000;
 
+export const UPLOAD_REJECT_REASON = {
+  CLIENT_ABORT: "Aborted by client",
+  URL_EXPIRED: "Upload URL expired",
+} as const;
+
 type RenewFinalizeClaimOptions = {
   claimRequestId: string;
   safeDb: SafeDb;

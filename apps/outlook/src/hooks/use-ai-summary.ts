@@ -2,9 +2,11 @@ import { useState } from "react";
 
 import { Result } from "better-result";
 
+import { parseOutlookAISummaryResponse } from "@stll/api-contract";
+
 import { buildAISummaryRequest } from "@/hooks/ai-request.logic";
-import { api, withTimeout } from "@/lib/api";
-import { toAPIError, userErrorMessage } from "@/lib/api-error";
+import { requestOutlookApi } from "@/lib/api";
+import { APIError, userErrorMessage } from "@/lib/api-error";
 
 const AI_REQUEST_TIMEOUT_MS = 70_000;
 
@@ -30,27 +32,26 @@ export const useAISummary = (errorFallback: string): UseAISummary => {
     text: string;
   }) => {
     setState({ type: "loading" });
-    const result = await Result.tryPromise(
-      async () =>
-        await api.ai.summarize.post(
-          buildAISummaryRequest({ language, text }),
-          withTimeout(AI_REQUEST_TIMEOUT_MS),
-        ),
+    const result = await Result.tryPromise(async () =>
+      requestOutlookApi({
+        body: buildAISummaryRequest({ language, text }),
+        method: "POST",
+        parse: parseOutlookAISummaryResponse,
+        path: "/ai/summarize",
+        timeoutMs: AI_REQUEST_TIMEOUT_MS,
+      }),
     );
     if (Result.isError(result)) {
-      setState({ message: errorFallback, type: "error" });
-      return;
-    }
-    const { data, error } = result.value;
-    if (error) {
-      const apiError = toAPIError(error);
       setState({
-        message: userErrorMessage(apiError, errorFallback),
+        message:
+          result.error instanceof APIError
+            ? userErrorMessage(result.error, errorFallback)
+            : errorFallback,
         type: "error",
       });
       return;
     }
-    setState({ summary: data.summary, type: "ready" });
+    setState({ summary: result.value.summary, type: "ready" });
   };
 
   return {

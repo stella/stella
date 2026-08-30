@@ -2,7 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Result } from "better-result";
 
-import { isAttachmentReadError, OutlookError } from "@/lib/outlook-error";
+import {
+  isAttachmentReadError,
+  isSourceIdentityError,
+  OutlookError,
+} from "@/lib/outlook-error";
 import { loadMailSnapshot, subscribeMailboxItemChanges } from "@/outlook";
 import type { MailSnapshot } from "@/types";
 
@@ -34,6 +38,9 @@ const snapshotErrorMessage = ({
 }): string => {
   if (isAttachmentReadError(error)) {
     return attachmentErrorFallback;
+  }
+  if (isSourceIdentityError(error)) {
+    return errorFallback;
   }
   if (error instanceof Error) {
     return error.message;
@@ -100,7 +107,7 @@ export const useMailSnapshot = ({
     loadLatest: async () => {
       const itemInstanceKey = `item-${String(itemInstanceSequence.current)}`;
       const sequence = ++loadSequence.current;
-      const snapshot = await loadMailSnapshot(itemInstanceKey);
+      const snapshot = await loadMailSnapshot(itemInstanceKey, "ensure");
       if (
         sequence !== loadSequence.current ||
         itemInstanceKey !== `item-${String(itemInstanceSequence.current)}`

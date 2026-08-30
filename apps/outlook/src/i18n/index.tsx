@@ -88,6 +88,8 @@ const messages = {
     readMode: "Read mode",
     refresh: "Refresh",
     saveButtonLabel: "Save to matter: {matterName}",
+    saveConflict:
+      "This email already has a save in progress. Try again shortly.",
     saveEmail: "Save to matter",
     saveErrorFallback: "Could not save email",
     saveFailed: "Save failed",

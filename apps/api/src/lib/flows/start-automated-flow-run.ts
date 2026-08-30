@@ -73,6 +73,8 @@ export type StartAutomatedFlowRunArgs = {
   enqueueDelayMs?: number;
   /** String-only structured-log context (definitionId, workspaceId, ...). */
   logContext: Record<string, string>;
+  /** Durable discovery callers retry infrastructure failures. */
+  failureMode?: "capture" | "throw";
 };
 
 type FindFlowDefinitionArgs = {
@@ -124,6 +126,7 @@ export const startAutomatedFlowRun = async (
     idempotencyKey,
     enqueueDelayMs,
     logContext,
+    failureMode = "capture",
   }: StartAutomatedFlowRunArgs,
   {
     findDefinition,
@@ -149,6 +152,9 @@ export const startAutomatedFlowRun = async (
       ...logContext,
       "error.type": errorTag(definitionResult.error),
     });
+    if (failureMode === "throw") {
+      throw definitionResult.error;
+    }
     return;
   }
   const definition = definitionResult.value;
@@ -184,6 +190,9 @@ export const startAutomatedFlowRun = async (
       ...logContext,
       "error.type": errorTag(authorization.error),
     });
+    if (failureMode === "throw") {
+      throw authorization.error;
+    }
     return;
   }
   const authorizedWorkspace = authorization.value?.workspace;
@@ -216,6 +225,9 @@ export const startAutomatedFlowRun = async (
       ...logContext,
       "error.type": errorTag(insertResult.error),
     });
+    if (failureMode === "throw") {
+      throw insertResult.error;
+    }
     return;
   }
   if (insertResult.value.outcome === "capped") {

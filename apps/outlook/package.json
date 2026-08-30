@@ -18,8 +18,6 @@
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
-    "@elysiajs/eden": "^1.4.9",
-    "@stll/api": "workspace:*",
     "@stll/api-contract": "workspace:*",
     "@stll/ui": "workspace:*",
     "better-result": "catalog:",

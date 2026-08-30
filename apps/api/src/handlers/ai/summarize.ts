@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
 
-import { OUTLOOK_AI_INPUT_MAX_CHARS } from "@stll/api-contract";
+import {
+  OUTLOOK_AI_INPUT_MAX_CHARS,
+  type OutlookAISummaryResponse,
+} from "@stll/api-contract";
 
 import { toOutlookGenerationError } from "@/api/handlers/ai/outlook-generation-error";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -128,7 +131,9 @@ const summarizeEmail = createSafeRootHandler(
       }),
     );
 
-    return Result.ok({ summary: generation.summary.trim() });
+    return Result.ok({
+      summary: generation.summary.trim(),
+    } satisfies OutlookAISummaryResponse);
   },
 );
 

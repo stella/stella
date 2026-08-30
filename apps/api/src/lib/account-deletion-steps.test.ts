@@ -71,6 +71,7 @@ describe("pendingUploadS3KeysForDeletion", () => {
           propertyId: toSafeId<"property">(
             "0198fa3d-fc8d-7000-8000-000000000007",
           ),
+          sourceKey: "d".repeat(64),
           recoveryObjectKeys,
         },
         workspaceId,

@@ -3,6 +3,7 @@ import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 
 import {
   bufferObjectCleanupIntents,
+  emailIngestEffects,
   entityDeletionCleanupRequests,
   pendingUploads,
 } from "@/api/db/schema";
@@ -50,6 +51,50 @@ describe("pending upload recovery indexes", () => {
     const predicateSql = new PgDialect().sqlToQuery(recoveryPredicate).sql;
     expect(predicateSql).toContain("email_ingest");
     expect(predicateSql).toContain("recoveryObjectKeys");
+  });
+
+  test("Outlook source identity is unique within its tenant and workspace", () => {
+    const sourceIndex = getTableConfig(pendingUploads).indexes.find(
+      (index) => index.config.name === "pending_uploads_email_source_uidx",
+    );
+
+    expect(sourceIndex?.config.unique).toBe(true);
+    expect(
+      sourceIndex?.config.columns
+        .slice(0, 2)
+        .map((column) => ("name" in column ? column.name : undefined)),
+    ).toEqual(["organization_id", "workspace_id"]);
+    const predicate = sourceIndex?.config.where;
+    expect(predicate).toBeDefined();
+    if (predicate) {
+      const predicateSql = new PgDialect().sqlToQuery(predicate).sql;
+      expect(predicateSql).toContain("email_ingest");
+      expect(predicateSql).toContain("sourceKey");
+    }
+  });
+});
+
+describe("email ingest effect outbox", () => {
+  const config = getTableConfig(emailIngestEffects);
+
+  test("uses a deterministic effect identity and bounded recovery indexes", () => {
+    expect(
+      config.primaryKeys.at(0)?.columns.map((column) => column.name),
+    ).toEqual(["source_upload_id", "entity_id", "kind"]);
+    expect(config.indexes.map((index) => index.config.name)).toEqual([
+      "email_ingest_effects_due_idx",
+      "email_ingest_effects_processing_idx",
+    ]);
+  });
+
+  test("binds claim and completion timestamps to their states", () => {
+    expect(config.checks.map((check) => check.name)).toEqual([
+      "email_ingest_effects_kind_check",
+      "email_ingest_effects_status_check",
+      "email_ingest_effects_attempt_count_check",
+      "email_ingest_effects_claim_state_check",
+      "email_ingest_effects_completion_state_check",
+    ]);
   });
 });
 

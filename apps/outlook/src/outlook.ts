@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { env } from "@/env";
 import {
   attachmentCapabilityError,
@@ -11,6 +13,10 @@ import {
 } from "@/lib/office";
 import type { OfficeAsyncCallback, OfficeItem } from "@/lib/office";
 import { OutlookError } from "@/lib/outlook-error";
+import {
+  ensureOutlookSourceId,
+  isOutlookSourceId,
+} from "@/lib/outlook-source-id";
 import type {
   AttachmentDownloadResult,
   MailAddress,
@@ -128,6 +134,76 @@ const getMode = (item: OfficeItem): MailSnapshot["mode"] => {
   return "read";
 };
 
+const OUTLOOK_SOURCE_PROPERTY = "stellaEmailSourceId";
+
+const runSourceIdentityOperation = async <T>(
+  operation: () => Promise<T>,
+): Promise<T> => {
+  const result = await Result.tryPromise(operation);
+  if (Result.isError(result)) {
+    throw new OutlookError({
+      cause: result.error,
+      code: "source-identity-unavailable",
+      message: "Outlook source identity persistence failed.",
+    });
+  }
+  return result.value;
+};
+
+const loadOutlookSourceId = async (
+  item: OfficeItem,
+  mode: MailSnapshot["mode"],
+  persistence: "ensure" | "read",
+): Promise<string | null> => {
+  if (!item.loadCustomPropertiesAsync) {
+    if (persistence === "read") {
+      return null;
+    }
+    throw new OutlookError({
+      code: "source-identity-unavailable",
+      message: "Outlook cannot persist this message's filing identity.",
+    });
+  }
+  const properties = await runSourceIdentityOperation(
+    async () =>
+      await fromOfficeAsync<Office.CustomProperties>((callback) =>
+        item.loadCustomPropertiesAsync?.(callback),
+      ),
+  );
+  const existing: unknown = properties.get(OUTLOOK_SOURCE_PROPERTY);
+  if (isOutlookSourceId(existing)) {
+    return existing;
+  }
+  if (persistence === "read") {
+    return null;
+  }
+  return await ensureOutlookSourceId({
+    existing,
+    mode,
+    persistProperty: async (sourceId) => {
+      properties.set(OUTLOOK_SOURCE_PROPERTY, sourceId);
+      await runSourceIdentityOperation(
+        async () =>
+          await fromOfficeAsync((callback) => properties.saveAsync(callback)),
+      );
+    },
+    persistItem: async () => {
+      if (!item.saveAsync) {
+        throw new OutlookError({
+          code: "source-identity-unavailable",
+          message: "Outlook cannot save this draft's filing identity.",
+        });
+      }
+      await runSourceIdentityOperation(
+        async () =>
+          await fromOfficeAsync<string>((callback) =>
+            item.saveAsync?.(callback),
+          ),
+      );
+    },
+  });
+};
+
 const toIsoString = (value: Date | undefined): string | null => {
   if (!value) {
     return null;
@@ -145,6 +221,7 @@ export const subscribeMailboxItemChanges = (
 
 export const loadMailSnapshot = async (
   itemInstanceKey: string,
+  sourceIdentityPersistence: "ensure" | "read" = "read",
 ): Promise<MailSnapshot> => {
   const office = getOfficeRuntime();
   if (!office) {
@@ -163,6 +240,13 @@ export const loadMailSnapshot = async (
       message: "No Outlook message is selected.",
     });
   }
+
+  const mode = getMode(item);
+  const sourceId = await loadOutlookSourceId(
+    item,
+    mode,
+    sourceIdentityPersistence,
+  );
 
   const subject = await readMaybeAsync(
     item.subject,
@@ -193,8 +277,9 @@ export const loadMailSnapshot = async (
     internetMessageId: item.internetMessageId ?? null,
     itemInstanceKey,
     itemId: item.itemId ?? null,
-    mode: getMode(item),
+    mode,
     sentAt: toIsoString(item.dateTimeCreated ?? item.dateTimeModified),
+    sourceId,
     subject: subject.trim() || "(No subject)",
     to,
     userEmail: office.context.mailbox.userProfile.emailAddress,
@@ -335,6 +420,7 @@ const createBrowserSampleSnapshot = (
   itemId: "sample-item",
   mode: "browser",
   sentAt: new Date().toISOString(),
+  sourceId: "00000000-0000-7000-8000-000000000001",
   subject: "SPA review before Friday",
   to: [{ email: "lawyer@stella.local", name: "Lawyer" }],
   userEmail: "lawyer@stella.local",

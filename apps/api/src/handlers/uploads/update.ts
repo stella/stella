@@ -47,10 +47,7 @@ import { scanFile } from "@/api/lib/file-scan/scan";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
-import {
-  finalizeEmailIngest,
-  replayEmailIngestPostCommitWork,
-} from "@/api/lib/uploads/email-ingest";
+import { finalizeEmailIngest } from "@/api/lib/uploads/email-ingest";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
@@ -58,6 +55,7 @@ import {
   sha256Base64ToHex,
   tmpUploadKey,
   tmpUploadKeys,
+  UPLOAD_REJECT_REASON,
   UploadFinalizeError,
 } from "@/api/lib/uploads/runtime";
 
@@ -221,16 +219,11 @@ const finalizeUpload = createSafeHandler(
         );
       }
       if (existing.status === "finalized" && existing.finalizedResult) {
-        if (existing.finalizedResult.type === "email_ingest") {
-          if (existing.purposeData.type !== "email_ingest") {
-            panic("Finalized email ingest has inconsistent purpose data");
-          }
-          replayEmailIngestPostCommitWork({
-            organizationId: session.activeOrganizationId,
-            purposeData: existing.purposeData,
-            userId: user.id,
-            workspaceId,
-          });
+        if (
+          existing.finalizedResult.type === "email_ingest" &&
+          existing.purposeData.type !== "email_ingest"
+        ) {
+          panic("Finalized email ingest has inconsistent purpose data");
         }
         capture("finalized", "complete", "none");
         return Result.ok({ finalizedResult: existing.finalizedResult });
@@ -277,7 +270,7 @@ const finalizeUpload = createSafeHandler(
             .update(pendingUploads)
             .set({
               status: "rejected",
-              rejectReason: "Upload URL expired",
+              rejectReason: UPLOAD_REJECT_REASON.URL_EXPIRED,
               finalizedAt: new Date(),
             })
             .where(
@@ -299,7 +292,10 @@ const finalizeUpload = createSafeHandler(
       if (expiredRows.at(0)) {
         capture("rejected", "terminal_failure", "none");
         return Result.err(
-          new HandlerError({ status: 422, message: "Upload URL expired" }),
+          new HandlerError({
+            status: 422,
+            message: UPLOAD_REJECT_REASON.URL_EXPIRED,
+          }),
         );
       }
       capture("scanning", "in_progress", "finalize");
