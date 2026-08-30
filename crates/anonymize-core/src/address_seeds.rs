@@ -2559,24 +2559,41 @@ fn has_sentence_boundary(text: &str) -> bool {
   if text.trim() == "." {
     return true;
   }
-  let mut chars = text.chars().peekable();
-  while let Some(ch) = chars.next() {
+  for (index, ch) in text.char_indices() {
     if matches!(ch, '!' | '?' | '。' | '！' | '？') {
       return true;
     }
     if ch != '.' {
       continue;
     }
-    let mut saw_space = false;
-    while chars.peek().is_some_and(|next| next.is_whitespace()) {
-      saw_space = true;
-      chars.next();
-    }
-    if saw_space && chars.peek().is_some_and(|next| next.is_uppercase()) {
+    let Some(after_period) = text.get(index.saturating_add(ch.len_utf8())..)
+    else {
+      continue;
+    };
+    let after_space = after_period.trim_start();
+    if after_space.len() < after_period.len()
+      && after_space.chars().next().is_some_and(char::is_uppercase)
+      && !starts_with_address_directional_continuation(after_space)
+    {
       return true;
     }
   }
   false
+}
+
+pub(crate) fn starts_with_address_directional_continuation(text: &str) -> bool {
+  let token_end = text
+    .find(|ch: char| !ch.is_ascii_alphabetic())
+    .unwrap_or(text.len());
+  let Some(token) = text.get(..token_end) else {
+    return false;
+  };
+  if !matches!(token, "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW") {
+    return false;
+  }
+  text
+    .get(token_end..)
+    .is_some_and(|tail| tail.trim_start().starts_with(','))
 }
 
 /// House numbers, postal codes, capitalized name words, and the connectives

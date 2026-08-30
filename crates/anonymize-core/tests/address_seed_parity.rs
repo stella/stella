@@ -372,6 +372,26 @@ fn sentence_boundaries_outside_entities_separate_address_evidence() {
 }
 
 #[test]
+fn street_period_before_directional_keeps_address_evidence_joined() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "Notices to 123 Main Street. NE, Paris 75002.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(
+    addresses
+      .iter()
+      .any(|address| address.contains("123 Main Street. NE, Paris 75002")),
+    "address entities: {addresses:?}; address seeds: {:?}",
+    result.detections.entities.address_seed(),
+  );
+}
+
+#[test]
 fn unsegmented_residual_prose_separates_address_evidence() {
   let prepared = barrier_address_engine();
   let result = prepared

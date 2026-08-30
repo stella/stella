@@ -721,15 +721,23 @@ fn is_all_caps_boilerplate_line(
   // followed by caption punctuation. At the start of an unpunctuated heading,
   // however, a short ambiguous suffix can make the first heading words look
   // like an organization.
-  let legal_form_heading_prefix =
-    entity.source == DetectionSource::LegalForm
-      && context.before.trim().is_empty()
-      && !context.after.trim_start().chars().next().is_some_and(|ch| {
-        matches!(ch, ',' | ':' | ';' | '(' | '-' | '–' | '—')
-      });
+  let has_caption_delimiter = context
+    .after
+    .trim_start()
+    .chars()
+    .next()
+    .is_some_and(|ch| matches!(ch, ',' | ':' | ';' | '(' | '-' | '–' | '—'));
+  let has_sentence_terminal = context
+    .line
+    .trim_end()
+    .chars()
+    .next_back()
+    .is_some_and(|ch| matches!(ch, '.' | '!' | '?'));
+  let legal_form_heading = entity.source == DetectionSource::LegalForm
+    && !has_caption_delimiter
+    && !has_sentence_terminal;
   if outside_entity_letters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS
-    && (entity.source != DetectionSource::LegalForm
-      || legal_form_heading_prefix)
+    && (entity.source != DetectionSource::LegalForm || legal_form_heading)
   {
     return Ok(true);
   }
@@ -905,6 +913,7 @@ fn is_unit_or_address_continuation(
 ) -> bool {
   after.len() < 5
     || has_address_component(after, filters)
+    || crate::address_seeds::starts_with_address_directional_continuation(after)
     || starts_with_unit_number(after, filters)
 }
 
@@ -2219,6 +2228,26 @@ mod tests {
         ORGANIZATION_LABEL,
         entity_text,
         0.8,
+        DetectionSource::LegalForm,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn rejects_mid_line_legal_forms_in_unnumbered_all_caps_headings() {
+    let text =
+      "REGISTRATION OF LIMITED LIABILITY COMPANY REQUIREMENTS AND PROCEDURES\n";
+    let entity_text = "LIMITED LIABILITY COMPANY";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        text,
+        entity_text,
+        ORGANIZATION_LABEL,
         DetectionSource::LegalForm,
       )],
       text,
