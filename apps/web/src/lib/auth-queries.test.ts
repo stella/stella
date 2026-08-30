@@ -10,22 +10,22 @@ describe("auth query refresh", () => {
     let roleFetchCount = 0;
     const sessionQuery = {
       queryKey: rootKeys.session,
-      queryFn: () => {
+      queryFn: async () => {
         sessionFetchCount += 1;
-        return Promise.resolve(sessionFetchCount);
+        return sessionFetchCount;
       },
     };
     const roleQuery = {
       queryKey: rootKeys.role,
-      queryFn: () => {
+      queryFn: async () => {
         roleFetchCount += 1;
-        return Promise.resolve(roleFetchCount);
+        return roleFetchCount;
       },
     };
 
     await Promise.all([
-      queryClient.fetchQuery(sessionQuery),
-      queryClient.fetchQuery(roleQuery),
+      queryClient.query(sessionQuery),
+      queryClient.query(roleQuery),
     ]);
     expect(
       queryClient
