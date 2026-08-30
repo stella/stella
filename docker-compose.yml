@@ -16,7 +16,9 @@ services:
       - pgdata:/var/lib/postgresql
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      # Exec directly: if Docker times out a shell health check, its orphaned
+      # child can be reaped by the Postgres PID 1 as a failed server process.
+      test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
