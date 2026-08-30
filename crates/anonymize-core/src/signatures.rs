@@ -22,7 +22,11 @@ struct PartyRoleEvidence<'a> {
 
 impl PartyRoleEvidence<'_> {
   fn has_person_name_token(self, candidate: &str) -> bool {
-    let candidate = without_leading_title_tokens(candidate, self.title_tokens);
+    let Some(candidate) =
+      without_leading_title_tokens(candidate, self.title_tokens)
+    else {
+      return false;
+    };
     if let Some(corpus) = self.name_corpus {
       return corpus.has_leading_person_name_token(candidate)
         || (!corpus.is_organization(candidate)
@@ -273,19 +277,19 @@ fn starts_with_first_name_token(text: &str, names: &BTreeSet<String>) -> bool {
 fn without_leading_title_tokens<'a>(
   mut text: &'a str,
   title_tokens: &BTreeSet<String>,
-) -> &'a str {
+) -> Option<&'a str> {
   loop {
     let trimmed = text.trim_start();
     let Some(token) = trimmed.split_whitespace().next() else {
-      return trimmed;
+      return Some(trimmed);
     };
     let bare = token
       .trim_matches(|ch: char| matches!(ch, '.' | ','))
       .to_lowercase();
     if !title_tokens.contains(&bare) {
-      return trimmed;
+      return Some(trimmed);
     }
-    text = &trimmed[token.len()..];
+    text = trimmed.strip_prefix(token)?;
   }
 }
 

@@ -99,7 +99,11 @@ impl PreparedRolePhraseIndex {
     words
       .iter()
       .enumerate()
-      .any(|(start, _)| self.longest_prefix(&words[start..]).is_some())
+      .any(|(start, _)| {
+        words
+          .get(start..)
+          .is_some_and(|tail| self.longest_prefix(tail).is_some())
+      })
   }
 
   fn longest_prefix(&self, words: &[String]) -> Option<usize> {
