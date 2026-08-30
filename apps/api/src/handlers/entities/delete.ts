@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -183,8 +183,7 @@ export const deleteEntitiesHandler = async function* ({
           id: fields.id,
         })
         .from(fields)
-        .where(inArray(fields.entityVersionId, entityVersionIds))
-        .orderBy(asc(fields.id));
+        .where(inArray(fields.entityVersionId, entityVersionIds));
 
       const entityIdByCurrentVersionId = new Map(
         lockedEntities.flatMap(({ currentVersionId, id }) =>

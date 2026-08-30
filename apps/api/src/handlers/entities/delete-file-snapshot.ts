@@ -18,9 +18,15 @@ export const selectCanonicalFileContents = (
   entityIdByCurrentVersionId: ReadonlyMap<string, string>,
 ): Map<string, FileFieldContent> => {
   const currentFileByEntityId = new Map<string, FileFieldContent>();
-  const orderedFieldRows = fieldRows.toSorted((left, right) =>
-    left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
-  );
+  const orderedFieldRows = fieldRows.toSorted((left, right) => {
+    if (left.id < right.id) {
+      return -1;
+    }
+    if (left.id > right.id) {
+      return 1;
+    }
+    return 0;
+  });
 
   for (const { content, entityVersionId } of orderedFieldRows) {
     const entityId = entityIdByCurrentVersionId.get(entityVersionId);
