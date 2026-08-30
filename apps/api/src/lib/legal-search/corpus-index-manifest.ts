@@ -17,13 +17,13 @@ import {
   FOLDED_TOKENIZER,
   type CorpusIndexConfig,
 } from "@/api/lib/legal-search/corpus-index-config";
+import { QUICKWIT_V09_BINARY_VERSION } from "@/api/lib/legal-search/corpus-index-engine-version";
 import {
   CORPUS_INDEX_ID_MAX_LENGTH,
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
 
 export const CORPUS_INDEX_MANIFEST_SCHEMA_VERSION = 1;
-export const QUICKWIT_V09_BINARY_VERSION = "0.9.0";
 
 type CorpusIndexProjectionContract = {
   documentIdField: "document_id";
