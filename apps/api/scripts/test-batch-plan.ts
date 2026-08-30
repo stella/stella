@@ -84,6 +84,42 @@ const DB_TEST_MARKERS = [
 ] as const;
 const DB_TEST_PATH_RE = /\.(?:integration|db)\.test\.tsx?$/u;
 
+const isProcessEnvExpression = (expression: ts.Expression): boolean =>
+  ts.isPropertyAccessExpression(expression) &&
+  ts.isIdentifier(expression.expression) &&
+  expression.expression.text === "process" &&
+  expression.name.text === "env";
+
+const isProcessEnvMember = (expression: ts.Expression): boolean =>
+  (ts.isElementAccessExpression(expression) ||
+    ts.isPropertyAccessExpression(expression)) &&
+  isProcessEnvExpression(expression.expression);
+
+/**
+ * Module-scope environment writes must run in a fresh process. Bun's module
+ * cache survives between files in a shared batch, so setting an env value
+ * after another file imported its reader cannot change the cached contract.
+ */
+export const hasModuleScopeProcessEnvMutation = (
+  testPath: string,
+  source: string,
+): boolean => {
+  const sourceFile = ts.createSourceFile(
+    testPath,
+    source,
+    ts.ScriptTarget.Latest,
+    false,
+    testPath.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  return sourceFile.statements.some(
+    (statement) =>
+      ts.isExpressionStatement(statement) &&
+      ts.isBinaryExpression(statement.expression) &&
+      statement.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      isProcessEnvMember(statement.expression.left),
+  );
+};
+
 const isRuntimeImport = (statement: ts.ImportDeclaration) => {
   const { importClause } = statement;
   if (importClause === undefined) {
