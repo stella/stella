@@ -42,6 +42,7 @@ import {
 } from "@/api/lib/tasks/deployment-features";
 import { includes } from "@/api/lib/type-guards";
 import { createWorkObligation } from "@/api/lib/work-obligations/create-work-obligation";
+import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 
 const agendaDateTimeSchema = t.Nullable(t.String({ format: "date-time" }));
 const agendaParticipantSchema = t.Object({
@@ -223,6 +224,22 @@ export const createTaskEntityHandler = async function* ({
   if (!includes(LIST_ITEM_TYPES, listItemType)) {
     return Result.err(
       new HandlerError({ status: 400, message: "Invalid list item type" }),
+    );
+  }
+  const governsWork =
+    features.governedWorkflow && isWorkObligationEligible(listItemType);
+  if (
+    !isWorkObligationEligible(listItemType) &&
+    (body.ownerUserId !== undefined ||
+      body.workingTargetDate !== undefined ||
+      body.hardDeadlineDate !== undefined ||
+      body.sourceDescription !== undefined)
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: `A ${listItemType} row cannot carry governed work`,
+      }),
     );
   }
   if (body.listSectionId !== undefined && body.listId === undefined) {
@@ -423,7 +440,7 @@ export const createTaskEntityHandler = async function* ({
         );
       }
 
-      if (features.governedWorkflow) {
+      if (governsWork) {
         await createWorkObligation({
           tx,
           entityId,
@@ -468,7 +485,7 @@ export const createTaskEntityHandler = async function* ({
             ...(body.parentId && { parentId: body.parentId }),
           },
         },
-        ...(features.governedWorkflow
+        ...(governsWork
           ? [
               {
                 action: AUDIT_ACTION.CREATE,

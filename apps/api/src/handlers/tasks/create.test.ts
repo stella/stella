@@ -336,6 +336,73 @@ describe("createTaskHandler validation", () => {
     ]);
   });
 
+  test("rejects governed fields on a row that cannot hold governed work", async () => {
+    const scopedDb = throwingScopedDb();
+
+    const result = await Result.gen(() =>
+      createTaskEntityHandler({
+        safeDb: toSafeDbMock(scopedDb),
+        workspaceId,
+        userId,
+        recordAuditEvent: async () => {},
+        body: {
+          name: "Witness fact",
+          listItemType: "fact",
+          ownerUserId: userId,
+        },
+        features: TASK_FEATURES_ENABLED,
+      }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({
+        status: 400,
+        message: "A fact row cannot carry governed work",
+      });
+    }
+  });
+
+  test("a non-task List row is created without governed work", async () => {
+    const obligationRows: Record<string, unknown>[] = [];
+    const { safeDb } = createScopedDbMock({
+      $count: async () => 0,
+      select: () => ({
+        from: () => ({
+          innerJoin: () => ({ where: () => [] }),
+          where: () => ({
+            limit: () => ({ for: async () => [{ userId }] }),
+          }),
+        }),
+      }),
+      insert: (table: unknown) => ({
+        values: async (values: Record<string, unknown>) => {
+          if (table === workObligations) {
+            obligationRows.push(values);
+          }
+        },
+        select: () => ({ onConflictDoUpdate: async () => [] }),
+      }),
+      update: () => ({
+        set: () => ({ where: async () => [] }),
+      }),
+    });
+
+    const result = await Result.gen(() =>
+      createTaskEntityHandler({
+        safeDb,
+        workspaceId,
+        userId,
+        recordAuditEvent: async () => {},
+        body: { name: "Witness fact", listItemType: "fact" },
+        features: TASK_FEATURES_ENABLED,
+      }),
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    expect(obligationRows).toEqual([]);
+  });
+
   test("all valid TASK_STATUSES pass validation", async () => {
     const validStatuses = [
       "open",

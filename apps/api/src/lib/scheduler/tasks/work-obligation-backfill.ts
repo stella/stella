@@ -6,6 +6,7 @@ import {
   entities,
   schedulerJobs,
   taskAssignees,
+  workObligationEvents,
   workObligations,
   workspaceMembers,
 } from "@/api/db/schema";
@@ -20,7 +21,11 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
-import { legacyWorkObligationValues } from "@/api/lib/work-obligations/legacy-work-obligation";
+import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
+import {
+  legacyWorkObligationCreatedEvents,
+  legacyWorkObligationValues,
+} from "@/api/lib/work-obligations/legacy-work-obligation";
 
 export const BACKFILL_WORK_OBLIGATIONS_TASK =
   "workObligations.backfillLegacyTasks" as const;
@@ -65,6 +70,7 @@ export const backfillWorkObligations: SchedulerTask = async ({
         id: entities.id,
         workspaceId: entities.workspaceId,
         kind: entities.kind,
+        listItemType: entities.listItemType,
         agendaKind: entities.agendaKind,
         agendaSource: entities.agendaSource,
         status: entities.status,
@@ -102,8 +108,10 @@ export const backfillWorkObligations: SchedulerTask = async ({
     }
 
     const tasks = entityPage.filter(
-      ({ kind, obligationEntityId }) =>
-        kind === "task" && obligationEntityId === null,
+      ({ kind, listItemType, obligationEntityId }) =>
+        kind === "task" &&
+        obligationEntityId === null &&
+        isWorkObligationEligible(listItemType),
     );
     await lockWorkspacesForEntityCap(
       tx,
@@ -162,8 +170,17 @@ export const backfillWorkObligations: SchedulerTask = async ({
           ),
         )
         .onConflictDoNothing({ target: workObligations.entityId })
-        .returning({ entityId: workObligations.entityId });
+        .returning({
+          entityId: workObligations.entityId,
+          workspaceId: workObligations.workspaceId,
+          createdByUserId: workObligations.createdByUserId,
+        });
       insertedCount = inserted.length;
+      if (inserted.length > 0) {
+        await tx
+          .insert(workObligationEvents)
+          .values(legacyWorkObligationCreatedEvents(inserted, new Date()));
+      }
     }
 
     await tx

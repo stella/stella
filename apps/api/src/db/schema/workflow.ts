@@ -88,7 +88,9 @@ export type WorkObligationEventType =
   (typeof WORK_OBLIGATION_EVENT_TYPES)[number];
 
 export type WorkObligationEventDetails =
-  | { type: "created" }
+  // `legacy_backfill` marks work derived from a pre-governance task rather than
+  // created through a governed flow: the row has no earlier history to show.
+  | { type: "created"; cause?: "legacy_backfill" }
   | {
       type: "ownership_changed";
       previousOwnerUserId: string | null;

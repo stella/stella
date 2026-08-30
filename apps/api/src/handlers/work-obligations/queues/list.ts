@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { WorkObligationStatus } from "@stll/api-contract/workflow-status";
@@ -21,6 +21,7 @@ import {
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
+import { workObligationEligibleEntity } from "@/api/lib/work-obligations/eligibility";
 
 const WORK_QUEUE_PAGE_SIZE_DEFAULT = 50;
 const WORK_QUEUE_PAGE_SIZE_MAX = 100;
@@ -51,7 +52,7 @@ const myWorkQuery = t.Object({
 
 const config = {
   description:
-    "List the signed-in user's governed work in inbox, upcoming, at-risk, or completed queues with cursor pagination.",
+    "List the signed-in user's governed work with cursor pagination. The queues partition the work: at-risk holds every open obligation already due, inbox the rest awaiting acknowledgement, upcoming the rest already acknowledged, and completed the finished work.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   access: "read",
@@ -59,6 +60,14 @@ const config = {
 } satisfies HandlerConfig;
 
 const sortDate = sql<string>`COALESCE(${workObligations.hardDeadlineDate}, ${workObligations.workingTargetDate}, ${LAST_SORT_DATE}::date)`;
+
+/**
+ * The one boundary the three open queues partition on. `COALESCE` keeps a
+ * dateless obligation out of at-risk and, negated, inside its status queue:
+ * plain three-valued logic would drop it from both.
+ */
+const isOverdue = (asOf: string) =>
+  sql`COALESCE(${workObligations.hardDeadlineDate} <= ${asOf}::date OR ${workObligations.workingTargetDate} <= ${asOf}::date, false)`;
 
 type QueueRow = {
   workflowStatus: WorkObligationStatus;
@@ -85,7 +94,9 @@ const getAttention = (
 const myWork = createSafeRootHandler(
   config,
   async function* ({ scopedDb, user, query }) {
-    const queue = query.queue ?? MY_WORK_QUEUE.UPCOMING;
+    // No queue is a superset of the others any more, so the default is the one
+    // that needs an answer from the owner rather than the widest slice.
+    const queue = query.queue ?? MY_WORK_QUEUE.INBOX;
     const asOf = query.asOf ?? new Date().toISOString().slice(0, 10);
     const limit = query.limit ?? WORK_QUEUE_PAGE_SIZE_DEFAULT;
     const conditions = [eq(workObligations.ownerUserId, user.id)];
@@ -97,14 +108,13 @@ const myWork = createSafeRootHandler(
             workObligations.status,
             WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
           ),
+          sql`NOT ${isOverdue(asOf)}`,
         );
         break;
       case MY_WORK_QUEUE.UPCOMING:
         conditions.push(
-          inArray(workObligations.status, [
-            WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
-            WORK_OBLIGATION_STATUS.ACTIVE,
-          ]),
+          eq(workObligations.status, WORK_OBLIGATION_STATUS.ACTIVE),
+          sql`NOT ${isOverdue(asOf)}`,
         );
         break;
       case MY_WORK_QUEUE.AT_RISK:
@@ -113,16 +123,8 @@ const myWork = createSafeRootHandler(
             WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
             WORK_OBLIGATION_STATUS.ACTIVE,
           ]),
+          isOverdue(asOf),
         );
-        {
-          const overdue = or(
-            lte(workObligations.hardDeadlineDate, asOf),
-            lte(workObligations.workingTargetDate, asOf),
-          );
-          if (overdue) {
-            conditions.push(overdue);
-          }
-        }
         break;
       case MY_WORK_QUEUE.COMPLETED:
         conditions.push(
@@ -185,6 +187,7 @@ const myWork = createSafeRootHandler(
                   eq(entities.id, workObligations.entityId),
                   eq(entities.workspaceId, workObligations.workspaceId),
                   eq(entities.kind, "task"),
+                  workObligationEligibleEntity,
                 ),
               )
               .innerJoin(
