@@ -2558,7 +2558,7 @@ fn has_paragraph_break(text: &str) -> bool {
   let mut line_breaks = 0usize;
   let mut previous_was_carriage_return = false;
   for ch in text.chars() {
-    if ch == '\u{2029}' {
+    if matches!(ch, '\u{000c}' | '\u{2029}') {
       return true;
     }
     if ch == '\n' && previous_was_carriage_return {

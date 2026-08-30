@@ -417,7 +417,13 @@ fn paragraph_barriers_keep_unrelated_address_evidence_separate() {
     "self-contained city and postal code were dropped: {paragraph_addresses:?}",
   );
 
-  for separator in ["\n\n", "\r\n\r\n", "\u{2028}\u{2028}", "\u{2029}"] {
+  for separator in [
+    "\n\n",
+    "\r\n\r\n",
+    "\u{000c}",
+    "\u{2028}\u{2028}",
+    "\u{2029}",
+  ] {
     let text = format!(
       "The filing mentions 123 Main Street.{separator}1:23-cv-04567{separator}Paris 75002."
     );
