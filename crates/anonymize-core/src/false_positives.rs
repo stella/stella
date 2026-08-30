@@ -2487,8 +2487,7 @@ mod tests {
       assert_eq!(entities.len(), 1, "text {text:?}");
     }
 
-    let german =
-      "ACME GMBH IST EINE VERTRAGSPARTEI DIESES VERTRAGS.\n";
+    let german = "ACME GMBH IST EINE VERTRAGSPARTEI DIESES VERTRAGS.\n";
     let english_data = prepared_clause_data(PreparedClauseDataArgs {
       leading_phrases: &[],
       role_heads: &["party"],
