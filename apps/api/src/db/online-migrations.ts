@@ -82,6 +82,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "pending_uploads_email_source_uidx" ON public."pending_uploads" USING btree ("organization_id", "workspace_id", (("purpose_data" ->> \'sourceKey\'::text))) WHERE "purpose" = \'email_ingest\'::text AND ("purpose_data" ->> \'sourceKey\'::text) IS NOT NULL',
+    definitionBody:
+      "ON public.pending_uploads USING btree (organization_id, workspace_id, ((purpose_data ->> 'sourceKey'::text))) WHERE ((purpose = 'email_ingest'::text) AND ((purpose_data ->> 'sourceKey'::text) IS NOT NULL))",
+    isUnique: true,
+    name: "pending_uploads_email_source_uidx",
+    tableName: "pending_uploads",
+  },
+  {
+    createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "workspaces_id_org_unq" ON public."workspaces" USING btree ("id", "organization_id")',
     definitionBody: "ON public.workspaces USING btree (id, organization_id)",
     isUnique: true,

@@ -12,7 +12,7 @@ test("creates the email-ingest recovery index outside the migration transaction"
   const primaryKey = source.indexOf('PRIMARY KEY ("id", "object_key")');
   const split = source.indexOf("COMMIT;", primaryKey);
   const concurrentStatement = source.indexOf(
-    "SET statement_timeout = '30min';",
+    "SET statement_timeout = 0;",
     split,
   );
   const concurrentLock = source.indexOf("SET lock_timeout = '1s';", split);
@@ -24,13 +24,13 @@ test("creates the email-ingest recovery index outside the migration transaction"
     'CREATE INDEX CONCURRENTLY "pending_uploads_email_ingest_recovery_idx"',
     drop,
   );
-  const sourceDrop = source.indexOf(
-    'DROP INDEX CONCURRENTLY IF EXISTS "pending_uploads_email_source_uidx";',
+  const sourceCreate = source.indexOf(
+    'CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "pending_uploads_email_source_uidx"',
     create,
   );
-  const sourceCreate = source.indexOf(
-    'CREATE UNIQUE INDEX CONCURRENTLY "pending_uploads_email_source_uidx"',
-    sourceDrop,
+  const sourceRepair = source.indexOf(
+    'REINDEX INDEX CONCURRENTLY "pending_uploads_email_source_uidx";',
+    sourceCreate,
   );
   const restoredStatement = source.indexOf(
     "SET statement_timeout = '5s';",
@@ -45,9 +45,9 @@ test("creates the email-ingest recovery index outside the migration transaction"
   expect(concurrentLock).toBeGreaterThan(concurrentStatement);
   expect(drop).toBeGreaterThan(concurrentLock);
   expect(create).toBeGreaterThan(drop);
-  expect(sourceDrop).toBeGreaterThan(create);
-  expect(sourceCreate).toBeGreaterThan(sourceDrop);
-  expect(restoredStatement).toBeGreaterThan(sourceCreate);
+  expect(sourceCreate).toBeGreaterThan(create);
+  expect(sourceRepair).toBeGreaterThan(sourceCreate);
+  expect(restoredStatement).toBeGreaterThan(sourceRepair);
   expect(restoredLock).toBeGreaterThan(restoredStatement);
   expect(reopen).toBeGreaterThan(restoredLock);
   expect(source).not.toContain(
