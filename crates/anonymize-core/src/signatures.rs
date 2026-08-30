@@ -49,6 +49,7 @@ pub struct SignatureData {
 pub(crate) struct PreparedSignatureData {
   labels: Vec<String>,
   person_value_labels: Vec<String>,
+  party_role_labels: Vec<String>,
   person_list_labels: Vec<String>,
   witness_phrases: Vec<String>,
   form_field_labels: Vec<String>,
@@ -62,7 +63,10 @@ pub(crate) struct PreparedSignatureData {
 
 impl PreparedSignatureData {
   #[must_use]
-  pub(crate) fn new(data: SignatureData) -> Self {
+  pub(crate) fn new(
+    data: SignatureData,
+    party_role_labels: Vec<String>,
+  ) -> Self {
     let mut contact_field_labels =
       non_empty_lowercase(data.contact_field_labels);
     contact_field_labels.sort_unstable();
@@ -74,6 +78,7 @@ impl PreparedSignatureData {
     Self {
       labels: non_empty_lowercase(data.labels),
       person_value_labels: non_empty_lowercase(data.person_value_labels),
+      party_role_labels: non_empty_lowercase(party_role_labels),
       person_list_labels: non_empty_lowercase(data.person_list_labels),
       witness_phrases: non_empty_lowercase(data.witness_phrases),
       form_field_labels,
@@ -684,6 +689,7 @@ fn label_end_at(
   for (label, requires_list_structure) in data
     .person_value_labels
     .iter()
+    .chain(data.party_role_labels.iter())
     .map(|label| (label, false))
     .chain(data.person_list_labels.iter().map(|label| (label, true)))
   {
@@ -1034,26 +1040,29 @@ mod tests {
   }
 
   fn test_data() -> PreparedSignatureData {
-    PreparedSignatureData::new(SignatureData {
-      labels: vec![String::from("name")],
-      person_value_labels: vec![String::from("name")],
-      person_list_labels: vec![
-        String::from("attention"),
-        String::from("do rąk własnych"),
-      ],
-      witness_phrases: vec![String::from("in witness whereof")],
-      form_field_labels: Vec::new(),
-      contact_field_labels: vec![
-        String::from("email"),
-        String::from("tel"),
-        String::from("téléphone"),
-      ],
-      signature_stamp_phrases: Vec::new(),
-      name_particles: Vec::new(),
-      post_nominal_suffixes: Vec::new(),
-      organization_suffixes: vec![String::from("inc.")],
-      image_stub_prefixes: Vec::new(),
-    })
+    PreparedSignatureData::new(
+      SignatureData {
+        labels: vec![String::from("name")],
+        person_value_labels: vec![String::from("name")],
+        person_list_labels: vec![
+          String::from("attention"),
+          String::from("do rąk własnych"),
+        ],
+        witness_phrases: vec![String::from("in witness whereof")],
+        form_field_labels: Vec::new(),
+        contact_field_labels: vec![
+          String::from("email"),
+          String::from("tel"),
+          String::from("téléphone"),
+        ],
+        signature_stamp_phrases: Vec::new(),
+        name_particles: Vec::new(),
+        post_nominal_suffixes: Vec::new(),
+        organization_suffixes: vec![String::from("inc.")],
+        image_stub_prefixes: Vec::new(),
+      },
+      Vec::new(),
+    )
   }
 
   #[test]
@@ -1066,6 +1075,32 @@ mod tests {
         .map(|entity| entity.text.as_str())
         .collect::<Vec<_>>(),
       vec!["Paul A. Pinkston", "Clark R. Moore"]
+    );
+  }
+
+  #[test]
+  fn party_role_fields_use_their_scoped_role_vocabulary() {
+    let data = PreparedSignatureData::new(
+      SignatureData {
+        person_value_labels: vec![String::from("name")],
+        ..SignatureData::default()
+      },
+      vec![String::from("seller"), String::from("borrower")],
+    );
+
+    assert_eq!(
+      detect_signatures("Seller: Imani Nwosu", &data)
+        .into_iter()
+        .map(|entity| entity.text)
+        .collect::<Vec<_>>(),
+      ["Imani Nwosu"]
+    );
+    assert_eq!(
+      detect_signatures("Borrower:\nZofia Wrona", &data)
+        .into_iter()
+        .map(|entity| entity.text)
+        .collect::<Vec<_>>(),
+      ["Zofia Wrona"]
     );
   }
 

@@ -134,10 +134,12 @@ pub(super) fn prepare_timed_name_corpus_data(
 
 pub(super) fn prepare_timed_signature_data(
   data: Option<SignatureData>,
+  party_role_labels: Vec<String>,
 ) -> TimedSupportData<Option<PreparedSignatureData>> {
   let len = signature_data_len(data.as_ref());
   let start = Instant::now();
-  let data = data.map(PreparedSignatureData::new);
+  let data =
+    data.map(|data| PreparedSignatureData::new(data, party_role_labels));
   TimedSupportData {
     data,
     len,

@@ -35,6 +35,7 @@ pub(super) struct SupportDataInput {
   coreference: Option<CoreferenceData>,
   name_corpus: Option<NameCorpusData>,
   signature: Option<SignatureData>,
+  signature_party_role_labels: Vec<String>,
 }
 
 pub(super) struct PreparedSupportData {
@@ -65,6 +66,10 @@ pub(super) fn take_support_input(
     .map(|filters| filters.document_heading_words.iter().cloned().collect())
     .unwrap_or_default();
   let mut signature = config.signature_data.take();
+  let signature_party_role_labels = legal_forms
+    .as_ref()
+    .map(|data| data.role_heads.clone())
+    .unwrap_or_default();
   if let (Some(legal_forms), Some(signature)) =
     (legal_forms.as_ref(), signature.as_mut())
   {
@@ -87,6 +92,7 @@ pub(super) fn take_support_input(
     coreference: config.coreference_data.take(),
     name_corpus: config.name_corpus_data.take(),
     signature,
+    signature_party_role_labels,
   }
 }
 
@@ -124,8 +130,12 @@ pub(super) fn prepare_support_data(
       scope.spawn(|| prepare_timed_coreference_data(input.coreference));
     let names =
       scope.spawn(|| Ok(prepare_timed_name_corpus_data(input.name_corpus)));
-    let signature =
-      scope.spawn(|| Ok(prepare_timed_signature_data(input.signature)));
+    let signature = scope.spawn(|| {
+      Ok(prepare_timed_signature_data(
+        input.signature,
+        input.signature_party_role_labels,
+      ))
+    });
 
     Ok(ParallelPreparedSupportData {
       hotwords: join_support_resource_data(
@@ -292,6 +302,7 @@ mod tests {
       signature.labels == ["name", "buyer", "seller"]
         && signature.person_value_labels.is_empty()
     }));
+    assert_eq!(input.signature_party_role_labels, ["buyer", "seller"]);
   }
 }
 
