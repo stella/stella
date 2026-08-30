@@ -8,7 +8,6 @@ import { expect, test } from "../helpers/test";
 
 const API_BASE_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
 const WEB_BASE_URL = process.env["E2E_WEB_URL"] ?? "http://localhost:3000";
-const TEST_ORGANIZATION_NAME = "Harbrook & Partners";
 
 const signIn = async (api: APIRequestContext, email: string) => {
   const sendResponse = await api.post(
@@ -46,44 +45,29 @@ const signIn = async (api: APIRequestContext, email: string) => {
 
 const createOrganizationSelectionSession = async ({
   email,
-  ownerApi,
+  organizations,
 }: {
   email: string;
-  ownerApi: APIRequestContext;
+  organizations: { name: string; slug: string }[];
 }) => {
   const requestOptions = {
     extraHTTPHeaders: { origin: new URL(WEB_BASE_URL).origin },
   };
-  const inviteResponse = await ownerApi.post(
-    `${API_BASE_URL}/api/auth/organization/invite-member`,
-    {
-      data: { email, role: "member" },
-      headers: requestOptions.extraHTTPHeaders,
-    },
-  );
-  const invitation: unknown = await inviteResponse.json();
-  expect(inviteResponse.ok(), JSON.stringify(invitation)).toBe(true);
-  if (
-    typeof invitation !== "object" ||
-    invitation === null ||
-    !("id" in invitation) ||
-    typeof invitation.id !== "string"
-  ) {
-    throw new Error("The organization invitation response had no id");
-  }
-
   const loginApi = await playwrightRequest.newContext(requestOptions);
   try {
     await signIn(loginApi, email);
-    // Accepting the invitation activates its organization and refreshes the
-    // cached session cookie. Preserve the signed pre-accept snapshot so the
-    // route sees a real membership with no active organization selected.
+    // Creating an organization activates it and refreshes the cached session
+    // cookie. Preserve the signed pre-create snapshot, then create two real
+    // memberships so the route shows its picker instead of auto-selecting the
+    // sole organization.
     const storageStateWithoutActiveOrganization = await loginApi.storageState();
-    const acceptResponse = await loginApi.post(
-      `${API_BASE_URL}/api/auth/organization/accept-invitation`,
-      { data: { invitationId: invitation.id } },
-    );
-    expect(acceptResponse.ok(), await acceptResponse.text()).toBe(true);
+    for (const organization of organizations) {
+      const createResponse = await loginApi.post(
+        `${API_BASE_URL}/api/auth/organization/create`,
+        { data: organization },
+      );
+      expect(createResponse.ok(), await createResponse.text()).toBe(true);
+    }
     return storageStateWithoutActiveOrganization;
   } finally {
     await loginApi.dispose();
@@ -92,12 +76,21 @@ const createOrganizationSelectionSession = async ({
 
 test("selecting an organization completes login and renders the destination", async ({
   page,
-  request,
 }) => {
   const testToken = randomUUID().slice(0, 8);
+  const organizationName = `Northbridge Legal ${testToken}`;
   const storageState = await createOrganizationSelectionSession({
     email: `organization-login-${testToken}@stella.dev`,
-    ownerApi: request,
+    organizations: [
+      {
+        name: organizationName,
+        slug: `northbridge-legal-${testToken}`,
+      },
+      {
+        name: `Northbridge Support ${testToken}`,
+        slug: `northbridge-support-${testToken}`,
+      },
+    ],
   });
   await page.context().clearCookies();
   await page.context().addCookies(storageState.cookies);
@@ -106,7 +99,7 @@ test("selecting an organization completes login and renders the destination", as
     waitUntil: "commit",
   });
   const organization = page.getByRole("button", {
-    name: TEST_ORGANIZATION_NAME,
+    name: organizationName,
   });
   await expect(organization).toBeVisible({ timeout: 30_000 });
   await organization.click();
