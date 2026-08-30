@@ -19,6 +19,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { SCOUT_KEY } from "@stll/api-contract/signals";
 
 import { rootDb } from "@/api/db/root";
 import {
@@ -28,9 +29,12 @@ import {
   extractedContent,
   fields,
   organizationSettings,
+  SCOUT_RUN_STATUS,
+  scoutRuns,
   workspaces,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -47,6 +51,7 @@ import {
 } from "@/api/lib/document-processing-contract";
 import {
   DOCUMENT_PROCESSING_QUEUE_NAME,
+  enqueueDocumentDeadlineScout,
   enqueueDocumentProcessingRun,
   type DocumentProcessingJobData,
 } from "@/api/lib/document-processing-enqueue";
@@ -102,6 +107,7 @@ import {
   writeTenantS3Object,
 } from "@/api/lib/s3-presign";
 import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
+import { documentScoutsEnabled } from "@/api/lib/scouts/document-scout-config";
 import {
   executeNativeExtraction,
   requiresDurableNativeExtraction,
@@ -122,6 +128,8 @@ const QUEUED_OCR_SELECTION = {
 const WORKER_LEASE_TIMEOUT_MS = 40 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_MS = 5 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_TIMEOUT_MS = 30_000;
+const DEADLINE_SCOUT_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
+const DEADLINE_SCOUT_DISPATCH_CONCURRENCY = 4;
 const SEARCH_INDEX_REPLAY_CONCURRENCY = 2;
 const SEARCH_INDEX_REPLAY_BATCH_SIZE = SEARCH_INDEX_REPLAY_CONCURRENCY * 2;
 const SEARCH_INDEX_REPLAY_STATE_TRANSITION_TIMEOUT_MS = 5000;
@@ -624,11 +632,20 @@ const completeDocumentProcessingRun = async ({
   claimToken: string;
   run: typeof documentProcessingRuns.$inferSelect;
 }): Promise<boolean> => {
+  const shouldDispatchDeadlineScout = documentScoutsEnabled(
+    envDocumentProcessingWorker,
+  );
   const completed = await rootDb
     .update(documentProcessingRuns)
     .set({
       claimedAt: null,
       claimedBy: null,
+      deadlineScoutAttemptCount: 0,
+      deadlineScoutClaimedAt: null,
+      deadlineScoutErrorCode: null,
+      deadlineScoutStatus: shouldDispatchDeadlineScout
+        ? "pending"
+        : "not_requested",
       errorAt: null,
       errorCode: null,
       finishedAt: new Date(),
@@ -646,6 +663,20 @@ const completeDocumentProcessingRun = async ({
     .returning({ id: documentProcessingRuns.id });
   if (!completed.at(0)) {
     return false;
+  }
+  if (shouldDispatchDeadlineScout) {
+    const enqueued = await Result.tryPromise(async () => {
+      await enqueueDocumentDeadlineScout({
+        sourceRunId: run.id,
+      });
+    });
+    if (Result.isError(enqueued)) {
+      captureError(enqueued.error, { runId: run.id });
+      logger.error("document_processing.deadline_scout_enqueue_failed", {
+        "error.type": errorTag(enqueued.error),
+        runId: run.id,
+      });
+    }
   }
   broadcastWorkspaceResourceUpdated(
     run.workspaceId,
@@ -1520,6 +1551,7 @@ export type DocumentProcessingReconciliationDependencies = {
   broadcastWorkspaceResourceUpdated: typeof broadcastWorkspaceResourceUpdated;
   database: typeof rootDb;
   enqueueDocumentProcessingRun: typeof enqueueDocumentProcessingRun;
+  enqueueDocumentDeadlineScout: typeof enqueueDocumentDeadlineScout;
   indexEntity: (entityId: SafeId<"entity">) => Promise<void>;
   readRepairScanCursor: () => Promise<SafeId<"field"> | null>;
   readyRepairCursor: () => Promise<unknown>;
@@ -1527,6 +1559,114 @@ export type DocumentProcessingReconciliationDependencies = {
     expectedCursor: SafeId<"field"> | null;
     nextCursor: SafeId<"field"> | null;
   }) => Promise<boolean>;
+};
+
+const recoverDocumentDeadlineScoutDispatches = async (
+  dependencies: DocumentProcessingReconciliationDependencies,
+): Promise<ReconciliationPhaseResult> => {
+  const staleBefore = new Date(Date.now() - DEADLINE_SCOUT_LEASE_TIMEOUT_MS);
+  const staleDispatches = await dependencies.database
+    .select({ id: documentProcessingRuns.id })
+    .from(documentProcessingRuns)
+    .where(
+      and(
+        eq(documentProcessingRuns.deadlineScoutStatus, "running"),
+        lt(documentProcessingRuns.deadlineScoutClaimedAt, staleBefore),
+      ),
+    )
+    .orderBy(
+      asc(documentProcessingRuns.deadlineScoutClaimedAt),
+      asc(documentProcessingRuns.id),
+    )
+    .limit(RECONCILE_BATCH_SIZE);
+  if (staleDispatches.length > 0) {
+    await dependencies.database
+      .update(documentProcessingRuns)
+      .set({
+        deadlineScoutClaimedAt: null,
+        deadlineScoutErrorCode: "worker_lease_expired",
+        deadlineScoutStatus: "pending",
+        updatedAt: new Date(),
+      })
+      .where(
+        inArray(
+          documentProcessingRuns.id,
+          staleDispatches.map(({ id }) => id),
+        ),
+      );
+  }
+
+  const staleCensusRuns = await dependencies.database
+    .select({ id: scoutRuns.id })
+    .from(scoutRuns)
+    .where(
+      and(
+        eq(scoutRuns.scoutKey, SCOUT_KEY.DOCUMENT_DEADLINES),
+        eq(scoutRuns.status, SCOUT_RUN_STATUS.RUNNING),
+        lt(scoutRuns.startedAt, staleBefore),
+      ),
+    )
+    .orderBy(asc(scoutRuns.startedAt), asc(scoutRuns.id))
+    .limit(RECONCILE_BATCH_SIZE);
+  if (staleCensusRuns.length > 0) {
+    await dependencies.database
+      .update(scoutRuns)
+      .set({
+        error: "worker_lease_expired",
+        finishedAt: new Date(),
+        status: SCOUT_RUN_STATUS.FAILED,
+      })
+      .where(
+        inArray(
+          scoutRuns.id,
+          staleCensusRuns.map(({ id }) => id),
+        ),
+      );
+  }
+
+  const pending = await dependencies.database
+    .select({ sourceRunId: documentProcessingRuns.id })
+    .from(documentProcessingRuns)
+    .where(eq(documentProcessingRuns.deadlineScoutStatus, "pending"))
+    .orderBy(
+      asc(documentProcessingRuns.updatedAt),
+      asc(documentProcessingRuns.id),
+    )
+    .limit(RECONCILE_BATCH_SIZE);
+
+  const results = await mapWithConcurrency({
+    items: pending,
+    limit: DEADLINE_SCOUT_DISPATCH_CONCURRENCY,
+    operation: async ({ sourceRunId }) =>
+      await Result.tryPromise(async () => {
+        await dependencies.enqueueDocumentDeadlineScout({ sourceRunId });
+      }),
+  });
+  for (const result of results) {
+    if (Result.isError(result)) {
+      captureError(result.error, { operation: "deadline-scout-dispatch" });
+    }
+  }
+
+  return {
+    count:
+      staleDispatches.length +
+      staleCensusRuns.length +
+      results.filter(Result.isOk).length,
+    hasMore:
+      cappedSelectionHasMore({
+        limit: RECONCILE_BATCH_SIZE,
+        selected: pending.length,
+      }) ||
+      cappedSelectionHasMore({
+        limit: RECONCILE_BATCH_SIZE,
+        selected: staleDispatches.length,
+      }) ||
+      cappedSelectionHasMore({
+        limit: RECONCILE_BATCH_SIZE,
+        selected: staleCensusRuns.length,
+      }),
+  };
 };
 
 /**
@@ -2389,6 +2529,7 @@ const handleDocumentProcessingFailure = ({
 };
 
 const RECONCILIATION_PHASE = {
+  DEADLINE_SCOUT: "deadline-scout",
   DELIVERY: "delivery",
   REINDEX: "reindex",
   REPAIR: "repair",
@@ -2414,6 +2555,7 @@ const RECONCILIATION_PHASE_NAMES = Object.values(RECONCILIATION_PHASE);
 const DEFAULT_RECONCILIATION_DEPENDENCIES = {
   broadcastWorkspaceResourceUpdated,
   database: rootDb,
+  enqueueDocumentDeadlineScout,
   enqueueDocumentProcessingRun,
   indexEntity: async (entityId: SafeId<"entity">) =>
     await getSearchProvider().indexEntity(entityId),
@@ -2430,6 +2572,8 @@ const createReconciliationPhaseRunners = (
   dependencies: DocumentProcessingReconciliationDependencies,
 ) =>
   ({
+    [RECONCILIATION_PHASE.DEADLINE_SCOUT]: async () =>
+      await recoverDocumentDeadlineScoutDispatches(dependencies),
     [RECONCILIATION_PHASE.DELIVERY]: async () =>
       await dispatchScheduledDocumentProcessingRetries(dependencies),
     [RECONCILIATION_PHASE.REINDEX]: async () =>
@@ -2466,6 +2610,7 @@ const createReconciliationPhaseRunners = (
  * so that phase reports it in its own `hasMore` instead.
  */
 export const DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS = {
+  [RECONCILIATION_PHASE.DEADLINE_SCOUT]: [],
   [RECONCILIATION_PHASE.DELIVERY]: [],
   [RECONCILIATION_PHASE.REINDEX]: [],
   [RECONCILIATION_PHASE.REPAIR]: [
@@ -2494,6 +2639,7 @@ export const DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS = {
  * check against both the declared names and the edges above.
  */
 const RECONCILIATION_PHASE_ORDER = [
+  RECONCILIATION_PHASE.DEADLINE_SCOUT,
   RECONCILIATION_PHASE.REPAIR,
   RECONCILIATION_PHASE.RETRY,
   RECONCILIATION_PHASE.STALE_LEASE,
@@ -2558,6 +2704,7 @@ export const runDocumentProcessingReconciliationPhases = async ({
     hasMore: false,
   });
   const results: ReconciliationResults = {
+    [RECONCILIATION_PHASE.DEADLINE_SCOUT]: drained(),
     [RECONCILIATION_PHASE.DELIVERY]: drained(),
     [RECONCILIATION_PHASE.REINDEX]: drained(),
     [RECONCILIATION_PHASE.REPAIR]: drained(),
@@ -2620,6 +2767,9 @@ const reconcileDocumentProcessing = async ({
         RECONCILIATION_PHASE_NAMES.some((phase) => results[phase].count > 0)
       ) {
         logger.info("document_processing.reconciled", {
+          deadlineScoutDispatchedCount: String(
+            results[RECONCILIATION_PHASE.DEADLINE_SCOUT].count,
+          ),
           deliveredCount: String(results[RECONCILIATION_PHASE.DELIVERY].count),
           recoveredCount: String(
             results[RECONCILIATION_PHASE.STALE_LEASE].count,

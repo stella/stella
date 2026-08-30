@@ -2702,6 +2702,7 @@ export default defineConfig({
               // connections. BullMQ owns the key layout under its own prefix
               // (see redis-client.ts for the cluster cutover).
               "apps/api/src/lib/bullmq-queue.ts",
+              "apps/api/src/lib/document-deadline-scout-worker.ts",
               "apps/api/src/lib/document-processing-queue.ts",
               "apps/api/src/lib/workflow-queue.ts",
               "apps/api/src/lib/file-derivative-queue.ts",
@@ -2944,7 +2945,6 @@ export default defineConfig({
         "apps/api/src/handlers/case-law/routes.ts",
         "apps/api/src/handlers/files/routes.ts",
         "apps/api/src/handlers/search/routes.ts",
-        "apps/api/src/handlers/tasks/my-tasks-route.ts",
         "apps/api/src/handlers/time-entries/routes.ts",
         "apps/api/src/handlers/workspaces/routes.ts",
       ],

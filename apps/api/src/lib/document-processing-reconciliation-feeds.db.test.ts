@@ -41,6 +41,8 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 const SETTLED_BEFORE_MS = 10 * 60 * 1000;
 const STALE_LEASE_MS = 60 * 60 * 1000;
+/** Older than the deadline-scout dispatch lease, which is its own timeout. */
+const STALE_DEADLINE_SCOUT_LEASE_MS = 10 * 60 * 1000;
 const EXTRACTABLE_FILE = {
   encrypted: false,
   fileName: "scan.pdf",
@@ -66,6 +68,7 @@ beforeAll(async () => {
   const dependencies = {
     broadcastWorkspaceResourceUpdated: () => undefined,
     database: asTestRaw<typeof rootDb>(testDb),
+    enqueueDocumentDeadlineScout: async () => undefined,
     enqueueDocumentProcessingRun: async () => undefined,
     indexEntity: async () => undefined,
     readRepairScanCursor: async () => null,
@@ -110,6 +113,22 @@ const past = (ms: number) => new Date(Date.now() - ms);
  * that nothing produces shows up as an unobserved edge.
  */
 const FIXTURES = [
+  {
+    label: "deadline-scout returns an expired scout dispatch to pending",
+    producer: "deadline-scout",
+    seed: async () => {
+      // A succeeded run is the only state a scout dispatch can be claimed
+      // from, and no other phase selects one, so this fixture's rows can
+      // only ever be taken by a phase that reads the scout columns.
+      await insertRun({
+        deadlineScoutAttemptCount: 1,
+        deadlineScoutClaimedAt: past(STALE_DEADLINE_SCOUT_LEASE_MS),
+        deadlineScoutStatus: "running",
+        finishedAt: past(STALE_DEADLINE_SCOUT_LEASE_MS),
+        status: "succeeded",
+      });
+    },
+  },
   {
     label: "repair inserts a run for an unprocessed file field",
     producer: "repair",

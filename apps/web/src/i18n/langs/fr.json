@@ -2148,6 +2148,71 @@
     "unavailable": "Ce guide est indisponible pour le moment",
     "whenLabel": "Quand l'utiliser :"
   },
+  "inbox": {
+    "ask": "Poser une question",
+    "askPrompt": "Explique-moi cet élément de la boîte de réception et ce que je devrais faire ensuite.\n\n{title}\n{summary}",
+    "assignTo": "Attribuer à",
+    "confidence": "Confiance : {percent}",
+    "dismissReason": "Motif (facultatif)",
+    "empty": "Rien ne vous attend. Créez une demande avec le bouton ci-dessus.",
+    "evidence": {
+      "current": "Actuellement",
+      "dueAt": "Échéance",
+      "findings": "Constats",
+      "hearingType": "Type d'audience",
+      "noAttachments": "Aucune pièce jointe",
+      "previous": "Auparavant",
+      "quote": "Passage cité",
+      "title": "Éléments",
+      "verdict": "Conclusion"
+    },
+    "filter": {
+      "any": "Tous",
+      "mine": "Les miens"
+    },
+    "newRequest": "Nouvelle demande",
+    "openMatter": "Ouvrir le dossier",
+    "origin": {
+      "manual": "Collègue",
+      "model": "IA",
+      "source": "Source externe"
+    },
+    "request": {
+      "created": "Demande envoyée",
+      "description": "Décrivez ce que l'équipe juridique doit examiner. La demande arrive dans la boîte de réception pour tri.",
+      "submit": "Envoyer la demande"
+    },
+    "scout": {
+      "documentDeadlines": "Échéances du document",
+      "documentReview": "Revue selon le playbook",
+      "manualRequest": "Demande"
+    },
+    "severity": {
+      "info": "Information",
+      "notice": "Avis",
+      "warning": "Avertissement"
+    },
+    "snooze": "Reporter",
+    "snoozeNextWeek": "Jusqu'à la semaine prochaine",
+    "snoozeTomorrow": "Jusqu'à demain",
+    "snoozedUntil": "Reporté jusqu'au {date}",
+    "suggestion": {
+      "assign": "Attribuer",
+      "createDeadline": "Créer une échéance",
+      "createTask": "Créer une tâche",
+      "fileToWorkspace": "Classer dans un dossier",
+      "runReview": "Lancer la revue"
+    },
+    "unassigned": "Non attribué",
+    "verdict": {
+      "safe": "Sans risque"
+    },
+    "view": {
+      "new": "Nouveaux",
+      "resolved": "Traités",
+      "snoozed": "Reportés"
+    }
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Terme à anonymiser",
@@ -2758,6 +2823,7 @@
   "navigation": {
     "chat": "Chat",
     "contacts": "Contacts",
+    "inbox": "Boîte de réception",
     "knowledge": "Connaissances",
     "myTodos": "Mes tâches",
     "pinned": "Épinglés",
@@ -3693,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Échéance",
       "task": "Tâche"
-    }
+    },
+    "workingTargetDue": "Objectif de travail arrivé à échéance"
   },
   "templates": {
     "addItem": "Ajouter un élément",

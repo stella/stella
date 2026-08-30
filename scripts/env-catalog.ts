@@ -116,6 +116,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_CONTACTS",
   "FEATURE_DESKTOP_EDITING",
   "FEATURE_GOVERNED_WORKFLOW",
+  "FEATURE_INBOX_DOCUMENT_SCOUTS",
   "FEATURE_KNOWLEDGE_TEMPLATES",
   "FEATURE_LEGAL_LISTS",
   "FEATURE_MCP",
@@ -310,8 +311,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'Transactional email transport: "ses" or "smtp". Leave unset when email is not configured.',
   FEATURE_AI_MEMORY:
     "Enable tenant-scoped AI memory APIs, prompt retrieval, tools, and workers.",
+  FEATURE_INBOX_DOCUMENT_SCOUTS:
+    "Enable model-backed inbox producers that read processed documents and review runs.",
   FEATURE_GOVERNED_WORKFLOW:
-    "Enable governed work obligations, My Work, and task workflow semantics.",
+    "Enable governed work obligations and task workflow semantics.",
   FEATURE_LEGAL_LISTS:
     "Enable first-class legal lists across REST, agents, and task UI.",
   FEATURE_PUBLIC_TOOLS:
@@ -418,7 +421,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   VITE_BETA_FEATURES_ENABLED:
     "Expose Settings → Beta features without enabling any preview by default.",
   VITE_FEATURE_AI_MEMORY: "Show tenant-scoped AI memory settings.",
-  VITE_FEATURE_GOVERNED_WORKFLOW: "Show governed work obligations and My Work.",
+  VITE_FEATURE_GOVERNED_WORKFLOW:
+    "Show governed work-obligation fields on a task (owner, acknowledgement, hard deadline).",
   VITE_FEATURE_LEGAL_LISTS:
     "Show first-class legal lists and list-item task controls.",
   VITE_GUIDES_ENABLED: "Show the in-app interactive guides.",

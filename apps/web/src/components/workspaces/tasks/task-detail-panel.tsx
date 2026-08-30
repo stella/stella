@@ -69,7 +69,6 @@ import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
-import { myTasksKeys } from "@/lib/workspaces/queries/my-tasks";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 import { taskDetailOptions, taskKeys } from "@/lib/workspaces/queries/tasks";
 
@@ -163,7 +162,6 @@ const TaskDetailPanelContent = ({
           queryKey: workspacesKeys.overview(workspaceId),
         }),
         queryClient.invalidateQueries({ queryKey: myWorkKeys.all }),
-        queryClient.invalidateQueries({ queryKey: myTasksKeys.all }),
         queryClient.invalidateQueries({
           queryKey: legalListKeys.all(workspaceId),
         }),
@@ -181,7 +179,6 @@ const TaskDetailPanelContent = ({
         queryKey: taskKeys.detail(workspaceId, taskId),
       }),
       queryClient.invalidateQueries({ queryKey: myWorkKeys.all }),
-      queryClient.invalidateQueries({ queryKey: myTasksKeys.all }),
       queryClient.invalidateQueries({
         queryKey: entitiesKeys.all(workspaceId),
       }),
@@ -286,7 +283,7 @@ const TaskDetailPanelContent = ({
                     queryKey: workspacesKeys.overview(workspaceId),
                   }),
                   queryClient.invalidateQueries({
-                    queryKey: myTasksKeys.all,
+                    queryKey: myWorkKeys.all,
                   }),
                 ]);
               } catch (error: unknown) {
@@ -303,7 +300,7 @@ const TaskDetailPanelContent = ({
           );
         } else {
           detached(
-            queryClient.invalidateQueries({ queryKey: myTasksKeys.all }),
+            queryClient.invalidateQueries({ queryKey: myWorkKeys.all }),
             "task-detail-panel.invalidate",
           );
         }

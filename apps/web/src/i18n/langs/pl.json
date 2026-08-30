@@ -2148,6 +2148,71 @@
     "unavailable": "Ten przewodnik jest obecnie niedostępny",
     "whenLabel": "Kiedy tego użyć:"
   },
+  "inbox": {
+    "ask": "Zapytaj o to",
+    "askPrompt": "Opowiedz mi więcej o tym elemencie skrzynki i co powinienem zrobić dalej.\n\n{title}\n{summary}",
+    "assignTo": "Przypisz do",
+    "confidence": "Pewność: {percent}",
+    "dismissReason": "Powód (opcjonalnie)",
+    "empty": "Nic nie czeka. Dodaj zgłoszenie przyciskiem powyżej.",
+    "evidence": {
+      "current": "Obecnie",
+      "dueAt": "Termin",
+      "findings": "Ustalenia",
+      "hearingType": "Rodzaj rozprawy",
+      "noAttachments": "Brak załączników",
+      "previous": "Poprzednio",
+      "quote": "Cytowany fragment",
+      "title": "Podstawa",
+      "verdict": "Werdykt"
+    },
+    "filter": {
+      "any": "Dowolne",
+      "mine": "Moje"
+    },
+    "newRequest": "Nowe zgłoszenie",
+    "openMatter": "Otwórz sprawę",
+    "origin": {
+      "manual": "Współpracownik",
+      "model": "AI",
+      "source": "Źródło zewnętrzne"
+    },
+    "request": {
+      "created": "Zgłoszenie wysłane",
+      "description": "Opisz, czym ma się zająć zespół prawny. Zgłoszenie trafi do skrzynki do przeglądu.",
+      "submit": "Wyślij zgłoszenie"
+    },
+    "scout": {
+      "documentDeadlines": "Terminy z dokumentu",
+      "documentReview": "Przegląd wg playbooka",
+      "manualRequest": "Zgłoszenie"
+    },
+    "severity": {
+      "info": "Informacja",
+      "notice": "Uwaga",
+      "warning": "Ostrzeżenie"
+    },
+    "snooze": "Odłóż",
+    "snoozeNextWeek": "Do przyszłego tygodnia",
+    "snoozeTomorrow": "Do jutra",
+    "snoozedUntil": "Odłożono do {date}",
+    "suggestion": {
+      "assign": "Przypisz",
+      "createDeadline": "Utwórz termin",
+      "createTask": "Utwórz zadanie",
+      "fileToWorkspace": "Dołącz do sprawy",
+      "runReview": "Uruchom przegląd"
+    },
+    "unassigned": "Nieprzypisane",
+    "verdict": {
+      "safe": "Bezpieczne"
+    },
+    "view": {
+      "new": "Nowe",
+      "resolved": "Rozwiązane",
+      "snoozed": "Odłożone"
+    }
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Termin do anonimizacji",
@@ -2758,6 +2823,7 @@
   "navigation": {
     "chat": "Czat",
     "contacts": "Kontakty",
+    "inbox": "Skrzynka",
     "knowledge": "Wiedza",
     "myTodos": "Moje zadania",
     "pinned": "Przypięte",
@@ -3693,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Termin",
       "task": "Zadanie"
-    }
+    },
+    "workingTargetDue": "Termin roboczy minął"
   },
   "templates": {
     "addItem": "Dodaj element",

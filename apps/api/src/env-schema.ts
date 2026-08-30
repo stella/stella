@@ -1,17 +1,12 @@
 import path from "node:path";
 import * as v from "valibot";
 
-import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
+import { DEPLOYED_NODE_ENVS, featureFlagSchema } from "@/api/env-base-schema";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
 import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
-
-const featureFlagSchema = v.optional(
-  v.pipe(v.string(), v.parseBoolean()),
-  "false",
-);
 
 type EmailProviderInput = {
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;

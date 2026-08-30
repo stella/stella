@@ -2148,6 +2148,71 @@
     "unavailable": "Diese Anleitung ist derzeit nicht verfügbar",
     "whenLabel": "Wann einsetzen:"
   },
+  "inbox": {
+    "ask": "Dazu fragen",
+    "askPrompt": "Erkläre mir diesen Posteingangseintrag und was ich als Nächstes tun sollte.\n\n{title}\n{summary}",
+    "assignTo": "Zuweisen an",
+    "confidence": "{percent} Konfidenz",
+    "dismissReason": "Grund (optional)",
+    "empty": "Nichts wartet auf Sie. Erstellen Sie oben eine Anfrage.",
+    "evidence": {
+      "current": "Jetzt",
+      "dueAt": "Fällig",
+      "findings": "Feststellungen",
+      "hearingType": "Art des Termins",
+      "noAttachments": "Keine Anhänge",
+      "previous": "Zuvor",
+      "quote": "Zitierte Stelle",
+      "title": "Belege",
+      "verdict": "Ergebnis"
+    },
+    "filter": {
+      "any": "Beliebig",
+      "mine": "Meine"
+    },
+    "newRequest": "Neue Anfrage",
+    "openMatter": "Akte öffnen",
+    "origin": {
+      "manual": "Kollege",
+      "model": "KI",
+      "source": "Externe Quelle"
+    },
+    "request": {
+      "created": "Anfrage gesendet",
+      "description": "Beschreiben Sie, was das Rechtsteam prüfen soll. Die Anfrage landet zur Sichtung im Posteingang.",
+      "submit": "Anfrage senden"
+    },
+    "scout": {
+      "documentDeadlines": "Fristen aus Dokument",
+      "documentReview": "Playbook-Prüfung",
+      "manualRequest": "Anfrage"
+    },
+    "severity": {
+      "info": "Information",
+      "notice": "Hinweis",
+      "warning": "Warnung"
+    },
+    "snooze": "Zurückstellen",
+    "snoozeNextWeek": "Bis nächste Woche",
+    "snoozeTomorrow": "Bis morgen",
+    "snoozedUntil": "Zurückgestellt bis {date}",
+    "suggestion": {
+      "assign": "Zuweisen",
+      "createDeadline": "Frist anlegen",
+      "createTask": "Aufgabe anlegen",
+      "fileToWorkspace": "In Akte ablegen",
+      "runReview": "Prüfung starten"
+    },
+    "unassigned": "Nicht zugewiesen",
+    "verdict": {
+      "safe": "Unbedenklich"
+    },
+    "view": {
+      "new": "Neu",
+      "resolved": "Erledigt",
+      "snoozed": "Zurückgestellt"
+    }
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Zu anonymisierender Begriff",
@@ -2758,6 +2823,7 @@
   "navigation": {
     "chat": "Chat",
     "contacts": "Kontakte",
+    "inbox": "Posteingang",
     "knowledge": "Wissen",
     "myTodos": "Meine Aufgaben",
     "pinned": "Angeheftet",
@@ -3693,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Frist",
       "task": "Aufgabe"
-    }
+    },
+    "workingTargetDue": "Arbeitsziel fällig"
   },
   "templates": {
     "addItem": "Element hinzufügen",

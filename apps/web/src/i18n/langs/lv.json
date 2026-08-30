@@ -2148,6 +2148,71 @@
     "unavailable": "Šis ceļvedis pašlaik nav pieejams",
     "whenLabel": "Kad to izmantot:"
   },
+  "inbox": {
+    "ask": "Jautāt par šo",
+    "askPrompt": "Pastāsti vairāk par šo iesūtnes ierakstu un ko man darīt tālāk.\n\n{title}\n{summary}",
+    "assignTo": "Piešķirt",
+    "confidence": "Ticamība {percent}",
+    "dismissReason": "Iemesls (neobligāti)",
+    "empty": "Pašlaik nekas negaida. Izveidojiet pieprasījumu ar pogu augšā.",
+    "evidence": {
+      "current": "Tagad",
+      "dueAt": "Termiņš",
+      "findings": "Konstatējumi",
+      "hearingType": "Sēdes veids",
+      "noAttachments": "Nav pielikumu",
+      "previous": "Iepriekš",
+      "quote": "Citētais fragments",
+      "title": "Pierādījumi",
+      "verdict": "Slēdziens"
+    },
+    "filter": {
+      "any": "Jebkurš",
+      "mine": "Mani"
+    },
+    "newRequest": "Jauns pieprasījums",
+    "openMatter": "Atvērt lietu",
+    "origin": {
+      "manual": "Kolēģis",
+      "model": "MI",
+      "source": "Ārējs avots"
+    },
+    "request": {
+      "created": "Pieprasījums nosūtīts",
+      "description": "Aprakstiet, kas jāizskata juridiskajai komandai. Pieprasījums nonāks iesūtnē šķirošanai.",
+      "submit": "Nosūtīt pieprasījumu"
+    },
+    "scout": {
+      "documentDeadlines": "Dokumenta termiņi",
+      "documentReview": "Pārbaude pēc playbook",
+      "manualRequest": "Pieprasījums"
+    },
+    "severity": {
+      "info": "Informācija",
+      "notice": "Paziņojums",
+      "warning": "Brīdinājums"
+    },
+    "snooze": "Atlikt",
+    "snoozeNextWeek": "Līdz nākamajai nedēļai",
+    "snoozeTomorrow": "Līdz rītdienai",
+    "snoozedUntil": "Atlikts līdz {date}",
+    "suggestion": {
+      "assign": "Piešķirt",
+      "createDeadline": "Izveidot termiņu",
+      "createTask": "Izveidot uzdevumu",
+      "fileToWorkspace": "Pievienot lietai",
+      "runReview": "Sākt pārskatu"
+    },
+    "unassigned": "Nav piešķirts",
+    "verdict": {
+      "safe": "Droši"
+    },
+    "view": {
+      "new": "Jauni",
+      "resolved": "Atrisināti",
+      "snoozed": "Atlikti"
+    }
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Anonimizējamais termins",
@@ -2758,6 +2823,7 @@
   "navigation": {
     "chat": "Tērzēšana",
     "contacts": "Kontakti",
+    "inbox": "Iesūtne",
     "knowledge": "Zināšanas",
     "myTodos": "Mani uzdevumi",
     "pinned": "Piesprausts",
@@ -3693,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Termiņš",
       "task": "Uzdevums"
-    }
+    },
+    "workingTargetDue": "Darba mērķa termiņš pienācis"
   },
   "templates": {
     "addItem": "Pievienot vienību",

@@ -75,6 +75,11 @@ const databasePoolMaxValueSchema = v.pipe(
   v.minValue(1),
 );
 
+export const featureFlagSchema = v.optional(
+  v.pipe(v.string(), v.parseBoolean()),
+  "false",
+);
+
 const databasePoolMaxSchema = (fallback = "5") =>
   v.optional(databasePoolMaxValueSchema, fallback);
 

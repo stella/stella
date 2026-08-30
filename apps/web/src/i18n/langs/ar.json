@@ -2148,6 +2148,71 @@
     "unavailable": "هذا الدليل غير متوفر في الوقت الحالي",
     "whenLabel": "متى تستخدمه:"
   },
+  "inbox": {
+    "ask": "اسأل عن هذا",
+    "askPrompt": "أخبرني المزيد عن هذا العنصر في صندوق الوارد وما الذي يجب أن أفعله بعد ذلك.\n\n{title}\n{summary}",
+    "assignTo": "إسناد إلى",
+    "confidence": "ثقة {percent}",
+    "dismissReason": "السبب (اختياري)",
+    "empty": "لا شيء بانتظارك الآن. أنشئ طلباً بالزر أعلاه.",
+    "evidence": {
+      "current": "الآن",
+      "dueAt": "الاستحقاق",
+      "findings": "النتائج",
+      "hearingType": "نوع الجلسة",
+      "noAttachments": "لا مرفقات",
+      "previous": "سابقاً",
+      "quote": "المقطع المقتبس",
+      "title": "الأدلة",
+      "verdict": "النتيجة"
+    },
+    "filter": {
+      "any": "الكل",
+      "mine": "الخاصة بي"
+    },
+    "newRequest": "طلب جديد",
+    "openMatter": "فتح الملف",
+    "origin": {
+      "manual": "زميل",
+      "model": "ذكاء اصطناعي",
+      "source": "مصدر خارجي"
+    },
+    "request": {
+      "created": "تم إرسال الطلب",
+      "description": "صف ما يجب أن يراجعه الفريق القانوني. يصل الطلب إلى صندوق الوارد للفرز.",
+      "submit": "إرسال الطلب"
+    },
+    "scout": {
+      "documentDeadlines": "مواعيد من المستند",
+      "documentReview": "مراجعة وفق الدليل",
+      "manualRequest": "طلب"
+    },
+    "severity": {
+      "info": "معلومة",
+      "notice": "تنبيه",
+      "warning": "تحذير"
+    },
+    "snooze": "تأجيل",
+    "snoozeNextWeek": "حتى الأسبوع القادم",
+    "snoozeTomorrow": "حتى الغد",
+    "snoozedUntil": "مؤجل حتى {date}",
+    "suggestion": {
+      "assign": "إسناد",
+      "createDeadline": "إنشاء موعد نهائي",
+      "createTask": "إنشاء مهمة",
+      "fileToWorkspace": "حفظ في ملف",
+      "runReview": "تشغيل المراجعة"
+    },
+    "unassigned": "غير مُسند",
+    "verdict": {
+      "safe": "آمن"
+    },
+    "view": {
+      "new": "جديدة",
+      "resolved": "محلولة",
+      "snoozed": "مؤجلة"
+    }
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "مصطلح لإخفاء هويته",
@@ -2758,6 +2823,7 @@
   "navigation": {
     "chat": "محادثة",
     "contacts": "جهات الاتصال",
+    "inbox": "صندوق الوارد",
     "knowledge": "المعرفة",
     "myTodos": "مهامي",
     "pinned": "المثبّتة",
@@ -3693,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "موعد نهائي",
       "task": "مهمة"
-    }
+    },
+    "workingTargetDue": "حلّ الموعد المستهدف"
   },
   "templates": {
     "addItem": "إضافة عنصر",

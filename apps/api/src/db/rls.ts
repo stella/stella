@@ -487,6 +487,39 @@ export const authoredNotePolicies = () => [
   }),
 ];
 
+const organizationOptionalWorkspaceCheck = sql`(
+  ${organizationCheck} AND
+  (workspace_id IS NULL OR ${workspaceCheck})
+)`;
+
+/**
+ * Organization-scoped rows whose optional workspace discriminator narrows
+ * visibility when present. Global rows remain organization-visible; scoped
+ * rows additionally require current workspace authorization.
+ */
+export const organizationOptionalWorkspacePolicies = (tableName: string) => [
+  p.pgPolicy(`${tableName}_scope_select`, {
+    for: "select",
+    to: stella,
+    using: organizationOptionalWorkspaceCheck,
+  }),
+  p.pgPolicy(`${tableName}_scope_insert`, {
+    for: "insert",
+    to: stella,
+    withCheck: organizationOptionalWorkspaceCheck,
+  }),
+  p.pgPolicy(`${tableName}_scope_update`, {
+    for: "update",
+    to: stella,
+    using: organizationOptionalWorkspaceCheck,
+  }),
+  p.pgPolicy(`${tableName}_scope_delete`, {
+    for: "delete",
+    to: stella,
+    using: organizationOptionalWorkspaceCheck,
+  }),
+];
+
 export const orgReadOnlyPolicies = (tableName: string) => [
   p.pgPolicy(`${tableName}_organization_select`, {
     for: "select",

@@ -2148,6 +2148,71 @@
     "unavailable": "Ez az útmutató jelenleg nem érhető el",
     "whenLabel": "Mikor használja:"
   },
+  "inbox": {
+    "ask": "Kérdés erről",
+    "askPrompt": "Mondj többet erről a beérkezett elemről és arról, mit tegyek ezután.\n\n{title}\n{summary}",
+    "assignTo": "Hozzárendelés",
+    "confidence": "{percent} megbízhatóság",
+    "dismissReason": "Indok (nem kötelező)",
+    "empty": "Most semmi sem vár Önre. Adjon fel kérést a fenti gombbal.",
+    "evidence": {
+      "current": "Most",
+      "dueAt": "Határidő",
+      "findings": "Megállapítások",
+      "hearingType": "Tárgyalás típusa",
+      "noAttachments": "Nincs melléklet",
+      "previous": "Korábban",
+      "quote": "Idézett rész",
+      "title": "Bizonyíték",
+      "verdict": "Eredmény"
+    },
+    "filter": {
+      "any": "Bármely",
+      "mine": "Saját"
+    },
+    "newRequest": "Új kérés",
+    "openMatter": "Ügy megnyitása",
+    "origin": {
+      "manual": "Kolléga",
+      "model": "MI",
+      "source": "Külső forrás"
+    },
+    "request": {
+      "created": "Kérés elküldve",
+      "description": "Írja le, mit nézzen át a jogi csapat. A kérés a beérkezettek közé kerül feldolgozásra.",
+      "submit": "Kérés küldése"
+    },
+    "scout": {
+      "documentDeadlines": "Határidők a dokumentumból",
+      "documentReview": "Playbook-ellenőrzés",
+      "manualRequest": "Kérés"
+    },
+    "severity": {
+      "info": "Információ",
+      "notice": "Értesítés",
+      "warning": "Figyelmeztetés"
+    },
+    "snooze": "Elhalasztás",
+    "snoozeNextWeek": "Jövő hétig",
+    "snoozeTomorrow": "Holnapig",
+    "snoozedUntil": "Elhalasztva eddig: {date}",
+    "suggestion": {
+      "assign": "Hozzárendelés",
+      "createDeadline": "Határidő létrehozása",
+      "createTask": "Feladat létrehozása",
+      "fileToWorkspace": "Ügyhöz csatolás",
+      "runReview": "Ellenőrzés indítása"
+    },
+    "unassigned": "Nincs hozzárendelve",
+    "verdict": {
+      "safe": "Biztonságos"
+    },
+    "view": {
+      "new": "Új",
+      "resolved": "Lezárt",
+      "snoozed": "Elhalasztott"
+    }
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Anonimizálandó kifejezés",
@@ -2758,6 +2823,7 @@
   "navigation": {
     "chat": "Csevegés",
     "contacts": "Kapcsolatok",
+    "inbox": "Beérkezett",
     "knowledge": "Tudásbázis",
     "myTodos": "Feladataim",
     "pinned": "Rögzített",
@@ -3693,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Határidő",
       "task": "Feladat"
-    }
+    },
+    "workingTargetDue": "Munkacél esedékes"
   },
   "templates": {
     "addItem": "Elem hozzáadása",

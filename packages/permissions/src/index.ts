@@ -28,6 +28,7 @@ export const statements = {
   property: ["create", "update", "delete"],
   playbook: ["create", "update", "delete", "apply", "approve"],
   flow: ["create", "update", "delete", "run", "review"],
+  signal: ["create", "resolve", "triage"],
   billingCode: ["create", "update", "delete"],
   rate: ["read", "create", "update", "delete"],
   // todo: add better permissions for chat
@@ -70,6 +71,7 @@ const externalStellaGrants = {
   property: [],
   playbook: [],
   flow: [],
+  signal: ["create"],
   billingCode: [],
   rate: [],
   chat: [],
@@ -102,6 +104,7 @@ const memberStellaGrants = {
   property: ["create", "update", "delete"],
   playbook: ["create", "update", "delete", "apply"],
   flow: ["create", "update", "delete", "run", "review"],
+  signal: ["create", "resolve", "triage"],
   billingCode: ["create", "update", "delete"],
   rate: [],
   chat: ["create", "update", "delete"],

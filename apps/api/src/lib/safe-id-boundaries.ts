@@ -307,3 +307,6 @@ export const parsePickedEntityIdsJson = (
   }
   return ids;
 };
+
+export const brandPersistedSignalId = (signalId: string): SafeId<"signal"> =>
+  toSafeId<"signal">(signalId);

@@ -2151,6 +2151,71 @@ type Messages = {
     "unavailable": "This guide is not available right now";
     "whenLabel": "When to use it:";
   };
+  "inbox": {
+    "ask": "Ask about this";
+    "askPrompt": "Tell me more about this inbox item and what I should do next.\n\n{title}\n{summary}";
+    "assignTo": "Assign to";
+    "confidence": "{percent} confidence";
+    "dismissReason": "Reason (optional)";
+    "empty": "Nothing needs you right now. Post a request to start one.";
+    "evidence": {
+      "current": "Now";
+      "dueAt": "Due";
+      "findings": "Findings";
+      "hearingType": "Hearing type";
+      "noAttachments": "No attachments";
+      "previous": "Previously";
+      "quote": "Quoted passage";
+      "title": "Evidence";
+      "verdict": "Verdict";
+    };
+    "filter": {
+      "any": "Any";
+      "mine": "Mine";
+    };
+    "newRequest": "New request";
+    "openMatter": "Open matter";
+    "origin": {
+      "manual": "Colleague";
+      "model": "AI";
+      "source": "External source";
+    };
+    "request": {
+      "created": "Request posted";
+      "description": "Describe what the legal team should look at. It lands in the inbox for triage.";
+      "submit": "Post request";
+    };
+    "scout": {
+      "documentDeadlines": "Document deadlines";
+      "documentReview": "Playbook review";
+      "manualRequest": "Request";
+    };
+    "severity": {
+      "info": "Info";
+      "notice": "Notice";
+      "warning": "Warning";
+    };
+    "snooze": "Snooze";
+    "snoozeNextWeek": "Until next week";
+    "snoozeTomorrow": "Until tomorrow";
+    "snoozedUntil": "Snoozed until {date}";
+    "suggestion": {
+      "assign": "Assign";
+      "createDeadline": "Create deadline";
+      "createTask": "Create task";
+      "fileToWorkspace": "File to matter";
+      "runReview": "Run review";
+    };
+    "unassigned": "Unassigned";
+    "verdict": {
+      "safe": "Safe";
+    };
+    "view": {
+      "new": "New";
+      "resolved": "Resolved";
+      "snoozed": "Snoozed";
+    };
+  };
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Term to anonymize";
@@ -2761,6 +2826,7 @@ type Messages = {
   "navigation": {
     "chat": "Chat";
     "contacts": "Contacts";
+    "inbox": "Inbox";
     "knowledge": "Intelligence";
     "myTodos": "My tasks";
     "pinned": "Pinned";
@@ -3697,6 +3763,7 @@ type Messages = {
       "deadline": "Deadline";
       "task": "Task";
     };
+    "workingTargetDue": "Working target due";
   };
   "templates": {
     "addItem": "Add item";

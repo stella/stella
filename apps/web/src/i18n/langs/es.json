@@ -2148,6 +2148,71 @@
     "unavailable": "Esta guía no está disponible en este momento",
     "whenLabel": "Cuándo usarlo:"
   },
+  "inbox": {
+    "ask": "Preguntar sobre esto",
+    "askPrompt": "Explícame este elemento de la bandeja de entrada y qué debería hacer a continuación.\n\n{title}\n{summary}",
+    "assignTo": "Asignar a",
+    "confidence": "Confianza: {percent}",
+    "dismissReason": "Motivo (opcional)",
+    "empty": "Nada requiere su atención. Cree una solicitud con el botón superior.",
+    "evidence": {
+      "current": "Ahora",
+      "dueAt": "Vence",
+      "findings": "Hallazgos",
+      "hearingType": "Tipo de audiencia",
+      "noAttachments": "Sin adjuntos",
+      "previous": "Anteriormente",
+      "quote": "Pasaje citado",
+      "title": "Evidencia",
+      "verdict": "Veredicto"
+    },
+    "filter": {
+      "any": "Cualquiera",
+      "mine": "Míos"
+    },
+    "newRequest": "Nueva solicitud",
+    "openMatter": "Abrir asunto",
+    "origin": {
+      "manual": "Colega",
+      "model": "IA",
+      "source": "Fuente externa"
+    },
+    "request": {
+      "created": "Solicitud enviada",
+      "description": "Describa qué debe revisar el equipo legal. La solicitud llega a la bandeja de entrada para su triaje.",
+      "submit": "Enviar solicitud"
+    },
+    "scout": {
+      "documentDeadlines": "Plazos del documento",
+      "documentReview": "Revisión según playbook",
+      "manualRequest": "Solicitud"
+    },
+    "severity": {
+      "info": "Información",
+      "notice": "Aviso",
+      "warning": "Advertencia"
+    },
+    "snooze": "Posponer",
+    "snoozeNextWeek": "Hasta la próxima semana",
+    "snoozeTomorrow": "Hasta mañana",
+    "snoozedUntil": "Pospuesto hasta el {date}",
+    "suggestion": {
+      "assign": "Asignar",
+      "createDeadline": "Crear plazo",
+      "createTask": "Crear tarea",
+      "fileToWorkspace": "Archivar en asunto",
+      "runReview": "Ejecutar revisión"
+    },
+    "unassigned": "Sin asignar",
+    "verdict": {
+      "safe": "Seguro"
+    },
+    "view": {
+      "new": "Nuevos",
+      "resolved": "Resueltos",
+      "snoozed": "Pospuestos"
+    }
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Término que anonimizar",
@@ -2758,6 +2823,7 @@
   "navigation": {
     "chat": "Chat",
     "contacts": "Contactos",
+    "inbox": "Bandeja de entrada",
     "knowledge": "Conocimiento",
     "myTodos": "Mis tareas",
     "pinned": "Fijados",
@@ -3693,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Plazo",
       "task": "Tarea"
-    }
+    },
+    "workingTargetDue": "Objetivo de trabajo vencido"
   },
   "templates": {
     "addItem": "Añadir elemento",

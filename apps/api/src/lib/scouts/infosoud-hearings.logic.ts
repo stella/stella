@@ -1,0 +1,101 @@
+import { panic } from "better-result";
+
+import { SIGNAL_SEVERITY } from "@stll/api-contract/signals";
+import type { SignalSeverity } from "@stll/api-contract/signals";
+import { DAY_IN_MS } from "@stll/time";
+
+import type { SafeId } from "@/api/lib/branded-types";
+import { isRecord } from "@/api/lib/type-guards";
+
+/** Hearings this close to now are flagged even when not rescheduled. */
+export const HEARING_SOON_WINDOW_MS = 14 * DAY_IN_MS;
+export const INFO_SOUD_TIME_ZONE = "Europe/Prague";
+
+/** Date-only value in the source court's civil time, not the server's UTC day. */
+export const infoSoudLocalDate = (date: Date): string => {
+  const parts = new Intl.DateTimeFormat("en", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: INFO_SOUD_TIME_ZONE,
+    year: "numeric",
+  }).formatToParts(date);
+  const year = parts.find(({ type }) => type === "year")?.value;
+  const month = parts.find(({ type }) => type === "month")?.value;
+  const day = parts.find(({ type }) => type === "day")?.value;
+  if (!year || !month || !day) {
+    panic("InfoSoud hearing date could not be formatted");
+  }
+  return `${year}-${month}-${day}`;
+};
+
+/** The slice of an infosoud hearing entity the scout reasons about. */
+export type HearingRecord = {
+  externalId: string;
+  caseMark: string;
+  court: string;
+  hearingType: string | null;
+  startAt: Date | null;
+  cancelled: boolean;
+  date: string | null;
+  time: string | null;
+};
+
+const readString = (value: unknown): string | null =>
+  typeof value === "string" && value.length > 0 ? value : null;
+
+/**
+ * Narrow an entity's `externalData` into a hearing record; `null` when the
+ * row is not a hearing (events carry `event`, not `hearing`).
+ */
+export const toHearingRecord = (row: {
+  externalId: string | null;
+  externalData: Record<string, unknown> | null;
+  startAt: Date | null;
+}): HearingRecord | null => {
+  if (!row.externalId || !row.externalData) {
+    return null;
+  }
+  const data = row.externalData;
+  const hearing = data["hearing"];
+  if (!isRecord(hearing)) {
+    return null;
+  }
+  const rawCase = data["case"];
+  const caseData = isRecord(rawCase) ? rawCase : null;
+  const caseMark = readString(caseData?.["caseMark"]);
+  if (!caseMark) {
+    return null;
+  }
+  return {
+    externalId: row.externalId,
+    caseMark,
+    court: readString(caseData?.["court"]) ?? "",
+    hearingType: readString(hearing["type"]),
+    startAt: row.startAt,
+    cancelled: hearing["cancelled"] === true,
+    date: readString(hearing["date"]),
+    time: readString(hearing["time"]),
+  };
+};
+
+export const hearingSeverity = (
+  hearing: HearingRecord,
+  previousAt: Date | null,
+  now: Date,
+): SignalSeverity => {
+  if (previousAt !== null) {
+    return SIGNAL_SEVERITY.WARNING;
+  }
+  if (
+    hearing.startAt !== null &&
+    hearing.startAt.getTime() - now.getTime() <= HEARING_SOON_WINDOW_MS
+  ) {
+    return SIGNAL_SEVERITY.WARNING;
+  }
+  return SIGNAL_SEVERITY.NOTICE;
+};
+
+export const hearingDedupeKey = (
+  workspaceId: SafeId<"workspace">,
+  externalId: string,
+): string => `infosoud:${workspaceId}:${externalId}`;

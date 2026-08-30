@@ -11,9 +11,16 @@ export type MatterDraftClient = {
 type CreateMatterState = {
   dialog:
     | { status: "closed" }
-    | { status: "open"; draftClient: MatterDraftClient | null };
+    | {
+        status: "open";
+        draftClient: MatterDraftClient | null;
+        onCreated?: (workspaceId: string) => void | Promise<void>;
+      };
   closeDialog: () => void;
-  openDialog: (client?: MatterDraftClient) => void;
+  openDialog: (
+    client?: MatterDraftClient,
+    onCreated?: (workspaceId: string) => void | Promise<void>,
+  ) => void;
 };
 
 export const useCreateMatterStore = create<CreateMatterState>()((set) => ({
@@ -22,8 +29,12 @@ export const useCreateMatterStore = create<CreateMatterState>()((set) => ({
     set({
       dialog: { status: "closed" },
     }),
-  openDialog: (client) =>
+  openDialog: (client, onCreated) =>
     set({
-      dialog: { status: "open", draftClient: client ?? null },
+      dialog: {
+        status: "open",
+        draftClient: client ?? null,
+        ...(onCreated ? { onCreated } : {}),
+      },
     }),
 }));

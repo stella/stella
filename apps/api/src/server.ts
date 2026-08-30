@@ -68,12 +68,12 @@ import { reportsRoute } from "@/api/handlers/reports/routes";
 import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
 import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
+import { signalsRoute } from "@/api/handlers/signals/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
 import { isSkillSourceRateLimitedRequest } from "@/api/handlers/skills/source-rate-limit";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { isStyleSetUploadRateLimitedRequest } from "@/api/handlers/style-sets/upload-rate-limit";
-import { myTasksRoute } from "@/api/handlers/tasks/my-tasks-route";
 import { tasksRoute } from "@/api/handlers/tasks/routes";
 import { templatePacksRoute } from "@/api/handlers/template-packs/routes";
 import { templateRecipesRoute } from "@/api/handlers/template-recipes/routes";
@@ -112,6 +112,7 @@ import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-bette
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { detached } from "@/api/lib/detached";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
+import { initDocumentDeadlineScoutWorker } from "@/api/lib/document-deadline-scout-worker";
 import { initDocumentReviewRunWorker } from "@/api/lib/document-review/run-queue";
 import { initDocumentTranslationRunWorker } from "@/api/lib/document-translation/run-queue";
 import { initEntityDeletionCleanupWorker } from "@/api/lib/entity-deletion-cleanup-queue";
@@ -606,6 +607,7 @@ const api = new Elysia()
       .use(bilingualTranslationsRoute)
       .use(reportsRoute)
       .use(flowsRoute)
+      .use(signalsRoute)
       .use(flowRunsRoute)
       .use(documentTypesRoute)
       .use(propertiesRoute)
@@ -670,7 +672,6 @@ const api = new Elysia()
       .use(tasksRoute)
       .use(workObligationsRoute)
       .use(myWorkRoute)
-      .use(myTasksRoute)
       .use(meRoute)
       .use(devRoute)
       .use(verifyAuthRoute),
@@ -789,6 +790,9 @@ const startServer = async (): Promise<void> => {
   // BullMQ worker for unified document translation runs.
   const documentTranslationRunWorker = initDocumentTranslationRunWorker();
 
+  // BullMQ worker for durable post-processing deadline scouts.
+  const documentDeadlineScoutWorker = initDocumentDeadlineScoutWorker();
+
   // BullMQ worker for durable bilingual translation runs.
   const bilingualRunWorker = initBilingualRunWorker();
 
@@ -849,6 +853,7 @@ const startServer = async (): Promise<void> => {
         reportExportWorker.close(),
         documentReviewRunWorker.close(),
         documentTranslationRunWorker.close(),
+        documentDeadlineScoutWorker.close(),
         bilingualRunWorker.close(),
       ]),
       Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),

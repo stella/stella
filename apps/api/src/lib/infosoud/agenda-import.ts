@@ -15,6 +15,11 @@ import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { AGENDA_ITEM_KIND, TASK_STATUS } from "@/api/lib/entity-constants";
 import type { AgendaItemKind } from "@/api/lib/entity-constants";
 import { LIMITS } from "@/api/lib/limits";
+import { emitInfoSoudHearingSignals } from "@/api/lib/scouts/infosoud-hearings";
+import {
+  INFO_SOUD_TIME_ZONE,
+  toHearingRecord,
+} from "@/api/lib/scouts/infosoud-hearings.logic";
 
 type InfoSoudAgendaItem = {
   agendaKind: AgendaItemKind;
@@ -42,6 +47,12 @@ type ImportInfoSoudAgendaItemsOptions = {
   actorUserId: string | null;
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
+  /**
+   * When set, newly inserted hearings also land in the inbox as
+   * `hearing.changed` signals. Callers omit it for a case's first import so
+   * historical hearings do not flood the feed.
+   */
+  signals?: { organizationId: SafeId<"organization"> } | undefined;
 };
 
 type ImportInfoSoudAgendaItemsResult =
@@ -61,8 +72,6 @@ type ImportInfoSoudAgendaItemsResult =
     };
 
 export const INFO_SOUD_EXTERNAL_SOURCE = "infosoud" as const;
-export const INFO_SOUD_TIME_ZONE = "Europe/Prague";
-
 export const buildInfoSoudAgendaItems = (
   caseResult: CaseSearchResult,
   hearings: HearingEvent[],
@@ -78,6 +87,7 @@ export const importInfoSoudAgendaItems = async ({
   agendaItems,
   tx,
   workspaceId,
+  signals,
 }: ImportInfoSoudAgendaItemsOptions): Promise<ImportInfoSoudAgendaItemsResult> => {
   // Previously a bare `pg_advisory_xact_lock(hashtext(workspaceId))` —
   // a domain accidentally shared with unrelated property-write
@@ -168,7 +178,7 @@ export const importInfoSoudAgendaItems = async ({
     .insert(entities)
     .values(values)
     .onConflictDoNothing()
-    .returning({ id: entities.id });
+    .returning({ id: entities.id, externalId: entities.externalId });
 
   if (inserted.length > 0) {
     const versions = inserted.map(({ id }) => ({
@@ -200,6 +210,30 @@ export const importInfoSoudAgendaItems = async ({
       .update(workspaces)
       .set({ lastActivityAt: new Date() })
       .where(eq(workspaces.id, workspaceId));
+
+    if (signals) {
+      const itemsByExternalId = new Map(
+        newItems.map((item) => [item.externalId, item]),
+      );
+      const insertedHearings = inserted.flatMap(({ id, externalId }) => {
+        const item = externalId ? itemsByExternalId.get(externalId) : null;
+        if (!item || item.agendaKind !== AGENDA_ITEM_KIND.HEARING) {
+          return [];
+        }
+        const hearing = toHearingRecord({
+          externalId: item.externalId,
+          externalData: item.externalData,
+          startAt: item.startAt,
+        });
+        return hearing ? [{ entityId: id, hearing }] : [];
+      });
+      await emitInfoSoudHearingSignals({
+        tx,
+        organizationId: signals.organizationId,
+        workspaceId,
+        inserted: insertedHearings,
+      });
+    }
   }
 
   return {

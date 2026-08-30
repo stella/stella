@@ -3,7 +3,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDbOrTx } from "@/api/db/safe-db";
+import { withScopedTx } from "@/api/db/safe-db";
 import {
   entities,
   entityVersions,
@@ -11,6 +12,7 @@ import {
   LIST_ITEM_TYPES,
   taskAssignees,
   workspaceMembers,
+  type WorkObligationSource,
   workspaces,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -126,25 +128,34 @@ export const createTaskBodySchema = t.Object({
 const toDateOrNull = (value: string | null | undefined): Date | null =>
   value ? new Date(value) : null;
 
-export type CreateTaskEntityHandlerProps = {
-  safeDb: SafeDb;
+type CreateTaskWorkObligationSource = {
+  type: WorkObligationSource;
+  description: string | null;
+  entityId?: SafeId<"entity">;
+};
+
+export type CreateTaskEntityHandlerProps = SafeDbOrTx & {
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: Static<typeof createTaskBodySchema>;
   entityId?: SafeId<"entity">;
   features?: TaskDeploymentFeatures;
+  workObligationSource?: CreateTaskWorkObligationSource;
 };
 
 export const createTaskEntityHandler = async function* ({
-  safeDb,
-  workspaceId,
-  userId,
-  recordAuditEvent,
-  body,
-  entityId: requestedEntityId,
-  features = deployedTaskFeatures(),
+  ...props
 }: CreateTaskEntityHandlerProps) {
+  const {
+    workspaceId,
+    userId,
+    recordAuditEvent,
+    body,
+    entityId: requestedEntityId,
+    features = deployedTaskFeatures(),
+    workObligationSource,
+  } = props;
   const agendaKind = body.agendaKind ?? AGENDA_ITEM_KIND.TASK;
   const taskStatus = body.status ?? "open";
   const taskPriority = body.priority ?? "none";
@@ -232,7 +243,7 @@ export const createTaskEntityHandler = async function* ({
   }
 
   const txResult = yield* Result.await(
-    safeDb(async (tx) => {
+    withScopedTx(props, async (tx) => {
       // See `lockWorkspacesForEntityCap` for the canonical lock
       // order every entity-creating path follows (issue #1139).
       await lockWorkspacesForEntityCap(tx, [workspaceId]);
@@ -423,9 +434,19 @@ export const createTaskEntityHandler = async function* ({
           taskStatus,
           workingTargetDate,
           hardDeadlineDate,
-          ...(body.sourceDescription === undefined
-            ? {}
-            : { sourceDescription: body.sourceDescription }),
+          ...(workObligationSource === undefined &&
+          body.sourceDescription !== undefined
+            ? { sourceDescription: body.sourceDescription }
+            : {}),
+          ...(workObligationSource
+            ? {
+                sourceType: workObligationSource.type,
+                sourceDescription: workObligationSource.description,
+              }
+            : {}),
+          ...(workObligationSource?.entityId
+            ? { sourceEntityId: workObligationSource.entityId }
+            : {}),
         });
       }
 
@@ -474,7 +495,11 @@ export const createTaskEntityHandler = async function* ({
     );
   }
 
-  flushEntitySearchRepairs([txResult.entityId]).catch(captureError);
+  // A caller-provided transaction has not committed yet. Its owner flushes
+  // after commit so the repair worker cannot race an invisible entity.
+  if (props.tx === undefined) {
+    flushEntitySearchRepairs([txResult.entityId]).catch(captureError);
+  }
 
   return Result.ok({ entityId: txResult.entityId });
 };

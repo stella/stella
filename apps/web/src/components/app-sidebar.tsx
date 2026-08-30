@@ -123,10 +123,12 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { formatHotkeyForPlatform, NAV_KEY } from "@/lib/hotkeys";
+import { inboxCountOptions } from "@/lib/inbox/queries";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -157,6 +159,7 @@ const GuideHelpDrawer = lazy(async () => {
 
 export const AppSidebar = (props: AppSidebarProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
   const navigate = routeApi.useNavigate();
   const canCreateMatter = usePermissions({ workspace: ["create"] });
@@ -189,6 +192,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const { data: workspacesData } = useChromeQuery(
     workspacesNavigationOptions(user.activeOrganizationId),
   );
+  const { data: inboxCount } = useChromeQuery(
+    inboxCountOptions(user.activeOrganizationId),
+  );
+  const openInboxCount = inboxCount?.count ?? 0;
   const mounted = useHasMounted();
   const { data: groupedChatThreadPages } = useInfiniteQuery({
     ...groupedChatThreadsOptions({
@@ -432,6 +439,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
         },
       },
     },
+    inbox: {
+      action: () => {
+        detached(navigate({ to: "/inbox" }), "app-sidebar.navigate");
+      },
+      contextMenu: {},
+    },
     matters: {
       action: () => {
         detached(navigate({ to: "/workspaces" }), "app-sidebar.navigate");
@@ -633,6 +646,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
                                 hotkeyPlatform,
                               )}
                             </kbd>
+                          </SidebarMenuBadge>
+                        );
+                      }
+                      if (item.id === "inbox" && openInboxCount > 0) {
+                        return (
+                          <SidebarMenuBadge>
+                            <span className="text-muted-foreground text-[0.625rem] tabular-nums">
+                              {format.number(openInboxCount)}
+                            </span>
                           </SidebarMenuBadge>
                         );
                       }

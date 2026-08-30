@@ -2148,6 +2148,71 @@
     "unavailable": "Tento sprievodca momentálne nie je k dispozícii",
     "whenLabel": "Kedy to použiť:"
   },
+  "inbox": {
+    "ask": "Opýtať sa",
+    "askPrompt": "Povedz mi viac o tejto položke doručených a čo mám urobiť ďalej.\n\n{title}\n{summary}",
+    "assignTo": "Priradiť",
+    "confidence": "Istota {percent}",
+    "dismissReason": "Dôvod (nepovinné)",
+    "empty": "Teraz vás nič nečaká. Zadajte požiadavku tlačidlom vyššie.",
+    "evidence": {
+      "current": "Novo",
+      "dueAt": "Lehota",
+      "findings": "Zistenia",
+      "hearingType": "Druh pojednávania",
+      "noAttachments": "Bez príloh",
+      "previous": "Pôvodne",
+      "quote": "Citovaná pasáž",
+      "title": "Podklady",
+      "verdict": "Výsledok"
+    },
+    "filter": {
+      "any": "Akýkoľvek",
+      "mine": "Moje"
+    },
+    "newRequest": "Nová požiadavka",
+    "openMatter": "Otvoriť spis",
+    "origin": {
+      "manual": "Kolega",
+      "model": "AI",
+      "source": "Externý zdroj"
+    },
+    "request": {
+      "created": "Požiadavka odoslaná",
+      "description": "Opíšte, na čo sa má právny tím pozrieť. Požiadavka sa objaví v doručených na triedenie.",
+      "submit": "Odoslať požiadavku"
+    },
+    "scout": {
+      "documentDeadlines": "Lehoty z dokumentu",
+      "documentReview": "Kontrola podľa playbooku",
+      "manualRequest": "Požiadavka"
+    },
+    "severity": {
+      "info": "Informácia",
+      "notice": "Upozornenie",
+      "warning": "Varovanie"
+    },
+    "snooze": "Odložiť na neskôr",
+    "snoozeNextWeek": "Do budúceho týždňa",
+    "snoozeTomorrow": "Do zajtra",
+    "snoozedUntil": "Odložené do {date}",
+    "suggestion": {
+      "assign": "Priradiť",
+      "createDeadline": "Vytvoriť lehotu",
+      "createTask": "Vytvoriť úlohu",
+      "fileToWorkspace": "Založiť do spisu",
+      "runReview": "Spustiť kontrolu"
+    },
+    "unassigned": "Nepriradené",
+    "verdict": {
+      "safe": "Bez rizika"
+    },
+    "view": {
+      "new": "Nové",
+      "resolved": "Vybavené",
+      "snoozed": "Odložené"
+    }
+  },
   "inspector": {
     "anonymization": {
       "addPlaceholder": "Výraz na anonymizáciu",
@@ -2758,6 +2823,7 @@
   "navigation": {
     "chat": "Chat",
     "contacts": "Kontakty",
+    "inbox": "Doručené",
     "knowledge": "Znalosti",
     "myTodos": "Moje úlohy",
     "pinned": "Pripnuté",
@@ -3693,7 +3759,8 @@
     "workTypeValues": {
       "deadline": "Lehota",
       "task": "Úloha"
-    }
+    },
+    "workingTargetDue": "Pracovný termín uplynul"
   },
   "templates": {
     "addItem": "Pridať položku",

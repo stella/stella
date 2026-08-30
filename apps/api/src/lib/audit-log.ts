@@ -251,6 +251,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   expense: "other",
   flow_definition: "other",
   folio_collab_room: "other",
+  signal: "other",
   invoice: "other",
   machine_api_key: "other",
   legal_list: "other",

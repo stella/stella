@@ -1,5 +1,6 @@
 import type { Transaction } from "@/api/db/root";
 import {
+  type WorkObligationSource,
   WORK_OBLIGATION_EVENT_TYPE,
   WORK_OBLIGATION_STATUS,
   WORK_OBLIGATION_TYPE,
@@ -22,6 +23,8 @@ type CreateWorkObligationOptions = {
   workingTargetDate: string | null;
   hardDeadlineDate: string | null;
   sourceDescription?: string | null;
+  sourceType?: WorkObligationSource;
+  sourceEntityId?: SafeId<"entity"> | null;
 };
 
 /**
@@ -39,6 +42,8 @@ export const createWorkObligation = async ({
   workingTargetDate,
   hardDeadlineDate,
   sourceDescription,
+  sourceType = "manual",
+  sourceEntityId = null,
 }: CreateWorkObligationOptions) => {
   const now = new Date();
   const isSelfAssigned = ownerUserId !== null && actorUserId === ownerUserId;
@@ -70,7 +75,8 @@ export const createWorkObligation = async ({
     acknowledgedByUserId: isSelfAssigned ? actorUserId : null,
     workingTargetDate,
     hardDeadlineDate,
-    sourceType: "manual",
+    sourceType,
+    sourceEntityId,
     sourceDescription: sourceDescription ?? null,
     createdByUserId: actorUserId,
   });
