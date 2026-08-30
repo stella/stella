@@ -357,16 +357,18 @@ fn entity_barriers_do_not_hide_residual_prose_between_address_seeds() {
 #[test]
 fn sentence_boundaries_outside_entities_separate_address_evidence() {
   let prepared = barrier_address_engine();
-  let result = prepared
-    .redact_static_entities(
-      "123 Main Street. Case No. 1:23-cv-04567. Paris 75002.",
-      &OperatorConfig::default(),
-    )
-    .expect("static redaction should succeed");
+  for text in [
+    "123 Main Street. Case No. 1:23-cv-04567. Paris 75002.",
+    "123 Main Street. reference@example.test. Paris 75002.",
+  ] {
+    let result = prepared
+      .redact_static_entities(text, &OperatorConfig::default())
+      .expect("static redaction should succeed");
 
-  let addresses = address_texts(&result);
-  assert!(!addresses.contains(&"123 Main Street"));
-  assert!(addresses.contains(&"Paris 75002"));
+    let addresses = address_texts(&result);
+    assert!(!addresses.contains(&"123 Main Street"));
+    assert!(addresses.contains(&"Paris 75002"));
+  }
 }
 
 #[test]
@@ -786,6 +788,10 @@ fn address_span_keeps_a_unit_component_that_follows_the_city() {
     ("Apt. ５", "10 Main Street, Springfield Apt. ５"),
     ("Apt. ٥", "10 Main Street, Springfield Apt. ٥"),
     ("Apt. ५", "10 Main Street, Springfield Apt. ५"),
+    (
+      "Apt. A\u{0308}1",
+      "10 Main Street, Springfield Apt. A\u{0308}1",
+    ),
     ("Apt.\u{2028}5", "10 Main Street, Springfield Apt.\u{2028}5"),
   ] {
     let text = format!("Notices go to 10 Main Street, Springfield {unit}.");

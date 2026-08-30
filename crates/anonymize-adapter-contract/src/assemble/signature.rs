@@ -100,7 +100,9 @@ mod tests {
 
   use serde::Deserialize;
   use serde_json::Value;
-  use stella_anonymize_core::assemble::PipelineConfig;
+  use stella_anonymize_core::assemble::{
+    Dictionaries, OrderedMap, PipelineConfig,
+  };
   use stella_anonymize_core::{OperatorConfig, PreparedEngine};
 
   use super::{build_signature_data, form_field_labels};
@@ -254,8 +256,16 @@ mod tests {
       "workspaceId": "party-role-without-name-corpus-test"
     }))
     .unwrap();
+    let dictionaries = Dictionaries {
+      first_names: Some(OrderedMap(vec![(
+        String::from("en"),
+        vec![String::from("Imani"), String::from("Jean")],
+      )])),
+      ..Dictionaries::default()
+    };
     let binding =
-      crate::assemble_static_search_config(&config, None, &[]).unwrap();
+      crate::assemble_static_search_config(&config, Some(&dictionaries), &[])
+        .unwrap();
     let prepared = PreparedEngine::new(
       prepared_search_config_from_binding(binding).unwrap(),
     )
@@ -332,6 +342,17 @@ mod tests {
     assert_eq!(
       detected_party_people_without_name_corpus("Seller: Imani Nwosu", "en"),
       vec![String::from("Imani Nwosu")]
+    );
+    assert_eq!(
+      detected_party_people_without_name_corpus(
+        "Seller: Jean-Paul Smith",
+        "en"
+      ),
+      vec![String::from("Jean-Paul Smith")]
+    );
+    assert_eq!(
+      detected_people("Jméno: Jan Příjmení: Novák", "cs"),
+      vec![String::from("Jan"), String::from("Novák")]
     );
     assert!(
       detected_party_people_without_name_corpus("Seller: Acme Trading", "en")

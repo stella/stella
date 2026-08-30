@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use crate::resolution::{DetectionSource, PipelineEntity};
 
 use crate::labels::PERSON_LABEL;
-use crate::name_corpus::PreparedNameCorpusData;
+use crate::name_corpus::{PreparedNameCorpusData, contains_first_name_token};
 const MAX_NAME_LEN: usize = 60;
 const MAX_WITNESS_SCAN_UNITS: usize = 600;
 const SIGNATURE_ONLY_PERSON_LABELS: &[&str] = &["by"];
@@ -20,10 +20,7 @@ impl PartyRoleEvidence<'_> {
       return corpus.has_person_name_token(candidate);
     }
     self.first_names.is_some_and(|first_names| {
-      candidate.split([' ', '\t']).any(|token| {
-        let letters = token.trim_matches(|ch: char| !ch.is_alphabetic());
-        first_names.contains(&letters.to_lowercase())
-      })
+      contains_first_name_token(candidate, first_names)
     })
   }
 }
@@ -31,6 +28,7 @@ impl PartyRoleEvidence<'_> {
 #[derive(Clone, Copy)]
 enum CandidateContext<'a> {
   SignatureBlock,
+  PersonValueField,
   LabelledField,
   PartyRoleField(PartyRoleEvidence<'a>),
 }
@@ -350,7 +348,8 @@ fn detect_labelled_names_in_line(args: DetectLabelledNamesInLineArgs<'_>) {
       || (next_contact_start.is_some()
         && next_contact_start == next_field_start);
     let following_line_index = usize::from(value_is_empty);
-    let has_following_contact_field = label.requires_list_structure
+    let requires_list_structure = label.kind.requires_list_structure();
+    let has_following_contact_field = requires_list_structure
       && following_contact_fields
         .get_mut(following_line_index)
         .is_some_and(|cached| {
@@ -363,21 +362,17 @@ fn detect_labelled_names_in_line(args: DetectLabelledNamesInLineArgs<'_>) {
             )
           })
         });
-    if label.requires_list_structure
+    if requires_list_structure
       && !has_same_line_structure
       && !has_following_contact_field
     {
       cursor = value_end.max(label.next_cursor);
       continue;
     }
-    let context = if label.requires_person_evidence {
-      CandidateContext::PartyRoleField(PartyRoleEvidence {
-        first_names,
-        name_corpus,
-      })
-    } else {
-      CandidateContext::LabelledField
-    };
+    let context = label.kind.candidate_context(PartyRoleEvidence {
+      first_names,
+      name_corpus,
+    });
     if value_is_empty {
       try_emit_forward_lines(
         results,
@@ -518,7 +513,9 @@ fn try_emit(
   let candidate = normalise_candidate(raw, data);
   if matches!(
     context,
-    CandidateContext::LabelledField | CandidateContext::PartyRoleField(_)
+    CandidateContext::PersonValueField
+      | CandidateContext::LabelledField
+      | CandidateContext::PartyRoleField(_)
   ) && ends_with_configured_label(&candidate, data)
   {
     return false;
@@ -528,7 +525,10 @@ fn try_emit(
   {
     return false;
   }
-  if !is_name_shape(&candidate, data) {
+  if !(is_name_shape(&candidate, data)
+    || matches!(context, CandidateContext::PersonValueField)
+      && is_single_name_token(&candidate))
+  {
     return false;
   }
   let Some(offset) = raw.find(&candidate) else {
@@ -623,6 +623,13 @@ fn is_name_shape(text: &str, data: &PreparedSignatureData) -> bool {
     .iter()
     .skip(1)
     .all(|token| is_name_particle(token, data) || is_cap_token(token))
+}
+
+fn is_single_name_token(text: &str) -> bool {
+  let text_len = text.chars().map(char::len_utf16).sum::<usize>();
+  (3..=MAX_NAME_LEN).contains(&text_len)
+    && !text.chars().any(char::is_whitespace)
+    && is_cap_token(text)
 }
 
 fn is_cap_token(token: &str) -> bool {
@@ -740,8 +747,32 @@ fn next_slash_s_offset(text: &str) -> Option<usize> {
 struct LabelMatch {
   value_start: usize,
   next_cursor: usize,
-  requires_list_structure: bool,
-  requires_person_evidence: bool,
+  kind: LabelKind,
+}
+
+#[derive(Clone, Copy)]
+enum LabelKind {
+  PersonValue,
+  SignatureOnly,
+  PartyRole,
+  PersonList,
+}
+
+impl LabelKind {
+  const fn requires_list_structure(self) -> bool {
+    matches!(self, Self::PersonList)
+  }
+
+  const fn candidate_context(
+    self,
+    evidence: PartyRoleEvidence<'_>,
+  ) -> CandidateContext<'_> {
+    match self {
+      Self::PersonValue => CandidateContext::PersonValueField,
+      Self::PartyRole => CandidateContext::PartyRoleField(evidence),
+      Self::SignatureOnly | Self::PersonList => CandidateContext::LabelledField,
+    }
+  }
 }
 
 fn find_label(
@@ -755,12 +786,7 @@ fn find_label(
       cursor = cursor.saturating_add(1);
       continue;
     }
-    if let Some((
-      after_label,
-      requires_list_structure,
-      requires_person_evidence,
-    )) = label_end_at(line, cursor, data)
-    {
+    if let Some((after_label, kind)) = label_end_at(line, cursor, data) {
       let mut after_spaces = skip_horizontal_ws(line, after_label);
       if let Some(separator_len) =
         line.get(after_spaces..).and_then(field_label_separator_len)
@@ -770,8 +796,7 @@ fn find_label(
         return Some(LabelMatch {
           value_start: after_spaces,
           next_cursor: after_spaces.saturating_add(1),
-          requires_list_structure,
-          requires_person_evidence,
+          kind,
         });
       }
     }
@@ -784,34 +809,39 @@ fn label_end_at(
   line: &str,
   start: usize,
   data: &PreparedSignatureData,
-) -> Option<(usize, bool, bool)> {
+) -> Option<(usize, LabelKind)> {
   if !boundary_before(line, start) {
     return None;
   }
   let tail = line.get(start..)?;
-  for (label, requires_list_structure, requires_person_evidence) in data
+  for (label, kind) in data
     .person_value_labels
     .iter()
-    .chain(data.signature_only_person_labels.iter())
-    .map(|label| (label, false, false))
+    .map(|label| (label, LabelKind::PersonValue))
+    .chain(
+      data
+        .signature_only_person_labels
+        .iter()
+        .map(|label| (label, LabelKind::SignatureOnly)),
+    )
     .chain(
       data
         .party_role_labels
         .iter()
-        .map(|label| (label, false, true)),
+        .map(|label| (label, LabelKind::PartyRole)),
     )
     .chain(
       data
         .person_list_labels
         .iter()
-        .map(|label| (label, true, false)),
+        .map(|label| (label, LabelKind::PersonList)),
     )
   {
     if let Some(relative_end) = unicode_case_insensitive_prefix_end(tail, label)
     {
       let end = start.saturating_add(relative_end);
       if label_tail_is_valid(line, end) {
-        return Some((end, requires_list_structure, requires_person_evidence));
+        return Some((end, kind));
       }
     }
   }
@@ -850,7 +880,8 @@ fn collect_field_label_starts(
         let after_spaces = skip_horizontal_ws(line, after_label);
         if line
           .get(after_spaces..)
-          .is_some_and(|remainder| remainder.starts_with(':'))
+          .and_then(field_label_separator_len)
+          .is_some()
         {
           starts.all.push(cursor);
           if contact_labels.binary_search(label).is_ok() {
@@ -907,7 +938,8 @@ fn line_starts_with_field(line: &str, labels: &[String]) -> bool {
     let after_label = skip_horizontal_ws(line, after_label);
     line
       .get(after_label..)
-      .is_some_and(|remainder| remainder.starts_with(':'))
+      .and_then(field_label_separator_len)
+      .is_some()
   })
 }
 
@@ -1278,6 +1310,20 @@ mod tests {
       .collect::<Vec<_>>(),
       ["Imani Nwosu"]
     );
+
+    let hyphenated_first_names = BTreeSet::from([String::from("jean")]);
+    assert_eq!(
+      detect_signatures(&DetectSignaturesArgs {
+        full_text: "Seller: Jean-Paul Smith",
+        data: &data,
+        first_names: Some(&hyphenated_first_names),
+        name_corpus: None,
+      })
+      .into_iter()
+      .map(|entity| entity.text)
+      .collect::<Vec<_>>(),
+      ["Jean-Paul Smith"]
+    );
     assert!(
       detect_signatures(&DetectSignaturesArgs {
         full_text: "Seller: Acme Trading",
@@ -1394,6 +1440,64 @@ mod tests {
         .map(|entity| entity.text.as_str())
         .collect::<Vec<_>>(),
       vec!["Jane Roe"]
+    );
+  }
+
+  #[test]
+  fn full_width_colon_fields_terminate_the_preceding_name() {
+    let entities = detect("Name： Jane Roe Email： mail@example.com");
+
+    assert_eq!(
+      entities
+        .iter()
+        .map(|entity| entity.text.as_str())
+        .collect::<Vec<_>>(),
+      vec!["Jane Roe"]
+    );
+  }
+
+  #[test]
+  fn full_width_colon_contact_field_structures_a_person_list() {
+    let entities = detect("Attention: Jane Roe\nEmail： mail@example.com");
+
+    assert_eq!(
+      entities
+        .iter()
+        .map(|entity| entity.text.as_str())
+        .collect::<Vec<_>>(),
+      vec!["Jane Roe"]
+    );
+  }
+
+  #[test]
+  fn person_value_fields_accept_split_single_token_names() {
+    let data = PreparedSignatureData::new(
+      SignatureData {
+        person_value_labels: vec![
+          String::from("jméno"),
+          String::from("příjmení"),
+        ],
+        form_field_labels: vec![
+          String::from("jméno"),
+          String::from("příjmení"),
+        ],
+        ..SignatureData::default()
+      },
+      Vec::new(),
+    );
+    let entities = detect_signatures(&DetectSignaturesArgs {
+      full_text: "Jméno: Jan Příjmení: Novák",
+      data: &data,
+      first_names: None,
+      name_corpus: None,
+    });
+
+    assert_eq!(
+      entities
+        .iter()
+        .map(|entity| entity.text.as_str())
+        .collect::<Vec<_>>(),
+      vec!["Jan", "Novák"]
     );
   }
 

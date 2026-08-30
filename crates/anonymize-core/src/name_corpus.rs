@@ -1,4 +1,5 @@
-use std::{collections::HashSet, ops::Range};
+use std::collections::{BTreeSet, HashSet};
+use std::ops::Range;
 use web_time::Instant;
 
 use crate::resolution::{DetectionSource, PipelineEntity};
@@ -831,6 +832,15 @@ fn segment_words(full_text: &str) -> Vec<WordSegment<'_>> {
     });
   }
   words
+}
+
+pub(crate) fn contains_first_name_token(
+  text: &str,
+  first_names: &BTreeSet<String>,
+) -> bool {
+  segment_words(text)
+    .iter()
+    .any(|word| first_names.contains(&word.text.to_lowercase()))
 }
 
 fn supplemental_seed_windows(

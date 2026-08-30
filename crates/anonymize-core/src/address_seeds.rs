@@ -2077,7 +2077,7 @@ fn plausible_unit_value_end(full_text: &str, offset: usize) -> Option<usize> {
     .map(|tail| {
       tail
         .chars()
-        .take_while(|ch| ch.is_alphanumeric() || matches!(ch, '-' | '/'))
+        .take_while(|ch| is_unit_value_char(*ch))
         .map(char::len_utf8)
         .sum::<usize>()
     })
@@ -2098,8 +2098,11 @@ fn is_plausible_unit_value(value: &str) -> bool {
       return false;
     }
     for ch in segment.chars() {
-      if ch.general_category() == GeneralCategory::DecimalNumber {
+      let category = ch.general_category();
+      if category == GeneralCategory::DecimalNumber {
         digit_count = digit_count.saturating_add(1);
+      } else if is_mark_category(category) {
+        continue;
       } else if ch.is_numeric() {
         return false;
       } else if ch.is_alphabetic() && ch.is_uppercase() {
@@ -2116,6 +2119,21 @@ fn is_plausible_unit_value(value: &str) -> bool {
     return false;
   }
   digit_count > 0 || uppercase_count <= MAX_ALPHA_UNIT_VALUE_CHARS
+}
+
+fn is_unit_value_char(ch: char) -> bool {
+  ch.is_alphanumeric()
+    || matches!(ch, '-' | '/')
+    || is_mark_category(ch.general_category())
+}
+
+const fn is_mark_category(category: GeneralCategory) -> bool {
+  matches!(
+    category,
+    GeneralCategory::NonspacingMark
+      | GeneralCategory::SpacingMark
+      | GeneralCategory::EnclosingMark
+  )
 }
 
 fn is_house_number_word(word: &str) -> bool {
@@ -2538,6 +2556,9 @@ fn prose_measure(gap: &str) -> ProseMeasure {
 }
 
 fn has_sentence_boundary(text: &str) -> bool {
+  if text.trim() == "." {
+    return true;
+  }
   let mut chars = text.chars().peekable();
   while let Some(ch) = chars.next() {
     if matches!(ch, '!' | '?' | '。' | '！' | '？') {
@@ -3054,6 +3075,13 @@ mod tests {
         "token {token:?}"
       );
     }
+  }
+
+  #[test]
+  fn unit_value_end_preserves_decomposed_combining_marks() {
+    let value = "A\u{0308}1";
+
+    assert_eq!(plausible_unit_value_end(value, 0), Some(value.len()));
   }
 
   #[test]

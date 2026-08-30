@@ -721,14 +721,12 @@ fn is_all_caps_boilerplate_line(
   // followed by caption punctuation. At the start of an unpunctuated heading,
   // however, a short ambiguous suffix can make the first heading words look
   // like an organization.
-  let legal_form_heading_prefix = entity.source == DetectionSource::LegalForm
-    && context.before.trim().is_empty()
-    && !context
-      .after
-      .trim_start()
-      .chars()
-      .next()
-      .is_some_and(|ch| matches!(ch, ',' | ':' | ';' | '('));
+  let legal_form_heading_prefix =
+    entity.source == DetectionSource::LegalForm
+      && context.before.trim().is_empty()
+      && !context.after.trim_start().chars().next().is_some_and(|ch| {
+        matches!(ch, ',' | ':' | ';' | '(' | '-' | '–' | '—')
+      });
   if outside_entity_letters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS
     && (entity.source != DetectionSource::LegalForm
       || legal_form_heading_prefix)
@@ -2288,6 +2286,29 @@ mod tests {
     .unwrap();
 
     assert_eq!(entities.len(), 1);
+  }
+
+  #[test]
+  fn keeps_dash_delimited_all_caps_legal_form_captions() {
+    for separator in ["-", "–", "—"] {
+      let text = format!(
+        "ACME LIMITED {separator} A DELAWARE CORPORATION AND PARTY TO THIS AGREEMENT\n"
+      );
+      let entity_text = "ACME LIMITED";
+      let entities = filter_entity_false_positives(
+        vec![entity(
+          &text,
+          entity_text,
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        &text,
+        Some(&DenyListFilterData::default()),
+      )
+      .unwrap();
+
+      assert_eq!(entities.len(), 1, "separator {separator:?}");
+    }
   }
 
   #[test]
