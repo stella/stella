@@ -8,6 +8,7 @@ import { expect, test } from "../helpers/test";
 
 const API_BASE_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
 const WEB_BASE_URL = process.env["E2E_WEB_URL"] ?? "http://localhost:3000";
+const TEST_ORGANIZATION_NAME = "Harbrook & Partners";
 
 const signIn = async (api: APIRequestContext, email: string) => {
   const sendResponse = await api.post(
@@ -45,31 +46,37 @@ const signIn = async (api: APIRequestContext, email: string) => {
 
 const createOrganizationSelectionSession = async ({
   email,
-  organizationName,
-  organizationSlug,
+  ownerApi,
 }: {
   email: string;
-  organizationName: string;
-  organizationSlug: string;
+  ownerApi: APIRequestContext;
 }) => {
   const requestOptions = {
     extraHTTPHeaders: { origin: new URL(WEB_BASE_URL).origin },
   };
-  const setupApi = await playwrightRequest.newContext(requestOptions);
-  try {
-    await signIn(setupApi, email);
-    const createResponse = await setupApi.post(
-      `${API_BASE_URL}/api/auth/organization/create`,
-      { data: { name: organizationName, slug: organizationSlug } },
-    );
-    expect(createResponse.ok(), await createResponse.text()).toBe(true);
-  } finally {
-    await setupApi.dispose();
+  const inviteResponse = await ownerApi.post(
+    `${API_BASE_URL}/api/auth/organization/invite-member`,
+    { data: { email, role: "member" } },
+  );
+  const invitation: unknown = await inviteResponse.json();
+  expect(inviteResponse.ok(), JSON.stringify(invitation)).toBe(true);
+  if (
+    typeof invitation !== "object" ||
+    invitation === null ||
+    !("id" in invitation) ||
+    typeof invitation.id !== "string"
+  ) {
+    throw new Error("The organization invitation response had no id");
   }
 
   const loginApi = await playwrightRequest.newContext(requestOptions);
   try {
     await signIn(loginApi, email);
+    const acceptResponse = await loginApi.post(
+      `${API_BASE_URL}/api/auth/organization/accept-invitation`,
+      { data: { invitationId: invitation.id } },
+    );
+    expect(acceptResponse.ok(), await acceptResponse.text()).toBe(true);
     return await loginApi.storageState();
   } finally {
     await loginApi.dispose();
@@ -78,13 +85,12 @@ const createOrganizationSelectionSession = async ({
 
 test("selecting an organization completes login and renders the destination", async ({
   page,
+  request,
 }) => {
   const testToken = randomUUID().slice(0, 8);
-  const organizationName = `Northbridge Legal ${testToken}`;
   const storageState = await createOrganizationSelectionSession({
     email: `organization-login-${testToken}@stella.dev`,
-    organizationName,
-    organizationSlug: `northbridge-legal-${testToken}`,
+    ownerApi: request,
   });
   await page.context().clearCookies();
   await page.context().addCookies(storageState.cookies);
@@ -92,7 +98,9 @@ test("selecting an organization completes login and renders the destination", as
   await page.goto("/auth/organization?redirectTo=%2Fchat", {
     waitUntil: "commit",
   });
-  const organization = page.getByRole("button", { name: organizationName });
+  const organization = page.getByRole("button", {
+    name: TEST_ORGANIZATION_NAME,
+  });
   await expect(organization).toBeVisible({ timeout: 30_000 });
   await organization.click();
 
