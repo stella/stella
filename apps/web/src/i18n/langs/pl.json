@@ -435,13 +435,11 @@
       "yearTitle": "{year}: {count, plural, one {# powołanie} few {# powołania} many {# powołań} other {# powołania}}"
     },
     "columns": {
-      "caseNumber": "Sygnatura akt",
-      "court": "Sąd"
+      "caseNumber": "Sygnatura akt"
     },
     "decisionNotFound": "Nie znaleziono orzeczenia",
     "emptyState": "Brak orzeczeń. Skonfiguruj źródło i uruchom synchronizację, aby zaimportować orzecznictwo.",
     "filters": {
-      "court": "Sąd",
       "searchPlaceholder": "Szukaj po sygnaturze akt..."
     },
     "loadingMore": "Ładowanie kolejnych...",
@@ -1053,6 +1051,7 @@
     "copy": "Kopiuj",
     "copyLink": "Kopiuj link",
     "country": "Kraj",
+    "court": "Sąd",
     "createCategory": "Nowa kategoria",
     "createdAt": "Utworzono {date}",
     "currency": "Waluta",

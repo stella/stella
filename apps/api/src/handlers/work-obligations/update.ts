@@ -44,6 +44,7 @@ const updateWorkObligationBody = t.Object({
       t.Literal(WORK_OBLIGATION_SOURCE.CALENDAR),
       t.Literal(WORK_OBLIGATION_SOURCE.EMAIL),
       t.Literal(WORK_OBLIGATION_SOURCE.DOCUMENT),
+      t.Literal(WORK_OBLIGATION_SOURCE.COURT),
       t.Literal(WORK_OBLIGATION_SOURCE.IMPORT),
       t.Literal(WORK_OBLIGATION_SOURCE.API),
     ]),

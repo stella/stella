@@ -19,8 +19,28 @@ import type {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import {
+  AGENDA_ITEM_SOURCE,
+  AGENDA_ITEM_SOURCES,
+} from "@/api/lib/entity-constants";
+import type { AgendaItemSource } from "@/api/lib/entity-constants";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { includes } from "@/api/lib/type-guards";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
+
+/**
+ * How a pre-governance task's `agenda_source` reads as governed provenance.
+ * Total over the legacy value list, so a new agenda source has to decide its
+ * provenance instead of silently landing on `manual`.
+ */
+const LEGACY_AGENDA_WORK_OBLIGATION_SOURCE = {
+  [AGENDA_ITEM_SOURCE.MANUAL]: WORK_OBLIGATION_SOURCE.MANUAL,
+  [AGENDA_ITEM_SOURCE.INFOSOUD]: WORK_OBLIGATION_SOURCE.COURT,
+  [AGENDA_ITEM_SOURCE.CALENDAR]: WORK_OBLIGATION_SOURCE.CALENDAR,
+  [AGENDA_ITEM_SOURCE.EMAIL]: WORK_OBLIGATION_SOURCE.EMAIL,
+  [AGENDA_ITEM_SOURCE.IMPORT]: WORK_OBLIGATION_SOURCE.IMPORT,
+  [AGENDA_ITEM_SOURCE.API]: WORK_OBLIGATION_SOURCE.API,
+} as const satisfies Record<AgendaItemSource, WorkObligationSource>;
 
 type LegacyTask = {
   id: SafeId<"entity">;
@@ -48,15 +68,11 @@ export const legacyWorkObligationValues = (task: LegacyTask) => {
   const ownerUserId =
     task.assigneeUserIds.length === 1 ? task.assigneeUserIds[0] : null;
 
-  let sourceType: WorkObligationSource = WORK_OBLIGATION_SOURCE.MANUAL;
-  if (
-    task.agendaSource === WORK_OBLIGATION_SOURCE.CALENDAR ||
-    task.agendaSource === WORK_OBLIGATION_SOURCE.EMAIL ||
-    task.agendaSource === WORK_OBLIGATION_SOURCE.IMPORT ||
-    task.agendaSource === WORK_OBLIGATION_SOURCE.API
-  ) {
-    sourceType = task.agendaSource;
-  }
+  const sourceType =
+    task.agendaSource !== null &&
+    includes(AGENDA_ITEM_SOURCES, task.agendaSource)
+      ? LEGACY_AGENDA_WORK_OBLIGATION_SOURCE[task.agendaSource]
+      : WORK_OBLIGATION_SOURCE.MANUAL;
 
   const isDeadline = task.agendaKind === WORK_OBLIGATION_TYPE.DEADLINE;
   return {

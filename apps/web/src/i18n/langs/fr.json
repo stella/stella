@@ -435,13 +435,11 @@
       "yearTitle": "{year} : {count, plural, one {# citation} other {# citations}}"
     },
     "columns": {
-      "caseNumber": "Numéro d'affaire",
-      "court": "Juridiction"
+      "caseNumber": "Numéro d'affaire"
     },
     "decisionNotFound": "Décision introuvable",
     "emptyState": "Aucune décision trouvée. Configurez une source et lancez une synchronisation pour importer la jurisprudence.",
     "filters": {
-      "court": "Juridiction",
       "searchPlaceholder": "Rechercher par numéro d'affaire..."
     },
     "loadingMore": "Chargement en cours…",
@@ -1053,6 +1051,7 @@
     "copy": "Copier",
     "copyLink": "Copier le lien",
     "country": "Pays",
+    "court": "Juridiction",
     "createCategory": "Nouvelle catégorie",
     "createdAt": "Créé le {date}",
     "currency": "Devise",

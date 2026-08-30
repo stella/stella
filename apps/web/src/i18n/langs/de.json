@@ -435,13 +435,11 @@
       "yearTitle": "{year}: {count, plural, one {# Zitat} other {# Zitate}}"
     },
     "columns": {
-      "caseNumber": "Aktenzeichen",
-      "court": "Gericht"
+      "caseNumber": "Aktenzeichen"
     },
     "decisionNotFound": "Entscheidung nicht gefunden",
     "emptyState": "Keine Entscheidungen gefunden. Konfigurieren Sie eine Quelle und führen Sie eine Synchronisierung durch, um Rechtsprechung zu importieren.",
     "filters": {
-      "court": "Gericht",
       "searchPlaceholder": "Nach Aktenzeichen suchen..."
     },
     "loadingMore": "Weitere werden geladen…",
@@ -1053,6 +1051,7 @@
     "copy": "Kopieren",
     "copyLink": "Link kopieren",
     "country": "Land",
+    "court": "Gericht",
     "createCategory": "Neue Kategorie",
     "createdAt": "Erstellt am {date}",
     "currency": "Währung",

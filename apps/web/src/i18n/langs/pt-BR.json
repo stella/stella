@@ -435,13 +435,11 @@
       "yearTitle": "{year}: {count, plural, one {# citação} other {# citações}}"
     },
     "columns": {
-      "caseNumber": "Número do processo",
-      "court": "Tribunal"
+      "caseNumber": "Número do processo"
     },
     "decisionNotFound": "Decisão não encontrada",
     "emptyState": "Nenhuma decisão encontrada. Configure uma fonte e execute uma sincronização para importar jurisprudência.",
     "filters": {
-      "court": "Tribunal",
       "searchPlaceholder": "Pesquisar por número do processo..."
     },
     "loadingMore": "Carregando mais...",
@@ -1053,6 +1051,7 @@
     "copy": "Copiar",
     "copyLink": "Copiar link",
     "country": "País",
+    "court": "Tribunal",
     "createCategory": "Nova categoria",
     "createdAt": "Criado em {date}",
     "currency": "Moeda",

@@ -46,7 +46,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
                 className="text-muted-foreground px-4 py-2 text-start font-medium"
                 scope="col"
               >
-                {t("caseLaw.columns.court")}
+                {t("common.court")}
               </th>
               <th
                 className="text-muted-foreground px-4 py-2 text-start font-medium"

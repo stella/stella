@@ -435,13 +435,11 @@
       "yearTitle": "{year}: {count, plural, one {# hivatkozás} other {# hivatkozás}}"
     },
     "columns": {
-      "caseNumber": "Ügyszám",
-      "court": "Bíróság"
+      "caseNumber": "Ügyszám"
     },
     "decisionNotFound": "A határozat nem található",
     "emptyState": "Nem található határozat. Adjon meg egy forrást, és futtasson szinkronizálást az ítélkezési gyakorlat importálásához.",
     "filters": {
-      "court": "Bíróság",
       "searchPlaceholder": "Keresés ügyszám alapján..."
     },
     "loadingMore": "Betöltés folyamatban...",
@@ -1053,6 +1051,7 @@
     "copy": "Másolás",
     "copyLink": "Hivatkozás másolása",
     "country": "Ország",
+    "court": "Bíróság",
     "createCategory": "Új kategória",
     "createdAt": "Létrehozva: {date}",
     "currency": "Pénznem",

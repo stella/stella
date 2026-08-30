@@ -55,7 +55,8 @@ const toDateOnly = (iso: string): string => iso.slice(0, 10);
 
 const SIGNAL_WORK_OBLIGATION_SOURCE = {
   [SIGNAL_KIND.REQUEST_SUBMITTED]: "manual",
-  [SIGNAL_KIND.HEARING_CHANGED]: "calendar",
+  // Hearings come from the court registry scout, not from a calendar feed.
+  [SIGNAL_KIND.HEARING_CHANGED]: "court",
   [SIGNAL_KIND.DEADLINE_DETECTED]: "document",
   [SIGNAL_KIND.CONTRACT_REVIEWED]: "document",
 } as const satisfies Record<SignalKind, WorkObligationSource>;

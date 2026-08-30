@@ -435,13 +435,11 @@
       "yearTitle": "{year}: {count, plural, one {# viide} other {# viidet}}"
     },
     "columns": {
-      "caseNumber": "Kohtuasja number",
-      "court": "Kohus"
+      "caseNumber": "Kohtuasja number"
     },
     "decisionNotFound": "Otsust ei leitud",
     "emptyState": "Otsuseid ei leitud. Seadistage allikas ja käivitage sünkroonimine kohtupraktika importimiseks.",
     "filters": {
-      "court": "Kohus",
       "searchPlaceholder": "Otsi kohtuasja numbri järgi..."
     },
     "loadingMore": "Laadib rohkem...",
@@ -1053,6 +1051,7 @@
     "copy": "Kopeeri",
     "copyLink": "Kopeeri link",
     "country": "Riik",
+    "court": "Kohus",
     "createCategory": "Uus kategooria",
     "createdAt": "Loodud {date}",
     "currency": "Valuuta",
