@@ -9,7 +9,7 @@ import {
   workObligations,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -18,6 +18,7 @@ import {
   resolveWorkObligationTransition,
   WORK_OBLIGATION_TRANSITION_ACTION,
   WORK_OBLIGATION_TRANSITION_ACTIONS,
+  WORK_OBLIGATION_TRANSITION_AUDIT_ACTION,
 } from "@/api/lib/work-obligations/transitions";
 
 const transitionParams = workspaceParams({ entityId: tSafeId("entity") });
@@ -121,10 +122,7 @@ const transitionWorkObligation = createSafeHandler(
           occurredAt: now,
         });
         await recordAuditEvent(tx, {
-          action:
-            body.action === WORK_OBLIGATION_TRANSITION_ACTION.CANCEL
-              ? AUDIT_ACTION.CANCEL
-              : AUDIT_ACTION.UPDATE,
+          action: WORK_OBLIGATION_TRANSITION_AUDIT_ACTION[body.action],
           resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
           resourceId: params.entityId,
           changes: {

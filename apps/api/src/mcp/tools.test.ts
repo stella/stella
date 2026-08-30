@@ -9,6 +9,11 @@ import {
 } from "bun:test";
 import JSZip from "jszip";
 
+import {
+  entities,
+  WORK_OBLIGATION_STATUS,
+  workObligations,
+} from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -36,7 +41,7 @@ import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 /**
  * Minimal DOCX with a Heading1 paragraph, a two-row table, and a body
@@ -3956,6 +3961,84 @@ describe("OpenAI-compatible MCP tools", () => {
       isError: true,
     });
     expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  // save_task writes task status through the same handler as the task API, so
+  // the governed lifecycle binds it too. Governed enforcement is off in this
+  // deployment, so the legacy freedom to complete cancelled work has to
+  // survive: the shared transition table is not consulted at all.
+  const createTaskStatusScopedDb = () => {
+    const workflowUpdates: Record<string, unknown>[] = [];
+    const { scopedDb } = createScopedDbMock({
+      query: {
+        entities: {
+          findFirst: async () => ({
+            kind: "task",
+            readOnly: false,
+            workspaceId: "ws_1",
+          }),
+        },
+      },
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: () => ({
+              for: async () => [
+                {
+                  entityId: "task_1",
+                  workspaceId: "ws_1",
+                  type: "task",
+                  status: WORK_OBLIGATION_STATUS.CANCELLED,
+                  ownerUserId: null,
+                  acknowledgedAt: null,
+                  workingTargetDate: null,
+                  hardDeadlineDate: null,
+                },
+              ],
+            }),
+          }),
+        }),
+      }),
+      update: (table: unknown) => ({
+        set: (values: Record<string, unknown>) => {
+          if (table === workObligations) {
+            workflowUpdates.push(values);
+          }
+          return {
+            where: () => ({
+              returning: async () =>
+                table === entities
+                  ? [{ id: "task_1" }]
+                  : [{ entityId: "task_1" }],
+            }),
+          };
+        },
+      }),
+      insert: () => ({ values: async () => {} }),
+    });
+    return { scopedDb, workflowUpdates };
+  };
+
+  test("save_task completes cancelled work while governed enforcement is off", async () => {
+    const { scopedDb, workflowUpdates } = createTaskStatusScopedDb();
+
+    const result = await handleMcpToolCall({
+      args: { task_id: "task_1", status: "done" },
+      context: createContext({ scopedDb }),
+      toolName: "save_task",
+    });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ taskId: "task_1", updated: true }),
+        },
+      ],
+    });
+    expect(workflowUpdates).toEqual([
+      expect.objectContaining({ status: WORK_OBLIGATION_STATUS.COMPLETED }),
+    ]);
   });
 
   // link_matter_contact accepts contact_id as an unlink selector, but a contact
