@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import { Buffer } from "node:buffer";
 
 import type { Transaction } from "@/api/db/root";
 import { PayloadBudgetError } from "@/api/lib/compression";
@@ -7,6 +8,9 @@ import { settleBoth } from "@/api/lib/corpus-index/core";
 import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { buildCorpusProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import {
+  CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
+  CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
+  CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
   planCorpusProjectionAppendRequests,
   type CorpusProjectionAppendEntry,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
@@ -35,6 +39,7 @@ import {
   readCorpusAtAuthoritativePointer,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
+import { LIMITS } from "@/api/lib/limits";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
 
@@ -251,7 +256,11 @@ const loadCorpusProjectionPayload = async (
 
 type PreparedProjectionEntry = {
   material: CorpusProjectionMaterial;
-  entry: CorpusProjectionAppendEntry;
+  documentCount: number;
+  indexId: string;
+  ndjson: string;
+  ndjsonBytes: number;
+  leaseExpiresAtMs: number;
 };
 
 type PreparedProjectionFailure = {
@@ -277,9 +286,100 @@ type PreparedProjectionRequest = {
   entries: readonly PreparedProjectionEntry[];
 };
 
-type PreparedProjectionPlan = {
-  requests: PreparedProjectionRequest[];
-  blocked: PreparedProjectionEntry[];
+type ProjectionAppendPart = {
+  indexId: string;
+  ndjson: string;
+  ndjsonBytes: number;
+  leaseExpiresAtMs: number;
+};
+
+type ProjectionAppendTail<Entry extends ProjectionAppendPart> = {
+  indexId: string;
+  entries: Entry[];
+  ndjsonBytes: number;
+  earliestLeaseExpiresAtMs: number;
+};
+
+const CORPUS_PROJECTION_APPEND_START_MARGIN_MS =
+  LIMITS.corpusObjectIoTimeoutMs + CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS;
+
+type AdvanceProjectionAppendTailsOptions<Entry extends ProjectionAppendPart> = {
+  tails: Map<string, ProjectionAppendTail<Entry>>;
+  entries: readonly Entry[];
+  mode: "buffer" | "flush-all";
+  nowMs: number;
+};
+
+/**
+ * Extend one serialized, byte-bounded tail per physical index in linear time.
+ * A tail flushes when full or near its earliest lease deadline; serialization
+ * and byte measurement are paid once per revision, not once per read window.
+ */
+export const advanceCorpusProjectionAppendTails = <
+  Entry extends ProjectionAppendPart,
+>({
+  tails,
+  entries,
+  mode,
+  nowMs,
+}: AdvanceProjectionAppendTailsOptions<Entry>): {
+  flush: ProjectionAppendTail<Entry>[];
+  tails: Map<string, ProjectionAppendTail<Entry>>;
+} => {
+  const nextTails = tails;
+  const flush: ProjectionAppendTail<Entry>[] = [];
+  const byIndex = new Map<string, Entry[]>();
+  for (const entry of entries) {
+    const group = byIndex.get(entry.indexId);
+    if (group === undefined) {
+      byIndex.set(entry.indexId, [entry]);
+      continue;
+    }
+    group.push(entry);
+  }
+  for (const indexId of [...byIndex.keys()].sort()) {
+    const group = byIndex.get(indexId) ?? panic("Lost projection entry group");
+    for (const entry of group) {
+      let tail = nextTails.get(indexId);
+      if (
+        tail !== undefined &&
+        (tail.entries.length >= CORPUS_PROJECTION_APPEND_MAX_REVISIONS ||
+          tail.ndjsonBytes + entry.ndjsonBytes >
+            CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES)
+      ) {
+        flush.push(tail);
+        nextTails.delete(indexId);
+        tail = undefined;
+      }
+      if (tail === undefined) {
+        nextTails.set(indexId, {
+          indexId,
+          entries: [entry],
+          ndjsonBytes: entry.ndjsonBytes,
+          earliestLeaseExpiresAtMs: entry.leaseExpiresAtMs,
+        });
+        continue;
+      }
+      tail.entries.push(entry);
+      tail.ndjsonBytes += entry.ndjsonBytes;
+      tail.earliestLeaseExpiresAtMs = Math.min(
+        tail.earliestLeaseExpiresAtMs,
+        entry.leaseExpiresAtMs,
+      );
+    }
+  }
+  for (const [indexId, tail] of nextTails) {
+    if (
+      mode === "buffer" &&
+      tail.earliestLeaseExpiresAtMs - nowMs >
+        CORPUS_PROJECTION_APPEND_START_MARGIN_MS
+    ) {
+      continue;
+    }
+    flush.push(tail);
+    nextTails.delete(indexId);
+  }
+  return { flush, tails: nextTails };
 };
 
 const buildPreparedEntry = async (
@@ -323,61 +423,32 @@ const buildPreparedEntry = async (
     }
     return panic("Corpus projection builder violated its manifest contract");
   }
-  return Result.ok({
-    material,
-    entry: { revision: material.lease.intentId, documents: built.value },
-  });
-};
-
-const planPreparedRequests = (
-  entries: readonly PreparedProjectionEntry[],
-): PreparedProjectionPlan => {
-  const eligible: PreparedProjectionEntry[] = [];
-  const blocked: PreparedProjectionEntry[] = [];
-  for (const prepared of entries) {
-    const planned = planCorpusProjectionAppendRequests([prepared.entry]);
-    if (planned.isOk()) {
-      eligible.push(prepared);
-      continue;
-    }
-    if (planned.error.code !== "revision_too_large") {
-      return panic(planned.error.message);
-    }
-    blocked.push(prepared);
-  }
-  const byIndex = new Map<string, PreparedProjectionEntry[]>();
-  for (const prepared of eligible) {
-    const group = byIndex.get(prepared.material.lease.indexId);
-    if (group === undefined) {
-      byIndex.set(prepared.material.lease.indexId, [prepared]);
-    } else {
-      group.push(prepared);
-    }
-  }
-  const requests: PreparedProjectionRequest[] = [];
-  for (const indexId of [...byIndex.keys()].sort()) {
-    const group = byIndex.get(indexId) ?? panic(`Lost projection index group`);
-    const planned = planCorpusProjectionAppendRequests(
-      group.map(({ entry }) => entry),
-    );
-    if (planned.isErr()) {
-      return panic(planned.error.message);
-    }
-    const byRevision = new Map(
-      group.map((prepared) => [prepared.entry.revision, prepared]),
-    );
-    for (const request of planned.value) {
-      requests.push({
-        indexId,
-        entries: request.entries.map(
-          ({ revision }) =>
-            byRevision.get(revision) ??
-            panic(`Lost planned projection revision ${revision}`),
-        ),
+  const entry = {
+    revision: material.lease.intentId,
+    documents: built.value,
+  } satisfies CorpusProjectionAppendEntry;
+  const planned = planCorpusProjectionAppendRequests([entry]);
+  if (planned.isErr()) {
+    if (planned.error.code === "revision_too_large") {
+      return Result.err({
+        kind: "revision_too_large",
+        message: "projection revision exceeds the append safety ceiling",
       });
     }
+    return panic(planned.error.message);
   }
-  return { requests, blocked };
+  const request = planned.value.at(0);
+  if (request === undefined || planned.value.length !== 1) {
+    return panic("One projection revision did not produce one append request");
+  }
+  return Result.ok({
+    material,
+    documentCount: entry.documents.length,
+    indexId: material.lease.indexId,
+    ndjson: request.ndjson,
+    ndjsonBytes: Buffer.byteLength(request.ndjson, "utf-8") + 1,
+    leaseExpiresAtMs: material.lease.leaseExpiresAt.getTime(),
+  });
 };
 
 const addCancellation = (
@@ -391,20 +462,18 @@ const addCancellation = (
 type ProcessPreparedRequestsOptions = {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
-  materialsReady: readonly CorpusProjectionMaterial[];
   requests: readonly PreparedProjectionRequest[];
   requestIndex: number;
-  windowEnd: number;
+  unattemptedLeases: readonly CorpusProjectionIntentLease[];
   result: CorpusProjectionAppendCycleResult;
 };
 
 const processPreparedRequests = async ({
   runInTransaction,
   client,
-  materialsReady,
   requests,
   requestIndex,
-  windowEnd,
+  unattemptedLeases,
   result,
 }: ProcessPreparedRequestsOptions): Promise<"completed" | "append_unknown"> => {
   const request = requests.at(requestIndex);
@@ -442,24 +511,16 @@ const processPreparedRequests = async ({
     return await processPreparedRequests({
       runInTransaction,
       client,
-      materialsReady,
       requests,
       requestIndex: requestIndex + 1,
-      windowEnd,
+      unattemptedLeases,
       result,
     });
-  }
-  const startedPlan = planCorpusProjectionAppendRequests(
-    started.map(({ entry }) => entry),
-  );
-  if (startedPlan.isErr() || startedPlan.value.length !== 1) {
-    return panic("Started projection request no longer fits its plan");
   }
   result.requestCount += 1;
   const appended = await client.ingestCommittedBatch(
     request.indexId,
-    startedPlan.value.at(0)?.ndjson ??
-      panic("Projection request plan is empty"),
+    started.map(({ ndjson }) => ndjson).join("\n"),
   );
   if (appended.isErr()) {
     const abandoned = await runInTransaction(async (tx) => {
@@ -487,7 +548,7 @@ const processPreparedRequests = async ({
       .flatMap(({ entries: laterEntries }) =>
         laterEntries.map(({ material }) => material.lease),
       );
-    for (const { lease } of materialsReady.slice(windowEnd)) {
+    for (const lease of unattemptedLeases) {
       laterLeases.push(lease);
     }
     addCancellation(
@@ -509,7 +570,7 @@ const processPreparedRequests = async ({
         await commitCorpusProjectionAppendTx(tx, {
           intentId: preparedEntry.material.lease.intentId,
           leaseToken: preparedEntry.material.lease.leaseToken,
-          documentCount: preparedEntry.entry.documents.length,
+          documentCount: preparedEntry.documentCount,
         }),
     );
     const counts = { applied: 0, staleCleanupPending: 0, leaseLost: 0 };
@@ -536,10 +597,9 @@ const processPreparedRequests = async ({
   return await processPreparedRequests({
     runInTransaction,
     client,
-    materialsReady,
     requests,
     requestIndex: requestIndex + 1,
-    windowEnd,
+    unattemptedLeases,
     result,
   });
 };
@@ -548,6 +608,7 @@ type ProcessPreparedWindowsOptions = {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
   materialsReady: readonly CorpusProjectionMaterial[];
+  tails: Map<string, ProjectionAppendTail<PreparedProjectionEntry>>;
   windowStart: number;
   payloadReadConcurrency: number;
   retryDelayMs: number;
@@ -559,6 +620,7 @@ const processPreparedWindows = async ({
   runInTransaction,
   client,
   materialsReady,
+  tails,
   windowStart,
   payloadReadConcurrency,
   retryDelayMs,
@@ -566,11 +628,24 @@ const processPreparedWindows = async ({
   result,
 }: ProcessPreparedWindowsOptions): Promise<"completed" | "append_unknown"> => {
   if (windowStart >= materialsReady.length) {
-    return "completed";
+    const final = advanceCorpusProjectionAppendTails({
+      tails,
+      entries: [],
+      mode: "flush-all",
+      nowMs: Date.now(),
+    });
+    return await processPreparedRequests({
+      runInTransaction,
+      client,
+      requests: final.flush,
+      requestIndex: 0,
+      unattemptedLeases: [],
+      result,
+    });
   }
-  // A window is fully classified and appended before the next payload is
-  // read. Peak residency therefore follows Plane's bounded concurrency,
-  // rather than the reservation limit of up to hundreds of documents.
+  // Payload I/O stays bounded by this window. Prepared entries then collect
+  // only until the byte planner emits a full request; at most one request-
+  // sized tail per physical index survives into the next window.
   const windowEnd = Math.min(
     windowStart + payloadReadConcurrency,
     materialsReady.length,
@@ -613,17 +688,6 @@ const processPreparedWindows = async ({
       },
     });
   }
-  const plan = planPreparedRequests(prepared);
-  for (const { material } of plan.blocked) {
-    preparationFailures.push({
-      lease: material.lease,
-      failure: {
-        status: "blocked",
-        kind: "revision_too_large",
-        message: "projection revision exceeds the append safety ceiling",
-      },
-    });
-  }
   const classified = await classifyReservationFailures({
     runInTransaction,
     failures: preparationFailures,
@@ -633,13 +697,26 @@ const processPreparedWindows = async ({
   result.cancelled += classified.staleCancelled;
   result.leaseLost += classified.leaseLost;
 
+  const advanced = advanceCorpusProjectionAppendTails({
+    tails,
+    entries: prepared,
+    mode: "buffer",
+    nowMs: Date.now(),
+  });
+  const unattemptedLeases = [...advanced.tails.values()].flatMap(
+    ({ entries: tailEntries }) =>
+      tailEntries.map(({ material }) => material.lease),
+  );
+  for (const { lease } of materialsReady.slice(windowEnd)) {
+    unattemptedLeases.push(lease);
+  }
+
   const requestStatus = await processPreparedRequests({
     runInTransaction,
     client,
-    materialsReady,
-    requests: plan.requests,
+    requests: advanced.flush,
     requestIndex: 0,
-    windowEnd,
+    unattemptedLeases,
     result,
   });
   if (requestStatus === "append_unknown") {
@@ -649,6 +726,7 @@ const processPreparedWindows = async ({
     runInTransaction,
     client,
     materialsReady,
+    tails: advanced.tails,
     windowStart: windowEnd,
     payloadReadConcurrency,
     retryDelayMs,
@@ -746,6 +824,7 @@ export const executeCorpusProjectionAppendCycle = async <
     runInTransaction,
     client,
     materialsReady: materials.ready,
+    tails: new Map(),
     windowStart: 0,
     payloadReadConcurrency,
     retryDelayMs,

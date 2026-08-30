@@ -19,6 +19,8 @@ import { isRecord } from "@/api/lib/type-guards";
 type ProjectionRevision = SafeId<"corpusIndexProjectionIntent">;
 
 export const CORPUS_PROJECTION_APPEND_MAX_REVISIONS = 512;
+export const CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES =
+  LIMITS.corpusIndexIngestMaxBytes;
 export const CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES =
   LIMITS.corpusPayloadMaxDecompressedBytes;
 export const CORPUS_PROJECTION_DELETE_MAX_REVISIONS = 128;
@@ -137,7 +139,7 @@ export const planCorpusProjectionAppendRequests = (
 
   const requests = splitIngestRequests(
     entries.map((entry) => ({ row: entry, docs: [...entry.documents] })),
-    LIMITS.corpusIndexIngestMaxBytes,
+    CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
   );
   for (const request of requests) {
     if (
