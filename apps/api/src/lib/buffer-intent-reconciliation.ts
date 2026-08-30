@@ -148,8 +148,8 @@ export const lockActiveWorkspaceForBufferIntent = async (
     .select({ status: workspaces.status })
     .from(workspaces)
     .where(eq(workspaces.id, workspaceId))
-    .for("share")
-    .limit(1);
+    .limit(1)
+    .for("share");
   if (rows.at(0)?.status !== "active") {
     throw new BufferIntentWorkspaceUnavailableError({
       message: "Workspace is not active",
