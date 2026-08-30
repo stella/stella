@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use web_time::Instant;
 
 use regex::Regex;
+use unicode_properties::{GeneralCategory, UnicodeGeneralCategory};
 
 use crate::processors::PatternSlice;
 use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
@@ -2097,10 +2098,12 @@ fn is_plausible_unit_value(value: &str) -> bool {
       return false;
     }
     for ch in segment.chars() {
-      if ch.is_alphabetic() && ch.is_uppercase() {
-        uppercase_count = uppercase_count.saturating_add(1);
-      } else if ch.is_ascii_digit() {
+      if ch.general_category() == GeneralCategory::DecimalNumber {
         digit_count = digit_count.saturating_add(1);
+      } else if ch.is_numeric() {
+        return false;
+      } else if ch.is_alphabetic() && ch.is_uppercase() {
+        uppercase_count = uppercase_count.saturating_add(1);
       } else {
         return false;
       }

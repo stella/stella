@@ -1491,6 +1491,7 @@ dependencies = [
  "stella-anonymize-adapter-contract",
  "stella-stdnum-core",
  "stella-text-search-core",
+ "unicode-properties",
  "unicode-segmentation",
  "web-time",
  "zeroize",
