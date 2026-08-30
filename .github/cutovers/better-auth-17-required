@@ -1,5 +1,0 @@
-The Better Auth 1.7 production cutover has not completed.
-
-Stable releases containing this marker require the explicit Better Auth
-cutover authorization. Remove the marker in a reviewed follow-up only after
-the production cutover and canaries have completed successfully.
