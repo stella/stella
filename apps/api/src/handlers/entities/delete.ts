@@ -41,6 +41,8 @@ import {
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
+import { selectCanonicalFileContents } from "./delete-file-snapshot";
+
 const deleteEntitiesBodySchema = t.Object({
   entityIds: t.Array(tSafeId("entity"), {
     minItems: 1,
@@ -189,21 +191,10 @@ export const deleteEntitiesHandler = async function* ({
           currentVersionId === null ? [] : [[currentVersionId, id] as const],
         ),
       );
-      const currentFileByEntityId = new Map<
-        string,
-        Extract<(typeof fieldRows)[number]["content"], { type: "file" }>
-      >();
-      for (const { content, entityVersionId } of fieldRows) {
-        const entityId = entityIdByCurrentVersionId.get(entityVersionId);
-        if (
-          content.type !== "file" ||
-          entityId === undefined ||
-          currentFileByEntityId.has(entityId)
-        ) {
-          continue;
-        }
-        currentFileByEntityId.set(entityId, content);
-      }
+      const currentFileByEntityId = selectCanonicalFileContents(
+        fieldRows,
+        entityIdByCurrentVersionId,
+      );
 
       const fileRefs = fieldRows.flatMap((row) =>
         extractFieldFileRefs(row.content),
