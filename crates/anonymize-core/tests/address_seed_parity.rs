@@ -365,6 +365,25 @@ fn lowercase_entity_contents_do_not_count_as_residual_prose() {
 }
 
 #[test]
+fn city_fragments_do_not_grow_over_capitalized_prose() {
+  let prepared = barrier_address_engine();
+  let result = prepared
+    .redact_static_entities(
+      "123 Main Street, Case No. 1:23-cv-04567, Paris Meridian Capital signed.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  let addresses = address_texts(&result);
+  assert!(addresses.contains(&"123 Main Street"));
+  assert!(
+    !addresses.iter().any(|address| address.contains("Capital")),
+    "address entities: {addresses:?}; address seeds: {:?}",
+    result.detections.entities.address_seed(),
+  );
+}
+
+#[test]
 fn paragraph_barriers_keep_unrelated_address_evidence_separate() {
   let prepared = barrier_address_engine();
   let paragraph_result = prepared

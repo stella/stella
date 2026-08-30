@@ -399,7 +399,15 @@ impl PreparedAddressSeedData {
         {
           (
             AddressEvidence::collect(&cluster.seeds).score(),
-            SpanGrowth::StreetNameOnly,
+            if cluster
+              .seeds
+              .iter()
+              .any(|seed| seed.kind == SeedType::StreetWord)
+            {
+              SpanGrowth::StreetNameOnly
+            } else {
+              SpanGrowth::None
+            },
           )
         }
         None => (
