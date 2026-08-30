@@ -319,6 +319,8 @@ impl<'a> StaticDetectorContext<'a> {
   pub(super) fn detect_signature(&self) -> Result<Vec<PipelineEntity>> {
     let full_text = self.full_text()?;
     let first_names = self.first_names()?;
+    let empty_title_tokens = BTreeSet::new();
+    let title_tokens = self.title_tokens()?.unwrap_or(&empty_title_tokens);
     let name_corpus = self.name_corpus_data()?;
     Ok(self.signature_data()?.map_or_else(Vec::new, |data| {
       detect_signatures(&DetectSignaturesArgs {
@@ -326,6 +328,7 @@ impl<'a> StaticDetectorContext<'a> {
         data,
         first_names,
         name_corpus,
+        title_tokens,
       })
     }))
   }

@@ -17,10 +17,12 @@ struct PartyRoleEvidence<'a> {
   first_names: Option<&'a BTreeSet<String>>,
   name_corpus: Option<&'a PreparedNameCorpusData>,
   party_role_name_tokens: &'a [String],
+  title_tokens: &'a BTreeSet<String>,
 }
 
 impl PartyRoleEvidence<'_> {
   fn has_person_name_token(self, candidate: &str) -> bool {
+    let candidate = without_leading_title_tokens(candidate, self.title_tokens);
     if let Some(corpus) = self.name_corpus {
       return corpus.has_leading_person_name_token(candidate)
         || (!corpus.is_organization(candidate)
@@ -268,6 +270,25 @@ fn starts_with_first_name_token(text: &str, names: &BTreeSet<String>) -> bool {
       .is_some_and(|word| names.contains(&word.to_lowercase()))
 }
 
+fn without_leading_title_tokens<'a>(
+  mut text: &'a str,
+  title_tokens: &BTreeSet<String>,
+) -> &'a str {
+  loop {
+    let trimmed = text.trim_start();
+    let Some(token) = trimmed.split_whitespace().next() else {
+      return trimmed;
+    };
+    let bare = token
+      .trim_matches(|ch: char| matches!(ch, '.' | ','))
+      .to_lowercase();
+    if !title_tokens.contains(&bare) {
+      return trimmed;
+    }
+    text = &trimmed[token.len()..];
+  }
+}
+
 pub(crate) fn decode_party_role_name_evidence(
   encoded: &str,
 ) -> std::result::Result<Vec<String>, String> {
@@ -350,6 +371,7 @@ pub(crate) struct DetectSignaturesArgs<'a> {
   pub data: &'a PreparedSignatureData,
   pub first_names: Option<&'a BTreeSet<String>>,
   pub name_corpus: Option<&'a PreparedNameCorpusData>,
+  pub title_tokens: &'a BTreeSet<String>,
 }
 
 #[must_use]
@@ -360,6 +382,7 @@ pub(crate) fn detect_signatures(
   let data = args.data;
   let first_names = args.first_names;
   let name_corpus = args.name_corpus;
+  let title_tokens = args.title_tokens;
   let mut results = Vec::new();
   detect_slash_s(full_text, data, &mut results);
   detect_labelled_names(DetectLabelledNamesArgs {
@@ -367,6 +390,7 @@ pub(crate) fn detect_signatures(
     data,
     first_names,
     name_corpus,
+    title_tokens,
     results: &mut results,
   });
   detect_witness_blocks(full_text, data, &mut results);
@@ -440,6 +464,7 @@ struct DetectLabelledNamesArgs<'a> {
   data: &'a PreparedSignatureData,
   first_names: Option<&'a BTreeSet<String>>,
   name_corpus: Option<&'a PreparedNameCorpusData>,
+  title_tokens: &'a BTreeSet<String>,
   results: &'a mut Vec<PipelineEntity>,
 }
 
@@ -449,6 +474,7 @@ fn detect_labelled_names(args: DetectLabelledNamesArgs<'_>) {
     data,
     first_names,
     name_corpus,
+    title_tokens,
     results,
   } = args;
   let mut line_start = 0usize;
@@ -460,6 +486,7 @@ fn detect_labelled_names(args: DetectLabelledNamesArgs<'_>) {
         data,
         first_names,
         name_corpus,
+        title_tokens,
         line,
         line_start,
         results,
@@ -477,6 +504,7 @@ struct DetectLabelledNamesInLineArgs<'a> {
   data: &'a PreparedSignatureData,
   first_names: Option<&'a BTreeSet<String>>,
   name_corpus: Option<&'a PreparedNameCorpusData>,
+  title_tokens: &'a BTreeSet<String>,
   line: &'a str,
   line_start: usize,
   results: &'a mut Vec<PipelineEntity>,
@@ -488,6 +516,7 @@ fn detect_labelled_names_in_line(args: DetectLabelledNamesInLineArgs<'_>) {
     data,
     first_names,
     name_corpus,
+    title_tokens,
     line,
     line_start,
     results,
@@ -557,6 +586,7 @@ fn detect_labelled_names_in_line(args: DetectLabelledNamesInLineArgs<'_>) {
       first_names,
       name_corpus,
       party_role_name_tokens: &data.party_role_name_tokens,
+      title_tokens,
     });
     if value_is_empty {
       try_emit_forward_lines(
@@ -1438,6 +1468,7 @@ mod tests {
       data: &test_data(),
       first_names: None,
       name_corpus: None,
+      title_tokens: &BTreeSet::new(),
     })
   }
 
@@ -1502,6 +1533,7 @@ mod tests {
         data: &data,
         first_names: None,
         name_corpus: Some(&names),
+        title_tokens: &BTreeSet::new(),
       })
       .into_iter()
       .map(|entity| entity.text)
@@ -1514,6 +1546,7 @@ mod tests {
         data: &data,
         first_names: None,
         name_corpus: Some(&names),
+        title_tokens: &BTreeSet::new(),
       })
       .into_iter()
       .map(|entity| entity.text)
@@ -1526,6 +1559,7 @@ mod tests {
         data: &data,
         first_names: None,
         name_corpus: Some(&names),
+        title_tokens: &BTreeSet::new(),
       })
       .is_empty()
     );
@@ -1547,6 +1581,7 @@ mod tests {
         data: &data,
         first_names: Some(&first_names),
         name_corpus: None,
+        title_tokens: &BTreeSet::new(),
       })
       .into_iter()
       .map(|entity| entity.text)
@@ -1561,6 +1596,7 @@ mod tests {
         data: &data,
         first_names: Some(&hyphenated_first_names),
         name_corpus: None,
+        title_tokens: &BTreeSet::new(),
       })
       .into_iter()
       .map(|entity| entity.text)
@@ -1574,6 +1610,7 @@ mod tests {
         data: &data,
         first_names: Some(&compound_first_names),
         name_corpus: None,
+        title_tokens: &BTreeSet::new(),
       })
       .into_iter()
       .map(|entity| entity.text)
@@ -1586,6 +1623,7 @@ mod tests {
         data: &data,
         first_names: Some(&first_names),
         name_corpus: None,
+        title_tokens: &BTreeSet::new(),
       })
       .is_empty()
     );
@@ -1595,8 +1633,44 @@ mod tests {
         data: &data,
         first_names: Some(&first_names),
         name_corpus: None,
+        title_tokens: &BTreeSet::new(),
       })
       .is_empty()
+    );
+  }
+
+  #[test]
+  fn party_role_fields_skip_configured_titles_before_name_evidence() {
+    let data = prepared_signature_data(
+      SignatureData::default(),
+      vec![String::from("seller")],
+    );
+    let first_names = BTreeSet::from([String::from("jane")]);
+    let title_tokens = BTreeSet::from([String::from("dr")]);
+
+    let detected = detect_signatures(&DetectSignaturesArgs {
+      full_text: "Seller: Dr. Jane Roe",
+      data: &data,
+      first_names: Some(&first_names),
+      name_corpus: None,
+      title_tokens: &title_tokens,
+    });
+    assert_eq!(
+      detected
+        .into_iter()
+        .map(|entity| entity.text)
+        .collect::<Vec<_>>(),
+      ["Dr. Jane Roe"],
+    );
+    assert!(
+      detect_signatures(&DetectSignaturesArgs {
+        full_text: "Seller: Dr. Acme Trading",
+        data: &data,
+        first_names: Some(&first_names),
+        name_corpus: None,
+        title_tokens: &title_tokens,
+      })
+      .is_empty(),
     );
   }
 
@@ -1620,6 +1694,7 @@ mod tests {
         data: &data,
         first_names: None,
         name_corpus: None,
+        title_tokens: &BTreeSet::new(),
       })
       .into_iter()
       .map(|entity| entity.text)
@@ -1632,6 +1707,7 @@ mod tests {
         data: &data,
         first_names: None,
         name_corpus: None,
+        title_tokens: &BTreeSet::new(),
       })
       .is_empty()
     );
@@ -1641,6 +1717,7 @@ mod tests {
         data: &data,
         first_names: None,
         name_corpus: None,
+        title_tokens: &BTreeSet::new(),
       })
       .into_iter()
       .map(|entity| entity.text)
@@ -1668,6 +1745,7 @@ mod tests {
       data: &data,
       first_names: None,
       name_corpus: Some(&names),
+      title_tokens: &BTreeSet::new(),
     });
     assert_eq!(
       detected
@@ -1682,6 +1760,7 @@ mod tests {
         data: &data,
         first_names: None,
         name_corpus: Some(&names),
+        title_tokens: &BTreeSet::new(),
       })
       .is_empty()
     );
@@ -1710,6 +1789,7 @@ mod tests {
         data: &data,
         first_names: None,
         name_corpus: Some(&names),
+        title_tokens: &BTreeSet::new(),
       });
       assert_eq!(
         detected
@@ -1725,6 +1805,7 @@ mod tests {
         data: &data,
         first_names: None,
         name_corpus: Some(&names),
+        title_tokens: &BTreeSet::new(),
       })
       .is_empty(),
     );
@@ -1786,6 +1867,7 @@ mod tests {
         data: &data,
         first_names: None,
         name_corpus: None,
+        title_tokens: &BTreeSet::new(),
       })
       .into_iter()
       .map(|entity| entity.text)
@@ -1798,6 +1880,7 @@ mod tests {
         data: &data,
         first_names: None,
         name_corpus: None,
+        title_tokens: &BTreeSet::new(),
       })
       .is_empty()
     );
@@ -1925,6 +2008,7 @@ mod tests {
       data: &data,
       first_names: None,
       name_corpus: None,
+      title_tokens: &BTreeSet::new(),
     });
 
     assert_eq!(
@@ -1941,6 +2025,7 @@ mod tests {
           data: &data,
           first_names: None,
           name_corpus: None,
+        title_tokens: &BTreeSet::new(),
         })
         .is_empty(),
         "unexpected person field match for {text:?}",
@@ -1965,6 +2050,7 @@ mod tests {
       data: &data,
       first_names: None,
       name_corpus: None,
+      title_tokens: &BTreeSet::new(),
     });
     assert_eq!(
       entities
@@ -1981,6 +2067,7 @@ mod tests {
           data: &data,
           first_names: None,
           name_corpus: None,
+          title_tokens: &BTreeSet::new(),
         })
         .is_empty(),
         "unexpected short-name match for {text:?}",

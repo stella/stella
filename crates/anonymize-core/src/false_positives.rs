@@ -2580,6 +2580,31 @@ mod tests {
   }
 
   #[test]
+  fn subject_clause_verbs_do_not_cross_language_scope() {
+    let text =
+      "LIMITED LIABILITY COMPANY IST PARTY REGISTRATION REQUIREMENTS.\n";
+    let legal_form_data = prepared_clause_data(PreparedClauseDataArgs {
+      leading_phrases: &[],
+      role_heads: &["party"],
+      sentence_verbs: &["is"],
+    });
+    let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+      entities: vec![entity(
+        text,
+        "LIMITED LIABILITY COMPANY",
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      full_text: text,
+      filters: Some(&DenyListFilterData::default()),
+      legal_form_data: &legal_form_data,
+    })
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
   fn rejects_introducer_only_all_caps_headings() {
     for terminal in ["", "."] {
       let text = format!(

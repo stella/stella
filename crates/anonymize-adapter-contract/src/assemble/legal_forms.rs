@@ -463,8 +463,7 @@ fn is_boundary_legal_suffix_form(
 /// Loads a per-language `{ "lang": [...] }`-shaped file that maps arbitrary
 /// keys (skipping `_`-prefixed metadata) to string arrays, unioning every
 /// value into an insertion-ordered dedup set seeded with `seed`. Mirrors the
-/// `loadSentenceVerbIndicators` / `loadClauseNounHeads` /
-/// `loadStructuralSingleCapPrefixes` shape.
+/// `loadClauseNounHeads` / `loadStructuralSingleCapPrefixes` shape.
 fn load_lowercase_union(
   file: &str,
   seed: &[&str],
@@ -493,6 +492,17 @@ fn load_lowercase_union(
     }
   }
   Ok(out)
+}
+
+fn scoped_sentence_verb_indicators(
+  selected: Option<&[String]>,
+) -> Result<Vec<String>, AssembleError> {
+  let configured: OrderedMap<Value> =
+    parse_ordered_data_file("sentence-verb-indicators.json")?;
+  Ok(language::language_keyed_terms(&configured, selected)
+    .into_iter()
+    .map(|word| word.to_lowercase())
+    .collect())
 }
 
 /// Mirrors `getLegalRoleHeadsSync` (post-warm).
@@ -831,9 +841,8 @@ pub(super) fn build_legal_form_data(
     normalized_in_name_words,
     normalized_suffix_words,
     role_heads: role_heads(ctx.content_languages.as_deref())?,
-    sentence_verb_indicators: load_lowercase_union(
-      "sentence-verb-indicators.json",
-      &[],
+    sentence_verb_indicators: scoped_sentence_verb_indicators(
+      ctx.content_languages.as_deref(),
     )?,
     clause_noun_heads: scoped_clause_noun_heads(
       ctx.content_languages.as_deref(),
@@ -888,6 +897,7 @@ mod tests {
     leading_clause_trims, non_ascii_name_short_suffixes,
     organization_detection_suffixes, parse_data_file, role_heads,
     scoped_clause_noun_heads, scoped_connector_words,
+    scoped_sentence_verb_indicators,
     validate_institutional_terms,
   };
 
@@ -915,6 +925,19 @@ mod tests {
 
     assert!(czech.iter().any(|word| word == "poskytovatele"));
     assert!(!english.iter().any(|word| word == "poskytovatele"));
+  }
+
+  #[test]
+  fn sentence_verbs_follow_content_language_scope() {
+    let english =
+      scoped_sentence_verb_indicators(Some(&[String::from("en")])).unwrap();
+    let german =
+      scoped_sentence_verb_indicators(Some(&[String::from("de")])).unwrap();
+
+    assert!(english.iter().any(|word| word == "is"));
+    assert!(!english.iter().any(|word| word == "ist"));
+    assert!(german.iter().any(|word| word == "ist"));
+    assert!(!german.iter().any(|word| word == "is"));
   }
 
   #[test]

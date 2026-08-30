@@ -10,6 +10,7 @@ static_detector_rules! {
     inputs: &[
       DetectorInput::FullText,
       DetectorInput::FirstNames,
+      DetectorInput::TitleTokens,
     ];
     scales: &[DetectorInput::FullText];
     uses: &[

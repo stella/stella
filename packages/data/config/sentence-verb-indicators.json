@@ -1,5 +1,5 @@
 {
-  "_comment": "Verb-like tokens that signal sentence context inside a legal-form match span. When one of these appears between a role-head opening ('Vendor', 'Predávajúci') and the legal-form suffix ('Inc.', 's.r.o.'), the match is a swept sentence fragment and gets trimmed back to the real organisation name. Lowercased; matched case-insensitively. Organised per-language because verb morphology is language-specific; at runtime the legal-form detector unions every language's list into a single set because match spans don't carry a language tag.",
+  "_comment": "Verb-like tokens that signal sentence context inside a legal-form match span. When one of these appears between a role-head opening ('Vendor', 'Predávajúci') and the legal-form suffix ('Inc.', 's.r.o.'), the match is a swept sentence fragment and gets trimmed back to the real organisation name. Lowercased; matched case-insensitively. Organised per-language because verb morphology is language-specific; assembly selects the configured content languages.",
   "cs": [
     "je",
     "jsou",
