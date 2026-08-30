@@ -1226,8 +1226,9 @@ export const bufferObjectCleanupIntents = p.pgTable(
       .text("writer_user_id")
       .$type<SafeId<"user">>()
       // PostgreSQL deparses this built-in without its implicit pg_catalog
-      // qualifier; matching that canonical form keeps schema parity stable.
-      .default(sql`current_setting('app.user_id', true)`),
+      // qualifier and with an explicit text cast; matching that canonical form
+      // keeps schema parity stable.
+      .default(sql`current_setting('app.user_id'::text, true)`),
     objectKey: p.text("object_key").notNull(),
     status: p
       .text({
