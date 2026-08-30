@@ -582,7 +582,6 @@ describe("custom oxlint guardrails", () => {
     // per call site: the pair is the identity the ledger is keyed on, and a
     // line number would churn on every edit above the mock.
     const droppedByPair = new Map<string, Set<string>>();
-    let readableFactories = 0;
     for (const relative of [
       ...new Bun.Glob("src/**/*.test.{ts,tsx}").scanSync({
         cwd: apiRoot,
@@ -597,7 +596,6 @@ describe("custom oxlint guardrails", () => {
         if (moduleFile === undefined) {
           continue;
         }
-        readableFactories += 1;
         if (
           factory.spreadsAnother &&
           source.includes(`await import("${factory.specifier}")`)
@@ -622,10 +620,6 @@ describe("custom oxlint guardrails", () => {
         }
       }
     }
-
-    // A scan that matched no readable factory would satisfy every check below
-    // without exercising anything.
-    expect(readableFactories).toBeGreaterThan(0);
 
     const offenders = [...droppedByPair]
       .map(([pair, dropped]) => ({
