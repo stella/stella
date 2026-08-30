@@ -138,7 +138,12 @@ type ActivityPerformer = {
 type ActivityItem = {
   id: SafeId<"auditLog">;
   performer: ActivityPerformer;
-  target: { deleted: boolean; kind: string; name: string | null };
+  target: {
+    deleted: boolean;
+    kind: string;
+    mimeType: string | null;
+    name: string | null;
+  };
 };
 
 beforeAll(async () => {
@@ -351,6 +356,41 @@ describe("matter overview activity", () => {
     expect(
       items.find((activityItem) => activityItem.id === folderDeleteId)?.target,
     ).toMatchObject({ deleted: true, kind: "folder", name: "Pleadings" });
+  });
+
+  test("a deleted document keeps its MIME type via the audit snapshot", async () => {
+    const documentId = Bun.randomUUIDv7();
+    const documentDeleteId = await seedActivity({
+      action: AUDIT_ACTION.DELETE,
+      changes: {
+        deleted: {
+          old: {
+            kind: "document",
+            mimeType:
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            name: "Agreement.docx",
+          },
+          new: null,
+        },
+      },
+      organizationId: ids.orgA,
+      resourceId: documentId,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+    });
+
+    const items = await readActivityOfWorkspaceA1();
+
+    expect(
+      items.find((activityItem) => activityItem.id === documentDeleteId)
+        ?.target,
+    ).toMatchObject({
+      deleted: true,
+      kind: "document",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      name: "Agreement.docx",
+    });
   });
 
   test("pages historical performers from authorized activity, not current matter membership", async () => {

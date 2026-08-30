@@ -4,6 +4,7 @@ import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME, EML_MIME, MSG_MIME, PPTX_MIME } from "@/lib/consts";
 
 import { getDocumentIconKind } from "./document-icon.logic";
+import type { DocumentIconKind } from "./document-icon.logic";
 
 describe("document icon MIME classification", () => {
   test("uses the email icon for EML and Outlook MSG files", () => {
@@ -25,6 +26,30 @@ describe("document icon MIME classification", () => {
       "powerpoint",
     );
     expect(getDocumentIconKind("text/plain")).toBe("text");
+  });
+
+  test("recovers supported document kinds from historical filenames without MIME metadata", () => {
+    const historicalFiles = [
+      ["agreement.docx", "word"],
+      ["legacy.doc", "word"],
+      ["evidence.pdf", "pdf"],
+      ["schedule.xlsx", "excel"],
+      ["legacy.xls", "excel"],
+      ["hearing.pptx", "powerpoint"],
+      ["legacy.ppt", "powerpoint"],
+      ["notes.rtf", "rtf"],
+      ["filing.odt", "openDocumentText"],
+      ["ledger.ods", "openDocumentSheet"],
+      ["export.csv", "csv"],
+      ["scan.PNG", "image"],
+      ["message.eml", "email"],
+      ["readme.md", "markdown"],
+      ["notes.txt", "text"],
+    ] as const satisfies readonly (readonly [string, DocumentIconKind])[];
+
+    for (const [fileName, expectedKind] of historicalFiles) {
+      expect(getDocumentIconKind(null, fileName)).toBe(expectedKind);
+    }
   });
 
   // text/csv also matches the generic text/ prefix, so it must be classified

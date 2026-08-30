@@ -38,6 +38,7 @@ import {
   ocrDerivativeCursorFilter,
   ocrDerivativePageOrder,
 } from "@/api/lib/ocr-derivative-pages";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 const deleteEntitiesBodySchema = t.Object({
@@ -116,7 +117,11 @@ export const deleteEntitiesHandler = async function* ({
       // fence; storage cleanup happens later from a durable request, never
       // while this transaction owns locks.
       const lockedEntities = await tx
-        .select({ id: entities.id, readOnly: entities.readOnly })
+        .select({
+          currentVersionId: entities.currentVersionId,
+          id: entities.id,
+          readOnly: entities.readOnly,
+        })
         .from(entities)
         .where(
           and(
@@ -170,9 +175,26 @@ export const deleteEntitiesHandler = async function* ({
         );
 
       const fieldRows = await tx
-        .select({ content: fields.content })
+        .select({
+          content: fields.content,
+          entityVersionId: fields.entityVersionId,
+        })
         .from(fields)
         .where(inArray(fields.entityVersionId, entityVersionIds));
+
+      const entityIdByCurrentVersionId = new Map(
+        lockedEntities.flatMap(({ currentVersionId, id }) =>
+          currentVersionId === null ? [] : [[currentVersionId, id] as const],
+        ),
+      );
+      const currentFileByEntityId = new Map(
+        fieldRows.flatMap(({ content, entityVersionId }) => {
+          const entityId = entityIdByCurrentVersionId.get(entityVersionId);
+          return content.type === "file" && entityId !== undefined
+            ? [[entityId, content] as const]
+            : [];
+        }),
+      );
 
       const fileRefs = fieldRows.flatMap((row) =>
         extractFieldFileRefs(row.content),
@@ -271,21 +293,30 @@ export const deleteEntitiesHandler = async function* ({
 
       await recordAuditEvent(
         tx,
-        deleted.map((entity) => ({
-          action: AUDIT_ACTION.DELETE,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          resourceId: entity.id,
-          changes: {
-            deleted: {
-              old: {
-                kind: entity.kind,
-                name: entity.name,
-                parentId: entity.parentId,
+        deleted.map((entity) => {
+          const file = currentFileByEntityId.get(entity.id);
+          return {
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            resourceId: entity.id,
+            changes: {
+              deleted: {
+                old: {
+                  kind: entity.kind,
+                  name: entity.name,
+                  parentId: entity.parentId,
+                  ...(file
+                    ? {
+                        fileName: sanitizeFilename(file.fileName),
+                        mimeType: file.mimeType,
+                      }
+                    : {}),
+                },
+                new: null,
               },
-              new: null,
             },
-          },
-        })),
+          };
+        }),
       );
 
       return {

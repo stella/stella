@@ -125,7 +125,7 @@ export const EntityKindIcon = ({
     case "link":
       return <LinkIcon className={className} />;
     case "document":
-      return mimeType ? (
+      return mimeType || fileName ? (
         <DocumentIcon
           className={className}
           fileName={fileName}

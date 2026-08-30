@@ -231,7 +231,14 @@ const auditEntityNameSnapshot = () => sql<string | null>`coalesce(
   ${auditLogs.metadata} ->> 'fileName',
   ${auditLogs.changes} -> 'created' -> 'new' ->> 'name',
   ${auditLogs.changes} -> 'created' -> 'new' ->> 'fileName',
-  ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'name'
+  ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'name',
+  ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'fileName'
+)`;
+
+const auditEntityMimeTypeSnapshot = () => sql<string | null>`coalesce(
+  ${auditLogs.metadata} ->> 'mimeType',
+  ${auditLogs.changes} -> 'created' -> 'new' ->> 'mimeType',
+  ${auditLogs.changes} -> 'deleted' -> 'old' ->> 'mimeType'
 )`;
 
 const siblingVersionEntityNameSnapshot = () => sql<string | null>`(
@@ -279,6 +286,18 @@ const siblingDeletedEntityName = () => sql<string | null>`(
     and ${entitySnapshotAuditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
     and ${entitySnapshotAuditLogs.resourceId} = ${resolvedAuditEntityIdSnapshot()}
     and ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'name' is not null
+  order by ${entitySnapshotAuditLogs.createdAt} desc, ${entitySnapshotAuditLogs.id} desc
+  limit 1
+)`;
+
+const siblingDeletedEntityMimeType = () => sql<string | null>`(
+  select ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'mimeType'
+  from ${auditLogs} as "entity_snapshot_audit_logs"
+  where ${entitySnapshotAuditLogs.organizationId} = ${auditLogs.organizationId}
+    and ${entitySnapshotAuditLogs.workspaceId} = ${auditLogs.workspaceId}
+    and ${entitySnapshotAuditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.ENTITY}
+    and ${entitySnapshotAuditLogs.resourceId} = ${resolvedAuditEntityIdSnapshot()}
+    and ${entitySnapshotAuditLogs.changes} -> 'deleted' -> 'old' ->> 'mimeType' is not null
   order by ${entitySnapshotAuditLogs.createdAt} desc, ${entitySnapshotAuditLogs.id} desc
   limit 1
 )`;
@@ -664,6 +683,10 @@ export const readOverviewActivityPage = async ({
             createdAt: auditLogs.createdAt,
             createdAtCursor: activityCursor.cursorValue.as("created_at_cursor"),
             entityIdSnapshot: resolvedAuditEntityIdSnapshot(),
+            entityMimeTypeSnapshot: sql<string | null>`coalesce(
+              ${auditEntityMimeTypeSnapshot()},
+              ${siblingDeletedEntityMimeType()}
+            )`,
             entityNameSnapshot: sql<string | null>`coalesce(
               ${auditEntityNameSnapshot()},
               ${siblingDeletedEntityName()},
@@ -928,6 +951,7 @@ export const readOverviewActivityPage = async ({
             entityMap,
             entityIdSnapshot: row.entityIdSnapshot,
             entityKindSnapshot: row.legacyKind,
+            entityMimeTypeSnapshot: row.entityMimeTypeSnapshot,
             entityNameSnapshot: row.entityNameSnapshot,
             fieldVersionMap,
             matterColor: result.workspace?.color ?? null,
@@ -993,6 +1017,7 @@ type TargetForRowOptions = {
   entityMap: Map<string, EntityTarget>;
   entityIdSnapshot: string | null;
   entityKindSnapshot: string | null;
+  entityMimeTypeSnapshot: string | null;
   entityNameSnapshot: string | null;
   fieldVersionMap: Map<string, string>;
   matterColor: string | null;
@@ -1008,6 +1033,7 @@ const targetForRow = ({
   entityMap,
   entityIdSnapshot,
   entityKindSnapshot,
+  entityMimeTypeSnapshot,
   entityNameSnapshot,
   fieldVersionMap,
   matterColor,
@@ -1024,6 +1050,7 @@ const targetForRow = ({
         category,
         id: resourceId,
         kindSnapshot: entityKindSnapshot,
+        mimeType: entityMimeTypeSnapshot,
         name: entityNameSnapshot,
       })
     );
@@ -1037,6 +1064,7 @@ const targetForRow = ({
           category,
           id: entityId,
           kindSnapshot: entityKindSnapshot,
+          mimeType: entityMimeTypeSnapshot,
           name: entityNameSnapshot,
         })
       );
@@ -1054,6 +1082,7 @@ const targetForRow = ({
           category,
           id: entityId,
           kindSnapshot: entityKindSnapshot,
+          mimeType: entityMimeTypeSnapshot,
           name: entityNameSnapshot,
         })
       );
@@ -1110,6 +1139,7 @@ type DeletedEntityTargetOptions = {
   id: string;
   /** Kind recorded in the audit snapshot; the entity row itself is gone. */
   kindSnapshot?: string | null;
+  mimeType?: string | null;
   name?: string | null;
 };
 
@@ -1127,6 +1157,7 @@ const deletedEntityTarget = ({
   category = "documents",
   id,
   kindSnapshot = null,
+  mimeType = null,
   name = null,
 }: DeletedEntityTargetOptions): EntityTarget => ({
   color: null,
@@ -1136,7 +1167,7 @@ const deletedEntityTarget = ({
   fieldId: null,
   id,
   kind: deletedEntityKind(category, kindSnapshot),
-  mimeType: null,
+  mimeType,
   name,
   pdfFileId: null,
   propertyId: null,

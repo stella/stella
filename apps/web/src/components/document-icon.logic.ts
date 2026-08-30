@@ -60,58 +60,104 @@ export type DocumentIconKind =
   | "text"
   | "file";
 
+const DOCUMENT_ICON_KIND_BY_EXTENSION = {
+  ".csv": "csv",
+  ".doc": "word",
+  ".docx": "word",
+  ".eml": "email",
+  ".gif": "image",
+  ".jpeg": "image",
+  ".jpg": "image",
+  ".md": "markdown",
+  ".msg": "email",
+  ".ods": "openDocumentSheet",
+  ".odt": "openDocumentText",
+  ".pdf": "pdf",
+  ".png": "image",
+  ".ppt": "powerpoint",
+  ".pptx": "powerpoint",
+  ".rtf": "rtf",
+  ".txt": "text",
+  ".webp": "image",
+  ".xls": "excel",
+  ".xlsx": "excel",
+} as const satisfies Record<string, DocumentIconKind>;
+
+const documentIconKindForFileName = (
+  fileName: string | null | undefined,
+): DocumentIconKind | null => {
+  const normalizedFileName = fileName?.trim().toLowerCase();
+  if (!normalizedFileName) {
+    return null;
+  }
+  for (const [extension, iconKind] of Object.entries(
+    DOCUMENT_ICON_KIND_BY_EXTENSION,
+  )) {
+    if (normalizedFileName.endsWith(extension)) {
+      return iconKind;
+    }
+  }
+  return null;
+};
+
 export const getDocumentIconKind = (
-  mimeType: string,
+  mimeType: string | null | undefined,
   fileName?: string | null,
 ): DocumentIconKind => {
-  if (mimeType === PDF_MIME_TYPE) {
+  const normalizedMimeType = mimeType ?? "";
+  if (normalizedMimeType === PDF_MIME_TYPE) {
     return "pdf";
   }
 
-  if (Object.hasOwn(wordMimeTypes, mimeType)) {
+  if (Object.hasOwn(wordMimeTypes, normalizedMimeType)) {
     return "word";
   }
 
-  if (Object.hasOwn(rtfMimeTypes, mimeType)) {
+  if (Object.hasOwn(rtfMimeTypes, normalizedMimeType)) {
     return "rtf";
   }
 
-  if (Object.hasOwn(openDocumentTextMimeTypes, mimeType)) {
+  if (Object.hasOwn(openDocumentTextMimeTypes, normalizedMimeType)) {
     return "openDocumentText";
   }
 
-  if (Object.hasOwn(excelMimeTypes, mimeType)) {
+  if (Object.hasOwn(excelMimeTypes, normalizedMimeType)) {
     return "excel";
   }
 
-  if (Object.hasOwn(powerpointMimeTypes, mimeType)) {
+  if (Object.hasOwn(powerpointMimeTypes, normalizedMimeType)) {
     return "powerpoint";
   }
 
-  if (Object.hasOwn(openDocumentSheetMimeTypes, mimeType)) {
+  if (Object.hasOwn(openDocumentSheetMimeTypes, normalizedMimeType)) {
     return "openDocumentSheet";
   }
 
-  if (Object.hasOwn(csvMimeTypes, mimeType)) {
+  if (Object.hasOwn(csvMimeTypes, normalizedMimeType)) {
     return "csv";
   }
 
-  if (Object.hasOwn(imageMimeTypes, mimeType)) {
+  if (Object.hasOwn(imageMimeTypes, normalizedMimeType)) {
     return "image";
   }
 
   if (
-    Object.hasOwn(emailMimeTypes, mimeType) ||
-    isEmailFile({ fileName, mimeType })
+    Object.hasOwn(emailMimeTypes, normalizedMimeType) ||
+    isEmailFile({ fileName, mimeType: normalizedMimeType })
   ) {
     return "email";
   }
 
-  if (isMarkdownFile({ fileName, mimeType })) {
+  if (isMarkdownFile({ fileName, mimeType: normalizedMimeType })) {
     return "markdown";
   }
 
-  if (mimeType.startsWith("text/")) {
+  const fileNameIconKind = documentIconKindForFileName(fileName);
+  if (fileNameIconKind !== null) {
+    return fileNameIconKind;
+  }
+
+  if (normalizedMimeType.startsWith("text/")) {
     return "text";
   }
 

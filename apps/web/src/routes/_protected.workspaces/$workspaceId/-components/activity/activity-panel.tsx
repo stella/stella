@@ -1818,7 +1818,10 @@ const targetIcon = (item: MatterActivityItem) => {
 };
 
 const activityTargetIcon = (item: MatterActivityItem) => {
-  if (item.target.kind === "document" && item.target.mimeType) {
+  if (
+    item.target.kind === "document" &&
+    (item.target.mimeType || item.target.name)
+  ) {
     return (
       <DocumentIcon
         className="size-3.5"
