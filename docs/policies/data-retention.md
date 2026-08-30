@@ -130,8 +130,11 @@ content. Deletion is immediate and irreversible upon request.
   soft-delete columns in the schema.
 - Cascade and restrict FK constraints are defined in
   `apps/api/src/db/schema/` and enforced by PostgreSQL.
-- Deletion flows that own S3 objects await bounded cleanup before removing
-  their database references.
+- Entity, workspace, and organization deletion records durable cleanup work in
+  the same transaction as database removal; bounded reconciliation applies
+  incomplete object deletion after commit.
+- Other deletion flows retain the ordering documented for their owning
+  handlers.
 
 ## Review
 

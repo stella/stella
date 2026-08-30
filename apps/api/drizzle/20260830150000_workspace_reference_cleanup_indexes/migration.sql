@@ -12,17 +12,17 @@ ALTER TABLE "buffer_object_cleanup_intents"
 -- rows may still have a live writer, so only that writer may retire them after
 -- exact-key cleanup. Current application inserts are linted to choose a state
 -- explicitly even though this rolling-deploy default must remain available.
-ADD COLUMN "status" text DEFAULT 'recovering' NOT NULL;
+ADD COLUMN IF NOT EXISTS "status" text DEFAULT 'recovering' NOT NULL;
 --> statement-breakpoint
 ALTER TABLE "buffer_object_cleanup_intents"
-ADD COLUMN "chat_thread_id" uuid;
+ADD COLUMN IF NOT EXISTS "chat_thread_id" uuid;
 --> statement-breakpoint
 -- The creator identity is deliberately not an FK: it is the narrow settlement
 -- capability that remains after lifecycle teardown removes the owner rows.
 -- Existing root-owned recovery rows remain null; scoped writers receive the
 -- transaction's authenticated user automatically, including older tasks.
 ALTER TABLE "buffer_object_cleanup_intents"
-ADD COLUMN "writer_user_id" text;
+ADD COLUMN IF NOT EXISTS "writer_user_id" text;
 --> statement-breakpoint
 ALTER TABLE "buffer_object_cleanup_intents"
 ALTER COLUMN "writer_user_id"
@@ -101,6 +101,10 @@ WITH CHECK (
   )
 );
 --> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - replay replaces only this migration's policy inside the same transaction before recreating the same access contract.
+DROP POLICY IF EXISTS "buffer_object_cleanup_select"
+ON "buffer_object_cleanup_intents";
+--> statement-breakpoint
 CREATE POLICY "buffer_object_cleanup_select"
 ON "buffer_object_cleanup_intents"
 AS PERMISSIVE FOR SELECT TO stella
@@ -162,6 +166,10 @@ USING (
     )
   )
 );
+--> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - replay replaces only this migration's policy inside the same transaction before recreating the same access contract.
+DROP POLICY IF EXISTS "buffer_object_cleanup_update"
+ON "buffer_object_cleanup_intents";
 --> statement-breakpoint
 CREATE POLICY "buffer_object_cleanup_update"
 ON "buffer_object_cleanup_intents"
@@ -287,9 +295,21 @@ USING (
   )
 );
 --> statement-breakpoint
-ALTER TABLE "buffer_object_cleanup_intents"
-ADD CONSTRAINT "buffer_object_cleanup_status_check"
-CHECK ("status" IN ('orphaned', 'recovering', 'writing')) NOT VALID;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_constraint
+    WHERE conname = 'buffer_object_cleanup_status_check'
+      AND conrelid =
+        'public.buffer_object_cleanup_intents'::pg_catalog.regclass
+  ) THEN
+    ALTER TABLE "buffer_object_cleanup_intents"
+    ADD CONSTRAINT "buffer_object_cleanup_status_check"
+    CHECK ("status" IN ('orphaned', 'recovering', 'writing')) NOT VALID;
+  END IF;
+END
+$$;
 --> statement-breakpoint
 -- Finish the additive DDL transaction before validating so the scan does not
 -- retain its earlier locks. The remaining index work must also run outside a

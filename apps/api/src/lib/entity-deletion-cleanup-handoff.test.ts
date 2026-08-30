@@ -81,3 +81,22 @@ test("captures a failed hand-off without failing the committed deletion", async 
 
   expect(captureDeliveryError).toHaveBeenCalledTimes(1);
 });
+
+test("preserves committed deletion success when delivery telemetry fails", async () => {
+  const captureDeliveryError = mock(() => {
+    throw new Error("telemetry unavailable");
+  });
+  const enqueueCleanup = mock(async () => {
+    await Promise.reject(new Error("redis unavailable"));
+  });
+
+  await expect(
+    handoffCommittedEntityDeletionCleanupBatch({
+      captureDeliveryError,
+      enqueueCleanup,
+      requestIds: [requestId],
+    }),
+  ).resolves.toBeUndefined();
+
+  expect(captureDeliveryError).toHaveBeenCalledTimes(1);
+});

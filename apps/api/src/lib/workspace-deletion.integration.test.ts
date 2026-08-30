@@ -738,8 +738,9 @@ describe("workspace deletion", () => {
           async (tx) => await callback(asTestRaw<Transaction>(tx)),
         ),
     };
+    const auditFailure = new Error("audit unavailable");
     const recordAuditEvent: AuditRecorder = async () => {
-      throw new Error("audit unavailable");
+      throw auditFailure;
     };
 
     const result = await executeAuthorizedWorkspaceDeletion(
@@ -752,7 +753,7 @@ describe("workspace deletion", () => {
       { database, enqueueCleanup: async () => {} },
     );
 
-    expect(Result.isError(result)).toBe(true);
+    expect(Result.isError(result) ? result.error : null).toBe(auditFailure);
     expect(
       await testDb
         .select({ status: workspaces.status })

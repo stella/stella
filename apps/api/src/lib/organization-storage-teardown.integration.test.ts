@@ -79,7 +79,7 @@ type Fixture = {
   checkpointKey: string;
   collabDocxKey: string;
   collabSnapshotKey: string;
-  foreignOrganizationWriterRejected: boolean;
+  foreignOrganizationWriterErrorTag: string | null;
   globalChatAttachmentKey: string;
   ocrKey: string;
   organizationId: SafeId<"organization">;
@@ -509,9 +509,11 @@ beforeAll(async () => {
     checkpointKey: `${organizationId}/${firstWorkspaceId}/${checkpointFileId}.docx`,
     collabDocxKey: `${organizationId}/${secondWorkspaceId}/${collabDocxFileId}.docx`,
     collabSnapshotKey: `${organizationId}/${secondWorkspaceId}/${collabSnapshotFileId}.bin`,
-    foreignOrganizationWriterRejected: Result.isError(
+    foreignOrganizationWriterErrorTag: Result.isError(
       foreignOrganizationWriter,
-    ),
+    )
+      ? foreignOrganizationWriter.error._tag
+      : null,
     globalChatAttachmentKey: globalAttachment.s3Key,
     ocrKey: `${organizationId}/${firstWorkspaceId}/ocr/${runId}.pdf`,
     organizationId,
@@ -612,7 +614,7 @@ const recordedKeys = async (
 
 describe("organization deletion storage teardown", () => {
   test("organization-scoped writer ownership stays pinned to the user key", () => {
-    expect(fixture.foreignOrganizationWriterRejected).toBe(true);
+    expect(fixture.foreignOrganizationWriterErrorTag).toBe("DatabaseRlsError");
   });
 
   test("records every stored object the organization owns", async () => {
