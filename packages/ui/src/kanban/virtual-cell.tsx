@@ -7,24 +7,42 @@ import {
   useRef,
 } from "react";
 
-import type { UniqueIdentifier } from "@dnd-kit/core";
+import { useDndContext, type UniqueIdentifier } from "@dnd-kit/core";
 import {
   SortableContext,
   type SortableContextProps,
   type SortingStrategy,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+  defaultRangeExtractor,
+  type Range,
+  useVirtualizer,
+} from "@tanstack/react-virtual";
 
 import { cn } from "../lib/utils";
 import {
   useKanbanDropTarget,
+  type KanbanVirtualScrollRequest,
   type UseKanbanDropTargetOptions,
 } from "./sortable-interactions";
 
 const DEFAULT_ESTIMATE_SIZE_PX = 128;
 const DEFAULT_OVERSCAN = 8;
 const DEFAULT_LOAD_MORE_THRESHOLD_PX = 200;
+
+const retainActiveSortableIndex = (
+  range: Range,
+  activeIndex: number,
+): number[] => {
+  const indexes = defaultRangeExtractor(range);
+  if (activeIndex < 0 || indexes.includes(activeIndex)) {
+    return indexes;
+  }
+  indexes.push(activeIndex);
+  indexes.sort((left, right) => left - right);
+  return indexes;
+};
 
 export const KANBAN_VIRTUAL_CELL_PAGINATION = {
   NONE: "none",
@@ -49,7 +67,7 @@ export type KanbanVirtualCellPagination =
  * merely to support dnd-kit consumers.
  */
 export type KanbanVirtualCellSortableContext<TRow> = {
-  dropTarget: Omit<UseKanbanDropTargetOptions, "itemIds">;
+  dropTarget: Omit<UseKanbanDropTargetOptions, "itemIds" | "navigation">;
   getRowId: (row: TRow) => UniqueIdentifier;
   disabled?: SortableContextProps["disabled"] | undefined;
   strategy?: SortingStrategy | undefined;
@@ -92,12 +110,9 @@ export const KanbanVirtualCell = <TRow,>({
   const scrollRef = internalRef;
   const requestedPageKeyRef = useRef<string | number | null>(null);
   const itemIds = sortable ? rows.map(sortable.getRowId) : [];
-  const dropTarget = useKanbanDropTarget({
-    disabled: sortable?.dropTarget.disabled ?? sortable === undefined,
-    id: sortable?.dropTarget.id ?? fallbackDropTargetId,
-    itemIds,
-    position: sortable?.dropTarget.position ?? { column: -1, lane: -1 },
-  });
+  const { active: activeDrag } = useDndContext();
+  const activeSortableIndex =
+    activeDrag === null ? -1 : itemIds.indexOf(activeDrag.id);
   const virtualizer = useVirtualizer({
     count: rows.length,
     estimateSize: () => estimateSize,
@@ -107,6 +122,24 @@ export const KanbanVirtualCell = <TRow,>({
     },
     getScrollElement: () => scrollRef.current,
     overscan,
+    rangeExtractor: (range) =>
+      retainActiveSortableIndex(range, activeSortableIndex),
+  });
+  const requestScroll = ({ itemId }: KanbanVirtualScrollRequest) => {
+    const index = itemIds.indexOf(itemId);
+    if (index !== -1) {
+      virtualizer.scrollToIndex(index, { align: "auto" });
+    }
+  };
+  const dropTarget = useKanbanDropTarget({
+    disabled: sortable?.dropTarget.disabled ?? sortable === undefined,
+    id: sortable?.dropTarget.id ?? fallbackDropTargetId,
+    itemIds,
+    navigation:
+      sortable === undefined
+        ? { type: "static" }
+        : { requestScroll, type: "virtual" },
+    position: sortable?.dropTarget.position ?? { column: -1, lane: -1 },
   });
 
   const handleScroll = ({ currentTarget }: UIEvent<HTMLDivElement>) => {

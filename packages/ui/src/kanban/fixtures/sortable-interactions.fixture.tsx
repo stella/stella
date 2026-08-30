@@ -24,6 +24,9 @@ const firstColumnRows = [
   { id: "fourth" },
   { id: "fifth" },
   { id: "sixth" },
+  ...Array.from({ length: 20 }, (_, index) => ({
+    id: `virtual-${index + 1}`,
+  })),
 ];
 
 const cells = [

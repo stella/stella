@@ -381,6 +381,39 @@ test("drops a touch drag into an adjacent virtual cell", async ({ page }) => {
     .toBe("second");
 });
 
+test("drops a whole-item touch drag across a virtual column", async ({
+  page,
+}) => {
+  await openFixture(page);
+  const wholeItem = page.getByRole("button", { name: "Move whole-item" });
+  const sourceCell = page.locator('[data-kanban-cell="cell-d"]');
+  await sourceCell.evaluate((element) => {
+    element.scrollTop = 96;
+  });
+  await expect
+    .poll(async () => await sourceCell.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(0);
+  const sourceCoordinates = await getTouchCoordinates(wholeItem);
+  const targetCoordinates = await getTouchCoordinates(
+    page.getByRole("button", { name: "Move lane-second" }),
+  );
+  const nativeTouch = await enableNativeTouch(page);
+
+  await dispatchNativeTouch(nativeTouch, "touchStart", [sourceCoordinates]);
+  await expect(page.locator("[data-overlay]")).toHaveText("whole-item");
+  await dispatchNativeTouch(nativeTouch, "touchMove", [targetCoordinates]);
+  await endNativeTouch(nativeTouch);
+
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["droppedOn"] ?? "",
+        ),
+    )
+    .toBe("lane-second");
+});
+
 test("drops pointer and touch input into an empty virtual cell", async ({
   page,
 }) => {
@@ -604,4 +637,50 @@ test("navigates items in order, then across matrix cells and lanes", async ({
         ),
     )
     .toBe("second");
+});
+
+test("keyboard navigation reaches rows beyond the virtualizer window", async ({
+  page,
+}) => {
+  const handle = await openFixture(page);
+  const sourceCell = page.locator('[data-kanban-cell="cell-a"]');
+  const targets = [
+    "third",
+    "fourth",
+    "fifth",
+    "sixth",
+    ...Array.from({ length: 12 }, (_, index) => `virtual-${index + 1}`),
+  ];
+
+  await handle.focus();
+  await page.keyboard.press("Space");
+  const moveToTarget = async (index: number): Promise<void> => {
+    const target = targets.at(index);
+    if (target === undefined) {
+      return;
+    }
+    await page.keyboard.press("ArrowDown");
+    await expect
+      .poll(
+        async () =>
+          await page.evaluate(
+            () => document.documentElement.dataset["draggedOver"] ?? "",
+          ),
+      )
+      .toBe(target);
+    await moveToTarget(index + 1);
+  };
+  await moveToTarget(0);
+  await expect
+    .poll(async () => await sourceCell.evaluate((node) => node.scrollTop))
+    .toBeGreaterThan(0);
+  await page.keyboard.press("Space");
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["droppedOn"] ?? "",
+        ),
+    )
+    .toBe("virtual-12");
 });

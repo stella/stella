@@ -17,16 +17,34 @@ export type KanbanSortableCellPosition = {
   lane: number;
 };
 
+export type KanbanVirtualScrollRequest = {
+  itemId: UniqueIdentifier;
+  type: "item";
+};
+
+export type KanbanCellVirtualNavigation =
+  | { type: "static" }
+  | {
+      requestScroll: (request: KanbanVirtualScrollRequest) => void;
+      type: "virtual";
+    };
+
 export type KanbanCellDropData = {
   itemIds: readonly UniqueIdentifier[];
+  navigation: KanbanCellVirtualNavigation;
   position: KanbanSortableCellPosition;
   type: "kanban-cell";
 };
 
+type KanbanKeyboardTargetState =
+  | { type: "idle" }
+  | { targetId: UniqueIdentifier; type: "pending" }
+  | { targetId: UniqueIdentifier; type: "ready" };
+
 export type KanbanItemDropData = {
-  navigation:
-    | { type: "idle" }
-    | { targetId: UniqueIdentifier; type: "keyboard" };
+  navigation: {
+    current: KanbanKeyboardTargetState;
+  };
   type: "kanban-item";
 };
 
@@ -55,6 +73,14 @@ const isCellPosition = (value: unknown): value is KanbanSortableCellPosition =>
   value["column"] >= 0 &&
   value["lane"] >= 0;
 
+const isKanbanCellVirtualNavigation = (
+  value: unknown,
+): value is KanbanCellVirtualNavigation =>
+  isRecord(value) &&
+  (value["type"] === "static" ||
+    (value["type"] === "virtual" &&
+      typeof value["requestScroll"] === "function"));
+
 export const isKanbanCellDropData = (
   value: unknown,
 ): value is KanbanCellDropData =>
@@ -62,6 +88,7 @@ export const isKanbanCellDropData = (
   value["type"] === KANBAN_DROP_TARGET_TYPES.CELL &&
   Array.isArray(value["itemIds"]) &&
   value["itemIds"].every(isUniqueIdentifier) &&
+  isKanbanCellVirtualNavigation(value["navigation"]) &&
   isCellPosition(value["position"]);
 
 const isKanbanItemDropData = (value: unknown): value is KanbanItemDropData => {
@@ -69,12 +96,25 @@ const isKanbanItemDropData = (value: unknown): value is KanbanItemDropData => {
     return false;
   }
   const navigation = value["navigation"];
+  const current = isRecord(navigation) ? navigation["current"] : undefined;
   return (
     isRecord(navigation) &&
-    (navigation["type"] === "idle" ||
-      (navigation["type"] === "keyboard" &&
-        isUniqueIdentifier(navigation["targetId"])))
+    isRecord(current) &&
+    (current["type"] === "idle" ||
+      ((current["type"] === "ready" || current["type"] === "pending") &&
+        isUniqueIdentifier(current["targetId"])))
   );
+};
+
+export const getKanbanKeyboardTargetState = (
+  value: unknown,
+): KanbanKeyboardTargetState | undefined =>
+  isKanbanItemDropData(value) ? value.navigation.current : undefined;
+
+export const clearKanbanKeyboardTarget = (value: unknown): void => {
+  if (isKanbanItemDropData(value) && value.navigation.current.type !== "idle") {
+    value.navigation.current = { type: "idle" };
+  }
 };
 
 const getSortableData = (value: unknown): SortableData | null => {
@@ -112,11 +152,17 @@ export const KANBAN_BOARD_COLLISION_DETECTION: CollisionDetection = (args) => {
   const boardContainers = args.droppableContainers.filter(isKanbanDroppable);
   if (args.pointerCoordinates === null) {
     const activeData: unknown = args.active.data.current;
-    if (
-      isKanbanItemDropData(activeData) &&
-      activeData.navigation.type === "keyboard"
-    ) {
-      const { targetId } = activeData.navigation;
+    if (isKanbanItemDropData(activeData)) {
+      if (activeData.navigation.current.type === "pending") {
+        return [];
+      }
+      if (activeData.navigation.current.type !== "ready") {
+        return closestCorners({
+          ...args,
+          droppableContainers: boardContainers,
+        });
+      }
+      const { targetId } = activeData.navigation.current;
       return boardContainers.some(({ id }) => id === targetId)
         ? [{ id: targetId }]
         : [];
@@ -272,7 +318,12 @@ export const kanbanKeyboardCoordinates: KeyboardCoordinateGetter = (
     const data: unknown = container.data.current;
     return isKanbanCellDropData(data) ? [{ ...data, id: container.id }] : [];
   });
-  const overId = context.over?.id ?? active;
+  const activeData: unknown = context.active?.data.current;
+  const keyboardTarget = getKanbanKeyboardTargetState(activeData);
+  const overId =
+    keyboardTarget?.type === "ready"
+      ? keyboardTarget.targetId
+      : (context.over?.id ?? active);
   const overContainer = context.droppableContainers.get(overId);
   const activeContainer = context.droppableContainers.get(active);
   const currentCellId =
@@ -295,15 +346,25 @@ export const kanbanKeyboardCoordinates: KeyboardCoordinateGetter = (
   const targetContainer = context.droppableContainers.get(targetId);
   const targetNode = targetContainer?.node.current;
   if (targetNode === null || targetNode === undefined) {
+    const targetCell = cells.find(({ itemIds }) => itemIds.includes(targetId));
+    if (
+      isKanbanItemDropData(activeData) &&
+      targetCell?.navigation.type === "virtual"
+    ) {
+      activeData.navigation.current = {
+        targetId,
+        type: "pending",
+      };
+      targetCell.navigation.requestScroll({ itemId: targetId, type: "item" });
+    }
     return undefined;
   }
   const targetRect = context.droppableRects.get(targetId);
   if (targetRect === undefined) {
     return undefined;
   }
-  const activeData: unknown = context.active?.data.current;
   if (isKanbanItemDropData(activeData)) {
-    activeData.navigation = { targetId, type: "keyboard" };
+    activeData.navigation.current = { targetId, type: "ready" };
   }
   // Commit the collision target before scrolling changes virtual measurements.
   requestAnimationFrame(() => {

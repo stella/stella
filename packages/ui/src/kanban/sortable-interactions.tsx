@@ -38,13 +38,22 @@ import { Button } from "../components/button";
 import { BOARD_DRAG_OVERLAY_Z_INDEX } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
 import {
+  clearKanbanKeyboardTarget,
+  getKanbanKeyboardTargetState,
   KANBAN_BOARD_COLLISION_DETECTION,
   KANBAN_DROP_TARGET_TYPES,
   kanbanKeyboardCoordinates,
   type KanbanCellDropData,
+  type KanbanCellVirtualNavigation,
+  type KanbanItemDropData,
   type KanbanSortableCellPosition,
 } from "./sortable-interactions.logic";
 import { isActiveTouchChange } from "./touch-identity";
+
+export type {
+  KanbanCellVirtualNavigation,
+  KanbanVirtualScrollRequest,
+} from "./sortable-interactions.logic";
 
 export {
   KANBAN_BOARD_COLLISION_DETECTION,
@@ -78,14 +87,15 @@ export type KanbanDragEndEvent = DragEndEvent;
 export type KanbanDragOverEvent = DragOverEvent;
 export type KanbanDragStartEvent = DragStartEvent;
 
-type TouchSensorProps = SensorProps<TouchSensorOptions>;
-type KeyboardSensorProps = SensorProps<KeyboardSensorOptions>;
+type TouchSensorConstructorOptions = SensorProps<TouchSensorOptions>;
+type KeyboardSensorConstructorOptions = SensorProps<KeyboardSensorOptions>;
 
 const KANBAN_KEYBOARD_CODES = {
   cancel: ["Escape"],
   end: ["Space", "Enter", "Tab"],
 } as const;
 const KANBAN_KEYBOARD_LISTENER_DELAY_MS = 0;
+const KANBAN_KEYBOARD_TARGET_RETRY_LIMIT = 60;
 
 type TouchEventWithLists = Event & {
   changedTouches: TouchList;
@@ -131,7 +141,7 @@ class KanbanTouchSensor extends TouchSensor {
   private readonly ownerDocument: Document;
   private readonly touchIdentifier: number | null;
 
-  constructor(props: TouchSensorProps) {
+  constructor(props: TouchSensorConstructorOptions) {
     const identityListeners = new AbortController();
     super({
       ...props,
@@ -211,10 +221,11 @@ class KanbanKeyboardSensor implements SensorInstance {
   autoScrollEnabled = false;
 
   private readonly listeners = new AbortController();
-  private readonly props: KeyboardSensorProps;
+  private readonly props: KeyboardSensorConstructorOptions;
+  private moveSequence = 0;
   private referenceCoordinates: { x: number; y: number } | null = null;
 
-  constructor(props: KeyboardSensorProps) {
+  constructor(props: KeyboardSensorConstructorOptions) {
     this.props = props;
     props.onStart({ x: 0, y: 0 });
     const ownerDocument = getTouchDocument(props.event);
@@ -238,6 +249,8 @@ class KanbanKeyboardSensor implements SensorInstance {
     if (this.listeners.signal.aborted) {
       return;
     }
+    this.moveSequence += 1;
+    clearKanbanKeyboardTarget(this.props.context.current.active?.data.current);
     this.listeners.abort();
     this.props.onCancel();
   };
@@ -253,22 +266,52 @@ class KanbanKeyboardSensor implements SensorInstance {
     }
     if (endCodes.some((code) => code === event.code)) {
       event.preventDefault();
+      this.moveSequence += 1;
+      clearKanbanKeyboardTarget(
+        this.props.context.current.active?.data.current,
+      );
       this.listeners.abort();
       this.props.onEnd();
       return;
     }
 
-    const collisionRect = this.props.context.current.collisionRect;
+    this.moveSequence += 1;
+    this.move(event, this.moveSequence, 0);
+  };
+
+  private readonly move = (
+    event: KeyboardEvent,
+    sequence: number,
+    retryCount: number,
+  ) => {
+    const currentContext = this.props.context.current;
+    const collisionRect = currentContext.collisionRect;
     const currentCoordinates = collisionRect
       ? { x: collisionRect.left, y: collisionRect.top }
       : { x: 0, y: 0 };
     this.referenceCoordinates ??= currentCoordinates;
     const coordinates = this.props.options.coordinateGetter?.(event, {
       active: this.props.active,
-      context: this.props.context.current,
+      context: currentContext,
       currentCoordinates,
     });
     if (coordinates === undefined) {
+      if (
+        getKanbanKeyboardTargetState(currentContext.active?.data.current)
+          ?.type !== "pending"
+      ) {
+        return;
+      }
+      if (retryCount >= KANBAN_KEYBOARD_TARGET_RETRY_LIMIT) {
+        clearKanbanKeyboardTarget(currentContext.active?.data.current);
+        return;
+      }
+      requestAnimationFrame(() => {
+        if (this.listeners.signal.aborted || this.moveSequence !== sequence) {
+          return;
+        }
+        this.move(event, sequence, retryCount + 1);
+      });
       return;
     }
     this.props.onMove({
@@ -309,6 +352,7 @@ export type UseKanbanDropTargetOptions = {
   disabled?: boolean | undefined;
   id: string;
   itemIds: readonly UniqueIdentifier[];
+  navigation: KanbanCellVirtualNavigation;
   position: KanbanSortableCellPosition;
 };
 
@@ -323,11 +367,13 @@ export const useKanbanDropTarget = ({
   disabled,
   id,
   itemIds,
+  navigation,
   position,
 }: UseKanbanDropTargetOptions) => {
   const dropTarget = useDroppable({
     data: {
       itemIds,
+      navigation,
       position,
       type: KANBAN_DROP_TARGET_TYPES.CELL,
     } satisfies KanbanCellDropData,
@@ -508,13 +554,14 @@ export const useKanbanSortable = ({
   id,
   disabled,
 }: UseKanbanSortableOptions) => {
-  // dnd-kit keeps this mutable data ref for the lifetime of an active drag.
-  // Stable identity preserves the keyboard target across virtualizer renders.
+  // useSortable merges custom data into a new object after virtualizer renders.
+  // The stable nested holder preserves the current navigation branch.
   const data = React.useMemo(
-    () => ({
-      navigation: { type: "idle" },
-      type: KANBAN_DROP_TARGET_TYPES.ITEM,
-    }),
+    () =>
+      ({
+        navigation: { current: { type: "idle" } },
+        type: KANBAN_DROP_TARGET_TYPES.ITEM,
+      }) satisfies KanbanItemDropData,
     [],
   );
   const sortable = useSortable({

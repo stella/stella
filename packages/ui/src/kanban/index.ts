@@ -25,6 +25,8 @@ export type {
   KanbanSortableBoardProps,
   KanbanSortableColumnsProps,
   KanbanSortableListProps,
+  KanbanVirtualScrollRequest,
+  KanbanCellVirtualNavigation,
   UseKanbanSortableOptions,
   UseKanbanDropTargetOptions,
 } from "./sortable-interactions";
