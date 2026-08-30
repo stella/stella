@@ -490,7 +490,7 @@ const PdfIcon = ({ className }: PdfIconProps) => (
 );
 
 type DocumentIconProps = {
-  mimeType: string;
+  mimeType?: string | null | undefined;
   fileName?: string | null | undefined;
   className?: string | undefined;
 };
