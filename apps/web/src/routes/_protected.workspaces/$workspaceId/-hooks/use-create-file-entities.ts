@@ -285,10 +285,15 @@ const prepareSingleFileEntityUpload = async ({
     attachResponseForRetry(error, presign.response);
     throw error;
   }
+  if (presign.data.state !== "reserved") {
+    panic("Entity-create upload returned an existing reservation");
+  }
 
   return {
-    ...presign.data,
+    headers: presign.data.headers,
+    uploadId: presign.data.uploadId,
     parentId: parentId ?? null,
+    url: presign.data.url,
   };
 };
 
