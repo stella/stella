@@ -2196,6 +2196,7 @@
       "workAttention": "Sledovanie práce"
     },
     "severity": {
+      "critical": "Kritické",
       "info": "Informácia",
       "notice": "Upozornenie",
       "warning": "Varovanie"

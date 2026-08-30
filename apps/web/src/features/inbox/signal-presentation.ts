@@ -26,7 +26,7 @@ export const SEVERITY_LABEL_KEY = {
   [SIGNAL_SEVERITY.INFO]: "inbox.severity.info",
   [SIGNAL_SEVERITY.NOTICE]: "inbox.severity.notice",
   [SIGNAL_SEVERITY.WARNING]: "inbox.severity.warning",
-  [SIGNAL_SEVERITY.CRITICAL]: "knowledge.playbooks.risk.riskLevel.critical",
+  [SIGNAL_SEVERITY.CRITICAL]: "inbox.severity.critical",
 } as const satisfies Record<SignalSeverity, TranslationKey>;
 
 export const ORIGIN_LABEL_KEY = {

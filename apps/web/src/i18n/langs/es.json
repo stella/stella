@@ -2196,6 +2196,7 @@
       "workAttention": "Seguimiento del trabajo"
     },
     "severity": {
+      "critical": "Crítico",
       "info": "Información",
       "notice": "Aviso",
       "warning": "Advertencia"

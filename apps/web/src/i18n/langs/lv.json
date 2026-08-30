@@ -2196,6 +2196,7 @@
       "workAttention": "Darba uzraudzība"
     },
     "severity": {
+      "critical": "Kritisks",
       "info": "Informācija",
       "notice": "Paziņojums",
       "warning": "Brīdinājums"

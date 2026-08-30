@@ -151,6 +151,9 @@ export const docxSuggestions = p.pgTable(
       .index("docx_suggestions_ws_entity_created_idx")
       .on(table.workspaceId, table.entityId, table.createdAt, table.id),
     p
+      .index("docx_suggestions_source_data_workspace_ids_idx")
+      .using("gin", table.sourceDataWorkspaceIds),
+    p
       .foreignKey({
         name: "docx_suggestions_entity_fk",
         columns: [table.entityId, table.workspaceId],
@@ -172,8 +175,6 @@ export const docxSuggestions = p.pgTable(
       .uniqueIndex("docx_suggestions_origin_review_finding_uidx")
       .on(table.originReviewFindingId)
       .where(sql`${table.originReviewFindingId} IS NOT NULL`),
-    // No index over the source matters: the scope is only ever read row-wise
-    // by the policy below, never searched.
     ...wsDataScopePolicies("source_data_workspace_ids"),
   ],
 );

@@ -2196,6 +2196,7 @@
       "workAttention": "Darbo stebėsena"
     },
     "severity": {
+      "critical": "Kritinė",
       "info": "Informacija",
       "notice": "Pranešimas",
       "warning": "Įspėjimas"

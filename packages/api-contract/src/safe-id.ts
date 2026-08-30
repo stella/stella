@@ -63,6 +63,7 @@ export type SafeIdType =
   | "effectLease"
   | "documentProcessingRun"
   | "documentReviewFinding"
+  | "documentReviewParty"
   | "documentReviewRun"
   | "documentTranslationRun"
   | "documentTranslationUnit"

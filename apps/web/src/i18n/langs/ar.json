@@ -2196,6 +2196,7 @@
       "workAttention": "متابعة العمل"
     },
     "severity": {
+      "critical": "حرج",
       "info": "معلومة",
       "notice": "تنبيه",
       "warning": "تحذير"

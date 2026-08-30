@@ -180,8 +180,8 @@ describe("the one caption sentence the card shows", () => {
 
   test("does not cut at an abbreviation or an initial", () => {
     expect(
-      firstSentence("Shorter than market, e.g. the Elixir SPA at 60 days."),
-    ).toBe("Shorter than market, e.g. the Elixir SPA at 60 days.");
+      firstSentence("Shorter than market, e.g. the precedent at 60 days."),
+    ).toBe("Shorter than market, e.g. the precedent at 60 days.");
     expect(firstSentence("Signed by J. Novak on behalf of the seller.")).toBe(
       "Signed by J. Novak on behalf of the seller.",
     );

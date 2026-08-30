@@ -2196,6 +2196,7 @@
       "workAttention": "Suivi du travail"
     },
     "severity": {
+      "critical": "Critique",
       "info": "Information",
       "notice": "Avis",
       "warning": "Avertissement"

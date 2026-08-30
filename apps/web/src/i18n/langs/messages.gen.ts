@@ -2199,6 +2199,7 @@ type Messages = {
       "workAttention": "Work monitoring";
     };
     "severity": {
+      "critical": "Critical";
       "info": "Info";
       "notice": "Notice";
       "warning": "Warning";

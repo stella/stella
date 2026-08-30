@@ -2196,6 +2196,7 @@
       "workAttention": "Arbeitsüberwachung"
     },
     "severity": {
+      "critical": "Kritisch",
       "info": "Information",
       "notice": "Hinweis",
       "warning": "Warnung"

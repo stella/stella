@@ -2196,6 +2196,7 @@
       "workAttention": "Munkafigyelés"
     },
     "severity": {
+      "critical": "Kritikus",
       "info": "Információ",
       "notice": "Értesítés",
       "warning": "Figyelmeztetés"

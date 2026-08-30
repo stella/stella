@@ -22,12 +22,13 @@ const playbookFinding = ({
   verdict: VerdictTier | null;
   rationale?: string | null;
 }): DocumentReviewFindingPayload => ({
-  checkKind: "playbook",
   finding: {
     positionId: "0198f2a0-5c1e-7a1b-9d3e-4f5a6b7c8d9e",
     issue,
     severity,
+    standardSource: "tiers",
     verdict,
+    delta: { kind: "language" },
     extracted: null,
     rationale,
     citations: [],
@@ -42,6 +43,7 @@ describe("findingSeverity", () => {
     expect(findingSeverity("deviation", "medium")).toBe("warning");
     expect(findingSeverity("fallback", "blocker")).toBe("notice");
     expect(findingSeverity("compliant", "blocker")).toBeNull();
+    expect(findingSeverity("additional", "blocker")).toBeNull();
     expect(findingSeverity("not-applicable", "high")).toBeNull();
     expect(findingSeverity(null, "high")).toBeNull();
   });
@@ -68,17 +70,19 @@ describe("toReviewSignalFindings", () => {
         severity: "low",
         verdict: "compliant",
       }),
+      // Graded against a reference standard, not an authored ladder: out of
+      // inbox scope however it is graded.
       {
-        checkKind: "reference",
         finding: {
-          findingId: "0198f2a0-5c1e-7a1b-9d3e-4f5a6b7c8d9f",
-          topicId: "payment-terms",
+          positionId: "0198f2a0-5c1e-7a1b-9d3e-4f5a6b7c8d9f",
           issue: "Payment terms",
-          assessment: "different",
-          consensus: "single",
-          explanation: { type: "comparison", text: "Net 60 vs Net 30." },
-          targetCitations: [],
-          referenceCitations: [],
+          severity: "blocker",
+          standardSource: "reference",
+          verdict: "deviation",
+          delta: { kind: "language" },
+          extracted: null,
+          rationale: "Net 60 vs Net 30.",
+          citations: [],
           fix: null,
         },
       },

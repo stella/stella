@@ -4,24 +4,28 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SafeDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import { NEUTRAL_PERSPECTIVE } from "@/api/lib/document-review/contract";
+import {
+  type gradeReferencePositions,
+  REFERENCE_GRADE_BATCH_SIZE,
+  ungradedReferenceGrading,
+} from "@/api/lib/document-review/reference-grade";
 import type { AskExtraction } from "@/api/lib/document-review/review-extract";
+import { buildFindings } from "@/api/lib/document-review/review-grade";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type {
   Position,
   ResolvedTiers,
 } from "@/api/lib/workflow/playbook-positions";
-
-const realVerdictEngine = await import("@/api/lib/workflow/verdict-engine");
-const realReferenceGrade =
-  await import("@/api/lib/document-review/reference-grade");
+import {
+  type gradeTierMatches,
+  TIER_MATCH_BATCH_SIZE,
+} from "@/api/lib/workflow/verdict-engine";
 
 let modelCallCount = 0;
 let abortAfterFirstCall: AbortController | null = null;
 let returnVerdicts = true;
 const gradeTierMatchesMock = mock(
-  async ({
-    items,
-  }: Parameters<typeof realVerdictEngine.gradeTierMatches>[0]) => {
+  async ({ items }: Parameters<typeof gradeTierMatches>[0]) => {
     modelCallCount += 1;
     if (modelCallCount === 1) {
       abortAfterFirstCall?.abort();
@@ -41,43 +45,22 @@ const gradeTierMatchesMock = mock(
   },
 );
 
-void mock.module("@/api/lib/workflow/verdict-engine", () => ({
-  ...realVerdictEngine,
-  gradeTierMatches: gradeTierMatchesMock,
-}));
-
 /** One call the reference grader made, still unresolved: the test decides
  *  when (and in what order) it lands. */
 type ReferenceGradeCall = {
-  positions: Parameters<
-    typeof realReferenceGrade.gradeReferencePositions
-  >[0]["positions"];
-  resolve: (
-    value: Awaited<
-      ReturnType<typeof realReferenceGrade.gradeReferencePositions>
-    >,
-  ) => void;
+  positions: Parameters<typeof gradeReferencePositions>[0]["positions"];
+  resolve: (value: Awaited<ReturnType<typeof gradeReferencePositions>>) => void;
 };
 
 let referenceGradeCalls: ReferenceGradeCall[] = [];
 const gradeReferencePositionsMock = mock(
-  async ({
-    positions,
-  }: Parameters<typeof realReferenceGrade.gradeReferencePositions>[0]) =>
-    await new Promise<
-      Awaited<ReturnType<typeof realReferenceGrade.gradeReferencePositions>>
-    >((resolve) => {
-      referenceGradeCalls.push({ positions, resolve });
-    }),
+  async ({ positions }: Parameters<typeof gradeReferencePositions>[0]) =>
+    await new Promise<Awaited<ReturnType<typeof gradeReferencePositions>>>(
+      (resolve) => {
+        referenceGradeCalls.push({ positions, resolve });
+      },
+    ),
 );
-
-void mock.module("@/api/lib/document-review/reference-grade", () => ({
-  ...realReferenceGrade,
-  gradeReferencePositions: gradeReferencePositionsMock,
-}));
-
-const { buildFindings } =
-  await import("@/api/lib/document-review/review-grade");
 
 const ORGANIZATION_ID = toSafeId<"organization">(
   "11111111-1111-4111-8111-111111111111",
@@ -213,6 +196,8 @@ const buildArgs = (
   target,
   perspective: NEUTRAL_PERSPECTIVE,
   referenceEntityVersionIds: [],
+  gradeTierMatches: gradeTierMatchesMock,
+  gradeReferencePositions: gradeReferencePositionsMock,
 });
 
 beforeEach(() => {
@@ -247,7 +232,7 @@ describe("document review grading", () => {
     const controller = new AbortController();
     abortAfterFirstCall = controller;
     const positions = Array.from(
-      { length: realVerdictEngine.TIER_MATCH_BATCH_SIZE + 1 },
+      { length: TIER_MATCH_BATCH_SIZE + 1 },
       (_, index) => position(index + 1),
     );
 
@@ -275,7 +260,7 @@ describe("document review grading", () => {
   // its last model call returns leaves that number at zero for the whole run.
   test("hands each batch over as it is graded, not once at the end", async () => {
     const positions = Array.from(
-      { length: realVerdictEngine.TIER_MATCH_BATCH_SIZE + 1 },
+      { length: TIER_MATCH_BATCH_SIZE + 1 },
       (_, index) => position(index + 1),
     );
 
@@ -285,9 +270,7 @@ describe("document review grading", () => {
 
     expect(modelCallCount).toBe(2);
     expect(gradedBatches).toHaveLength(2);
-    expect(gradedBatches.at(0)).toHaveLength(
-      realVerdictEngine.TIER_MATCH_BATCH_SIZE,
-    );
+    expect(gradedBatches.at(0)).toHaveLength(TIER_MATCH_BATCH_SIZE);
     expect(gradedBatches.at(1)).toHaveLength(1);
     // Every position reaches a caller before the pass returns, and the return
     // value is still the whole set in position order.
@@ -306,7 +289,7 @@ describe("document review grading", () => {
   // set regardless of which model call happened to finish first.
   test("hands reference batches over as each resolves, out of launch order, but keeps the final findings in position order", async () => {
     const positions = Array.from(
-      { length: realReferenceGrade.REFERENCE_GRADE_BATCH_SIZE * 2 + 1 },
+      { length: REFERENCE_GRADE_BATCH_SIZE * 2 + 1 },
       (_, index) => referencePosition(index + 1),
     );
 
@@ -320,12 +303,12 @@ describe("document review grading", () => {
 
     const gradingFor = (
       call: (typeof referenceGradeCalls)[number],
-    ): Awaited<ReturnType<typeof realReferenceGrade.gradeReferencePositions>> =>
+    ): Awaited<ReturnType<typeof gradeReferencePositions>> =>
       Result.ok(
         new Map(
           call.positions.map((referencedPosition) => [
             referencedPosition.sourceId,
-            realReferenceGrade.ungradedReferenceGrading(referencedPosition),
+            ungradedReferenceGrading(referencedPosition),
           ]),
         ),
       );

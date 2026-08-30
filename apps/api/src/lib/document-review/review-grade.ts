@@ -107,6 +107,9 @@ type AiGradingDeps = {
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering: AIUsageMetering;
+  /** External model-dispatch boundaries; supplied by focused tests. */
+  gradeTierMatches?: typeof gradeTierMatches | undefined;
+  gradeReferencePositions?: typeof gradeReferencePositions | undefined;
 };
 
 /**
@@ -273,6 +276,7 @@ const gradeTierMatchPositions = async ({
   verdicts: Map<string, GradingOutcome>;
   emit: (batch: readonly Position[]) => Promise<void>;
 }): Promise<void> => {
+  const gradeTierMatchesForReview = deps.gradeTierMatches ?? gradeTierMatches;
   for (
     let cursor = 0;
     cursor < positions.length;
@@ -283,7 +287,7 @@ const gradeTierMatchPositions = async ({
     }
     const batch = positions.slice(cursor, cursor + TIER_MATCH_BATCH_SIZE);
     // oxlint-disable-next-line no-await-in-loop -- one model call per batch, in order, keeps the single-doc review's fan-out bounded
-    const graded = await gradeTierMatches({
+    const graded = await gradeTierMatchesForReview({
       items: batch.map((position) => ({
         key: position.sourceId,
         askValue:
@@ -405,6 +409,8 @@ const gradeReferenceStandards = async ({
   gradings: Map<string, ReferenceGrading>;
   emit: (batch: readonly Position[]) => Promise<void>;
 }): Promise<void> => {
+  const gradeReferencePositionsForReview =
+    deps.gradeReferencePositions ?? gradeReferencePositions;
   const batches: ReferencePair[][] = [];
   for (
     let cursor = 0;
@@ -419,7 +425,7 @@ const gradeReferenceStandards = async ({
     concurrency: REFERENCE_GRADE_CONCURRENCY,
     abortSignal: deps.abortSignal,
     onBatch: async (batch) => {
-      const outcome = await gradeReferencePositions({
+      const outcome = await gradeReferencePositionsForReview({
         positions: batch.map((pair) => pair.reference),
         target,
         perspective,

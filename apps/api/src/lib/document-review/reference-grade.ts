@@ -602,6 +602,8 @@ export type GradeReferencePositionsArgs = {
   serviceTier: AIRequestServiceTier;
   usageMetering: AIUsageMetering;
   abortSignal: AbortSignal;
+  /** External model-dispatch boundary; supplied by focused integration tests. */
+  generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
 };
 
 /** Grade one batch of reference-standard positions. Keyed by `sourceId`; a
@@ -620,6 +622,7 @@ export const gradeReferencePositions = async ({
   serviceTier,
   usageMetering,
   abortSignal,
+  generateObjectForRole = generateTanStackObjectForRole,
 }: GradeReferencePositionsArgs): Promise<
   Result<Map<string, ReferenceGrading>, WorkflowIntegrationError>
 > => {
@@ -646,7 +649,7 @@ export const gradeReferencePositions = async ({
 
   return await Result.tryPromise({
     try: async () => {
-      const output = await generateTanStackObjectForRole({
+      const output = await generateObjectForRole({
         role: REFERENCE_GRADE_ROLE,
         orgAIConfig,
         organizationId,

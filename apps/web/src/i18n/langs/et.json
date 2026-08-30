@@ -2196,6 +2196,7 @@
       "workAttention": "Töö jälgimine"
     },
     "severity": {
+      "critical": "Kriitiline",
       "info": "Teave",
       "notice": "Teade",
       "warning": "Hoiatus"
