@@ -262,12 +262,20 @@ pub(crate) struct PreparedAddressSeedData {
   house_number_after_street_re: Regex,
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct AddressSeedProcessArgs<'a> {
   pub(crate) matches: &'a [SearchMatch],
   pub(crate) street_type_slice: PatternSlice,
   pub(crate) full_text: &'a str,
   pub(crate) existing_entities: &'a [PipelineEntity],
   pub(crate) false_positive_filters: Option<&'a DenyListFilterData>,
+}
+
+#[derive(Clone, Copy)]
+struct ClusterScoreArgs<'a> {
+  cluster: &'a SeedCluster,
+  runs: &'a [AddressEvidence],
+  full_text: &'a str,
 }
 
 struct BoundaryPhraseSearch {
@@ -425,34 +433,12 @@ impl PreparedAddressSeedData {
     let mut results = Vec::new();
 
     for cluster in clusters {
-      let (score, growth) = match score_cluster(&cluster) {
-        Some(score) => (score, self.cluster_growth(&cluster, full_text)),
-        // A barrier split this cluster off an address that does carry enough
-        // evidence, so it is still address material. Keep the span tight: on
-        // its own it has no destination to bound its right edge.
-        None => match runs
-          .get(cluster.run)
-          .copied()
-          .filter(|evidence| evidence.is_sufficient())
-        {
-          Some(run_evidence) => (
-            run_evidence.score(),
-            if cluster
-              .seeds
-              .iter()
-              .any(|seed| seed.kind == SeedType::StreetWord)
-            {
-              SpanGrowth::StreetNameOnly
-            } else {
-              SpanGrowth::None
-            },
-          ),
-          None => (
-            self.standalone_street_score(&cluster, full_text),
-            SpanGrowth::StreetNameOnly,
-          ),
-        },
-      };
+      let (score, growth) =
+        self.cluster_score_and_growth(ClusterScoreArgs {
+          cluster: &cluster,
+          runs: &runs,
+          full_text,
+        });
       if score < 0.6 {
         continue;
       }
@@ -489,6 +475,45 @@ impl PreparedAddressSeedData {
       entities: results,
       profile,
     })
+  }
+
+  fn cluster_score_and_growth(
+    &self,
+    args: ClusterScoreArgs<'_>,
+  ) -> (f64, SpanGrowth) {
+    let ClusterScoreArgs {
+      cluster,
+      runs,
+      full_text,
+    } = args;
+    if let Some(score) = score_cluster(cluster) {
+      return (score, self.cluster_growth(cluster, full_text));
+    }
+
+    // A barrier split this cluster off an address that does carry enough
+    // evidence, so it is still address material. Keep the span tight: on its
+    // own it has no destination to bound its right edge.
+    if let Some(run_evidence) = runs
+      .get(cluster.run)
+      .copied()
+      .filter(|evidence| evidence.is_sufficient())
+    {
+      let growth = if cluster
+        .seeds
+        .iter()
+        .any(|seed| seed.kind == SeedType::StreetWord)
+      {
+        SpanGrowth::StreetNameOnly
+      } else {
+        SpanGrowth::None
+      };
+      return (run_evidence.score(), growth);
+    }
+
+    (
+      self.standalone_street_score(cluster, full_text),
+      SpanGrowth::StreetNameOnly,
+    )
   }
 
   fn collect_seeds_profiled(
@@ -2329,6 +2354,7 @@ struct NonAddressEntitySpan {
   has_case_number_label: bool,
 }
 
+#[derive(Clone, Copy)]
 struct NonAddressEntityIndexArgs<'a> {
   existing_entities: &'a [PipelineEntity],
   full_text: &'a str,

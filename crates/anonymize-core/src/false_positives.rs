@@ -258,6 +258,7 @@ pub(crate) fn soft_wrapped_city_person_candidate(
   }))
 }
 
+#[derive(Clone, Copy)]
 struct ShouldRejectEntityArgs<'a> {
   entity: &'a PipelineEntity,
   document: &'a ResolutionDocument<'a>,
@@ -724,6 +725,7 @@ fn is_all_caps_candidate(text: &str) -> bool {
   has_upper
 }
 
+#[derive(Clone, Copy)]
 struct IsAllCapsBoilerplateLineArgs<'a> {
   document: &'a ResolutionDocument<'a>,
   offsets: &'a ByteOffsets<'a>,
