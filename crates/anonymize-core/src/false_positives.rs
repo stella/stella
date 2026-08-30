@@ -2556,6 +2556,12 @@ mod tests {
         vec!["donneur d'ordre"],
         vec!["est"],
       ),
+      (
+        "DONNEUR D'ORDRE: ACME SARL EST DONNEUR D'ORDRE DANS CET ACCORD.\n",
+        "ACME SARL",
+        vec!["donneur d'ordre"],
+        vec!["est"],
+      ),
     ] {
       let legal_form_data = prepared_clause_data(PreparedClauseDataArgs {
         leading_phrases: &[],

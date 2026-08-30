@@ -234,19 +234,33 @@ impl PreparedLegalFormData {
     else {
       return false;
     };
-    let mut words = label
+    let words = label
       .split(|ch: char| !ch.is_alphanumeric())
-      .filter(|word| !word.is_empty());
-    let Some(role) = words.next() else {
+      .filter(|word| !word.is_empty())
+      .collect::<Vec<_>>();
+    let Some(role_word_count) = self
+      .subject_clause_role_phrases
+      .iter()
+      .filter_map(|role| {
+        let role_word_count = role.split_whitespace().count();
+        words
+          .get(..role_word_count)
+          .filter(|prefix| {
+            prefix
+              .iter()
+              .zip(role.split_whitespace())
+              .all(|(word, role_word)| word.to_lowercase() == role_word)
+          })
+          .map(|_| role_word_count)
+      })
+      .max()
+    else {
       return false;
     };
-    if !contains_lowercase(&self.role_heads, role) {
-      return false;
-    }
-    let Some(discriminator) = words.next() else {
+    let Some(discriminator) = words.get(role_word_count) else {
       return true;
     };
-    words.next().is_none()
+    words.len() == role_word_count.saturating_add(1)
       && discriminator.chars().count() <= 2
       && discriminator
         .chars()
