@@ -101,7 +101,7 @@ WITH CHECK (
   )
 );
 --> statement-breakpoint
--- stella-migration-safety: reviewed destructive-change - replay replaces only this migration's policy inside the same transaction before recreating the same access contract.
+-- stella-migration-safety: reviewed drop-object - replay replaces only this migration's policy inside the same transaction before recreating the same access contract; rollback recreates the policy from the schema declaration.
 DROP POLICY IF EXISTS "buffer_object_cleanup_select"
 ON "buffer_object_cleanup_intents";
 --> statement-breakpoint
@@ -167,7 +167,7 @@ USING (
   )
 );
 --> statement-breakpoint
--- stella-migration-safety: reviewed destructive-change - replay replaces only this migration's policy inside the same transaction before recreating the same access contract.
+-- stella-migration-safety: reviewed drop-object - replay replaces only this migration's policy inside the same transaction before recreating the same access contract; rollback recreates the policy from the schema declaration.
 DROP POLICY IF EXISTS "buffer_object_cleanup_update"
 ON "buffer_object_cleanup_intents";
 --> statement-breakpoint
