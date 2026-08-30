@@ -3,6 +3,8 @@ import {
   WORK_OBLIGATION_STATUS,
 } from "@/api/db/schema";
 import type { WorkObligationStatus } from "@/api/db/schema";
+import { AUDIT_ACTION } from "@/api/lib/audit-log.constants";
+import type { AuditAction } from "@/api/lib/audit-log.constants";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import type { TaskStatus } from "@/api/lib/entity-constants";
 
@@ -12,9 +14,23 @@ import type { TaskStatus } from "@/api/lib/entity-constants";
  * Two entry points move an obligation: the explicit transition endpoint, and a
  * legacy task-status write (task API or `save_task`) that implies one. Both
  * read this table, so the allowed source statuses, the target status, the
- * lifecycle event and the mirrored legacy task status cannot drift apart.
- * Permissions, reason requirements, locking and event emission stay with each
- * caller: this module owns the transition data and the pure resolution only.
+ * lifecycle event, the mirrored legacy task status and the audit action cannot
+ * drift apart. Permissions, reason requirements, locking and event emission
+ * stay with each caller: this module owns the transition data and the pure
+ * resolution only.
+ *
+ * Where the two surfaces still differ, they differ on purpose:
+ * - Ungoverned deployments bypass this table's source-status check entirely;
+ *   the obligation only mirrors whatever status the task write asks for.
+ * - Writing a status the obligation already carries is an idempotent no-op on
+ *   the legacy path, while the endpoint answers 409 for the repeat transition.
+ * - Reopening through the legacy path keeps the caller's explicit open task
+ *   status; the endpoint writes the table's `taskStatus` (`in_progress`).
+ * - Concurrency guards differ: the endpoint re-checks the source statuses in
+ *   its `UPDATE` and reports a conflict, the legacy path holds the row lock it
+ *   read under and panics if the row moved.
+ * - Error codes follow each surface's convention: the endpoint distinguishes
+ *   403 for ownership from 409 for status, the legacy task write answers 409.
  */
 export const WORK_OBLIGATION_TRANSITION_ACTION = {
   COMPLETE: "complete",
@@ -86,8 +102,20 @@ export const WORK_OBLIGATION_TRANSITIONS = {
   WorkObligationTransition
 >;
 
+/**
+ * How each lifecycle move reads in the audit trail. Cancellation is its own
+ * audited action; the rest are ordinary updates to the obligation.
+ */
+export const WORK_OBLIGATION_TRANSITION_AUDIT_ACTION = {
+  complete: AUDIT_ACTION.UPDATE,
+  cancel: AUDIT_ACTION.CANCEL,
+  reopen: AUDIT_ACTION.UPDATE,
+} as const satisfies Record<WorkObligationTransitionAction, AuditAction>;
+
 /** Closed work is exactly the work reopening exists to bring back. */
-const isClosedStatus = (status: WorkObligationStatus): boolean =>
+export const isClosedWorkObligationStatus = (
+  status: WorkObligationStatus,
+): boolean =>
   WORK_OBLIGATION_TRANSITIONS.reopen.from.some((from) => from === status);
 
 /**
@@ -172,7 +200,8 @@ const closingActionForTaskStatus = (
   WORK_OBLIGATION_TRANSITION_ACTIONS.find((action) => {
     const transition = WORK_OBLIGATION_TRANSITIONS[action];
     return (
-      transition.taskStatus === taskStatus && isClosedStatus(transition.to)
+      transition.taskStatus === taskStatus &&
+      isClosedWorkObligationStatus(transition.to)
     );
   });
 
@@ -201,7 +230,7 @@ export const workObligationIntentForTaskStatus = ({
       ? { type: "none" }
       : { type: "transition", action: closingAction };
   }
-  return isClosedStatus(currentStatus)
+  return isClosedWorkObligationStatus(currentStatus)
     ? { type: "transition", action: WORK_OBLIGATION_TRANSITION_ACTION.REOPEN }
     : { type: "none" };
 };

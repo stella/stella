@@ -9,8 +9,12 @@ import {
   workObligationEvents,
   workObligations,
 } from "@/api/db/schema";
+import type { WorkObligationStatus } from "@/api/db/schema";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditAction, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
+import { WORK_OBLIGATION_TRANSITIONS } from "@/api/lib/work-obligations/transitions";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -267,5 +271,213 @@ describe("updateTaskHandler legacy deadline compatibility", () => {
         }),
       ]),
     );
+  });
+});
+
+type StatusWriteOptions = {
+  governedWorkflow: boolean;
+  owner: "caller" | "other" | "none";
+  requestedStatus: string;
+  status: WorkObligationStatus;
+  workflowReason?: string;
+};
+
+/**
+ * Drive one legacy task-status write against an obligation in a known state,
+ * and report what the obligation row and the audit trail received.
+ */
+const runStatusWrite = async ({
+  governedWorkflow,
+  owner,
+  requestedStatus,
+  status,
+  workflowReason,
+}: StatusWriteOptions) => {
+  const taskId = createSafeId<"entity">();
+  const workspaceId = createSafeId<"workspace">();
+  const userId = mintAuthProviderId<"user">();
+  const workflowUpdates: Record<string, unknown>[] = [];
+  const auditActions: AuditAction[] = [];
+  const workflow = {
+    entityId: taskId,
+    workspaceId,
+    type: WORK_OBLIGATION_TYPE.TASK,
+    status,
+    ownerUserId: {
+      caller: userId,
+      other: mintAuthProviderId<"user">(),
+      none: null,
+    }[owner],
+    acknowledgedAt: new Date("2026-01-01T00:00:00Z"),
+    workingTargetDate: null,
+    hardDeadlineDate: null,
+  };
+  const { safeDb } = createScopedDbMock({
+    select: () => ({
+      from: () => ({
+        where: () => ({ limit: () => ({ for: async () => [workflow] }) }),
+      }),
+    }),
+    update: (table: unknown) => ({
+      set: (values: Record<string, unknown>) => {
+        if (table === workObligations) {
+          workflowUpdates.push(values);
+        }
+        return {
+          where: () => ({
+            returning: async () =>
+              table === entities ? [{ id: taskId }] : [{ entityId: taskId }],
+          }),
+        };
+      },
+    }),
+    insert: () => ({ values: async () => {} }),
+  });
+  const recordAuditEvent: AuditRecorder = async (_tx, event) => {
+    for (const entry of Array.isArray(event) ? event : [event]) {
+      if (entry.resourceType === AUDIT_RESOURCE_TYPE.WORK_OBLIGATION) {
+        auditActions.push(entry.action);
+      }
+    }
+  };
+
+  const result = await Result.gen(() =>
+    updateTaskHandler({
+      safeDb,
+      workspaceId,
+      userId,
+      recordAuditEvent,
+      body: {
+        taskId,
+        status: requestedStatus,
+        ...(workflowReason === undefined ? {} : { workflowReason }),
+      },
+      features: { governedWorkflow, legalLists: true },
+    }),
+  );
+
+  return { auditActions, result, workflowUpdates };
+};
+
+describe("updateTaskHandler governed lifecycle", () => {
+  test("refuses to cancel completed work", async () => {
+    const { result, workflowUpdates } = await runStatusWrite({
+      governedWorkflow: true,
+      owner: "caller",
+      requestedStatus: "cancelled",
+      status: WORK_OBLIGATION_STATUS.COMPLETED,
+      workflowReason: "superseded",
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({
+        status: 409,
+        message:
+          "Work that is completed must be reopened before it can be cancelled",
+      });
+    }
+    expect(workflowUpdates).toEqual([]);
+  });
+
+  test("refuses to complete cancelled work", async () => {
+    const { result, workflowUpdates } = await runStatusWrite({
+      governedWorkflow: true,
+      owner: "caller",
+      requestedStatus: "done",
+      status: WORK_OBLIGATION_STATUS.CANCELLED,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({
+        status: 409,
+        message:
+          "Work that is cancelled must be reopened before it can be completed",
+      });
+    }
+    expect(workflowUpdates).toEqual([]);
+  });
+
+  test("refuses completion by anyone but the accountable owner", async () => {
+    const { result, workflowUpdates } = await runStatusWrite({
+      governedWorkflow: true,
+      owner: "other",
+      requestedStatus: "done",
+      status: WORK_OBLIGATION_STATUS.ACTIVE,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({
+        status: 409,
+        message: "Only the accountable owner can complete this work",
+      });
+    }
+    expect(workflowUpdates).toEqual([]);
+  });
+
+  test("lets the owner complete from every status the table admits", async () => {
+    const runs = await Promise.all(
+      WORK_OBLIGATION_TRANSITIONS.complete.from.map(async (status) =>
+        runStatusWrite({
+          governedWorkflow: true,
+          owner: "caller",
+          requestedStatus: "done",
+          status,
+        }),
+      ),
+    );
+
+    for (const { auditActions, result, workflowUpdates } of runs) {
+      expect(Result.isOk(result)).toBe(true);
+      expect(workflowUpdates).toEqual([
+        expect.objectContaining({ status: WORK_OBLIGATION_STATUS.COMPLETED }),
+      ]);
+      expect(auditActions).toEqual([AUDIT_ACTION.UPDATE]);
+    }
+  });
+
+  test("audits a cancellation as a cancellation", async () => {
+    const { auditActions, result, workflowUpdates } = await runStatusWrite({
+      governedWorkflow: true,
+      owner: "caller",
+      requestedStatus: "cancelled",
+      status: WORK_OBLIGATION_STATUS.ACTIVE,
+      workflowReason: "client withdrew the instruction",
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    expect(workflowUpdates).toEqual([
+      expect.objectContaining({ status: WORK_OBLIGATION_STATUS.CANCELLED }),
+    ]);
+    expect(auditActions).toEqual([AUDIT_ACTION.CANCEL]);
+  });
+
+  test("ungoverned deployments keep flipping closed work freely", async () => {
+    const cancelled = await runStatusWrite({
+      governedWorkflow: false,
+      owner: "none",
+      requestedStatus: "cancelled",
+      status: WORK_OBLIGATION_STATUS.COMPLETED,
+    });
+
+    expect(Result.isOk(cancelled.result)).toBe(true);
+    expect(cancelled.workflowUpdates).toEqual([
+      expect.objectContaining({ status: WORK_OBLIGATION_STATUS.CANCELLED }),
+    ]);
+    expect(cancelled.auditActions).toEqual([AUDIT_ACTION.CANCEL]);
+
+    const completed = await runStatusWrite({
+      governedWorkflow: false,
+      owner: "none",
+      requestedStatus: "done",
+      status: WORK_OBLIGATION_STATUS.CANCELLED,
+    });
+
+    expect(Result.isOk(completed.result)).toBe(true);
+    expect(completed.workflowUpdates).toEqual([
+      expect.objectContaining({ status: WORK_OBLIGATION_STATUS.COMPLETED }),
+    ]);
   });
 });

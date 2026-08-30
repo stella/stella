@@ -15,9 +15,13 @@ import {
   workObligationEvents,
   workObligations,
 } from "@/api/db/schema";
-import type { ListItemType } from "@/api/db/schema";
+import type { ListItemType, WorkObligationStatus } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
+import type {
+  AuditAction,
+  AuditRecorder,
+  FieldDiffs,
+} from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -40,8 +44,11 @@ import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility
 import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 import {
+  isClosedWorkObligationStatus,
   nextWorkObligationStatus,
+  resolveWorkObligationTransition,
   WORK_OBLIGATION_TRANSITION_ACTION,
+  WORK_OBLIGATION_TRANSITION_AUDIT_ACTION,
   WORK_OBLIGATION_TRANSITIONS,
   workObligationIntentForTaskStatus,
 } from "@/api/lib/work-obligations/transitions";
@@ -382,39 +389,53 @@ type ResolveWorkflowStatusTransitionOptions = {
   workflowReason: string | undefined;
 };
 
-type WorkflowStatusPolicyOptions = ResolveWorkflowStatusTransitionOptions & {
+type WorkflowStatusPolicyOptions = {
   action: WorkObligationTransitionAction;
+  userId: SafeId<"user">;
+  workflow: LockedWorkObligation;
+  workflowReason: string | undefined;
+};
+
+/** The move each action names, for the message a refusal has to explain. */
+const BLOCKED_MOVE = {
+  complete: "completed",
+  cancel: "cancelled",
+  reopen: "reopened",
+} as const satisfies Record<WorkObligationTransitionAction, string>;
+
+/**
+ * Closed work has exactly one way back, so say so; every other refused source
+ * status simply is not one the lifecycle admits for that move.
+ */
+const blockedTransitionMessage = (
+  action: WorkObligationTransitionAction,
+  status: WorkObligationStatus,
+): string => {
+  const current = `Work that is ${status.replaceAll("_", " ")}`;
+  return isClosedWorkObligationStatus(status)
+    ? `${current} must be reopened before it can be ${BLOCKED_MOVE[action]}`
+    : `${current} cannot be ${BLOCKED_MOVE[action]}`;
 };
 
 /**
  * A legacy status write carries no explicit intent, so the guards the
  * transition endpoint applies per action are re-applied here. They stay at this
  * call site: the shared table owns which move a status implies, not who may
- * make it.
- *
- * Ungoverned workspaces keep writing task statuses freely; the obligation row
- * only mirrors them.
+ * make it, and the source statuses it admits are already settled before this
+ * runs.
  */
 const assertWorkflowStatusPolicy = ({
   action,
-  governedWorkflow,
   userId,
   workflow,
   workflowReason,
 }: WorkflowStatusPolicyOptions): void => {
-  if (!governedWorkflow) {
-    return;
-  }
   switch (action) {
     case WORK_OBLIGATION_TRANSITION_ACTION.COMPLETE:
-      if (
-        workflow.status !== WORK_OBLIGATION_STATUS.ACTIVE ||
-        workflow.ownerUserId !== userId
-      ) {
+      if (workflow.ownerUserId !== userId) {
         throw new HandlerError({
           status: 409,
-          message:
-            "Only the acknowledged accountable owner can complete this work",
+          message: "Only the accountable owner can complete this work",
         });
       }
       return;
@@ -438,22 +459,50 @@ const assertWorkflowStatusPolicy = ({
   }
 };
 
-const resolveWorkflowStatusTransition = (
-  options: ResolveWorkflowStatusTransitionOptions,
-) => {
-  const { requestedStatus, workflow } = options;
+/**
+ * Governed deployments resolve the implied move through the shared table, so a
+ * task-status write can only reach the obligation states the endpoint would
+ * reach. Ungoverned deployments keep legacy freedom: the obligation row mirrors
+ * whatever status the write asks for.
+ */
+const resolveWorkflowStatusTransition = ({
+  governedWorkflow,
+  requestedStatus,
+  userId,
+  workflow,
+  workflowReason,
+}: ResolveWorkflowStatusTransitionOptions) => {
   const intent = workObligationIntentForTaskStatus({
     currentStatus: workflow.status,
     requestedTaskStatus: requestedStatus,
   });
   if (intent.type === "none") {
-    return { eventType: undefined, status: workflow.status };
+    return { type: "none" as const };
+  }
+  const { action } = intent;
+
+  if (!governedWorkflow) {
+    return {
+      type: "transition" as const,
+      action,
+      eventType: WORK_OBLIGATION_TRANSITIONS[action].eventType,
+      nextStatus: nextWorkObligationStatus(action, workflow),
+    };
   }
 
-  assertWorkflowStatusPolicy({ ...options, action: intent.action });
+  const resolution = resolveWorkObligationTransition(action, workflow);
+  if (resolution.type === "invalid_status") {
+    throw new HandlerError({
+      status: 409,
+      message: blockedTransitionMessage(action, workflow.status),
+    });
+  }
+  assertWorkflowStatusPolicy({ action, userId, workflow, workflowReason });
   return {
-    eventType: WORK_OBLIGATION_TRANSITIONS[intent.action].eventType,
-    status: nextWorkObligationStatus(intent.action, workflow),
+    type: "transition" as const,
+    action,
+    eventType: resolution.eventType,
+    nextStatus: resolution.nextStatus,
   };
 };
 
@@ -565,6 +614,7 @@ export const updateTaskHandler = async function* ({
       const workflowSet: Partial<typeof workObligations.$inferInsert> = {};
       const workflowEvents: (typeof workObligationEvents.$inferInsert)[] = [];
       const workflowChanges: FieldDiffs = {};
+      let workflowAuditAction: AuditAction = AUDIT_ACTION.UPDATE;
       const now = new Date();
 
       if (workflow && eligibility.type !== "removes_obligation") {
@@ -576,35 +626,36 @@ export const updateTaskHandler = async function* ({
         const nextLegacyHardDeadlineDate = updatesLegacyDeadline
           ? body.dueDate
           : undefined;
-        const { eventType: workflowEventType, status: nextWorkflowStatus } =
-          resolveWorkflowStatusTransition({
-            governedWorkflow: features.governedWorkflow,
-            requestedStatus: body.status,
-            userId,
-            workflow,
-            workflowReason,
-          });
+        const statusTransition = resolveWorkflowStatusTransition({
+          governedWorkflow: features.governedWorkflow,
+          requestedStatus: body.status,
+          userId,
+          workflow,
+          workflowReason,
+        });
 
-        if (nextWorkflowStatus !== workflow.status && workflowEventType) {
-          workflowSet.status = nextWorkflowStatus;
-          if (nextWorkflowStatus === WORK_OBLIGATION_STATUS.UNASSIGNED) {
+        if (statusTransition.type === "transition") {
+          const { action, eventType, nextStatus } = statusTransition;
+          workflowAuditAction = WORK_OBLIGATION_TRANSITION_AUDIT_ACTION[action];
+          workflowSet.status = nextStatus;
+          if (nextStatus === WORK_OBLIGATION_STATUS.UNASSIGNED) {
             workflowSet.acknowledgedAt = null;
             workflowSet.acknowledgedByUserId = null;
           }
           workflowChanges["status"] = {
             old: workflow.status,
-            new: nextWorkflowStatus,
+            new: nextStatus,
           };
           workflowEvents.push({
             id: createSafeId<"workObligationEvent">(),
             workspaceId,
             obligationEntityId: body.taskId,
             actorUserId: userId,
-            type: workflowEventType,
+            type: eventType,
             details: {
               type: "status_changed",
               previousStatus: workflow.status,
-              nextStatus: nextWorkflowStatus,
+              nextStatus,
             },
             reason: workflowReason ?? null,
             occurredAt: now,
@@ -739,7 +790,7 @@ export const updateTaskHandler = async function* ({
           }
           await tx.insert(workObligationEvents).values(workflowEvents);
           await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
+            action: workflowAuditAction,
             resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
             resourceId: body.taskId,
             changes: workflowChanges,
