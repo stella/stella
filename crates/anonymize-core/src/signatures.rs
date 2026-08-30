@@ -1,14 +1,16 @@
 use crate::resolution::{DetectionSource, PipelineEntity};
 
 use crate::labels::PERSON_LABEL;
+use crate::name_corpus::PreparedNameCorpusData;
 const MAX_NAME_LEN: usize = 60;
 const MAX_WITNESS_SCAN_UNITS: usize = 600;
 const SIGNATURE_ONLY_PERSON_LABELS: &[&str] = &["by"];
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum CandidateContext {
+#[derive(Clone, Copy)]
+enum CandidateContext<'a> {
   SignatureBlock,
   LabelledField,
+  PartyRoleField(Option<&'a PreparedNameCorpusData>),
 }
 
 #[derive(
@@ -139,13 +141,29 @@ pub struct PersonSpanTerminators<'a> {
 }
 
 #[must_use]
+pub(crate) struct DetectSignaturesArgs<'a> {
+  pub full_text: &'a str,
+  pub data: &'a PreparedSignatureData,
+  pub name_corpus: Option<&'a PreparedNameCorpusData>,
+}
+
+#[must_use]
 pub(crate) fn detect_signatures(
-  full_text: &str,
-  data: &PreparedSignatureData,
+  args: DetectSignaturesArgs<'_>,
 ) -> Vec<PipelineEntity> {
+  let DetectSignaturesArgs {
+    full_text,
+    data,
+    name_corpus,
+  } = args;
   let mut results = Vec::new();
   detect_slash_s(full_text, data, &mut results);
-  detect_labelled_names(full_text, data, &mut results);
+  detect_labelled_names(DetectLabelledNamesArgs {
+    full_text,
+    data,
+    name_corpus,
+    results: &mut results,
+  });
   detect_witness_blocks(full_text, data, &mut results);
   results
 }
@@ -212,16 +230,32 @@ fn detect_slash_s(
   }
 }
 
-fn detect_labelled_names(
-  full_text: &str,
-  data: &PreparedSignatureData,
-  results: &mut Vec<PipelineEntity>,
-) {
+struct DetectLabelledNamesArgs<'a> {
+  full_text: &'a str,
+  data: &'a PreparedSignatureData,
+  name_corpus: Option<&'a PreparedNameCorpusData>,
+  results: &'a mut Vec<PipelineEntity>,
+}
+
+fn detect_labelled_names(args: DetectLabelledNamesArgs<'_>) {
+  let DetectLabelledNamesArgs {
+    full_text,
+    data,
+    name_corpus,
+    results,
+  } = args;
   let mut line_start = 0usize;
   while line_start <= full_text.len() {
     let line_end = find_line_end(full_text, line_start);
     if let Some(line) = full_text.get(line_start..line_end) {
-      detect_labelled_names_in_line(full_text, data, line_start, line, results);
+      detect_labelled_names_in_line(DetectLabelledNamesInLineArgs {
+        full_text,
+        data,
+        name_corpus,
+        line,
+        line_start,
+        results,
+      });
     }
     if line_end >= full_text.len() {
       break;
@@ -230,13 +264,24 @@ fn detect_labelled_names(
   }
 }
 
-fn detect_labelled_names_in_line(
-  full_text: &str,
-  data: &PreparedSignatureData,
+struct DetectLabelledNamesInLineArgs<'a> {
+  full_text: &'a str,
+  data: &'a PreparedSignatureData,
+  name_corpus: Option<&'a PreparedNameCorpusData>,
+  line: &'a str,
   line_start: usize,
-  line: &str,
-  results: &mut Vec<PipelineEntity>,
-) {
+  results: &'a mut Vec<PipelineEntity>,
+}
+
+fn detect_labelled_names_in_line(args: DetectLabelledNamesInLineArgs<'_>) {
+  let DetectLabelledNamesInLineArgs {
+    full_text,
+    data,
+    name_corpus,
+    line,
+    line_start,
+    results,
+  } = args;
   let mut cursor = 0usize;
   let mut field_label_starts = None::<FieldLabelStarts>;
   let mut following_contact_fields = [None::<bool>; 2];
@@ -299,6 +344,11 @@ fn detect_labelled_names_in_line(
       cursor = value_end.max(label.next_cursor);
       continue;
     }
+    let context = if label.requires_person_evidence {
+      CandidateContext::PartyRoleField(name_corpus)
+    } else {
+      CandidateContext::LabelledField
+    };
     if value_is_empty {
       try_emit_forward_lines(
         results,
@@ -307,7 +357,7 @@ fn detect_labelled_names_in_line(
         global_end.saturating_add(1),
         3,
         0.9,
-        CandidateContext::LabelledField,
+        context,
       );
     } else {
       try_emit_semicolon_list(
@@ -317,7 +367,7 @@ fn detect_labelled_names_in_line(
         global_start,
         global_end,
         0.95,
-        CandidateContext::LabelledField,
+        context,
       );
     }
     cursor = value_end.max(label.next_cursor);
@@ -331,7 +381,7 @@ fn try_emit_semicolon_list(
   start: usize,
   end: usize,
   score: f64,
-  context: CandidateContext,
+  context: CandidateContext<'_>,
 ) {
   let value = full_text.get(start..end).unwrap_or_default();
   let mut segment_start = 0usize;
@@ -403,7 +453,7 @@ fn try_emit_forward_lines(
   from_pos: usize,
   max_lines: usize,
   score: f64,
-  context: CandidateContext,
+  context: CandidateContext<'_>,
 ) -> bool {
   let mut pos = from_pos;
   for _ in 0..max_lines {
@@ -430,15 +480,23 @@ fn try_emit(
   start: usize,
   end: usize,
   score: f64,
-  context: CandidateContext,
+  context: CandidateContext<'_>,
 ) -> bool {
   let raw = full_text.get(start..end).unwrap_or_default();
   if contains_org_suffix(raw, data) {
     return false;
   }
   let candidate = normalise_candidate(raw, data);
-  if context == CandidateContext::LabelledField
-    && ends_with_configured_label(&candidate, data)
+  if matches!(
+    context,
+    CandidateContext::LabelledField | CandidateContext::PartyRoleField(_)
+  ) && ends_with_configured_label(&candidate, data)
+  {
+    return false;
+  }
+  if let CandidateContext::PartyRoleField(name_corpus) = context
+    && name_corpus
+      .is_none_or(|corpus| !corpus.has_person_name_token(&candidate))
   {
     return false;
   }
@@ -655,6 +713,7 @@ struct LabelMatch {
   value_start: usize,
   next_cursor: usize,
   requires_list_structure: bool,
+  requires_person_evidence: bool,
 }
 
 fn find_label(
@@ -668,8 +727,11 @@ fn find_label(
       cursor = cursor.saturating_add(1);
       continue;
     }
-    if let Some((after_label, requires_list_structure)) =
-      label_end_at(line, cursor, data)
+    if let Some((
+      after_label,
+      requires_list_structure,
+      requires_person_evidence,
+    )) = label_end_at(line, cursor, data)
     {
       let mut after_spaces = skip_horizontal_ws(line, after_label);
       if line.get(after_spaces..)?.starts_with(':') {
@@ -678,6 +740,7 @@ fn find_label(
           value_start: after_spaces,
           next_cursor: after_spaces.saturating_add(1),
           requires_list_structure,
+          requires_person_evidence,
         });
       }
     }
@@ -690,24 +753,34 @@ fn label_end_at(
   line: &str,
   start: usize,
   data: &PreparedSignatureData,
-) -> Option<(usize, bool)> {
+) -> Option<(usize, bool, bool)> {
   if !boundary_before(line, start) {
     return None;
   }
   let tail = line.get(start..)?;
-  for (label, requires_list_structure) in data
+  for (label, requires_list_structure, requires_person_evidence) in data
     .person_value_labels
     .iter()
     .chain(data.signature_only_person_labels.iter())
-    .chain(data.party_role_labels.iter())
-    .map(|label| (label, false))
-    .chain(data.person_list_labels.iter().map(|label| (label, true)))
+    .map(|label| (label, false, false))
+    .chain(
+      data
+        .party_role_labels
+        .iter()
+        .map(|label| (label, false, true)),
+    )
+    .chain(
+      data
+        .person_list_labels
+        .iter()
+        .map(|label| (label, true, false)),
+    )
   {
     if let Some(relative_end) = unicode_case_insensitive_prefix_end(tail, label)
     {
       let end = start.saturating_add(relative_end);
       if label_tail_is_valid(line, end) {
-        return Some((end, requires_list_structure));
+        return Some((end, requires_list_structure, requires_person_evidence));
       }
     }
   }
@@ -1043,10 +1116,19 @@ fn non_empty_compact_lowercase(values: Vec<String>) -> Vec<String> {
 mod tests {
   use proptest::prelude::*;
 
-  use super::{PreparedSignatureData, SignatureData, detect_signatures};
+  use crate::name_corpus::{NameCorpusData, PreparedNameCorpusData};
+
+  use super::{
+    DetectSignaturesArgs, PreparedSignatureData, SignatureData,
+    detect_signatures,
+  };
 
   fn detect(text: &str) -> Vec<crate::resolution::PipelineEntity> {
-    detect_signatures(text, &test_data())
+    detect_signatures(DetectSignaturesArgs {
+      full_text: text,
+      data: &test_data(),
+      name_corpus: None,
+    })
   }
 
   fn test_data() -> PreparedSignatureData {
@@ -1097,20 +1179,41 @@ mod tests {
       },
       vec![String::from("seller"), String::from("borrower")],
     );
+    let names = PreparedNameCorpusData::new(NameCorpusData {
+      first_names: vec![String::from("Imani"), String::from("Zofia")],
+      surnames: vec![String::from("Nwosu"), String::from("Wrona")],
+      ..NameCorpusData::default()
+    });
 
     assert_eq!(
-      detect_signatures("Seller: Imani Nwosu", &data)
-        .into_iter()
-        .map(|entity| entity.text)
-        .collect::<Vec<_>>(),
+      detect_signatures(DetectSignaturesArgs {
+        full_text: "Seller: Imani Nwosu",
+        data: &data,
+        name_corpus: Some(&names),
+      })
+      .into_iter()
+      .map(|entity| entity.text)
+      .collect::<Vec<_>>(),
       ["Imani Nwosu"]
     );
     assert_eq!(
-      detect_signatures("Borrower:\nZofia Wrona", &data)
-        .into_iter()
-        .map(|entity| entity.text)
-        .collect::<Vec<_>>(),
+      detect_signatures(DetectSignaturesArgs {
+        full_text: "Borrower:\nZofia Wrona",
+        data: &data,
+        name_corpus: Some(&names),
+      })
+      .into_iter()
+      .map(|entity| entity.text)
+      .collect::<Vec<_>>(),
       ["Zofia Wrona"]
+    );
+    assert!(
+      detect_signatures(DetectSignaturesArgs {
+        full_text: "Seller: Acme Trading",
+        data: &data,
+        name_corpus: Some(&names),
+      })
+      .is_empty()
     );
   }
 
@@ -1126,13 +1229,24 @@ mod tests {
     );
 
     assert_eq!(
-      detect_signatures("By: Q. Z. Mercer", &data)
-        .into_iter()
-        .map(|entity| entity.text)
-        .collect::<Vec<_>>(),
+      detect_signatures(DetectSignaturesArgs {
+        full_text: "By: Q. Z. Mercer",
+        data: &data,
+        name_corpus: None,
+      })
+      .into_iter()
+      .map(|entity| entity.text)
+      .collect::<Vec<_>>(),
       ["Q. Z. Mercer"]
     );
-    assert!(detect_signatures("Name: Main Street", &data).is_empty());
+    assert!(
+      detect_signatures(DetectSignaturesArgs {
+        full_text: "Name: Main Street",
+        data: &data,
+        name_corpus: None,
+      })
+      .is_empty()
+    );
   }
 
   #[test]

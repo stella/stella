@@ -99,6 +99,7 @@ modules:
         dependencies: []
         support_resources:
           - Signature
+          - NameCorpus
         additive_scaling_domains:
           - FullText
   - name: legal_form

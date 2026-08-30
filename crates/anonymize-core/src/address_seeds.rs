@@ -22,9 +22,11 @@ const COMPOUND_STREET_SUFFIX_MIN_CHARS: usize = 5;
 /// Cap on street-name words joined to the right of a standalone street seed.
 const STANDALONE_STREET_MAX_TAIL_WORDS: usize = 6;
 const ADDRESS_CLUSTER_MAX_GAP: usize = 150;
-/// Ordinary words tolerated between two address seeds before the gap reads as
-/// prose rather than as a separator.
+/// Ordinary words and UTF-16 text units tolerated between two address seeds
+/// before the gap reads as prose rather than as a separator. The unit bound
+/// covers scripts whose prose is not separated by spaces.
 const MAX_PROSE_WORDS_BETWEEN_SEEDS: usize = 1;
+const MAX_PROSE_UNITS_BETWEEN_SEEDS: usize = 8;
 const IN_NAME_CONNECTORS: &str = "of|the|and";
 const ADDRESS_RIGHT_EXPAND_LIMIT: usize = 200;
 const BR_CEP_CONTEXT_WINDOW: usize = 200;
@@ -2276,7 +2278,7 @@ impl NonAddressEntityIndex {
       return false;
     };
     let mut cursor = gap_start;
-    let mut prose_words = 0usize;
+    let mut prose = ProseMeasure::default();
     let mut saw_entity = false;
     let visit =
       self
@@ -2288,9 +2290,8 @@ impl NonAddressEntityIndex {
             let Some(residual) = full_text.get(cursor..residual_end) else {
               return Ok::<_, ()>(());
             };
-            prose_words =
-              prose_words.saturating_add(prose_word_count(residual));
-            if prose_words > MAX_PROSE_WORDS_BETWEEN_SEEDS {
+            prose.add(prose_measure(residual));
+            if prose.exceeds_gap_limit() {
               return Err(());
             }
           }
@@ -2306,8 +2307,8 @@ impl NonAddressEntityIndex {
     let Some(residual) = full_text.get(cursor..gap_end) else {
       return false;
     };
-    prose_words.saturating_add(prose_word_count(residual))
-      > MAX_PROSE_WORDS_BETWEEN_SEEDS
+    prose.add(prose_measure(residual));
+    prose.exceeds_gap_limit()
   }
 
   fn nearest_left(
@@ -2472,14 +2473,39 @@ fn cluster_separation(
 /// Springfield"). Only applied before a street word opens the address; see
 /// `ClusterJoin::guards_against_prose`.
 fn has_prose_run(gap: &str) -> bool {
-  prose_word_count(gap) > MAX_PROSE_WORDS_BETWEEN_SEEDS
+  prose_measure(gap).exceeds_gap_limit()
 }
 
-fn prose_word_count(gap: &str) -> usize {
-  gap
+#[derive(Clone, Copy, Default)]
+struct ProseMeasure {
+  text_units: usize,
+  words: usize,
+}
+
+impl ProseMeasure {
+  fn add(&mut self, other: Self) {
+    self.text_units = self.text_units.saturating_add(other.text_units);
+    self.words = self.words.saturating_add(other.words);
+  }
+
+  const fn exceeds_gap_limit(self) -> bool {
+    self.words > MAX_PROSE_WORDS_BETWEEN_SEEDS
+      || self.text_units > MAX_PROSE_UNITS_BETWEEN_SEEDS
+  }
+}
+
+fn prose_measure(gap: &str) -> ProseMeasure {
+  let mut measure = ProseMeasure::default();
+  for word in gap
     .split(|ch: char| !ch.is_alphanumeric() && !matches!(ch, '-' | '\'' | '’'))
     .filter(|word| is_prose_word(word))
-    .count()
+  {
+    measure.words = measure.words.saturating_add(1);
+    measure.text_units = measure
+      .text_units
+      .saturating_add(word.chars().map(char::len_utf16).sum::<usize>());
+  }
+  measure
 }
 
 /// House numbers, postal codes, capitalized name words, and the connectives

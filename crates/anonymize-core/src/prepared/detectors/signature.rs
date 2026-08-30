@@ -9,7 +9,10 @@ static_detector_rules! {
     stage: DiagnosticStage::EntitySignature;
     inputs: &[DetectorInput::FullText];
     scales: &[DetectorInput::FullText];
-    uses: &[SupportResource::Signature];
+    uses: &[
+      SupportResource::Signature,
+      SupportResource::NameCorpus,
+    ];
     active: signature_is_active;
     detect: detect_signature;
   }

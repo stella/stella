@@ -59,6 +59,7 @@ describe("structured English contract-party fields", () => {
     const text = [
       "Buyer: the party named above",
       "Seller: ____________________",
+      "Seller: Acme Trading",
       "Lender: General Lender",
       "Customer: Harbor Legal Inc.",
     ].join("\n");

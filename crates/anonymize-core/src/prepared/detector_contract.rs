@@ -19,7 +19,9 @@ use crate::processors::{
   process_prepared_regex_matches,
 };
 use crate::resolution::{PipelineEntity, ResolutionDocument};
-use crate::signatures::{PreparedSignatureData, detect_signatures};
+use crate::signatures::{
+  DetectSignaturesArgs, PreparedSignatureData, detect_signatures,
+};
 use crate::triggers::{
   PreparedTriggerData, ProcessTriggerMatchesArgs, process_trigger_matches,
 };
@@ -313,11 +315,14 @@ impl<'a> StaticDetectorContext<'a> {
 
   pub(super) fn detect_signature(&self) -> Result<Vec<PipelineEntity>> {
     let full_text = self.full_text()?;
-    Ok(
-      self
-        .signature_data()?
-        .map_or_else(Vec::new, |data| detect_signatures(full_text, data)),
-    )
+    let name_corpus = self.name_corpus_data()?;
+    Ok(self.signature_data()?.map_or_else(Vec::new, |data| {
+      detect_signatures(DetectSignaturesArgs {
+        full_text,
+        data,
+        name_corpus,
+      })
+    }))
   }
 
   pub(super) fn legal_form_is_active(&self) -> Result<bool> {
