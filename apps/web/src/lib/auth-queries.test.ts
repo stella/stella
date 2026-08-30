@@ -6,15 +6,21 @@ import { refreshAuthQueries, rootKeys } from "@/lib/auth-queries";
 describe("auth query refresh", () => {
   test("refreshes inactive session and role caches together", async () => {
     const queryClient = new QueryClient();
-    let sessionVersion = 0;
-    let roleVersion = 0;
+    let sessionFetchCount = 0;
+    let roleFetchCount = 0;
     const sessionQuery = {
       queryKey: rootKeys.session,
-      queryFn: () => Promise.resolve(sessionVersion),
+      queryFn: () => {
+        sessionFetchCount += 1;
+        return Promise.resolve(sessionFetchCount);
+      },
     };
     const roleQuery = {
       queryKey: rootKeys.role,
-      queryFn: () => Promise.resolve(roleVersion),
+      queryFn: () => {
+        roleFetchCount += 1;
+        return Promise.resolve(roleFetchCount);
+      },
     };
 
     await Promise.all([
@@ -33,12 +39,9 @@ describe("auth query refresh", () => {
         .find({ queryKey: rootKeys.role })
         ?.getObserversCount(),
     ).toBe(0);
-    sessionVersion = 1;
-    roleVersion = 1;
-
     await refreshAuthQueries(queryClient);
 
-    expect(queryClient.getQueryData(rootKeys.session)).toBe(1);
-    expect(queryClient.getQueryData(rootKeys.role)).toBe(1);
+    expect(sessionFetchCount).toBe(2);
+    expect(roleFetchCount).toBe(2);
   });
 });
