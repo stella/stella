@@ -449,6 +449,7 @@ fn build_br_cue_words(
 
 #[cfg(test)]
 mod tests {
+  use serde_json::Value;
   use stella_anonymize_core::assemble::{
     AssembleError, PipelineConfig, StandaloneStreetDetection, parse_data_file,
   };
@@ -577,6 +578,38 @@ mod tests {
       ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
     );
     assert!(directional_abbreviations(&["de"])?.is_empty());
+    Ok(())
+  }
+
+  #[test]
+  fn manifest_languages_have_reviewed_directional_coverage()
+  -> Result<(), AssembleError> {
+    #[derive(serde::Deserialize)]
+    struct Manifest {
+      languages: stella_anonymize_core::assemble::OrderedMap<Value>,
+    }
+
+    let manifest: Manifest = parse_data_file("manifest.json")?;
+    let data: stella_anonymize_core::assemble::OrderedMap<Value> =
+      stella_anonymize_core::assemble::parse_ordered_data_file(
+        "address-directional-abbreviations.json",
+      )?;
+    let omissions = data.get("_omissions").and_then(Value::as_object);
+
+    for (language, _) in &manifest.languages {
+      let has_abbreviations = data
+        .get(language)
+        .and_then(Value::as_array)
+        .is_some_and(|values| !values.is_empty());
+      let has_omission = omissions
+        .and_then(|values| values.get(language))
+        .and_then(Value::as_str)
+        .is_some_and(|rationale| !rationale.trim().is_empty());
+      assert_ne!(
+        has_abbreviations, has_omission,
+        "{language} must have reviewed address directionals or one omission rationale"
+      );
+    }
     Ok(())
   }
 

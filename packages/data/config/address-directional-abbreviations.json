@@ -1,4 +1,17 @@
 {
-  "_comment": "Cardinal abbreviations that can continue an address after a street-ending period. Locale-scoped because short direction letters are ambiguous prose outside their address conventions.",
+  "_comment": "Cardinal abbreviations that can continue an address after a street-ending period. Locale-scoped because short direction letters are ambiguous prose outside their address conventions. Every manifest language has either reviewed abbreviations or an explicit omission rationale.",
+  "_omissions": {
+    "cs": "No reviewed Czech postal directional abbreviation convention; short compass tokens remain disabled to avoid prose ambiguity.",
+    "de": "No reviewed German postal directional abbreviation convention; short compass tokens remain disabled to avoid prose ambiguity.",
+    "es": "No reviewed Spanish postal directional abbreviation convention; short compass tokens remain disabled to avoid prose ambiguity.",
+    "fr": "No reviewed French postal directional abbreviation convention; short compass tokens remain disabled to avoid prose ambiguity.",
+    "hu": "No reviewed Hungarian postal directional abbreviation convention; short compass tokens remain disabled to avoid prose ambiguity.",
+    "it": "No reviewed Italian postal directional abbreviation convention; short compass tokens remain disabled to avoid prose ambiguity.",
+    "pl": "No reviewed Polish postal directional abbreviation convention; short compass tokens remain disabled to avoid prose ambiguity.",
+    "pt-br": "No reviewed Brazilian Portuguese postal directional abbreviation convention; short compass tokens remain disabled to avoid prose ambiguity.",
+    "ro": "No reviewed Romanian postal directional abbreviation convention; short compass tokens remain disabled to avoid prose ambiguity.",
+    "sk": "No reviewed Slovak postal directional abbreviation convention; short compass tokens remain disabled to avoid prose ambiguity.",
+    "sv": "No reviewed Swedish postal directional abbreviation convention; short compass tokens remain disabled to avoid prose ambiguity."
+  },
   "en": ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 }
