@@ -1,15 +1,15 @@
 {
   "_comment": "Per-language clause text that may precede an organization name before a legal-form suffix. `phrases` are trimmed unconditionally when found inside an over-captured legal-form span. `directPrefixes` are trimmed only when the text before the prefix already looks like prose, so company names such as `Stand By Me LLC` are preserved.",
   "cs": {
-    "phrases": [],
+    "phrases": ["je s"],
     "directPrefixes": ["mezi", "s"]
   },
   "de": {
-    "phrases": [],
+    "phrases": ["ist mit"],
     "directPrefixes": ["mit", "zwischen"]
   },
   "en": {
-    "phrases": ["by and among", "by and between", "is between"],
+    "phrases": ["by and among", "by and between", "is between", "is with"],
     "directPrefixes": ["by", "among", "amongst", "between"]
   }
 }

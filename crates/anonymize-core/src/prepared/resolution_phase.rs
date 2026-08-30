@@ -112,11 +112,7 @@ impl PreparedEngine {
         document: resolution_document,
         filters: false_positive_filters,
         directional_abbreviations: self.address_directional_abbreviations(),
-        legal_form_clause_introducers: self
-          .data
-          .legal_forms
-          .as_ref()
-          .map(|data| data.leading_clause_direct_prefixes()),
+        legal_form_data: self.data.legal_forms.as_ref(),
       })?,
       self.policy.threshold,
       &self.policy.allowed_labels,
@@ -297,11 +293,7 @@ impl PreparedEngine {
         document,
         filters: false_positive_filters,
         directional_abbreviations: self.address_directional_abbreviations(),
-        legal_form_clause_introducers: self
-          .data
-          .legal_forms
-          .as_ref()
-          .map(|data| data.leading_clause_direct_prefixes()),
+        legal_form_data: self.data.legal_forms.as_ref(),
       })?;
     Ok(filter_entities_for_labels(
       filtered,

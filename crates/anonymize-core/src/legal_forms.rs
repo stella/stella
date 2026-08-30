@@ -186,8 +186,33 @@ impl PreparedLegalFormData {
     }
   }
 
-  pub(crate) fn leading_clause_direct_prefixes(&self) -> &[String] {
-    &self.leading_clause_direct_prefixes
+  pub(crate) fn has_leading_clause_phrase(&self, text: &str) -> bool {
+    let trimmed = text.trim_end_matches(char::is_whitespace);
+    let lower = lowercase_lookup(trimmed);
+    self.leading_clause_phrases.iter().any(|phrase| {
+      let Some(before_phrase) = lower.strip_suffix(phrase) else {
+        return false;
+      };
+      before_phrase
+        .chars()
+        .next_back()
+        .is_none_or(|ch| !ch.is_alphanumeric())
+    })
+  }
+
+  pub(crate) fn has_subject_clause_tail(&self, text: &str) -> bool {
+    let mut words = text
+      .split(|ch: char| !ch.is_alphabetic())
+      .filter(|word| !word.is_empty());
+    let Some(verb) = words.next() else {
+      return false;
+    };
+    if !contains_lowercase(&self.sentence_verb_indicators, verb) {
+      return false;
+    }
+    words
+      .take(3)
+      .any(|word| contains_lowercase(&self.role_heads, word))
   }
 
   fn bridges_lowercase(&self, token: &str) -> bool {

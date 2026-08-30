@@ -6,6 +6,7 @@ use regex::Regex;
 
 use crate::address_seeds::soft_wrapped_us_city_tail;
 use crate::byte_offsets::ByteOffsets;
+use crate::legal_forms::PreparedLegalFormData;
 use crate::processors::DenyListFilterData;
 use crate::resolution::{
   DetectionSource, PipelineEntity, ResolutionDocument, SourceDetail,
@@ -83,7 +84,7 @@ pub(crate) struct FilterEntityFalsePositivesArgs<'a> {
   pub(crate) document: &'a ResolutionDocument<'a>,
   pub(crate) filters: Option<&'a DenyListFilterData>,
   pub(crate) directional_abbreviations: Option<&'a BTreeSet<String>>,
-  pub(crate) legal_form_clause_introducers: Option<&'a [String]>,
+  pub(crate) legal_form_data: Option<&'a PreparedLegalFormData>,
 }
 
 pub(crate) fn filter_entity_false_positives(
@@ -94,7 +95,7 @@ pub(crate) fn filter_entity_false_positives(
     document,
     filters,
     directional_abbreviations,
-    legal_form_clause_introducers,
+    legal_form_data,
   } = args;
   let offsets = document.offsets();
   let mut filtered = Vec::with_capacity(entities.len());
@@ -114,7 +115,7 @@ pub(crate) fn filter_entity_false_positives(
       document,
       offsets: &offsets,
       filters,
-      legal_form_clause_introducers,
+      legal_form_data,
     })? {
       continue;
     }
@@ -262,7 +263,7 @@ struct ShouldRejectEntityArgs<'a> {
   document: &'a ResolutionDocument<'a>,
   offsets: &'a ByteOffsets<'a>,
   filters: Option<&'a DenyListFilterData>,
-  legal_form_clause_introducers: Option<&'a [String]>,
+  legal_form_data: Option<&'a PreparedLegalFormData>,
 }
 
 fn should_reject_entity(args: ShouldRejectEntityArgs<'_>) -> Result<bool> {
@@ -271,7 +272,7 @@ fn should_reject_entity(args: ShouldRejectEntityArgs<'_>) -> Result<bool> {
     document,
     offsets,
     filters,
-    legal_form_clause_introducers,
+    legal_form_data,
   } = args;
   let full_text = document.text();
   let text = entity.text.trim();
@@ -351,7 +352,7 @@ fn should_reject_entity(args: ShouldRejectEntityArgs<'_>) -> Result<bool> {
       document,
       offsets,
       entity,
-      legal_form_clause_introducers,
+      legal_form_data,
     })?
   {
     return Ok(true);
@@ -727,7 +728,7 @@ struct IsAllCapsBoilerplateLineArgs<'a> {
   document: &'a ResolutionDocument<'a>,
   offsets: &'a ByteOffsets<'a>,
   entity: &'a PipelineEntity,
-  legal_form_clause_introducers: Option<&'a [String]>,
+  legal_form_data: Option<&'a PreparedLegalFormData>,
 }
 
 fn is_all_caps_boilerplate_line(
@@ -737,7 +738,7 @@ fn is_all_caps_boilerplate_line(
     document,
     offsets,
     entity,
-    legal_form_clause_introducers,
+    legal_form_data,
   } = args;
   let Some(context) = line_context(document, offsets, entity)? else {
     return Ok(false);
@@ -780,19 +781,14 @@ fn is_all_caps_boilerplate_line(
     .chars()
     .next()
     .is_some_and(|ch| matches!(ch, ',' | ':' | ';' | '(' | '-' | '–' | '—'));
-  let has_clause_introducer = context
-    .before
-    .split(|ch: char| !ch.is_alphabetic())
-    .rfind(|word| !word.is_empty())
-    .is_some_and(|word| {
-      legal_form_clause_introducers
-        .unwrap_or_default()
-        .iter()
-        .any(|introducer| word.eq_ignore_ascii_case(introducer))
-    });
+  let has_structural_clause = legal_form_data.is_some_and(|data| {
+    data.has_leading_clause_phrase(context.before)
+      || (context.before.trim().is_empty()
+        && data.has_subject_clause_tail(context.after))
+  });
   let legal_form_heading = entity.source == DetectionSource::LegalForm
     && !has_caption_delimiter
-    && !has_clause_introducer;
+    && !has_structural_clause;
   if outside_entity_letters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS
     && (entity.source != DetectionSource::LegalForm || legal_form_heading)
   {
@@ -1520,36 +1516,73 @@ mod tests {
     full_text: &str,
     filters: Option<&DenyListFilterData>,
   ) -> Result<Vec<PipelineEntity>> {
-    let clause_introducers = [
-      String::from("among"),
-      String::from("amongst"),
-      String::from("between"),
-      String::from("by"),
-      String::from("with"),
-    ];
-    filter_with_clause_introducers(FilterWithClauseIntroducersArgs {
+    let legal_form_data = prepared_clause_data(PreparedClauseDataArgs {
+      leading_phrases: &[
+        "by and among",
+        "by and between",
+        "is between",
+        "is with",
+      ],
+      role_heads: &["party", "seller"],
+      sentence_verbs: &["is"],
+    });
+    filter_with_legal_form_data(FilterWithLegalFormDataArgs {
       entities,
       full_text,
       filters,
-      clause_introducers: &clause_introducers,
+      legal_form_data: &legal_form_data,
     })
   }
 
-  struct FilterWithClauseIntroducersArgs<'a> {
+  struct PreparedClauseDataArgs<'a> {
+    leading_phrases: &'a [&'a str],
+    role_heads: &'a [&'a str],
+    sentence_verbs: &'a [&'a str],
+  }
+
+  fn prepared_clause_data(
+    args: PreparedClauseDataArgs<'_>,
+  ) -> PreparedLegalFormData {
+    let PreparedClauseDataArgs {
+      leading_phrases,
+      role_heads,
+      sentence_verbs,
+    } = args;
+    PreparedLegalFormData::new_with_soft_wrap_boundary_labels(
+      crate::legal_forms::LegalFormData {
+        leading_clause_phrases: leading_phrases
+          .iter()
+          .map(|value| (*value).to_string())
+          .collect(),
+        role_heads: role_heads
+          .iter()
+          .map(|value| (*value).to_string())
+          .collect(),
+        sentence_verb_indicators: sentence_verbs
+          .iter()
+          .map(|value| (*value).to_string())
+          .collect(),
+        ..crate::legal_forms::LegalFormData::default()
+      },
+      Vec::new(),
+    )
+  }
+
+  struct FilterWithLegalFormDataArgs<'a> {
     entities: Vec<PipelineEntity>,
     full_text: &'a str,
     filters: Option<&'a DenyListFilterData>,
-    clause_introducers: &'a [String],
+    legal_form_data: &'a PreparedLegalFormData,
   }
 
-  fn filter_with_clause_introducers(
-    args: FilterWithClauseIntroducersArgs<'_>,
+  fn filter_with_legal_form_data(
+    args: FilterWithLegalFormDataArgs<'_>,
   ) -> Result<Vec<PipelineEntity>> {
-    let FilterWithClauseIntroducersArgs {
+    let FilterWithLegalFormDataArgs {
       entities,
       full_text,
       filters,
-      clause_introducers,
+      legal_form_data,
     } = args;
     let document = ResolutionDocument::new(full_text);
     super::filter_entity_false_positives(FilterEntityFalsePositivesArgs {
@@ -1557,7 +1590,7 @@ mod tests {
       document: &document,
       filters,
       directional_abbreviations: None,
-      legal_form_clause_introducers: Some(clause_introducers),
+      legal_form_data: Some(legal_form_data),
     })
   }
 
@@ -2353,51 +2386,150 @@ mod tests {
 
   #[test]
   fn legal_form_party_clauses_use_scoped_introducers() {
-    for (text, entity_text, introducers) in [
+    for (text, entity_text, leading_phrases, role_heads, sentence_verbs) in [
       (
         "DIESE VEREINBARUNG IST MIT ACME GMBH ALS VERKÄUFER GESCHLOSSEN.\n",
         "ACME GMBH",
-        vec![String::from("mit"), String::from("zwischen")],
+        vec!["ist mit"],
+        vec!["verkäufer"],
+        vec!["ist"],
       ),
       (
         "TATO SMLOUVA JE S ACME S.R.O. JAKO PRODÁVAJÍCÍ UZAVŘENA.\n",
         "ACME S.R.O.",
-        vec![String::from("mezi"), String::from("s")],
+        vec!["je s"],
+        vec!["prodávající"],
+        vec!["je"],
       ),
     ] {
-      let entities =
-        filter_with_clause_introducers(FilterWithClauseIntroducersArgs {
-          entities: vec![entity(
-            text,
-            entity_text,
-            ORGANIZATION_LABEL,
-            DetectionSource::LegalForm,
-          )],
-          full_text: text,
-          filters: Some(&DenyListFilterData::default()),
-          clause_introducers: &introducers,
-        })
-        .unwrap();
+      let legal_form_data = prepared_clause_data(PreparedClauseDataArgs {
+        leading_phrases: &leading_phrases,
+        role_heads: &role_heads,
+        sentence_verbs: &sentence_verbs,
+      });
+      let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+        entities: vec![entity(
+          text,
+          entity_text,
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        full_text: text,
+        filters: Some(&DenyListFilterData::default()),
+        legal_form_data: &legal_form_data,
+      })
+      .unwrap();
       assert_eq!(entities.len(), 1, "text {text:?}");
     }
 
     let german =
       "DIESE VEREINBARUNG IST MIT ACME GMBH ALS VERKÄUFER GESCHLOSSEN.\n";
-    let english_introducers = [String::from("with")];
-    let entities =
-      filter_with_clause_introducers(FilterWithClauseIntroducersArgs {
+    let english_data = prepared_clause_data(PreparedClauseDataArgs {
+      leading_phrases: &["is with"],
+      role_heads: &["party", "seller"],
+      sentence_verbs: &["is"],
+    });
+    let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+      entities: vec![entity(
+        german,
+        "ACME GMBH",
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      full_text: german,
+      filters: Some(&DenyListFilterData::default()),
+      legal_form_data: &english_data,
+    })
+    .unwrap();
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn keeps_subject_led_all_caps_party_clauses() {
+    for (text, entity_text, role_heads, sentence_verbs) in [
+      (
+        "ACME LIMITED IS A PARTY TO THIS AGREEMENT。\n",
+        "ACME LIMITED",
+        vec!["party"],
+        vec!["is"],
+      ),
+      (
+        "ACME GMBH IST EINE VERTRAGSPARTEI DIESES VERTRAGS.\n",
+        "ACME GMBH",
+        vec!["vertragspartei"],
+        vec!["ist"],
+      ),
+      (
+        "ACME S.R.O. JE SMLUVNÍ STRANOU TÉTO SMLOUVY.\n",
+        "ACME S.R.O.",
+        vec!["smluvní"],
+        vec!["je"],
+      ),
+    ] {
+      let legal_form_data = prepared_clause_data(PreparedClauseDataArgs {
+        leading_phrases: &[],
+        role_heads: &role_heads,
+        sentence_verbs: &sentence_verbs,
+      });
+      let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
         entities: vec![entity(
-          german,
-          "ACME GMBH",
+          text,
+          entity_text,
           ORGANIZATION_LABEL,
           DetectionSource::LegalForm,
         )],
-        full_text: german,
+        full_text: text,
         filters: Some(&DenyListFilterData::default()),
-        clause_introducers: &english_introducers,
+        legal_form_data: &legal_form_data,
       })
       .unwrap();
+
+      assert_eq!(entities.len(), 1, "text {text:?}");
+    }
+
+    let german =
+      "ACME GMBH IST EINE VERTRAGSPARTEI DIESES VERTRAGS.\n";
+    let english_data = prepared_clause_data(PreparedClauseDataArgs {
+      leading_phrases: &[],
+      role_heads: &["party"],
+      sentence_verbs: &["is"],
+    });
+    let entities = filter_with_legal_form_data(FilterWithLegalFormDataArgs {
+      entities: vec![entity(
+        german,
+        "ACME GMBH",
+        ORGANIZATION_LABEL,
+        DetectionSource::LegalForm,
+      )],
+      full_text: german,
+      filters: Some(&DenyListFilterData::default()),
+      legal_form_data: &english_data,
+    })
+    .unwrap();
+
     assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn rejects_introducer_only_all_caps_headings() {
+    for terminal in ["", "."] {
+      let text = format!(
+        "REGISTRATION BY LIMITED LIABILITY COMPANY REQUIREMENTS AND PROCEDURES{terminal}\n"
+      );
+      let entities = filter_entity_false_positives(
+        vec![entity(
+          &text,
+          "LIMITED LIABILITY COMPANY",
+          ORGANIZATION_LABEL,
+          DetectionSource::LegalForm,
+        )],
+        &text,
+        Some(&DenyListFilterData::default()),
+      )
+      .unwrap();
+
+      assert!(entities.is_empty(), "terminal {terminal:?}");
+    }
   }
 
   #[test]

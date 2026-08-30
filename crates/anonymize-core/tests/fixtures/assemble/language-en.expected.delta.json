@@ -1000,6 +1000,17 @@
       ]
     },
     {
+      "type": "array",
+      "path": ["legal_form_data", "leading_clause_phrases"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 2,
+          "end": 6
+        }
+      ]
+    },
+    {
       "type": "set",
       "path": ["legal_form_data", "lowercase_bridge", "policy"],
       "value": "closed"

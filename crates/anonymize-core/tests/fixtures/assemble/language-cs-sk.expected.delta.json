@@ -1019,7 +1019,13 @@
     {
       "type": "array",
       "path": ["legal_form_data", "leading_clause_phrases"],
-      "segments": []
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 1
+        }
+      ]
     },
     {
       "type": "array",

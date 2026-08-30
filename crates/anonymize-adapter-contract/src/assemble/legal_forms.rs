@@ -933,11 +933,15 @@ mod tests {
   fn leading_clause_prefixes_follow_content_language_scope() {
     let german = leading_clause_trims(Some(&[String::from("de")])).unwrap();
     assert!(german.direct_prefixes.contains(&String::from("mit")));
+    assert!(german.phrases.contains(&String::from("ist mit")));
     assert!(!german.direct_prefixes.contains(&String::from("with")));
+    assert!(!german.phrases.contains(&String::from("is with")));
 
     let czech = leading_clause_trims(Some(&[String::from("cs")])).unwrap();
     assert!(czech.direct_prefixes.contains(&String::from("s")));
+    assert!(czech.phrases.contains(&String::from("je s")));
     assert!(!czech.direct_prefixes.contains(&String::from("mit")));
+    assert!(!czech.phrases.contains(&String::from("ist mit")));
   }
 
   #[test]
