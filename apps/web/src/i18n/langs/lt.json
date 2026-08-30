@@ -3735,7 +3735,7 @@
     "queue": {
       "atRisk": "Rizikingi",
       "completed": "Užbaigti",
-      "inbox": "Gauta",
+      "toAcknowledge": "Laukia patvirtinimo",
       "upcoming": "Artėjantys"
     },
     "reopenWork": "Atnaujinti darbą",

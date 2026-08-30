@@ -32,7 +32,7 @@ type MyWorkContext = Parameters<typeof myWork.handler>[0];
 type MyWorkQueue = NonNullable<MyWorkContext["query"]["queue"]>;
 
 const AS_OF = "2026-03-01";
-const OPEN_QUEUES = ["inbox", "upcoming", "at_risk"] as const;
+const OPEN_QUEUES = ["to_acknowledge", "upcoming", "at_risk"] as const;
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -204,13 +204,13 @@ afterAll(async () => {
 
 describe("my work queues", () => {
   test("the open queues partition the owner's open work", async () => {
-    const [inbox, upcoming, atRisk] = await Promise.all([
-      queueEntityIds("inbox"),
+    const [toAcknowledge, upcoming, atRisk] = await Promise.all([
+      queueEntityIds("to_acknowledge"),
       queueEntityIds("upcoming"),
       queueEntityIds("at_risk"),
     ]);
 
-    expect(inbox).toEqual(
+    expect(toAcknowledge).toEqual(
       new Set([
         entityIdOf("awaiting, no dates"),
         entityIdOf("awaiting, working target in the future"),
@@ -230,12 +230,12 @@ describe("my work queues", () => {
       ]),
     );
 
-    const openRows = [...inbox, ...upcoming, ...atRisk];
+    const openRows = [...toAcknowledge, ...upcoming, ...atRisk];
     expect(new Set(openRows).size).toBe(openRows.length);
     expect(openRows).toHaveLength(7);
   });
 
-  test("an unnamed queue answers with the inbox", async () => {
+  test("an unnamed queue answers with the to-acknowledge work", async () => {
     expect(await queueEntityIds()).toEqual(
       new Set([
         entityIdOf("awaiting, no dates"),

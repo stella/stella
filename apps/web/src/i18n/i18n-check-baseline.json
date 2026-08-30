@@ -246,7 +246,6 @@
     "tasks.priorityValues.low",
     "tasks.priorityValues.medium",
     "tasks.queue.completed",
-    "tasks.queue.inbox",
     "tasks.sourceTypeValues.calendar",
     "tasks.sourceTypeValues.manual",
     "tasks.statusValues.cancelled",

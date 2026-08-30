@@ -3738,7 +3738,7 @@ type Messages = {
     "queue": {
       "atRisk": "At risk";
       "completed": "Completed";
-      "inbox": "Inbox";
+      "toAcknowledge": "To acknowledge";
       "upcoming": "Upcoming";
     };
     "reopenWork": "Reopen work";

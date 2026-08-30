@@ -28,7 +28,7 @@ const WORK_QUEUE_PAGE_SIZE_MAX = 100;
 const LAST_SORT_DATE = "9999-12-31";
 
 const MY_WORK_QUEUE = {
-  INBOX: "inbox",
+  TO_ACKNOWLEDGE: "to_acknowledge",
   UPCOMING: "upcoming",
   AT_RISK: "at_risk",
   COMPLETED: "completed",
@@ -37,7 +37,7 @@ const MY_WORK_QUEUE = {
 const myWorkQuery = t.Object({
   queue: t.Optional(
     t.Union([
-      t.Literal(MY_WORK_QUEUE.INBOX),
+      t.Literal(MY_WORK_QUEUE.TO_ACKNOWLEDGE),
       t.Literal(MY_WORK_QUEUE.UPCOMING),
       t.Literal(MY_WORK_QUEUE.AT_RISK),
       t.Literal(MY_WORK_QUEUE.COMPLETED),
@@ -52,7 +52,7 @@ const myWorkQuery = t.Object({
 
 const config = {
   description:
-    "List the signed-in user's governed work with cursor pagination. The queues partition the work: at-risk holds every open obligation already due, inbox the rest awaiting acknowledgement, upcoming the rest already acknowledged, and completed the finished work.",
+    "List the signed-in user's governed work with cursor pagination. The queues partition the work: at-risk holds every open obligation already due, to-acknowledge the rest awaiting acknowledgement, upcoming the rest already acknowledged, and completed the finished work.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   access: "read",
@@ -96,13 +96,13 @@ const myWork = createSafeRootHandler(
   async function* ({ scopedDb, user, query }) {
     // No queue is a superset of the others any more, so the default is the one
     // that needs an answer from the owner rather than the widest slice.
-    const queue = query.queue ?? MY_WORK_QUEUE.INBOX;
+    const queue = query.queue ?? MY_WORK_QUEUE.TO_ACKNOWLEDGE;
     const asOf = query.asOf ?? new Date().toISOString().slice(0, 10);
     const limit = query.limit ?? WORK_QUEUE_PAGE_SIZE_DEFAULT;
     const conditions = [eq(workObligations.ownerUserId, user.id)];
 
     switch (queue) {
-      case MY_WORK_QUEUE.INBOX:
+      case MY_WORK_QUEUE.TO_ACKNOWLEDGE:
         conditions.push(
           eq(
             workObligations.status,

@@ -41294,7 +41294,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "work-obligations", "queues-list"],
                 capabilityId: "work-obligations.queues.list",
                 description:
-                  "List the signed-in user's governed work with cursor pagination. The queues partition the work: at-risk holds every open obligation already due, inbox the rest awaiting acknowledgement, upcoming the rest already acknowledged, and completed the finished work.",
+                  "List the signed-in user's governed work with cursor pagination. The queues partition the work: at-risk holds every open obligation already due, to-acknowledge the rest awaiting acknowledgement, upcoming the rest already acknowledged, and completed the finished work.",
                 access: "read",
                 flags: [
                   {
@@ -41323,7 +41323,7 @@ export const generatedRouteMap: RouteNode = {
                         queue: {
                           anyOf: [
                             {
-                              const: "inbox",
+                              const: "to_acknowledge",
                               type: "string",
                             },
                             {
