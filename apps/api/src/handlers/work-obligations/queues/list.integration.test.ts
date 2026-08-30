@@ -204,9 +204,11 @@ afterAll(async () => {
 
 describe("my work queues", () => {
   test("the open queues partition the owner's open work", async () => {
-    const [inbox, upcoming, atRisk] = await Promise.all(
-      OPEN_QUEUES.map(queueEntityIds),
-    );
+    const [inbox, upcoming, atRisk] = await Promise.all([
+      queueEntityIds("inbox"),
+      queueEntityIds("upcoming"),
+      queueEntityIds("at_risk"),
+    ]);
 
     expect(inbox).toEqual(
       new Set([
