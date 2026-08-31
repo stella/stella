@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/assets/banner.png" alt="stll/country-codes" width="100%" />
+  <img src="https://raw.githubusercontent.com/stella/stella/main/.github/assets/banners/country-codes.webp" alt="stll/country-codes" width="100%" />
 </p>
 
 # @stll/country-codes

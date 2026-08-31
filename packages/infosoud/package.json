@@ -24,7 +24,6 @@
     "infosoud": "./dist/cli.js"
   },
   "files": [
-    ".github/assets/banner.png",
     "dist",
     "PUBLISHING.md",
     "README.md"

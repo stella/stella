@@ -14,6 +14,7 @@ import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { readGzipJson } from "@/api/lib/gzip-json";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -26,7 +27,7 @@ type FixtureRecord = {
   };
 };
 
-/** Load all *-page.json fixtures from __fixtures__/. */
+/** Load all *-page.json.gz fixtures from __fixtures__/. */
 const loadPageFixtures = async (): Promise<
   { filename: string; data: FixtureRecord }[]
 > => {
@@ -35,16 +36,15 @@ const loadPageFixtures = async (): Promise<
     data: FixtureRecord;
   }[] = [];
 
-  const glob = new Glob("*-page.json");
+  const glob = new Glob("*-page.json.gz");
   const fixturePath = FIXTURES_DIR.pathname.endsWith("/")
     ? FIXTURES_DIR.pathname
     : `${FIXTURES_DIR.pathname}/`;
 
   for await (const filename of glob.scan(fixturePath)) {
     const path = new URL(filename, FIXTURES_DIR);
-    const text = await Bun.file(path).text();
     // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- committed fixture JSON; the assertions below are the shape validation
-    const data = JSON.parse(text) as FixtureRecord;
+    const data = (await readGzipJson(path)) as FixtureRecord;
     results.push({ filename, data });
   }
 

@@ -16,6 +16,7 @@ import {
   listAdapterKeys,
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
+import { encodeGzipJson } from "@/api/lib/gzip-json";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -40,10 +41,9 @@ const writeFixture = async (
   adapter: string,
   data: FixtureRecord,
 ): Promise<string> => {
-  const filename = `${adapter}-page.json`;
+  const filename = `${adapter}-page.json.gz`;
   const path = new URL(filename, FIXTURES_DIR);
-  const content = JSON.stringify(data, null, 2);
-  await Bun.write(path, content);
+  await Bun.write(path, encodeGzipJson(data));
   return filename;
 };
 

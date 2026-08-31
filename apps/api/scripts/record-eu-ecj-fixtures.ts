@@ -12,7 +12,7 @@
  *    decisions in `PORTAL_CORPUS` get a second recording in the same
  *    pass: the page encoding of the same converter output, written only
  *    together with the manifestation it is compared against.
- * 2. The seed fixture (`scripts/__fixtures__/case-law/eu-ecj.json`) in
+ * 2. The seed fixture (`scripts/__fixtures__/case-law/eu-ecj.json.gz`) in
  *    the shape `seed-case-law.ts` loads.
  *
  * Both come from `fetchDecisionsByCelex`, the adapter's own query and
@@ -41,6 +41,7 @@ import {
   manifestationStem,
   portalStem,
 } from "@/api/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/corpus";
+import { encodeGzipJson } from "@/api/lib/gzip-json";
 
 import { seedId } from "./seed-utils";
 
@@ -107,7 +108,7 @@ const PARSER_FIXTURES_DIR = new URL(
   import.meta.url,
 );
 const SEED_FIXTURE = new URL(
-  "__fixtures__/case-law/eu-ecj.json",
+  "__fixtures__/case-law/eu-ecj.json.gz",
   import.meta.url,
 );
 
@@ -401,20 +402,16 @@ const recordSeedFixture = async (): Promise<void> => {
 
   await Bun.write(
     SEED_FIXTURE,
-    `${JSON.stringify(
-      {
-        source: {
-          id: sourceId,
-          name: "Court of Justice of the EU (CJEU)",
-          config: {},
-          enabled: true,
-          adapter_key: "eu-ecj",
-        },
-        decisions: rows,
+    encodeGzipJson({
+      source: {
+        id: sourceId,
+        name: "Court of Justice of the EU (CJEU)",
+        config: {},
+        enabled: true,
+        adapter_key: "eu-ecj",
       },
-      null,
-      2,
-    )}\n`,
+      decisions: rows,
+    }),
   );
 };
 
@@ -430,7 +427,7 @@ if (import.meta.main) {
   }
 
   if (!parserOnly) {
-    log("Recording seed fixture → __fixtures__/case-law/eu-ecj.json");
+    log("Recording seed fixture → __fixtures__/case-law/eu-ecj.json.gz");
     await recordSeedFixture();
   }
   log("done");

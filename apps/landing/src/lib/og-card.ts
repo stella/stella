@@ -107,14 +107,13 @@ const WORDMARK_WIDTH = 236;
 let background: string | undefined;
 
 /**
- * The hero gradient, pre-scaled to card size once. The source is a 3.4 MB
- * print-resolution PNG; re-decoding it per card dominated render time when
- * every page started getting one.
+ * The hero gradient, pre-scaled to card size once. Re-decoding the full-size
+ * source per card dominated render time when every page started getting one.
  */
 const cardBackground = (): string => {
   background ??= new Resvg(
-    String.raw`<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg"><image href="data:image/png;base64,${readFileSync(
-      resolveLandingPath("public", "brand", "stella-gradient-1.png"),
+    String.raw`<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg"><image href="data:image/webp;base64,${readFileSync(
+      resolveLandingPath("public", "brand", "stella-gradient-1.webp"),
     ).toString(
       "base64",
     )}" x="0" y="0" width="${WIDTH}" height="${HEIGHT}" preserveAspectRatio="xMidYMid slice" /></svg>`,

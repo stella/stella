@@ -15,6 +15,7 @@ import { describe, expect, test } from "bun:test";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
+import { readGzipJson } from "@/api/lib/gzip-json";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 
 type FixtureDecision = {
@@ -27,9 +28,10 @@ type FixtureDecision = {
   metadata: Record<string, unknown> | null;
 };
 
-const fixture: { decisions: FixtureDecision[] } = await Bun.file(
-  new URL("eu-ecj.json", import.meta.url),
-).json();
+// eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- committed generated fixture; assertions below validate its behavioral contract
+const fixture = (await readGzipJson(
+  new URL("eu-ecj.json.gz", import.meta.url),
+)) as { decisions: FixtureDecision[] };
 
 describe("eu-ecj seed fixture", () => {
   test("is not empty", () => {
