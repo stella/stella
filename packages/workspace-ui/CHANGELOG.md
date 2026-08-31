@@ -1,5 +1,17 @@
 # @stll/workspace-ui
 
+## 0.5.0
+
+### Minor Changes
+
+- [#2668](https://github.com/stella/stella/pull/2668) [`e72a4f2`](https://github.com/stella/stella/commit/e72a4f277e6bf76b558d8f5f1bf4db286fc18929) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the responsive action toolbar for compact workspace controls and allow
+  single-purpose shells to omit a compact navigation trigger.
+
+### Patch Changes
+
+- Updated dependencies [[`fb97db5`](https://github.com/stella/stella/commit/fb97db59eb4756fd6b0bd82ce42c3016d6946d66), [`e72a4f2`](https://github.com/stella/stella/commit/e72a4f277e6bf76b558d8f5f1bf4db286fc18929)]:
+  - @stll/ui@0.12.1
+
 ## 0.4.4
 
 ### Patch Changes
