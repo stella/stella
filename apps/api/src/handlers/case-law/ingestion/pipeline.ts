@@ -1024,45 +1024,42 @@ const processDecisionAttempt = async ({
         // or payload fields would make a temporary publisher regression durable.
         // A pending corpus mirror deliberately continues below: it must replay
         // the stored payload before this source page is allowed to advance.
-        const watermarkAdvanced = await scopedDb(
-          // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-          async (tx) => {
-            const projectionActive = await lockActiveCorpusProjectionSourceTx(
-              tx,
-              { family: "case_law", entityId: existing.id },
-            );
-            // audit: skip — background case-law observation watermark; public data
-            const advanced = (
-              await tx
-                .update(caseLawDecisions)
-                .set({
-                  sourceObservedAt: observedAt,
-                  sourceObservationOrder: observationOrder,
-                  sourceObservationHash: result.rawHash,
-                  updatedAt: sql`${caseLawDecisions.updatedAt}`,
-                })
-                .where(
-                  and(
-                    eq(caseLawDecisions.id, existing.id),
-                    storedObservationPrecedes({ order: observationOrder }),
-                    isNull(caseLawDecisions.redactedAt),
-                    eq(
-                      caseLawDecisions.corpusMirrorStatus,
-                      CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-                    ),
+        const watermarkAdvanced = await scopedDb(async (tx) => {
+          const projectionActive = await lockActiveCorpusProjectionSourceTx(
+            tx,
+            { family: "case_law", entityId: existing.id },
+          );
+          // audit: skip — background case-law observation watermark; public data
+          const advanced = (
+            await tx
+              .update(caseLawDecisions)
+              .set({
+                sourceObservedAt: observedAt,
+                sourceObservationOrder: observationOrder,
+                sourceObservationHash: result.rawHash,
+                updatedAt: sql`${caseLawDecisions.updatedAt}`,
+              })
+              .where(
+                and(
+                  eq(caseLawDecisions.id, existing.id),
+                  storedObservationPrecedes({ order: observationOrder }),
+                  isNull(caseLawDecisions.redactedAt),
+                  eq(
+                    caseLawDecisions.corpusMirrorStatus,
+                    CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
                   ),
-                )
-                .returning({ id: caseLawDecisions.id })
-            ).at(0);
-            if (advanced !== undefined && projectionActive !== null) {
-              await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
-                lock: projectionActive,
-                subject: { family: "case_law", entityId: existing.id },
-              });
-            }
-            return advanced;
-          },
-        );
+                ),
+              )
+              .returning({ id: caseLawDecisions.id })
+          ).at(0);
+          if (advanced !== undefined && projectionActive !== null) {
+            await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+              lock: projectionActive,
+              subject: { family: "case_law", entityId: existing.id },
+            });
+          }
+          return advanced;
+        });
         if (!watermarkAdvanced) {
           const current = await scopedDb((tx) =>
             tx.query.caseLawDecisions.findFirst({
@@ -1145,49 +1142,46 @@ const processDecisionAttempt = async ({
           incomingUsesSourceRawBytes: result.sourceRawBytes !== undefined,
         })
       ) {
-        const watermarkAdvanced = await scopedDb(
-          // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-          async (tx) => {
-            const projectionActive = await lockActiveCorpusProjectionSourceTx(
-              tx,
-              { family: "case_law", entityId: existing.id },
-            );
-            // audit: skip — background case-law ingestion ordering metadata; public case-law data, not user actions
-            const advanced = (
-              await tx
-                .update(caseLawDecisions)
-                .set({
-                  sourceObservedAt: observedAt,
-                  sourceObservationOrder: observationOrder,
-                  sourceObservationHash: result.rawHash,
-                  // Drizzle applies the schema's on-update value unless this column is
-                  // explicit. A watermark-only replay is not a content modification.
-                  updatedAt: sql`${caseLawDecisions.updatedAt}`,
-                })
-                .where(
-                  and(
-                    eq(caseLawDecisions.id, existing.id),
-                    storedObservationPrecedes({ order: observationOrder }),
-                    isNull(caseLawDecisions.redactedAt),
-                    sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${existing.sourceHash}`,
-                    // `::text::jsonb`, never a bare `::jsonb`: the cast fixes the
-                    // bind parameter's type, and the driver then JSON-encodes the
-                    // already-serialized string, so the comparison sees a jsonb
-                    // *string* rather than the object and never matches.
-                    sql`${caseLawDecisions.metadata} IS NOT DISTINCT FROM ${JSON.stringify(existing.metadata)}::text::jsonb`,
-                  ),
-                )
-                .returning({ id: caseLawDecisions.id })
-            ).at(0);
-            if (advanced !== undefined && projectionActive !== null) {
-              await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
-                lock: projectionActive,
-                subject: { family: "case_law", entityId: existing.id },
-              });
-            }
-            return advanced;
-          },
-        );
+        const watermarkAdvanced = await scopedDb(async (tx) => {
+          const projectionActive = await lockActiveCorpusProjectionSourceTx(
+            tx,
+            { family: "case_law", entityId: existing.id },
+          );
+          // audit: skip — background case-law ingestion ordering metadata; public case-law data, not user actions
+          const advanced = (
+            await tx
+              .update(caseLawDecisions)
+              .set({
+                sourceObservedAt: observedAt,
+                sourceObservationOrder: observationOrder,
+                sourceObservationHash: result.rawHash,
+                // Drizzle applies the schema's on-update value unless this column is
+                // explicit. A watermark-only replay is not a content modification.
+                updatedAt: sql`${caseLawDecisions.updatedAt}`,
+              })
+              .where(
+                and(
+                  eq(caseLawDecisions.id, existing.id),
+                  storedObservationPrecedes({ order: observationOrder }),
+                  isNull(caseLawDecisions.redactedAt),
+                  sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${existing.sourceHash}`,
+                  // `::text::jsonb`, never a bare `::jsonb`: the cast fixes the
+                  // bind parameter's type, and the driver then JSON-encodes the
+                  // already-serialized string, so the comparison sees a jsonb
+                  // *string* rather than the object and never matches.
+                  sql`${caseLawDecisions.metadata} IS NOT DISTINCT FROM ${JSON.stringify(existing.metadata)}::text::jsonb`,
+                ),
+              )
+              .returning({ id: caseLawDecisions.id })
+          ).at(0);
+          if (advanced !== undefined && projectionActive !== null) {
+            await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+              lock: projectionActive,
+              subject: { family: "case_law", entityId: existing.id },
+            });
+          }
+          return advanced;
+        });
         if (!watermarkAdvanced) {
           const current = await scopedDb((tx) =>
             tx.query.caseLawDecisions.findFirst({

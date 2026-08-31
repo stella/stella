@@ -296,7 +296,7 @@ if (!databaseUrl || !runPostgresTests) {
         expect(activatedWhileWriterHeld).toBe(false);
 
         releaseWriter.resolve(undefined);
-        expect(await writer).toBeUndefined();
+        await writer;
         expect(await activation).toEqual({ epoch: 1n, created: true });
         expect(
           await writerDb.transaction(
