@@ -1204,15 +1204,17 @@ const ClipboardApp = () => {
   const activeItemId = activeItem?.id;
   // Copy and delete act on the list the current query produces: while the
   // deferred render is pending the rail still shows the previous query's
-  // list, and acting on it would hand over the wrong clip. Cheap thanks to
-  // the per-item fold cache; identical to the rendered list once settled.
-  const actionItems =
+  // list, and acting on it would hand over the wrong clip. Resolved on
+  // demand inside the key handlers so the keystroke render itself never
+  // pays for a filter; identical to the rendered list once settled.
+  const resolveActionItems = () =>
     query === filterQuery
       ? filteredItems
       : filterClipboardItems(snapshot.items, query, activeGroupId);
-  const actionItem = actionItems.at(
-    Math.min(selectedIndex, Math.max(0, actionItems.length - 1)),
-  );
+  const resolveActionItem = () => {
+    const items = resolveActionItems();
+    return items.at(Math.min(selectedIndex, Math.max(0, items.length - 1)));
+  };
   const railViewport = useRailViewport(
     timelineRailRef,
     filteredItems.length > 0,
@@ -1562,6 +1564,7 @@ const ClipboardApp = () => {
       return;
     }
     if (primaryModifier) {
+      const actionItems = resolveActionItems();
       const quickIndex = quickCopyIndex(event.key, actionItems.length);
       if (quickIndex !== null) {
         event.preventDefault();
@@ -1578,19 +1581,25 @@ const ClipboardApp = () => {
         isComposing: event.isComposing,
         key: event.key,
       };
-      if (actionItem && shouldCopyFromClipboardInput(inputKey)) {
-        event.preventDefault();
-        copyItem(actionItem);
+      if (shouldCopyFromClipboardInput(inputKey)) {
+        const item = resolveActionItem();
+        if (item) {
+          event.preventDefault();
+          copyItem(item);
+        }
       } else if (activeItem && shouldReturnToTimelineFromInput(inputKey)) {
         event.preventDefault();
         selectIndex(activeIndex);
       }
       return;
     }
-    if (isClipboardCopyShortcut(event) && actionItem) {
-      event.preventDefault();
-      copyItem(actionItem);
-      return;
+    if (isClipboardCopyShortcut(event)) {
+      const item = resolveActionItem();
+      if (item) {
+        event.preventDefault();
+        copyItem(item);
+        return;
+      }
     }
     if (
       event.target instanceof HTMLTextAreaElement ||
@@ -1633,14 +1642,20 @@ const ClipboardApp = () => {
       navigate(keyAction);
       return;
     }
-    if (event.key === "Enter" && actionItem) {
-      event.preventDefault();
-      copyItem(actionItem);
+    if (event.key === "Enter") {
+      const item = resolveActionItem();
+      if (item) {
+        event.preventDefault();
+        copyItem(item);
+      }
       return;
     }
-    if ((event.key === "Backspace" || event.key === "Delete") && actionItem) {
-      event.preventDefault();
-      applySnapshotCommand("clipboard_delete_item", { id: actionItem.id });
+    if (event.key === "Backspace" || event.key === "Delete") {
+      const item = resolveActionItem();
+      if (item) {
+        event.preventDefault();
+        applySnapshotCommand("clipboard_delete_item", { id: item.id });
+      }
     }
   };
 
