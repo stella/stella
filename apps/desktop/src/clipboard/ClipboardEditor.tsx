@@ -134,14 +134,15 @@ const listItemsFromSelection = (fragment: DocumentFragment) => {
   return items;
 };
 
+/** Returns whether the editor content changed. */
 const applyFormat = (editor: HTMLDivElement, command: FormatCommand) => {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) {
-    return;
+    return false;
   }
   const range = selection.getRangeAt(0);
   if (range.collapsed || !editor.contains(range.commonAncestorContainer)) {
-    return;
+    return false;
   }
   if (command === "bulletedList" || command === "numberedList") {
     const formatted = document.createElement(
@@ -156,7 +157,7 @@ const applyFormat = (editor: HTMLDivElement, command: FormatCommand) => {
     formattedRange.selectNodeContents(formatted);
     selection.addRange(formattedRange);
     editor.focus();
-    return;
+    return true;
   }
   const inlineTags = {
     bold: "strong",
@@ -175,6 +176,7 @@ const applyFormat = (editor: HTMLDivElement, command: FormatCommand) => {
   formattedRange.selectNodeContents(formatted);
   selection.addRange(formattedRange);
   editor.focus();
+  return true;
 };
 
 const editorPlainText = (editor: HTMLDivElement) => {
@@ -335,8 +337,7 @@ const ClipboardEditor = () => {
 
   const format = (command: FormatCommand) => {
     const editor = editorRef.current;
-    if (editor) {
-      applyFormat(editor, command);
+    if (editor && applyFormat(editor, command)) {
       editedRef.current = true;
     }
   };
