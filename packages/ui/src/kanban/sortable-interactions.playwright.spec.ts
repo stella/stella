@@ -723,3 +723,46 @@ test("keyboard navigation reaches rows beyond the virtualizer window", async ({
     )
     .toBe("virtual-12");
 });
+
+test("drops on a row the keyboard reached while it was still offscreen", async ({
+  page,
+}) => {
+  const handle = await openFixture(page);
+  const sourceCell = page.locator('[data-kanban-cell="cell-a"]');
+  const draggedOver = async () =>
+    await page.evaluate(
+      () => document.documentElement.dataset["draggedOver"] ?? "",
+    );
+
+  await handle.focus();
+  await page.keyboard.press("Space");
+  await expectDragActivated(page);
+  // Pin the drop target to the dragged item so scrolling the cell away cannot
+  // drift it onto a row that happens to stay mounted.
+  await page.keyboard.press("ArrowDown");
+  await expect.poll(draggedOver).toBe("third");
+  await page.keyboard.press("ArrowUp");
+  await expect.poll(draggedOver).toBe("first");
+
+  await sourceCell.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect
+    .poll(
+      async () => await page.locator('[data-sortable-item="third"]').count(),
+    )
+    .toBe(0);
+
+  // The next row is unmounted, so this arrow only requests a virtual scroll.
+  // Ending before that scroll resolves must still drop on the requested row.
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Space");
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["droppedOn"] ?? "",
+        ),
+    )
+    .toBe("third");
+});
