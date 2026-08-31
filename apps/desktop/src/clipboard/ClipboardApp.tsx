@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   CSSProperties,
   MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
   ReactNode,
 } from "react";
 
@@ -80,6 +81,7 @@ import {
   adjacentClipboardIndex,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
+  clipboardPointerMoved,
   clipboardRailScrollDelta,
   clipboardRailWindow,
   clipboardSourceTintIndex,
@@ -92,6 +94,7 @@ import {
   quickCopyIndex,
   shouldCopyFromClipboardInput,
 } from "./clipboard-logic";
+import type { ClipboardPointerPosition } from "./clipboard-logic";
 import {
   markClipboardShellCommit,
   markClipboardSnapshotApplied,
@@ -271,10 +274,13 @@ const ClipboardCard = ({
   const sourceStyle: ClipboardCardStyle | undefined = accent
     ? { "--clipboard-source-accent": accent }
     : undefined;
+  const rendersHtml = item.type === "formattedText" && !query;
   const previewClassName = cn(
-    "text-foreground line-clamp-[8] text-sm leading-5 text-pretty break-words whitespace-pre-wrap",
-    item.type === "formattedText" &&
-      "[&_blockquote]:border-s-2 [&_blockquote]:ps-3 [&_code]:font-mono [&_li]:ms-4 [&_ol]:list-decimal [&_strong]:font-semibold [&_ul]:list-disc",
+    "text-foreground line-clamp-[8] text-sm leading-5 text-pretty break-words",
+    // HTML collapses its source whitespace; only plain text (and <pre>) keeps it.
+    rendersHtml
+      ? "[&_blockquote]:border-s-2 [&_blockquote]:ps-3 [&_code]:font-mono [&_li]:ms-4 [&_ol]:list-decimal [&_pre]:whitespace-pre-wrap [&_strong]:font-semibold [&_ul]:list-disc"
+      : "whitespace-pre-wrap",
   );
   const highlightedText = highlightClipboardText(item.plainText, query);
   let previewContent: ReactNode = (
@@ -282,7 +288,7 @@ const ClipboardCard = ({
       {item.plainText}
     </div>
   );
-  if (item.type === "formattedText" && !query) {
+  if (rendersHtml) {
     previewContent = (
       <div
         className={previewClassName}
@@ -366,6 +372,7 @@ const ClipboardCard = ({
         active ? "opacity-100" : "opacity-86 hover:opacity-100",
       )}
       data-clipboard-id={item.id}
+      data-clipboard-index={index}
       data-dragging={dragging ? "" : undefined}
       data-source-tint={sourceTintIndex ?? undefined}
       role="listitem"
@@ -378,11 +385,6 @@ const ClipboardCard = ({
         onClick={() => onCopy(item)}
         onContextMenu={(event) => onOpenMenu(event, item, index)}
         onFocus={() => onSelect(index)}
-        onPointerMove={(event) => {
-          if (event.pointerType === "mouse") {
-            onSelect(index);
-          }
-        }}
         type="button"
       >
         <div className="relative min-h-0 flex-1 self-stretch overflow-hidden p-5">
@@ -1056,6 +1058,7 @@ const ClipboardApp = () => {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const timelineRailRef = useRef<HTMLDivElement>(null);
+  const railPointerRef = useRef<ClipboardPointerPosition | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
   const snapshotRequestIdRef = useRef(0);
   const [snapshot, setSnapshot] = useState<ClipboardSnapshot>(EMPTY_SNAPSHOT);
@@ -1211,6 +1214,9 @@ const ClipboardApp = () => {
     };
     const handleWindowFocus = () => {
       setAgeReferenceTime(Date.now());
+      // The pointer may have moved while the window was hidden; the next
+      // pointer move only seeds the position.
+      railPointerRef.current = null;
       if (welcomeOpen) {
         return;
       }
@@ -1459,6 +1465,23 @@ const ClipboardApp = () => {
     }
   };
 
+  const handleRailPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "mouse") {
+      return;
+    }
+    const position = { x: event.screenX, y: event.screenY };
+    const moved = clipboardPointerMoved(railPointerRef.current, position);
+    railPointerRef.current = position;
+    if (!moved || !(event.target instanceof Element)) {
+      return;
+    }
+    const index = event.target.closest<HTMLElement>("[data-clipboard-index]")
+      ?.dataset["clipboardIndex"];
+    if (index !== undefined) {
+      setSelectedIndex(Number(index));
+    }
+  };
+
   const navigate = (direction: "next" | "previous") => {
     const nextIndex = adjacentClipboardIndex(
       activeIndex,
@@ -1683,6 +1706,7 @@ const ClipboardApp = () => {
           <div
             aria-label={t("timeline")}
             className="absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
+            onPointerMove={handleRailPointerMove}
             ref={timelineRailRef}
             role="list"
           >
