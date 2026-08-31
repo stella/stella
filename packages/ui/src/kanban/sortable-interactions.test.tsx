@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
@@ -32,20 +31,6 @@ describe("sortable board interactions", () => {
       delay: 150,
       tolerance: 8,
     });
-  });
-
-  test("exposes a typed mouse activation override without changing touch behavior", () => {
-    const source = readFileSync(
-      new URL("./sortable-interactions.tsx", import.meta.url),
-      "utf8",
-    );
-
-    expect(source).toContain("mouseActivationDistance?: number | undefined");
-    expect(source).toContain("mouseActivationDistance,");
-    expect(source).toContain(
-      "mouseActivationDistance: number = KANBAN_MOUSE_ACTIVATION_DISTANCE",
-    );
-    expect(source).toContain("delay: 150");
   });
 
   test("uses the current mouse or touch coordinate to resolve the insertion edge", () => {

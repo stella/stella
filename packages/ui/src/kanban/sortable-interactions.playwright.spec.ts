@@ -3,8 +3,8 @@ import type { CDPSession, Locator, Page } from "@playwright/test";
 
 const fixturePath = "/src/kanban/fixtures/sortable-interactions.fixture.html";
 
-const openFixture = async (page: Page) => {
-  await page.goto(fixturePath);
+const openFixture = async (page: Page, path = fixturePath) => {
+  await page.goto(path);
   await expect
     .poll(
       async () =>
@@ -191,6 +191,23 @@ test("activates a mouse drag only after its distance threshold", async ({
   await page.mouse.move(box.x + 19, box.y + 12);
   await expect(page.locator("[data-overlay]")).toHaveCount(0);
   await page.mouse.move(box.x + 21, box.y + 12);
+  await expect(page.locator("[data-overlay]")).toHaveText("first");
+  await page.mouse.up();
+});
+
+test("honors a shorter mouse activation distance", async ({ page }) => {
+  const handle = await openFixture(
+    page,
+    `${fixturePath}?mouseActivationDistance=1`,
+  );
+  const box = await handle.boundingBox();
+  if (!box) {
+    throw new Error("Missing drag handle bounds");
+  }
+
+  await page.mouse.move(box.x + 12, box.y + 12);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 14, box.y + 12);
   await expect(page.locator("[data-overlay]")).toHaveText("first");
   await page.mouse.up();
 });
