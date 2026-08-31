@@ -17,7 +17,6 @@ SET statement_timeout = 0;
 SET lock_timeout = 0;
 --> statement-breakpoint
 
--- stella-migration-safety: reviewed drop-object - retry cleanup only;
 -- a cancelled concurrent build can leave an INVALID index with this name.
 DROP INDEX CONCURRENTLY IF EXISTS "corpus_index_projection_states_pending_route_idx";
 --> statement-breakpoint
@@ -47,7 +46,6 @@ CREATE INDEX CONCURRENTLY "corpus_index_projection_states_pending_route_idx"
 -- an already published older revision remains required even when the newer
 -- projection exhausted its append retries. That broader predicate cannot use
 -- the pending-work index, so give route workers their exact sparse queue.
--- stella-migration-safety: reviewed drop-object - retry cleanup only; a
 -- cancelled concurrent build can leave an INVALID index with this name.
 DROP INDEX CONCURRENTLY IF EXISTS "corpus_index_projection_states_replacement_route_idx";
 --> statement-breakpoint

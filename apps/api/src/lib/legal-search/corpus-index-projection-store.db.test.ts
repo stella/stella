@@ -335,7 +335,7 @@ test("an unregistered route fails before reservation mutates state", async () =>
   await expect(
     db.transaction(
       async (tx) =>
-        await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
           family: "case_law",
           generation: "case_law_v5",
           scope: { type: "route", indexId: "case_law_v5_hun" },

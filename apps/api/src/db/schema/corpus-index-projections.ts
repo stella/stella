@@ -414,13 +414,7 @@ export const corpusIndexProjectionStates = p.pgTable(
       .where(corpusIndexProjectionNeedsWork(t)),
     p
       .index("corpus_index_projection_states_replacement_route_idx")
-      .on(
-        t.family,
-        t.generation,
-        t.desiredIndexId,
-        t.updatedAt,
-        t.entityId,
-      )
+      .on(t.family, t.generation, t.desiredIndexId, t.updatedAt, t.entityId)
       .where(
         sql`${t.desiredAction} = 'upsert'
           AND ${t.appliedAction} = 'upsert'
