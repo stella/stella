@@ -20,7 +20,7 @@
   "dependencies": {
     "@astrojs/react": "^6.0.4",
     "@astrojs/sitemap": "^3.7.3",
-    "@astrojs/starlight": "^0.41.7",
+    "@astrojs/starlight": "^0.41.9",
     "@resvg/resvg-js": "^2.6.2",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",
@@ -30,7 +30,7 @@
     "@stll/ui": "workspace:*",
     "@stll/workspace-ui": "workspace:*",
     "@tailwindcss/vite": "catalog:",
-    "astro": "^7.2.4",
+    "astro": "^7.2.7",
     "better-result": "catalog:",
     "buffer": "^6.0.3",
     "lucide-react": "catalog:",
