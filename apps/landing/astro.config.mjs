@@ -8,6 +8,7 @@ import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
 import { UI_LOCALES } from "@stll/locales";
 
 import { ogCards } from "./src/integrations/og-cards";
+import { sitemapLastmod } from "./src/integrations/sitemap-lastmod";
 
 // Keep this aligned with the production CDN response-headers policy.
 // `wasm-unsafe-eval` permits WebAssembly compilation without enabling
@@ -28,6 +29,14 @@ const astroLocales = UI_LOCALES.map((tag) =>
 const sitemapLocales = Object.fromEntries(
   UI_LOCALES.map((tag) => [tag === "en" ? "en" : tag.toLowerCase(), tag]),
 );
+const lastmod = sitemapLastmod({
+  localeTagByPath: new Map(
+    UI_LOCALES.filter((tag) => tag !== "en").map((tag) => [
+      tag.toLowerCase(),
+      tag,
+    ]),
+  ),
+});
 
 export default defineConfig({
   site: "https://stll.app",
@@ -50,12 +59,8 @@ export default defineConfig({
   // adjacent inline elements (footer "·" separators, inline link runs).
   // Keep the v6 behavior so existing spacing renders unchanged.
   compressHTML: true,
-  // `lastmod` is intentionally omitted: stamping every URL with the
-  // build timestamp would lie about which pages actually changed and
-  // train crawlers to discount the field site-wide. Add per-URL lastmod
-  // via @astrojs/sitemap's serialize() once there is real content to
-  // source dates from.
   integrations: [
+    lastmod.integration,
     // Docs live under /docs (every entry sits in src/content/docs/docs/),
     // English-only, structured by Diátaxis (get started / how-to /
     // reference / explanation). The landing keeps its own 404 page.
@@ -92,7 +97,6 @@ export default defineConfig({
       ],
     }),
     sitemap({
-      changefreq: "weekly",
       // The /changelog/<release> stubs are noindex link-preview redirect pages;
       // Starlight also emits fallback copies of the English-only docs under
       // every configured locale. Keep both classes of noindex page out of the
@@ -114,6 +118,12 @@ export default defineConfig({
       i18n: {
         defaultLocale: "en",
         locales: sitemapLocales,
+      },
+      // <lastmod> from the newest commit touching each page's sources; a
+      // shallow checkout emits none rather than a fabricated date.
+      serialize: (item) => {
+        const date = lastmod.lastmodFor(item.url);
+        return date === undefined ? item : { ...item, lastmod: date };
       },
     }),
     react(),
