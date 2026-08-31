@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { evaluateMergeBar, type MergeBarSnapshot } from "./merge-bar";
+import {
+  evaluateMergeBar,
+  mergeBarMigrationDirectory,
+  type MergeBarSnapshot,
+} from "./merge-bar";
 
 const HEAD_SHA = "1f0c3a7d9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d";
 const OTHER_SHA = "9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d6f0e1b3c";
@@ -46,6 +50,17 @@ const failedGate = (snapshot: MergeBarSnapshot) => {
 };
 
 describe("merge bar", () => {
+  test("applies stella's migration-order gate only to its owning repository", () => {
+    expect(mergeBarMigrationDirectory("stella/stella")).toBe(
+      "apps/api/drizzle",
+    );
+    expect(mergeBarMigrationDirectory("Stella/Stella")).toBe(
+      "apps/api/drizzle",
+    );
+    expect(mergeBarMigrationDirectory("stella/stella-infra")).toBeNull();
+    expect(mergeBarMigrationDirectory("stella/stella-plane")).toBeNull();
+  });
+
   test("merges when every gate is positively satisfied", () => {
     const verdict = evaluateMergeBar(passingSnapshot());
 
