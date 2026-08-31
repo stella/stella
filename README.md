@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/assets/banner.png" alt="stella" width="100%" />
+  <img src=".github/assets/banners/stella.webp" alt="stella" width="100%" />
 </p>
 
 <p align="center">

@@ -2,7 +2,7 @@
  * Seed the database with real decisions pulled from production for
  * local testing of the Case Law feature.
  *
- * Data lives in `__fixtures__/case-law/<adapterKey>.json` — one file per
+ * Data lives in `__fixtures__/case-law/<adapterKey>.json.gz` — one file per
  * source (cz-ns, cz-nss, cz-regional, cz-us, eu-ecj, pl-courts,
  * sk-courts, sk-us). Each fixture holds the source row plus the three
  * most recent decisions, taken verbatim from prod RDS so the dev DB
@@ -30,6 +30,7 @@ import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createIngestionDb } from "@/api/db/scoped";
 import { backfillCaseLawSlugs } from "@/api/handlers/case-law/decisions/slug-backfill";
 import { canonicalDecisionDate } from "@/api/lib/dates";
+import { readGzipJson } from "@/api/lib/gzip-json";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import type {
   DecisionSection,
@@ -107,12 +108,12 @@ const loadFixtures = async (): Promise<CaseLawFixture[]> => {
   const entries = await readdir(FIXTURES_DIR);
   const fixtures: CaseLawFixture[] = [];
   for (const entry of entries) {
-    if (!entry.endsWith(".json")) {
+    if (!entry.endsWith(".json.gz")) {
       continue;
     }
-    const file = Bun.file(path.join(FIXTURES_DIR, entry));
-    // oxlint-disable-next-line no-await-in-loop -- bounded memory: read and parse one fixture file at a time
-    const raw = v.parse(fixtureSchema, await file.json());
+    // oxlint-disable-next-line no-await-in-loop -- bounded memory: read one compressed fixture at a time
+    const parsed = await readGzipJson(path.join(FIXTURES_DIR, entry));
+    const raw = v.parse(fixtureSchema, parsed);
     // SAFETY: structural fields validated by fixtureSchema; deep JSON
     // (sections, document_ast, analysis) is checked into the repo
     // and matches the prod schema by construction.

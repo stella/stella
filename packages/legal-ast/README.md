@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/assets/banner.png" alt="stll/legal-ast" width="100%" />
+  <img src="https://raw.githubusercontent.com/stella/stella/main/.github/assets/banners/legal-ast.webp" alt="stll/legal-ast" width="100%" />
 </p>
 
 # @stll/legal-ast
