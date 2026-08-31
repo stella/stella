@@ -50,7 +50,7 @@ const failedGate = (snapshot: MergeBarSnapshot) => {
 };
 
 describe("merge bar", () => {
-  test("applies Stella's migration-order gate only to its owning repository", () => {
+  test("applies stella's migration-order gate only to its owning repository", () => {
     expect(mergeBarMigrationDirectory("stella/stella")).toBe(
       "apps/api/drizzle",
     );
