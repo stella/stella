@@ -249,7 +249,16 @@ jobs:
           MANUAL_PACKAGE: ${{ inputs.package || 'all' }}
         run: |
           set -euo pipefail
-          mapfile -t pkgs < <(bun scripts/publish-package-selection.ts "$EVENT_NAME" "$MANUAL_PACKAGE")
+          # A historical source checkout predates this selector. Recovery is
+          # always one named non-CLI package, so resolve it from the workflow
+          # input instead of asking the old source to run new tooling.
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            pkgs=(cli)
+          elif [[ "$EVENT_NAME" == "workflow_dispatch" && "$MANUAL_PACKAGE" != "all" ]]; then
+            pkgs=("$MANUAL_PACKAGE")
+          else
+            mapfile -t pkgs < <(bun scripts/publish-package-selection.ts "$EVENT_NAME" "$MANUAL_PACKAGE")
+          fi
           if [[ "${#pkgs[@]}" -eq 0 ]]; then
             echo "No packages selected for release." >&2
             exit 1

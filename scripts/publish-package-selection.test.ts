@@ -56,6 +56,20 @@ describe("publish package selection", () => {
     );
   });
 
+  test("selects an explicit historical recovery package without requiring new tooling in old source", async () => {
+    const workflow = await Bun.file(
+      new URL("../.github/workflows/publish-npm.yml", import.meta.url),
+    ).text();
+
+    expect(workflow).toContain(
+      'elif [[ "$EVENT_NAME" == "workflow_dispatch" && "$MANUAL_PACKAGE" != "all" ]]; then',
+    );
+    expect(workflow).toContain('pkgs=("$MANUAL_PACKAGE")');
+    expect(workflow).toContain(
+      "Recovery is\n          # always one named non-CLI package",
+    );
+  });
+
   test("keeps workflow-run CLI releases explicit", () => {
     expect(
       selectPublishPackages({
