@@ -4,6 +4,7 @@ import {
   adjacentClipboardIndex,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
+  clipboardTimelineKeyAction,
   clipboardRailScrollDelta,
   clipboardRailWindow,
   clipboardSourceTintIndex,
@@ -144,6 +145,13 @@ test("source apps receive a stable tint from the bounded palette", () => {
 });
 
 describe("keyboard indexes", () => {
+  test("timeline arrows navigate horizontally and Arrow Down focuses search", () => {
+    expect(clipboardTimelineKeyAction("ArrowLeft")).toBe("previous");
+    expect(clipboardTimelineKeyAction("ArrowRight")).toBe("next");
+    expect(clipboardTimelineKeyAction("ArrowDown")).toBe("focusSearch");
+    expect(clipboardTimelineKeyAction("ArrowUp")).toBeNull();
+  });
+
   test("timeline navigation has no target beyond either edge", () => {
     expect(adjacentClipboardIndex(0, "next", 2)).toBe(1);
     expect(adjacentClipboardIndex(1, "next", 2)).toBeNull();

@@ -77,17 +77,18 @@ import {
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import {
+  adjacentClipboardIndex,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
   clipboardRailScrollDelta,
   clipboardRailWindow,
   clipboardSourceTintIndex,
+  clipboardTimelineKeyAction,
   filterClipboardItems,
   formatClipboardAge,
   highlightClipboardText,
   isClipboardCopyShortcut,
   isClipboardNameInput,
-  adjacentClipboardIndex,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
 } from "./clipboard-logic";
@@ -1541,14 +1542,15 @@ const ClipboardApp = () => {
       searchInputRef.current?.focus();
       return;
     }
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+    const keyAction = clipboardTimelineKeyAction(event.key);
+    if (keyAction === "focusSearch") {
       event.preventDefault();
-      navigate("next");
+      searchInputRef.current?.focus();
       return;
     }
-    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+    if (keyAction) {
       event.preventDefault();
-      navigate("previous");
+      navigate(keyAction);
       return;
     }
     if (event.key === "Enter" && activeItem) {

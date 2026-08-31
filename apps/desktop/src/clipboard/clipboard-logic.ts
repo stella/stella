@@ -43,6 +43,19 @@ export const isClipboardCopyShortcut = (shortcut: ClipboardCopyShortcut) =>
   !shortcut.shiftKey &&
   shortcut.key.toLocaleLowerCase() === "c";
 
+export const clipboardTimelineKeyAction = (key: string) => {
+  switch (key) {
+    case "ArrowDown":
+      return "focusSearch";
+    case "ArrowLeft":
+      return "previous";
+    case "ArrowRight":
+      return "next";
+    default:
+      return null;
+  }
+};
+
 export const clipboardDraggedItemId = (
   data: ClipboardDragData,
   itemIds: ReadonlySet<string>,
