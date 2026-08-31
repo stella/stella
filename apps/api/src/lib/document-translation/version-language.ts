@@ -132,6 +132,7 @@ export const recordEntityVersionDetectedLanguage = async (
       and(
         eq(entityVersions.id, entityVersionId),
         eq(entityVersions.workspaceId, workspaceId),
+        isNull(entityVersions.deletedAt),
         isNull(entityVersions.detectedLanguage),
       ),
     );
