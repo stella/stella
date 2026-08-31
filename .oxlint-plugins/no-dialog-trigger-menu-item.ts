@@ -126,7 +126,7 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         return {
-          JSXElement(node: unknown) {
+          JSXElement(node) {
             const triggerName = nameOfJsxElement(node);
             if (
               triggerName === null ||
