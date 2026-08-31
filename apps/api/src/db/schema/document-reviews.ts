@@ -419,14 +419,12 @@ export const documentReviewReferencePassages = p.pgTable(
   "document_review_reference_passages",
   {
     id: pUuid<"documentReviewReferencePassage">().primaryKey(),
-    organizationId: safeOrganizationId("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    // Both scope FKs are named by hand: the generated names run past
+    // Postgres's 63-byte identifier limit and would be silently truncated.
+    organizationId: safeOrganizationId("organization_id").notNull(),
     // The matter the reference document lives in, not the matter of any run
     // that quotes it: that is what row security scopes by.
-    workspaceId: safeWorkspaceId("workspace_id")
-      .notNull()
-      .references(() => workspaces.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
     entityId: safeUuid<"entity">("entity_id").notNull(),
     fileFieldId: safeUuid<"field">("file_field_id").notNull(),
     // Provenance, not a foreign key: a passage outlives the pruning of the
@@ -440,6 +438,20 @@ export const documentReviewReferencePassages = p.pgTable(
     p
       .uniqueIndex("document_review_reference_passages_version_block_uidx")
       .on(table.entityVersionId, table.blockId),
+    p
+      .foreignKey({
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+        name: "document_review_reference_passages_organization_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.workspaceId],
+        foreignColumns: [workspaces.id],
+        name: "document_review_reference_passages_workspace_fk",
+      })
+      .onDelete("cascade"),
     p
       .foreignKey({
         columns: [table.entityId, table.workspaceId],

@@ -19,11 +19,11 @@ CREATE TABLE "document_review_reference_passages" (
 );--> statement-breakpoint
 
 ALTER TABLE "document_review_reference_passages"
-  ADD CONSTRAINT "document_review_reference_passages_organization_id_organization_id_fk"
+  ADD CONSTRAINT "document_review_reference_passages_organization_fk"
   FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id")
   ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_review_reference_passages"
-  ADD CONSTRAINT "document_review_reference_passages_workspace_id_workspaces_id_fk"
+  ADD CONSTRAINT "document_review_reference_passages_workspace_fk"
   FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id")
   ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "document_review_reference_passages"
