@@ -262,6 +262,13 @@ body:has(.clipboard-editor-window) .font-sans {
     inset 0 1px 0 color-mix(in srgb, var(--color-white) 8%, transparent);
 }
 
+/* The input group paints an unfocused hairline through a ::before overlay
+ * whose radius stays at the group's lg default; inside this pill the smaller
+ * corners show as stray shading, and the pill draws its own inset highlight. */
+.clipboard-search::before {
+  content: none;
+}
+
 .clipboard-search-input::placeholder {
   color: var(--clipboard-search-placeholder) !important;
   opacity: 1;

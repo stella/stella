@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type {
   CSSProperties,
   MouseEvent as ReactMouseEvent,
@@ -80,6 +86,7 @@ import {
 } from "../telemetry/desktop-telemetry";
 import {
   adjacentClipboardIndex,
+  CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
   clipboardPointerMoved,
@@ -287,7 +294,7 @@ const ClipboardCard = ({
   );
   let previewContent: ReactNode = (
     <div className={previewClassName} dir="auto">
-      {item.plainText}
+      {item.plainText.slice(0, CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS)}
     </div>
   );
   if (rendersHtml) {
@@ -1174,9 +1181,15 @@ const ClipboardApp = () => {
   )
     ? selectedGroupId
     : null;
+  // Typing must never wait on filtering and card re-render: the rail catches
+  // up in a deferred render that further keystrokes interrupt. Clearing stays
+  // synchronous (the empty filter is free) so the reopen reset can focus the
+  // newest card in the same flushSync commit.
+  const deferredQuery = useDeferredValue(query);
+  const filterQuery = query === "" ? query : deferredQuery;
   const filteredItems = filterClipboardItems(
     snapshot.items,
-    query,
+    filterQuery,
     activeGroupId,
   );
   const groupsById = new Map(snapshot.groups.map((group) => [group.id, group]));
@@ -1271,7 +1284,7 @@ const ClipboardApp = () => {
       snapshot.groups.length % CLIPBOARD_GROUP_COLORS.length,
     ) ?? "gray";
   let emptyStateTitle = t("emptyTitle");
-  if (query) {
+  if (filterQuery) {
     emptyStateTitle = t("noResults");
   } else if (activeGroupId) {
     emptyStateTitle = t("groupEmpty");
@@ -1477,7 +1490,7 @@ const ClipboardApp = () => {
   }, [
     activeGroupId,
     applySnapshotCommand,
-    query,
+    filterQuery,
     railWindow.end,
     railWindow.start,
     snapshot.groups,
@@ -1725,14 +1738,16 @@ const ClipboardApp = () => {
         {filteredItems.length === 0 ? (
           <div className="text-foreground absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
             <span className="bg-foreground/6 text-foreground/70 grid size-11 place-items-center rounded-2xl shadow-sm/5">
-              {query ? (
+              {filterQuery ? (
                 <SearchIcon aria-hidden="true" className="size-5" />
               ) : (
                 <ClipboardIcon aria-hidden="true" className="size-5" />
               )}
             </span>
             <p className="text-foreground/82 text-wrap-balance max-w-sm text-sm font-medium">
-              {query || activeGroupId ? emptyStateTitle : t("emptyDescription")}
+              {filterQuery || activeGroupId
+                ? emptyStateTitle
+                : t("emptyDescription")}
             </p>
           </div>
         ) : (
@@ -1787,7 +1802,7 @@ const ClipboardApp = () => {
                       })
                     }
                     onSelect={setSelectedIndex}
-                    query={query}
+                    query={filterQuery}
                     sourceVisual={
                       item.sourceApp
                         ? (sourceAppVisuals.get(

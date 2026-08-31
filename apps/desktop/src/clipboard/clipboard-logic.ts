@@ -127,6 +127,13 @@ const SEARCH_PREVIEW_PREFIX_LINES = 4;
 /** Context kept ahead of a distant first match. */
 const SEARCH_PREVIEW_LEAD_CHARACTERS = 24;
 
+/**
+ * The clamped preview shows ~320 characters at most; text past this budget can
+ * never become visible, while rendering a full 64 KiB clip into every card
+ * (one highlight span per match) made search repaints crawl.
+ */
+export const CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS = 1000;
+
 export type ClipboardSearchPreview = { text: string; truncated: boolean };
 
 /**
@@ -138,21 +145,23 @@ export const clipboardSearchPreviewText = (
   text: string,
   query: string,
 ): ClipboardSearchPreview => {
+  const cap = (value: string) =>
+    value.slice(0, CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS);
   const terms = clipboardQueryTerms(query);
   if (terms.length === 0) {
-    return { text, truncated: false };
+    return { text: cap(text), truncated: false };
   }
   const matcher = new RegExp(terms.map(escapeRegExp).join("|"), "iu");
   const matchIndex = text.search(matcher);
   if (matchIndex === -1) {
-    return { text, truncated: false };
+    return { text: cap(text), truncated: false };
   }
   const prefixLines = text.slice(0, matchIndex).split("\n").length - 1;
   if (
     matchIndex <= SEARCH_PREVIEW_PREFIX_CHARACTERS &&
     prefixLines < SEARCH_PREVIEW_PREFIX_LINES
   ) {
-    return { text, truncated: false };
+    return { text: cap(text), truncated: false };
   }
   // Start at the match's line when it is short enough, otherwise at the first
   // word boundary inside the lead window; without one the fragment of a long
@@ -164,7 +173,7 @@ export const clipboardSearchPreviewText = (
     const boundary = text.slice(windowStart, matchIndex).search(/\s\S/u);
     start = boundary === -1 ? matchIndex : windowStart + boundary + 1;
   }
-  return { text: text.slice(start).trimStart(), truncated: true };
+  return { text: cap(text.slice(start).trimStart()), truncated: true };
 };
 
 export const clipboardSourceTintIndex = (sourceIdentity: string | null) => {
@@ -248,6 +257,25 @@ export const clipboardRailWindow = ({
   };
 };
 
+/**
+ * The filter runs on every keystroke over every clip; lowercasing megabytes
+ * of history each time dominated search latency. Keyed weakly by the item
+ * object: a snapshot replaces its items wholesale, so stale entries fall away
+ * with the old snapshot, and an item's text only changes via a new snapshot.
+ */
+const searchableTextCache = new WeakMap<ClipboardItem, string>();
+
+const clipboardSearchableText = (item: ClipboardItem) => {
+  const cached = searchableTextCache.get(item);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const searchableText =
+    `${item.name ?? ""}\n${item.plainText}`.toLocaleLowerCase();
+  searchableTextCache.set(item, searchableText);
+  return searchableText;
+};
+
 export const filterClipboardItems = (
   items: readonly ClipboardItem[],
   query: string,
@@ -262,8 +290,7 @@ export const filterClipboardItems = (
   }
   const terms = normalizedQuery.split(/\s+/u);
   return groupedItems.filter((item) => {
-    const searchableText =
-      `${item.name ?? ""}\n${item.plainText}`.toLocaleLowerCase();
+    const searchableText = clipboardSearchableText(item);
     return terms.every((term) => searchableText.includes(term));
   });
 };

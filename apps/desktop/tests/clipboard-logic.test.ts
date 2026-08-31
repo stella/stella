@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   adjacentClipboardIndex,
+  CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
   clipboardPointerMoved,
@@ -146,6 +147,26 @@ describe("clipboardSearchPreviewText", () => {
 
     expect(preview.truncated).toBe(true);
     expect(preview.text.startsWith("INDEMNITY tail")).toBe(true);
+  });
+
+  test("caps the preview past what the clamped card can show", () => {
+    const text = `intro clause ${"filler ".repeat(20_000)}`;
+
+    expect(clipboardSearchPreviewText(text, "clause").text).toHaveLength(
+      CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
+    );
+    expect(clipboardSearchPreviewText(text, "").text).toHaveLength(
+      CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
+    );
+  });
+
+  test("caps a windowed distant match", () => {
+    const text = `${"filler ".repeat(100)}indemnity ${"tail ".repeat(20_000)}`;
+    const preview = clipboardSearchPreviewText(text, "indemnity");
+
+    expect(preview.truncated).toBe(true);
+    expect(preview.text).toHaveLength(CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS);
+    expect(preview.text).toContain("indemnity");
   });
 });
 
