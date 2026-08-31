@@ -955,6 +955,7 @@ export const RowActions = ({
           hasAnyFolder={hasAnyFolder}
           hasDownloadVariants={hasDownloadVariants}
           hasPdfConversion={hasPdfConversion}
+          isBulk={isBulk}
           isCellContext={isCellContext}
           onCopyToMatter={openCopyToMatterDialog}
           onDelete={requestDelete}
@@ -1338,6 +1339,7 @@ type RowFileOperationsMenuProps = {
   hasAnyFolder: boolean;
   hasDownloadVariants: boolean;
   hasPdfConversion: boolean;
+  isBulk: boolean;
   isCellContext: boolean;
   onCopyToMatter: () => void;
   onDelete: () => void;
@@ -1354,6 +1356,7 @@ const RowFileOperationsMenu = ({
   hasAnyFolder,
   hasDownloadVariants,
   hasPdfConversion,
+  isBulk,
   isCellContext,
   onCopyToMatter,
   onDelete,
