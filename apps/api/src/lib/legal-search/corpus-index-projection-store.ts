@@ -11,13 +11,14 @@ import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { CorpusIndexProjectionFailureKind } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
-  readActiveCorpusProjectionManifest,
-  readRegisteredCorpusProjectionManifestForCleanup,
+  lockActiveCorpusProjectionManifestForMutation,
+  lockRegisteredCorpusProjectionManifestForMutation,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
   corpusIndexUnknownAppendBarrierAt,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import { lockCorpusIndexProjectionMutationsTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
   entityIdsForCorpusProjectionWorkScope,
@@ -139,11 +140,10 @@ export const reserveCorpusProjectionIntentsTx = async <
   const limit = validateBatchSize(requestedLimit);
   const leaseMs = validateLeaseMs(requestedLeaseMs);
   const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
-  const manifest = await readActiveCorpusProjectionManifest(
+  const manifest = await lockActiveCorpusProjectionManifestForMutation(
     tx,
     family,
     generation,
-    true,
   );
   const scopedIndexId = indexIdForCorpusProjectionWorkScope(scope, manifest);
   const eligibilityAt = testNow ?? (await readPostgresClock(tx));
@@ -323,11 +323,10 @@ export const prepareCorpusProjectionReplacementsTx = async <
 ): Promise<CorpusProjectionReplacementCleanup[]> => {
   const limit = validateBatchSize(requestedLimit);
   const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
-  const manifest = await readActiveCorpusProjectionManifest(
+  const manifest = await lockActiveCorpusProjectionManifestForMutation(
     tx,
     family,
     generation,
-    true,
   );
   const scopedIndexId = indexIdForCorpusProjectionWorkScope(scope, manifest);
   const candidates = await tx
@@ -453,11 +452,10 @@ export const startCorpusProjectionAppendTx = async (
   if (identity === undefined) {
     return "lease_lost";
   }
-  await readActiveCorpusProjectionManifest(
+  await lockActiveCorpusProjectionManifestForMutation(
     tx,
     identity.family,
     identity.generation,
-    true,
   );
   await tx
     .select({ entityId: corpusIndexProjectionStates.entityId })
@@ -579,11 +577,10 @@ export const startCorpusProjectionAppendBatchTx = async (
       "Corpus projection append-start leases must be unique and scoped",
     );
   }
-  await readActiveCorpusProjectionManifest(
+  await lockActiveCorpusProjectionManifestForMutation(
     tx,
     first.family,
     first.generation,
-    true,
   );
   const entityIdList = [...entityIds];
   await tx
@@ -728,7 +725,7 @@ export const abandonCorpusProjectionAppendTx = async (
   if (identity === undefined) {
     return "lease_lost";
   }
-  const manifest = await readRegisteredCorpusProjectionManifestForCleanup(
+  const manifest = await lockRegisteredCorpusProjectionManifestForMutation(
     tx,
     identity.family,
     identity.generation,
@@ -808,7 +805,7 @@ export const commitCorpusProjectionAppendTx = async (
   if (identity === undefined) {
     return { status: "lease_lost" };
   }
-  await readRegisteredCorpusProjectionManifestForCleanup(
+  await lockRegisteredCorpusProjectionManifestForMutation(
     tx,
     identity.family,
     identity.generation,
@@ -955,6 +952,19 @@ export const cancelCorpusProjectionReservationTx = async (
     errorMessage,
   }: CancelCorpusProjectionReservationOptions,
 ): Promise<"cancelled" | "lease_lost"> => {
+  const identities = await tx
+    .select({
+      family: corpusIndexProjectionIntents.family,
+      generation: corpusIndexProjectionIntents.generation,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(eq(corpusIndexProjectionIntents.id, intentId))
+    .limit(1);
+  const identity = identities.at(0);
+  if (identity === undefined) {
+    return "lease_lost";
+  }
+  await lockCorpusIndexProjectionMutationsTx(tx, [identity]);
   const locked = await tx
     .select({ id: corpusIndexProjectionIntents.id })
     .from(corpusIndexProjectionIntents)
@@ -1073,6 +1083,7 @@ export const classifyCorpusProjectionReservationFailureTx = async (
   if (identity === undefined) {
     return "lease_lost";
   }
+  await lockCorpusIndexProjectionMutationsTx(tx, [identity]);
   const states = await tx
     .select()
     .from(corpusIndexProjectionStates)

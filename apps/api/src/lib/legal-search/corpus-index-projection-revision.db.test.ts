@@ -13,6 +13,8 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 import {
+  lockCorpusIndexProjectionIntentMutationsTx,
+  lockCorpusIndexProjectionMutationsTx,
   lockCorpusIndexProjectionPromotionTx,
   lockCorpusIndexProjectionRevisionTx,
   readCorpusIndexProjectionRevisionTx,
@@ -29,6 +31,13 @@ const ENTITY_IDS = [
 const INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000503",
 );
+const MUTATION_INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
+  "0198e331-e578-7000-8000-000000000504",
+);
+const LEGISLATION_TARGET = {
+  family: "legislation",
+  generation: "legislation_v2",
+} as const;
 const MIGRATION_URL = new URL(
   "../../../drizzle/20260826004100_corpus_projection_revision_fence/migration.sql",
   import.meta.url,
@@ -164,4 +173,35 @@ test("the typed read and proof boundaries return the current revision", async ()
   expect(read).toBe(await revision());
   expect(locked).toBe(read);
   expect(promotion).toBe(read);
+});
+
+test("mutation fences lock registered generations in a stable order", async () => {
+  await db.insert(corpusIndexGenerations).values({
+    ...LEGISLATION_TARGET,
+    cluster: "q09",
+    manifestDigest: "c".repeat(64),
+    status: "building",
+  });
+  await db.insert(corpusIndexProjectionIntents).values({
+    id: MUTATION_INTENT_ID,
+    ...TARGET,
+    entityId: ENTITY_IDS[1],
+    epoch: 1n,
+    fingerprint: "d".repeat(64),
+    indexId: "case_law_v5_cs_sk",
+    status: "cancelled",
+    cancelledAt: new Date("2026-08-26T00:00:04.000Z"),
+  });
+
+  await db.transaction(async (tx) => {
+    const transaction = asTestRaw<Transaction>(tx);
+    await lockCorpusIndexProjectionMutationsTx(transaction, [
+      LEGISLATION_TARGET,
+      TARGET,
+      LEGISLATION_TARGET,
+    ]);
+    await lockCorpusIndexProjectionIntentMutationsTx(transaction, [
+      MUTATION_INTENT_ID,
+    ]);
+  });
 });

@@ -355,7 +355,6 @@ export const readReservedCorpusProjectionMaterialsTx = async (
     tx,
     family,
     generation,
-    false,
   );
   const intentIds = leases.map(({ intentId }) => intentId);
   const entityIds = leases.map(({ entityId }) => entityId);
