@@ -42,6 +42,20 @@ describe("publish package selection", () => {
     ).not.toContain("chat");
   });
 
+  test("passes only an explicitly requested prior artifact run to the verified recovery path", async () => {
+    const workflow = await Bun.file(
+      new URL("../.github/workflows/publish-npm.yml", import.meta.url),
+    ).text();
+
+    expect(workflow).toContain("artifact_run_id:");
+    expect(workflow).toContain(
+      `artifact-run-id: ${String.fromCodePoint(36)}{{ inputs.artifact_run_id || '' }}`,
+    );
+    expect(workflow).toContain(
+      "The reusable workflow verifies that a resumed artifact comes from this",
+    );
+  });
+
   test("keeps workflow-run CLI releases explicit", () => {
     expect(
       selectPublishPackages({

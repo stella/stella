@@ -72,6 +72,10 @@ on:
         description: Exact commit SHA for recovering one existing immutable package tag
         required: false
         type: string
+      artifact_run_id:
+        description: Exact prior Publish npm packages run whose packed artifact should be resumed
+        required: false
+        type: string
 
 concurrency:
   # One group across every trigger so publishes to the same registry
@@ -246,6 +250,10 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t pkgs < <(bun scripts/publish-package-selection.ts "$EVENT_NAME" "$MANUAL_PACKAGE")
+          if [[ "${#pkgs[@]}" -eq 0 ]]; then
+            echo "No packages selected for release." >&2
+            exit 1
+          fi
 
           for package in "${pkgs[@]}"; do
             echo "::group::Build + pack @stll/${package}"
@@ -507,6 +515,9 @@ jobs:
       # this environment so only main and release tags can mint the token.
       environment: release-app
       artifact-pattern: npm-tarball-*
+      # The reusable workflow verifies that a resumed artifact comes from this
+      # workflow and the immutable source commit before it is downloaded.
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
       package-files: ${{ needs.pack.outputs.package_files }}
       source-ref: ${{ needs.pack.outputs.source_sha }}
     secrets:
