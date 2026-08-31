@@ -1473,7 +1473,7 @@ const ClipboardApp = () => {
       return;
     }
     const index = event.target.closest<HTMLElement>("[data-clipboard-index]")
-      ?.dataset.clipboardIndex;
+      ?.dataset["clipboardIndex"];
     if (index !== undefined) {
       setSelectedIndex(Number(index));
     }
