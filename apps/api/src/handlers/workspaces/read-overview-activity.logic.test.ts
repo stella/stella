@@ -212,7 +212,7 @@ describe("activity target sources", () => {
       expect(feeds).toBe(source !== null);
       for (const action of actions) {
         const visible = VISIBLE_ACTIVITY_ACTION_BY_ACTION[action];
-        if (!feeds || visible === null) {
+        if (source === null || visible === null) {
           continue;
         }
         // Whatever the pair, the row resolves to a target the feed can name
