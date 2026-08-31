@@ -8,6 +8,18 @@ const openFixture = async (page: Page) => {
   return page.getByRole("button", { name: "Move first" });
 };
 
+/** Keyboard navigation must work once the drag is live, not only in the same tick. */
+const expectDragActivated = async (page: Page) => {
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["dragStartedAt"] ?? "",
+        ),
+    )
+    .not.toBe("");
+};
+
 const getTouchCoordinates = async (handle: Locator) => {
   const box = await handle.boundingBox();
   if (!box) {
@@ -369,6 +381,14 @@ test("drops a touch drag into an adjacent virtual cell", async ({ page }) => {
   await dispatchNativeTouch(nativeTouch, "touchStart", [sourceCoordinates]);
   await expect(page.locator("[data-overlay]")).toHaveText("first");
   await dispatchNativeTouch(nativeTouch, "touchMove", [targetCoordinates]);
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["draggedOver"] ?? "",
+        ),
+    )
+    .toBe("second");
   await endNativeTouch(nativeTouch);
 
   await expect
@@ -402,6 +422,14 @@ test("drops a whole-item touch drag across a virtual column", async ({
   await dispatchNativeTouch(nativeTouch, "touchStart", [sourceCoordinates]);
   await expect(page.locator("[data-overlay]")).toHaveText("whole-item");
   await dispatchNativeTouch(nativeTouch, "touchMove", [targetCoordinates]);
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["draggedOver"] ?? "",
+        ),
+    )
+    .toBe("lane-second");
   await endNativeTouch(nativeTouch);
 
   await expect
@@ -451,6 +479,14 @@ test("drops pointer and touch input into an empty virtual cell", async ({
   await dispatchNativeTouch(nativeTouch, "touchStart", [touchSource]);
   await expect(page.locator("[data-overlay]")).toHaveText("first");
   await dispatchNativeTouch(nativeTouch, "touchMove", [touchTarget]);
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["draggedOver"] ?? "",
+        ),
+    )
+    .toBe("cell-b");
   await endNativeTouch(nativeTouch);
   await expect
     .poll(
@@ -559,6 +595,7 @@ test("drops a keyboard drag into an adjacent virtual cell", async ({
 
   await handle.focus();
   await page.keyboard.press("Space");
+  await expectDragActivated(page);
   await page.keyboard.press("ArrowRight");
   await expect
     .poll(
@@ -587,6 +624,7 @@ test("navigates items in order, then across matrix cells and lanes", async ({
 
   await handle.focus();
   await page.keyboard.press("Space");
+  await expectDragActivated(page);
   await page.keyboard.press("ArrowDown");
   await expect
     .poll(
@@ -610,6 +648,7 @@ test("navigates items in order, then across matrix cells and lanes", async ({
   const reloadedHandle = page.getByRole("button", { name: "Move first" });
   await reloadedHandle.focus();
   await page.keyboard.press("Space");
+  await expectDragActivated(page);
   await page.keyboard.press("ArrowRight");
   await expect
     .poll(
@@ -683,4 +722,47 @@ test("keyboard navigation reaches rows beyond the virtualizer window", async ({
         ),
     )
     .toBe("virtual-12");
+});
+
+test("drops on a row the keyboard reached while it was still offscreen", async ({
+  page,
+}) => {
+  const handle = await openFixture(page);
+  const sourceCell = page.locator('[data-kanban-cell="cell-a"]');
+  const draggedOver = async () =>
+    await page.evaluate(
+      () => document.documentElement.dataset["draggedOver"] ?? "",
+    );
+
+  await handle.focus();
+  await page.keyboard.press("Space");
+  await expectDragActivated(page);
+  // Pin the drop target to the dragged item so scrolling the cell away cannot
+  // drift it onto a row that happens to stay mounted.
+  await page.keyboard.press("ArrowDown");
+  await expect.poll(draggedOver).toBe("third");
+  await page.keyboard.press("ArrowUp");
+  await expect.poll(draggedOver).toBe("first");
+
+  await sourceCell.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect
+    .poll(
+      async () => await page.locator('[data-sortable-item="third"]').count(),
+    )
+    .toBe(0);
+
+  // The next row is unmounted, so this arrow only requests a virtual scroll.
+  // Ending before that scroll resolves must still drop on the requested row.
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Space");
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["droppedOn"] ?? "",
+        ),
+    )
+    .toBe("third");
 });

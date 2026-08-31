@@ -25,6 +25,7 @@ import type {
   DndContextProps,
   KeyboardCoordinateGetter,
   KeyboardSensorOptions,
+  MouseSensorOptions,
   SensorInstance,
   SensorProps,
   TouchSensorOptions,
@@ -40,6 +41,7 @@ import { cn } from "../lib/utils";
 import {
   clearKanbanKeyboardTarget,
   getKanbanKeyboardTargetState,
+  isKanbanDropSettled,
   KANBAN_BOARD_COLLISION_DETECTION,
   KANBAN_DROP_TARGET_TYPES,
   kanbanKeyboardCoordinates,
@@ -87,8 +89,10 @@ export type KanbanDragEndEvent = DragEndEvent;
 export type KanbanDragOverEvent = DragOverEvent;
 export type KanbanDragStartEvent = DragStartEvent;
 
+type MouseSensorConstructorOptions = SensorProps<MouseSensorOptions>;
 type TouchSensorConstructorOptions = SensorProps<TouchSensorOptions>;
 type KeyboardSensorConstructorOptions = SensorProps<KeyboardSensorOptions>;
+type KanbanSensorContext = SensorProps<never>["context"];
 
 const KANBAN_KEYBOARD_CODES = {
   cancel: ["Escape"],
@@ -96,6 +100,32 @@ const KANBAN_KEYBOARD_CODES = {
 } as const;
 const KANBAN_KEYBOARD_LISTENER_DELAY_MS = 0;
 const KANBAN_KEYBOARD_TARGET_RETRY_LIMIT = 60;
+/** A render commit, not a virtual scroll, so the budget stays short. */
+const KANBAN_DROP_SETTLE_FRAME_LIMIT = 10;
+
+/**
+ * Defers a drop until dnd-kit has published the collision target it computed.
+ * Every sensor ends a drag from a single input event, so without this wait the
+ * drop resolves against the target published before that event.
+ */
+const endWhenDropTargetSettled = (
+  context: KanbanSensorContext,
+  end: () => void,
+) => {
+  let framesWaited = 0;
+  const attempt = () => {
+    if (
+      framesWaited >= KANBAN_DROP_SETTLE_FRAME_LIMIT ||
+      isKanbanDropSettled(context.current)
+    ) {
+      end();
+      return;
+    }
+    framesWaited += 1;
+    requestAnimationFrame(attempt);
+  };
+  attempt();
+};
 
 type TouchEventWithLists = Event & {
   changedTouches: TouchList;
@@ -155,7 +185,9 @@ class KanbanTouchSensor extends TouchSensor {
       },
       onEnd: () => {
         identityListeners.abort();
-        props.onEnd();
+        endWhenDropTargetSettled(props.context, () => {
+          props.onEnd();
+        });
       },
     });
     this.identityListeners = identityListeners;
@@ -210,6 +242,20 @@ class KanbanTouchSensor extends TouchSensor {
   };
 }
 
+/** The stock mouse sensor, holding its drop until the board target settles. */
+class KanbanMouseSensor extends MouseSensor {
+  constructor(props: MouseSensorConstructorOptions) {
+    super({
+      ...props,
+      onEnd: () => {
+        endWhenDropTargetSettled(props.context, () => {
+          props.onEnd();
+        });
+      },
+    });
+  }
+}
+
 /**
  * Applies board coordinates without the stock sensor's one-dimensional source
  * scroll clamping. The coordinate getter moves to the typed target and then
@@ -220,7 +266,13 @@ class KanbanKeyboardSensor implements SensorInstance {
 
   autoScrollEnabled = false;
 
+  /** Input handling, released as soon as a drag stops accepting keys. */
   private readonly listeners = new AbortController();
+  /**
+   * The drag itself, released only once it resolves. Ending must not stop the
+   * queued retry that still has to bring a pending virtual target into view.
+   */
+  private readonly lifetime = new AbortController();
   private readonly props: KeyboardSensorConstructorOptions;
   private moveSequence = 0;
   private referenceCoordinates: { x: number; y: number } | null = null;
@@ -246,13 +298,20 @@ class KanbanKeyboardSensor implements SensorInstance {
   }
 
   private readonly handleCancel = () => {
-    if (this.listeners.signal.aborted) {
+    if (this.lifetime.signal.aborted) {
       return;
     }
     this.moveSequence += 1;
-    clearKanbanKeyboardTarget(this.props.context.current.active?.data.current);
     this.listeners.abort();
-    this.props.onCancel();
+    this.finish(() => {
+      this.props.onCancel();
+    });
+  };
+
+  private readonly finish = (resolve: () => void) => {
+    clearKanbanKeyboardTarget(this.props.context.current.active?.data.current);
+    this.lifetime.abort();
+    resolve();
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent) => {
@@ -266,17 +325,62 @@ class KanbanKeyboardSensor implements SensorInstance {
     }
     if (endCodes.some((code) => code === event.code)) {
       event.preventDefault();
-      this.moveSequence += 1;
-      clearKanbanKeyboardTarget(
-        this.props.context.current.active?.data.current,
-      );
+      // The move sequence and the lifetime signal stay untouched so a queued
+      // virtual-scroll retry can still resolve the target this drop needs.
       this.listeners.abort();
-      this.props.onEnd();
+      this.endWhenNavigationResolves(0);
       return;
     }
 
     this.moveSequence += 1;
     this.move(event, this.moveSequence, 0);
+  };
+
+  /**
+   * A pending target has asked a virtual cell to mount an offscreen row and has
+   * published nothing, so the queued move retry, not this keypress, decides
+   * where the item lands. Cancel when that retry gives up: the board never
+   * reached the row the user navigated to, and the target still published is
+   * the one they navigated away from.
+   */
+  private readonly endWhenNavigationResolves = (framesWaited: number) => {
+    if (this.lifetime.signal.aborted) {
+      return;
+    }
+    const target = getKanbanKeyboardTargetState(
+      this.props.context.current.active?.data.current,
+    );
+    if (target?.type === "pending") {
+      if (framesWaited >= KANBAN_KEYBOARD_TARGET_RETRY_LIMIT) {
+        this.finish(() => {
+          this.props.onCancel();
+        });
+        return;
+      }
+      requestAnimationFrame(() => {
+        this.endWhenNavigationResolves(framesWaited + 1);
+      });
+      return;
+    }
+    if (framesWaited > 0 && target?.type !== "ready") {
+      this.finish(() => {
+        this.props.onCancel();
+      });
+      return;
+    }
+    endWhenDropTargetSettled(this.props.context, () => {
+      // The wait is bounded, so it can stop without the board ever publishing
+      // the navigated target. Committing whatever is published instead would
+      // drop the item somewhere the user never asked for.
+      const settled = isKanbanDropSettled(this.props.context.current);
+      this.finish(() => {
+        if (settled) {
+          this.props.onEnd();
+          return;
+        }
+        this.props.onCancel();
+      });
+    });
   };
 
   private readonly move = (
@@ -307,7 +411,7 @@ class KanbanKeyboardSensor implements SensorInstance {
         return;
       }
       requestAnimationFrame(() => {
-        if (this.listeners.signal.aborted || this.moveSequence !== sequence) {
+        if (this.lifetime.signal.aborted || this.moveSequence !== sequence) {
           return;
         }
         this.move(event, sequence, retryCount + 1);
@@ -459,7 +563,7 @@ export const useKanbanSortableSensors = (
   keyboardCoordinates: KeyboardCoordinateGetter = kanbanKeyboardCoordinates,
 ) =>
   useSensors(
-    useSensor(MouseSensor, {
+    useSensor(KanbanMouseSensor, {
       activationConstraint: { distance: KANBAN_MOUSE_ACTIVATION_DISTANCE },
     }),
     useSensor(KanbanTouchSensor, {
