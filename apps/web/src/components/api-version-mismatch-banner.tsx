@@ -21,6 +21,38 @@ import { compareSemver } from "@/lib/semver-compare";
 
 import { shouldRefreshAfterNavigation } from "./api-version-mismatch-banner.logic";
 
+export const ApiVersionMismatchProvider = ({ children }: PropsWithChildren) => {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const serverVersion = useAvailableServerVersion();
+
+  return (
+    <ApiVersionMismatchContext value={serverVersion}>
+      {serverVersion ? (
+        <VersionRefreshObserver key={serverVersion} pathname={pathname} />
+      ) : null}
+      {children}
+    </ApiVersionMismatchContext>
+  );
+};
+
+export const ApiVersionMismatchBanner = () => {
+  const installedVersion = __APP_VERSION__;
+  const serverVersion = useVersionMismatch();
+  if (!serverVersion) {
+    return null;
+  }
+
+  return (
+    <AvailableVersionBanner
+      installedVersion={installedVersion}
+      key={serverVersion}
+      serverVersion={serverVersion}
+    />
+  );
+};
+
 const FIVE_MIN_MS = 5 * 60 * 1000;
 const DISMISSED_KEY_PREFIX = "stella:api-version-mismatch-dismissed:";
 const ApiVersionMismatchContext = createContext<string | null | undefined>(
@@ -92,22 +124,6 @@ const VersionRefreshObserver = ({ pathname }: VersionRefreshObserverProps) => {
   }, [refreshAfterNavigation]);
 
   return null;
-};
-
-export const ApiVersionMismatchProvider = ({ children }: PropsWithChildren) => {
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
-  const serverVersion = useAvailableServerVersion();
-
-  return (
-    <ApiVersionMismatchContext value={serverVersion}>
-      {serverVersion ? (
-        <VersionRefreshObserver key={serverVersion} pathname={pathname} />
-      ) : null}
-      {children}
-    </ApiVersionMismatchContext>
-  );
 };
 
 const useVersionMismatch = (): string | null => {
@@ -184,21 +200,5 @@ const AvailableVersionBanner = ({
         </Tooltip>
       </div>
     </div>
-  );
-};
-
-export const ApiVersionMismatchBanner = () => {
-  const installedVersion = __APP_VERSION__;
-  const serverVersion = useVersionMismatch();
-  if (!serverVersion) {
-    return null;
-  }
-
-  return (
-    <AvailableVersionBanner
-      installedVersion={installedVersion}
-      key={serverVersion}
-      serverVersion={serverVersion}
-    />
   );
 };
