@@ -1240,11 +1240,18 @@ const ClipboardApp = () => {
       timelineRef.current?.focus();
     };
     window.addEventListener("focus", handleWindowFocus);
+    // A card other than the active one holds focus when a snapshot landed
+    // after an open (a clip copied right before it slid in at the front);
+    // focus follows the selection.
+    const focusedCardId =
+      document.activeElement?.closest<HTMLElement>("[data-clipboard-id]")
+        ?.dataset["clipboardId"] ?? null;
     if (
       !welcomeOpen &&
       document.hasFocus() &&
       (document.activeElement === document.body ||
-        document.activeElement === timelineRef.current)
+        document.activeElement === timelineRef.current ||
+        (focusedCardId !== null && focusedCardId !== activeItemId))
     ) {
       focusActiveCard();
     }
