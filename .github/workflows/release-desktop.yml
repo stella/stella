@@ -530,6 +530,27 @@ jobs:
           printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
           bun run build -- --target ${{ matrix.target }} --bundles app --verbose --verbose
 
+      - name: Verify macOS update identity
+        if: matrix.os == 'macos'
+        working-directory: apps/desktop
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          shopt -s nullglob
+          app_bundles=(src-tauri/target/"$TARGET"/release/bundle/macos/*.app)
+          if (( ${#app_bundles[@]} != 1 )); then
+            echo "::error::Expected exactly one signed macOS app bundle, found ${#app_bundles[@]}"
+            exit 1
+          fi
+
+          # Keychain ACL access survives updates only while the app's designated
+          # requirement remains stable. Treat any identity change as a migration.
+          expected_requirement='=identifier "legal.stella.desktop" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "4N3QVH454C"'
+          codesign --verify --verbose=2 \
+            --test-requirement="$expected_requirement" \
+            "${app_bundles[0]}"
+
       - name: Build styled DMG without Finder automation
         if: matrix.os == 'macos'
         working-directory: apps/desktop
