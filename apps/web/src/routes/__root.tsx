@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-router";
 
 import { AppProviders } from "@/app-providers";
+import { ApiVersionMismatchProvider } from "@/components/api-version-mismatch-banner";
 import {
   DefaultErrorComponent,
   DefaultPendingComponent,
@@ -104,14 +105,16 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
 function RootApp() {
   return (
     <div className="flex h-dvh w-full flex-col" id="app">
-      <Outlet />
-      {DevRoot ? (
-        <ClientOnly>
-          <Suspense fallback={null}>
-            <DevRoot />
-          </Suspense>
-        </ClientOnly>
-      ) : null}
+      <ApiVersionMismatchProvider>
+        <Outlet />
+        {DevRoot ? (
+          <ClientOnly>
+            <Suspense fallback={null}>
+              <DevRoot />
+            </Suspense>
+          </ClientOnly>
+        ) : null}
+      </ApiVersionMismatchProvider>
     </div>
   );
 }
