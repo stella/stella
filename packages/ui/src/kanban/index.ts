@@ -15,6 +15,7 @@ export { KanbanCardShell } from "./card-shell";
 export type { KanbanColumnHeaderProps } from "./column-header";
 export { KanbanColumnHeader } from "./column-header";
 export type {
+  KanbanCardDragSurfaceProps,
   KanbanDragHandleProps,
   KanbanDragCancelEvent,
   KanbanDragEndEvent,
@@ -37,6 +38,7 @@ export {
   KANBAN_DRAG_OVERLAY_Z_INDEX,
   KANBAN_SORTABLE_ACTIVATION_MODES,
   KANBAN_TOUCH_ACTIVATION_CONSTRAINT,
+  KanbanCardDragSurface,
   KanbanDragHandle,
   KanbanSortableBoard,
   KanbanSortableColumns,
