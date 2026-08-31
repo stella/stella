@@ -505,6 +505,7 @@ const measureRouteTarget = async ({
     });
     await assertNoRouteBoundary(page, route.template);
     assertFinalDestination(page, route);
+    await assertRouteContentVisible(page, route.template);
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
     // Captured after the route shell and tracked API work are ready, so the
     // manifest reflects the fully-rendered route.
@@ -657,6 +658,17 @@ const assertNoRouteBoundary = async (page: Page, routeTemplate: string) => {
     page.getByRole("heading", { name: "This page couldn’t be opened" }),
     `route error boundary rendered on ${routeTemplate}`,
   ).toHaveCount(0);
+};
+
+const assertRouteContentVisible = async (page: Page, routeTemplate: string) => {
+  if (routeTemplate !== "/workspaces") {
+    return;
+  }
+
+  await expect(
+    page.locator("main h2").first(),
+    "the matters route paints its first matter inside the viewport",
+  ).toBeInViewport();
 };
 
 const expectAuthenticatedRouteCoverage = async (
