@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { createContext, use, useState } from "react";
+import type { PropsWithChildren } from "react";
 
 import { useRouterState } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { RefreshCwIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -21,6 +23,9 @@ import { shouldRefreshAfterNavigation } from "./api-version-mismatch-banner.logi
 
 const FIVE_MIN_MS = 5 * 60 * 1000;
 const DISMISSED_KEY_PREFIX = "stella:api-version-mismatch-dismissed:";
+const ApiVersionMismatchContext = createContext<string | null | undefined>(
+  undefined,
+);
 
 const healthSchema = v.object({
   status: v.literal("ok"),
@@ -31,22 +36,48 @@ const handleRefresh = () => {
   window.location.reload();
 };
 
-type AvailableVersionBannerProps = {
-  installedVersion: string;
-  pathname: string;
-  serverVersion: string;
+const useAvailableServerVersion = (): string | null => {
+  // Selfhost has its own GitHub-release-driven banner. Skip there
+  // so the two don't fight for the same slot.
+  const enabled = !env.VITE_SELFHOST;
+  const installedVersion = __APP_VERSION__;
+  const { data: serverVersion } = useChromeQuery({
+    queryKey: ["api-version-check"],
+    enabled,
+    staleTime: FIVE_MIN_MS,
+    refetchInterval: FIVE_MIN_MS,
+    refetchIntervalInBackground: false,
+    retry: false,
+    queryFn: async ({ signal }): Promise<string | null> => {
+      const response = await fetchWithTimeout(browserApiRootUrl("/health"), {
+        cache: "no-store",
+        signal,
+        timeoutMs: 8000,
+      });
+      if (!response.ok) {
+        return null;
+      }
+      const json: unknown = await response.json();
+      const parsed = v.safeParse(healthSchema, json);
+      return parsed.success ? parsed.output.version : null;
+    },
+  });
+
+  if (!enabled || !serverVersion) {
+    return null;
+  }
+
+  return compareSemver(serverVersion, installedVersion) > 0
+    ? serverVersion
+    : null;
 };
 
-const AvailableVersionBanner = ({
-  installedVersion,
-  pathname,
-  serverVersion,
-}: AvailableVersionBannerProps) => {
-  const t = useTranslations();
+type VersionRefreshObserverProps = {
+  pathname: string;
+};
+
+const VersionRefreshObserver = ({ pathname }: VersionRefreshObserverProps) => {
   const [detectedPathname] = useState(pathname);
-  const [dismissed, setDismissed] = useState(false);
-  const dismissedKey = `${DISMISSED_KEY_PREFIX}${serverVersion}`;
-  const isPersistedDismissal = useLocalStorageFlag(dismissedKey);
   const refreshAfterNavigation = shouldRefreshAfterNavigation({
     currentPathname: pathname,
     detectedPathname,
@@ -59,6 +90,49 @@ const AvailableVersionBanner = ({
       handleRefresh();
     }
   }, [refreshAfterNavigation]);
+
+  return null;
+};
+
+export const ApiVersionMismatchProvider = ({ children }: PropsWithChildren) => {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const serverVersion = useAvailableServerVersion();
+
+  return (
+    <ApiVersionMismatchContext value={serverVersion}>
+      {serverVersion ? (
+        <VersionRefreshObserver key={serverVersion} pathname={pathname} />
+      ) : null}
+      {children}
+    </ApiVersionMismatchContext>
+  );
+};
+
+const useVersionMismatch = (): string | null => {
+  const serverVersion = use(ApiVersionMismatchContext);
+  if (serverVersion === undefined) {
+    return panic(
+      "ApiVersionMismatchBanner must be used within ApiVersionMismatchProvider",
+    );
+  }
+  return serverVersion;
+};
+
+type AvailableVersionBannerProps = {
+  installedVersion: string;
+  serverVersion: string;
+};
+
+const AvailableVersionBanner = ({
+  installedVersion,
+  serverVersion,
+}: AvailableVersionBannerProps) => {
+  const t = useTranslations();
+  const [dismissed, setDismissed] = useState(false);
+  const dismissedKey = `${DISMISSED_KEY_PREFIX}${serverVersion}`;
+  const isPersistedDismissal = useLocalStorageFlag(dismissedKey);
 
   if (dismissed || isPersistedDismissal) {
     return null;
@@ -114,42 +188,9 @@ const AvailableVersionBanner = ({
 };
 
 export const ApiVersionMismatchBanner = () => {
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
-
-  // Selfhost has its own GitHub-release-driven banner. Skip there
-  // so the two don't fight for the same slot.
-  const enabled = !env.VITE_SELFHOST;
   const installedVersion = __APP_VERSION__;
-
-  const { data: serverVersion } = useChromeQuery({
-    queryKey: ["api-version-check"],
-    enabled,
-    staleTime: FIVE_MIN_MS,
-    refetchInterval: FIVE_MIN_MS,
-    refetchIntervalInBackground: false,
-    retry: false,
-    queryFn: async ({ signal }): Promise<string | null> => {
-      const response = await fetchWithTimeout(browserApiRootUrl("/health"), {
-        cache: "no-store",
-        signal,
-        timeoutMs: 8000,
-      });
-      if (!response.ok) {
-        return null;
-      }
-      const json: unknown = await response.json();
-      const parsed = v.safeParse(healthSchema, json);
-      return parsed.success ? parsed.output.version : null;
-    },
-  });
-
-  if (!enabled || !serverVersion) {
-    return null;
-  }
-
-  if (compareSemver(serverVersion, installedVersion) <= 0) {
+  const serverVersion = useVersionMismatch();
+  if (!serverVersion) {
     return null;
   }
 
@@ -157,7 +198,6 @@ export const ApiVersionMismatchBanner = () => {
     <AvailableVersionBanner
       installedVersion={installedVersion}
       key={serverVersion}
-      pathname={pathname}
       serverVersion={serverVersion}
     />
   );
