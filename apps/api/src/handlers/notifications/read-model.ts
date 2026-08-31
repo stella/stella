@@ -29,6 +29,13 @@ export type NotificationListItem = {
   metadata: NotificationMetadataValue;
   entityType: NotificationEntityType | null;
   entityId: string | null;
+  /**
+   * The matter the pointer lives in, or null for a kind that points at nothing
+   * and for a pointer whose matter has since been deleted. The client renders a
+   * link only when it has all three, so a stale pointer degrades to plain text
+   * rather than to a route that cannot resolve.
+   */
+  workspaceId: SafeId<"workspace"> | null;
   readAt: string | null;
   createdAt: string;
 };
@@ -39,6 +46,7 @@ export const toNotificationListItem = (row: {
   metadata: NotificationMetadataValue;
   entityType: NotificationEntityType | null;
   entityId: string | null;
+  workspaceId: SafeId<"workspace"> | null;
   readAt: Date | null;
   createdAt: Date;
 }): NotificationListItem => ({
@@ -47,6 +55,7 @@ export const toNotificationListItem = (row: {
   metadata: row.metadata,
   entityType: row.entityType,
   entityId: row.entityId,
+  workspaceId: row.workspaceId,
   readAt: row.readAt?.toISOString() ?? null,
   createdAt: row.createdAt.toISOString(),
 });

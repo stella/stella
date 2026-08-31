@@ -87,6 +87,13 @@ describe("policy coverage", () => {
     // not tenant-scoped — it has a deny-all RLS policy plus REVOKE ALL from
     // stella, so the org-policy coverage requirement does not apply.
     "agent_delegation",
+    // A notification is addressed to a person, not to a matter: recipient and
+    // organization are what admit the row, and its nullable workspace_id is a
+    // link pointer the client resolves through the ordinary authorized routes,
+    // never a permission. Workspace policies would additionally hide the rows
+    // whose matter has since been deleted, which are exactly the rows whose
+    // message the recipient still needs to read.
+    "notifications",
     // AI memory is multi-scope (org OR user OR workspace in one table)
     // and archive-only (no permissive DELETE). The generic workspace /
     // org loops can't express either shape; the dedicated test below
@@ -312,6 +319,10 @@ describe("policy coverage", () => {
     [
       "entity_deletion_cleanup_requests",
       "storage-erasure outbox: references no ancestor so cleanup survives owner deletion (apps/api/src/db/schema/entities.test.ts)",
+    ],
+    [
+      "notifications",
+      "awareness pointer whose nullable workspace_id is a deep link surviving matter deletion; the pair needs ON DELETE SET NULL (workspace_id), which drizzle cannot declare",
     ],
     [
       "usage_events",

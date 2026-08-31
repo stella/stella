@@ -1,15 +1,27 @@
 import type { ReactNode } from "react";
 
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { BellIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { REALTIME_EVENT_TYPE } from "@stll/api-contract";
-import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
-import type { NotificationKind } from "@stll/api-contract/notifications";
+import {
+  NOTIFICATION_ENTITY_TYPE,
+  NOTIFICATION_KIND,
+} from "@stll/api-contract/notifications";
+import type {
+  NotificationEntityType,
+  NotificationKind,
+} from "@stll/api-contract/notifications";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import {
+  Popover,
+  PopoverClose,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stll/ui/popover";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -252,30 +264,143 @@ type NotificationRowProps = {
 
 const NotificationRow = ({ notification, onRead }: NotificationRowProps) => {
   const unread = notification.readAt === null;
+  const rowClassName = cn(
+    "hover:bg-muted flex w-full items-start gap-2 px-3 py-2 text-start text-sm",
+    unread && "font-medium",
+  );
+  const body = (
+    <>
+      <span
+        aria-hidden
+        className={cn(
+          "mt-1.5 size-1.5 shrink-0 rounded-full",
+          unread ? "bg-primary" : "bg-transparent",
+        )}
+      />
+      <span className="min-w-0 flex-1">
+        <NotificationMessage notification={notification} />
+      </span>
+    </>
+  );
+  const target = notificationTarget(notification);
 
   return (
     <li>
-      <button
-        className={cn(
-          "hover:bg-muted flex w-full items-start gap-2 px-3 py-2 text-start text-sm",
-          unread && "font-medium",
-        )}
-        onClick={onRead}
-        type="button"
-      >
-        <span
-          aria-hidden
-          className={cn(
-            "mt-1.5 size-1.5 shrink-0 rounded-full",
-            unread ? "bg-primary" : "bg-transparent",
-          )}
-        />
-        <span className="min-w-0 flex-1">
-          <NotificationMessage notification={notification} />
-        </span>
-      </button>
+      {target === null ? (
+        <button className={rowClassName} onClick={onRead} type="button">
+          {body}
+        </button>
+      ) : (
+        <NotificationLink
+          className={rowClassName}
+          onRead={onRead}
+          target={target}
+        >
+          {body}
+        </NotificationLink>
+      )}
     </li>
   );
+};
+
+type NotificationTarget = {
+  entityId: string;
+  entityType: NotificationEntityType;
+  workspaceId: string;
+};
+
+/**
+ * The deep link this row can offer, or `null` when it cannot: an announcement
+ * points at nothing, and a pointer whose matter has been deleted keeps its
+ * message but loses its workspace. Every target route is
+ * `/workspaces/$workspaceId/...`, so all three parts are required — a row
+ * missing any of them renders as text rather than as a link that dead-ends.
+ */
+const notificationTarget = ({
+  entityId,
+  entityType,
+  workspaceId,
+}: Notification): NotificationTarget | null =>
+  entityType === null || entityId === null || workspaceId === null
+    ? null
+    : { entityId, entityType, workspaceId };
+
+type NotificationLinkProps = {
+  children: ReactNode;
+  className: string;
+  onRead: () => void;
+  target: NotificationTarget;
+};
+
+/**
+ * Where each entity type opens. The switch is exhaustive over
+ * `NotificationEntityType`, so a pointer shape added on the backend fails to
+ * compile here instead of rendering an unclickable row.
+ *
+ * `PopoverClose` closes the panel as it navigates: the reader lands on the
+ * target rather than on the target behind an open panel. Marking the row read
+ * rides the same click, so following a notification is one gesture.
+ */
+const NotificationLink = ({
+  children,
+  className,
+  onRead,
+  target: { entityId, entityType, workspaceId },
+}: NotificationLinkProps) => {
+  switch (entityType) {
+    // Today's only producer is a mention on a list item, and the item's own
+    // id addresses no route: Lists is the surface the comment lives on.
+    case NOTIFICATION_ENTITY_TYPE.ENTITY:
+      return (
+        <PopoverClose
+          render={
+            <Link
+              className={className}
+              onClick={onRead}
+              params={{ workspaceId }}
+              to="/workspaces/$workspaceId/lists"
+            />
+          }
+        >
+          {children}
+        </PopoverClose>
+      );
+    case NOTIFICATION_ENTITY_TYPE.REPORT_EXPORT:
+      return (
+        <PopoverClose
+          render={
+            <Link
+              className={className}
+              onClick={onRead}
+              params={{ exportId: entityId, workspaceId }}
+              to="/workspaces/$workspaceId/reports/$exportId"
+            />
+          }
+        >
+          {children}
+        </PopoverClose>
+      );
+    // The run detail is panel state rather than a route parameter, so the run
+    // id has nowhere to go; Workflows is the page that holds it.
+    case NOTIFICATION_ENTITY_TYPE.FLOW_RUN:
+      return (
+        <PopoverClose
+          render={
+            <Link
+              className={className}
+              onClick={onRead}
+              params={{ workspaceId }}
+              to="/workspaces/$workspaceId/workflows"
+            />
+          }
+        >
+          {children}
+        </PopoverClose>
+      );
+    default:
+      entityType satisfies never;
+      return null;
+  }
 };
 
 /**

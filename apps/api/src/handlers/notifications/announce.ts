@@ -143,6 +143,7 @@ export const createPublishAnnouncementEndpoint = ({
           metadata: { title: body.title },
           entityType: null,
           entityId: null,
+          workspaceId: null,
           organizationId,
           userId: brandPersistedUserId(recipient.userId),
           idempotencyKey,

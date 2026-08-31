@@ -93,6 +93,9 @@ const createItemComment = createSafeHandler(
           metadata: { actorName: result.mentions.actorName },
           entityType: "entity",
           entityId: body.itemEntityId,
+          // The handler's validated matter, the same one the mention was
+          // resolved against, so the recipient's link cannot point outside it.
+          workspaceId,
           organizationId: session.activeOrganizationId,
           userId: mentioned,
           idempotencyKey: `mention:${result.id}`,

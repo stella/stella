@@ -26,7 +26,11 @@ import { broadcastToUser } from "@/api/lib/sse";
 type TotalEntityRefMap<
   T extends Record<
     NotificationKind,
-    { entityType: NotificationEntityType | null; entityId: string | null }
+    {
+      entityType: NotificationEntityType | null;
+      entityId: string | null;
+      workspaceId: SafeId<"workspace"> | null;
+    }
   >,
 > = T;
 
@@ -34,33 +38,47 @@ type TotalEntityRefMap<
  * What each kind points at. The pointer is derived from the kind, not chosen
  * per call, so a producer cannot file a flow-run notification against a report
  * export id.
+ *
+ * `workspaceId` travels with the pointer because every target route is
+ * `/workspaces/:workspaceId/...`: an entity id alone is not addressable. It is
+ * the matter the producer already validated, never a value off a request body.
  */
 type NotificationEntityRefByKind = TotalEntityRefMap<{
   [NOTIFICATION_KIND.MENTION]: {
     entityType: "entity";
     entityId: SafeId<"entity">;
+    workspaceId: SafeId<"workspace">;
   };
   [NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED]: {
     entityType: "report_export";
     entityId: SafeId<"reportExport">;
+    workspaceId: SafeId<"workspace">;
   };
   [NOTIFICATION_KIND.REPORT_EXPORT_FAILED]: {
     entityType: "report_export";
     entityId: SafeId<"reportExport">;
+    workspaceId: SafeId<"workspace">;
   };
   [NOTIFICATION_KIND.FLOW_RUN_COMPLETED]: {
     entityType: "flow_run";
     entityId: SafeId<"flowRun">;
+    workspaceId: SafeId<"workspace">;
   };
   [NOTIFICATION_KIND.FLOW_RUN_FAILED]: {
     entityType: "flow_run";
     entityId: SafeId<"flowRun">;
+    workspaceId: SafeId<"workspace">;
   };
   [NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL]: {
     entityType: "flow_run";
     entityId: SafeId<"flowRun">;
+    workspaceId: SafeId<"workspace">;
   };
-  [NOTIFICATION_KIND.ANNOUNCEMENT]: { entityType: null; entityId: null };
+  [NOTIFICATION_KIND.ANNOUNCEMENT]: {
+    entityType: null;
+    entityId: null;
+    workspaceId: null;
+  };
 }>;
 
 /**
@@ -144,6 +162,7 @@ const insertNotifications = async (
     metadata: row.metadata,
     entityType: row.entityType,
     entityId: row.entityId,
+    workspaceId: row.workspaceId,
     idempotencyKey: row.idempotencyKey,
   }));
 
