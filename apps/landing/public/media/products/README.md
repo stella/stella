@@ -40,8 +40,13 @@ debugging a capture; do not commit macOS-generated PNGs.
 
 ## Recording the MP4 clips
 
-The videos are still recorded locally. Start the stack, seed the authenticated
-test user and development data, then record:
+The videos are recorded locally, then stored as immutable, content-addressed
+objects outside Git. `bun --filter @stll/landing dev` and `build` hydrate the
+exact manifest-pinned files into this directory before Astro starts; the local
+copies are ignored and shared through Git's common worktree cache.
+
+Start the stack, seed the authenticated test user and development data, then
+record:
 
 ```sh
 bun run dev --no-browser
@@ -65,6 +70,20 @@ The capture suite selects the deterministic `Harbrook & Partners` organization
 (`apps/api/scripts/seed-test-user.ts`), resolves seeded
 workspace view IDs from the API, waits for real route content, and writes
 light and dark files for every product in this directory.
+
+After recording, regenerate the object manifest and publish it with an
+authenticated AWS session that can write to the downloads CDN:
+
+```sh
+bun run marketing:media:manifest
+PRODUCT_MEDIA_S3_BUCKET="$(gh variable get DOWNLOADS_BUCKET)" bun run marketing:media:publish
+```
+
+Publication verifies every local file against the manifest and creates only
+content-addressed objects. Existing objects must have the same size and SHA-256
+checksum. Commit `recordings-manifest.json` and
+`apps/landing/product-media-manifest.json`; do not force-add the ignored MP4 or
+poster files.
 
 `capture:product-story` records the six Stella-owned scenes used in the
 homepage story and product pages: Files, Table review, Editor, Agent, the
@@ -124,6 +143,7 @@ Re-record a subset with the comma-separated `MARKETING_CAPTURE` filter and an
 optional `MARKETING_THEME` (`light` or `dark`):
 
 ```sh
+bun run marketing:media:sync
 cd apps/web && MARKETING_CAPTURE=editor-hero,editor-portrait MARKETING_THEME=dark bun run capture:product-story
 ```
 
@@ -147,8 +167,9 @@ leaving the landing page stale; update the paired MP4 clips in the same review.
 The nightly run repeats the check against the default branch, covering drift a
 per-file allowlist cannot see (dependency upgrades, seed changes). The marketing
 content check verifies that every light/dark clip and poster referenced by the
-shared scene registry exists. Route and content guards prevent sign-in, loading,
-and organization-selection screens from being accepted as product screenshots.
+shared scene registry is pinned in the product-media manifest. Route and content
+guards prevent sign-in, loading, and organization-selection screens from being
+accepted as product screenshots.
 
 The recorder additionally stamps every capture into
 `recordings-manifest.json` (in this directory): capture id, theme, viewport,
@@ -186,17 +207,18 @@ to reshoot` and exits without touching the app. Otherwise it preflights the
 local stack (`E2E_WEB_URL` / `E2E_API_URL`, defaulting to the URLs above), and
 if either is unreachable it prints the same "Refreshing the images" commands
 from this file and exits without recording anything — it never starts
-servers itself. Once the stack answers, it re-records only the stale capture
-ids in one `capture:product-story` invocation (both themes), then re-checks
-staleness and reports what turned fresh.
+servers itself. Once the stack answers, it hydrates the manifest-pinned media,
+re-records only the stale capture ids in one `capture:product-story` invocation
+(both themes), then re-checks staleness and reports what turned fresh.
 
-The script does not commit. Land the result in the two commits this
-directory's history already uses: one commit for the re-recorded footage and
-manifest, and a separate `chore(landing): stamp recording manifest against
-the committed tree` commit that rewrites `recordedAtCommit` to the commit
-that just landed the footage (the recorder stamps the pre-commit HEAD, so it
-is one commit behind once the footage lands). The reshoot script prints both
-commands, including a ready-to-run `jq` snippet for the second commit.
+The script does not publish or commit. Land the result in the two commits this
+directory's history already uses: first regenerate and publish the immutable
+objects, then commit both manifests. In a separate `chore(landing): stamp
+recording manifest against the committed tree` commit, rewrite
+`recordedAtCommit` to the commit that just landed the manifests (the recorder
+stamps the pre-commit HEAD, so it is one commit behind once the first commit
+lands). The reshoot script prints the publish and commit commands, including a
+ready-to-run `jq` snippet for the second commit.
 
 `tag-on-version-bump.yml` runs `bun run marketing:stale --strict` before
 pushing a release tag, so a stale recording fails the tag push instead of
@@ -225,6 +247,6 @@ bun run marketing:verify-current -- \
 
 Use `--capture workspace,review` to limit the attestation. The command updates
 only selected stale manifest entries and binds the review to a hash of their
-exact watched source tree, MP4, and poster. Any later relevant code or media
-change invalidates it. A new recording replaces the entry and clears its
-manual verification.
+exact watched source tree and manifest-pinned MP4/poster pair. Any later
+relevant code or media change invalidates it. A new recording replaces the
+entry and clears its manual verification.

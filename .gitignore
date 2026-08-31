@@ -21,6 +21,10 @@ coverage
 playwright-report/
 test-results/
 
+# Checksum-verified landing recordings hydrated from the product-media manifest
+apps/landing/public/media/products/*.mp4
+apps/landing/public/media/products/*-poster.jpg
+
 # Claude Code worktrees (local state)
 .claude/worktrees/
 

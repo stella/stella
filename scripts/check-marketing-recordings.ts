@@ -22,6 +22,11 @@ import type {
   CaptureViewport,
   RecordingManifestEntry,
 } from "../apps/web/e2e/marketing/captures";
+import {
+  readProductMediaManifestSync,
+  recordingArtifactPaths,
+  recordingArtifactsHashFromManifest,
+} from "./product-media";
 
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
 const STRICT = process.argv.includes("--strict");
@@ -126,19 +131,25 @@ export const watchedPathsHashAtHead = (
     .digest("hex");
 };
 
-const recordingArtifactPaths = (captureId: string, theme: CaptureTheme) => {
-  const base = `apps/landing/public/media/products/story-${captureId}${
-    theme === "dark" ? "-dark" : ""
-  }`;
-  return [`${base}.mp4`, `${base}-poster.jpg`] as const;
-};
-
 export const recordingArtifactsHash = (
   captureId: string,
   theme: CaptureTheme,
 ): string => {
+  const paths = recordingArtifactPaths(captureId, theme).map(
+    (path) => `apps/landing/public/${path}`,
+  );
+  if (paths.every((path) => !existsSync(nodePath.join(ROOT_DIR, path)))) {
+    const manifestHash = recordingArtifactsHashFromManifest(
+      readProductMediaManifestSync(),
+      captureId,
+      theme,
+    );
+    if (manifestHash !== undefined) {
+      return manifestHash;
+    }
+  }
   const hasher = new Bun.CryptoHasher("sha256");
-  for (const path of recordingArtifactPaths(captureId, theme)) {
+  for (const path of paths) {
     hasher.update(`${path}\0`);
     hasher.update(readFileSync(nodePath.join(ROOT_DIR, path)));
   }
