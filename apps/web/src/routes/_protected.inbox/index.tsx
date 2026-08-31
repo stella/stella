@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi, redirect } from "@tanstack/react-router";
 import { InboxIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -28,6 +28,7 @@ import {
   SEVERITY_LABEL_KEY,
 } from "@/features/inbox/signal-presentation";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { inboxRouteAvailable } from "@/hooks/use-inbox-preview";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -51,6 +52,11 @@ import { SignalCard } from "@/routes/_protected.inbox/-signal-card";
 const protectedRouteApi = getRouteApi("/_protected");
 
 export const Route = createFileRoute("/_protected/inbox/")({
+  beforeLoad: () => {
+    if (!inboxRouteAvailable()) {
+      throw redirect({ to: "/chat" });
+    }
+  },
   loader: async ({ context }) => {
     // Governed queues only exist behind the deployment flag; prefetching
     // them on a flag-off deployment would fail the whole route load.

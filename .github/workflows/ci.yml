@@ -1322,6 +1322,7 @@ jobs:
         env:
           # The same artifact serves the feature-complete production E2E suite.
           # These flags preserve the committed bundle baseline.
+          VITE_FEATURE_INBOX: "true"
           VITE_FEATURE_TIME_BILLING: "true"
           VITE_PUBLIC_LAW_ENABLED: "true"
           VITE_PUBLIC_TOOLS_ENABLED: "true"

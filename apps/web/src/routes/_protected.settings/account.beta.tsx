@@ -28,6 +28,8 @@ function BetaFeaturesPage() {
   const setTimeBillingPreview = useDevStore((s) => s.setTimeBillingPreview);
   const guidesPreview = useDevStore((s) => s.guidesPreview);
   const setGuidesPreview = useDevStore((s) => s.setGuidesPreview);
+  const inboxPreview = useDevStore((s) => s.inboxPreview);
+  const setInboxPreview = useDevStore((s) => s.setInboxPreview);
 
   return (
     <>
@@ -96,6 +98,29 @@ function BetaFeaturesPage() {
                 }}
               />
               <FieldLabel>{t("common.timeBilling")}</FieldLabel>
+            </Field>
+          </div>
+        </FramePanel>
+        <FramePanel>
+          <div className="flex flex-col gap-3 p-1">
+            <h2 className="text-sm font-medium">
+              {t("settings.account.betaInbox")}
+            </h2>
+            <p className="text-muted-foreground text-xs">
+              {t("settings.account.betaInboxDescription")}
+            </p>
+            <Field className="flex-row items-center gap-2">
+              <Checkbox
+                checked={inboxPreview}
+                onCheckedChange={(next) => {
+                  if (next === inboxPreview) {
+                    return;
+                  }
+
+                  setInboxPreview(next);
+                }}
+              />
+              <FieldLabel>{t("settings.account.betaInbox")}</FieldLabel>
             </Field>
           </div>
         </FramePanel>

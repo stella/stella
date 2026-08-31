@@ -3297,6 +3297,8 @@ type Messages = {
       "beta": "Beta Features";
       "betaCaseLawDescription": "Show the public case law search and reader in the sidebar";
       "betaDescription": "Try features that are still in development";
+      "betaInbox": "Inbox & notifications";
+      "betaInboxDescription": "Show the Inbox and the notification bell";
       "betaTimeBillingDescription": "Show time tracking, invoices, and expenses";
       "confirmDelete": "Confirm delete account";
       "dangerZone": "Danger zone";

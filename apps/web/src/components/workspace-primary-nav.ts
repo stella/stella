@@ -99,15 +99,20 @@ export type WorkspacePrimaryNavId =
   (typeof WORKSPACE_PRIMARY_NAV_ITEMS)[number]["id"];
 
 export const getWorkspacePrimaryNavItems = ({
+  includeInbox,
   includePublicLaw,
   includePublicTools,
 }: {
+  includeInbox: boolean;
   includePublicLaw: boolean;
   includePublicTools: boolean;
 }) =>
   WORKSPACE_PRIMARY_NAV_ITEMS.filter((item) => {
     if (item.id === "caseLaw") {
       return includePublicLaw;
+    }
+    if (item.id === "inbox") {
+      return includeInbox;
     }
     if (item.id === "tools") {
       return includePublicTools;

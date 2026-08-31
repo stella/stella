@@ -3294,6 +3294,8 @@
       "beta": "Fonctionnalités bêta",
       "betaCaseLawDescription": "Afficher la recherche et le lecteur de jurisprudence publique dans la barre latérale",
       "betaDescription": "Essayez des fonctionnalités encore en développement",
+      "betaInbox": "Boîte de réception et notifications",
+      "betaInboxDescription": "Afficher la boîte de réception et la cloche de notifications",
       "betaTimeBillingDescription": "Afficher le suivi du temps, les factures et les dépenses",
       "confirmDelete": "Confirmer la suppression du compte",
       "dangerZone": "Zone de danger",
