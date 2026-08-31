@@ -37,6 +37,24 @@ body:has(.clipboard-editor-window) {
   overflow: hidden;
 }
 
+/* The clipboard windows are OS utilities: they use the system typeface, not
+ * the product one. `.font-sans` is inlined by the design system's theme, so
+ * it is overridden here too. */
+body:has(.clipboard-window),
+body:has(.clipboard-editor-window),
+body:has(.clipboard-window) .font-sans,
+body:has(.clipboard-editor-window) .font-sans {
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif,
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol",
+    "Noto Color Emoji";
+}
+
 .clipboard-window {
   --clipboard-search-placeholder: var(--foreground-placeholder);
   --clipboard-search-text: var(--foreground);

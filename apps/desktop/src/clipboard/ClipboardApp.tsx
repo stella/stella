@@ -5,6 +5,7 @@ import type {
   PointerEvent as ReactPointerEvent,
   ReactNode,
 } from "react";
+import { flushSync } from "react-dom";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -1212,6 +1213,9 @@ const ClipboardApp = () => {
       }
       timelineRef.current?.focus();
     };
+    // The window hides on blur, so a focus event is always an open, and every
+    // open starts on the newest clip. flushSync commits the reset first so the
+    // newest card is in the DOM (the rail is virtualized) before it is focused.
     const handleWindowFocus = () => {
       setAgeReferenceTime(Date.now());
       // The pointer may have moved while the window was hidden; the next
@@ -1220,7 +1224,20 @@ const ClipboardApp = () => {
       if (welcomeOpen) {
         return;
       }
-      focusActiveCard();
+      flushSync(() => {
+        setQuery("");
+        setSelectedIndex(0);
+      });
+      const newestItem = filterClipboardItems(
+        snapshot.items,
+        "",
+        activeGroupId,
+      ).at(0);
+      if (newestItem) {
+        focusCard(timelineRailRef.current, newestItem.id);
+        return;
+      }
+      timelineRef.current?.focus();
     };
     window.addEventListener("focus", handleWindowFocus);
     if (
@@ -1232,7 +1249,7 @@ const ClipboardApp = () => {
       focusActiveCard();
     }
     return () => window.removeEventListener("focus", handleWindowFocus);
-  }, [activeItemId, welcomeOpen]);
+  }, [activeGroupId, activeItemId, snapshot.items, welcomeOpen]);
 
   const nextGroupColor =
     CLIPBOARD_GROUP_COLORS.at(
