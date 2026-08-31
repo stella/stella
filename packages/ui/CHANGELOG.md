@@ -1,5 +1,21 @@
 # @stll/ui
 
+## 0.12.0
+
+### Minor Changes
+
+- [#2635](https://github.com/stella/stella/pull/2635) [`88bf7fb`](https://github.com/stella/stella/commit/88bf7fb898ece322c3b7d2aa015dcb7b5d1da8a8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a card drag surface that preserves embedded controls and scrolling while supporting whole-card drag activation.
+
+- [#2573](https://github.com/stella/stella/pull/2573) [`0b7892b`](https://github.com/stella/stella/commit/0b7892bd9b3b440db2da3604ca05c806d458e98f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Let virtual Kanban cells own typed scroll-element drop targets and their sortable context. Add two-axis keyboard navigation, explicit item or handle activation, outside-board cancellation, overlay stacking, and pointer/touch auto-scroll defaults.
+
+### Patch Changes
+
+- [#2639](https://github.com/stella/stella/pull/2639) [`58c51a3`](https://github.com/stella/stella/commit/58c51a3018ca64ed898e1598b1daba6fe7a71bc8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Drop a Kanban drag on the cell or item the pointer, touch, or keyboard actually reached. dnd-kit computes collisions while rendering but publishes the resulting drop target a render later, and resolves a drop from that published value; because a single move produces a single render, a drag that ended right after its last move landed the item on the previous target. Every board sensor now waits for the published target to match the computed collision before ending the drag.
+
+  Keyboard navigation to a row a virtual cell has not mounted yet is held to the same rule: ending while that row is still being scrolled into view waits for it rather than committing the row the drag had left, and cancels instead of dropping somewhere the user never navigated to if the board cannot reach it.
+
+- [#2642](https://github.com/stella/stella/pull/2642) [`00bd34d`](https://github.com/stella/stella/commit/00bd34d7b6d4204749730813ae2cde4a2e82047e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Restore keyboard card dragging and preserve nested control input events.
+
 ## 0.11.1
 
 ### Patch Changes
