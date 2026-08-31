@@ -31,11 +31,12 @@ import {
   auditLogs,
   auditRelationshipChangeSql,
   contacts,
+  documentReviewRuns,
   entities,
   entityVersions,
   fields,
 } from "@/api/db/schema";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -43,17 +44,22 @@ import { escapeLike } from "@/api/lib/escape-like";
 import { createCursorPage } from "@/api/lib/pagination";
 import {
   brandPersistedAuditLogId,
+  brandPersistedDocumentReviewRunId,
   brandPersistedEntityId,
   brandPersistedEntityVersionId,
 } from "@/api/lib/safe-id-boundaries";
 
 import {
+  activityTargetSource,
   bindActivityCursorToFilters,
+  FEED_ACTIVITY_RESOURCE_TYPES,
   parseFieldAuditResourceId,
   resolveActivityAction,
   resolveActivityCategory,
   resolveActivityRunId,
   timestampMicroseconds,
+  VISIBLE_ACTIVITY_ACTIONS,
+  type VisibleActivityAction,
 } from "./read-overview-activity.logic";
 
 const versionSnapshotAuditLogs = alias(
@@ -65,17 +71,6 @@ const contactSnapshotAuditLogs = alias(
   auditLogs,
   "contact_snapshot_audit_logs",
 );
-
-const VISIBLE_ACTIONS = [
-  AUDIT_ACTION.CREATE,
-  AUDIT_ACTION.UPDATE,
-  AUDIT_ACTION.DELETE,
-  AUDIT_ACTION.EXECUTE,
-  AUDIT_ACTION.CANCEL,
-  AUDIT_ACTION.REVIEW,
-] as const;
-
-type VisibleActivityAction = (typeof VISIBLE_ACTIONS)[number];
 
 const LEGACY_VISIBLE_RESOURCE_TYPES = [
   AUDIT_RESOURCE_TYPE.ENTITY,
@@ -91,7 +86,11 @@ const LEGACY_VISIBLE_RESOURCE_TYPES = [
 
 export const visibleActivityCondition = () =>
   and(
-    inArray(auditLogs.action, VISIBLE_ACTIONS),
+    inArray(auditLogs.action, VISIBLE_ACTIVITY_ACTIONS),
+    // Every feed row must resolve to a named target, so the query admits only
+    // the resource types the projection names. A resource excluded there can
+    // never arrive here to be labelled generically.
+    inArray(auditLogs.resourceType, FEED_ACTIVITY_RESOURCE_TYPES),
     // "other" is housekeeping — session expiry, retention sweeps — and stays
     // out of the matter's story no matter who performed it. The performer
     // test only rescues rows written before activityCategory existed.
@@ -369,6 +368,14 @@ const renameOnlyChange = () => sql<boolean>`coalesce((
   and (select count(*) = 1 from jsonb_object_keys(${auditLogs.changes}))
 ), false)`;
 
+// The reviewed document's name as the run pinned it, so a review whose run
+// row is gone still names what it reviewed.
+const auditReviewDocumentName = () => sql<string | null>`case
+  when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.DOCUMENT_REVIEW_RUN}
+    then ${auditLogs.metadata} ->> 'documentName'
+  else null
+end`;
+
 const teamContactIdSnapshot = () => sql<string | null>`case
   when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT}
     then coalesce(
@@ -502,7 +509,15 @@ type ActivityTarget = {
   entityId: string | null;
   fieldId: string | null;
   id: string;
-  kind: EntityTargetKind | "matter" | "team" | "court" | "automation";
+  kind:
+    | EntityTargetKind
+    | "automation"
+    | "court"
+    | "documentReviewRun"
+    | "matter"
+    | "playbook"
+    | "team"
+    | "translationRun";
   mimeType: string | null;
   name: string | null;
   pdfFileId: string | null;
@@ -708,6 +723,7 @@ export const readOverviewActivityPage = async ({
             performerType: auditLogs.performerType,
             resourceId: auditLogs.resourceId,
             resourceType: auditLogs.resourceType,
+            reviewDocumentNameSnapshot: auditReviewDocumentName(),
             relationshipChange: auditRelationshipChangeSql(auditLogs),
             renameOnly: renameOnlyChange(),
             runId: auditLogs.runId,
@@ -783,10 +799,35 @@ export const readOverviewActivityPage = async ({
                     inArray(entityVersions.id, versionIds),
                   ),
                 );
+        // A review row names its run; what the reader needs is the document
+        // that was reviewed, which the run row holds. The audit metadata
+        // carries the same identity for a run that has since been deleted.
+        const reviewRunIds = rows
+          .filter(
+            (row) =>
+              row.resourceType === AUDIT_RESOURCE_TYPE.DOCUMENT_REVIEW_RUN,
+          )
+          .map((row) => brandPersistedDocumentReviewRunId(row.resourceId));
+        const reviewRunRows =
+          reviewRunIds.length === 0
+            ? []
+            : await tx
+                .select({
+                  entityId: documentReviewRuns.entityId,
+                  id: documentReviewRuns.id,
+                })
+                .from(documentReviewRuns)
+                .where(
+                  and(
+                    eq(documentReviewRuns.workspaceId, workspaceId),
+                    inArray(documentReviewRuns.id, reviewRunIds),
+                  ),
+                );
         const entityIds = [
           ...new Set([
             ...directEntityIds,
             ...versionRows.map((row) => row.entityId),
+            ...reviewRunRows.map((row) => brandPersistedEntityId(row.entityId)),
             ...rows.flatMap((row) =>
               row.entityIdSnapshot
                 ? [brandPersistedEntityId(row.entityIdSnapshot)]
@@ -872,6 +913,7 @@ export const readOverviewActivityPage = async ({
           compositeFieldVersions,
           entityRows,
           fieldRows,
+          reviewRunRows,
           rows,
           versionRows,
           workspace,
@@ -896,6 +938,9 @@ export const readOverviewActivityPage = async ({
     );
     const versionEntityMap = new Map(
       result.versionRows.map((version) => [version.id, version.entityId]),
+    );
+    const reviewRunEntityMap = new Map<string, string>(
+      result.reviewRunRows.map((run) => [run.id, run.entityId]),
     );
     const fieldVersionMap = new Map([
       ...result.fieldRows.map(
@@ -966,6 +1011,8 @@ export const readOverviewActivityPage = async ({
             matterName: result.workspace?.name ?? null,
             resourceId: row.resourceId,
             resourceType: row.resourceType,
+            reviewDocumentNameSnapshot: row.reviewDocumentNameSnapshot,
+            reviewRunEntityMap,
             teamTargetName: row.teamUserIdSnapshot
               ? (actorMap.get(row.teamUserIdSnapshot)?.name ?? null)
               : row.teamContactNameSnapshot,
@@ -1032,6 +1079,8 @@ type TargetForRowOptions = {
   matterName: string | null;
   resourceId: string;
   resourceType: string;
+  reviewDocumentNameSnapshot: string | null;
+  reviewRunEntityMap: Map<string, string>;
   teamTargetName: string | null;
   versionEntityMap: Map<string, string>;
 };
@@ -1048,98 +1097,124 @@ const targetForRow = ({
   matterName,
   resourceId,
   resourceType,
+  reviewDocumentNameSnapshot,
+  reviewRunEntityMap,
   teamTargetName,
   versionEntityMap,
 }: TargetForRowOptions): ActivityTarget => {
-  if (resourceType === AUDIT_RESOURCE_TYPE.ENTITY) {
-    return (
-      entityMap.get(resourceId) ??
-      deletedEntityTarget({
-        category,
+  const entityTarget = (entityId: string): ActivityTarget =>
+    entityMap.get(entityId) ??
+    deletedEntityTarget({
+      category,
+      id: entityId,
+      kindSnapshot: entityKindSnapshot,
+      mimeType: entityMimeTypeSnapshot,
+      name: entityNameSnapshot,
+    });
+
+  const source = activityTargetSource(resourceType);
+  switch (source) {
+    case "entity":
+      return entityTarget(resourceId);
+    case "entityVersion": {
+      const entityId = versionEntityMap.get(resourceId) ?? entityIdSnapshot;
+      return entityId
+        ? entityTarget(entityId)
+        : deletedEntityTarget({ category, id: resourceId, name: null });
+    }
+    case "field": {
+      const versionId = fieldVersionMap.get(resourceId);
+      const entityId =
+        (versionId ? versionEntityMap.get(versionId) : null) ??
+        entityIdSnapshot;
+      return entityId
+        ? entityTarget(entityId)
+        : deletedEntityTarget({ category, id: resourceId, name: null });
+    }
+    case "userFile":
+      return documentTarget(resourceId);
+    case "workspace":
+      return category === "team"
+        ? genericTarget({
+            color: null,
+            id: resourceId,
+            kind: "team",
+            name: teamTargetName,
+          })
+        : genericTarget({
+            color: matterColor,
+            id: resourceId,
+            kind: "matter",
+            name: matterName,
+          });
+    case "team":
+      return genericTarget({
+        color: null,
         id: resourceId,
-        kindSnapshot: entityKindSnapshot,
-        mimeType: entityMimeTypeSnapshot,
-        name: entityNameSnapshot,
-      })
-    );
-  }
-  if (resourceType === AUDIT_RESOURCE_TYPE.ENTITY_VERSION) {
-    const entityId = versionEntityMap.get(resourceId) ?? entityIdSnapshot;
-    if (entityId) {
-      return (
-        entityMap.get(entityId) ??
-        deletedEntityTarget({
-          category,
-          id: entityId,
-          kindSnapshot: entityKindSnapshot,
-          mimeType: entityMimeTypeSnapshot,
-          name: entityNameSnapshot,
-        })
-      );
-    }
-    return deletedEntityTarget({ category, id: resourceId, name: null });
-  }
-  if (resourceType === AUDIT_RESOURCE_TYPE.FIELD) {
-    const versionId = fieldVersionMap.get(resourceId);
-    const entityId =
-      (versionId ? versionEntityMap.get(versionId) : null) ?? entityIdSnapshot;
-    if (entityId) {
-      return (
-        entityMap.get(entityId) ??
-        deletedEntityTarget({
-          category,
-          id: entityId,
-          kindSnapshot: entityKindSnapshot,
-          mimeType: entityMimeTypeSnapshot,
-          name: entityNameSnapshot,
-        })
-      );
-    }
-    return deletedEntityTarget({ category, id: resourceId, name: null });
-  }
-  if (resourceType === AUDIT_RESOURCE_TYPE.USER_FILE) {
-    return documentTarget(resourceId);
-  }
-  if (resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE) {
-    return category === "team"
-      ? genericTarget({
+        kind: "team",
+        name: teamTargetName,
+      });
+    case "court":
+      return genericTarget({
+        color: null,
+        id: resourceId,
+        kind: "court",
+        name: null,
+      });
+    case "documentReviewRun": {
+      // The row is about the reviewed document: it carries the document's
+      // identity so the feed can name it and open it, keeping the run's own
+      // id so consecutive decisions on one review stay one row.
+      const entityId = reviewRunEntityMap.get(resourceId) ?? entityIdSnapshot;
+      const document = entityId ? entityMap.get(entityId) : undefined;
+      if (!document) {
+        return genericTarget({
           color: null,
           id: resourceId,
-          kind: "team",
-          name: teamTargetName,
-        })
-      : genericTarget({
-          color: matterColor,
-          id: resourceId,
-          kind: "matter",
-          name: matterName,
+          kind: "documentReviewRun",
+          name: reviewDocumentNameSnapshot,
         });
+      }
+      return {
+        color: null,
+        deleted: document.deleted,
+        encrypted: document.encrypted,
+        entityId: document.entityId,
+        fieldId: document.fieldId,
+        id: resourceId,
+        kind: "documentReviewRun",
+        mimeType: document.mimeType,
+        name: document.name,
+        pdfFileId: document.pdfFileId,
+        propertyId: document.propertyId,
+      };
+    }
+    case "translationRun":
+      return genericTarget({
+        color: null,
+        id: resourceId,
+        kind: "translationRun",
+        name: null,
+      });
+    case "playbook":
+      return genericTarget({
+        color: null,
+        id: resourceId,
+        kind: "playbook",
+        name: entityNameSnapshot,
+      });
+    case "automation":
+      return genericTarget({
+        color: null,
+        id: resourceId,
+        kind: "automation",
+        name: null,
+      });
+    default: {
+      const exhaustive: never = source;
+      return exhaustive;
+    }
   }
-  if (
-    resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER ||
-    resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT
-  ) {
-    return genericTarget({
-      color: null,
-      id: resourceId,
-      kind: "team",
-      name: teamTargetName,
-    });
-  }
-  if (resourceType === AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK) {
-    return genericTarget({
-      color: null,
-      id: resourceId,
-      kind: "court",
-      name: null,
-    });
-  }
-  return genericTarget({
-    color: null,
-    id: resourceId,
-    kind: "automation",
-    name: null,
-  });
 };
 
 type DeletedEntityTargetOptions = {

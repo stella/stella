@@ -4633,6 +4633,10 @@
           "trigger": "Inicijavo",
           "webhook": "Saityno jungtis"
         },
+        "documentReview": {
+          "decided": "Nusprendė dėl {count, plural, one {# išvados} few {# išvadų} other {# išvadų}} dokumento peržiūroje:",
+          "started": "Pradėjo dokumento peržiūrą:"
+        },
         "empty": "Šioje byloje veiklos dar nėra.",
         "filterLabel": "Filtruoti veiklą",
         "filters": {
@@ -4672,12 +4676,15 @@
           "automation": "automatizavimas",
           "court": "teismo įrašas",
           "document": "dokumentas",
+          "documentReview": "dokumento peržiūra",
           "folder": "aplankas",
           "link": "nuoroda",
           "matter": "byla",
           "message": "žinutė",
+          "playbook": "peržiūros vadovo taisyklės",
           "task": "darbotvarkės elementas",
-          "team": "bylos komanda"
+          "team": "bylos komanda",
+          "translation": "vertimas"
         },
         "title": "Veikla",
         "views": {

@@ -4633,6 +4633,10 @@
           "trigger": "Initiée par",
           "webhook": "Déclencheur web"
         },
+        "documentReview": {
+          "decided": "A traité {count, plural, one {# constat} other {# constats}} dans la révision de",
+          "started": "A lancé une révision de"
+        },
         "empty": "Aucune activité dans ce dossier pour le moment.",
         "filterLabel": "Filtrer l’activité",
         "filters": {
@@ -4672,12 +4676,15 @@
           "automation": "automatisation",
           "court": "dossier judiciaire",
           "document": "fichier",
+          "documentReview": "révision de document",
           "folder": "dossier",
           "link": "lien",
           "matter": "dossier",
           "message": "message",
+          "playbook": "règles du playbook",
           "task": "élément d’agenda",
-          "team": "équipe du dossier"
+          "team": "équipe du dossier",
+          "translation": "traduction"
         },
         "title": "Activité",
         "views": {

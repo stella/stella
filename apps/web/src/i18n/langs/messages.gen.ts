@@ -4636,6 +4636,10 @@ type Messages = {
           "trigger": "Initiated by";
           "webhook": "Webhook";
         };
+        "documentReview": {
+          "decided": "Decided {count, plural, one {# finding} other {# findings}} in the review of";
+          "started": "Started a review of";
+        };
         "empty": "No activity in this matter yet.";
         "filterLabel": "Filter activity";
         "filters": {
@@ -4675,12 +4679,15 @@ type Messages = {
           "automation": "automation";
           "court": "court record";
           "document": "document";
+          "documentReview": "document review";
           "folder": "folder";
           "link": "link";
           "matter": "matter";
           "message": "message";
+          "playbook": "playbook rules";
           "task": "agenda item";
           "team": "matter team";
+          "translation": "translation";
         };
         "title": "Matter activity";
         "views": {

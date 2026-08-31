@@ -4633,6 +4633,10 @@
           "trigger": "Spustil(a)",
           "webhook": "Webové volání"
         },
+        "documentReview": {
+          "decided": "Rozhodl(a) o {count, plural, one {# zjištění} few {# zjištěních} other {# zjištěních}} v kontrole dokumentu",
+          "started": "Spustil(a) kontrolu dokumentu"
+        },
         "empty": "V tomto spisu zatím není žádná aktivita.",
         "filterLabel": "Filtrovat aktivitu",
         "filters": {
@@ -4672,12 +4676,15 @@
           "automation": "automatizace",
           "court": "soudní záznam",
           "document": "dokument",
+          "documentReview": "kontrola dokumentu",
           "folder": "složka",
           "link": "odkaz",
           "matter": "spis",
           "message": "zpráva",
+          "playbook": "pravidla playbooku",
           "task": "položka agendy",
-          "team": "tým spisu"
+          "team": "tým spisu",
+          "translation": "překlad"
         },
         "title": "Aktivita",
         "views": {

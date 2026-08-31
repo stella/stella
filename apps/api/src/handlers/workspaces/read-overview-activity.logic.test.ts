@@ -3,19 +3,24 @@ import { describe, expect, test } from "bun:test";
 import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
 
 import { auditLogs } from "@/api/db/schema";
-import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
 
 import {
+  ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE,
+  activityTargetSource,
   bindActivityCursorToFilters,
+  FEED_ACTIVITY_RESOURCE_TYPES,
   legacyActivityCategory,
   parseFieldAuditResourceId,
   resolveActivityAction,
   resolveActivityCategory,
   resolveActivityRunId,
   timestampMicroseconds,
+  VISIBLE_ACTIVITY_ACTION_BY_ACTION,
+  VISIBLE_ACTIVITY_ACTIONS,
 } from "./read-overview-activity.logic";
 
 const fieldId = toSafeId<"field">("00000000-0000-0000-0000-000000000001");
@@ -192,6 +197,66 @@ describe("activity filter cursors", () => {
     }).encode(timestamp, auditLogId);
 
     expect(cursor.length).toBeLessThanOrEqual(512);
+  });
+});
+
+describe("activity target sources", () => {
+  test("names or excludes every audited resource type, for every action", () => {
+    const resourceTypes = Object.values(AUDIT_RESOURCE_TYPE);
+    const actions = Object.values(AUDIT_ACTION);
+    expect(resourceTypes.length).toBeGreaterThan(0);
+
+    for (const resourceType of resourceTypes) {
+      const source = ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE[resourceType];
+      const feeds = FEED_ACTIVITY_RESOURCE_TYPES.includes(resourceType);
+      expect(feeds).toBe(source !== null);
+      for (const action of actions) {
+        const visible = VISIBLE_ACTIVITY_ACTION_BY_ACTION[action];
+        if (!feeds || visible === null) {
+          continue;
+        }
+        // Whatever the pair, the row resolves to a target the feed can name
+        // rather than falling through to an unnamed automation label.
+        expect(activityTargetSource(resourceType)).toBe(source);
+      }
+    }
+  });
+
+  test("keeps the automation target for automation runs only", () => {
+    const automationTargets = FEED_ACTIVITY_RESOURCE_TYPES.filter(
+      (resourceType) =>
+        ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE[resourceType] === "automation",
+    );
+
+    expect(automationTargets).toEqual([AUDIT_RESOURCE_TYPE.FLOW_RUN]);
+    expect(
+      ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE[
+        AUDIT_RESOURCE_TYPE.DOCUMENT_REVIEW_RUN
+      ],
+    ).toBe("documentReviewRun");
+    // Obligations are audited against the task entity they govern, so they
+    // read as that task rather than as an unnamed record.
+    expect(
+      ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE[
+        AUDIT_RESOURCE_TYPE.WORK_OBLIGATION
+      ],
+    ).toBe("entity");
+  });
+
+  test("panics on a resource type the allow-list should have filtered", () => {
+    expect(() =>
+      activityTargetSource(AUDIT_RESOURCE_TYPE.CHAT_MESSAGE),
+    ).toThrow("Activity row has no target source: chat_message");
+    expect(() => activityTargetSource("not_a_resource_type")).toThrow(
+      "Activity row has no target source: not_a_resource_type",
+    );
+  });
+
+  test("narrates state changes and never access records", () => {
+    expect(VISIBLE_ACTIVITY_ACTIONS).not.toContain(AUDIT_ACTION.ACCESS);
+    expect(VISIBLE_ACTIVITY_ACTIONS).not.toContain(AUDIT_ACTION.DOWNLOAD);
+    expect(VISIBLE_ACTIVITY_ACTIONS).toContain(AUDIT_ACTION.REVIEW);
+    expect(VISIBLE_ACTIVITY_ACTIONS).toContain(AUDIT_ACTION.EXECUTE);
   });
 });
 

@@ -295,6 +295,19 @@ const createDocumentReviewRun = createSafeHandler(
     }
 
     const pinnedTarget = selection.value.target;
+    const targetDocumentName =
+      nameByEntityId.get(pinnedTarget.entityId) ?? null;
+    // The side the run judged from, by role alone: the party's name is the
+    // document's business, and the audit record does not need it to say what
+    // the review was.
+    const perspectiveRole =
+      basis.perspective.type === "party" ? basis.perspective.role : null;
+    // Null for positions confirmed for this run alone: those have no playbook
+    // to name, and `referenceCount` says what they were drawn from instead.
+    const playbookBasisName =
+      playbook.provenance === PLAYBOOK_PIN_PROVENANCE.EPHEMERAL
+        ? null
+        : playbook.definitionSnapshot.name;
     const runId = createSafeId<"documentReviewRun">();
     const inserted = yield* Result.await(
       safeDb(async (tx) => {
@@ -341,8 +354,16 @@ const createDocumentReviewRun = createSafeHandler(
           action: AUDIT_ACTION.EXECUTE,
           resourceType: AUDIT_RESOURCE_TYPE.DOCUMENT_REVIEW_RUN,
           resourceId: runId,
+          // The reviewed document and what the run was judged against, pinned
+          // the way the run row pins them: the matter's activity names the
+          // document and its basis without re-reading a row that may be gone.
           metadata: {
+            documentName: targetDocumentName,
+            entityId: pinnedTarget.entityId,
             expectedFindingCount: plan.expectedFindingCount,
+            fileFieldId: pinnedTarget.file.fileFieldId,
+            perspectiveRole,
+            playbookName: playbookBasisName,
             playbookProvenance: playbook.provenance,
             referenceCount: references.length,
           },

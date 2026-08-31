@@ -224,7 +224,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   case_law_decision_annotation: "court",
   bilingual_translation_run: "automation",
   document_translation_run: "automation",
-  document_review_run: "automation",
+  document_review_run: "documents",
   flow_run: "automation",
   playbook: playbookActivityCategory,
   workspace: workspaceActivityCategory,

@@ -4633,6 +4633,10 @@
           "trigger": "Iniciado por",
           "webhook": "Enlace web"
         },
+        "documentReview": {
+          "decided": "Decidió {count, plural, one {# hallazgo} other {# hallazgos}} en la revisión de",
+          "started": "Inició una revisión de"
+        },
         "empty": "Aún no hay actividad en este asunto.",
         "filterLabel": "Filtrar actividad",
         "filters": {
@@ -4672,12 +4676,15 @@
           "automation": "automatización",
           "court": "registro judicial",
           "document": "documento",
+          "documentReview": "revisión de documento",
           "folder": "carpeta",
           "link": "enlace",
           "matter": "asunto",
           "message": "mensaje",
+          "playbook": "reglas del playbook",
           "task": "elemento de agenda",
-          "team": "equipo del asunto"
+          "team": "equipo del asunto",
+          "translation": "traducción"
         },
         "title": "Actividad",
         "views": {

@@ -4633,6 +4633,10 @@
           "trigger": "Uzsāka",
           "webhook": "Tīmekļa aizķere"
         },
+        "documentReview": {
+          "decided": "Pieņēma lēmumu par {count, plural, zero {# secinājumiem} one {# secinājumu} other {# secinājumiem}} dokumenta pārbaudē:",
+          "started": "Sāka dokumenta pārbaudi:"
+        },
         "empty": "Šajā lietā vēl nav darbību.",
         "filterLabel": "Filtrēt darbības",
         "filters": {
@@ -4672,12 +4676,15 @@
           "automation": "automatizācija",
           "court": "tiesas ieraksts",
           "document": "dokuments",
+          "documentReview": "dokumenta pārbaude",
           "folder": "mape",
           "link": "saite",
           "matter": "lieta",
           "message": "ziņa",
+          "playbook": "pārbaudes ceļveža noteikumi",
           "task": "darba kārtības vienums",
-          "team": "lietas komanda"
+          "team": "lietas komanda",
+          "translation": "tulkojums"
         },
         "title": "Darbības",
         "views": {

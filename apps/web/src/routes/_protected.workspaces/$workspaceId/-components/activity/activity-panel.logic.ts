@@ -1,7 +1,54 @@
+import type { TranslationKey } from "@/i18n/types";
 import { addDays, parseIsoDateLocal } from "@/lib/dates";
 import type { MatterActivityItem } from "@/lib/workspaces/queries";
 
+/**
+ * The verb for a feed row's action. Total over the actions the feed carries,
+ * so an audit action the API starts narrating cannot reach a row unlabelled.
+ */
+export const ROW_ACTION_LABEL_KEYS = {
+  add: "workspaces.overview.activity.actorActions.added",
+  cancel: "workspaces.overview.activity.actorActions.cancelled",
+  create: "workspaces.overview.activity.actorActions.created",
+  delete: "workspaces.overview.activity.actorActions.deleted",
+  execute: "workspaces.overview.activity.actorActions.executed",
+  remove: "workspaces.overview.activity.actorActions.removed",
+  review: "workspaces.overview.activity.actorActions.reviewed",
+  update: "workspaces.overview.activity.actorActions.updated",
+} as const satisfies Record<MatterActivityItem["action"], TranslationKey>;
+
+/**
+ * What the row calls its target when the target has no name of its own. Total
+ * over the target kinds the API projects: a new kind names itself here or the
+ * build fails, which is what stops it from arriving as "automation".
+ */
+export const TARGET_LABEL_KEYS = {
+  automation: "workspaces.overview.activity.targets.automation",
+  court: "workspaces.overview.activity.targets.court",
+  document: "workspaces.overview.activity.targets.document",
+  documentReviewRun: "workspaces.overview.activity.targets.documentReview",
+  folder: "workspaces.overview.activity.targets.folder",
+  link: "workspaces.overview.activity.targets.link",
+  matter: "workspaces.overview.activity.targets.matter",
+  message: "workspaces.overview.activity.targets.message",
+  playbook: "workspaces.overview.activity.targets.playbook",
+  task: "workspaces.overview.activity.targets.task",
+  team: "workspaces.overview.activity.targets.team",
+  translationRun: "workspaces.overview.activity.targets.translation",
+} as const satisfies Record<
+  MatterActivityItem["target"]["kind"],
+  TranslationKey
+>;
+
 const ACTIVITY_FOLD_WINDOW_MS = 60_000;
+
+/**
+ * How far apart two decisions on the same review may sit and still read as one
+ * sitting. Deciding a review's findings writes one audit row per finding, and
+ * a reviewer works through them in a single pass; a row each would bury
+ * everything else in the matter.
+ */
+const REVIEW_DECISION_FOLD_WINDOW_MS = 30 * 60_000;
 
 export const toMatterActivityDateRange = ({
   from,
@@ -75,6 +122,11 @@ export type ActivityGroup =
   | {
       id: string;
       items: [MatterActivityItem, ...MatterActivityItem[]];
+      type: "review_decisions";
+    }
+  | {
+      id: string;
+      items: [MatterActivityItem, ...MatterActivityItem[]];
       type: "document_batch";
     }
   | {
@@ -137,6 +189,44 @@ const hasSameActivityDay = (
   right: MatterActivityItem,
 ) => activityDayKey(left.activityAt) === activityDayKey(right.activityAt);
 
+/** One decision on one review's finding, whichever surface took it. */
+const isReviewDecision = (item: MatterActivityItem) =>
+  item.action === "review" && item.target.kind === "documentReviewRun";
+
+const hasSameActor = (left: MatterActivityItem, right: MatterActivityItem) =>
+  left.performer.type === "user" || right.performer.type === "user"
+    ? hasSamePerformer(left, right)
+    : left.performer.type === right.performer.type &&
+      left.performer.name === right.performer.name;
+
+const isWithinReviewDecisionWindow = (
+  previous: MatterActivityItem,
+  candidate: MatterActivityItem,
+) => {
+  const previousTime = new Date(previous.activityAt).getTime();
+  const candidateTime = new Date(candidate.activityAt).getTime();
+  return (
+    Number.isFinite(previousTime) &&
+    Number.isFinite(candidateTime) &&
+    Math.abs(previousTime - candidateTime) <= REVIEW_DECISION_FOLD_WINDOW_MS
+  );
+};
+
+const foldsIntoReviewDecisions = (
+  candidate: ActivityGroup | undefined,
+  item: MatterActivityItem,
+): candidate is Extract<ActivityGroup, { type: "review_decisions" }> =>
+  candidate?.type === "review_decisions" &&
+  candidate.items[0].target.id === item.target.id &&
+  hasSameActor(candidate.items[0], item) &&
+  hasSameActivityDay(candidate.items[0], item) &&
+  // Chained from the last folded decision, so a long sitting keeps folding
+  // while a decision taken hours later starts its own row.
+  isWithinReviewDecisionWindow(
+    candidate.items.at(-1) ?? candidate.items[0],
+    item,
+  );
+
 export const groupActivityItems = (
   items: MatterActivityItem[],
 ): ActivityGroup[] => {
@@ -144,6 +234,20 @@ export const groupActivityItems = (
 
   for (const item of items) {
     const previous = groups.at(-1);
+    // Before the run grouping below: a decision taken through chat carries a
+    // run id, and it still belongs to its review rather than to that run.
+    if (isReviewDecision(item)) {
+      if (foldsIntoReviewDecisions(previous, item)) {
+        previous.items.push(item);
+        continue;
+      }
+      groups.push({
+        id: `review-decisions:${item.target.id}:${item.id}`,
+        items: [item],
+        type: "review_decisions",
+      });
+      continue;
+    }
     if (
       item.runId &&
       previous?.type === "automation_run" &&

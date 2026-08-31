@@ -4633,6 +4633,10 @@
           "trigger": "Ausgelöst von",
           "webhook": "Web-Schnittstelle"
         },
+        "documentReview": {
+          "decided": "{count, plural, one {# Ergebnis} other {# Ergebnisse}} entschieden in der Prüfung von",
+          "started": "Dokumentenprüfung gestartet für"
+        },
         "empty": "Noch keine Aktivität in dieser Akte.",
         "filterLabel": "Aktivität filtern",
         "filters": {
@@ -4672,12 +4676,15 @@
           "automation": "Automatisierung",
           "court": "Gerichtseintrag",
           "document": "Dokument",
+          "documentReview": "Dokumentenprüfung",
           "folder": "Ordner",
           "link": "Link",
           "matter": "Akte",
           "message": "Nachricht",
+          "playbook": "Playbook-Regeln",
           "task": "Agendaeintrag",
-          "team": "Aktenteam"
+          "team": "Aktenteam",
+          "translation": "Übersetzung"
         },
         "title": "Aktivität",
         "views": {

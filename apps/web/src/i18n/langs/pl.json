@@ -4633,6 +4633,10 @@
           "trigger": "Zainicjował(a)",
           "webhook": "Wywołanie sieciowe"
         },
+        "documentReview": {
+          "decided": "Rozstrzygnął(-ęła) {count, plural, one {# ustalenie} few {# ustalenia} many {# ustaleń} other {# ustaleń}} w przeglądzie dokumentu",
+          "started": "Rozpoczął(-ęła) przegląd dokumentu"
+        },
         "empty": "Brak aktywności w tej sprawie.",
         "filterLabel": "Filtruj aktywność",
         "filters": {
@@ -4672,12 +4676,15 @@
           "automation": "automatyzacja",
           "court": "wpis sądowy",
           "document": "dokument",
+          "documentReview": "przegląd dokumentu",
           "folder": "folder",
           "link": "link",
           "matter": "sprawa",
           "message": "wiadomość",
+          "playbook": "zasady playbooka",
           "task": "element agendy",
-          "team": "zespół sprawy"
+          "team": "zespół sprawy",
+          "translation": "tłumaczenie"
         },
         "title": "Aktywność",
         "views": {

@@ -4633,6 +4633,10 @@
           "trigger": "Algataja",
           "webhook": "Veebihaak"
         },
+        "documentReview": {
+          "decided": "Otsustas {count, plural, one {# leiu} other {# leidu}} dokumendi ülevaatuses",
+          "started": "Alustas ülevaatust dokumendile"
+        },
         "empty": "Selles toimikus pole veel tegevust.",
         "filterLabel": "Filtreeri tegevust",
         "filters": {
@@ -4672,12 +4676,15 @@
           "automation": "automatiseerimine",
           "court": "kohtukirje",
           "document": "dokument",
+          "documentReview": "dokumendi ülevaatus",
           "folder": "kaust",
           "link": "link",
           "matter": "toimik",
           "message": "sõnum",
+          "playbook": "playbooki reeglid",
           "task": "päevakorrapunkt",
-          "team": "toimiku meeskond"
+          "team": "toimiku meeskond",
+          "translation": "tõlge"
         },
         "title": "Tegevus",
         "views": {

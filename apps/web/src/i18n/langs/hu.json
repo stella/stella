@@ -4633,6 +4633,10 @@
           "trigger": "Kezdeményezte",
           "webhook": "Webes esemény"
         },
+        "documentReview": {
+          "decided": "Eldöntött {count, plural, one {# megállapítást} other {# megállapítást}} ebben az ellenőrzésben:",
+          "started": "Ellenőrzést indított ezen:"
+        },
         "empty": "Ebben az ügyben még nincs tevékenység.",
         "filterLabel": "Tevékenység szűrése",
         "filters": {
@@ -4672,12 +4676,15 @@
           "automation": "automatizálás",
           "court": "bírósági bejegyzés",
           "document": "dokumentum",
+          "documentReview": "dokumentumellenőrzés",
           "folder": "mappa",
           "link": "hivatkozás",
           "matter": "ügy",
           "message": "üzenet",
+          "playbook": "playbook szabályai",
           "task": "napirendi elem",
-          "team": "ügycsapat"
+          "team": "ügycsapat",
+          "translation": "fordítás"
         },
         "title": "Tevékenység",
         "views": {
