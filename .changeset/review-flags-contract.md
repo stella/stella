@@ -1,6 +1,6 @@
 ---
-"@stll/api-contract": minor
+"@stll/cli": patch
 ---
 
-Add the shared review-flag vocabulary, the safe-id brand for document review
-parties, and a guard for document translation source language codes.
+Extend the capability catalog with the document review endpoints: proposing
+positions from a reference, resolving parties, and saving a run as a playbook.
