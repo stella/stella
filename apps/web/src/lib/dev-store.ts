@@ -10,6 +10,7 @@ type State = {
   reactGrab: boolean;
   publicLawPreview: boolean;
   workflowsPreview: boolean;
+  inboxPreview: boolean;
   guidesPreview: boolean;
   timeBillingPreview: boolean;
   simulateSlowLoad: boolean;
@@ -21,6 +22,7 @@ type Actions = {
   setReactGrab: (value: boolean) => void;
   setPublicLawPreview: (value: boolean) => void;
   setWorkflowsPreview: (value: boolean) => void;
+  setInboxPreview: (value: boolean) => void;
   setGuidesPreview: (value: boolean) => void;
   setTimeBillingPreview: (value: boolean) => void;
   setSimulateSlowLoad: (value: boolean) => void;
@@ -40,6 +42,7 @@ export const useDevStore = create<State & Actions>()(
       reactGrab: false,
       publicLawPreview: false,
       workflowsPreview: false,
+      inboxPreview: false,
       guidesPreview: false,
       timeBillingPreview: false,
       simulateSlowLoad: false,
@@ -58,6 +61,9 @@ export const useDevStore = create<State & Actions>()(
       },
       setWorkflowsPreview: (workflowsPreview) => {
         set({ workflowsPreview });
+      },
+      setInboxPreview: (inboxPreview) => {
+        set({ inboxPreview });
       },
       setGuidesPreview: (guidesPreview) => {
         set({ guidesPreview });

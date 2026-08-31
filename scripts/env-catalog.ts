@@ -426,6 +426,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   VITE_FEATURE_AI_MEMORY: "Show tenant-scoped AI memory settings.",
   VITE_FEATURE_GOVERNED_WORKFLOW:
     "Show governed work-obligation fields on a task (owner, acknowledgement, hard deadline).",
+  VITE_FEATURE_INBOX:
+    "Show the Inbox and the notification bell for everyone, without the per-browser beta toggle.",
   VITE_FEATURE_LEGAL_LISTS:
     "Show first-class legal lists and list-item task controls.",
   VITE_GUIDES_ENABLED: "Show the in-app interactive guides.",

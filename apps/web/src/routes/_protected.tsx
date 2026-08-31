@@ -57,6 +57,10 @@ import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import {
+  isInboxPreviewEnabled,
+  useInboxPreviewEnabled,
+} from "@/hooks/use-inbox-preview";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { roleOptions } from "@/lib/auth-queries";
@@ -184,14 +188,16 @@ export const Route = createFileRoute("/_protected")({
     );
     // Prefetched here so the bell's first page joins the shell's request wave
     // instead of chaining a new sequential round after hydration.
-    detached(
-      prefetchNonCriticalInfiniteQuery(
-        context.queryClient,
-        notificationsOptions({ organizationId: activeOrganizationId }),
-        onPrefetchError,
-      ),
-      "protected-layout.notifications-prefetch",
-    );
+    if (isInboxPreviewEnabled()) {
+      detached(
+        prefetchNonCriticalInfiniteQuery(
+          context.queryClient,
+          notificationsOptions({ organizationId: activeOrganizationId }),
+          onPrefetchError,
+        ),
+        "protected-layout.notifications-prefetch",
+      );
+    }
     const rolePrefetch = prefetchRouteQuery(
       context.queryClient,
       roleOptions,
@@ -410,6 +416,9 @@ function ProtectedContent() {
   });
   const workspaceId = projectMatch?.params.workspaceId;
   const isPinned = workspaceId ? pinnedIds.has(workspaceId) : false;
+  // Not mounting the bell is the whole gate: it is the only consumer of the
+  // notifications query and of the user event stream.
+  const inboxPreviewEnabled = useInboxPreviewEnabled();
 
   // Inspector toggle wiring — the right-side `PanelRightIcon`
   // button is the universal entry point for the inspector pane.
@@ -518,7 +527,7 @@ function ProtectedContent() {
           </Button>
         </>
       )}
-      <NotificationBell />
+      {inboxPreviewEnabled && <NotificationBell />}
       {canShowInspectorButton && (
         <div className="contents md:hidden">
           <Separator className="mx-1 h-4" orientation="vertical" />

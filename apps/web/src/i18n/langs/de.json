@@ -3294,6 +3294,8 @@
       "beta": "Beta-Funktionen",
       "betaCaseLawDescription": "Öffentliche Rechtsprechungssuche und -ansicht in der Seitenleiste anzeigen",
       "betaDescription": "Funktionen ausprobieren, die sich noch in der Entwicklung befinden",
+      "betaInbox": "Posteingang und Benachrichtigungen",
+      "betaInboxDescription": "Posteingang und Benachrichtigungsglocke anzeigen",
       "betaTimeBillingDescription": "Zeiterfassung, Rechnungen und Ausgaben anzeigen",
       "confirmDelete": "Konto löschen bestätigen",
       "dangerZone": "Gefahrenbereich",

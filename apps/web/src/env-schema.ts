@@ -77,6 +77,7 @@ export const envWebClientSchema = {
   VITE_FEATURE_AI_MEMORY: featureFlagSchema,
   VITE_FEATURE_LEGAL_LISTS: featureFlagSchema,
   VITE_FEATURE_GOVERNED_WORKFLOW: featureFlagSchema,
+  VITE_FEATURE_INBOX: featureFlagSchema,
   /** Lets a production deployment expose per-browser beta previews. */
   VITE_BETA_FEATURES_ENABLED: featureFlagSchema,
   VITE_FEEDBACK_EMAIL_TO: v.optional(v.pipe(v.string(), v.email())),

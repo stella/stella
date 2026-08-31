@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi, redirect } from "@tanstack/react-router";
 import { InboxIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -28,6 +28,7 @@ import {
   SEVERITY_LABEL_KEY,
 } from "@/features/inbox/signal-presentation";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -51,6 +52,19 @@ import { SignalCard } from "@/routes/_protected.inbox/-signal-card";
 const protectedRouteApi = getRouteApi("/_protected");
 
 export const Route = createFileRoute("/_protected/inbox/")({
+  // Deliberately narrower than the workflows route, which also opens on a
+  // beta host because it can server-render, where the per-browser toggle is
+  // unreadable. This route is client-only (it sits under `_protected`), so
+  // the toggle always reads true or false here and a host bypass would serve
+  // the feed, and run its signals query, for every dev and staging visitor.
+  beforeLoad: () => {
+    // The dev server stays open so a local route-smoke run (and a baseline
+    // regeneration) can render this route; staging and production only open
+    // through the browser toggle or the deployment flag.
+    if (!import.meta.env.DEV && !isInboxPreviewEnabled()) {
+      throw redirect({ to: "/chat" });
+    }
+  },
   loader: async ({ context }) => {
     // Governed queues only exist behind the deployment flag; prefetching
     // them on a flag-off deployment would fail the whole route load.

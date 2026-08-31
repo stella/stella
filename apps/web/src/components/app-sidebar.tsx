@@ -118,6 +118,7 @@ import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useGuidesPreviewEnabled } from "@/hooks/use-guides-preview";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
+import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -170,7 +171,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
   const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
   const guidesPreviewEnabled = useGuidesPreviewEnabled();
+  const inboxPreviewEnabled = useInboxPreviewEnabled();
   const primaryNavItems = getWorkspacePrimaryNavItems({
+    includeInbox: inboxPreviewEnabled,
     includePublicLaw: publicLawPreviewEnabled,
     // The public /tools catalogue stays out of the authenticated app
     // nav; signed-in users manage tools via /knowledge/tools instead.
@@ -192,9 +195,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const { data: workspacesData } = useChromeQuery(
     workspacesNavigationOptions(user.activeOrganizationId),
   );
-  const { data: inboxCount } = useChromeQuery(
-    inboxCountOptions(user.activeOrganizationId),
-  );
+  const { data: inboxCount } = useChromeQuery({
+    ...inboxCountOptions(user.activeOrganizationId),
+    enabled: inboxPreviewEnabled,
+  });
   const openInboxCount = inboxCount?.count ?? 0;
   const mounted = useHasMounted();
   const { data: groupedChatThreadPages } = useInfiniteQuery({

@@ -3294,6 +3294,8 @@
       "beta": "Funciones beta",
       "betaCaseLawDescription": "Mostrar la búsqueda y el lector de jurisprudencia pública en la barra lateral",
       "betaDescription": "Prueba funciones que aún están en desarrollo",
+      "betaInbox": "Bandeja de entrada y notificaciones",
+      "betaInboxDescription": "Mostrar la bandeja de entrada y la campana de notificaciones",
       "betaTimeBillingDescription": "Mostrar el registro de tiempo, las facturas y los gastos",
       "confirmDelete": "Confirmar eliminación de cuenta",
       "dangerZone": "Zona de peligro",
