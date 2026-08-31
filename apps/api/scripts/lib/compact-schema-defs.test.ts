@@ -25,7 +25,10 @@ import { compactSchemaDefs } from "./compact-schema-defs";
 // reads once.
 const catalogEntries: readonly Record<string, unknown>[] = JSON.parse(
   await Bun.file(
-    new URL("../../src/mcp/generated/capability-catalog.json", import.meta.url),
+    new URL(
+      "../../../../packages/cli/capability-catalog.json",
+      import.meta.url,
+    ),
   ).text(),
 );
 

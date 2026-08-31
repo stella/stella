@@ -28,10 +28,7 @@ const snapshotUrl = new URL(
   "generated/registry-snapshot.json",
   import.meta.url,
 );
-const catalogUrl = new URL(
-  "generated/capability-catalog.json",
-  import.meta.url,
-);
+const catalogUrl = new URL("../capability-catalog.json", import.meta.url);
 const outputUrl = new URL("generated/route-map.ts", import.meta.url);
 const resourceSnapshotUrl = new URL(
   "generated/resources-snapshot.json",

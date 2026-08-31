@@ -1,5 +1,5 @@
 // Loader/validator for the committed capability-catalog snapshot
-// (`generated/capability-catalog.json`, written by the api-side exporter).
+// (`../capability-catalog.json`, written by the api-side exporter).
 // Shared by build-time codegen (strict: a malformed snapshot panics) and the
 // runtime registry-refresh path (tolerant: `null` falls back to the baked-in
 // tree), so both consume the identical projection of the catalog entries.
@@ -13,10 +13,7 @@ import type {
   CapabilityTransport,
 } from "./generate-capability-tree.js";
 
-const CATALOG_URL = new URL(
-  "generated/capability-catalog.json",
-  import.meta.url,
-);
+const CATALOG_URL = new URL("../capability-catalog.json", import.meta.url);
 
 const jsonSchemaSchema = v.record(v.string(), v.unknown());
 

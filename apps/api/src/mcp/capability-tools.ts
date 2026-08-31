@@ -4,6 +4,7 @@ import { Value, type ValueError } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { ElysiaCustomStatusResponse } from "elysia";
 
+import capabilityCatalogRaw from "@stll/cli/capability-catalog.json";
 import type { PermissionInput } from "@stll/permissions";
 
 import { captureError } from "@/api/lib/analytics/capture";
@@ -35,7 +36,6 @@ import {
 } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
-import capabilityCatalogRaw from "@/api/mcp/generated/capability-catalog.json";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch";
 import type { CapabilityDispatchEntry } from "@/api/mcp/generated/capability-dispatch";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";

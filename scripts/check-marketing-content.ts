@@ -12,8 +12,7 @@ import {
 import { products } from "../apps/landing/src/data/products/registry";
 import { securityControls } from "../apps/landing/src/data/security-controls";
 
-const CAPABILITY_CATALOG_PATH =
-  "apps/api/src/mcp/generated/capability-catalog.json";
+const CAPABILITY_CATALOG_PATH = "packages/cli/capability-catalog.json";
 const POLICY_EVIDENCE_PATH = "docs/policies/evidence.json";
 const CLI_REGISTRY_SNAPSHOT_PATH =
   "packages/cli/src/generated/registry-snapshot.json";

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import capabilityCatalog from "@/api/mcp/generated/capability-catalog.json";
+import capabilityCatalog from "@stll/cli/capability-catalog.json";
+
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 

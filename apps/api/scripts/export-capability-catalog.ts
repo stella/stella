@@ -1,6 +1,6 @@
 // Dev-only exporter: projects the safe-handler universe down to a capability
 // catalog and writes a deterministic JSON snapshot
-// (`apps/api/src/mcp/generated/capability-catalog.json`).
+// (`packages/cli/capability-catalog.json`).
 //
 // A "capability" is any safe handler whose `mcp` disposition is `tool`,
 // `covered`, or `capability` (an `internal` disposition is a permanent reviewed
@@ -102,16 +102,7 @@ import {
 
 const CATALOG_PATH = path.resolve(
   REPO_ROOT,
-  "apps/api/src/mcp/generated/capability-catalog.json",
-);
-
-// The CLI codegen consumes a byte-identical snapshot of the catalog beside its
-// tool-registry snapshot, so `@stll/cli` never imports `apps/api`. This exporter
-// owns both copies; `--check` compares each, so the CLI copy cannot drift from
-// the API copy.
-const CLI_CATALOG_PATH = path.resolve(
-  REPO_ROOT,
-  "packages/cli/src/generated/capability-catalog.json",
+  "packages/cli/capability-catalog.json",
 );
 
 const DISPATCH_PATH = path.resolve(
@@ -420,8 +411,8 @@ type CapabilityEntry = {
   id: string;
   /**
    * Prose from the handler config's `description`, written for the agent
-   * deciding whether to call this capability. Carried verbatim into both
-   * committed catalog mirrors; the CLI renders it as the generated command's
+   * deciding whether to call this capability. Carried verbatim into the
+   * committed catalog; the CLI renders it as the generated command's
    * `--help` brief and MCP renders it in list/describe. Absent only for a
    * capability that has not been given one yet; each of those is listed by id
    * in apps/api/capability-description-ledger.json and guarded by
@@ -751,7 +742,7 @@ const collectClassGuardErrors = ({
   // invoke it. The access-keyed resolver above already downgrades reads to their
   // domain read tier, so this can only fire if that resolver is later broken —
   // which is exactly when it must fail the export (companion to the
-  // `read-capabilities-with-write-scope` ratchet over the committed mirrors).
+  // `read-capabilities-with-write-scope` ratchet over the committed catalog).
   for (const entry of entries) {
     if (entry.access === "read" && WRITE_ONLY_SCOPES.has(entry.scope)) {
       errors.push(
@@ -1573,19 +1564,15 @@ const main = async (): Promise<number> => {
 
   if (!checkMode) {
     await Bun.write(CATALOG_PATH, serialized);
-    await Bun.write(CLI_CATALOG_PATH, serialized);
     await Bun.write(DISPATCH_PATH, dispatchSerialized);
     await Bun.write(COVERAGE_DOC_PATH, doc);
     process.stderr.write(
-      `export-capability-catalog: wrote ${entries.length} capabilities to ${CATALOG_PATH}, ${CLI_CATALOG_PATH}, ${DISPATCH_PATH}, and ${COVERAGE_DOC_PATH}\n`,
+      `export-capability-catalog: wrote ${entries.length} capabilities to ${CATALOG_PATH}, ${DISPATCH_PATH}, and ${COVERAGE_DOC_PATH}\n`,
     );
     return 0;
   }
 
   const committedText = await Bun.file(CATALOG_PATH)
-    .text()
-    .catch(() => null);
-  const committedCliText = await Bun.file(CLI_CATALOG_PATH)
     .text()
     .catch(() => null);
   const committedDispatch = await Bun.file(DISPATCH_PATH)
@@ -1596,20 +1583,13 @@ const main = async (): Promise<number> => {
     .catch(() => null);
   if (
     committedText === serialized &&
-    committedCliText === serialized &&
     committedDispatch === dispatchSerialized &&
     committedDoc === doc
   ) {
     console.log(
-      `export-capability-catalog: OK. ${entries.length} capabilities, catalog (API + CLI copies), dispatch module, and coverage doc are up to date.`,
+      `export-capability-catalog: OK. ${entries.length} capabilities, catalog, dispatch module, and coverage doc are up to date.`,
     );
     return 0;
-  }
-
-  if (committedCliText !== serialized) {
-    console.error(
-      "\nexport-capability-catalog: committed CLI capability-catalog.json is out of date. Regenerate with:\n  bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts",
-    );
   }
 
   if (committedDispatch !== dispatchSerialized) {
