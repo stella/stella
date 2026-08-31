@@ -1,6 +1,6 @@
 {
   "name": "@stll/business-registries",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Typed clients for national business / commercial registries (Czech ARES, Norwegian Brreg, Mexican INEGI DENUE, US SEC EDGAR, Slovak ORSR, Taiwanese GCIS, Finnish PRH, Polish KRS, UK Companies House, French INSEE Sirene, ...)",
   "keywords": [
     "ares",

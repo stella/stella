@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.13.0
+
+### Minor Changes
+
+- [#2695](https://github.com/stella/stella/pull/2695) [`5a4fa91`](https://github.com/stella/stella/commit/5a4fa911178e25717079e00d048d3a38daf50e7b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow sortable Kanban boards to configure mouse drag activation distance while preserving the default touch and keyboard behavior.
+
 ## 0.12.1
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @stll/business-registries
 
+## 0.3.2
+
+### Patch Changes
+
+- [#2672](https://github.com/stella/stella/pull/2672) [`6b5d02c`](https://github.com/stella/stella/commit/6b5d02c144aa0fa053e0d8e4a3de4e65bdc14c73) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Serve README banners from the shared repository assets instead of packaging a
+  private copy with each package.
+- Updated dependencies [[`6b5d02c`](https://github.com/stella/stella/commit/6b5d02c144aa0fa053e0d8e4a3de4e65bdc14c73)]:
+  - @stll/country-codes@0.1.2
+
 ## 0.3.1
 
 ### Patch Changes
