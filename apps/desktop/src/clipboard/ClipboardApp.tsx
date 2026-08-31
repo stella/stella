@@ -94,6 +94,7 @@ import {
   isClipboardNameInput,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
+  shouldReturnToTimelineFromInput,
 } from "./clipboard-logic";
 import type { ClipboardPointerPosition } from "./clipboard-logic";
 import {
@@ -1541,16 +1542,17 @@ const ClipboardApp = () => {
       }
     }
     if (event.target instanceof HTMLInputElement) {
-      if (
-        activeItem &&
-        shouldCopyFromClipboardInput({
-          dataset: event.target.dataset,
-          isComposing: event.isComposing,
-          key: event.key,
-        })
-      ) {
+      const inputKey = {
+        dataset: event.target.dataset,
+        isComposing: event.isComposing,
+        key: event.key,
+      };
+      if (activeItem && shouldCopyFromClipboardInput(inputKey)) {
         event.preventDefault();
         copyItem(activeItem);
+      } else if (activeItem && shouldReturnToTimelineFromInput(inputKey)) {
+        event.preventDefault();
+        selectIndex(activeIndex);
       }
       return;
     }

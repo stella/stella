@@ -16,6 +16,7 @@ import {
   isClipboardNameInput,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
+  shouldReturnToTimelineFromInput,
 } from "../src/clipboard/clipboard-logic";
 import type { ClipboardItem } from "../src/clipboard/clipboard-types";
 
@@ -249,6 +250,37 @@ describe("clipboard input keyboard handling", () => {
         dataset: {},
         isComposing: true,
         key: "Enter",
+      }),
+    ).toBe(false);
+  });
+
+  test("ArrowUp in search returns focus to the timeline", () => {
+    expect(
+      shouldReturnToTimelineFromInput({
+        dataset: {},
+        isComposing: false,
+        key: "ArrowUp",
+      }),
+    ).toBe(true);
+    expect(
+      shouldReturnToTimelineFromInput({
+        dataset: {},
+        isComposing: true,
+        key: "ArrowUp",
+      }),
+    ).toBe(false);
+    expect(
+      shouldReturnToTimelineFromInput({
+        dataset: { clipboardNameInput: "" },
+        isComposing: false,
+        key: "ArrowUp",
+      }),
+    ).toBe(false);
+    expect(
+      shouldReturnToTimelineFromInput({
+        dataset: {},
+        isComposing: false,
+        key: "ArrowDown",
       }),
     ).toBe(false);
   });

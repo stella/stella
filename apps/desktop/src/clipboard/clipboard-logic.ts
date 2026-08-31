@@ -37,6 +37,18 @@ export const shouldCopyFromClipboardInput = ({
 }: ClipboardInputKey) =>
   !isClipboardNameInput(dataset) && key === "Enter" && !isComposing;
 
+/**
+ * ArrowUp in the search field hands focus back to the selected card (the rail
+ * sits above the search bar). Composition keeps ArrowUp for the IME's
+ * candidate list, and a clip name editor keeps its caret.
+ */
+export const shouldReturnToTimelineFromInput = ({
+  dataset,
+  isComposing,
+  key,
+}: ClipboardInputKey) =>
+  !isClipboardNameInput(dataset) && key === "ArrowUp" && !isComposing;
+
 export const isClipboardCopyShortcut = (shortcut: ClipboardCopyShortcut) =>
   (shortcut.metaKey || shortcut.ctrlKey) &&
   !shortcut.altKey &&
