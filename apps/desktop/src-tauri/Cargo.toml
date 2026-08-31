@@ -124,7 +124,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
   "NSURL",
 ] }
 plist = "1.10"
-stella-desktop-macos = { path = "crates/macos-park" }
+stella-desktop-macos = { path = "crates/macos-park", version = "0.0.1" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-icons = "0.4.0"

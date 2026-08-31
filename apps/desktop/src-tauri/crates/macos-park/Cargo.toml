@@ -4,6 +4,7 @@ version = "0.0.1"
 edition = "2024"
 description = "Safe wrappers over the raw AppKit/WebKit calls behind clipboard window parking"
 license = "Apache-2.0"
+publish = false
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
