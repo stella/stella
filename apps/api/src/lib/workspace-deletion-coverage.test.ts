@@ -62,10 +62,11 @@ describe("workspace deletion coverage", () => {
         .filter((edge) => edge.parent === workspaces)
         .map((edge) => getTableConfig(edge.child).name),
     );
-    expect(directChildren.size).toBe(50);
+    expect(directChildren.size).toBe(51);
     expect(directChildren.has("chat_threads")).toBe(true);
     expect(directChildren.has("desktop_edit_sessions")).toBe(true);
     expect(directChildren.has("signals")).toBe(true);
+    expect(directChildren.has("notifications")).toBe(true);
   });
 
   test("every restrictive edge into the deletion closure is manually or transitively covered", () => {

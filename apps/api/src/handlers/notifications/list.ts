@@ -78,6 +78,7 @@ const listNotifications = createSafeRootHandler(
             metadata: notifications.metadata,
             entityType: notifications.entityType,
             entityId: notifications.entityId,
+            workspaceId: notifications.workspaceId,
             readAt: notifications.readAt,
             createdAt: notifications.createdAt,
             createdAtCursor:

@@ -733,6 +733,7 @@ const completeStepAndAdvance = async ({
           flowName,
           organizationId,
           runId,
+          workspaceId,
         }),
       ],
       tx,
@@ -753,6 +754,7 @@ type FlowRunCompletedNotificationArgs = {
   flowName: string;
   organizationId: SafeId<"organization">;
   runId: SafeId<"flowRun">;
+  workspaceId: SafeId<"workspace">;
 };
 
 /**
@@ -767,11 +769,13 @@ const flowRunCompletedNotification = ({
   flowName,
   organizationId,
   runId,
+  workspaceId,
 }: FlowRunCompletedNotificationArgs): NewNotification => ({
   kind: NOTIFICATION_KIND.FLOW_RUN_COMPLETED,
   metadata: { flowName },
   entityType: "flow_run",
   entityId: runId,
+  workspaceId,
   organizationId,
   userId: actorUserId,
   idempotencyKey: `flow-run-completed:${runId}`,
@@ -814,6 +818,7 @@ const pauseAtReviewGate = async ({
           metadata: { flowName },
           entityType: "flow_run",
           entityId: runId,
+          workspaceId,
           organizationId,
           userId: actorUserId,
           idempotencyKey: `flow-run-review-gate:${runId}:${stepIndex}`,
@@ -904,6 +909,7 @@ export const failFlowRunFromWorker = async (
                 metadata: { flowName: run.definitionSnapshot.name },
                 entityType: "flow_run",
                 entityId: runId,
+                workspaceId: run.workspaceId,
                 organizationId: scope.organizationId,
                 userId: actorUserId,
                 idempotencyKey: `flow-run-failed:${runId}`,
@@ -1129,6 +1135,7 @@ export const resolveFlowReviewGate = async (
                     flowName: run.definitionSnapshot.name,
                     organizationId,
                     runId,
+                    workspaceId,
                   }),
                 ],
                 database,

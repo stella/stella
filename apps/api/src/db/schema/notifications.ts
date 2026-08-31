@@ -10,11 +10,13 @@ import {
   p,
   pUuid,
   safeOrganizationId,
+  safeWorkspaceId,
   sql,
   timestamptz,
   user,
   userOrganizationPolicies,
 } from "./common";
+import { workspaces } from "./contacts";
 
 const NOTIFICATION_KIND_SQL_VALUES = NOTIFICATION_KINDS.map((kind) =>
   sql.raw(`'${kind}'`),
@@ -50,6 +52,19 @@ export const notifications = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /**
+     * The matter the entity pointer lives in, so the client can build the
+     * `/workspaces/:workspaceId/...` link a bare entity id cannot address.
+     * Null for a kind that points at nothing, and null again once the matter
+     * is deleted: `ON DELETE SET NULL` keeps matter deletion unblocked and
+     * leaves the row as a linkless message rather than removing the history.
+     * Authorization is unaffected — the recipient and organization pins are
+     * what admit the row, and this column is never read as a permission.
+     */
+    workspaceId: safeWorkspaceId("workspace_id").references(
+      () => workspaces.id,
+      { onDelete: "set null" },
+    ),
     kind: p.text({ enum: NOTIFICATION_KINDS }).notNull(),
     /** Exactly the ICU parameters this kind's message renders. */
     metadata: jsonb().$type<NotificationMetadataValue>().notNull(),

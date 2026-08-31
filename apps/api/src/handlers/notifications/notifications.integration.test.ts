@@ -76,6 +76,7 @@ const seedNotification = async ({
     metadata: kind === NOTIFICATION_KIND.MENTION ? { actorName: "Ada" } : {},
     entityType: kind === NOTIFICATION_KIND.MENTION ? "entity" : null,
     entityId: kind === NOTIFICATION_KIND.MENTION ? ids.entityA1 : null,
+    workspaceId: kind === NOTIFICATION_KIND.MENTION ? ids.wsA1 : null,
     idempotencyKey,
     readAt,
   });
@@ -182,6 +183,22 @@ describe("notification list scoping", () => {
     expect(returned).toContain(readA1);
     expect(returned).not.toContain(otherOrgA1);
     expect(returned).not.toContain(otherUser);
+  });
+
+  test("answers with the matter a pointer lives in, and none without one", async () => {
+    const page = await listAs({
+      userId: ids.userA1,
+      organizationId: ids.orgA,
+    });
+    const mention = page.items.find(({ id }) => id === unreadA1);
+    const pointerless = page.items.find(({ id }) => id === readA1);
+
+    // Every target route is /workspaces/:workspaceId/..., so the entity id
+    // alone is not addressable: without this the client can render no link.
+    expect(mention?.entityType).toBe("entity");
+    expect(mention?.entityId).toBe(ids.entityA1);
+    expect(mention?.workspaceId).toBe(ids.wsA1);
+    expect(pointerless?.workspaceId).toBeNull();
   });
 
   test("switching organizations switches the feed", async () => {
@@ -380,12 +397,42 @@ describe("unread count", () => {
 });
 
 describe("fanOutNotifications", () => {
+  test("a mention filed for somebody else keeps the comment's matter", async () => {
+    // The producer writes the matter it validated the mention against, and it
+    // survives the fan-out to the recipient's feed unchanged: this is the
+    // whole deep link, and it names a matter the recipient is a member of.
+    const row: NewNotification = {
+      kind: NOTIFICATION_KIND.MENTION,
+      metadata: { actorName: "Ada" },
+      entityType: "entity",
+      entityId: ids.entityA1,
+      workspaceId: ids.wsA1,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      idempotencyKey: "test:mention-workspace",
+    };
+
+    await fanOutNotifications([row], fanOutDb());
+
+    const written = await testDb
+      .select({ id: notifications.id, workspaceId: notifications.workspaceId })
+      .from(notifications)
+      .where(eq(notifications.idempotencyKey, "test:mention-workspace"));
+    seeded.push(...written.map(({ id }) => id));
+    expect(written.map(({ workspaceId }) => workspaceId)).toEqual([ids.wsA1]);
+
+    const page = await listAs({ userId: ids.userA1, organizationId: ids.orgA });
+    const listed = page.items.find(({ id }) => id === written.at(0)?.id);
+    expect(listed?.workspaceId).toBe(ids.wsA1);
+  });
+
   test("an idempotency key replayed for the same user writes one row", async () => {
     const row: NewNotification = {
       kind: NOTIFICATION_KIND.FLOW_RUN_COMPLETED,
       metadata: { flowName: "Intake" },
       entityType: "flow_run",
       entityId: createSafeId<"flowRun">(),
+      workspaceId: ids.wsA1,
       organizationId: ids.orgA,
       userId: ids.userA1,
       idempotencyKey: "test:dedupe",
@@ -408,6 +455,7 @@ describe("fanOutNotifications", () => {
       metadata: { title: "Maintenance window" },
       entityType: null,
       entityId: null,
+      workspaceId: null,
       organizationId: ids.orgA,
       idempotencyKey: "test:shared-announcement",
     } as const;
@@ -439,6 +487,7 @@ describe("fanOutNotifications", () => {
         metadata: { title: "Batched" },
         entityType: null,
         entityId: null,
+        workspaceId: null,
         organizationId: ids.orgA,
         userId: index % 2 === 0 ? ids.userA1 : ids.userA2,
         idempotencyKey: `test:batch:${index}`,

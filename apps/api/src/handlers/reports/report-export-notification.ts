@@ -112,6 +112,7 @@ export const notifyReportExportStatus = async ({
                   metadata: {},
                   entityType: "report_export",
                   entityId: exportId,
+                  workspaceId,
                   organizationId,
                   userId,
                   idempotencyKey: `report-export:${exportId}`,
