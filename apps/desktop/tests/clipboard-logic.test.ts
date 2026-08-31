@@ -4,6 +4,7 @@ import {
   adjacentClipboardIndex,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
+  clipboardRailScrollDelta,
   clipboardRailWindow,
   clipboardSourceTintIndex,
   filterClipboardItems,
@@ -321,6 +322,38 @@ describe("clipboardRailWindow", () => {
         viewportWidth: 0,
       }),
     ).toEqual({ end: 3, start: 0 });
+  });
+});
+
+describe("clipboardRailScrollDelta", () => {
+  test("does not move a fully visible keyboard target", () => {
+    expect(
+      clipboardRailScrollDelta({
+        cardEnd: 650,
+        cardStart: 400,
+        viewportEnd: 1000,
+        viewportStart: 0,
+      }),
+    ).toBe(0);
+  });
+
+  test("moves only far enough to reveal a target beyond either edge", () => {
+    expect(
+      clipboardRailScrollDelta({
+        cardEnd: 200,
+        cardStart: -50,
+        viewportEnd: 1000,
+        viewportStart: 0,
+      }),
+    ).toBe(-50);
+    expect(
+      clipboardRailScrollDelta({
+        cardEnd: 1050,
+        cardStart: 800,
+        viewportEnd: 1000,
+        viewportStart: 0,
+      }),
+    ).toBe(50);
   });
 });
 

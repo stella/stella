@@ -79,6 +79,7 @@ import {
 import {
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
+  clipboardRailScrollDelta,
   clipboardRailWindow,
   clipboardSourceTintIndex,
   filterClipboardItems,
@@ -135,11 +136,12 @@ const RETENTION_LABEL_KEYS = {
   year: "retentionYear",
 } as const satisfies Record<ClipboardRetention, string>;
 const CLIPBOARD_CARD_SELECTOR = "[data-clipboard-id]";
-// Must match the card's `w-[246px]` and the rail's `gap-3`.
+// Must match the card's `w-[246px]` and the rail's `gap-3 px-5`.
 const CLIPBOARD_CARD_WIDTH = 246;
 const CLIPBOARD_CARD_GAP = 12;
 const CLIPBOARD_CARD_STRIDE = CLIPBOARD_CARD_WIDTH + CLIPBOARD_CARD_GAP;
 const CLIPBOARD_RAIL_OVERSCAN = 3;
+const CLIPBOARD_RAIL_PADDING = 20;
 const CLIPBOARD_GROUP_DROP_SELECTOR = "[data-clipboard-group-id]";
 const CLIPBOARD_NO_GROUP_DROP_ID = "__no_group__";
 const PRIMARY_MODIFIER_LABEL = navigator.userAgent.includes("Mac")
@@ -187,14 +189,17 @@ const focusCard = (rail: HTMLDivElement | null, id: string) => {
 
     const railBounds = rail.getBoundingClientRect();
     const cardBounds = card.getBoundingClientRect();
-    const left =
-      cardBounds.left +
-      cardBounds.width / 2 -
-      (railBounds.left + railBounds.width / 2);
+    const left = clipboardRailScrollDelta({
+      cardEnd: cardBounds.right,
+      cardStart: cardBounds.left,
+      viewportEnd: railBounds.right - CLIPBOARD_RAIL_PADDING,
+      viewportStart: railBounds.left + CLIPBOARD_RAIL_PADDING,
+    });
+    if (left === 0) {
+      return;
+    }
     rail.scrollBy({
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "auto"
-        : "smooth",
+      behavior: "auto",
       left,
     });
   });
