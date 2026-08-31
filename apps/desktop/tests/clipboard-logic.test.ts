@@ -8,6 +8,7 @@ import {
   clipboardTimelineKeyAction,
   clipboardRailScrollDelta,
   clipboardRailWindow,
+  clipboardSearchPreviewText,
   clipboardSourceTintIndex,
   filterClipboardItems,
   formatClipboardAge,
@@ -101,6 +102,50 @@ describe("clipboard search highlighting", () => {
     expect(highlightClipboardText("Closing date", "  ")).toEqual([
       { match: false, text: "Closing date" },
     ]);
+  });
+});
+
+describe("clipboardSearchPreviewText", () => {
+  test("keeps the full text when the first match is near the start", () => {
+    const text = "Purchase price is payable at closing.";
+    expect(clipboardSearchPreviewText(text, "closing")).toEqual({
+      text,
+      truncated: false,
+    });
+  });
+
+  test("windows a distant match to a word boundary with leading context", () => {
+    const text = `${"lorem ipsum dolor sit amet ".repeat(8)}indemnity cap applies`;
+    const preview = clipboardSearchPreviewText(text, "indemnity");
+
+    expect(preview.truncated).toBe(true);
+    expect(preview.text.startsWith("ipsum dolor sit amet indemnity cap")).toBe(
+      true,
+    );
+  });
+
+  test("windows a match hidden below the clamped line count", () => {
+    const text = `a\nb\nc\nd\ne\nf\ng\nh\ni\nfinal clause`;
+    const preview = clipboardSearchPreviewText(text, "clause");
+
+    expect(preview.truncated).toBe(true);
+    expect(preview.text.startsWith("final clause")).toBe(true);
+  });
+
+  test("keeps the full text when only the clip name matched", () => {
+    const text = "Body without the term.";
+    expect(clipboardSearchPreviewText(text, "acquisition")).toEqual({
+      text,
+      truncated: false,
+    });
+  });
+
+  test("matches case-insensitively when windowing", () => {
+    const text = `${"x".repeat(200)} INDEMNITY tail`;
+    const preview = clipboardSearchPreviewText(text, "indemnity");
+
+    expect(preview.truncated).toBe(true);
+    expect(preview.text.startsWith("INDEMNITY tail")).toBe(true);
   });
 });
 

@@ -82,15 +82,20 @@ export const clipboardDraggedItemId = (
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
-export const highlightClipboardText = (text: string, query: string) => {
+/** Deduplicated query terms, longest first so overlapping terms match whole. */
+const clipboardQueryTerms = (query: string) => {
   const normalizedTerms = query
     .trim()
     .split(/\s+/u)
     .map((term) => term.toLocaleLowerCase())
     .filter(Boolean);
-  const terms = Array.from(new Set(normalizedTerms)).sort(
+  return Array.from(new Set(normalizedTerms)).sort(
     (left, right) => right.length - left.length,
   );
+};
+
+export const highlightClipboardText = (text: string, query: string) => {
+  const terms = clipboardQueryTerms(query);
   if (terms.length === 0) {
     return [{ match: false, text }] satisfies ClipboardTextSegment[];
   }
@@ -113,6 +118,53 @@ export const highlightClipboardText = (text: string, query: string) => {
     segments.push({ match: false, text: text.slice(cursor) });
   }
   return segments;
+};
+
+// The card preview clamps at eight lines of roughly forty characters; a first
+// match past either budget would be clipped out of view.
+const SEARCH_PREVIEW_PREFIX_CHARACTERS = 96;
+const SEARCH_PREVIEW_PREFIX_LINES = 4;
+/** Context kept ahead of a distant first match. */
+const SEARCH_PREVIEW_LEAD_CHARACTERS = 24;
+
+export type ClipboardSearchPreview = { text: string; truncated: boolean };
+
+/**
+ * Text to render for a searched clip: the full text while the first match
+ * falls inside the clamped preview, otherwise a window that starts one word
+ * boundary ahead of the first match so the highlighted hit is visible.
+ */
+export const clipboardSearchPreviewText = (
+  text: string,
+  query: string,
+): ClipboardSearchPreview => {
+  const terms = clipboardQueryTerms(query);
+  if (terms.length === 0) {
+    return { text, truncated: false };
+  }
+  const matcher = new RegExp(terms.map(escapeRegExp).join("|"), "iu");
+  const matchIndex = text.search(matcher);
+  if (matchIndex === -1) {
+    return { text, truncated: false };
+  }
+  const prefixLines = text.slice(0, matchIndex).split("\n").length - 1;
+  if (
+    matchIndex <= SEARCH_PREVIEW_PREFIX_CHARACTERS &&
+    prefixLines < SEARCH_PREVIEW_PREFIX_LINES
+  ) {
+    return { text, truncated: false };
+  }
+  // Start at the match's line when it is short enough, otherwise at the first
+  // word boundary inside the lead window; without one the fragment of a long
+  // word is dropped and the preview starts at the match itself.
+  const lineStart = text.lastIndexOf("\n", matchIndex - 1) + 1;
+  let start = lineStart;
+  if (matchIndex - lineStart > SEARCH_PREVIEW_LEAD_CHARACTERS) {
+    const windowStart = matchIndex - SEARCH_PREVIEW_LEAD_CHARACTERS;
+    const boundary = text.slice(windowStart, matchIndex).search(/\s\S/u);
+    start = boundary === -1 ? matchIndex : windowStart + boundary + 1;
+  }
+  return { text: text.slice(start).trimStart(), truncated: true };
 };
 
 export const clipboardSourceTintIndex = (sourceIdentity: string | null) => {
