@@ -6,6 +6,7 @@ import {
   type NetworkBaseline,
   type RouteNetworkMetrics,
   browserRequestInterval,
+  countsTowardsWaterfall,
   diffNetworkBaseline,
   mergeNetworkBaseline,
   mergeResampledMetrics,
@@ -263,6 +264,23 @@ describe("waterfallDepth", () => {
 
     expect(waterfallDepth(intervals)).toBe(3);
     expect(waterfallDepth(intervals.toReversed())).toBe(3);
+  });
+});
+
+describe("countsTowardsWaterfall", () => {
+  test("keeps streamed requests in coverage without counting a load round", () => {
+    expect(
+      countsTowardsWaterfall({ resourceType: "eventsource", streamed: true }),
+    ).toBe(false);
+    expect(
+      countsTowardsWaterfall({ resourceType: "fetch", streamed: true }),
+    ).toBe(false);
+  });
+
+  test("counts finite API responses", () => {
+    expect(
+      countsTowardsWaterfall({ resourceType: "fetch", streamed: false }),
+    ).toBe(true);
   });
 });
 

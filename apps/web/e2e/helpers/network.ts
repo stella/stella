@@ -52,6 +52,9 @@ export type NetworkCapture = {
     // body failed (e.g. aborted/redirected mid-navigation).
     responseBytesUnavailable: boolean;
   }[];
+  // Intervals for finite API responses only. Streams remain in `requests` so
+  // request coverage sees them, but they do not represent a route-load round:
+  // the page does not wait for an EventSource to finish before it can settle.
   intervals: { start: number; end: number }[];
 };
 
@@ -144,8 +147,10 @@ export const browserRequestInterval = (
 type NetworkRecord = {
   method: string;
   pathname: string;
+  resourceType: string;
   start: number;
   end: number | null;
+  streamed: boolean;
   // Browser-measured interval, present once the request settles and the
   // network stack times it. Untimed requests retain both driver timestamps,
   // so an interval is never assembled from two different clocks.
@@ -161,6 +166,13 @@ type NetworkRecord = {
   responseBytes: number | null;
   responseBytesUnavailable: boolean;
 };
+
+/** Streams are covered as requests, but never form a route-load waterfall. */
+export const countsTowardsWaterfall = ({
+  resourceType,
+  streamed,
+}: Pick<NetworkRecord, "resourceType" | "streamed">): boolean =>
+  resourceType !== "eventsource" && !streamed;
 
 const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean => {
   if (!TRACKED_RESOURCE_TYPES.has(request.resourceType())) {
@@ -215,8 +227,10 @@ export const createNetworkCollector = (
         const record: NetworkRecord = {
           method: request.method(),
           pathname: new URL(request.url()).pathname,
+          resourceType: request.resourceType(),
           start: Date.now(),
           end: null,
+          streamed: request.resourceType() === "eventsource",
           browserInterval: null,
           dbQueries: null,
           dbQueryHeaderMissing: false,
@@ -252,6 +266,7 @@ export const createNetworkCollector = (
         }
 
         if (isStreamedResponse(response)) {
+          record.streamed = true;
           return;
         }
         pendingBodyReads.push(readResponseBytes(response, record));
@@ -299,10 +314,12 @@ export const createNetworkCollector = (
             responseBytesUnavailable,
           }),
         ),
-        intervals: records.map(
-          ({ browserInterval, start, end }) =>
-            browserInterval ?? { start, end: end ?? now },
-        ),
+        intervals: records
+          .filter(countsTowardsWaterfall)
+          .map(
+            ({ browserInterval, start, end }) =>
+              browserInterval ?? { start, end: end ?? now },
+          ),
       };
     },
   };
