@@ -2158,7 +2158,7 @@
     "evidence": {
       "current": "Obecnie",
       "daysOverdue": "Dni po terminie",
-      "daysUnanswered": "Dni bez potwierdzenia",
+      "daysUnacknowledged": "Dni bez potwierdzenia",
       "daysUntilDeadline": "Dni do terminu",
       "dueAt": "Termin",
       "findings": "Ustalenia",

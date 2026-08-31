@@ -2161,7 +2161,7 @@ type Messages = {
     "evidence": {
       "current": "Now";
       "daysOverdue": "Days overdue";
-      "daysUnanswered": "Days unanswered";
+      "daysUnacknowledged": "Days awaiting acknowledgement";
       "daysUntilDeadline": "Days until deadline";
       "dueAt": "Due";
       "findings": "Findings";

@@ -2158,7 +2158,7 @@
     "evidence": {
       "current": "الآن",
       "daysOverdue": "أيام التأخير",
-      "daysUnanswered": "أيام بلا تأكيد",
+      "daysUnacknowledged": "أيام بلا تأكيد",
       "daysUntilDeadline": "أيام حتى الموعد النهائي",
       "dueAt": "الاستحقاق",
       "findings": "النتائج",

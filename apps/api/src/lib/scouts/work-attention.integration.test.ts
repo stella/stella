@@ -51,8 +51,12 @@ let testDb: TestDatabase;
 let ids: TestIds;
 const seededEntityIds: SafeId<"entity">[] = [];
 
+/** Which fixture organization owns the row. */
+type Tenant = "A" | "B";
+
 type SeedWork = {
   label: string;
+  tenant: Tenant;
   status: WorkObligationStatus;
   hardDeadlineDate: string | null;
   /** Days before `NOW` the row itself was created. */
@@ -61,15 +65,22 @@ type SeedWork = {
   assignedDaysAgo: number | null;
 };
 
+const tenantScope = (tenant: Tenant) =>
+  tenant === "A"
+    ? { workspaceId: ids.wsA1, userId: ids.userA1 }
+    : { workspaceId: ids.wsB1, userId: ids.userB1 };
+
 /**
  * One row per decision the scout has to make: how long an assignment has gone
  * unanswered, whether the waiting clock comes from an event or from the row's
- * own creation, how close a hard deadline is, and whether closed work is out
- * of scope at all.
+ * own creation, how close a hard deadline is, whether closed work is out of
+ * scope at all, and whether a scanned organization warranting nothing is still
+ * recorded as scanned.
  */
 const SEED: SeedWork[] = [
   {
     label: "awaiting, assigned five days ago",
+    tenant: "A",
     status: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
     hardDeadlineDate: null,
     createdDaysAgo: 30,
@@ -77,6 +88,7 @@ const SEED: SeedWork[] = [
   },
   {
     label: "awaiting, assigned yesterday on an old row",
+    tenant: "A",
     status: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
     hardDeadlineDate: null,
     createdDaysAgo: 30,
@@ -84,6 +96,7 @@ const SEED: SeedWork[] = [
   },
   {
     label: "awaiting, backfilled without an assignment event",
+    tenant: "A",
     status: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
     hardDeadlineDate: null,
     createdDaysAgo: 10,
@@ -91,6 +104,7 @@ const SEED: SeedWork[] = [
   },
   {
     label: "active, hard deadline passed",
+    tenant: "A",
     status: WORK_OBLIGATION_STATUS.ACTIVE,
     hardDeadlineDate: dateOffset(-1),
     createdDaysAgo: 20,
@@ -98,6 +112,7 @@ const SEED: SeedWork[] = [
   },
   {
     label: "active, hard deadline a month out",
+    tenant: "A",
     status: WORK_OBLIGATION_STATUS.ACTIVE,
     hardDeadlineDate: dateOffset(30),
     createdDaysAgo: 20,
@@ -105,10 +120,19 @@ const SEED: SeedWork[] = [
   },
   {
     label: "completed, hard deadline passed",
+    tenant: "A",
     status: WORK_OBLIGATION_STATUS.COMPLETED,
     hardDeadlineDate: dateOffset(-1),
     createdDaysAgo: 20,
     assignedDaysAgo: 20,
+  },
+  {
+    label: "second organization, assigned yesterday",
+    tenant: "B",
+    status: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+    hardDeadlineDate: null,
+    createdDaysAgo: 30,
+    assignedDaysAgo: 1,
   },
 ];
 
@@ -119,39 +143,40 @@ const entityIdOf = (label: string) =>
 
 const seedWork = async (work: SeedWork) => {
   const entityId = createSafeId<"entity">();
+  const { workspaceId, userId } = tenantScope(work.tenant);
   seededEntityIds.push(entityId);
   seeded.set(work.label, entityId);
   const acknowledged = work.status === WORK_OBLIGATION_STATUS.ACTIVE;
   await testDb.insert(entities).values({
     id: entityId,
-    workspaceId: ids.wsA1,
+    workspaceId,
     kind: "task",
     name: work.label,
     status: "open",
-    createdBy: ids.userA1,
+    createdBy: userId,
   });
   await testDb.insert(workObligations).values({
     entityId,
-    workspaceId: ids.wsA1,
-    ownerUserId: ids.userA1,
+    workspaceId,
+    ownerUserId: userId,
     status: work.status,
     acknowledgedAt: acknowledged ? instantOffset(-1) : null,
-    acknowledgedByUserId: acknowledged ? ids.userA1 : null,
+    acknowledgedByUserId: acknowledged ? userId : null,
     hardDeadlineDate: work.hardDeadlineDate,
-    createdByUserId: ids.userA1,
+    createdByUserId: userId,
     createdAt: instantOffset(-work.createdDaysAgo),
   });
   if (work.assignedDaysAgo !== null) {
     await testDb.insert(workObligationEvents).values({
       id: createSafeId<"workObligationEvent">(),
-      workspaceId: ids.wsA1,
+      workspaceId,
       obligationEntityId: entityId,
-      actorUserId: ids.userA1,
+      actorUserId: userId,
       type: WORK_OBLIGATION_EVENT_TYPE.OWNER_ASSIGNED,
       details: {
         type: "ownership_changed",
         previousOwnerUserId: null,
-        nextOwnerUserId: ids.userA1,
+        nextOwnerUserId: userId,
       },
       occurredAt: instantOffset(-work.assignedDaysAgo),
     });
@@ -165,6 +190,45 @@ const dependencies = (): WorkAttentionScoutDependencies => ({
       createScopedDb(testDb, workspaceIds, organizationId, userId),
     ),
 });
+
+/**
+ * The same dependencies, with one mutation interleaved before the first
+ * emitting transaction: the race the emit-time recheck exists to lose.
+ */
+const dependenciesMutatingBeforeEmit = (
+  mutate: () => Promise<void>,
+): WorkAttentionScoutDependencies => {
+  const base = dependencies();
+  let pending = true;
+  return {
+    db: base.db,
+    createScopedDb: (args) => {
+      const scoped = base.createScopedDb(args);
+      return async (fn) => {
+        if (pending) {
+          pending = false;
+          await mutate();
+        }
+        return await scoped(fn);
+      };
+    },
+  };
+};
+
+const scoutRunsFor = async (organizationId: SafeId<"organization">) =>
+  await testDb
+    .select({
+      status: scoutRuns.status,
+      insertedCount: scoutRuns.insertedCount,
+      emittedCount: scoutRuns.emittedCount,
+    })
+    .from(scoutRuns)
+    .where(
+      and(
+        eq(scoutRuns.scoutKey, SCOUT_KEY.WORK_ATTENTION),
+        eq(scoutRuns.organizationId, organizationId),
+      ),
+    );
 
 const seededSignals = async () =>
   await testDb
@@ -284,23 +348,20 @@ describe("work attention scout", () => {
     expect(await signalsFor("active, hard deadline a month out")).toEqual([]);
     expect(await signalsFor("completed, hard deadline passed")).toEqual([]);
 
-    const runs = await testDb
-      .select({
-        status: scoutRuns.status,
-        insertedCount: scoutRuns.insertedCount,
-        emittedCount: scoutRuns.emittedCount,
-      })
-      .from(scoutRuns)
-      .where(
-        and(
-          eq(scoutRuns.scoutKey, SCOUT_KEY.WORK_ATTENTION),
-          eq(scoutRuns.organizationId, ids.orgA),
-        ),
-      );
+    const runs = await scoutRunsFor(ids.orgA);
     expect(runs).toHaveLength(1);
     expect(runs.at(0)?.status).toBe("succeeded");
     expect(runs.at(0)?.insertedCount).toBe(3);
     expect(runs.at(0)?.emittedCount).toBe(3);
+  });
+
+  test("records the scan of an organization that warrants no signal", async () => {
+    expect(await signalsFor("second organization, assigned yesterday")).toEqual(
+      [],
+    );
+    expect(await scoutRunsFor(ids.orgB)).toEqual([
+      { status: "succeeded", insertedCount: 0, emittedCount: 0 },
+    ]);
   });
 
   test("a second sweep of the same state inserts nothing", async () => {
@@ -350,5 +411,38 @@ describe("work attention scout", () => {
       inserted: 0,
       nextCursor: null,
     });
+  });
+
+  test("drops a signal whose obligation was answered before the emit", async () => {
+    const label = "awaiting, acknowledged between the page and the emit";
+    await seedWork({
+      label,
+      tenant: "A",
+      status: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+      hardDeadlineDate: null,
+      createdDaysAgo: 30,
+      assignedDaysAgo: 5,
+    });
+    const entityId = entityIdOf(label);
+    const runsBefore = (await scoutRunsFor(ids.orgA)).length;
+
+    await runWorkAttentionScout({
+      cursor: null,
+      now: NOW,
+      dependencies: dependenciesMutatingBeforeEmit(async () => {
+        await testDb
+          .update(workObligations)
+          .set({
+            status: WORK_OBLIGATION_STATUS.ACTIVE,
+            acknowledgedAt: instantOffset(-1),
+            acknowledgedByUserId: ids.userA1,
+          })
+          .where(eq(workObligations.entityId, entityId));
+      }),
+    });
+
+    expect(await signalsFor(label)).toEqual([]);
+    // The sweep still ran: only the stale observation was dropped.
+    expect(await scoutRunsFor(ids.orgA)).toHaveLength(runsBefore + 1);
   });
 });

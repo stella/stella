@@ -2158,7 +2158,7 @@
     "evidence": {
       "current": "Dabar",
       "daysOverdue": "Vėluojama dienų",
-      "daysUnanswered": "Dienų be patvirtinimo",
+      "daysUnacknowledged": "Dienų be patvirtinimo",
       "daysUntilDeadline": "Dienų iki termino",
       "dueAt": "Terminas",
       "findings": "Išvados",

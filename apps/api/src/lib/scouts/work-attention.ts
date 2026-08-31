@@ -9,6 +9,7 @@ import { DAY_IN_MS } from "@stll/time";
 
 import { member as organizationMembers } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import {
   entities,
   WORK_OBLIGATION_EVENT_TYPE,
@@ -74,10 +75,9 @@ export type RunWorkAttentionScoutResult = {
   nextCursor: SafeId<"entity"> | null;
 };
 
-type ObligationRow = {
+type ObligationFacts = {
   entityId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
-  organizationId: SafeId<"organization">;
   status: WorkObligationStatus;
   ownerUserId: string | null;
   name: string;
@@ -85,6 +85,37 @@ type ObligationRow = {
   hardDeadlineDate: string | null;
   createdAt: Date;
 };
+
+type ObligationRow = ObligationFacts & {
+  organizationId: SafeId<"organization">;
+};
+
+/**
+ * Either handle the scout reads obligations through: the root pool for the
+ * sweep page, the emitting transaction for the recheck immediately before
+ * insertion.
+ */
+type ObligationReader = Pick<Transaction, "select">;
+
+/** The facts both reads project, so the recheck cannot drift from the page. */
+const obligationFactsColumns = {
+  entityId: workObligations.entityId,
+  workspaceId: workObligations.workspaceId,
+  status: workObligations.status,
+  ownerUserId: workObligations.ownerUserId,
+  name: entities.name,
+  workingTargetDate: workObligations.workingTargetDate,
+  hardDeadlineDate: workObligations.hardDeadlineDate,
+  createdAt: workObligations.createdAt,
+} as const;
+
+/** The entity both reads join through, so the recheck cannot drift either. */
+const obligationEntityJoin = and(
+  eq(entities.id, workObligations.entityId),
+  eq(entities.workspaceId, workObligations.workspaceId),
+  eq(entities.kind, "task"),
+  workObligationEligibleEntity,
+);
 
 const openStatus = (status: WorkObligationStatus): OpenWorkObligationStatus => {
   switch (status) {
@@ -109,7 +140,7 @@ const openStatus = (status: WorkObligationStatus): OpenWorkObligationStatus => {
  * inside the risk window.
  */
 const loadObligationPage = async (
-  db: typeof rootDb,
+  db: ObligationReader,
   cursor: SafeId<"entity"> | null,
   now: Date,
 ): Promise<ObligationRow[]> => {
@@ -118,26 +149,11 @@ const loadObligationPage = async (
   );
   return await db
     .select({
-      entityId: workObligations.entityId,
-      workspaceId: workObligations.workspaceId,
+      ...obligationFactsColumns,
       organizationId: workspaces.organizationId,
-      status: workObligations.status,
-      ownerUserId: workObligations.ownerUserId,
-      name: entities.name,
-      workingTargetDate: workObligations.workingTargetDate,
-      hardDeadlineDate: workObligations.hardDeadlineDate,
-      createdAt: workObligations.createdAt,
     })
     .from(workObligations)
-    .innerJoin(
-      entities,
-      and(
-        eq(entities.id, workObligations.entityId),
-        eq(entities.workspaceId, workObligations.workspaceId),
-        eq(entities.kind, "task"),
-        workObligationEligibleEntity,
-      ),
-    )
+    .innerJoin(entities, obligationEntityJoin)
     .innerJoin(workspaces, eq(workspaces.id, workObligations.workspaceId))
     .where(
       and(
@@ -162,8 +178,8 @@ const loadObligationPage = async (
  * creation is when the owner was put on it.
  */
 const loadAssignedAt = async (
-  db: typeof rootDb,
-  rows: readonly ObligationRow[],
+  db: ObligationReader,
+  rows: readonly ObligationFacts[],
 ): Promise<Map<SafeId<"entity">, Date>> => {
   const awaiting = rows.filter(
     ({ status }) => status === WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
@@ -235,7 +251,7 @@ const loadScoutActors = async (
 };
 
 const toObligation = (
-  row: ObligationRow,
+  row: ObligationFacts,
   assignedAt: Map<SafeId<"entity">, Date>,
 ): WorkAttentionObligation => ({
   entityId: row.entityId,
@@ -254,9 +270,16 @@ const toObligation = (
 type OrganizationBatch = {
   organizationId: SafeId<"organization">;
   workspaceIds: SafeId<"workspace">[];
+  /** Every scanned obligation, so the recheck reads exactly what was scanned. */
+  obligationEntityIds: SafeId<"entity">[];
   signals: NewSignal[];
 };
 
+/**
+ * One batch per organization the page touched, including the organizations
+ * whose scanned obligations warrant nothing: the census records that they were
+ * scanned, which is what keeps "ran, found nothing" apart from "never ran".
+ */
 const groupByOrganization = (
   rows: readonly ObligationRow[],
   assignedAt: Map<SafeId<"entity">, Date>,
@@ -265,29 +288,63 @@ const groupByOrganization = (
   const batches = new Map<SafeId<"organization">, OrganizationBatch>();
   for (const row of rows) {
     const signals = workAttentionSignals(toObligation(row, assignedAt), now);
-    if (signals.length === 0) {
-      continue;
-    }
     const batch = batches.get(row.organizationId);
-    if (batch) {
-      batch.signals.push(...signals);
-      if (!batch.workspaceIds.includes(row.workspaceId)) {
-        batch.workspaceIds.push(row.workspaceId);
-      }
+    if (!batch) {
+      batches.set(row.organizationId, {
+        organizationId: row.organizationId,
+        workspaceIds: [row.workspaceId],
+        obligationEntityIds: [row.entityId],
+        signals,
+      });
       continue;
     }
-    batches.set(row.organizationId, {
-      organizationId: row.organizationId,
-      workspaceIds: [row.workspaceId],
-      signals,
-    });
+    batch.signals.push(...signals);
+    batch.obligationEntityIds.push(row.entityId);
+    if (!batch.workspaceIds.includes(row.workspaceId)) {
+      batch.workspaceIds.push(row.workspaceId);
+    }
   }
   return [...batches.values()];
 };
 
 /**
+ * The dedupe keys the batch's obligations still warrant, recomputed from rows
+ * re-read inside the emitting transaction. The page was read from the root
+ * handle and several organizations may have been emitted since: an obligation
+ * acknowledged, completed, reassigned or re-dated in that window must not
+ * raise a warning, because nothing resolves a stored signal once its condition
+ * clears. Bounded by the page, and read through the same projection and join
+ * as the page so the two cannot disagree about what qualifies.
+ */
+const stillWarrantedKeys = async (
+  tx: Transaction,
+  batch: OrganizationBatch,
+  now: Date,
+): Promise<Set<string>> => {
+  const rows = await tx
+    .select(obligationFactsColumns)
+    .from(workObligations)
+    .innerJoin(entities, obligationEntityJoin)
+    .where(
+      and(
+        inArray(workObligations.entityId, batch.obligationEntityIds),
+        inArray(workObligations.status, [...OPEN_WORK_OBLIGATION_STATUSES]),
+      ),
+    );
+  const assignedAt = await loadAssignedAt(tx, rows);
+  return new Set(
+    rows.flatMap((row) =>
+      workAttentionSignals(toObligation(row, assignedAt), now).map(
+        ({ dedupeKey }) => dedupeKey,
+      ),
+    ),
+  );
+};
+
+/**
  * Observe one bounded page of governed work and emit the attention signals it
- * warrants, one `scout_runs` row per organization the page touched.
+ * warrants, one `scout_runs` row per organization the page touched, including
+ * the organizations the page found nothing to warn about.
  *
  * Nothing here resolves a signal whose condition has cleared: the signals model
  * only transitions rows through an authenticated member's accept, dismiss or
@@ -341,6 +398,10 @@ export const runWorkAttentionScout = async ({
       organizationId: batch.organizationId,
       scoutKey: SCOUT_KEY.WORK_ATTENTION,
       observe: () => batch.signals,
+      screen: async (tx, proposed) => {
+        const warranted = await stillWarrantedKeys(tx, batch, now);
+        return proposed.filter(({ dedupeKey }) => warranted.has(dedupeKey));
+      },
     });
     emitted += result.emittedCount;
     inserted += result.insertedIds.length;

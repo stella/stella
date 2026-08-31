@@ -298,8 +298,8 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
           <Row label={t("tasks.assigned")}>
             {formatDateTime(evidence.assignedAt)}
           </Row>
-          <Row label={t("inbox.evidence.daysUnanswered")}>
-            {evidence.daysWaiting}
+          <Row label={t("inbox.evidence.daysUnacknowledged")}>
+            {format.number(evidence.daysWaiting)}
           </Row>
           {evidence.workingTargetDate !== null && (
             <Row label={t("tasks.workingTarget")}>
@@ -326,7 +326,7 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
                 : "inbox.evidence.daysUntilDeadline",
             )}
           >
-            {Math.abs(evidence.daysUntilDeadline)}
+            {format.number(Math.abs(evidence.daysUntilDeadline))}
           </Row>
           {evidence.workingTargetDate !== null && (
             <Row label={t("tasks.workingTarget")}>

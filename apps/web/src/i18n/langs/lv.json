@@ -2158,7 +2158,7 @@
     "evidence": {
       "current": "Tagad",
       "daysOverdue": "Nokavētās dienas",
-      "daysUnanswered": "Dienas bez apstiprinājuma",
+      "daysUnacknowledged": "Dienas bez apstiprinājuma",
       "daysUntilDeadline": "Dienas līdz termiņam",
       "dueAt": "Termiņš",
       "findings": "Konstatējumi",

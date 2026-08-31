@@ -2158,7 +2158,7 @@
     "evidence": {
       "current": "Most",
       "daysOverdue": "Késés napokban",
-      "daysUnanswered": "Megerősítés nélküli napok",
+      "daysUnacknowledged": "Megerősítés nélküli napok",
       "daysUntilDeadline": "Napok a határidőig",
       "dueAt": "Határidő",
       "findings": "Megállapítások",

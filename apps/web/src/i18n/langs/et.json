@@ -2158,7 +2158,7 @@
     "evidence": {
       "current": "Nüüd",
       "daysOverdue": "Päevi üle tähtaja",
-      "daysUnanswered": "Päevi kinnitamata",
+      "daysUnacknowledged": "Päevi kinnitamata",
       "daysUntilDeadline": "Päevi tähtajani",
       "dueAt": "Tähtaeg",
       "findings": "Leiud",

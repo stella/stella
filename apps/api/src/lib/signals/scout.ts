@@ -20,6 +20,13 @@ export type RunScoutArgs = {
   observe: () => NewSignal[] | Promise<NewSignal[]>;
   /** Revalidate mutable source ownership immediately before emission. */
   validate?: (tx: Transaction) => Promise<boolean>;
+  /**
+   * Drop the individual signals whose source stopped qualifying between the
+   * observation and this transaction. `validate` accepts or rejects a whole
+   * observation of one source; this keeps the still-warranted signals of an
+   * observation that spans many independent ones.
+   */
+  screen?: (tx: Transaction, proposed: NewSignal[]) => Promise<NewSignal[]>;
 };
 
 export type RunScoutResult = EmitSignalsResult & {
@@ -39,6 +46,7 @@ export const runScout = async ({
   scoutKey,
   observe,
   validate,
+  screen,
 }: RunScoutArgs): Promise<RunScoutResult> => {
   const runId = createSafeId<"scoutRun">();
   await db((tx) =>
@@ -56,10 +64,14 @@ export const runScout = async ({
     const proposed = await observe();
     result = await db(async (tx) => {
       observationAccepted = validate ? await validate(tx) : true;
+      let admitted = observationAccepted ? proposed : [];
+      if (screen && admitted.length > 0) {
+        admitted = await screen(tx, admitted);
+      }
       const emitted = await emitSignals({
         tx,
         organizationId,
-        signals: observationAccepted ? proposed : [],
+        signals: admitted,
       });
       await tx
         .update(scoutRuns)

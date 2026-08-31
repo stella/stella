@@ -2158,7 +2158,7 @@
     "evidence": {
       "current": "Novo",
       "daysOverdue": "Dní po termíne",
-      "daysUnanswered": "Dní bez potvrdenia",
+      "daysUnacknowledged": "Dní bez potvrdenia",
       "daysUntilDeadline": "Dní do lehoty",
       "dueAt": "Lehota",
       "findings": "Zistenia",
