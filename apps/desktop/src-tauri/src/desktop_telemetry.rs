@@ -400,6 +400,10 @@ fn analytics_timing_payload(
       "duration_ms": u64::try_from(report.duration.as_millis()).unwrap_or(u64::MAX),
       "item_count": report.item_count,
       "open_kind": report.open_kind.map(ClipboardOpenKind::as_str),
+      // Splits latency spans by platform: fixes like clipboard window
+      // parking are platform-specific, and their effect must be readable
+      // per OS.
+      "os": std::env::consts::OS,
       "payload_bytes": report.payload_bytes,
       "service_name": "stella-desktop",
       "span": report.span.as_str(),
@@ -614,6 +618,7 @@ mod tests {
     assert_eq!(properties["item_count"], 3);
     assert_eq!(properties["payload_bytes"], 4096);
     assert_eq!(properties["$process_person_profile"], false);
+    assert_eq!(properties["os"], std::env::consts::OS);
     let allowed = [
       "$process_person_profile",
       "app_commit",
@@ -623,6 +628,7 @@ mod tests {
       "duration_ms",
       "item_count",
       "open_kind",
+      "os",
       "payload_bytes",
       "service_name",
       "span",

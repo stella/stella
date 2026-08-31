@@ -157,6 +157,14 @@ body:has(.clipboard-editor-window) .font-sans {
   opacity: 1;
 }
 
+/* macOS-convention inactive selection: while the search field holds focus,
+ * the selected card stays the Enter target but drops the active accent. */
+.clipboard-window:has(.clipboard-search-input:focus)
+  .clipboard-card[aria-current="true"]::after {
+  border-color: color-mix(in srgb, var(--foreground) 26%, transparent);
+  box-shadow: none;
+}
+
 .dark .clipboard-card {
   background-color: color-mix(in srgb, var(--card) 84%, transparent);
   box-shadow:

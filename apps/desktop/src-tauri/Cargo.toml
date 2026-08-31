@@ -40,6 +40,11 @@ used_underscore_binding = "warn"
 [lints.rust]
 unsafe_code = "forbid"
 
+# The raw AppKit/WebKit calls this crate cannot express without `unsafe` live
+# in the workspace member below, behind a safe API.
+[workspace]
+members = ["crates/macos-park"]
+
 [lints.rustdoc]
 bare_urls = "deny"
 broken_intra_doc_links = "deny"
@@ -119,6 +124,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
   "NSURL",
 ] }
 plist = "1.10"
+stella-desktop-macos = { path = "crates/macos-park", version = "0.0.1" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-icons = "0.4.0"

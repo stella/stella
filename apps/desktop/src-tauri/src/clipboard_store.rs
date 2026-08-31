@@ -141,6 +141,7 @@ mod tests {
         source_app: None,
       }],
       retention: ClipboardRetention::Month,
+      source_app_visuals: Vec::new(),
     };
 
     store.persist(&state).unwrap();
@@ -162,6 +163,7 @@ mod tests {
         groups: Vec::new(),
         items: Vec::new(),
         retention: ClipboardRetention::Month,
+        source_app_visuals: Vec::new(),
       })
       .unwrap();
 

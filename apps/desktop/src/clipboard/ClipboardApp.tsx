@@ -85,6 +85,7 @@ import {
   clipboardPointerMoved,
   clipboardRailScrollDelta,
   clipboardRailWindow,
+  clipboardSearchPreviewText,
   clipboardSourceTintIndex,
   clipboardTimelineKeyAction,
   filterClipboardItems,
@@ -94,6 +95,7 @@ import {
   isClipboardNameInput,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
+  shouldReturnToTimelineFromInput,
 } from "./clipboard-logic";
 import type { ClipboardPointerPosition } from "./clipboard-logic";
 import {
@@ -283,7 +285,6 @@ const ClipboardCard = ({
       ? "[&_blockquote]:border-s-2 [&_blockquote]:ps-3 [&_code]:font-mono [&_li]:ms-4 [&_ol]:list-decimal [&_pre]:whitespace-pre-wrap [&_strong]:font-semibold [&_ul]:list-disc"
       : "whitespace-pre-wrap",
   );
-  const highlightedText = highlightClipboardText(item.plainText, query);
   let previewContent: ReactNode = (
     <div className={previewClassName} dir="auto">
       {item.plainText}
@@ -302,8 +303,15 @@ const ClipboardCard = ({
     );
   }
   if (query) {
+    const searchPreview = clipboardSearchPreviewText(item.plainText, query);
+    const highlightedText = highlightClipboardText(searchPreview.text, query);
     previewContent = (
       <div className={previewClassName} dir="auto">
+        {searchPreview.truncated ? (
+          <span aria-hidden="true" className="text-muted-foreground">
+            {"… "}
+          </span>
+        ) : null}
         {highlightedText.map((segment, segmentIndex) =>
           segment.match ? (
             <mark
@@ -1541,16 +1549,17 @@ const ClipboardApp = () => {
       }
     }
     if (event.target instanceof HTMLInputElement) {
-      if (
-        activeItem &&
-        shouldCopyFromClipboardInput({
-          dataset: event.target.dataset,
-          isComposing: event.isComposing,
-          key: event.key,
-        })
-      ) {
+      const inputKey = {
+        dataset: event.target.dataset,
+        isComposing: event.isComposing,
+        key: event.key,
+      };
+      if (activeItem && shouldCopyFromClipboardInput(inputKey)) {
         event.preventDefault();
         copyItem(activeItem);
+      } else if (activeItem && shouldReturnToTimelineFromInput(inputKey)) {
+        event.preventDefault();
+        selectIndex(activeIndex);
       }
       return;
     }
