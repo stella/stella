@@ -69,7 +69,7 @@ const CONTENTS_ENDPOINT_ENTRY_LIMIT = 1000;
 const PULL_NUMBER_PATTERN = /^\d+$/u;
 
 export const mergeBarMigrationDirectory = (repo: string): string | null =>
-  repo === DEFAULT_REPO ? MIGRATION_DIRECTORY : null;
+  repo.toLowerCase() === DEFAULT_REPO ? MIGRATION_DIRECTORY : null;
 
 // --- Gate model -------------------------------------------------------------
 

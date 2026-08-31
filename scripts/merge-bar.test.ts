@@ -54,6 +54,9 @@ describe("merge bar", () => {
     expect(mergeBarMigrationDirectory("stella/stella")).toBe(
       "apps/api/drizzle",
     );
+    expect(mergeBarMigrationDirectory("Stella/Stella")).toBe(
+      "apps/api/drizzle",
+    );
     expect(mergeBarMigrationDirectory("stella/stella-infra")).toBeNull();
     expect(mergeBarMigrationDirectory("stella/stella-plane")).toBeNull();
   });
