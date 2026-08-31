@@ -24,8 +24,8 @@ describe("ResponsiveActionToolbar", () => {
     );
 
     expect(markup).toContain('aria-label="Workspace actions"');
-    expect(markup).toContain("basis-full");
-    expect(markup).toContain("sm:flex-none");
+    expect(markup).toContain("flex-nowrap");
+    expect(markup).toContain("overflow-x-auto");
     expect(markup).toContain("Search");
     expect(markup).toContain("Filter");
     expect(markup).toContain("More");

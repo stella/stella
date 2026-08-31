@@ -5,10 +5,9 @@ import { cn } from "@stll/ui/utils";
 export type ResponsiveActionToolbarSlot = "primary" | "secondary" | "action";
 
 const RESPONSIVE_ACTION_TOOLBAR_SLOT_CLASS = {
-  primary:
-    "order-1 min-w-0 basis-full sm:order-none sm:min-w-56 sm:basis-0 sm:flex-1",
-  secondary: "order-2 min-w-0 flex-1 sm:order-none sm:flex-none",
-  action: "order-3 shrink-0 sm:order-none",
+  primary: "min-w-56 flex-1 shrink-0",
+  secondary: "min-w-0 shrink-0",
+  action: "shrink-0",
 } as const satisfies Record<ResponsiveActionToolbarSlot, string>;
 
 export const ResponsiveActionToolbar = ({
@@ -16,7 +15,10 @@ export const ResponsiveActionToolbar = ({
   ...props
 }: React.ComponentProps<"div">) => (
   <div
-    className={cn("flex flex-wrap items-center gap-2", className)}
+    className={cn(
+      "flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto",
+      className,
+    )}
     {...props}
   />
 );
