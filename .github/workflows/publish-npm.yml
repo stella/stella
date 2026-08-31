@@ -245,16 +245,7 @@ jobs:
           MANUAL_PACKAGE: ${{ inputs.package || 'all' }}
         run: |
           set -euo pipefail
-          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
-            pkgs=(cli)
-          elif [[ "$EVENT_NAME" == "push" ]]; then
-            pkgs=(auth-model ai-catalog anonymize-chat chat country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-model workspace-ui)
-          else
-            case "$MANUAL_PACKAGE" in
-              all) pkgs=(auth-model ai-catalog anonymize-chat chat country-codes business-registries conditions template-conditions docx-utils ui money calculations workspace-model workspace-ui cli) ;;
-              *) pkgs=("$MANUAL_PACKAGE") ;;
-            esac
-          fi
+          mapfile -t pkgs < <(bun scripts/publish-package-selection.ts "$EVENT_NAME" "$MANUAL_PACKAGE")
 
           for package in "${pkgs[@]}"; do
             echo "::group::Build + pack @stll/${package}"
