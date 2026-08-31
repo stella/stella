@@ -1,6 +1,6 @@
 /**
- * Language combobox shared by the bilingual dialogs, plus the defaults both
- * use when they open.
+ * Language combobox shared by the translation dialogs. The locale defaults
+ * and the typeahead match key live in the sibling `.logic.ts`.
  */
 
 import { panic } from "better-result";
@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 
 import {
   DOCUMENT_TRANSLATION_SOURCE_LANGUAGES,
+  isDocumentTranslationSourceLanguageCode,
   type DocumentTranslationSourceLanguageCode,
 } from "@stll/api-contract/document-translation";
 import {
@@ -19,6 +20,7 @@ import {
   ComboboxPopup,
 } from "@stll/ui/combobox";
 
+import { matchesLanguageQuery } from "@/components/document-language-picker.logic";
 import { useLocale } from "@/i18n/formatting-context";
 import { compareByLocale } from "@/lib/collation";
 import {
@@ -65,6 +67,7 @@ const LanguagePicker = ({
       <Combobox<LanguageOption>
         autoHighlight
         disabled={disabled}
+        filter={matchesLanguageQuery}
         isItemEqualToValue={(a, b) => a.code === b.code}
         items={options}
         itemToStringLabel={(item) => item.label}
@@ -115,13 +118,6 @@ type DocumentSourceLanguagePickerProps = {
   disabled?: boolean | undefined;
 };
 
-const isSourceLanguageCode = (
-  code: DeepLTargetLanguageCode,
-): code is DocumentTranslationSourceLanguageCode =>
-  DOCUMENT_TRANSLATION_SOURCE_LANGUAGES.some(
-    (language) => language.code === code,
-  );
-
 export const DocumentSourceLanguagePicker = ({
   onChange,
   ...props
@@ -130,54 +126,9 @@ export const DocumentSourceLanguagePicker = ({
     {...props}
     languages={DOCUMENT_TRANSLATION_SOURCE_LANGUAGES}
     onChange={(code) =>
-      isSourceLanguageCode(code)
+      isDocumentTranslationSourceLanguageCode(code)
         ? onChange(code)
         : panic("Source-language picker returned a target-only language")
     }
   />
 );
-
-const DEFAULT_TARGET_LANG: DeepLTargetLanguageCode = "EN-GB";
-const FALLBACK_SOURCE_LANG: DeepLTargetLanguageCode = "CS";
-
-/** UI locales whose code differs from the document-language code. */
-const LOCALE_TO_LANGUAGE = {
-  en: "EN-GB",
-} as const satisfies Record<string, DeepLTargetLanguageCode>;
-
-const isMappedLocale = (
-  locale: string,
-): locale is keyof typeof LOCALE_TO_LANGUAGE =>
-  Object.hasOwn(LOCALE_TO_LANGUAGE, locale);
-
-const isLanguageCode = (value: string): value is DeepLTargetLanguageCode =>
-  DEEPL_TARGET_LANGUAGES.some((lang) => lang.code === value);
-
-export type DefaultLanguagePair = {
-  source: DeepLTargetLanguageCode;
-  target: DeepLTargetLanguageCode;
-};
-
-/**
- * The UI locale is the best guess for the document's language; the target
- * defaults to English unless the source already is.
- */
-export const defaultLanguagePair = (locale: string): DefaultLanguagePair => {
-  const mapped = isMappedLocale(locale)
-    ? LOCALE_TO_LANGUAGE[locale]
-    : locale.toUpperCase();
-  const source = isLanguageCode(mapped) ? mapped : FALLBACK_SOURCE_LANG;
-  const target =
-    source === DEFAULT_TARGET_LANG ? FALLBACK_SOURCE_LANG : DEFAULT_TARGET_LANG;
-  return { source, target };
-};
-
-/** Default a new translation toward the user's UI language when supported. */
-export const defaultTargetLanguage = (
-  locale: string,
-): DeepLTargetLanguageCode => {
-  const mapped = isMappedLocale(locale)
-    ? LOCALE_TO_LANGUAGE[locale]
-    : locale.toUpperCase();
-  return isLanguageCode(mapped) ? mapped : DEFAULT_TARGET_LANG;
-};

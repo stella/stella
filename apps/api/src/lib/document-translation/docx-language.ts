@@ -147,28 +147,53 @@ const dominantExplicitLanguage = (
   return dominant;
 };
 
+type ReadDocxDeclaredSourceLanguageOptions = {
+  /**
+   * The document's plain text, when the caller already has it. Only the script
+   * mix is needed, to choose which of the three `w:lang` attributes carries
+   * the answer; supplying it lets the usual case skip `word/document.xml`
+   * entirely.
+   */
+  text?: string | undefined;
+};
+
 /**
  * Read Word's authored proofing language. The document-wide run default is
  * authoritative; theme metadata is the next document-level declaration.
  * Direct run formatting is only a fallback because a few quoted or pasted
  * runs commonly carry a different language from the document itself.
+ *
+ * `word/document.xml` is by far the expensive part to parse and the two
+ * document-level declarations usually answer without it, so it is read lazily.
  */
 export const readDocxDeclaredSourceLanguage = async (
   buffer: ArrayBuffer,
+  { text }: ReadDocxDeclaredSourceLanguageOptions = {},
 ): Promise<DocumentTranslationSourceLanguageCode | null> => {
   const archive = await loadDocxArchive(buffer);
-  const [stylesXml, settingsXml, documentXml] = await Promise.all([
+  const [stylesXml, settingsXml] = await Promise.all([
     archive.readEntryString(STYLES_PART),
     archive.readEntryString(SETTINGS_PART),
-    archive.readEntryString(DOCUMENT_PART),
   ]);
   const styles = parsePart(stylesXml);
   const settings = parsePart(settingsXml);
-  const document = parsePart(documentXml);
-  const attribute = languageAttributeForText(documentText(document));
+
+  let documentRead = false;
+  let document: slimdom.Document | null = null;
+  const loadDocument = async (): Promise<slimdom.Document | null> => {
+    if (!documentRead) {
+      documentRead = true;
+      document = parsePart(await archive.readEntryString(DOCUMENT_PART));
+    }
+    return document;
+  };
+
+  const attribute = languageAttributeForText(
+    text ?? documentText(await loadDocument()),
+  );
   return (
     defaultRunLanguage(styles, attribute) ??
     themeLanguage(settings, attribute) ??
-    dominantExplicitLanguage(document)
+    dominantExplicitLanguage(await loadDocument())
   );
 };

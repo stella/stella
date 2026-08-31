@@ -33,10 +33,10 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import {
-  defaultTargetLanguage,
   DocumentLanguagePicker,
   DocumentSourceLanguagePicker,
 } from "@/components/document-language-picker";
+import { DOCUMENT_TRANSLATION_TARGET_CODES } from "@/components/document-language-picker.logic";
 import {
   documentTranslationPreparationOptions,
   invalidateDocumentTranslationOutputQueries,
@@ -45,16 +45,21 @@ import {
   type DocumentTranslationRun,
 } from "@/components/document-translation-queries";
 import {
+  activeTranslationChoice,
   canStartDocumentTranslation,
   commentPolicyStateForSource,
+  DEFAULT_TRANSLATION_CHOICE,
+  defaultDocumentTranslationTarget,
   documentTranslationRunFailureKey,
   openDocumentTranslationOutput,
   resolvedDocumentTranslationSource,
   type DocumentTranslationCommentPolicy,
   type DocumentTranslationCommentPolicyState,
   type DocumentTranslationSourceSelection,
+  type TranslationChoice,
 } from "@/components/translate-document-dialog.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLastTranslationTarget } from "@/hooks/use-last-translation-target";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -67,8 +72,6 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
-
-type TranslationChoice = "bilingual:ai" | "translated:ai" | "translated:deepl";
 
 type SourceStatusKeyOptions = {
   selection: DocumentTranslationSourceSelection;
@@ -129,7 +132,6 @@ type TranslateDocumentDialogProps = TranslateDocumentDialogCommonProps &
       }
   );
 
-const DEFAULT_CHOICE: TranslationChoice = "translated:deepl";
 export const TranslateDocumentDialog = (
   props: TranslateDocumentDialogProps,
 ) => {
@@ -154,6 +156,7 @@ export const TranslateDocumentDialog = (
   const { data: availability } = useQuery(
     deepLAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
+  const { lastTarget, rememberTarget } = useLastTranslationTarget();
 
   const [triggerOpen, setTriggerOpen] = useState(false);
   const open = props.mode === "controlled" ? props.open : triggerOpen;
@@ -164,7 +167,9 @@ export const TranslateDocumentDialog = (
     }
     setTriggerOpen(nextOpen);
   };
-  const [choice, setChoice] = useState<TranslationChoice>(DEFAULT_CHOICE);
+  const [selectedChoice, setChoice] = useState<TranslationChoice>(
+    DEFAULT_TRANSLATION_CHOICE,
+  );
   const documentKey = `${entityId}:${fieldId}`;
   const [sourceSelectionState, setSourceSelectionState] = useState<{
     documentKey: string;
@@ -174,9 +179,10 @@ export const TranslateDocumentDialog = (
     sourceSelectionState.documentKey === documentKey
       ? sourceSelectionState.selection
       : ({ type: "automatic" } as const);
-  const [targetLang, setTargetLang] = useState<DeepLTargetLanguageCode>(() =>
-    defaultTargetLanguage(locale),
-  );
+  const [targetSelection, setTargetSelection] = useState<{
+    documentKey: string;
+    language: DeepLTargetLanguageCode;
+  } | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const [commentPolicyState, setCommentPolicyState] =
     useState<DocumentTranslationCommentPolicyState>({ type: "unchecked" });
@@ -217,11 +223,26 @@ export const TranslateDocumentDialog = (
   const pollingErrorRunRef = useRef<string | null>(null);
   const preparationErrorRef = useRef<unknown>(null);
 
-  const isDeepL = choice.endsWith(":deepl");
+  const canUseDeepL = availability?.configured === true;
+  const choice = activeTranslationChoice({
+    selected: selectedChoice,
+    canUseDeepL,
+    isDocx,
+  });
+  const isDeepL = choice === "translated:deepl";
+  const targetLang =
+    targetSelection?.documentKey === documentKey
+      ? targetSelection.language
+      : defaultDocumentTranslationTarget({
+          lastUsedTarget: lastTarget,
+          matterLanguages: preparationQuery.data?.matterLanguages ?? [],
+          sourceLanguage: sourceLang,
+          supportedTargets: DOCUMENT_TRANSLATION_TARGET_CODES,
+          uiLocale: locale,
+        });
   const targetSourceLanguage = documentTranslationSourceForTarget(targetLang);
   const sameLanguage =
     sourceLang !== null && sourceLang === targetSourceLanguage;
-  const canUseDeepL = availability?.configured === true;
   const runQuery = useQuery({
     ...documentTranslationRunOptions({
       workspaceId,
@@ -396,9 +417,10 @@ export const TranslateDocumentDialog = (
         data,
         sourceEntityId: entityId,
         sourceFieldId: fieldId,
+        submittedTarget: targetLang,
       };
     },
-    onSuccess: ({ data, sourceEntityId, sourceFieldId }) => {
+    onSuccess: ({ data, sourceEntityId, sourceFieldId, submittedTarget }) => {
       if (data.type === "commentPolicyRequired") {
         setCommentPolicyState({
           type: "required",
@@ -409,6 +431,7 @@ export const TranslateDocumentDialog = (
         setDialogOpen(true);
         return;
       }
+      rememberTarget(submittedTarget);
       setRunId(data.runId);
       setDialogOpen(true);
     },
@@ -527,14 +550,6 @@ export const TranslateDocumentDialog = (
                   {t("translate.dialog.outputLabel")}
                 </legend>
                 <RadioCard
-                  checked={choice === "translated:deepl"}
-                  disabled={!canUseDeepL}
-                  label={t("translate.dialog.translatedDocument")}
-                  onChange={() => setChoice("translated:deepl")}
-                  description={t("translate.dialog.deeplDescription")}
-                  value="translated:deepl"
-                />
-                <RadioCard
                   checked={choice === "translated:ai"}
                   disabled={!isDocx}
                   label={t("translate.dialog.translatedDocumentAi")}
@@ -550,17 +565,25 @@ export const TranslateDocumentDialog = (
                   description={t("translate.dialog.bilingualDescription")}
                   value="bilingual:ai"
                 />
+                {!isDocx ? (
+                  <p className="text-muted-foreground text-xs">
+                    {t("translate.dialog.docxOnly")}
+                  </p>
+                ) : null}
+                <RadioCard
+                  checked={choice === "translated:deepl"}
+                  disabled={!canUseDeepL}
+                  label={t("translate.dialog.translatedDocument")}
+                  onChange={() => setChoice("translated:deepl")}
+                  description={t("translate.dialog.deeplDescription")}
+                  value="translated:deepl"
+                />
+                {!canUseDeepL ? (
+                  <p className="text-muted-foreground text-xs">
+                    {t("translate.dialog.notConfigured")}
+                  </p>
+                ) : null}
               </fieldset>
-              {!canUseDeepL ? (
-                <p className="text-muted-foreground text-xs">
-                  {t("translate.dialog.notConfigured")}
-                </p>
-              ) : null}
-              {!isDocx ? (
-                <p className="text-muted-foreground text-xs">
-                  {t("translate.dialog.docxOnly")}
-                </p>
-              ) : null}
               {!isDeepL ? (
                 <div className="flex flex-col gap-1.5">
                   <DocumentSourceLanguagePicker
@@ -590,7 +613,9 @@ export const TranslateDocumentDialog = (
               <DocumentLanguagePicker
                 id="translate-target"
                 label={t("translate.dialog.targetLanguage")}
-                onChange={setTargetLang}
+                onChange={(language) =>
+                  setTargetSelection({ documentKey, language })
+                }
                 value={targetLang}
               />
               {commentsFound ? (

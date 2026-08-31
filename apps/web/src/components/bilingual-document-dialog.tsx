@@ -28,10 +28,8 @@ import {
 } from "@stll/ui/dialog";
 import { stellaToast } from "@stll/ui/toast";
 
-import {
-  defaultLanguagePair,
-  DocumentLanguagePicker,
-} from "@/components/document-language-picker";
+import { DocumentLanguagePicker } from "@/components/document-language-picker";
+import { defaultLanguagePair } from "@/components/document-language-picker.logic";
 import { useLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";

@@ -36,6 +36,14 @@ export type DocumentTranslationSourceLanguage =
 export type DocumentTranslationSourceLanguageCode =
   DocumentTranslationSourceLanguage["code"];
 
+/** Narrow a stored or detected code back onto the catalog. */
+export const isDocumentTranslationSourceLanguageCode = (
+  value: string,
+): value is DocumentTranslationSourceLanguageCode =>
+  DOCUMENT_TRANSLATION_SOURCE_LANGUAGES.some(
+    (language) => language.code === value,
+  );
+
 export const DOCUMENT_TRANSLATION_TARGET_LANGUAGES = [
   { code: "AR", englishName: "Arabic" },
   { code: "BG", englishName: "Bulgarian" },
