@@ -310,7 +310,7 @@ const ClipboardCard = ({
     );
   }
   if (query) {
-    const searchPreview = clipboardSearchPreviewText(item.plainText, query);
+    const searchPreview = clipboardSearchPreviewText(item, query);
     const highlightedText = highlightClipboardText(searchPreview.text, query);
     previewContent = (
       <div className={previewClassName} dir="auto">

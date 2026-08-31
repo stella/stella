@@ -1,3 +1,10 @@
+import {
+  findSearchMatchRanges,
+  foldSearchMatchText,
+  foldSearchMatchTextWithOffsets,
+} from "@stll/text-normalize";
+import type { FoldedSearchText, SearchMatchRange } from "@stll/text-normalize";
+
 import type { ClipboardItem } from "./clipboard-types";
 
 const CLIPBOARD_SOURCE_TINT_COUNT = 6;
@@ -79,15 +86,14 @@ export const clipboardDraggedItemId = (
   return typeof itemId === "string" && itemIds.has(itemId) ? itemId : null;
 };
 
-const escapeRegExp = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-
-/** Deduplicated query terms, longest first so overlapping terms match whole. */
+/**
+ * Deduplicated diacritic-folded query terms, longest first so overlapping
+ * terms match whole. The whole query is folded before splitting because
+ * compatibility decomposition can itself produce whitespace (NBSP).
+ */
 const clipboardQueryTerms = (query: string) => {
-  const normalizedTerms = query
-    .trim()
+  const normalizedTerms = foldSearchMatchText(query)
     .split(/\s+/u)
-    .map((term) => term.toLocaleLowerCase())
     .filter(Boolean);
   return Array.from(new Set(normalizedTerms)).sort(
     (left, right) => right.length - left.length,
@@ -100,19 +106,27 @@ export const highlightClipboardText = (text: string, query: string) => {
     return [{ match: false, text }] satisfies ClipboardTextSegment[];
   }
 
-  const matcher = new RegExp(terms.map(escapeRegExp).join("|"), "giu");
+  const foldedText = foldSearchMatchTextWithOffsets(text);
+  const ranges: SearchMatchRange[] = [];
+  for (const term of terms) {
+    ranges.push(...findSearchMatchRanges(foldedText, term));
+  }
+  // Same start prefers the longer term; a range starting inside an already
+  // highlighted one is dropped.
+  ranges.sort(
+    (left, right) => left.start - right.start || right.end - left.end,
+  );
   const segments: ClipboardTextSegment[] = [];
   let cursor = 0;
-  for (const match of text.matchAll(matcher)) {
-    const matchedText = match.at(0);
-    if (!matchedText) {
+  for (const range of ranges) {
+    if (range.start < cursor) {
       continue;
     }
-    if (match.index > cursor) {
-      segments.push({ match: false, text: text.slice(cursor, match.index) });
+    if (range.start > cursor) {
+      segments.push({ match: false, text: text.slice(cursor, range.start) });
     }
-    segments.push({ match: true, text: matchedText });
-    cursor = match.index + matchedText.length;
+    segments.push({ match: true, text: text.slice(range.start, range.end) });
+    cursor = range.end;
   }
   if (cursor < text.length) {
     segments.push({ match: false, text: text.slice(cursor) });
@@ -136,23 +150,55 @@ export const CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS = 1000;
 
 export type ClipboardSearchPreview = { text: string; truncated: boolean };
 
+type ClipboardSearchPreviewSource = Pick<ClipboardItem, "plainText">;
+
+/**
+ * Folding a 64 KiB clip character by character is the expensive step of the
+ * windowed preview, and every rendered card repeats it per query change.
+ * Keyed weakly by the item object: a snapshot replaces its items wholesale,
+ * so stale entries fall away with the old snapshot.
+ */
+const foldedPlainTextCache = new WeakMap<
+  ClipboardSearchPreviewSource,
+  FoldedSearchText
+>();
+
+const foldedPlainText = (item: ClipboardSearchPreviewSource) => {
+  const cached = foldedPlainTextCache.get(item);
+  if (cached) {
+    return cached;
+  }
+  const folded = foldSearchMatchTextWithOffsets(item.plainText);
+  foldedPlainTextCache.set(item, folded);
+  return folded;
+};
+
 /**
  * Text to render for a searched clip: the full text while the first match
  * falls inside the clamped preview, otherwise a window that starts one word
  * boundary ahead of the first match so the highlighted hit is visible.
  */
 export const clipboardSearchPreviewText = (
-  text: string,
+  item: ClipboardSearchPreviewSource,
   query: string,
 ): ClipboardSearchPreview => {
+  const { plainText: text } = item;
   const cap = (value: string) =>
     value.slice(0, CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS);
   const terms = clipboardQueryTerms(query);
   if (terms.length === 0) {
     return { text: cap(text), truncated: false };
   }
-  const matcher = new RegExp(terms.map(escapeRegExp).join("|"), "iu");
-  const matchIndex = text.search(matcher);
+  const foldedText = foldedPlainText(item);
+  let matchIndex = -1;
+  for (const term of terms) {
+    const first = findSearchMatchRanges(foldedText, term, {
+      maxMatches: 1,
+    }).at(0);
+    if (first && (matchIndex === -1 || first.start < matchIndex)) {
+      matchIndex = first.start;
+    }
+  }
   if (matchIndex === -1) {
     return { text: cap(text), truncated: false };
   }
@@ -258,8 +304,8 @@ export const clipboardRailWindow = ({
 };
 
 /**
- * The filter runs on every keystroke over every clip; lowercasing megabytes
- * of history each time dominated search latency. Keyed weakly by the item
+ * The filter runs on every keystroke over every clip; folding megabytes of
+ * history each time dominated search latency. Keyed weakly by the item
  * object: a snapshot replaces its items wholesale, so stale entries fall away
  * with the old snapshot, and an item's text only changes via a new snapshot.
  */
@@ -270,8 +316,9 @@ const clipboardSearchableText = (item: ClipboardItem) => {
   if (cached !== undefined) {
     return cached;
   }
-  const searchableText =
-    `${item.name ?? ""}\n${item.plainText}`.toLocaleLowerCase();
+  const searchableText = foldSearchMatchText(
+    `${item.name ?? ""}\n${item.plainText}`,
+  );
   searchableTextCache.set(item, searchableText);
   return searchableText;
 };
@@ -284,11 +331,10 @@ export const filterClipboardItems = (
   const groupedItems = groupId
     ? items.filter((item) => item.groupId === groupId)
     : items;
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  if (!normalizedQuery) {
+  const terms = clipboardQueryTerms(query);
+  if (terms.length === 0) {
     return groupedItems;
   }
-  const terms = normalizedQuery.split(/\s+/u);
   return groupedItems.filter((item) => {
     const searchableText = clipboardSearchableText(item);
     return terms.every((term) => searchableText.includes(term));

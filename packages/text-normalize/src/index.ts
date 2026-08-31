@@ -11,6 +11,12 @@ export { ASCII_FOLD_TABLE } from "./ascii-fold-table.js";
 export { stripDiacritics, stripDiacriticsForSlug } from "./diacritics.js";
 export { normalizeSearchText } from "./normalize.js";
 export {
+  findSearchMatchRanges,
+  foldSearchMatchText,
+  foldSearchMatchTextWithOffsets,
+} from "./search-match.js";
+export type { FoldedSearchText, SearchMatchRange } from "./search-match.js";
+export {
   collapseSpacedLetters,
   spacedLetterRunRegex,
 } from "./spaced-letters.js";
