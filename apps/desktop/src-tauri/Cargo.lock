@@ -4642,6 +4642,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
+ "stella-desktop-macos",
  "sys-locale",
  "tauri",
  "tauri-build",
@@ -4665,6 +4666,15 @@ dependencies = [
  "winsafe",
  "zbus-secret-service-keyring-store",
  "zip 8.6.0",
+]
+
+[[package]]
+name = "stella-desktop-macos"
+version = "0.0.1"
+dependencies = [
+ "objc2",
+ "objc2-app-kit",
+ "tauri",
 ]
 
 [[package]]

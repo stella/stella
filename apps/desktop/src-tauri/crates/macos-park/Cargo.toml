@@ -1,0 +1,24 @@
+[package]
+name = "stella-desktop-macos"
+version = "0.0.1"
+edition = "2024"
+description = "Safe wrappers over the raw AppKit/WebKit calls behind clipboard window parking"
+license = "Apache-2.0"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "deny"
+
+[lints.rustdoc]
+bare_urls = "deny"
+broken_intra_doc_links = "deny"
+
+[dependencies]
+tauri = "2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+  "NSResponder",
+  "NSWindow",
+] }

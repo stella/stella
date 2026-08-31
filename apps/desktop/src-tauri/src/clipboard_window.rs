@@ -311,7 +311,7 @@ fn park_window(window: &WebviewWindow, handoff: ParkFocusHandoff) -> bool {
 #[allow(deprecated)]
 #[cfg(target_os = "macos")]
 fn park_window_on_main(window: &WebviewWindow, handoff: ParkFocusHandoff) -> bool {
-  use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication, NSWindow};
+  use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication};
 
   let app = window.app_handle();
   let Some(park) = app.try_state::<ClipboardWindowPark>() else {
@@ -320,9 +320,6 @@ fn park_window_on_main(window: &WebviewWindow, handoff: ParkFocusHandoff) -> boo
   if park.is_parked() {
     return true;
   }
-  let Ok(ns_window) = window.ns_window() else {
-    return false;
-  };
   if let ParkFocusHandoff::PreviousApp = handoff {
     let activated = park
       .previous_app_pid()
@@ -336,11 +333,9 @@ fn park_window_on_main(window: &WebviewWindow, handoff: ParkFocusHandoff) -> boo
       return false;
     }
   }
-  // SAFETY: `ns_window` returns a valid NSWindow pointer for a live window and
-  // this runs on the main thread.
-  let ns_window = unsafe { &*ns_window.cast::<NSWindow>() };
-  ns_window.setAlphaValue(0.0);
-  ns_window.setIgnoresMouseEvents(true);
+  if !stella_desktop_macos::set_window_parked(window, true) {
+    return false;
+  }
   park.set_parked(true);
   true
 }
@@ -348,7 +343,6 @@ fn park_window_on_main(window: &WebviewWindow, handoff: ParkFocusHandoff) -> boo
 #[cfg(target_os = "macos")]
 fn unpark_window(window: &WebviewWindow) {
   use objc2::MainThreadMarker;
-  use objc2_app_kit::NSWindow;
 
   if MainThreadMarker::new().is_none() {
     let cloned = window.clone();
@@ -357,13 +351,9 @@ fn unpark_window(window: &WebviewWindow) {
       .run_on_main_thread(move || unpark_window(&cloned));
     return;
   }
-  let Ok(ns_window) = window.ns_window() else {
+  if !stella_desktop_macos::set_window_parked(window, false) {
     return;
-  };
-  // SAFETY: as in `park_window_on_main`.
-  let ns_window = unsafe { &*ns_window.cast::<NSWindow>() };
-  ns_window.setAlphaValue(1.0);
-  ns_window.setIgnoresMouseEvents(false);
+  }
   if let Some(park) = window.app_handle().try_state::<ClipboardWindowPark>() {
     park.set_parked(false);
   }
@@ -478,24 +468,10 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
         created_kind,
       );
       position_window(app, &window);
+      // A parked window (alpha 0) may be reported occluded, which would put
+      // WebKit back to sleep and defeat the parking.
       #[cfg(target_os = "macos")]
-      let _ = window.with_webview(|webview| {
-        // A parked window (alpha 0) may be reported occluded, which would put
-        // WebKit back to sleep and defeat the parking; occlusion tracking is
-        // irrelevant for an always-on-top panel, so it is turned off. Private
-        // WebKit API, hence the respondsToSelector guard.
-        // SAFETY: `inner` returns a valid WKWebView pointer and the closure
-        // runs on the main thread.
-        unsafe {
-          use objc2::{msg_send, runtime::AnyObject, sel};
-          let webview = &*webview.inner().cast::<AnyObject>();
-          let selector = sel!(_setWindowOcclusionDetectionEnabled:);
-          let responds: bool = msg_send![webview, respondsToSelector: selector];
-          if responds {
-            let () = msg_send![webview, _setWindowOcclusionDetectionEnabled: false];
-          }
-        }
-      });
+      stella_desktop_macos::disable_occlusion_detection(&window);
       let window_to_hide = window.clone();
       window.on_window_event(move |event| {
         if matches!(event, tauri::WindowEvent::Focused(false))
