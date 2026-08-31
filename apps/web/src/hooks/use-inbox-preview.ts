@@ -1,9 +1,7 @@
 import { env } from "@/env";
-import {
-  betaFeaturesAvailable,
-  betaFeaturesHostDefaultEnabled,
-} from "@/lib/beta-features";
-import { previewRouteAvailable } from "@/lib/beta-features.logic";
+import { useHasMounted } from "@/hooks/use-chrome-query";
+import { betaFeaturesAvailable } from "@/lib/beta-features";
+import { publicShellPreviewEntryVisible } from "@/lib/beta-features.logic";
 import { useDevStore } from "@/lib/dev-store";
 
 const isInboxPreviewEnabledForDevState = (
@@ -19,16 +17,14 @@ export const useInboxPreviewEnabled = (): boolean => {
   return isInboxPreviewEnabledForDevState(devPreviewEnabled);
 };
 
-// The isomorphic half of the gate, for server-rendered chrome: the
-// localStorage-backed toggle is browser-only and would mismatch hydration.
-export const inboxSsrEntryEnabled = (): boolean =>
-  env.VITE_FEATURE_INBOX || betaFeaturesHostDefaultEnabled();
-
-// Deployment-enabled and beta-host routes resolve during SSR. Elsewhere, only
-// an opted-in browser may navigate to the preview route.
-export const inboxRouteAvailable = (): boolean =>
-  previewRouteAvailable({
-    browserPreviewEnabled: isInboxPreviewEnabled(),
+// The Inbox entry in the server-rendered public shell (/law, /tools), which
+// unlike the app sidebar renders for signed-out visitors too.
+export const usePublicShellInboxEntryEnabled = (): boolean => {
+  const browserPreviewEnabled = useInboxPreviewEnabled();
+  const mounted = useHasMounted();
+  return publicShellPreviewEntryVisible({
+    browserPreviewEnabled,
     deploymentEnabled: env.VITE_FEATURE_INBOX,
-    hostDefaultEnabled: betaFeaturesHostDefaultEnabled(),
+    mounted,
   });
+};
