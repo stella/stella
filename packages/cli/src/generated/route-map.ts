@@ -6051,6 +6051,109 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "fork-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "chat", "fork-create"],
+                capabilityId: "chat.fork.create",
+                description:
+                  "Fork one of your own chat threads into a new thread that keeps the history up to a chosen message, so another direction or model can be explored without touching the original. The new thread id is minted by the caller, which makes a retried fork return the existing copy instead of duplicating it. Attachments are duplicated, never shared: deleting either thread leaves the other's files intact. The fork records where it came from and starts with no compaction state of its own.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--thread-id",
+                    prop: "threadId",
+                    required: true,
+                    part: "params",
+                    partPath: "threadId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--new-thread-id",
+                    prop: "newThreadId",
+                    required: true,
+                    part: "body",
+                    partPath: "newThreadId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--up-to-message-id",
+                    prop: "upToMessageId",
+                    required: true,
+                    part: "body",
+                    partPath: "upToMessageId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--workspace-id",
+                    prop: "workspaceId",
+                    required: false,
+                    part: "query",
+                    partPath: "workspaceId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "chat",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["newThreadId", "upToMessageId"],
+                      properties: {
+                        newThreadId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        upToMessageId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["threadId"],
+                      properties: {
+                        threadId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "get-messages": {
               kind: "capability-leaf",
               spec: {

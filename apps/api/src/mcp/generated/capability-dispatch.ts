@@ -59,6 +59,9 @@ export const CAPABILITY_DISPATCH = {
   "chat.export.create": {
     load: async () => await import("@/api/handlers/chat/export/create"),
   },
+  "chat.fork.create": {
+    load: async () => await import("@/api/handlers/chat/fork/create"),
+  },
   "chat.get-messages": {
     load: async () => await import("@/api/handlers/chat/get-messages"),
   },

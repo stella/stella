@@ -848,6 +848,153 @@ describe("buildMessageTurns", () => {
     expect(second.body.map((item) => item.index)).toEqual([4]);
   });
 
+  test("offers the fork action on every message of a thread, not just the latest", () => {
+    const chatMessages: ChatUIMessage[] = [
+      {
+        id: "message-user",
+        parts: [{ type: "text", content: "First ask" }],
+        role: "user",
+      },
+      {
+        id: "message-old",
+        parts: [{ type: "text", content: "Older answer" }],
+        role: "assistant",
+      },
+      {
+        id: "message-latest",
+        parts: [{ type: "text", content: "Latest answer" }],
+        role: "assistant",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        onResend={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+        threadRef={{
+          scope: "global",
+          threadId: toChatThreadId("thread"),
+        }}
+      />,
+    );
+
+    // Both assistant messages plus the user message: forking neither replaces
+    // nor discards anything, so it is not gated on being the latest turn the
+    // way retry is.
+    expect(html.match(/>Fork from here<\/button>/gu)).toHaveLength(3);
+    expect(html.match(/>Retry<\/button>/gu)).toHaveLength(1);
+  });
+
+  test("offers the fork action in the sticky user header too", () => {
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={[
+          {
+            id: "message-user",
+            parts: [{ type: "text", content: "Sticky ask" }],
+            role: "user",
+          },
+          {
+            id: "message-assistant",
+            parts: [{ type: "text", content: "Sticky answer" }],
+            role: "assistant",
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        stickyUserMessages
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+        threadRef={{
+          scope: "global",
+          threadId: toChatThreadId("thread"),
+        }}
+      />,
+    );
+
+    expect(html.match(/>Fork from here<\/button>/gu)).toHaveLength(2);
+  });
+
+  test("hides fork on a user message whose turn has no assistant reply", () => {
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={[
+          {
+            id: "message-replied-ask",
+            parts: [{ type: "text", content: "Replied ask" }],
+            role: "user",
+          },
+          {
+            id: "message-answer",
+            parts: [{ type: "text", content: "The answer" }],
+            role: "assistant",
+          },
+          {
+            id: "message-unreplied-ask",
+            parts: [{ type: "text", content: "Unreplied ask" }],
+            role: "user",
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+        threadRef={{
+          scope: "global",
+          threadId: toChatThreadId("thread"),
+        }}
+      />,
+    );
+
+    // The replied ask and the answer offer forking; the trailing ask does
+    // not: without a reply of its own the client cannot know its row is
+    // durable (the send may still be in flight, or have failed), and the
+    // fork boundary must exist server-side.
+    expect(html.match(/>Fork from here<\/button>/gu)).toHaveLength(2);
+  });
+
+  test("omits the fork action on surfaces that carry no thread reference", () => {
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={[
+          {
+            id: "message-user",
+            parts: [{ type: "text", content: "Embedded ask" }],
+            role: "user",
+          },
+          {
+            id: "message-assistant",
+            parts: [{ type: "text", content: "Embedded answer" }],
+            role: "assistant",
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain("Embedded answer");
+    expect(html).not.toContain("Fork from here");
+  });
+
   test("groups assistant messages preceding any user message into an orphan turn", () => {
     const turns = buildMessageTurns([
       assistantMessage("a1"),

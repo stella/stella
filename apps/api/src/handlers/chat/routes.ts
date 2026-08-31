@@ -2,6 +2,7 @@ import Elysia from "elysia";
 
 import deleteThread from "@/api/handlers/chat/delete-thread";
 import createMessageExport from "@/api/handlers/chat/export/create";
+import forkThread from "@/api/handlers/chat/fork/create";
 import getMessages from "@/api/handlers/chat/get-messages";
 import getModelOptions from "@/api/handlers/chat/get-model-options";
 import getOlderMessages from "@/api/handlers/chat/get-older-messages";
@@ -120,6 +121,12 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     params: getSuggestedPrompts.config.params,
     permissions: getSuggestedPrompts.config.permissions,
     query: getSuggestedPrompts.config.query,
+  })
+  .post("/threads/:threadId/fork", forkThread.handler, {
+    body: forkThread.config.body,
+    params: forkThread.config.params,
+    permissions: forkThread.config.permissions,
+    query: forkThread.config.query,
   })
   .post("/threads/:threadId/export", createMessageExport.handler, {
     body: createMessageExport.config.body,

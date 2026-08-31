@@ -92,6 +92,7 @@ import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
+import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
@@ -643,6 +644,7 @@ export const ChatThreadPage = ({
             value (sticky headers, scroll button) inside its own context so
             none of them can leak up and overlay the fade or the composer.
           */}
+            <ChatForkedFromBanner forkProvenance={data.forkProvenance} />
             <ChatThreadScrollSurface containerRef={pageContainerRef}>
               <Conversation className="@container isolate min-h-0">
                 <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-[calc(var(--composer-block-h,7rem)+1.5rem)]">

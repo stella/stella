@@ -1869,6 +1869,7 @@ describe("acquireChatRuntime reconcile", () => {
   const buildThreadData = (
     overrides: Partial<ChatThreadFetched> = {},
   ): ChatThreadFetched => ({
+    forkProvenance: { type: "none" },
     messages: [],
     olderCursor: null,
     contextMatterIds: [],
