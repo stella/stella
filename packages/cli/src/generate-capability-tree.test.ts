@@ -605,10 +605,7 @@ describe("insertCapabilities: namespaced merge", () => {
 
 describe("insertCapabilities: against the real curated tree + catalog", () => {
   test("merges the committed catalog with the expected shape", async () => {
-    const catalogUrl = new URL(
-      "generated/capability-catalog.json",
-      import.meta.url,
-    );
+    const catalogUrl = new URL("../capability-catalog.json", import.meta.url);
     const snapshotUrl = new URL(
       "generated/registry-snapshot.json",
       import.meta.url,
@@ -633,7 +630,7 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
     // `parseCapabilityCatalog`, which is exactly the silent default this
     // field replaced.
     const catalog: { transport?: unknown }[] = await Bun.file(
-      new URL("generated/capability-catalog.json", import.meta.url),
+      new URL("../capability-catalog.json", import.meta.url),
     ).json();
     expect(catalog.filter((e) => e.transport === undefined)).toEqual([]);
   });
@@ -674,7 +671,7 @@ describe("curated commands must not shadow capability commands", () => {
 
   test("every generated capability stays at one fixed-depth namespace", async () => {
     const catalog: CapabilityCatalogEntry[] = await Bun.file(
-      new URL("generated/capability-catalog.json", import.meta.url),
+      new URL("../capability-catalog.json", import.meta.url),
     ).json();
     const listings = await Bun.file(
       new URL("generated/registry-snapshot.json", import.meta.url),
@@ -740,7 +737,7 @@ describe("every capability flag maps to a real path in its wrapper schema", () =
 
   test("no flag targets a path absent from the wrapper schema", async () => {
     const raw: unknown = await Bun.file(
-      new URL("generated/capability-catalog.json", import.meta.url),
+      new URL("../capability-catalog.json", import.meta.url),
     ).json();
     const entries = parseCapabilityCatalog(raw);
     expect(entries).not.toBeNull();

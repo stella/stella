@@ -39,9 +39,8 @@ const { UPLOAD_PURPOSE_GATE_BY_CAPABILITY } =
 const { synthesizeCapabilityContext } =
   await import("@/api/mcp/capability-context");
 const { ElysiaCustomStatusResponse } = await import("elysia");
-const capabilityCatalog = (
-  await import("@/api/mcp/generated/capability-catalog.json")
-).default;
+const capabilityCatalog = (await import("@stll/cli/capability-catalog.json"))
+  .default;
 
 // --- Helpers -----------------------------------------------------------------
 

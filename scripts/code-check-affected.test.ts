@@ -56,7 +56,7 @@ describe("affected code-check planning", () => {
         targets: ["apps/landing", "apps/web", "packages/ui"],
       },
       rootLintPaths: [],
-      rootChecks: ["env", "repo-typecheck"],
+      rootChecks: ["env", "assets", "repo-typecheck"],
     });
   });
 
@@ -66,7 +66,7 @@ describe("affected code-check planning", () => {
       lint: { type: "targets", targets: [] },
       typecheck: { type: "targets", targets: [] },
       rootLintPaths: [],
-      rootChecks: ["env", "repo-typecheck"],
+      rootChecks: ["env", "assets", "repo-typecheck"],
     });
   });
 
@@ -80,6 +80,7 @@ describe("affected code-check planning", () => {
     }
     const commands = scopedCommands(planned);
     expect(commands).toContainEqual(["bun", "run", "env:check"]);
+    expect(commands).toContainEqual(["bun", "run", "assets:check"]);
     expect(commands).toContainEqual([
       "bun",
       "--bun",
@@ -119,7 +120,7 @@ describe("affected code-check planning", () => {
       lint: { type: "targets", targets: ["packages/ui"] },
       typecheck: { type: "targets", targets: ["packages/ui"] },
       rootLintPaths: [],
-      rootChecks: ["env", "repo-typecheck"],
+      rootChecks: ["env", "assets", "repo-typecheck"],
     });
   });
 
@@ -161,6 +162,7 @@ describe("affected code-check planning", () => {
         rootLintPaths: [changedPath],
         rootChecks: [
           "env",
+          "assets",
           "plugin-registry",
           "plugin-fixtures",
           "root-script-lint",
@@ -176,7 +178,7 @@ describe("affected code-check planning", () => {
       lint: { type: "all" },
       typecheck: { type: "targets", targets: [] },
       rootLintPaths: [],
-      rootChecks: ["env", "repo-typecheck"],
+      rootChecks: ["env", "assets", "repo-typecheck"],
     });
   });
 
@@ -198,7 +200,12 @@ describe("affected code-check planning", () => {
       }
       expect(planned.lint).toEqual({ type: "targets", targets: [] });
       expect(planned.typecheck).toEqual({ type: "targets", targets: [] });
-      expect(planned.rootChecks).toEqual(["env", rootCheck, "repo-typecheck"]);
+      expect(planned.rootChecks).toEqual([
+        "env",
+        "assets",
+        rootCheck,
+        "repo-typecheck",
+      ]);
     },
   );
 

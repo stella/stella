@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { isPublishedTestArtifact } from "./published-export-guards";
+import {
+  isExpectedPublishedExportResolution,
+  isPublishedTestArtifact,
+} from "./published-export-guards";
 
 describe("published export artifact guard", () => {
   test.each([
@@ -23,4 +26,46 @@ describe("published export artifact guard", () => {
       expect(isPublishedTestArtifact(file)).toBe(false);
     },
   );
+});
+
+describe("published export resolution guard", () => {
+  const packageDir = "/repo/packages/example";
+
+  test("requires built modules to resolve under dist", () => {
+    const entry = { import: "./dist/index.js" };
+
+    expect(
+      isExpectedPublishedExportResolution({
+        entry,
+        packageDir,
+        resolved: "/repo/packages/example/dist/index.js",
+      }),
+    ).toBe(true);
+    expect(
+      isExpectedPublishedExportResolution({
+        entry,
+        packageDir,
+        resolved: "/repo/packages/example/src/index.ts",
+      }),
+    ).toBe(false);
+  });
+
+  test("requires copied assets to resolve to their declared path", () => {
+    const entry = "./capability-catalog.json";
+
+    expect(
+      isExpectedPublishedExportResolution({
+        entry,
+        packageDir,
+        resolved: "/repo/packages/example/capability-catalog.json",
+      }),
+    ).toBe(true);
+    expect(
+      isExpectedPublishedExportResolution({
+        entry,
+        packageDir,
+        resolved: "/repo/packages/example/dist/capability-catalog.json",
+      }),
+    ).toBe(false);
+  });
 });

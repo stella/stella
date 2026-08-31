@@ -42,6 +42,14 @@ const COPIED_EXTENSIONS = [".css"] as const;
 const hasExtension = (target: string, extensions: readonly string[]): boolean =>
   extensions.some((extension) => target.endsWith(extension));
 
+const isShippedRootJsonAsset = (
+  target: string,
+  manifest: Record<string, unknown>,
+): boolean =>
+  /^\.\/[^/]+\.json$/u.test(target) &&
+  Array.isArray(manifest["files"]) &&
+  manifest["files"].includes(target.slice(2));
+
 // "./src/model/document.ts" -> "./dist/model/document"
 const distBase = (srcPath: string): string =>
   srcPath.replace(/^\.\/src\//u, "./dist/").replace(/\.tsx?$/u, "");
@@ -54,10 +62,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 // Validated `exports` map of a source-shaped manifest: subpath -> a single
-// file under ./src. Wildcards are rejected along with everything else that is
-// not a concrete source path: the published map has to name every subpath, or
-// the checks below (and the export-resolution guard in CI) have nothing to
-// resolve.
+// source file or explicitly shipped root JSON asset. Wildcards are rejected:
+// the published map has to name every subpath, or the checks below (and the
+// export-resolution guard in CI) have nothing to resolve.
 export const sourceExportTargets = (
   manifest: unknown,
 ): Record<string, string> => {
@@ -73,14 +80,15 @@ export const sourceExportTargets = (
   for (const [subpath, target] of Object.entries(exportsField)) {
     if (
       typeof target !== "string" ||
-      !target.startsWith("./src/") ||
       !(
-        hasExtension(target, MODULE_EXTENSIONS) ||
-        hasExtension(target, COPIED_EXTENSIONS)
+        (target.startsWith("./src/") &&
+          (hasExtension(target, MODULE_EXTENSIONS) ||
+            hasExtension(target, COPIED_EXTENSIONS))) ||
+        isShippedRootJsonAsset(target, manifest)
       )
     ) {
       panic(
-        `${manifest["name"]}: expected source export "${subpath}" to be a ./src/*.{ts,tsx,css} string, got ${JSON.stringify(target)}`,
+        `${manifest["name"]}: expected source export "${subpath}" to be a ./src/*.{ts,tsx,css} string or an explicitly shipped root JSON asset, got ${JSON.stringify(target)}`,
       );
     }
     targets[subpath] = target;
@@ -99,6 +107,10 @@ export const toPublishedManifest = (manifest: unknown): PublishedManifest => {
 
   const distExports: Record<string, DistEntry> = {};
   for (const [subpath, target] of Object.entries(sourceTargets)) {
+    if (isShippedRootJsonAsset(target, manifest)) {
+      distExports[subpath] = target;
+      continue;
+    }
     if (hasExtension(target, COPIED_EXTENSIONS)) {
       distExports[subpath] = distAsset(target);
       continue;

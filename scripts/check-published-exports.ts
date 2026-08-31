@@ -20,7 +20,10 @@ import {
   isDistModuleEntry,
   toPublishedManifest,
 } from "./publish-manifest";
-import { isPublishedTestArtifact } from "./published-export-guards";
+import {
+  isExpectedPublishedExportResolution,
+  isPublishedTestArtifact,
+} from "./published-export-guards";
 
 const repoRoot = path.resolve(import.meta.dir, "..");
 
@@ -132,8 +135,18 @@ try {
         failures.push(`${subpath}: "${specifier}" does not resolve`);
         return;
       }
-      if (!resolved.includes(`${path.sep}dist${path.sep}`)) {
-        failures.push(`${subpath}: "${specifier}" resolved outside dist`);
+      if (
+        !isExpectedPublishedExportResolution({
+          entry,
+          packageDir: pkgDir,
+          resolved,
+        })
+      ) {
+        failures.push(
+          isDistModuleEntry(entry)
+            ? `${subpath}: "${specifier}" resolved outside dist`
+            : `${subpath}: "${specifier}" did not resolve to ${entry}`,
+        );
       }
       resolvedBySubpath.set(subpath, resolved);
 
@@ -180,5 +193,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `${published.name}@${published.version}: ${Object.keys(published.exports).length} exports resolve, ship, and load from dist`,
+  `${published.name}@${published.version}: ${Object.keys(published.exports).length} exports resolve and ship; modules load from dist`,
 );

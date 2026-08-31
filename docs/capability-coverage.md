@@ -7,7 +7,7 @@ Every safe handler the API exposes, grouped by domain: how it is classified
 (read/write, destructive) and how it is reachable — as a curated MCP tool,
 covered by one, or only through the generic `invoke_capability` path (shown
 here as its CLI form). Projected from the same handler enumeration that builds
-`apps/api/src/mcp/generated/capability-catalog.json`; see
+`packages/cli/capability-catalog.json`; see
 `apps/api/scripts/export-capability-catalog.ts`.
 
 ## audit-logs
