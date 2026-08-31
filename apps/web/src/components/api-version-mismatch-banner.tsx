@@ -25,21 +25,29 @@ export const ApiVersionMismatchProvider = ({ children }: PropsWithChildren) => {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
-  const serverVersion = useAvailableServerVersion();
+  const [serverVersion, setServerVersion] = useState<string | null>(null);
 
   return (
-    <ApiVersionMismatchContext value={serverVersion}>
+    <ApiVersionMismatchReporterContext value={setServerVersion}>
       {serverVersion ? (
         <VersionRefreshObserver key={serverVersion} pathname={pathname} />
       ) : null}
       {children}
-    </ApiVersionMismatchContext>
+    </ApiVersionMismatchReporterContext>
   );
 };
 
 export const ApiVersionMismatchBanner = () => {
   const installedVersion = __APP_VERSION__;
-  const serverVersion = useVersionMismatch();
+  const serverVersion = useAvailableServerVersion();
+  const reportServerVersion = useVersionMismatchReporter();
+
+  // Keep the mismatch in the root provider after this protected-route banner
+  // unmounts, so the persistent observer can refresh at the new pathname.
+  useExternalSyncEffect(() => {
+    reportServerVersion(serverVersion);
+  }, [reportServerVersion, serverVersion]);
+
   if (!serverVersion) {
     return null;
   }
@@ -55,9 +63,9 @@ export const ApiVersionMismatchBanner = () => {
 
 const FIVE_MIN_MS = 5 * 60 * 1000;
 const DISMISSED_KEY_PREFIX = "stella:api-version-mismatch-dismissed:";
-const ApiVersionMismatchContext = createContext<string | null | undefined>(
-  undefined,
-);
+const ApiVersionMismatchReporterContext = createContext<
+  ((serverVersion: string | null) => void) | undefined
+>(undefined);
 
 const healthSchema = v.object({
   status: v.literal("ok"),
@@ -126,14 +134,14 @@ const VersionRefreshObserver = ({ pathname }: VersionRefreshObserverProps) => {
   return null;
 };
 
-const useVersionMismatch = (): string | null => {
-  const serverVersion = use(ApiVersionMismatchContext);
-  if (serverVersion === undefined) {
+const useVersionMismatchReporter = () => {
+  const reportServerVersion = use(ApiVersionMismatchReporterContext);
+  if (reportServerVersion === undefined) {
     return panic(
       "ApiVersionMismatchBanner must be used within ApiVersionMismatchProvider",
     );
   }
-  return serverVersion;
+  return reportServerVersion;
 };
 
 type AvailableVersionBannerProps = {
