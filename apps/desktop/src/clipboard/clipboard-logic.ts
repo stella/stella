@@ -219,7 +219,8 @@ export type ClipboardPointerPosition = {
 export const clipboardPointerMoved = (
   previous: ClipboardPointerPosition | null,
   current: ClipboardPointerPosition,
-) => previous !== null && (previous.x !== current.x || previous.y !== current.y);
+) =>
+  previous !== null && (previous.x !== current.x || previous.y !== current.y);
 
 export const adjacentClipboardIndex = (
   currentIndex: number,
