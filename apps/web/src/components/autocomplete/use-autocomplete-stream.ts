@@ -75,8 +75,7 @@ const consumeAutocompleteStream = async (
   body: ReadableStream<Uint8Array>,
   cb: StreamCallbacks,
 ): Promise<void> => {
-  let terminal = false;
-  await readSSEEvents(body, (event) => {
+  const outcome = await readSSEEvents(body, (event) => {
     if (event.event === "token") {
       const text = readStringField(event.data, "text");
       if (text === null || text.length === 0) {
@@ -85,12 +84,10 @@ const consumeAutocompleteStream = async (
       return cb.onToken(text);
     }
     if (event.event === "error") {
-      terminal = true;
       cb.onError();
       return false;
     }
     if (event.event === "done") {
-      terminal = true;
       cb.onDone();
       return false;
     }
@@ -98,7 +95,7 @@ const consumeAutocompleteStream = async (
   });
   // A body that ended without a terminal frame still finishes the suggestion:
   // what streamed is what the model wrote.
-  if (!terminal) {
+  if (outcome === "drained") {
     cb.onDone();
   }
 };

@@ -2346,6 +2346,7 @@
       "GET /v1/workspaces/:id/workflow",
       "GET /v1/workspaces/navigation",
       "POST /v1/workspaces/:id/active",
+      "POST /v1/workspaces/:id/document-reviews/parties",
       "POST /v1/workspaces/:id/justifications/query"
     ],
     "requestCounts": {
@@ -2379,6 +2380,7 @@
       "GET /v1/workspaces/:id/workflow": 1,
       "GET /v1/workspaces/navigation": 1,
       "POST /v1/workspaces/:id/active": 1,
+      "POST /v1/workspaces/:id/document-reviews/parties": 1,
       "POST /v1/workspaces/:id/justifications/query": 1
     },
     "dbQueries": {

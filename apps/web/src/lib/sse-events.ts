@@ -45,12 +45,15 @@ export const parseSSEEvents = (raw: string): SSEEvent[] => {
  *
  * `onEvent` answers whether to keep reading: `false` stops the read and
  * cancels the body, which is what closes the connection and, for a stream
- * backed by a model call, stops the tokens being paid for.
+ * backed by a model call, stops the tokens being paid for. The result says
+ * which side ended the read: the body draining or a handler stopping it.
  */
+export type SSEReadOutcome = "drained" | "stopped";
+
 export const readSSEEvents = async (
   body: ReadableStream<Uint8Array>,
   onEvent: (event: SSEEvent) => boolean,
-): Promise<void> => {
+): Promise<SSEReadOutcome> => {
   const decoder = new TextDecoder();
   let buffer = "";
   const reader = body.getReader();
@@ -60,7 +63,7 @@ export const readSSEEvents = async (
       const chunk = await reader.read();
       if (chunk.done) {
         // A stream that ends mid-frame has nothing complete left to report.
-        return;
+        return "drained";
       }
       buffer += decoder.decode(chunk.value, { stream: true });
       const boundary = buffer.lastIndexOf(FRAME_SEPARATOR);
@@ -71,7 +74,7 @@ export const readSSEEvents = async (
       buffer = buffer.slice(boundary + FRAME_SEPARATOR.length);
       for (const event of parseSSEEvents(ready)) {
         if (!onEvent(event)) {
-          return;
+          return "stopped";
         }
       }
     }

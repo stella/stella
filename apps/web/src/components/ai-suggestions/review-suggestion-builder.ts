@@ -51,7 +51,7 @@ export const PREVIEW_ANCHOR_CHARS = 80;
  */
 export const summarizeOperation = (
   operation: FolioAIEditOperation,
-  blockLabel?: string | undefined,
+  blockLabel?: string,
 ): string => {
   const { key, values } = describeOperationSummary(operation, blockLabel);
   return getTranslator()(key, values);

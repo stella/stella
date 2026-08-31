@@ -94,7 +94,7 @@ const labelValue = (blockLabel: string | undefined): string => {
  */
 export const describeOperationSummary = (
   operation: FolioAIEditOperation,
-  blockLabel?: string | undefined,
+  blockLabel?: string,
 ): OperationSummaryMessage => {
   const label = labelValue(blockLabel);
   switch (operation.type) {
