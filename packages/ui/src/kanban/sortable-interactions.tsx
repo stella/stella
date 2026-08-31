@@ -837,18 +837,69 @@ const getKanbanCardDragSurfaceAttributes = ({
   "aria-pressed": _pressed,
   "aria-roledescription": _roleDescription,
   role: _role,
-  tabIndex: _tabIndex,
+  tabIndex,
   ...attributes
-}: KanbanSortableBindings["attributes"]) => attributes;
+}: KanbanSortableBindings["attributes"]) => ({ ...attributes, tabIndex });
 
-const stopKanbanCardDragAtInteractiveDescendant = (
+type KanbanCardDragSurfaceListener = (
   event: React.SyntheticEvent<HTMLDivElement>,
+) => void;
+
+const isKanbanCardDragSurfaceListener = (
+  listener: unknown,
+): listener is KanbanCardDragSurfaceListener => typeof listener === "function";
+
+const getKanbanCardDragSurfaceListeners = (
+  listeners: NonNullable<KanbanSortableBindings["listeners"]>,
 ) => {
-  if (
-    isKanbanCardDragSurfaceInteractiveTarget(event.target, event.currentTarget)
-  ) {
-    event.stopPropagation();
-  }
+  const { onKeyDown, onMouseDown, onPointerDown, onTouchStart, ...rest } =
+    listeners;
+
+  const shouldActivate = (event: React.SyntheticEvent<HTMLDivElement>) =>
+    !isKanbanCardDragSurfaceInteractiveTarget(
+      event.target,
+      event.currentTarget,
+    );
+
+  return {
+    ...rest,
+    ...(!isKanbanCardDragSurfaceListener(onKeyDown)
+      ? {}
+      : {
+          onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => {
+            if (shouldActivate(event)) {
+              onKeyDown(event);
+            }
+          },
+        }),
+    ...(!isKanbanCardDragSurfaceListener(onMouseDown)
+      ? {}
+      : {
+          onMouseDown: (event: React.MouseEvent<HTMLDivElement>) => {
+            if (shouldActivate(event)) {
+              onMouseDown(event);
+            }
+          },
+        }),
+    ...(!isKanbanCardDragSurfaceListener(onPointerDown)
+      ? {}
+      : {
+          onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => {
+            if (shouldActivate(event)) {
+              onPointerDown(event);
+            }
+          },
+        }),
+    ...(!isKanbanCardDragSurfaceListener(onTouchStart)
+      ? {}
+      : {
+          onTouchStart: (event: React.TouchEvent<HTMLDivElement>) => {
+            if (shouldActivate(event)) {
+              onTouchStart(event);
+            }
+          },
+        }),
+  };
 };
 
 export type KanbanCardDragSurfaceProps = {
@@ -861,7 +912,7 @@ export const KanbanCardDragSurface = ({
   className,
   ...props
 }: KanbanCardDragSurfaceProps) => {
-  const { setActivatorNodeRef: setCardActivatorNodeRef } = bindings;
+  const { listeners, setActivatorNodeRef: setCardActivatorNodeRef } = bindings;
   const setActivatorNodeRef = React.useCallback(
     (element: HTMLDivElement | null) => {
       setCardActivatorNodeRef(element);
@@ -873,11 +924,10 @@ export const KanbanCardDragSurface = ({
     <div
       {...props}
       {...getKanbanCardDragSurfaceAttributes(bindings.attributes)}
-      {...bindings.listeners}
+      {...(listeners === undefined
+        ? {}
+        : getKanbanCardDragSurfaceListeners(listeners))}
       className={cn("touch-auto", className)}
-      onMouseDownCapture={stopKanbanCardDragAtInteractiveDescendant}
-      onPointerDownCapture={stopKanbanCardDragAtInteractiveDescendant}
-      onTouchStartCapture={stopKanbanCardDragAtInteractiveDescendant}
       ref={setActivatorNodeRef}
     />
   );

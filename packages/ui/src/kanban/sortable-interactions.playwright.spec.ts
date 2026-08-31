@@ -348,7 +348,7 @@ test("exposes explicit whole-item and 44px handle activation surfaces", async ({
   page,
 }) => {
   const handle = await openFixture(page);
-  const wholeItem = page.locator('[data-card-content=""]');
+  const wholeItem = page.locator('[data-card-drag-surface=""]');
 
   await expect(handle).toHaveCSS("width", "44px");
   await expect(handle).toHaveCSS("height", "44px");
@@ -357,6 +357,10 @@ test("exposes explicit whole-item and 44px handle activation surfaces", async ({
     handle.locator("xpath=ancestor::*[@data-sortable-item]"),
   ).toHaveCSS("touch-action", "auto");
   await expect(wholeItem).toHaveCSS("touch-action", "auto");
+  await wholeItem.focus();
+  await page.keyboard.press("Space");
+  await expect(page.locator("[data-overlay]")).toHaveText("whole-item");
+  await page.keyboard.press("Escape");
   const control = page.getByRole("button", {
     name: "Keep whole-item control interactive",
   });
@@ -369,6 +373,14 @@ test("exposes explicit whole-item and 44px handle activation surfaces", async ({
   await page.mouse.move(controlBox.x + 16, controlBox.y + 4);
   await page.mouse.up();
   await expect(page.locator("[data-overlay]")).toHaveCount(0);
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["cardControlPointerDown"],
+        ),
+    )
+    .toBe("seen");
 });
 
 test("keeps the drag overlay above sticky board chrome", async ({ page }) => {
