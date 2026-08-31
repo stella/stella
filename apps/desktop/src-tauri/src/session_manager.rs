@@ -551,6 +551,11 @@ impl SessionManager {
     self.app_handle = Some(handle);
   }
 
+  #[cfg(test)]
+  pub fn set_store_path_for_test(&mut self, store_path: PathBuf) {
+    self.store_path = store_path;
+  }
+
   pub async fn initialize(&mut self) {
     let store = session_store::load_session_store(&self.store_path).await;
 
@@ -1006,6 +1011,12 @@ impl SessionManager {
     self.persist_sessions().await;
     self.emit_state_change();
     self.get_snapshot()
+  }
+
+  pub async fn link_account(&mut self, linked_account: LinkedAccountSnapshot) {
+    self.linked_account = Some(linked_account);
+    self.persist_sessions().await;
+    self.emit_state_change();
   }
 
   pub fn is_trusted_self_host_origin(&self, origin: &str) -> bool {
@@ -2709,6 +2720,42 @@ mod tests {
       .map(|session| session.id)
       .collect();
     assert_eq!(session_ids, vec!["session-unconfirmed"]);
+
+    tokio::fs::remove_file(path).await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn link_account_updates_snapshot_and_persists() {
+    let path = std::env::temp_dir().join(format!(
+      "stella-desktop-sessions-{}.json",
+      uuid::Uuid::new_v4()
+    ));
+    let mut manager = SessionManager::new();
+    manager.store_path = path.clone();
+    let account = LinkedAccountSnapshot {
+      email: "user@example.com".to_string(),
+      name: Some("Test User".to_string()),
+      verified_at: "2026-08-31T10:00:00Z".to_string(),
+    };
+
+    manager.link_account(account).await;
+
+    assert_eq!(
+      manager
+        .get_snapshot()
+        .linked_account
+        .as_ref()
+        .map(|value| value.email.as_str()),
+      Some("user@example.com")
+    );
+    let loaded = session_store::load_session_store(&path).await;
+    assert_eq!(
+      loaded
+        .linked_account
+        .as_ref()
+        .map(|value| value.email.as_str()),
+      Some("user@example.com")
+    );
 
     tokio::fs::remove_file(path).await.unwrap();
   }

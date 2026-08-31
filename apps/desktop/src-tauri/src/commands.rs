@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use tauri::State;
+use tauri_plugin_opener::OpenerExt;
 use tokio::sync::Mutex;
 
 use crate::session_manager::SessionManager;
@@ -7,10 +8,20 @@ use crate::types::{AppSnapshot, DesktopNotificationPreferences};
 
 pub type AppState = Arc<Mutex<SessionManager>>;
 
+const STELLA_DESKTOP_ACCOUNT_URL: &str = "https://my.stll.app/settings/account/desktop";
+
 #[tauri::command]
 pub async fn get_state(state: State<'_, AppState>) -> Result<AppSnapshot, String> {
   let mgr = state.lock().await;
   Ok(mgr.get_snapshot())
+}
+
+#[tauri::command]
+pub async fn open_stella_account(app: tauri::AppHandle) -> Result<(), String> {
+  app
+    .opener()
+    .open_url(STELLA_DESKTOP_ACCOUNT_URL, None::<&str>)
+    .map_err(|e| format!("stella desktop could not open stella web: {e}"))
 }
 
 #[tauri::command]

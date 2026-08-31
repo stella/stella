@@ -20,6 +20,8 @@ export type DesktopUpdateSnapshot = { baseUrl: string | null, channel: string | 
 
 export type DesktopUpdateStatus = "idle" | "checking" | "available" | "downloading" | "ready" | "applying" | "up_to_date" | "error" | "disabled";
 
+export type LinkAccountRequest = { apiBaseUrl: string, linkedAccount: LinkedAccountSnapshot, };
+
 export type LinkedAccountSnapshot = { email: string, name: string | null, verifiedAt: string, };
 
 export type OpenFileRemoteSession = { baseVersionNumber: number, downloadUrl: string, fileType: DesktopEditFileType, fileName: string, lastCheckpointAt: string | null, resumedFromCheckpoint: boolean, sessionId: string, sessionToken: string, tookOverExistingSession: boolean, };

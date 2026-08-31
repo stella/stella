@@ -16,6 +16,7 @@ export type {
   DesktopNotificationPreferences,
   DesktopUpdateSnapshot,
   DesktopUpdateStatus,
+  LinkAccountRequest,
   LinkedAccountSnapshot,
   OpenFileRemoteSession,
   OpenFileRequest,

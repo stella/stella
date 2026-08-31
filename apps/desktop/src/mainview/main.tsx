@@ -2,11 +2,20 @@ import { lazy, StrictMode, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root as ReactRoot } from "react-dom/client";
 
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { panic } from "better-result";
 
 import ClipboardApp from "../clipboard/ClipboardApp";
-import { defaultMessages, DesktopIntlProvider, loadMessages } from "../i18n";
+import {
+  defaultMessages,
+  DESKTOP_LANGUAGE_CHANGED_EVENT,
+  DesktopIntlProvider,
+  getPreferredLanguage,
+  isSupportedLanguage,
+  loadMessages,
+} from "../i18n";
+import type { DesktopMessages } from "../i18n";
 import { useSystemTheme } from "../shared/use-system-theme";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -32,10 +41,40 @@ const isReactRoot = (value: unknown): value is ReactRoot =>
 const Root = () => {
   useSystemTheme();
 
-  const [messages, setMessages] = useState(defaultMessages);
+  const [language, setLanguage] = useState(getPreferredLanguage);
+  const [messages, setMessages] = useState<DesktopMessages>(defaultMessages);
 
   useEffect(() => {
-    void loadMessages().then(setMessages);
+    let disposed = false;
+    void loadMessages(language).then((nextMessages) => {
+      if (!disposed) {
+        setMessages(nextMessages);
+      }
+      return;
+    });
+
+    return () => {
+      disposed = true;
+    };
+  }, [language]);
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    void listen<{ language: string }>(
+      DESKTOP_LANGUAGE_CHANGED_EVENT,
+      ({ payload }) => {
+        if (isSupportedLanguage(payload.language)) {
+          setLanguage(payload.language);
+        }
+      },
+    ).then((unlisten) => {
+      cleanup = unlisten;
+      return;
+    });
+
+    return () => {
+      cleanup?.();
+    };
   }, []);
 
   const windowLabel = getCurrentWindow().label;
@@ -56,7 +95,9 @@ const Root = () => {
 
   return (
     <StrictMode>
-      <DesktopIntlProvider messages={messages}>{content}</DesktopIntlProvider>
+      <DesktopIntlProvider language={language} messages={messages}>
+        {content}
+      </DesktopIntlProvider>
     </StrictMode>
   );
 };

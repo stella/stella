@@ -2,7 +2,7 @@ import { startTransition, useEffect, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
 import { Button } from "@stll/ui/button";
@@ -10,10 +10,24 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
 import { Separator } from "@stll/ui/separator";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { cn } from "@stll/ui/utils";
 
+import {
+  isSupportedLanguage,
+  LANGUAGE_LABELS,
+  setPreferredLanguage,
+  SUPPORTED_LANGUAGES,
+} from "../i18n";
+import type { SupportedLanguage } from "../i18n";
 import { isAppSnapshot } from "../shared/rpc";
 import type {
   AppSnapshot,
@@ -209,9 +223,15 @@ const AutoStartToggle = () => {
 };
 
 const GeneralPane = ({
+  language,
   linkedAccount,
+  onLanguageChange,
+  onOpenStellaWeb,
 }: {
+  language: SupportedLanguage;
   linkedAccount: LinkedAccountSnapshot | null;
+  onLanguageChange: (language: SupportedLanguage) => void;
+  onOpenStellaWeb: () => void;
 }) => {
   const t = useTranslations("settings");
 
@@ -229,7 +249,7 @@ const GeneralPane = ({
                 t("stellaDesktop")}
             </p>
             <p className="text-muted-foreground truncate text-sm">
-              {linkedAccount?.email ?? t("linkDevice")}
+              {linkedAccount?.email ?? t("connectToStellaDescription")}
             </p>
           </div>
           <span
@@ -260,7 +280,48 @@ const GeneralPane = ({
           </>
         ) : null}
         <Separator />
+        <div className="flex items-center justify-between gap-4 px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">{t("connectToStella")}</p>
+            <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+              {t("connectToStellaDescription")}
+            </p>
+          </div>
+          <Button onClick={onOpenStellaWeb} size="sm" variant="outline">
+            {t("openStellaWeb")}
+          </Button>
+        </div>
+        <Separator />
         <AutoStartToggle />
+      </PanelGroup>
+      <PanelGroup>
+        <div className="flex items-center justify-between gap-4 px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">{t("language")}</p>
+            <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+              {t("languageDescription")}
+            </p>
+          </div>
+          <Select
+            onValueChange={(value) => {
+              if (value && isSupportedLanguage(value)) {
+                onLanguageChange(value);
+              }
+            }}
+            value={language}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup align="end">
+              {SUPPORTED_LANGUAGES.map((supportedLanguage) => (
+                <SelectItem key={supportedLanguage} value={supportedLanguage}>
+                  {LANGUAGE_LABELS[supportedLanguage]}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </div>
       </PanelGroup>
     </div>
   );
@@ -375,6 +436,7 @@ const AboutPane = ({
 
 const App = () => {
   const t = useTranslations("settings");
+  const locale = useLocale();
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<AppSnapshot | null>(null);
   const [activeTab, setActiveTab] = useState<PreferencesTab>(getInitialTab);
@@ -561,6 +623,34 @@ const App = () => {
     }
   };
 
+  const handleLanguageChange = async (language: SupportedLanguage) => {
+    try {
+      await setPreferredLanguage(language);
+      setError(null);
+    } catch (languageError) {
+      setError(
+        languageError instanceof Error
+          ? languageError.message
+          : t("errorUpdateLanguage"),
+      );
+    }
+  };
+
+  const handleOpenStellaWeb = async () => {
+    try {
+      await invoke("open_stella_account");
+      setError(null);
+    } catch (openError) {
+      setError(
+        openError instanceof Error
+          ? openError.message
+          : t("errorOpenStellaWeb"),
+      );
+    }
+  };
+
+  const language = isSupportedLanguage(locale) ? locale : "en";
+
   return (
     <main className="bg-background text-foreground min-h-screen">
       <div
@@ -610,7 +700,16 @@ const App = () => {
             <TabsPanel className="h-full min-h-0" value="general">
               <ScrollArea className="h-full">
                 <div className="space-y-4 p-4">
-                  <GeneralPane linkedAccount={state?.linkedAccount ?? null} />
+                  <GeneralPane
+                    language={language}
+                    linkedAccount={state?.linkedAccount ?? null}
+                    onLanguageChange={(nextLanguage) => {
+                      void handleLanguageChange(nextLanguage);
+                    }}
+                    onOpenStellaWeb={() => {
+                      void handleOpenStellaWeb();
+                    }}
+                  />
                 </div>
               </ScrollArea>
             </TabsPanel>

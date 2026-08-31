@@ -17,6 +17,7 @@ const DESKTOP_SELF_HOST_CONNECT_POLL_INTERVAL_MS = 750;
 const DESKTOP_SELF_HOST_CONNECT_TIMEOUT_MS = 120_000;
 const MIN_DESKTOP_BRIDGE_VERSION = 9;
 const REQUIRED_DESKTOP_BRIDGE_CAPABILITY = "office-edit.v1";
+const DESKTOP_ACCOUNT_LINK_CAPABILITY = "account-link.v1";
 
 export class DesktopBridgeUnavailableError extends Error {
   public constructor() {
@@ -135,10 +136,13 @@ const readBridgeHealth = async (
   }
 };
 
-const isCompatibleDesktopBridge = (health: BridgeHealth) =>
+const isCompatibleDesktopBridge = (
+  health: BridgeHealth,
+  requiredCapability: string,
+) =>
   typeof health.bridgeVersion === "number" &&
   health.bridgeVersion >= MIN_DESKTOP_BRIDGE_VERSION &&
-  health.capabilities?.includes(REQUIRED_DESKTOP_BRIDGE_CAPABILITY) === true;
+  health.capabilities?.includes(requiredCapability) === true;
 
 const signalDesktopUpdateCheck = () => {
   window.location.href = "stella://ping";
@@ -146,9 +150,15 @@ const signalDesktopUpdateCheck = () => {
 
 const assertCompatibleDesktopBridge = (
   health: BridgeHealth,
-  { signalUpdateCheck = true }: { signalUpdateCheck?: boolean } = {},
+  {
+    requiredCapability = REQUIRED_DESKTOP_BRIDGE_CAPABILITY,
+    signalUpdateCheck = true,
+  }: {
+    requiredCapability?: string;
+    signalUpdateCheck?: boolean;
+  } = {},
 ) => {
-  if (isCompatibleDesktopBridge(health)) {
+  if (isCompatibleDesktopBridge(health, requiredCapability)) {
     return;
   }
 
@@ -367,6 +377,54 @@ export const connectSelfHostedDesktop = async ({
         ),
       ),
     );
+  }
+
+  throw new DesktopBridgeUnavailableError();
+};
+
+export const linkDesktopAccount = async ({
+  apiBaseUrl,
+  linkedAccount,
+}: {
+  apiBaseUrl: string;
+  linkedAccount: LinkedAccountSnapshot;
+}) => {
+  const health =
+    (await readBridgeHealth(500)) ?? (await wakeDesktopAndReadBridgeHealth());
+  if (!health) {
+    throw new DesktopBridgeUnavailableError();
+  }
+
+  assertCompatibleDesktopBridge(health, {
+    requiredCapability: DESKTOP_ACCOUNT_LINK_CAPABILITY,
+  });
+
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(`${DESKTOP_BRIDGE_URL}/v1/link-account`, {
+      body: JSON.stringify({ apiBaseUrl, linkedAccount }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      timeoutMs: 10_000,
+    });
+  } catch {
+    throw new DesktopBridgeUnavailableError();
+  }
+
+  if (response.ok) {
+    return;
+  }
+
+  const payload = await parseBridgeResponse(response);
+  if (payload?.message) {
+    throw new FetchBoundaryError({
+      message: payload.message,
+      status: response.status,
+      statusText: response.statusText,
+      url: `${DESKTOP_BRIDGE_URL}/v1/link-account`,
+    });
   }
 
   throw new DesktopBridgeUnavailableError();
