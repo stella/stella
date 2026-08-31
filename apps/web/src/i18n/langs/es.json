@@ -2157,6 +2157,9 @@
     "empty": "Nada requiere su atención. Cree una solicitud con el botón superior.",
     "evidence": {
       "current": "Ahora",
+      "daysOverdue": "Días de retraso",
+      "daysUnacknowledged": "Días sin confirmar",
+      "daysUntilDeadline": "Días hasta la fecha límite",
       "dueAt": "Vence",
       "findings": "Hallazgos",
       "hearingType": "Tipo de audiencia",
@@ -2185,7 +2188,8 @@
     "scout": {
       "documentDeadlines": "Plazos del documento",
       "documentReview": "Revisión según playbook",
-      "manualRequest": "Solicitud"
+      "manualRequest": "Solicitud",
+      "workAttention": "Seguimiento del trabajo"
     },
     "severity": {
       "info": "Información",
@@ -3714,6 +3718,7 @@
     },
     "addAssignee": "Añadir asignado",
     "addSubtask": "Añadir subtarea",
+    "assigned": "Asignado",
     "assigneeRoles": {
       "assignee": "Asignado",
       "reviewer": "Revisor"
@@ -3776,6 +3781,7 @@
       "deadline": "Plazo",
       "task": "Tarea"
     },
+    "workingTarget": "Objetivo de trabajo",
     "workingTargetDue": "Objetivo de trabajo vencido"
   },
   "templates": {

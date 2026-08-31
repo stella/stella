@@ -64,6 +64,10 @@ import {
   cleanTemplateDeletionObjects,
 } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
 import {
+  WORK_ATTENTION_SCOUT_TASK,
+  runWorkAttentionScoutTask,
+} from "@/api/lib/scheduler/tasks/work-attention-scout";
+import {
   BACKFILL_WORK_OBLIGATIONS_TASK,
   backfillWorkObligations,
 } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
@@ -92,6 +96,7 @@ const SCHEDULER_TASKS = {
   [REPAIR_SEARCH_PROJECTIONS_TASK]: repairSearchProjections,
   [CHAT_THREAD_COMPACTOR_TASK]: compactChatThreads,
   [BACKFILL_WORK_OBLIGATIONS_TASK]: backfillWorkObligations,
+  [WORK_ATTENTION_SCOUT_TASK]: runWorkAttentionScoutTask,
   [REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK]: repairSearchSemanticTimestampsTask,
   [MEMORY_CURATOR_TASK]: curateAiMemories,
   [MEMORY_EXTRACTOR_TASK]: extractMemoriesFromCompactions,

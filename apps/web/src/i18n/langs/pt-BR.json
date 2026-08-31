@@ -2157,6 +2157,9 @@
     "empty": "Nada aguarda você agora. Crie uma solicitação pelo botão acima.",
     "evidence": {
       "current": "Agora",
+      "daysOverdue": "Dias de atraso",
+      "daysUnacknowledged": "Dias sem confirmação",
+      "daysUntilDeadline": "Dias até o prazo",
       "dueAt": "Prazo",
       "findings": "Constatações",
       "hearingType": "Tipo de audiência",
@@ -2185,7 +2188,8 @@
     "scout": {
       "documentDeadlines": "Prazos do documento",
       "documentReview": "Revisão por playbook",
-      "manualRequest": "Solicitação"
+      "manualRequest": "Solicitação",
+      "workAttention": "Monitoramento do trabalho"
     },
     "severity": {
       "info": "Informação",
@@ -3714,6 +3718,7 @@
     },
     "addAssignee": "Adicionar responsável",
     "addSubtask": "Adicionar subtarefa",
+    "assigned": "Atribuído",
     "assigneeRoles": {
       "assignee": "Responsável",
       "reviewer": "Revisor"
@@ -3776,6 +3781,7 @@
       "deadline": "Prazo",
       "task": "Tarefa"
     },
+    "workingTarget": "Meta de trabalho",
     "workingTargetDue": "Meta de trabalho vencida"
   },
   "templates": {

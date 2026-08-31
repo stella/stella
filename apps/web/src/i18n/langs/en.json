@@ -2157,6 +2157,9 @@
     "empty": "Nothing needs you right now. Post a request to start one.",
     "evidence": {
       "current": "Now",
+      "daysOverdue": "Days overdue",
+      "daysUnacknowledged": "Days awaiting acknowledgement",
+      "daysUntilDeadline": "Days until deadline",
       "dueAt": "Due",
       "findings": "Findings",
       "hearingType": "Hearing type",
@@ -2185,7 +2188,8 @@
     "scout": {
       "documentDeadlines": "Document deadlines",
       "documentReview": "Playbook review",
-      "manualRequest": "Request"
+      "manualRequest": "Request",
+      "workAttention": "Work monitoring"
     },
     "severity": {
       "info": "Info",
@@ -3714,6 +3718,7 @@
     },
     "addAssignee": "Add assignee",
     "addSubtask": "Add subtask",
+    "assigned": "Assigned",
     "assigneeRoles": {
       "assignee": "Assignee",
       "reviewer": "Reviewer"
@@ -3776,6 +3781,7 @@
       "deadline": "Deadline",
       "task": "Task"
     },
+    "workingTarget": "Working target",
     "workingTargetDue": "Working target due"
   },
   "templates": {

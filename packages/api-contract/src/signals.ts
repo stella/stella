@@ -7,6 +7,13 @@
  * model-read date at a glance.
  */
 
+import type { WORK_OBLIGATION_STATUS } from "./workflow-status";
+
+/** The two statuses a governed obligation is still open in. */
+export type OpenWorkObligationStatus =
+  | typeof WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT
+  | typeof WORK_OBLIGATION_STATUS.ACTIVE;
+
 export const SIGNAL_ORIGIN = {
   MANUAL: "manual",
   SOURCE: "source",
@@ -68,6 +75,7 @@ export const SCOUT_KEY = {
   INFOSOUD_HEARINGS: "infosoud.hearings",
   DOCUMENT_DEADLINES: "document.deadlines",
   DOCUMENT_REVIEW: "document.review",
+  WORK_ATTENTION: "work.attention",
 } as const;
 export type ScoutKey = (typeof SCOUT_KEY)[keyof typeof SCOUT_KEY];
 
@@ -76,6 +84,8 @@ export const SIGNAL_KIND = {
   HEARING_CHANGED: "hearing.changed",
   DEADLINE_DETECTED: "deadline.detected",
   CONTRACT_REVIEWED: "contract.reviewed",
+  WORK_UNACKNOWLEDGED: "work.unacknowledged",
+  WORK_DEADLINE_AT_RISK: "work.deadline_at_risk",
 } as const;
 export type SignalKind = (typeof SIGNAL_KIND)[keyof typeof SIGNAL_KIND];
 export const SIGNAL_KINDS = [
@@ -83,6 +93,8 @@ export const SIGNAL_KINDS = [
   SIGNAL_KIND.HEARING_CHANGED,
   SIGNAL_KIND.DEADLINE_DETECTED,
   SIGNAL_KIND.CONTRACT_REVIEWED,
+  SIGNAL_KIND.WORK_UNACKNOWLEDGED,
+  SIGNAL_KIND.WORK_DEADLINE_AT_RISK,
 ] as const satisfies readonly SignalKind[];
 
 /** Each kind has exactly one origin; the map is total so a new kind must decide. */
@@ -91,6 +103,8 @@ export const SIGNAL_KIND_ORIGIN = {
   [SIGNAL_KIND.HEARING_CHANGED]: SIGNAL_ORIGIN.SOURCE,
   [SIGNAL_KIND.DEADLINE_DETECTED]: SIGNAL_ORIGIN.MODEL,
   [SIGNAL_KIND.CONTRACT_REVIEWED]: SIGNAL_ORIGIN.MODEL,
+  [SIGNAL_KIND.WORK_UNACKNOWLEDGED]: SIGNAL_ORIGIN.SOURCE,
+  [SIGNAL_KIND.WORK_DEADLINE_AT_RISK]: SIGNAL_ORIGIN.SOURCE,
 } as const satisfies Record<SignalKind, SignalOrigin>;
 
 /** What a signal is about; rendered as the card's subject link. */
@@ -138,6 +152,26 @@ export type SignalEvidence =
       verdict: "safe" | "needs-review" | "reject";
       findings: { title: string; severity: SignalSeverity; quote: string }[];
       reviewRunId: string | null;
+    }
+  | {
+      kind: typeof SIGNAL_KIND.WORK_UNACKNOWLEDGED;
+      obligationEntityId: string;
+      ownerUserId: string;
+      /** When the current owner was put on the obligation. */
+      assignedAt: string;
+      daysWaiting: number;
+      workingTargetDate: string | null;
+      hardDeadlineDate: string | null;
+    }
+  | {
+      kind: typeof SIGNAL_KIND.WORK_DEADLINE_AT_RISK;
+      obligationEntityId: string;
+      ownerUserId: string;
+      hardDeadlineDate: string;
+      workingTargetDate: string | null;
+      /** Negative once the deadline has passed; severity carries the same split. */
+      daysUntilDeadline: number;
+      obligationStatus: OpenWorkObligationStatus;
     };
 
 type MissingEvidenceKind = Exclude<SignalKind, SignalEvidence["kind"]>;

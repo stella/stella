@@ -17,6 +17,7 @@ import type { InspectorViewRenderProps } from "@/components/inspector/view-regis
 import { MatterRefLink } from "@/components/matter-ref-link";
 import type { InboxSignalViewPayload } from "@/features/inbox/signal-inspector.logic";
 import {
+  OPEN_WORK_STATUS_LABEL_KEY,
   ORIGIN_LABEL_KEY,
   scoutLabelKey,
   SEVERITY_DOT_CLASS,
@@ -148,6 +149,13 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
   const format = useFormatter();
   const formatDateTime = (iso: string) =>
     format.dateTime(new Date(iso), MEDIUM_DATE_SHORT_TIME_FORMAT);
+  // A civil date carries no time zone; pinning the format to UTC keeps it on
+  // the day the server recorded instead of shifting west of Greenwich.
+  const formatDate = (date: string) =>
+    format.dateTime(new Date(`${date}T00:00:00Z`), {
+      dateStyle: "long",
+      timeZone: "UTC",
+    });
 
   switch (evidence.kind) {
     case SIGNAL_KIND.REQUEST_SUBMITTED:
@@ -281,6 +289,52 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
                 ))}
               </ul>
             )}
+          </Row>
+        </dl>
+      );
+    case SIGNAL_KIND.WORK_UNACKNOWLEDGED:
+      return (
+        <dl className="flex flex-col gap-2 text-sm">
+          <Row label={t("tasks.assigned")}>
+            {formatDateTime(evidence.assignedAt)}
+          </Row>
+          <Row label={t("inbox.evidence.daysUnacknowledged")}>
+            {format.number(evidence.daysWaiting)}
+          </Row>
+          {evidence.workingTargetDate !== null && (
+            <Row label={t("tasks.workingTarget")}>
+              {formatDate(evidence.workingTargetDate)}
+            </Row>
+          )}
+          {evidence.hardDeadlineDate !== null && (
+            <Row label={t("tasks.hardDeadline")}>
+              {formatDate(evidence.hardDeadlineDate)}
+            </Row>
+          )}
+        </dl>
+      );
+    case SIGNAL_KIND.WORK_DEADLINE_AT_RISK:
+      return (
+        <dl className="flex flex-col gap-2 text-sm">
+          <Row label={t("tasks.hardDeadline")}>
+            {formatDate(evidence.hardDeadlineDate)}
+          </Row>
+          <Row
+            label={t(
+              evidence.daysUntilDeadline < 0
+                ? "inbox.evidence.daysOverdue"
+                : "inbox.evidence.daysUntilDeadline",
+            )}
+          >
+            {format.number(Math.abs(evidence.daysUntilDeadline))}
+          </Row>
+          {evidence.workingTargetDate !== null && (
+            <Row label={t("tasks.workingTarget")}>
+              {formatDate(evidence.workingTargetDate)}
+            </Row>
+          )}
+          <Row label={t("tasks.status")}>
+            {t(OPEN_WORK_STATUS_LABEL_KEY[evidence.obligationStatus])}
           </Row>
         </dl>
       );

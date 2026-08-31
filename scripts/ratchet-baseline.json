@@ -253,7 +253,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 742,
+    "count": 743,
     "files": {
       "apps/api/scripts/ai-provider-canary.ts": 4,
       "apps/api/scripts/backfill-image-thumbnails.ts": 9,
@@ -403,6 +403,7 @@
       "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts": 6,
       "apps/api/src/lib/scheduler/tasks/infosoud.ts": 10,
       "apps/api/src/lib/scheduler/tasks/memory-curator.ts": 1,
+      "apps/api/src/lib/scouts/work-attention.ts": 1,
       "apps/api/src/lib/search/extraction-worker.ts": 1,
       "apps/api/src/lib/search/index-chat.ts": 3,
       "apps/api/src/lib/search/index-global.ts": 5,

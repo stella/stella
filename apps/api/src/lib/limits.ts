@@ -444,6 +444,10 @@ export const LIMITS = {
   infoSoudRelatedCasesMax: 50,
   infoSoudAgendaImportItemsMax: 1000,
   infoSoudTrackedCasesSyncBatch: 50,
+  /** Obligations the work-attention scout reads per tick. The sweep is a
+   *  keyset cycle over open governed work, so the page size bounds one tick's
+   *  cost rather than the corpus it eventually covers. */
+  workAttentionObligationsPage: 500,
   agendaAttendeesMax: 500,
   /** Max chat context file attachment size per file. */
   chatContextFileMaxChars: 16_000,

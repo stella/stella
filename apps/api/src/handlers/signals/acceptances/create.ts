@@ -59,6 +59,11 @@ const SIGNAL_WORK_OBLIGATION_SOURCE = {
   [SIGNAL_KIND.HEARING_CHANGED]: "court",
   [SIGNAL_KIND.DEADLINE_DETECTED]: "document",
   [SIGNAL_KIND.CONTRACT_REVIEWED]: "document",
+  // The work-attention kinds carry no task or deadline suggestion, so these
+  // entries only decide provenance if one is ever added. They report on work
+  // a person already created inside Stella, which is `manual`.
+  [SIGNAL_KIND.WORK_UNACKNOWLEDGED]: "manual",
+  [SIGNAL_KIND.WORK_DEADLINE_AT_RISK]: "manual",
 } as const satisfies Record<SignalKind, WorkObligationSource>;
 
 export type AcceptSignalDependencies = {
