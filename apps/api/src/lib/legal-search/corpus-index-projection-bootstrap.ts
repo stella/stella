@@ -13,11 +13,10 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
   buildCorpusIndexProjectionDesiredStateValues,
-  readActiveCorpusProjectionManifest,
+  lockActiveCorpusProjectionManifestForMutation,
   type CorpusIndexProjectionSubject,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
@@ -208,7 +207,6 @@ const bootstrapCaseLaw = async (
   generation: string,
   limit: number,
   afterEntityId: SafeId<"caseLawDecision"> | undefined,
-  manifest: CorpusIndexManifest,
 ): Promise<CorpusIndexProjectionBootstrapResult> => {
   const conditions = [
     isNull(corpusIndexProjectionStates.entityId),
@@ -341,8 +339,12 @@ const bootstrapCaseLaw = async (
   }
 
   // Recheck the generation after claiming canonical rows. Retirement waits on
-  // this share lock, and a changed status rolls back the whole bounded claim.
-  await readActiveCorpusProjectionManifest(tx, "case_law", generation, true);
+  // this mutation fence, and a changed status rolls back the bounded claim.
+  const manifest = await lockActiveCorpusProjectionManifestForMutation(
+    tx,
+    "case_law",
+    generation,
+  );
   await setZeroCaseLawProjectionEpochs(tx, entityIds);
 
   const values = rows.map((row: BootstrapCaseLawRow) =>
@@ -407,7 +409,6 @@ const bootstrapLegislation = async (
   generation: string,
   limit: number,
   afterEntityId: SafeId<"legislationDocument"> | undefined,
-  manifest: CorpusIndexManifest,
 ): Promise<CorpusIndexProjectionBootstrapResult> => {
   const conditions = [
     isNull(corpusIndexProjectionStates.entityId),
@@ -501,7 +502,11 @@ const bootstrapLegislation = async (
     ]),
   );
 
-  await readActiveCorpusProjectionManifest(tx, "legislation", generation, true);
+  const manifest = await lockActiveCorpusProjectionManifestForMutation(
+    tx,
+    "legislation",
+    generation,
+  );
   await setZeroLegislationProjectionEpochs(tx, entityIds);
 
   const values = rows.map((row: BootstrapLegislationRow) =>
@@ -569,12 +574,6 @@ export const bootstrapCorpusProjectionDesiredStateBatchTx = async (
   options: CorpusIndexProjectionBootstrapOptions,
 ): Promise<CorpusIndexProjectionBootstrapResult> => {
   const limit = validateBootstrapLimit(options.limit);
-  const manifest = await readActiveCorpusProjectionManifest(
-    tx,
-    options.family,
-    options.generation,
-    false,
-  );
   switch (options.family) {
     case "case_law":
       return await bootstrapCaseLaw(
@@ -582,7 +581,6 @@ export const bootstrapCorpusProjectionDesiredStateBatchTx = async (
         options.generation,
         limit,
         options.afterEntityId,
-        manifest,
       );
     case "legislation":
       return await bootstrapLegislation(
@@ -590,7 +588,6 @@ export const bootstrapCorpusProjectionDesiredStateBatchTx = async (
         options.generation,
         limit,
         options.afterEntityId,
-        manifest,
       );
     default:
       return options satisfies never;

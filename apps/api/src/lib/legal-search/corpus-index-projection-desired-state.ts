@@ -354,7 +354,7 @@ const activeManifests = async (
     )
     .orderBy(asc(corpusIndexGenerations.generation))
     .limit(CORPUS_INDEX_MANIFEST_COUNT + 1)
-    .for("share");
+    .for("update");
   if (rows.length > CORPUS_INDEX_MANIFEST_COUNT) {
     return panic(`Active corpus generation registry exceeds its manifest set`);
   }
@@ -368,7 +368,6 @@ export const readActiveCorpusProjectionManifest = async (
   tx: Transaction,
   family: CorpusIndexProjectionSubject["family"],
   generation: string,
-  lock: boolean,
 ): Promise<CorpusIndexManifest> => {
   const query = tx
     .select()
@@ -384,7 +383,42 @@ export const readActiveCorpusProjectionManifest = async (
       ),
     )
     .limit(1);
-  const rows = lock ? await query.for("share") : await query;
+  const rows = await query;
+  const row = rows.at(0);
+  if (row === undefined) {
+    return panic(
+      `Active corpus generation is not registered: ${family}/${generation}`,
+    );
+  }
+  return requireRegisteredCorpusIndexManifest(row);
+};
+
+/**
+ * Validate an active manifest while taking the generation-local mutation
+ * fence. Every projection state or intent mutation must take this lock before
+ * its first projection-row lock so statement-trigger revision bumps cannot
+ * deadlock while upgrading shared generation locks.
+ */
+export const lockActiveCorpusProjectionManifestForMutation = async (
+  tx: Transaction,
+  family: CorpusIndexProjectionSubject["family"],
+  generation: string,
+): Promise<CorpusIndexManifest> => {
+  const rows = await tx
+    .select()
+    .from(corpusIndexGenerations)
+    .where(
+      and(
+        eq(corpusIndexGenerations.family, family),
+        eq(corpusIndexGenerations.generation, generation),
+        or(
+          eq(corpusIndexGenerations.status, "building"),
+          eq(corpusIndexGenerations.status, "serving"),
+        ),
+      ),
+    )
+    .limit(1)
+    .for("update");
   const row = rows.at(0);
   if (row === undefined) {
     return panic(
@@ -419,6 +453,32 @@ export const readRegisteredCorpusProjectionManifestForCleanup = async (
   if (row === undefined) {
     return panic(
       `Corpus generation is not registered for cleanup: ${family}/${generation}`,
+    );
+  }
+  return requireRegisteredCorpusIndexManifest(row);
+};
+
+/** Lock a registered generation before mutating cleanup or retirement state. */
+export const lockRegisteredCorpusProjectionManifestForMutation = async (
+  tx: Transaction,
+  family: CorpusIndexProjectionSubject["family"],
+  generation: string,
+): Promise<CorpusIndexManifest> => {
+  const rows = await tx
+    .select()
+    .from(corpusIndexGenerations)
+    .where(
+      and(
+        eq(corpusIndexGenerations.family, family),
+        eq(corpusIndexGenerations.generation, generation),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  const row = rows.at(0);
+  if (row === undefined) {
+    return panic(
+      `Corpus generation is not registered for mutation: ${family}/${generation}`,
     );
   }
   return requireRegisteredCorpusIndexManifest(row);
@@ -643,7 +703,7 @@ export const ensureCorpusProjectionDesiredStateTx = async (
       ),
     )
     .limit(1)
-    .for("share");
+    .for("update");
   const generationRow = generationRows.at(0);
   if (generationRow === undefined) {
     return panic(

@@ -9,7 +9,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES } from "@/api/lib/legal-search/corpus-index-projection-contract";
-import { readRegisteredCorpusProjectionManifestForCleanup } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { lockRegisteredCorpusProjectionManifestForMutation } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { corpusIndexUnknownAppendBarrierAt } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
@@ -68,7 +68,7 @@ export const advanceCorpusProjectionErasuresTx = async <
 ): Promise<AdvanceCorpusProjectionErasuresResult> => {
   const limit = validateLimit(requestedLimit);
   const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
-  const manifest = await readRegisteredCorpusProjectionManifestForCleanup(
+  const manifest = await lockRegisteredCorpusProjectionManifestForMutation(
     tx,
     family,
     generation,

@@ -14,13 +14,14 @@ import type {
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import type { CorpusIndexIntentStatus } from "@/api/lib/legal-search/corpus-index-projection-contract";
-import { readRegisteredCorpusProjectionManifestForCleanup } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { lockRegisteredCorpusProjectionManifestForMutation } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   corpusIndexUnknownAppendBarrierAt,
   countCorpusProjectionRevisions,
   readCorpusProjectionDeleteSettlement,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import { lockCorpusIndexProjectionIntentMutationsTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
   entityIdsForCorpusProjectionWorkScope,
@@ -121,7 +122,7 @@ export const claimCorpusProjectionCleanupTx = async <
   const limit = validateCleanupBatchSize(requestedLimit);
   const leaseMs = validateLeaseMs(requestedLeaseMs);
   const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
-  await readRegisteredCorpusProjectionManifestForCleanup(
+  await lockRegisteredCorpusProjectionManifestForMutation(
     tx,
     family,
     generation,
@@ -222,6 +223,7 @@ export const recordCorpusProjectionDeleteTx = async (
   ) {
     return panic("Corpus projection delete receipt is invalid");
   }
+  await lockCorpusIndexProjectionIntentMutationsTx(tx, intentIds);
   await lockCorpusProjectionIntentsById(tx, intentIds);
   const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   const rows = await tx
@@ -270,6 +272,7 @@ export const retryCorpusProjectionCleanupTx = async (
   if (intentIds.length === 0) {
     return 0;
   }
+  await lockCorpusIndexProjectionIntentMutationsTx(tx, intentIds);
   await lockCorpusProjectionIntentsById(tx, intentIds);
   const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   const rows = await tx
@@ -337,7 +340,7 @@ export const claimCorpusProjectionCleanupSettlementTx = async <
   const limit = validateCleanupBatchSize(requestedLimit);
   const leaseMs = validateLeaseMs(requestedLeaseMs);
   const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
-  await readRegisteredCorpusProjectionManifestForCleanup(
+  await lockRegisteredCorpusProjectionManifestForMutation(
     tx,
     family,
     generation,
@@ -534,6 +537,7 @@ export const releaseCorpusProjectionCleanupSettlementTx = async (
   tx: Transaction,
   { lease, testNow }: ReleaseCorpusProjectionCleanupSettlementOptions,
 ): Promise<number> => {
+  await lockCorpusIndexProjectionIntentMutationsTx(tx, lease.intentIds);
   await lockCorpusProjectionIntentsById(tx, lease.intentIds);
   const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   const rows = await tx
@@ -569,6 +573,7 @@ export const settleCorpusProjectionCleanupTx = async (
   tx: Transaction,
   { proof, testNow }: SettleCorpusProjectionCleanupOptions,
 ): Promise<number> => {
+  await lockCorpusIndexProjectionIntentMutationsTx(tx, proof.intentIds);
   await lockCorpusProjectionIntentsById(tx, proof.intentIds);
   const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
   const rows = await tx
@@ -624,6 +629,7 @@ export const reopenCorpusProjectionCleanupTx = async (
   ) {
     return panic("Corpus projection cleanup reopen request is invalid");
   }
+  await lockCorpusIndexProjectionIntentMutationsTx(tx, intentIds);
   const identities = await tx
     .select({
       family: corpusIndexProjectionIntents.family,
@@ -780,7 +786,7 @@ export const recoverExpiredCorpusProjectionIntentsTx = async <
 ): Promise<CorpusProjectionExpiredIntent[]> => {
   const limit = validateCleanupBatchSize(requestedLimit);
   const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
-  const manifest = await readRegisteredCorpusProjectionManifestForCleanup(
+  const manifest = await lockRegisteredCorpusProjectionManifestForMutation(
     tx,
     family,
     generation,
