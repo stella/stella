@@ -10,6 +10,13 @@ pub type AppState = Arc<Mutex<SessionManager>>;
 
 const STELLA_DESKTOP_ACCOUNT_URL: &str = "https://my.stll.app/settings/account/desktop";
 
+fn stella_account_url(linked_self_host_origin: Option<&str>) -> String {
+  linked_self_host_origin.map_or_else(
+    || STELLA_DESKTOP_ACCOUNT_URL.to_string(),
+    |origin| format!("{origin}/settings/account/desktop"),
+  )
+}
+
 #[tauri::command]
 pub async fn get_state(state: State<'_, AppState>) -> Result<AppSnapshot, String> {
   let mgr = state.lock().await;
@@ -17,10 +24,20 @@ pub async fn get_state(state: State<'_, AppState>) -> Result<AppSnapshot, String
 }
 
 #[tauri::command]
-pub async fn open_stella_account(app: tauri::AppHandle) -> Result<(), String> {
+pub async fn open_stella_account(
+  app: tauri::AppHandle,
+  state: State<'_, AppState>,
+) -> Result<(), String> {
+  let linked_self_host_origin = {
+    let manager = state.lock().await;
+    manager.linked_self_host_origin().map(str::to_owned)
+  };
   app
     .opener()
-    .open_url(STELLA_DESKTOP_ACCOUNT_URL, None::<&str>)
+    .open_url(
+      stella_account_url(linked_self_host_origin.as_deref()),
+      None::<&str>,
+    )
     .map_err(|e| format!("stella desktop could not open stella web: {e}"))
 }
 
@@ -159,4 +176,18 @@ pub async fn set_autostart(
       .map_err(|e| format!("autostart disable failed: {e}"))?;
   }
   Ok(enabled)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn account_settings_url_uses_the_linked_self_host_origin() {
+    assert_eq!(
+      stella_account_url(Some("https://stella.example")),
+      "https://stella.example/settings/account/desktop"
+    );
+    assert_eq!(stella_account_url(None), STELLA_DESKTOP_ACCOUNT_URL);
+  }
 }

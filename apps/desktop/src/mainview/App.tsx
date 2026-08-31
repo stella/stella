@@ -2,7 +2,7 @@ import { startTransition, useEffect, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useLocale, useTranslations } from "use-intl";
+import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
 import { Button } from "@stll/ui/button";
@@ -233,6 +233,7 @@ const GeneralPane = ({
   onLanguageChange: (language: SupportedLanguage) => void;
   onOpenStellaWeb: () => void;
 }) => {
+  const format = useFormatter();
   const t = useTranslations("settings");
 
   return (
@@ -270,7 +271,7 @@ const GeneralPane = ({
               label={t("lastVerified")}
               value={
                 linkedAccount.verifiedAt
-                  ? new Date(linkedAccount.verifiedAt).toLocaleString([], {
+                  ? format.dateTime(new Date(linkedAccount.verifiedAt), {
                       dateStyle: "medium",
                       timeStyle: "short",
                     })

@@ -347,9 +347,25 @@ async fn link_account(
     }
   }
 
-  {
+  let linked_account_web_origin =
+    (!is_static_origin).then(|| origin_ref.unwrap_or_default().to_string());
+  let link_result = {
     let mut manager = state.manager.lock().await;
-    manager.link_account(request.linked_account).await;
+    manager
+      .link_account(request.linked_account, linked_account_web_origin)
+      .await
+  };
+  if link_result.is_err() {
+    tracing::error!("failed to persist linked desktop account");
+    return json_response(
+      StatusCode::INTERNAL_SERVER_ERROR,
+      serde_json::json!({
+        "message": "Stella Desktop could not save the linked account."
+      }),
+      origin_ref,
+      allowed,
+    )
+    .into_response();
   }
 
   json_response(
@@ -715,6 +731,94 @@ mod tests {
     );
 
     tokio::fs::remove_file(store_path).await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn link_account_records_its_trusted_self_host_origin() {
+    let state = test_state();
+    let manager = Arc::clone(&state.manager);
+    let store_path = std::env::temp_dir().join(format!(
+      "stella-desktop-self-host-link-account-{}.json",
+      uuid::Uuid::new_v4()
+    ));
+    {
+      let mut manager = manager.lock().await;
+      manager.set_store_path_for_test(store_path.clone());
+      manager.trust_self_host_connection_for_test(
+        "https://stella.example".to_string(),
+        "https://api.stella.example".to_string(),
+      );
+    }
+    let app = build_router(state);
+    let request = Request::builder()
+      .method("POST")
+      .uri("/v1/link-account")
+      .header("origin", "https://stella.example")
+      .header("content-type", "application/json")
+      .body(Body::from(
+        serde_json::to_vec(&serde_json::json!({
+          "apiBaseUrl": "https://api.stella.example",
+          "linkedAccount": {
+            "email": "user@example.com",
+            "name": "Test User",
+            "verifiedAt": "2026-08-31T10:00:00Z"
+          }
+        }))
+        .unwrap(),
+      ))
+      .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+      manager.lock().await.linked_self_host_origin(),
+      Some("https://stella.example")
+    );
+
+    tokio::fs::remove_file(store_path).await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn link_account_reports_persistence_failure() {
+    let state = test_state();
+    let manager = Arc::clone(&state.manager);
+    let blocked_parent = std::env::temp_dir().join(format!(
+      "stella-desktop-link-account-blocked-{}",
+      uuid::Uuid::new_v4()
+    ));
+    tokio::fs::write(&blocked_parent, b"not a directory")
+      .await
+      .unwrap();
+    manager
+      .lock()
+      .await
+      .set_store_path_for_test(blocked_parent.join("sessions.json"));
+    let app = build_router(state);
+    let request = Request::builder()
+      .method("POST")
+      .uri("/v1/link-account")
+      .header("origin", "http://localhost:3000")
+      .header("content-type", "application/json")
+      .body(Body::from(
+        serde_json::to_vec(&serde_json::json!({
+          "apiBaseUrl": "https://api.example.com",
+          "linkedAccount": {
+            "email": "user@example.com",
+            "name": "Test User",
+            "verifiedAt": "2026-08-31T10:00:00Z"
+          }
+        }))
+        .unwrap(),
+      ))
+      .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(manager.lock().await.get_snapshot().linked_account.is_none());
+
+    tokio::fs::remove_file(blocked_parent).await.unwrap();
   }
 
   #[tokio::test]

@@ -41,6 +41,8 @@ pub struct SessionStorePayload {
   #[serde(default)]
   pub cleanup_paths: Vec<String>,
   pub linked_account: Option<LinkedAccountSnapshot>,
+  #[serde(default)]
+  pub linked_account_web_origin: Option<String>,
   pub notification_preferences: Option<DesktopNotificationPreferences>,
   pub sessions: Vec<PersistedDesktopSession>,
   #[serde(default)]
@@ -56,6 +58,7 @@ pub enum StoreLoadIssue {
 pub struct LoadedSessionStore {
   pub cleanup_paths: Vec<String>,
   pub linked_account: Option<LinkedAccountSnapshot>,
+  pub linked_account_web_origin: Option<String>,
   pub notification_preferences: Option<DesktopNotificationPreferences>,
   pub sessions: Vec<PersistedDesktopSession>,
   pub trusted_self_host_connections: Vec<TrustedSelfHostConnection>,
@@ -66,6 +69,7 @@ pub async fn load_session_store(store_path: &Path) -> LoadedSessionStore {
   let empty = LoadedSessionStore {
     cleanup_paths: Vec::new(),
     linked_account: None,
+    linked_account_web_origin: None,
     notification_preferences: None,
     sessions: Vec::new(),
     trusted_self_host_connections: Vec::new(),
@@ -87,6 +91,7 @@ pub async fn load_session_store(store_path: &Path) -> LoadedSessionStore {
     Ok(payload) => LoadedSessionStore {
       cleanup_paths: payload.cleanup_paths,
       linked_account: payload.linked_account,
+      linked_account_web_origin: payload.linked_account_web_origin,
       notification_preferences: payload.notification_preferences,
       sessions: payload.sessions,
       trusted_self_host_connections: payload.trusted_self_host_connections,
@@ -103,6 +108,7 @@ pub async fn persist_session_store(
   store_path: &Path,
   cleanup_paths: &[String],
   linked_account: &Option<LinkedAccountSnapshot>,
+  linked_account_web_origin: &Option<String>,
   notification_preferences: &DesktopNotificationPreferences,
   sessions: &[PersistedDesktopSession],
   trusted_self_host_connections: &[TrustedSelfHostConnection],
@@ -116,6 +122,7 @@ pub async fn persist_session_store(
   let payload = SessionStorePayload {
     cleanup_paths: cleanup_paths.to_vec(),
     linked_account: linked_account.clone(),
+    linked_account_web_origin: linked_account_web_origin.clone(),
     notification_preferences: Some(notification_preferences.clone()),
     sessions: sessions.to_vec(),
     trusted_self_host_connections: trusted_self_host_connections.to_vec(),
@@ -184,6 +191,7 @@ mod tests {
         name: Some("Test User".into()),
         verified_at: "2026-01-01T00:00:00Z".into(),
       }),
+      linked_account_web_origin: Some("https://selfhost.example".into()),
       notification_preferences: Some(DesktopNotificationPreferences::default()),
       sessions: vec![make_session()],
       trusted_self_host_connections: vec![TrustedSelfHostConnection {
@@ -220,9 +228,27 @@ mod tests {
     );
     assert!(deserialized.linked_account.is_some());
     assert_eq!(
+      deserialized.linked_account_web_origin.as_deref(),
+      Some("https://selfhost.example")
+    );
+    assert_eq!(
       deserialized.linked_account.unwrap().email,
       "user@example.com"
     );
+  }
+
+  #[test]
+  fn persisted_account_without_web_origin_remains_readable() {
+    let mut value = serde_json::to_value(make_payload()).unwrap();
+    value
+      .as_object_mut()
+      .unwrap()
+      .remove("linkedAccountWebOrigin");
+
+    let payload: SessionStorePayload = serde_json::from_value(value).unwrap();
+
+    assert!(payload.linked_account.is_some());
+    assert!(payload.linked_account_web_origin.is_none());
   }
 
   #[test]
@@ -278,6 +304,7 @@ mod tests {
       &path,
       &["/tmp/cleanup.docx".into()],
       &linked,
+      &Some("https://selfhost.example".into()),
       &prefs,
       &[session],
       &[TrustedSelfHostConnection {
@@ -299,6 +326,10 @@ mod tests {
       "https://api.selfhost.example"
     );
     assert_eq!(loaded.linked_account.unwrap().email, "test@test.com");
+    assert_eq!(
+      loaded.linked_account_web_origin.as_deref(),
+      Some("https://selfhost.example")
+    );
 
     let _ = fs::remove_file(&path).await;
   }

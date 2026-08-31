@@ -182,6 +182,7 @@ pub struct SessionManager {
   unconfirmed_sessions: HashMap<String, PersistedDesktopSession>,
   cleanup_paths: HashSet<String>,
   linked_account: Option<LinkedAccountSnapshot>,
+  linked_account_web_origin: Option<String>,
   notification_preferences: DesktopNotificationPreferences,
   trusted_self_host_connections: Vec<TrustedSelfHostConnection>,
   update: DesktopUpdateSnapshot,
@@ -533,6 +534,7 @@ impl SessionManager {
       unconfirmed_sessions: HashMap::new(),
       cleanup_paths: HashSet::new(),
       linked_account: None,
+      linked_account_web_origin: None,
       notification_preferences: DesktopNotificationPreferences::default(),
       trusted_self_host_connections: Vec::new(),
       update: DesktopUpdateSnapshot::default(),
@@ -560,6 +562,7 @@ impl SessionManager {
     let store = session_store::load_session_store(&self.store_path).await;
 
     self.linked_account = store.linked_account;
+    self.linked_account_web_origin = store.linked_account_web_origin;
     if let Some(prefs) = store.notification_preferences {
       self.notification_preferences = prefs;
     }
@@ -1013,10 +1016,29 @@ impl SessionManager {
     self.get_snapshot()
   }
 
-  pub async fn link_account(&mut self, linked_account: LinkedAccountSnapshot) {
-    self.linked_account = Some(linked_account);
-    self.persist_sessions().await;
+  pub async fn link_account(
+    &mut self,
+    linked_account: LinkedAccountSnapshot,
+    web_origin: Option<String>,
+  ) -> Result<(), String> {
+    let previous_account = self.linked_account.replace(linked_account);
+    let previous_web_origin =
+      std::mem::replace(&mut self.linked_account_web_origin, web_origin);
+    if let Err(error) = self.persist_sessions_result().await {
+      self.linked_account = previous_account;
+      self.linked_account_web_origin = previous_web_origin;
+      return Err(error);
+    }
     self.emit_state_change();
+    Ok(())
+  }
+
+  pub fn linked_self_host_origin(&self) -> Option<&str> {
+    self.linked_account.as_ref()?;
+    let web_origin = self.linked_account_web_origin.as_deref()?;
+    self
+      .is_trusted_self_host_origin(web_origin)
+      .then_some(web_origin)
   }
 
   pub fn is_trusted_self_host_origin(&self, origin: &str) -> bool {
@@ -2038,7 +2060,7 @@ impl SessionManager {
     Ok(file_path.to_string_lossy().to_string())
   }
 
-  async fn persist_sessions(&self) {
+  async fn persist_sessions_result(&self) -> Result<(), String> {
     let mut persisted: Vec<PersistedDesktopSession> = self
       .unconfirmed_sessions
       .values()
@@ -2054,16 +2076,20 @@ impl SessionManager {
       v
     };
 
-    if let Err(e) = session_store::persist_session_store(
+    session_store::persist_session_store(
       &self.store_path,
       &cleanup,
       &self.linked_account,
+      &self.linked_account_web_origin,
       &self.notification_preferences,
       &persisted,
       &self.trusted_self_host_connections,
     )
     .await
-    {
+  }
+
+  async fn persist_sessions(&self) {
+    if let Err(e) = self.persist_sessions_result().await {
       tracing::error!(error = %e, "failed to persist session store");
     }
   }
@@ -2738,7 +2764,14 @@ mod tests {
       verified_at: "2026-08-31T10:00:00Z".to_string(),
     };
 
-    manager.link_account(account).await;
+    manager.trust_self_host_connection_for_test(
+      "https://selfhost.example".to_string(),
+      "https://api.selfhost.example".to_string(),
+    );
+    manager
+      .link_account(account, Some("https://selfhost.example".to_string()))
+      .await
+      .unwrap();
 
     assert_eq!(
       manager
@@ -2748,6 +2781,10 @@ mod tests {
         .map(|value| value.email.as_str()),
       Some("user@example.com")
     );
+    assert_eq!(
+      manager.linked_self_host_origin(),
+      Some("https://selfhost.example")
+    );
     let loaded = session_store::load_session_store(&path).await;
     assert_eq!(
       loaded
@@ -2755,6 +2792,10 @@ mod tests {
         .as_ref()
         .map(|value| value.email.as_str()),
       Some("user@example.com")
+    );
+    assert_eq!(
+      loaded.linked_account_web_origin.as_deref(),
+      Some("https://selfhost.example")
     );
 
     tokio::fs::remove_file(path).await.unwrap();
