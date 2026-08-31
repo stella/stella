@@ -5,4 +5,4 @@ SET LOCAL statement_timeout = '30s';--> statement-breakpoint
 -- ACCESS EXCLUSIVE lock. Parties rows are one per document version and the
 -- table is young; the timeout keeps that assumption explicit.
 ALTER TABLE "document_review_parties"
-  VALIDATE CONSTRAINT "document_review_parties_workspace_id_workspaces_id_fkey";
+  VALIDATE CONSTRAINT "document_review_parties_workspace_id_workspaces_id_fk";

@@ -15,6 +15,6 @@ ALTER TABLE "document_review_runs" DROP COLUMN IF EXISTS "basis_v1";--> statemen
 -- through the composite tenant key; the create migration only wrote the latter.
 -- The next migration validates it outside this transaction.
 ALTER TABLE "document_review_parties"
-  ADD CONSTRAINT "document_review_parties_workspace_id_workspaces_id_fkey"
+  ADD CONSTRAINT "document_review_parties_workspace_id_workspaces_id_fk"
   FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id")
   ON DELETE CASCADE NOT VALID;
