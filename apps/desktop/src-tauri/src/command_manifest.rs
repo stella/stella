@@ -2,6 +2,7 @@ macro_rules! with_stella_commands {
   ($consumer:ident) => {
     $consumer! {
       commands::get_state => "get_state",
+      commands::open_stella_account => "open_stella_account",
       commands::update_notification_preferences => "update_notification_preferences",
       commands::open_session_file => "open_session_file",
       commands::reveal_session => "reveal_session",

@@ -5,6 +5,7 @@
   "permissions": [
     "core:default",
     "allow-get-state",
+    "allow-open-stella-account",
     "allow-desktop-report-error",
     "allow-update-notification-preferences",
     "allow-copy-diagnostics",

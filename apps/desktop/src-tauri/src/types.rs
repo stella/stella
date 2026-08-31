@@ -131,6 +131,36 @@ pub struct LinkedAccountSnapshot {
   pub verified_at: String,
 }
 
+const MAX_LINKED_ACCOUNT_EMAIL_LENGTH: usize = 320;
+const MAX_LINKED_ACCOUNT_NAME_LENGTH: usize = 256;
+
+pub fn is_valid_linked_account(account: &LinkedAccountSnapshot) -> bool {
+  let email = account.email.trim();
+  if email.is_empty()
+    || email.len() > MAX_LINKED_ACCOUNT_EMAIL_LENGTH
+    || !email.contains('@')
+    || email.chars().any(char::is_control)
+  {
+    return false;
+  }
+
+  if account.name.as_ref().is_some_and(|name| {
+    name.len() > MAX_LINKED_ACCOUNT_NAME_LENGTH || name.chars().any(char::is_control)
+  }) {
+    return false;
+  }
+
+  chrono::DateTime::parse_from_rfc3339(&account.verified_at).is_ok()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct LinkAccountRequest {
+  pub api_base_url: String,
+  pub linked_account: LinkedAccountSnapshot,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
@@ -213,11 +243,12 @@ pub struct TrustedSelfHostConnection {
 /// Monotonic bridge contract revision. Increment whenever the bridge
 /// surface changes so the web app can require a minimum revision without
 /// coupling to the desktop's literal app version.
-pub const BRIDGE_VERSION: u32 = 10;
+pub const BRIDGE_VERSION: u32 = 11;
 
 /// Versioned contracts advertised to the web app. A client requires the
 /// capability it uses; breaking semantics receive a new capability id.
-pub const BRIDGE_CAPABILITIES: &[&str] = &["office-edit.v1", "self-host.connect"];
+pub const BRIDGE_CAPABILITIES: &[&str] =
+  &["office-edit.v1", "self-host.connect", "account-link.v1"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -409,6 +440,42 @@ mod tests {
     assert!(serde_json::from_str::<SessionStatus>(r#""unknown""#).is_err());
   }
 
+  #[test]
+  fn linked_account_validation_accepts_authenticated_snapshot() {
+    assert!(is_valid_linked_account(&LinkedAccountSnapshot {
+      email: "user@example.com".to_string(),
+      name: Some("Test User".to_string()),
+      verified_at: "2026-08-31T10:00:00Z".to_string(),
+    }));
+  }
+
+  #[test]
+  fn linked_account_validation_rejects_unbounded_or_invalid_fields() {
+    let invalid_accounts = [
+      LinkedAccountSnapshot {
+        email: "not-an-email".to_string(),
+        name: None,
+        verified_at: "2026-08-31T10:00:00Z".to_string(),
+      },
+      LinkedAccountSnapshot {
+        email: "user@example.com".to_string(),
+        name: Some("x".repeat(MAX_LINKED_ACCOUNT_NAME_LENGTH + 1)),
+        verified_at: "2026-08-31T10:00:00Z".to_string(),
+      },
+      LinkedAccountSnapshot {
+        email: "user@example.com".to_string(),
+        name: None,
+        verified_at: "not-a-time".to_string(),
+      },
+    ];
+
+    assert!(
+      invalid_accounts
+        .iter()
+        .all(|account| !is_valid_linked_account(account))
+    );
+  }
+
   // -- AppSnapshot round-trip --
 
   #[test]
@@ -575,11 +642,17 @@ mod rpc_codegen_tests {
   use std::path::Path;
   use ts_rs::{Config, TS, TypeVisitor};
 
-  const GENERATED_PATH: &str = "../src/shared/rpc.gen.ts";
-  const COMMITTED_BINDINGS: &str = include_str!("../../src/shared/rpc.gen.ts");
+  const GENERATED_PATH: &str = "../../../packages/api-contract/src/desktop-rpc.gen.ts";
+  const COMMITTED_BINDINGS: &str =
+    include_str!("../../../../packages/api-contract/src/desktop-rpc.gen.ts");
   const GENERATED_HEADER: &str = "// Generated from apps/desktop/src-tauri/src/types.rs.\n// Regenerate from the repository root with `bun --filter @stll/desktop rpc:generate`.\n// Do not edit by hand.\n\n";
 
-  type DesktopRpcContract = (AppSnapshot, OpenFileRequest, OpenFileResponse);
+  type DesktopRpcContract = (
+    AppSnapshot,
+    LinkAccountRequest,
+    OpenFileRequest,
+    OpenFileResponse,
+  );
 
   struct DeclarationVisitor<'a> {
     config: &'a Config,
@@ -690,7 +763,7 @@ mod rpc_codegen_tests {
 
 /// Golden-fixture compatibility checks for the generated bridge types.
 ///
-/// Rust serde DTOs are the source for `src/shared/rpc.gen.ts`. The JSON files
+/// Rust serde DTOs are the source for `packages/api-contract/src/desktop-rpc.gen.ts`. The JSON files
 /// under `apps/desktop/fixtures/rpc/` independently pin representative wire
 /// payloads, and `tests/rpc.golden.test.ts` validates those same fixtures
 /// against the generated declarations.

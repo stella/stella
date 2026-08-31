@@ -1,7 +1,7 @@
 {
   "bridgePort": 45901,
-  "bridgeVersion": 10,
-  "capabilities": ["office-edit.v1", "self-host.connect"],
+  "bridgeVersion": 11,
+  "capabilities": ["office-edit.v1", "self-host.connect", "account-link.v1"],
   "linkedAccount": {
     "email": "counsel@example.com",
     "name": "Jane Counsel",

@@ -43,6 +43,19 @@ export const isClipboardCopyShortcut = (shortcut: ClipboardCopyShortcut) =>
   !shortcut.shiftKey &&
   shortcut.key.toLocaleLowerCase() === "c";
 
+export const clipboardTimelineKeyAction = (key: string) => {
+  switch (key) {
+    case "ArrowDown":
+      return "focusSearch";
+    case "ArrowLeft":
+      return "previous";
+    case "ArrowRight":
+      return "next";
+    default:
+      return null;
+  }
+};
+
 export const clipboardDraggedItemId = (
   data: ClipboardDragData,
   itemIds: ReadonlySet<string>,
@@ -114,6 +127,28 @@ type ClipboardRailWindowOptions = {
 
 /** Half-open index range `[start, end)` of cards to keep mounted. */
 export type ClipboardRailWindow = { end: number; start: number };
+
+type ClipboardRailScrollDeltaOptions = {
+  cardEnd: number;
+  cardStart: number;
+  viewportEnd: number;
+  viewportStart: number;
+};
+
+export const clipboardRailScrollDelta = ({
+  cardEnd,
+  cardStart,
+  viewportEnd,
+  viewportStart,
+}: ClipboardRailScrollDeltaOptions) => {
+  if (cardStart < viewportStart) {
+    return cardStart - viewportStart;
+  }
+  if (cardEnd > viewportEnd) {
+    return cardEnd - viewportEnd;
+  }
+  return 0;
+};
 
 const UNMEASURED_VISIBLE_CARDS = 8;
 

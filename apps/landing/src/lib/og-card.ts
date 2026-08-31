@@ -119,7 +119,7 @@ const cardBackground = async (): Promise<string> => {
       ),
     )
       .resize(WIDTH)
-      .png({ palette: true, colors: CARD_PALETTE_COLOURS })
+      .png({ compressionLevel: 9 })
       .toBase64();
 
     return new Resvg(

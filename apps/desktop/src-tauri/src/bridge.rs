@@ -10,9 +10,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 
-use crate::session_manager::SessionManager;
+use crate::session_manager::{LinkedAccountOriginUpdate, SessionManager};
 use crate::types::{
-  BRIDGE_CAPABILITIES, BRIDGE_VERSION, OpenFileRequest, is_safe_session_id,
+  BRIDGE_CAPABILITIES, BRIDGE_VERSION, LinkAccountRequest, OpenFileRequest,
+  is_safe_session_id, is_valid_linked_account,
 };
 
 const BIND_RETRY_INITIAL_BACKOFF: Duration = Duration::from_secs(1);
@@ -207,26 +208,26 @@ async fn open_file_request(
   let is_static_origin = state
     .static_allowed_origins
     .contains(origin_ref.unwrap_or_default());
-  if !is_static_origin {
-    let trusted_connection = {
-      let manager = state.manager.lock().await;
-      manager.is_trusted_self_host_connection(
-        origin_ref.unwrap_or_default(),
-        &request.api_base_url,
-      )
-    };
-    if !trusted_connection {
-      return json_response(
-        StatusCode::FORBIDDEN,
-        serde_json::json!({
-            "message": "Desktop bridge only accepts requests from allowed stella origins."
-        }),
-        origin_ref,
-        false,
-      )
-      .into_response();
-    }
+  let trusted_self_host_connection = {
+    let manager = state.manager.lock().await;
+    manager.is_trusted_self_host_connection(
+      origin_ref.unwrap_or_default(),
+      &request.api_base_url,
+    )
+  };
+  if !is_static_origin && !trusted_self_host_connection {
+    return json_response(
+      StatusCode::FORBIDDEN,
+      serde_json::json!({
+          "message": "Desktop bridge only accepts requests from allowed stella origins."
+      }),
+      origin_ref,
+      false,
+    )
+    .into_response();
   }
+  let linked_account_web_origin =
+    trusted_self_host_connection.then(|| origin_ref.unwrap_or_default().to_string());
 
   // Clone the HTTP client while briefly holding the lock, then download
   // outside the lock to avoid blocking health checks during network I/O.
@@ -257,7 +258,13 @@ async fn open_file_request(
 
   let result = {
     let mut manager = state.manager.lock().await;
-    manager.open_file(request, prefetched_buffer).await
+    manager
+      .open_file(
+        request,
+        prefetched_buffer,
+        LinkedAccountOriginUpdate::Replace(linked_account_web_origin),
+      )
+      .await
   };
 
   match result {
@@ -286,6 +293,92 @@ async fn open_file_request(
     )
     .into_response(),
   }
+}
+
+async fn link_account(
+  State(state): State<BridgeState>,
+  headers: HeaderMap,
+  Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+  let origin = get_origin(&headers);
+  let origin_ref = origin.as_deref();
+  let allowed = is_allowed_origin(&state, origin_ref).await;
+
+  if !allowed {
+    return json_response(
+      StatusCode::FORBIDDEN,
+      serde_json::json!({
+        "message": "Desktop bridge only accepts requests from allowed stella origins."
+      }),
+      origin_ref,
+      false,
+    )
+    .into_response();
+  }
+
+  let request = match serde_json::from_value::<LinkAccountRequest>(body) {
+    Ok(request) if is_valid_linked_account(&request.linked_account) => request,
+    _ => {
+      return json_response(
+        StatusCode::BAD_REQUEST,
+        serde_json::json!({ "message": "Invalid linked account payload" }),
+        origin_ref,
+        allowed,
+      )
+      .into_response();
+    }
+  };
+
+  let is_static_origin = state
+    .static_allowed_origins
+    .contains(origin_ref.unwrap_or_default());
+  let trusted_self_host_connection = {
+    let manager = state.manager.lock().await;
+    manager.is_trusted_self_host_connection(
+      origin_ref.unwrap_or_default(),
+      &request.api_base_url,
+    )
+  };
+  if !is_static_origin && !trusted_self_host_connection {
+    return json_response(
+      StatusCode::FORBIDDEN,
+      serde_json::json!({
+        "message": "Desktop bridge only accepts requests from allowed stella origins."
+      }),
+      origin_ref,
+      false,
+    )
+    .into_response();
+  }
+
+  let linked_account_web_origin =
+    trusted_self_host_connection.then(|| origin_ref.unwrap_or_default().to_string());
+  let link_result = {
+    let mut manager = state.manager.lock().await;
+    manager
+      .link_account(request.linked_account, linked_account_web_origin)
+      .await
+  };
+  if link_result.is_err() {
+    tracing::error!("failed to persist linked desktop account");
+    return json_response(
+      StatusCode::INTERNAL_SERVER_ERROR,
+      serde_json::json!({
+        "message": "Stella Desktop could not save the linked account."
+      }),
+      origin_ref,
+      allowed,
+    )
+    .into_response();
+  }
+
+  json_response(
+    StatusCode::OK,
+    serde_json::json!({ "linked": true }),
+    origin_ref,
+    allowed,
+  )
+  .into_response()
 }
 
 async fn open_file(
@@ -317,6 +410,7 @@ fn build_router(state: BridgeState) -> Router {
   Router::new()
     .route("/health", get(health))
     .route("/v1/self-host-connection", get(self_host_connection))
+    .route("/v1/link-account", post(link_account))
     .route("/v1/open-file", post(open_file))
     .fallback(not_found)
     .layer(axum::middleware::from_fn_with_state(
@@ -553,6 +647,208 @@ mod tests {
           .unwrap(),
       ))
       .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+  }
+
+  #[tokio::test]
+  async fn link_account_rejects_invalid_payload() {
+    let app = build_router(test_state());
+    let request = Request::builder()
+      .method("POST")
+      .uri("/v1/link-account")
+      .header("origin", "http://localhost:3000")
+      .header("content-type", "application/json")
+      .body(Body::from(
+        serde_json::to_vec(&serde_json::json!({
+          "apiBaseUrl": "https://api.example.com",
+          "linkedAccount": {
+            "email": "not-an-email",
+            "name": null,
+            "verifiedAt": "not-a-time"
+          }
+        }))
+        .unwrap(),
+      ))
+      .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+  }
+
+  #[tokio::test]
+  async fn link_account_persists_authenticated_snapshot() {
+    let state = test_state();
+    let manager = Arc::clone(&state.manager);
+    let store_path = std::env::temp_dir().join(format!(
+      "stella-desktop-link-account-{}.json",
+      uuid::Uuid::new_v4()
+    ));
+    manager
+      .lock()
+      .await
+      .set_store_path_for_test(store_path.clone());
+    let app = build_router(state);
+    let request = Request::builder()
+      .method("POST")
+      .uri("/v1/link-account")
+      .header("origin", "http://localhost:3000")
+      .header("content-type", "application/json")
+      .body(Body::from(
+        serde_json::to_vec(&serde_json::json!({
+          "apiBaseUrl": "https://api.example.com",
+          "linkedAccount": {
+            "email": "user@example.com",
+            "name": "Test User",
+            "verifiedAt": "2026-08-31T10:00:00Z"
+          }
+        }))
+        .unwrap(),
+      ))
+      .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), 65_536).await.unwrap();
+    assert_eq!(
+      serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+      serde_json::json!({ "linked": true })
+    );
+    assert_eq!(
+      manager
+        .lock()
+        .await
+        .get_snapshot()
+        .linked_account
+        .as_ref()
+        .map(|account| account.email.as_str()),
+      Some("user@example.com")
+    );
+    let loaded = crate::session_store::load_session_store(&store_path).await;
+    assert_eq!(
+      loaded
+        .linked_account
+        .as_ref()
+        .map(|account| account.email.as_str()),
+      Some("user@example.com")
+    );
+
+    tokio::fs::remove_file(store_path).await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn link_account_records_its_trusted_self_host_origin() {
+    let mut state = test_state();
+    state
+      .static_allowed_origins
+      .insert("https://stella.example".to_string());
+    let manager = Arc::clone(&state.manager);
+    let store_path = std::env::temp_dir().join(format!(
+      "stella-desktop-self-host-link-account-{}.json",
+      uuid::Uuid::new_v4()
+    ));
+    {
+      let mut manager = manager.lock().await;
+      manager.set_store_path_for_test(store_path.clone());
+      manager.trust_self_host_connection_for_test(
+        "https://stella.example".to_string(),
+        "https://api.stella.example".to_string(),
+      );
+    }
+    let app = build_router(state);
+    let request = Request::builder()
+      .method("POST")
+      .uri("/v1/link-account")
+      .header("origin", "https://stella.example")
+      .header("content-type", "application/json")
+      .body(Body::from(
+        serde_json::to_vec(&serde_json::json!({
+          "apiBaseUrl": "https://api.stella.example",
+          "linkedAccount": {
+            "email": "user@example.com",
+            "name": "Test User",
+            "verifiedAt": "2026-08-31T10:00:00Z"
+          }
+        }))
+        .unwrap(),
+      ))
+      .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+      manager.lock().await.linked_self_host_origin(),
+      Some("https://stella.example")
+    );
+
+    tokio::fs::remove_file(store_path).await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn link_account_reports_persistence_failure() {
+    let state = test_state();
+    let manager = Arc::clone(&state.manager);
+    let blocked_parent = std::env::temp_dir().join(format!(
+      "stella-desktop-link-account-blocked-{}",
+      uuid::Uuid::new_v4()
+    ));
+    tokio::fs::write(&blocked_parent, b"not a directory")
+      .await
+      .unwrap();
+    manager
+      .lock()
+      .await
+      .set_store_path_for_test(blocked_parent.join("sessions.json"));
+    let app = build_router(state);
+    let request = Request::builder()
+      .method("POST")
+      .uri("/v1/link-account")
+      .header("origin", "http://localhost:3000")
+      .header("content-type", "application/json")
+      .body(Body::from(
+        serde_json::to_vec(&serde_json::json!({
+          "apiBaseUrl": "https://api.example.com",
+          "linkedAccount": {
+            "email": "user@example.com",
+            "name": "Test User",
+            "verifiedAt": "2026-08-31T10:00:00Z"
+          }
+        }))
+        .unwrap(),
+      ))
+      .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(manager.lock().await.get_snapshot().linked_account.is_none());
+
+    tokio::fs::remove_file(blocked_parent).await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn link_account_rejects_disallowed_origin() {
+    let app = build_router(test_state());
+    let request = Request::builder()
+      .method("POST")
+      .uri("/v1/link-account")
+      .header("origin", "https://evil.example")
+      .header("content-type", "application/json")
+      .body(Body::from(
+        serde_json::to_vec(&serde_json::json!({
+          "apiBaseUrl": "https://api.example.com",
+          "linkedAccount": {
+            "email": "user@example.com",
+            "name": null,
+            "verifiedAt": "2026-08-31T10:00:00Z"
+          }
+        }))
+        .unwrap(),
+      ))
+      .unwrap();
+
     let response = app.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
   }

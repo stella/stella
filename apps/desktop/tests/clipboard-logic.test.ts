@@ -4,6 +4,8 @@ import {
   adjacentClipboardIndex,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
+  clipboardTimelineKeyAction,
+  clipboardRailScrollDelta,
   clipboardRailWindow,
   clipboardSourceTintIndex,
   filterClipboardItems,
@@ -143,6 +145,13 @@ test("source apps receive a stable tint from the bounded palette", () => {
 });
 
 describe("keyboard indexes", () => {
+  test("timeline arrows navigate horizontally and Arrow Down focuses search", () => {
+    expect(clipboardTimelineKeyAction("ArrowLeft")).toBe("previous");
+    expect(clipboardTimelineKeyAction("ArrowRight")).toBe("next");
+    expect(clipboardTimelineKeyAction("ArrowDown")).toBe("focusSearch");
+    expect(clipboardTimelineKeyAction("ArrowUp")).toBeNull();
+  });
+
   test("timeline navigation has no target beyond either edge", () => {
     expect(adjacentClipboardIndex(0, "next", 2)).toBe(1);
     expect(adjacentClipboardIndex(1, "next", 2)).toBeNull();
@@ -321,6 +330,38 @@ describe("clipboardRailWindow", () => {
         viewportWidth: 0,
       }),
     ).toEqual({ end: 3, start: 0 });
+  });
+});
+
+describe("clipboardRailScrollDelta", () => {
+  test("does not move a fully visible keyboard target", () => {
+    expect(
+      clipboardRailScrollDelta({
+        cardEnd: 650,
+        cardStart: 400,
+        viewportEnd: 1000,
+        viewportStart: 0,
+      }),
+    ).toBe(0);
+  });
+
+  test("moves only far enough to reveal a target beyond either edge", () => {
+    expect(
+      clipboardRailScrollDelta({
+        cardEnd: 200,
+        cardStart: -50,
+        viewportEnd: 1000,
+        viewportStart: 0,
+      }),
+    ).toBe(-50);
+    expect(
+      clipboardRailScrollDelta({
+        cardEnd: 1050,
+        cardStart: 800,
+        viewportEnd: 1000,
+        viewportStart: 0,
+      }),
+    ).toBe(50);
   });
 });
 

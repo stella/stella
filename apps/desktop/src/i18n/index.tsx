@@ -1,8 +1,9 @@
+import { emit } from "@tauri-apps/api/event";
 import { IntlProvider } from "use-intl";
 
 import en from "./langs/en.json";
 
-const SUPPORTED_LANGUAGES = [
+export const SUPPORTED_LANGUAGES = [
   "en",
   "cs",
   "de",
@@ -16,12 +17,30 @@ const SUPPORTED_LANGUAGES = [
   "sk",
 ] as const;
 
-type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
+export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
+
+export const LANGUAGE_LABELS = {
+  cs: "Čeština",
+  de: "Deutsch",
+  en: "English",
+  es: "Español",
+  et: "Eesti",
+  fr: "Français",
+  hu: "Magyar",
+  lt: "Lietuvių",
+  lv: "Latviešu",
+  pl: "Polski",
+  sk: "Slovenčina",
+} as const satisfies Record<SupportedLanguage, string>;
+
+export const DESKTOP_LANGUAGE_CHANGED_EVENT = "desktop-language-changed";
+const DESKTOP_LANGUAGE_STORAGE_KEY = "stella-desktop-language";
 
 const supportedSet: ReadonlySet<string> = new Set(SUPPORTED_LANGUAGES);
 
-const isSupportedLanguage = (value: string): value is SupportedLanguage =>
-  supportedSet.has(value);
+export const isSupportedLanguage = (
+  value: string,
+): value is SupportedLanguage => supportedSet.has(value);
 
 const detectLanguage = (): SupportedLanguage => {
   const languages =
@@ -60,11 +79,31 @@ export type DesktopMessages = typeof en;
 
 export const detectedLanguage = detectLanguage();
 
+export const getPreferredLanguage = (): SupportedLanguage => {
+  try {
+    const storedLanguage = localStorage.getItem(DESKTOP_LANGUAGE_STORAGE_KEY);
+    if (storedLanguage && isSupportedLanguage(storedLanguage)) {
+      return storedLanguage;
+    }
+  } catch {
+    return detectedLanguage;
+  }
+
+  return detectedLanguage;
+};
+
+export const setPreferredLanguage = async (language: SupportedLanguage) => {
+  localStorage.setItem(DESKTOP_LANGUAGE_STORAGE_KEY, language);
+  await emit(DESKTOP_LANGUAGE_CHANGED_EVENT, { language });
+};
+
 const resolvedTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-export const loadMessages = async (): Promise<DesktopMessages> => {
+export const loadMessages = async (
+  language: SupportedLanguage,
+): Promise<DesktopMessages> => {
   try {
-    return await messageLoaders[detectedLanguage]();
+    return await messageLoaders[language]();
   } catch {
     return en;
   }
@@ -74,13 +113,15 @@ export const defaultMessages = en;
 
 export const DesktopIntlProvider = ({
   children,
+  language,
   messages,
 }: {
   children: React.ReactNode;
+  language: SupportedLanguage;
   messages: DesktopMessages;
 }) => (
   <IntlProvider
-    locale={detectedLanguage}
+    locale={language}
     messages={messages}
     timeZone={resolvedTimeZone}
   >

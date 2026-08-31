@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./chat": "./src/chat.ts",
     "./chat-file-types": "./src/chat-file-types.ts",
+    "./desktop-rpc": "./src/desktop-rpc.gen.ts",
     "./document-translation": "./src/document-translation.ts",
     "./entity-options": "./src/entity-options.ts",
     "./folio-collab": "./src/folio-collab.ts",

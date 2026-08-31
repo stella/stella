@@ -182,6 +182,7 @@ pub struct SessionManager {
   unconfirmed_sessions: HashMap<String, PersistedDesktopSession>,
   cleanup_paths: HashSet<String>,
   linked_account: Option<LinkedAccountSnapshot>,
+  linked_account_web_origin: Option<String>,
   notification_preferences: DesktopNotificationPreferences,
   trusted_self_host_connections: Vec<TrustedSelfHostConnection>,
   update: DesktopUpdateSnapshot,
@@ -193,6 +194,11 @@ pub struct SessionManager {
   store_load_issue: Option<StoreLoadIssue>,
   http_client: reqwest::Client,
   app_handle: Option<AppHandle>,
+}
+
+pub(crate) enum LinkedAccountOriginUpdate {
+  Preserve,
+  Replace(Option<String>),
 }
 
 fn session_key(workspace_id: &str, entity_id: &str, property_id: &str) -> String {
@@ -533,6 +539,7 @@ impl SessionManager {
       unconfirmed_sessions: HashMap::new(),
       cleanup_paths: HashSet::new(),
       linked_account: None,
+      linked_account_web_origin: None,
       notification_preferences: DesktopNotificationPreferences::default(),
       trusted_self_host_connections: Vec::new(),
       update: DesktopUpdateSnapshot::default(),
@@ -551,10 +558,16 @@ impl SessionManager {
     self.app_handle = Some(handle);
   }
 
+  #[cfg(test)]
+  pub fn set_store_path_for_test(&mut self, store_path: PathBuf) {
+    self.store_path = store_path;
+  }
+
   pub async fn initialize(&mut self) {
     let store = session_store::load_session_store(&self.store_path).await;
 
     self.linked_account = store.linked_account;
+    self.linked_account_web_origin = store.linked_account_web_origin;
     if let Some(prefs) = store.notification_preferences {
       self.notification_preferences = prefs;
     }
@@ -722,28 +735,23 @@ impl SessionManager {
     &mut self,
     request: OpenFileRequest,
     prefetched_buffer: Option<Vec<u8>>,
+    linked_account_origin_update: LinkedAccountOriginUpdate,
   ) -> Result<OpenFileResponse, String> {
     let key = session_key(
       &request.workspace_id,
       &request.entity_id,
       &request.property_id,
     );
+    self
+      .sync_linked_account(
+        request.linked_account.as_ref(),
+        linked_account_origin_update,
+      )
+      .await?;
+
     let remote = &request.remote_session;
     let file_type = remote.file_type;
     let managed_file_name = sanitize_file_name(&remote.file_name, file_type);
-
-    // Sync linked account
-    if let Some(ref account) = request.linked_account {
-      let changed = self.linked_account.as_ref().is_none_or(|la| {
-        la.email != account.email
-          || la.name != account.name
-          || la.verified_at != account.verified_at
-      });
-      if changed {
-        self.linked_account = Some(account.clone());
-        self.persist_sessions().await;
-      }
-    }
 
     // Check for reusable existing session
     let existing_id = self.session_ids_by_key.get(&key).cloned();
@@ -1006,6 +1014,57 @@ impl SessionManager {
     self.persist_sessions().await;
     self.emit_state_change();
     self.get_snapshot()
+  }
+
+  pub async fn link_account(
+    &mut self,
+    linked_account: LinkedAccountSnapshot,
+    web_origin: Option<String>,
+  ) -> Result<(), String> {
+    let previous_account = self.linked_account.replace(linked_account);
+    let previous_web_origin =
+      std::mem::replace(&mut self.linked_account_web_origin, web_origin);
+    if let Err(error) = self.persist_sessions_result().await {
+      self.linked_account = previous_account;
+      self.linked_account_web_origin = previous_web_origin;
+      return Err(error);
+    }
+    self.emit_state_change();
+    Ok(())
+  }
+
+  async fn sync_linked_account(
+    &mut self,
+    linked_account: Option<&LinkedAccountSnapshot>,
+    origin_update: LinkedAccountOriginUpdate,
+  ) -> Result<(), String> {
+    let Some(linked_account) = linked_account else {
+      return Ok(());
+    };
+    let next_web_origin = match origin_update {
+      LinkedAccountOriginUpdate::Preserve => self.linked_account_web_origin.clone(),
+      LinkedAccountOriginUpdate::Replace(web_origin) => web_origin,
+    };
+    let changed = self.linked_account.as_ref().is_none_or(|current| {
+      current.email != linked_account.email
+        || current.name != linked_account.name
+        || current.verified_at != linked_account.verified_at
+    }) || self.linked_account_web_origin != next_web_origin;
+    if !changed {
+      return Ok(());
+    }
+
+    self
+      .link_account(linked_account.clone(), next_web_origin)
+      .await
+  }
+
+  pub fn linked_self_host_origin(&self) -> Option<&str> {
+    self.linked_account.as_ref()?;
+    let web_origin = self.linked_account_web_origin.as_deref()?;
+    self
+      .is_trusted_self_host_origin(web_origin)
+      .then_some(web_origin)
   }
 
   pub fn is_trusted_self_host_origin(&self, origin: &str) -> bool {
@@ -2027,7 +2086,7 @@ impl SessionManager {
     Ok(file_path.to_string_lossy().to_string())
   }
 
-  async fn persist_sessions(&self) {
+  async fn persist_sessions_result(&self) -> Result<(), String> {
     let mut persisted: Vec<PersistedDesktopSession> = self
       .unconfirmed_sessions
       .values()
@@ -2043,16 +2102,20 @@ impl SessionManager {
       v
     };
 
-    if let Err(e) = session_store::persist_session_store(
+    session_store::persist_session_store(
       &self.store_path,
       &cleanup,
       &self.linked_account,
+      &self.linked_account_web_origin,
       &self.notification_preferences,
       &persisted,
       &self.trusted_self_host_connections,
     )
     .await
-    {
+  }
+
+  async fn persist_sessions(&self) {
+    if let Err(e) = self.persist_sessions_result().await {
       tracing::error!(error = %e, "failed to persist session store");
     }
   }
@@ -2709,6 +2772,117 @@ mod tests {
       .map(|session| session.id)
       .collect();
     assert_eq!(session_ids, vec!["session-unconfirmed"]);
+
+    tokio::fs::remove_file(path).await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn link_account_updates_snapshot_and_persists() {
+    let path = std::env::temp_dir().join(format!(
+      "stella-desktop-sessions-{}.json",
+      uuid::Uuid::new_v4()
+    ));
+    let mut manager = SessionManager::new();
+    manager.store_path = path.clone();
+    let account = LinkedAccountSnapshot {
+      email: "user@example.com".to_string(),
+      name: Some("Test User".to_string()),
+      verified_at: "2026-08-31T10:00:00Z".to_string(),
+    };
+
+    manager.trust_self_host_connection_for_test(
+      "https://selfhost.example".to_string(),
+      "https://api.selfhost.example".to_string(),
+    );
+    manager
+      .link_account(account, Some("https://selfhost.example".to_string()))
+      .await
+      .unwrap();
+
+    assert_eq!(
+      manager
+        .get_snapshot()
+        .linked_account
+        .as_ref()
+        .map(|value| value.email.as_str()),
+      Some("user@example.com")
+    );
+    assert_eq!(
+      manager.linked_self_host_origin(),
+      Some("https://selfhost.example")
+    );
+    let loaded = session_store::load_session_store(&path).await;
+    assert_eq!(
+      loaded
+        .linked_account
+        .as_ref()
+        .map(|value| value.email.as_str()),
+      Some("user@example.com")
+    );
+    assert_eq!(
+      loaded.linked_account_web_origin.as_deref(),
+      Some("https://selfhost.example")
+    );
+
+    tokio::fs::remove_file(path).await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn document_relink_replaces_or_preserves_the_account_origin_explicitly() {
+    let path = std::env::temp_dir().join(format!(
+      "stella-desktop-account-origin-{}.json",
+      uuid::Uuid::new_v4()
+    ));
+    let mut manager = SessionManager::new();
+    manager.store_path = path.clone();
+    manager.trust_self_host_connection_for_test(
+      "https://first.example".to_string(),
+      "https://api.first.example".to_string(),
+    );
+    manager.trust_self_host_connection_for_test(
+      "https://second.example".to_string(),
+      "https://api.second.example".to_string(),
+    );
+    let account = LinkedAccountSnapshot {
+      email: "user@example.com".to_string(),
+      name: Some("Test User".to_string()),
+      verified_at: "2026-08-31T10:00:00Z".to_string(),
+    };
+    manager
+      .link_account(account.clone(), Some("https://first.example".to_string()))
+      .await
+      .unwrap();
+
+    manager
+      .sync_linked_account(
+        Some(&account),
+        LinkedAccountOriginUpdate::Replace(Some("https://second.example".to_string())),
+      )
+      .await
+      .unwrap();
+    assert_eq!(
+      manager.linked_self_host_origin(),
+      Some("https://second.example")
+    );
+
+    manager
+      .sync_linked_account(Some(&account), LinkedAccountOriginUpdate::Replace(None))
+      .await
+      .unwrap();
+    assert!(manager.linked_self_host_origin().is_none());
+
+    manager
+      .link_account(account.clone(), Some("https://first.example".to_string()))
+      .await
+      .unwrap();
+    manager
+      .sync_linked_account(Some(&account), LinkedAccountOriginUpdate::Preserve)
+      .await
+      .unwrap();
+    assert_eq!(
+      manager.linked_self_host_origin(),
+      Some("https://first.example")
+    );
 
     tokio::fs::remove_file(path).await.unwrap();
   }

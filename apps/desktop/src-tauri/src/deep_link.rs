@@ -5,7 +5,9 @@ use tauri::AppHandle;
 use tokio::sync::Mutex;
 
 use crate::config;
-use crate::session_manager::{SessionManager, download_file_standalone};
+use crate::session_manager::{
+  LinkedAccountOriginUpdate, SessionManager, download_file_standalone,
+};
 use crate::types::{ErrorResponse, OpenFileRequest, is_safe_session_id};
 use crate::updater;
 
@@ -445,7 +447,13 @@ async fn redeem_and_open_desktop_edit(
 
   let result = {
     let mut mgr = manager.lock().await;
-    mgr.open_file(request, Some(prefetched_buffer)).await
+    mgr
+      .open_file(
+        request,
+        Some(prefetched_buffer),
+        LinkedAccountOriginUpdate::Preserve,
+      )
+      .await
   }?;
 
   SessionManager::attach_watcher(&manager, &result.session_id).await;
