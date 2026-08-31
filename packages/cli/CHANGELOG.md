@@ -1,5 +1,19 @@
 # @stll/cli
 
+## 0.7.0
+
+### Minor Changes
+
+- [#2350](https://github.com/stella/stella/pull/2350) [`e593a45`](https://github.com/stella/stella/commit/e593a45715d1fe07f27841de5539f548c8787ed2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh the capability catalog with the inbox signal capabilities (list, read, request, snooze, dismiss, assign, accept), retain the governed `my-work` queue for the Inbox work view, and drop the retired `my-tasks` capability. The navigation-only count endpoint remains internal.
+
+### Patch Changes
+
+- [#2613](https://github.com/stella/stella/pull/2613) [`4f8e6c8`](https://github.com/stella/stella/commit/4f8e6c847cf29b50f1e2a96defdb2068c6cf2476) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh the `work-obligations.queues.list` capability description: the My Work queues now partition the owner's work (at-risk holds due work; inbox and upcoming split the rest by acknowledgement).
+
+- [#2623](https://github.com/stella/stella/pull/2623) [`fb15c4d`](https://github.com/stella/stella/commit/fb15c4d1d4da13123c07abd64d69651dd99b9ae0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Rename the `work-obligations.queues.list` queue value `inbox` to `to_acknowledge`, so the governed My Work queue no longer collides with the inbox signal feed. The capability description names the new queue.
+
+- [#2618](https://github.com/stella/stella/pull/2618) [`f361688`](https://github.com/stella/stella/commit/f361688d3177ec025f399c9f4393590a7c9eb829) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Accept `court` as a work-obligation source type on `work-obligations.update`, for deadlines that come from a court registry rather than a calendar.
+
 ## 0.6.8
 
 ### Patch Changes
