@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   evaluateMergeBar,
   mergeBarMigrationDirectory,
+  mergeBarRequiredCheckRuns,
   type MergeBarSnapshot,
 } from "./merge-bar";
 
@@ -28,6 +29,7 @@ const passingSnapshot = (
     { name: "ci-result", status: "completed", conclusion: "success" },
     { name: "typecheck", status: "completed", conclusion: "success" },
   ],
+  requiredCheckRuns: ["ci-result"],
   reviewThreads: [{ id: "PRRT_kwDOabcdef", isResolved: true }],
   migrations: {
     baseDirectories: ["20260801120000_earlier", "20260812090000_latest"],
@@ -59,6 +61,42 @@ describe("merge bar", () => {
     );
     expect(mergeBarMigrationDirectory("stella/stella-infra")).toBeNull();
     expect(mergeBarMigrationDirectory("stella/stella-plane")).toBeNull();
+  });
+
+  test("requires each repository's complete check policy", () => {
+    expect(mergeBarRequiredCheckRuns("Stella/Stella")).toEqual(["ci-result"]);
+    expect(mergeBarRequiredCheckRuns("stella/stella-plane")).toEqual([
+      "Overlay check",
+    ]);
+    expect(mergeBarRequiredCheckRuns("stella/stella-infra")).toEqual([
+      "Lint & Validate",
+      "Plan (production)",
+      "Plan (staging)",
+    ]);
+    expect(() => mergeBarRequiredCheckRuns("stella/unknown")).toThrow(
+      "No merge-bar check policy is registered for stella/unknown",
+    );
+  });
+
+  test("every configured required check must be present and green", () => {
+    const requiredCheckRuns = mergeBarRequiredCheckRuns("stella/stella-infra");
+    const checkRuns = requiredCheckRuns.map((name) => ({
+      name,
+      status: "completed",
+      conclusion: "success",
+    }));
+    expect(
+      evaluateMergeBar(passingSnapshot({ requiredCheckRuns, checkRuns }))
+        .decision,
+    ).toBe("merge");
+    expect(
+      failedGate(
+        passingSnapshot({
+          requiredCheckRuns,
+          checkRuns: checkRuns.slice(1),
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["REQUIRED_CHECK_MISSING"] });
   });
 
   test("merges when every gate is positively satisfied", () => {
