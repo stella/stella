@@ -657,6 +657,7 @@ describe("processDecision — corpus storage off", () => {
       sourceRawS3Key: null,
       sourceRawContentType: null,
     };
+    const sourceId = createSafeId<"caseLawSource">();
 
     let updated: Record<string, unknown> | undefined;
     const scopedDb: ScopedDb = async (callback) => {
@@ -665,9 +666,14 @@ describe("processDecision — corpus storage off", () => {
         // write. This suite asserts the decision row, so it reports no prior
         // identity and the citation-graph branch stays out of the way.
         select: () => ({
-          from: () => ({
+          from: (table: unknown) => ({
             where: () => ({
-              for: () => ({ limit: async () => await Promise.resolve([]) }),
+              for: () => ({
+                limit: async () =>
+                  await Promise.resolve(
+                    table === caseLawSources ? [{ id: sourceId }] : [],
+                  ),
+              }),
               limit: async () => await Promise.resolve([]),
             }),
           }),
@@ -715,7 +721,7 @@ describe("processDecision — corpus storage off", () => {
         documentAst: EMPTY_AST,
       },
       observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
+      sourceId,
       scopedDb,
       observedAt: new Date("2026-07-31T12:00:00.000Z"),
     });
@@ -745,6 +751,7 @@ describe("processDecision — decision date on an existing row", () => {
       sourceRawS3Key: null,
       sourceRawContentType: null,
     };
+    const sourceId = createSafeId<"caseLawSource">();
 
     let updated: Record<string, unknown> | undefined;
     const scopedDb: ScopedDb = async (callback) => {
@@ -753,9 +760,14 @@ describe("processDecision — decision date on an existing row", () => {
         // write. This suite asserts the decision row, so it reports no prior
         // identity and the citation-graph branch stays out of the way.
         select: () => ({
-          from: () => ({
+          from: (table: unknown) => ({
             where: () => ({
-              for: () => ({ limit: async () => await Promise.resolve([]) }),
+              for: () => ({
+                limit: async () =>
+                  await Promise.resolve(
+                    table === caseLawSources ? [{ id: sourceId }] : [],
+                  ),
+              }),
               limit: async () => await Promise.resolve([]),
             }),
           }),
@@ -804,7 +816,7 @@ describe("processDecision — decision date on an existing row", () => {
         documentAst: EMPTY_AST,
       },
       observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
+      sourceId,
       scopedDb,
       observedAt: new Date("2026-07-31T12:00:00.000Z"),
     });

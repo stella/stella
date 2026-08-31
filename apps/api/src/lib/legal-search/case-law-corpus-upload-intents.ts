@@ -14,6 +14,11 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
+  type ActiveCorpusProjectionSourceLock,
+  CorpusIndexProjectionSubjectMissingError,
+  lockActiveCorpusProjectionSourceTx,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import {
   corpusKeys,
   deleteCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -208,6 +213,7 @@ type WriteReservedCaseLawCorpusUploadOptions = {
    * settles the mirror with null pointers instead of keys.
    */
   apply: (args: {
+    projectionLock: ActiveCorpusProjectionSourceLock | null;
     tx: Transaction;
     written: WriteCorpusResult | null;
   }) => Promise<CaseLawCorpusUploadApplyResult>;
@@ -247,6 +253,22 @@ export const writeReservedCaseLawCorpusUpload = async ({
   try {
     return await scopedDb(async (tx) => {
       signal?.throwIfAborted();
+      const sourceLock = await Result.tryPromise({
+        try: async () =>
+          await lockActiveCorpusProjectionSourceTx(tx, {
+            family: "case_law",
+            entityId: decisionId,
+          }),
+        catch: (cause) => cause,
+      });
+      if (Result.isError(sourceLock)) {
+        if (
+          sourceLock.error instanceof CorpusIndexProjectionSubjectMissingError
+        ) {
+          return { type: "redacted-or-missing" };
+        }
+        throw sourceLock.error;
+      }
       const decision = (
         await tx
           .select({ redactedAt: caseLawDecisions.redactedAt })
@@ -313,7 +335,11 @@ export const writeReservedCaseLawCorpusUpload = async ({
           message: "Reserved corpus upload failed",
         });
       }
-      const outcome = await apply({ tx, written: writeOutcome.written });
+      const outcome = await apply({
+        projectionLock: sourceLock.value,
+        tx,
+        written: writeOutcome.written,
+      });
       if (outcome.type === "superseded") {
         await tx
           .update(caseLawCorpusUploadIntents)

@@ -2,7 +2,11 @@ import { panic } from "better-result";
 import { and, eq, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { corpusIndexGenerations } from "@/api/db/schema";
+import {
+  caseLawSources,
+  corpusIndexGenerations,
+  legislationSources,
+} from "@/api/db/schema";
 import {
   corpusIndexClusterForGeneration,
   type CorpusFamily,
@@ -26,6 +30,27 @@ export type ServingCorpusIndexGeneration = {
   family: CorpusFamily;
   generation: string;
   cluster: QuickwitCluster;
+};
+
+/**
+ * Fence activation against canonical writers. Writers share-lock their source
+ * before checking the registry; the short table fence also covers a source
+ * inserted concurrently with first activation.
+ */
+const lockCorpusIndexGenerationActivationTx = async (
+  tx: Transaction,
+  family: CorpusFamily,
+): Promise<void> => {
+  switch (family) {
+    case "case_law":
+      await tx.execute(sql`LOCK TABLE ${caseLawSources} IN EXCLUSIVE MODE`);
+      return;
+    case "legislation":
+      await tx.execute(sql`LOCK TABLE ${legislationSources} IN EXCLUSIVE MODE`);
+      return;
+    default:
+      return family satisfies never;
+  }
 };
 
 type CorpusIndexGenerationReadTransaction = Pick<Transaction, "select">;
@@ -133,6 +158,7 @@ export const resumeRetiringCorpusIndexGenerationTx = async (
   tx: Transaction,
   target: { family: CorpusFamily; generation: string },
 ): Promise<void> => {
+  await lockCorpusIndexGenerationActivationTx(tx, target.family);
   const rows = await tx
     .select()
     .from(corpusIndexGenerations)
@@ -172,6 +198,30 @@ export const registerCorpusIndexGenerationTx = async (
   target: CorpusIndexGenerationTarget,
 ): Promise<CorpusIndexManifest> => {
   const manifest = requireCorpusIndexManifest(target.family, target.generation);
+  const registered = (
+    await tx
+      .select()
+      .from(corpusIndexGenerations)
+      .where(
+        and(
+          eq(corpusIndexGenerations.family, manifest.family),
+          eq(corpusIndexGenerations.generation, manifest.generation),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (
+    registered !== undefined &&
+    (registered.status === "building" || registered.status === "serving")
+  ) {
+    return requireRegisteredCorpusIndexManifest(registered);
+  }
+  if (registered !== undefined) {
+    return panic(
+      `Active corpus generation registration failed: ${target.family}/${target.generation}`,
+    );
+  }
+  await lockCorpusIndexGenerationActivationTx(tx, manifest.family);
   await tx
     .insert(corpusIndexGenerations)
     .values({

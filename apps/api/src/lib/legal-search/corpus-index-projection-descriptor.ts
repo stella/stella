@@ -7,6 +7,7 @@ import {
   corpusIndexManifestDigest,
   type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 
 type ProjectionInputBase = {
   documentId: string;
@@ -89,6 +90,7 @@ export const deriveCorpusIndexProjectionDescriptor = (
   }
   if (
     input.contentHash === null ||
+    EMPTY_CORPUS_CONTENT_HASHES.includes(input.contentHash) ||
     !input.redistributionEligible ||
     (input.family === "case_law" && input.redacted)
   ) {

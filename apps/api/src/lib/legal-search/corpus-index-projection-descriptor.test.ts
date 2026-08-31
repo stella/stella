@@ -7,6 +7,7 @@ import {
   type CaseLawV5ProjectionInput,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 
 const CASE_LAW_INPUT = {
   family: "case_law",
@@ -79,7 +80,7 @@ test("every projected metadata change invalidates the input fingerprint", () => 
   expect(changed).not.toEqual(first);
 });
 
-test("redaction, missing payload, and redistribution revocation erase", () => {
+test("redaction, missing or empty payload, and redistribution revocation erase", () => {
   for (const input of [
     { ...CASE_LAW_INPUT, redacted: true },
     { ...CASE_LAW_INPUT, contentHash: null },
@@ -89,6 +90,14 @@ test("redaction, missing payload, and redistribution revocation erase", () => {
       deriveCorpusIndexProjectionDescriptor(
         CORPUS_INDEX_MANIFESTS.case_law_v5,
         input,
+      ),
+    ).toEqual({ action: "erase" });
+  }
+  for (const contentHash of EMPTY_CORPUS_CONTENT_HASHES) {
+    expect(
+      deriveCorpusIndexProjectionDescriptor(
+        CORPUS_INDEX_MANIFESTS.case_law_v5,
+        { ...CASE_LAW_INPUT, contentHash },
       ),
     ).toEqual({ action: "erase" });
   }

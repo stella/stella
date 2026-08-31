@@ -12,14 +12,22 @@ import {
   CORPUS_SOURCE_TYPE,
   INGESTION_CHECKPOINT_STATUS,
 } from "@/api/lib/corpus-ingestion-checkpoint";
+import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
+import {
+  lockActiveCorpusProjectionSourceTx,
+  synchronizeLockedCorpusProjectionDesiredStateTx,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   sanitizeMetadata,
   stripDangerousChars,
 } from "@/api/lib/legal-search/corpus-sanitize";
 import {
+  corpusContentHash,
+  planCorpusDocumentWrite,
   storedCorpusWrite,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
+import type { CorpusWriteOutcome } from "@/api/lib/legal-search/corpus-storage";
 import {
   ADAPTER_TIMEOUT,
   MAX_CYCLE_MS,
@@ -105,11 +113,14 @@ const preserveLegislationCorpusWriteRetry = async ({
   // Keep the next ingestion pass from treating this document as unchanged
   // after a failed object-storage write. Clear corpus-derived pointers so
   // reads use the fresh Postgres columns until S3 succeeds.
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-  await scopedDb((tx) => {
+  await scopedDb(async (tx) => {
+    const projectionLock = await lockActiveCorpusProjectionSourceTx(tx, {
+      family: "legislation",
+      entityId: documentId,
+    });
     // audit: skip — background corpus storage retry bookkeeping; derived state
-    return (
-      tx
+    const reset = (
+      await tx
         .update(legislationDocuments)
         .set({
           sourceHash: previousSourceHash,
@@ -129,9 +140,80 @@ const preserveLegislationCorpusWriteRetry = async ({
             sql`${legislationDocuments.sourceHash} IS NOT DISTINCT FROM ${expectedSourceHash}`,
           ),
         )
-    );
+        .returning({ id: legislationDocuments.id })
+    ).at(0);
+    if (reset === undefined) {
+      return;
+    }
+    if (projectionLock !== null) {
+      await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+        lock: projectionLock,
+        subject: { family: "legislation", entityId: documentId },
+      });
+    }
   });
 };
+
+type SettleLegislationCorpusProjectionInput = {
+  documentId: SafeId<"legislationDocument">;
+  expectedSourceHash: string;
+  outcome: CorpusWriteOutcome | null;
+  scopedDb: ScopedDb;
+};
+
+/** Settle corpus pointers and the matching desired projection as one CAS. */
+const settleLegislationCorpusProjection = async ({
+  documentId,
+  expectedSourceHash,
+  outcome,
+  scopedDb,
+}: SettleLegislationCorpusProjectionInput): Promise<boolean> =>
+  await scopedDb(async (tx) => {
+    const projectionLock = await lockActiveCorpusProjectionSourceTx(tx, {
+      family: "legislation",
+      entityId: documentId,
+    });
+    const ownerPredicate = and(
+      eq(legislationDocuments.id, documentId),
+      sql`${legislationDocuments.sourceHash} IS NOT DISTINCT FROM ${expectedSourceHash}`,
+    );
+    // audit: skip — background corpus pointer and projection settlement; derived state
+    const owned =
+      outcome === null || outcome.type === "skipped-unchanged"
+        ? (
+            await tx
+              .select({ id: legislationDocuments.id })
+              .from(legislationDocuments)
+              .where(ownerPredicate)
+              .limit(1)
+              .for("update")
+          ).at(0)
+        : (
+            await tx
+              .update(legislationDocuments)
+              .set({
+                textS3Key: outcome.written?.textKey ?? null,
+                normalizedS3Key: outcome.written?.sectionsKey ?? null,
+                astS3Key: outcome.written?.astKey ?? null,
+                contentHash:
+                  outcome.type === "skipped-empty"
+                    ? outcome.contentHash
+                    : outcome.written.contentHash,
+              })
+              .where(ownerPredicate)
+              .returning({ id: legislationDocuments.id })
+          ).at(0);
+    if (owned === undefined) {
+      return false;
+    }
+    if (projectionLock !== null) {
+      await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+        lock: projectionLock,
+        subject: { family: "legislation", entityId: documentId },
+      });
+    }
+    return true;
+  });
 
 /**
  * Hash over every persisted, search-visible field — not just the corpus
@@ -233,7 +315,18 @@ const storeSourceRaw = async ({
   return { sourceRawS3Key: written.value, sourceRawContentType: contentType };
 };
 
+export type LegislationCorpusDependencies = {
+  mode: CorpusStorageMode;
+  write: typeof writeCorpusDocument;
+};
+
+const LEGISLATION_CORPUS_DEPENDENCIES: LegislationCorpusDependencies = {
+  mode: corpusStorageMode,
+  write: writeCorpusDocument,
+};
+
 type ProcessLegislationDocumentOptions = {
+  corpus?: LegislationCorpusDependencies | undefined;
   /** Test seam; production writes through the object-storage client. */
   writeSourceRaw?: WriteRawSourcePayload | undefined;
 };
@@ -244,14 +337,14 @@ type ProcessLegislationDocumentOptions = {
  * re-ingest is skipped. The publisher's payload is stored first,
  * because a row written without it would dedup-skip forever. When corpus
  * storage is on, the canonical payload is written to object storage (outside
- * the tx) and the row's S3 keys + content hash are recorded so the indexers
- * pick it up. The pg-fts and corpus index projections are maintained by the
- * backfill loops (not inline), matching the case-law pipeline.
+ * the tx). Its row pointers and desired corpus projection settle together;
+ * the PostgreSQL full-text projection remains asynchronous.
  */
 export const processLegislationDocument = async (
   raw: LegislationDocumentInput,
   scopedDb: ScopedDb,
   {
+    corpus = LEGISLATION_CORPUS_DEPENDENCIES,
     writeSourceRaw = writeRawSourcePayload,
   }: ProcessLegislationDocumentOptions = {},
 ): Promise<ProcessLegislationResult> => {
@@ -260,6 +353,7 @@ export const processLegislationDocument = async (
   const sections = input.sections ?? null;
   const ast = input.ast ?? null;
   const sourceHash = legislationSourceHash(input);
+  const expectedContentHash = corpusContentHash({ text, sections, ast });
 
   const versionMatch = sql`${legislationDocuments.versionValidFrom} IS NOT DISTINCT FROM ${input.versionValidFrom ?? null}`;
 
@@ -289,7 +383,36 @@ export const processLegislationDocument = async (
       .limit(1),
   );
 
-  if (existing?.sourceHash === sourceHash) {
+  const existingCorpusPlan =
+    existing === undefined
+      ? null
+      : planCorpusDocumentWrite({
+          documentId: existing.id,
+          jurisdiction: input.country,
+          text,
+          sections,
+          ast,
+          stored: storedCorpusWrite(existing),
+        });
+  const corpusAlreadySettled =
+    corpus.mode === "off"
+      ? existing?.contentHash === null &&
+        existing.textS3Key === null &&
+        existing.normalizedS3Key === null &&
+        existing.astS3Key === null
+      : existingCorpusPlan?.type === "skipped-unchanged" ||
+        (existingCorpusPlan?.type === "skipped-empty" &&
+          existing?.contentHash === expectedContentHash &&
+          existing.textS3Key === null &&
+          existing.normalizedS3Key === null &&
+          existing.astS3Key === null);
+  if (existing?.sourceHash === sourceHash && corpusAlreadySettled) {
+    await settleLegislationCorpusProjection({
+      documentId: existing.id,
+      expectedSourceHash: sourceHash,
+      outcome: null,
+      scopedDb,
+    });
     return {
       type: "stored",
       id: existing.id,
@@ -323,6 +446,14 @@ export const processLegislationDocument = async (
     metadata: input.metadata ?? {},
     sourceHash,
     ...sourceRaw,
+    ...(corpus.mode === "off"
+      ? {
+          textS3Key: null,
+          normalizedS3Key: null,
+          astS3Key: null,
+          contentHash: null,
+        }
+      : {}),
   };
 
   const id = await scopedDb(async (tx) => {
@@ -354,9 +485,9 @@ export const processLegislationDocument = async (
   // Postgres columns, and its readers key off row state, which stays correct
   // either way. Treating `canonical` as `dual-write` here is the scope
   // decision, not an oversight.
-  if (corpusStorageMode !== "off") {
+  if (corpus.mode !== "off") {
     try {
-      const outcome = await writeCorpusDocument({
+      const outcome = await corpus.write({
         documentId: id,
         jurisdiction: input.country,
         text,
@@ -371,37 +502,17 @@ export const processLegislationDocument = async (
       // stale scans require a non-null content hash, so a row whose indexed
       // document refreshed to empty must stay visible to them — with a null
       // hash the previously indexed text would remain searchable forever.
-      if (outcome.type !== "skipped-unchanged") {
-        // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-        await scopedDb((tx) => {
-          // audit: skip — background corpus storage; derived state
-          return (
-            tx
-              .update(legislationDocuments)
-              .set({
-                textS3Key: outcome.written?.textKey ?? null,
-                normalizedS3Key: outcome.written?.sectionsKey ?? null,
-                astS3Key: outcome.written?.astKey ?? null,
-                contentHash:
-                  outcome.type === "skipped-empty"
-                    ? outcome.contentHash
-                    : outcome.written.contentHash,
-              })
-              // Only while the row still carries this run's sourceHash: a
-              // slower run must not overwrite a concurrent newer refresh.
-              .where(
-                and(
-                  eq(legislationDocuments.id, id),
-                  sql`${legislationDocuments.sourceHash} IS NOT DISTINCT FROM ${sourceHash}`,
-                ),
-              )
-          );
-        });
-      }
+      await settleLegislationCorpusProjection({
+        documentId: id,
+        expectedSourceHash: sourceHash,
+        outcome,
+        scopedDb,
+      });
     } catch (error) {
       corpusWriteFailed = true;
       captureError(error, {
         documentId: id,
+        sourceId: input.sourceId,
         step: "processLegislationDocument.corpusWrite",
       });
       await preserveLegislationCorpusWriteRetry({
@@ -411,6 +522,13 @@ export const processLegislationDocument = async (
         scopedDb,
       });
     }
+  } else {
+    await settleLegislationCorpusProjection({
+      documentId: id,
+      expectedSourceHash: sourceHash,
+      outcome: null,
+      scopedDb,
+    });
   }
 
   return {

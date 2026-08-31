@@ -13,6 +13,12 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { registerCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
+import {
+  ensureCorpusProjectionDesiredStateTx,
+  lockActiveCorpusProjectionSourceTx,
+  reconcileCorpusProjectionDesiredStateTx,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 
 import { lockCorpusIndexProjectionMutationsTx } from "./corpus-index-projection-revision";
 
@@ -208,6 +214,144 @@ if (!databaseUrl || !runPostgresTests) {
           .where(eq(legislationSources.id, legislationSourceId));
         await firstDb.delete(corpusIndexGenerations).where(generationPredicate);
         await Promise.all([firstClient.close(), secondClient.close()]);
+      }
+    });
+
+    test("generation activation cannot overtake a canonical mutation", async () => {
+      const writerClient = new SQL({ url: databaseUrl, max: 1 });
+      const activationClient = new SQL({ url: databaseUrl, max: 1 });
+      const writerDb = drizzle({
+        client: writerClient,
+        relations: databaseRelations,
+      });
+      const activationDb = drizzle({
+        client: activationClient,
+        relations: databaseRelations,
+      });
+      const suffix = Date.now();
+      const sourceId = toSafeId<"caseLawSource">(Bun.randomUUIDv7());
+      const decisionId = toSafeId<"caseLawDecision">(Bun.randomUUIDv7());
+      const target = {
+        family: "case_law",
+        generation: "case_law_v5",
+      } as const;
+      const legacyGeneration = `case_law_v${suffix}`;
+      const subject = { family: "case_law", entityId: decisionId } as const;
+      const releaseWriter = Promise.withResolvers<undefined>();
+      const writerLocked = Promise.withResolvers<undefined>();
+      const activationAttempted = Promise.withResolvers<undefined>();
+      let targetGenerationCreated = false;
+
+      try {
+        const existingTarget = (
+          await writerDb
+            .select({ generation: corpusIndexGenerations.generation })
+            .from(corpusIndexGenerations)
+            .where(
+              and(
+                eq(corpusIndexGenerations.family, target.family),
+                eq(corpusIndexGenerations.generation, target.generation),
+              ),
+            )
+            .limit(1)
+        ).at(0);
+        expect(existingTarget).toBeUndefined();
+        await writerDb.insert(caseLawSources).values({
+          id: sourceId,
+          adapterKey: `projection-activation-${suffix}`,
+          name: "Projection activation",
+        });
+        await writerDb.insert(caseLawDecisions).values({
+          id: decisionId,
+          sourceId,
+          caseNumber: `projection-activation-${suffix}`,
+          court: "Court before activation",
+          country: "CZE",
+          language: "cs",
+          contentHash: "a".repeat(64),
+        });
+        await writerDb.insert(corpusIndexGenerations).values({
+          family: "case_law",
+          generation: legacyGeneration,
+          cluster: "q08",
+          manifestDigest: "a".repeat(64),
+          status: "building",
+        });
+
+        const writer = writerDb.transaction(async (tx) => {
+          await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
+          const lock = await lockActiveCorpusProjectionSourceTx(tx, subject);
+          expect(lock).toBeNull();
+          await tx
+            .update(caseLawDecisions)
+            .set({ court: "Court committed before activation" })
+            .where(eq(caseLawDecisions.id, decisionId));
+          writerLocked.resolve(undefined);
+          await releaseWriter.promise;
+        });
+        await writerLocked.promise;
+
+        const activation = activationDb.transaction(async (tx) => {
+          await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
+          activationAttempted.resolve(undefined);
+          await registerCorpusIndexGenerationTx(tx, target);
+          return await ensureCorpusProjectionDesiredStateTx(
+            tx,
+            subject,
+            target.generation,
+          );
+        });
+        await activationAttempted.promise;
+
+        const activatedWhileWriterHeld = await Promise.race([
+          activation.then(() => true),
+          Bun.sleep(100).then(() => false),
+        ]);
+        expect(activatedWhileWriterHeld).toBe(false);
+
+        releaseWriter.resolve(undefined);
+        await writer;
+        const activationResult = await activation;
+        targetGenerationCreated = true;
+        expect(activationResult).toEqual({ epoch: 1n, created: true });
+        expect(
+          await writerDb.transaction(
+            async (tx) =>
+              await reconcileCorpusProjectionDesiredStateTx(tx, subject),
+          ),
+        ).toEqual({ epoch: 1n, changed: false, generationCount: 1 });
+      } finally {
+        releaseWriter.resolve(undefined);
+        const createdGenerations = targetGenerationCreated
+          ? [legacyGeneration, target.generation]
+          : [legacyGeneration];
+        await writerDb
+          .update(corpusIndexGenerations)
+          .set({ status: "retired" })
+          .where(
+            and(
+              eq(corpusIndexGenerations.family, "case_law"),
+              inArray(corpusIndexGenerations.generation, createdGenerations),
+            ),
+          );
+        await writerDb
+          .delete(corpusIndexProjectionStates)
+          .where(eq(corpusIndexProjectionStates.entityId, decisionId));
+        await writerDb
+          .delete(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, decisionId));
+        await writerDb
+          .delete(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId));
+        await writerDb
+          .delete(corpusIndexGenerations)
+          .where(
+            and(
+              eq(corpusIndexGenerations.family, "case_law"),
+              inArray(corpusIndexGenerations.generation, createdGenerations),
+            ),
+          );
+        await Promise.all([writerClient.close(), activationClient.close()]);
       }
     });
   });

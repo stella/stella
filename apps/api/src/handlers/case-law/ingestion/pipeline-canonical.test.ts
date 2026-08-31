@@ -178,26 +178,39 @@ const scopedDb: ScopedDb = async (callback) => {
       },
     },
     select: (selection: Record<string, unknown>) => ({
-      from: (table: unknown) => ({
-        where: () => {
-          const rows = async () => {
-            if (table === caseLawCorpusUploadIntents) {
-              return [{ status: intentStatus }];
-            }
-            if ("redactedAt" in selection) {
-              return [{ redactedAt: null }];
-            }
-            if ("id" in selection) {
-              return [{ id: "decision-id" }];
-            }
-            return [];
-          };
-          return {
+      from: (table: unknown) => {
+        const rows = async () => {
+          if (table === caseLawSources && "sourceDescriptor" in selection) {
+            return [
+              {
+                sourceId:
+                  insertedRows.at(0)?.["sourceId"] ??
+                  existingDecision?.["sourceId"],
+                sourceDescriptor: null,
+              },
+            ];
+          }
+          if (table === caseLawCorpusUploadIntents) {
+            return [{ status: intentStatus }];
+          }
+          if ("redactedAt" in selection) {
+            return [{ redactedAt: null }];
+          }
+          if ("id" in selection) {
+            return [{ id: "decision-id" }];
+          }
+          return [];
+        };
+        return {
+          innerJoin: () => ({
+            where: () => ({ limit: () => ({ for: rows }) }),
+          }),
+          where: () => ({
             limit: rows,
             for: () => ({ limit: rows }),
-          };
-        },
-      }),
+          }),
+        };
+      },
     }),
     insert: (table: unknown) => ({
       values: (values: Record<string, unknown>) => {

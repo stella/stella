@@ -51,6 +51,7 @@ import {
   reserveCaseLawCorpusUploadIntent,
   writeReservedCaseLawCorpusUpload,
 } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
+import { synchronizeLockedCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   corpusContentHash,
   corpusMirrorColumns,
@@ -148,7 +149,7 @@ const backfillRow = async (row: BackfillRow): Promise<void> => {
       timestampMatchesCasToken(caseLawDecisions.updatedAt, row.updatedAtToken),
     );
     const outcome = await writeReservedCaseLawCorpusUpload({
-      apply: async ({ tx, written: uploaded }) => {
+      apply: async ({ projectionLock, tx, written: uploaded }) => {
         // audit: skip — one-time corpus storage repair; derived state
         const recorded = await tx
           .update(caseLawDecisions)
@@ -160,6 +161,12 @@ const backfillRow = async (row: BackfillRow): Promise<void> => {
           )
           .where(ownerPredicate)
           .returning({ id: caseLawDecisions.id });
+        if (recorded.length > 0 && projectionLock !== null) {
+          await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+            lock: projectionLock,
+            subject: { family: "case_law", entityId: row.id },
+          });
+        }
         return { type: recorded.length > 0 ? "applied" : "superseded" };
       },
       decisionId: row.id,
