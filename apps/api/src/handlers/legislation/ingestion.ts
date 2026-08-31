@@ -403,6 +403,7 @@ export const processLegislationDocument = async (
         existing.astS3Key === null
       : existingCorpusPlan?.type === "skipped-unchanged" ||
         (existingCorpusPlan?.type === "skipped-empty" &&
+          existing !== undefined &&
           existing.contentHash === expectedContentHash &&
           existing.textS3Key === null &&
           existing.normalizedS3Key === null &&

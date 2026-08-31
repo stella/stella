@@ -235,6 +235,7 @@ if (!databaseUrl || !runPostgresTests) {
         family: "case_law",
         generation: "case_law_v5",
       } as const;
+      const legacyGeneration = `case_law_v${suffix}`;
       const subject = { family: "case_law", entityId: decisionId } as const;
       const releaseWriter = Promise.withResolvers<undefined>();
       const writerLocked = Promise.withResolvers<undefined>();
@@ -257,7 +258,7 @@ if (!databaseUrl || !runPostgresTests) {
         });
         await writerDb.insert(corpusIndexGenerations).values({
           family: "case_law",
-          generation: "case_law_v2",
+          generation: legacyGeneration,
           cluster: "q08",
           manifestDigest: "a".repeat(64),
           status: "serving",
@@ -320,7 +321,7 @@ if (!databaseUrl || !runPostgresTests) {
             and(
               eq(corpusIndexGenerations.family, "case_law"),
               inArray(corpusIndexGenerations.generation, [
-                "case_law_v2",
+                legacyGeneration,
                 "case_law_v5",
               ]),
             ),
