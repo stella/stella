@@ -77,6 +77,19 @@ describe("findSearchMatchRanges", () => {
     expect(findSearchMatchRanges("Čapek", "  ")).toEqual([]);
   });
 
+  test("reports an expanding fold once and reaches later hits", () => {
+    expect(findSearchMatchRanges("ßs", "s")).toEqual([
+      { start: 0, end: 1 },
+      { start: 1, end: 2 },
+    ]);
+    expect(findSearchMatchRanges("ßs", "s", { maxMatches: 2 })).toHaveLength(2);
+  });
+
+  test("treats final and medial sigma alike", () => {
+    expect(findSearchMatchRanges("ΟΣ", "σ")).toEqual([{ start: 1, end: 2 }]);
+    expect(findSearchMatchRanges("οσ", "ς")).toEqual([{ start: 1, end: 2 }]);
+  });
+
   test("ranges cover expanding folds", () => {
     const content = "sídlo: Wrocław, Straße 7";
     const [wroclaw] = findSearchMatchRanges(content, "wroclaw");

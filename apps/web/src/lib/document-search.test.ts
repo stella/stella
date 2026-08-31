@@ -88,9 +88,10 @@ describe("document search highlighting", () => {
     expect(foldSearchMatchText("ODŠTĚPENÍ")).toBe("odstepeni");
   });
 
-  test("preserves contextual case folding while mapping source offsets", () => {
-    expect(foldSearchMatchText("ΟΣ")).toBe("ος");
+  test("case-folds final sigma while mapping source offsets", () => {
+    expect(foldSearchMatchText("ΟΣ")).toBe("οσ");
     expect(findSearchMatchRanges("ΟΣ", "ος")).toEqual([{ start: 0, end: 2 }]);
+    expect(findSearchMatchRanges("ΟΣ", "σ")).toEqual([{ start: 1, end: 2 }]);
   });
 
   test("uses canonical Arabic folds while preserving source offsets", () => {

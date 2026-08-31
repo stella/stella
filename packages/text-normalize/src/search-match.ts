@@ -20,6 +20,12 @@ import { applyArabicFolds } from "./arabic.js";
 import { applyAsciiFolds } from "./ascii-fold.js";
 
 const COMBINING_MARKS = /\p{M}+/gu;
+// `toLowerCase` keeps the positional final sigma that Unicode case folding
+// maps to σ; a lone `σ` query would otherwise miss the end of `ΟΣ`. Same
+// length, so offsets are unaffected; a full `toUpperCase().toLowerCase()`
+// fold is not used because it changes lengths (ß → SS) and the ASCII table
+// already covers those letters.
+const FINAL_SIGMA = /ς/gu;
 
 export type SearchMatchRange = {
   end: number;
@@ -37,8 +43,11 @@ const foldSearchMatchTextBeforeCase = (value: string): string =>
     applyAsciiFolds(value.normalize("NFKD")).replace(COMBINING_MARKS, ""),
   );
 
+const caseFold = (value: string): string =>
+  value.toLowerCase().replace(FINAL_SIGMA, "σ");
+
 export const foldSearchMatchText = (value: string): string =>
-  foldSearchMatchTextBeforeCase(value).toLowerCase();
+  caseFold(foldSearchMatchTextBeforeCase(value));
 
 export const foldSearchMatchTextWithOffsets = (
   content: string,
@@ -56,7 +65,7 @@ export const foldSearchMatchTextWithOffsets = (
   }
 
   const beforeCase = units.map(({ text }) => text).join("");
-  const contextualLowercase = beforeCase.toLowerCase();
+  const contextualLowercase = caseFold(beforeCase);
   if (contextualLowercase.length === beforeCase.length) {
     const originalRanges: SearchMatchRange[] = [];
     for (const unit of units) {
@@ -78,7 +87,7 @@ export const foldSearchMatchTextWithOffsets = (
   const loweredParts: string[] = [];
   const originalRanges: SearchMatchRange[] = [];
   for (const unit of units) {
-    const lowered = unit.text.toLowerCase();
+    const lowered = caseFold(unit.text);
     loweredParts.push(lowered);
     let codeUnit = 0;
     while (codeUnit < lowered.length) {
@@ -130,13 +139,23 @@ export const findSearchMatchRanges = (
     const foldedEnd = foldedStart + foldedQuery.length;
     const firstRange = foldedContent.originalRanges.at(foldedStart);
     const lastRange = foldedContent.originalRanges.at(foldedEnd - 1);
-    if (firstRange && lastRange) {
-      matches.push({ start: firstRange.start, end: lastRange.end });
-      if (matches.length >= maxMatches) {
-        break;
-      }
+    if (!firstRange || !lastRange) {
+      break;
     }
+    matches.push({ start: firstRange.start, end: lastRange.end });
+    if (matches.length >= maxMatches) {
+      break;
+    }
+    // An expanding fold (ß → ss) maps several folded units to one original
+    // character; resume after the last unit inside the matched characters so
+    // that character is reported once and the budget reaches later hits.
     searchFrom = foldedEnd;
+    while (
+      (foldedContent.originalRanges.at(searchFrom)?.start ?? Infinity) <
+      lastRange.end
+    ) {
+      searchFrom += 1;
+    }
   }
 
   return matches;

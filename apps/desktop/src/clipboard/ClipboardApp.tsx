@@ -1202,6 +1202,17 @@ const ClipboardApp = () => {
   );
   const activeItem = filteredItems.at(activeIndex);
   const activeItemId = activeItem?.id;
+  // Copy and delete act on the list the current query produces: while the
+  // deferred render is pending the rail still shows the previous query's
+  // list, and acting on it would hand over the wrong clip. Cheap thanks to
+  // the per-item fold cache; identical to the rendered list once settled.
+  const actionItems =
+    query === filterQuery
+      ? filteredItems
+      : filterClipboardItems(snapshot.items, query, activeGroupId);
+  const actionItem = actionItems.at(
+    Math.min(selectedIndex, Math.max(0, actionItems.length - 1)),
+  );
   const railViewport = useRailViewport(
     timelineRailRef,
     filteredItems.length > 0,
@@ -1551,10 +1562,10 @@ const ClipboardApp = () => {
       return;
     }
     if (primaryModifier) {
-      const quickIndex = quickCopyIndex(event.key, filteredItems.length);
+      const quickIndex = quickCopyIndex(event.key, actionItems.length);
       if (quickIndex !== null) {
         event.preventDefault();
-        const item = filteredItems.at(quickIndex);
+        const item = actionItems.at(quickIndex);
         if (item) {
           copyItem(item);
         }
@@ -1567,18 +1578,18 @@ const ClipboardApp = () => {
         isComposing: event.isComposing,
         key: event.key,
       };
-      if (activeItem && shouldCopyFromClipboardInput(inputKey)) {
+      if (actionItem && shouldCopyFromClipboardInput(inputKey)) {
         event.preventDefault();
-        copyItem(activeItem);
+        copyItem(actionItem);
       } else if (activeItem && shouldReturnToTimelineFromInput(inputKey)) {
         event.preventDefault();
         selectIndex(activeIndex);
       }
       return;
     }
-    if (isClipboardCopyShortcut(event) && activeItem) {
+    if (isClipboardCopyShortcut(event) && actionItem) {
       event.preventDefault();
-      copyItem(activeItem);
+      copyItem(actionItem);
       return;
     }
     if (
@@ -1622,14 +1633,14 @@ const ClipboardApp = () => {
       navigate(keyAction);
       return;
     }
-    if (event.key === "Enter" && activeItem) {
+    if (event.key === "Enter" && actionItem) {
       event.preventDefault();
-      copyItem(activeItem);
+      copyItem(actionItem);
       return;
     }
-    if ((event.key === "Backspace" || event.key === "Delete") && activeItem) {
+    if ((event.key === "Backspace" || event.key === "Delete") && actionItem) {
       event.preventDefault();
-      applySnapshotCommand("clipboard_delete_item", { id: activeItem.id });
+      applySnapshotCommand("clipboard_delete_item", { id: actionItem.id });
     }
   };
 
