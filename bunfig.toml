@@ -14,7 +14,6 @@ minimumReleaseAgeExcludes = [
   # the normal five-day quarantine admits the currently pinned release.
   # @silurus/ooxml 0.82.1 adds host-controlled XLSX viewer chrome colors.
   # Remove this exception once the normal quarantine admits it.
-  "@silurus/ooxml", # quarantine-expires: 2026-08-31T07:24:25.545Z
   # @vscode/markdown-editor ships near-daily pre-release builds; the hybrid
   # markdown editor pins the current one. Remove this exception once the normal
   # quarantine admits it.
