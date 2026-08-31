@@ -298,6 +298,12 @@ describe("changeset policy file", () => {
     }
   });
 
+  test("gates the CLI capability catalog", () => {
+    expect(policy.releasePaths).toContain(
+      "packages/cli/capability-catalog.json",
+    );
+  });
+
   test("declares the same packages to the changesets entry validator", () => {
     expect([...policy.packageFiles].sort()).toEqual(
       gatedWorkspaces().map((workspace) => `${workspace}/package.json`),

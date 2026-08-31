@@ -16,6 +16,7 @@
     "packages/chat/tsconfig.json",
     "packages/chat/tsdown.config.ts",
     "packages/cli/README.md",
+    "packages/cli/capability-catalog.json",
     "packages/cli/package.json",
     "packages/cli/src/**",
     "packages/cli/skills/**",

@@ -68,6 +68,36 @@ describe("sourceExportTargets", () => {
       sourceExportTargets(manifest({ ".": "./src/index.json" })),
     ).toThrow(/expected source export/u);
   });
+
+  test("accepts an exported root JSON asset when files ships it", () => {
+    const withCatalog = {
+      ...manifest({
+        ".": "./src/index.ts",
+        "./capability-catalog.json": "./capability-catalog.json",
+      }),
+      files: ["capability-catalog.json", "dist", "src", "README.md"],
+    };
+
+    expect(sourceExportTargets(withCatalog)).toEqual({
+      ".": "./src/index.ts",
+      "./capability-catalog.json": "./capability-catalog.json",
+    });
+    expect(toPublishedManifest(withCatalog).exports).toEqual({
+      ".": { types: "./dist/index.d.ts", import: "./dist/index.js" },
+      "./capability-catalog.json": "./capability-catalog.json",
+    });
+  });
+
+  test("rejects a root JSON asset omitted from files", () => {
+    expect(() =>
+      sourceExportTargets(
+        manifest({
+          ".": "./src/index.ts",
+          "./capability-catalog.json": "./capability-catalog.json",
+        }),
+      ),
+    ).toThrow(/expected source export/u);
+  });
 });
 
 describe("toPublishedManifest", () => {
