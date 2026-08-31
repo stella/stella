@@ -349,7 +349,8 @@ test("an unregistered route fails before reservation mutates state", async () =>
       (error: unknown) => error,
     );
   expect(rejection).toMatchObject({
-    message: "Corpus index id is not a manifest route",
+    message:
+      "Corpus index id is not a manifest route: case_law_v5/case_law_v5_hun",
   });
   expect(await db.select().from(corpusIndexProjectionIntents)).toEqual([]);
 });
@@ -649,6 +650,10 @@ test("subject-scoped replacement cannot retire another applied revision", async 
   await db.execute(
     sql`ALTER TABLE corpus_index_projection_intents ENABLE TRIGGER corpus_index_projection_intents_insert_guard`,
   );
+  await db
+    .update(caseLawDecisions)
+    .set({ projectionEpoch: 2n })
+    .where(eq(caseLawDecisions.id, DECISION_ID));
   await db
     .update(caseLawDecisions)
     .set({ projectionEpoch: 2n })
