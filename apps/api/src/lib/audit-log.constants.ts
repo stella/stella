@@ -17,6 +17,7 @@ export const AUDIT_RESOURCE_TYPE = {
   AGENT_SKILL_COMMENT: "agent_skill_comment",
   AGENT_SKILL_PROPOSAL: "agent_skill_proposal",
   AI_MEMORY: "ai_memory",
+  ANNOUNCEMENT: "announcement",
   BILLING_CODE: "billing_code",
   CASE_LAW_MATTER_LINK: "case_law_matter_link",
   CASE_LAW_DECISION_ANNOTATION: "case_law_decision_annotation",

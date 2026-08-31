@@ -9,14 +9,18 @@ import {
 import { env } from "@/api/env";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
-  createNotifications,
+  fanOutNotifications,
   listAnnouncementRecipients,
 } from "@/api/lib/notifications";
-import type { NewNotification } from "@/api/lib/notifications";
+import type {
+  NewNotification,
+  NotificationFanOutDb,
+} from "@/api/lib/notifications";
 import { logger } from "@/api/lib/observability/logger";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
@@ -73,74 +77,109 @@ export type PublishAnnouncementDeps = {
    * state that the parsed env no longer reads.
    */
   getOperatorUserIds: () => string | undefined;
+  /**
+   * Owner connection the audience read and the fan-out go through. Both are
+   * organization-wide writes no caller's scope can perform, so in production
+   * this is always the default; supplying it is what lets the success path be
+   * exercised against the embedded test database at all.
+   */
+  database?: NotificationFanOutDb | undefined;
 };
 
 export const createPublishAnnouncementEndpoint = ({
   getOperatorUserIds,
+  database,
 }: PublishAnnouncementDeps) =>
-  createSafeRootHandler(config, async function* ({ body, session, user }) {
-    const allowlist = operatorUserIds(getOperatorUserIds());
-    if (allowlist === null) {
-      logger.error("notifications.announce_unconfigured");
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message:
-            "Announcements are not configured on this deployment. Set STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS.",
-        }),
-      );
-    }
-    if (!allowlist.has(user.id)) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "Announcements require operator authorization",
-        }),
-      );
-    }
+  createSafeRootHandler(
+    config,
+    async function* ({ body, recordAuditEvent, safeDb, session, user }) {
+      const allowlist = operatorUserIds(getOperatorUserIds());
+      if (allowlist === null) {
+        logger.error("notifications.announce_unconfigured");
+        return Result.err(
+          new HandlerError({
+            status: 500,
+            message:
+              "Announcements are not configured on this deployment. Set STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS.",
+          }),
+        );
+      }
+      if (!allowlist.has(user.id)) {
+        return Result.err(
+          new HandlerError({
+            status: 403,
+            message: "Announcements require operator authorization",
+          }),
+        );
+      }
 
-    const organizationId = session.activeOrganizationId;
-    const recipients = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await listAnnouncementRecipients(
-            organizationId,
-            LIMITS.announcementRecipientsMax + 1,
-          ),
-      ),
-    );
-    if (recipients.length > LIMITS.announcementRecipientsMax) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: `This organization has more than ${LIMITS.announcementRecipientsMax} members; announcements are not sized for it.`,
-        }),
+      const organizationId = session.activeOrganizationId;
+      const recipients = yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await listAnnouncementRecipients(
+              organizationId,
+              LIMITS.announcementRecipientsMax + 1,
+              database,
+            ),
+        ),
       );
-    }
+      if (recipients.length > LIMITS.announcementRecipientsMax) {
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: `This organization has more than ${LIMITS.announcementRecipientsMax} members; announcements are not sized for it.`,
+          }),
+        );
+      }
 
-    const rows: NewNotification[] = recipients.map(
-      (recipient): NewNotification => ({
-        kind: NOTIFICATION_KIND.ANNOUNCEMENT,
-        metadata: { title: body.title },
-        entityType: null,
-        entityId: null,
+      const idempotencyKey = announcementIdempotencyKey({
+        announcementKey: body.announcementKey,
         organizationId,
-        userId: brandPersistedUserId(recipient.userId),
-        idempotencyKey: announcementIdempotencyKey({
-          announcementKey: body.announcementKey,
+      });
+      const rows: NewNotification[] = recipients.map(
+        (recipient): NewNotification => ({
+          kind: NOTIFICATION_KIND.ANNOUNCEMENT,
+          metadata: { title: body.title },
+          entityType: null,
+          entityId: null,
           organizationId,
+          userId: brandPersistedUserId(recipient.userId),
+          idempotencyKey,
         }),
-      }),
-    );
+      );
 
-    yield* Result.await(
-      Result.tryPromise(
-        async () => await createNotifications(rows, { kind: "systemFanOut" }),
-      ),
-    );
+      // Committed before the fan-out, not after: the recipient rows record
+      // only who received what, so a broadcast that reached a whole firm
+      // without a durable actor trail would be exactly the state this event
+      // exists to prevent. The recorder binds the operator from the request,
+      // so the row names the caller the allowlist admitted above. Root-scoped
+      // handler, so the workspace is explicitly none.
+      yield* Result.await(
+        safeDb(
+          async (tx) =>
+            await recordAuditEvent(tx, {
+              action: AUDIT_ACTION.CREATE,
+              resourceType: AUDIT_RESOURCE_TYPE.ANNOUNCEMENT,
+              resourceId: idempotencyKey,
+              workspaceId: null,
+              metadata: {
+                title: body.title,
+                recipientCount: rows.length,
+              },
+            }),
+        ),
+      );
 
-    return Result.ok({ recipientCount: rows.length });
-  });
+      yield* Result.await(
+        Result.tryPromise(
+          async () => await fanOutNotifications(rows, database),
+        ),
+      );
+
+      return Result.ok({ recipientCount: rows.length });
+    },
+  );
 
 const announcementIdempotencyKey = ({
   announcementKey,

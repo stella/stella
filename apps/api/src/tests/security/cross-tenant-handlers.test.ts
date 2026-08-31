@@ -569,6 +569,21 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) =>
       expectPageContainsField(result, "id", notificationB),
   },
+  {
+    // The case above changes the person AND the firm at once, so a handler
+    // that filtered on organization alone would still pass it. This one holds
+    // the firm fixed: user A1 working in organization B must not see a row
+    // addressed to user B1, which isolates the recipient predicate.
+    name: "notifications (same organization, other recipient)",
+    runAAgainstB: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listNotifications, sameUserWorkspaceB, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listNotifications, workspaceB, { query: {} }),
+    expectDenied: (result) =>
+      expectPageExcludesField(result, "id", notificationB),
+    expectPositive: (result) =>
+      expectPageContainsField(result, "id", notificationB),
+  },
 ];
 
 beforeAll(async () => {

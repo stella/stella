@@ -2855,11 +2855,11 @@
   "notifications": {
     "empty": "Brak powiadomień",
     "kind": {
-      "announcement": "{title}",
-      "flowRunAwaitingApproval": "Przepływ pracy {flowName} czeka na Twoje zatwierdzenie",
-      "flowRunCompleted": "Przepływ pracy {flowName} został zakończony",
-      "flowRunFailed": "Przepływ pracy {flowName} nie powiódł się",
-      "mention": "{actorName} wspomniał o Tobie w komentarzu",
+      "announcement": "<bdi>{title}</bdi>",
+      "flowRunAwaitingApproval": "Przepływ pracy <bdi>{flowName}</bdi> czeka na Twoje zatwierdzenie",
+      "flowRunCompleted": "Przepływ pracy <bdi>{flowName}</bdi> został zakończony",
+      "flowRunFailed": "Przepływ pracy <bdi>{flowName}</bdi> nie powiódł się",
+      "mention": "<bdi>{actorName}</bdi> wspomniał o Tobie w komentarzu",
       "reportExportFailed": "Eksport raportu nie powiódł się",
       "reportExportSucceeded": "Twój raport jest gotowy"
     },

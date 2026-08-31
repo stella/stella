@@ -23,19 +23,38 @@ CREATE UNIQUE INDEX "notifications_user_idempotency_uidx" ON "notifications" USI
 CREATE INDEX "notifications_user_org_created_idx" ON "notifications" USING btree ("user_id","organization_id","created_at" DESC,"id");--> statement-breakpoint
 CREATE INDEX "notifications_user_org_unread_idx" ON "notifications" USING btree ("user_id","organization_id") WHERE "read_at" IS NULL;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "notifications" TO stella;--> statement-breakpoint
-CREATE POLICY "user_select" ON "notifications" AS PERMISSIVE FOR SELECT TO "stella" USING (user_id =
-  (SELECT current_setting(
-    'app.user_id', true
-  )));--> statement-breakpoint
-CREATE POLICY "user_insert" ON "notifications" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK (user_id =
-  (SELECT current_setting(
-    'app.user_id', true
-  )));--> statement-breakpoint
-CREATE POLICY "user_update" ON "notifications" AS PERMISSIVE FOR UPDATE TO "stella" USING (user_id =
-  (SELECT current_setting(
-    'app.user_id', true
-  )));--> statement-breakpoint
-CREATE POLICY "user_delete" ON "notifications" AS PERMISSIVE FOR DELETE TO "stella" USING (user_id =
-  (SELECT current_setting(
-    'app.user_id', true
-  )));
+CREATE POLICY "user_select"
+  ON "notifications"
+  AS PERMISSIVE FOR SELECT TO "stella"
+  USING (
+    user_id = (SELECT current_setting('app.user_id', true))
+    AND organization_id = (SELECT current_setting('app.organization_id', true))
+  );--> statement-breakpoint
+
+CREATE POLICY "user_insert"
+  ON "notifications"
+  AS PERMISSIVE FOR INSERT TO "stella"
+  WITH CHECK (
+    user_id = (SELECT current_setting('app.user_id', true))
+    AND organization_id = (SELECT current_setting('app.organization_id', true))
+  );--> statement-breakpoint
+
+CREATE POLICY "user_update"
+  ON "notifications"
+  AS PERMISSIVE FOR UPDATE TO "stella"
+  USING (
+    user_id = (SELECT current_setting('app.user_id', true))
+    AND organization_id = (SELECT current_setting('app.organization_id', true))
+  )
+  WITH CHECK (
+    user_id = (SELECT current_setting('app.user_id', true))
+    AND organization_id = (SELECT current_setting('app.organization_id', true))
+  );--> statement-breakpoint
+
+CREATE POLICY "user_delete"
+  ON "notifications"
+  AS PERMISSIVE FOR DELETE TO "stella"
+  USING (
+    user_id = (SELECT current_setting('app.user_id', true))
+    AND organization_id = (SELECT current_setting('app.organization_id', true))
+  );

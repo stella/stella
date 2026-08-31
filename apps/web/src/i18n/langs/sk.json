@@ -2855,11 +2855,11 @@
   "notifications": {
     "empty": "Zatiaľ žiadne oznámenia",
     "kind": {
-      "announcement": "{title}",
-      "flowRunAwaitingApproval": "Pracovný postup {flowName} čaká na vaše schválenie",
-      "flowRunCompleted": "Pracovný postup {flowName} bol dokončený",
-      "flowRunFailed": "Pracovný postup {flowName} zlyhal",
-      "mention": "{actorName} vás spomenul v komentári",
+      "announcement": "<bdi>{title}</bdi>",
+      "flowRunAwaitingApproval": "Pracovný postup <bdi>{flowName}</bdi> čaká na vaše schválenie",
+      "flowRunCompleted": "Pracovný postup <bdi>{flowName}</bdi> bol dokončený",
+      "flowRunFailed": "Pracovný postup <bdi>{flowName}</bdi> zlyhal",
+      "mention": "<bdi>{actorName}</bdi> vás spomenul v komentári",
       "reportExportFailed": "Export správy zlyhal",
       "reportExportSucceeded": "Vaša správa je pripravená"
     },

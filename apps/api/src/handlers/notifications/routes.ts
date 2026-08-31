@@ -27,6 +27,11 @@ export const notificationsRoute = new Elysia({
    * uses cookie credentials through the ordinary auth macro, exactly like the
    * workspace stream — and refuses a `?token=` credential for the same reason:
    * a query-string secret lands in proxy logs, referrers and history.
+   *
+   * The stream is bound to the session's active organization for its whole
+   * life; a client that switches firms opens a new one rather than having
+   * this one re-point. The organization is never read off the request — the
+   * session is the only source that may name it.
    */
   .get(
     "/events",

@@ -5,6 +5,8 @@ import { notifications } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
+import { readUnreadCount } from "./read-model";
+
 const config = {
   description:
     "Mark every unread notification the caller has in their active " +
@@ -38,9 +40,18 @@ const markAllNotificationsRead = createSafeRootHandler(
       }),
     );
 
-    // Everything unread in this organization was just marked, so the count is
-    // zero by construction rather than by a follow-up query.
-    return Result.ok({ markedCount: updated.length, unreadCount: 0 });
+    // Counted after the update rather than assumed to be zero: a notification
+    // filed between the UPDATE and this read is genuinely unread, and a hard
+    // zero would clear the badge and the favicon dot for it. Same read the
+    // single-notification endpoint answers with, so the two cannot disagree.
+    const unreadCount = yield* Result.await(
+      readUnreadCount(safeDb, {
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+      }),
+    );
+
+    return Result.ok({ markedCount: updated.length, unreadCount });
   },
 );
 

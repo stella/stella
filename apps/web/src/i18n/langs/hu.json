@@ -2855,11 +2855,11 @@
   "notifications": {
     "empty": "Még nincsenek értesítések",
     "kind": {
-      "announcement": "{title}",
-      "flowRunAwaitingApproval": "A(z) {flowName} munkafolyamat a jóváhagyására vár",
-      "flowRunCompleted": "A(z) {flowName} munkafolyamat befejeződött",
-      "flowRunFailed": "A(z) {flowName} munkafolyamat sikertelen",
-      "mention": "{actorName} megemlítette Önt egy hozzászólásban",
+      "announcement": "<bdi>{title}</bdi>",
+      "flowRunAwaitingApproval": "A(z) <bdi>{flowName}</bdi> munkafolyamat a jóváhagyására vár",
+      "flowRunCompleted": "A(z) <bdi>{flowName}</bdi> munkafolyamat befejeződött",
+      "flowRunFailed": "A(z) <bdi>{flowName}</bdi> munkafolyamat sikertelen",
+      "mention": "<bdi>{actorName}</bdi> megemlítette Önt egy hozzászólásban",
       "reportExportFailed": "A jelentés exportálása sikertelen",
       "reportExportSucceeded": "A jelentése elkészült"
     },

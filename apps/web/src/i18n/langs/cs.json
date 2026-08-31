@@ -2855,12 +2855,12 @@
   "notifications": {
     "empty": "Zatím žádná oznámení",
     "kind": {
-      "announcement": "{title}",
-      "flowRunAwaitingApproval": "Pracovní postup {flowName} čeká na vaše schválení",
-      "flowRunCompleted": "Pracovní postup {flowName} byl dokončen",
-      "flowRunFailed": "Pracovní postup {flowName} selhal",
-      "mention": "{actorName} vás zmínil v komentáři",
-      "reportExportFailed": "Zprávu se nepodařilo uložit",
+      "announcement": "<bdi>{title}</bdi>",
+      "flowRunAwaitingApproval": "Pracovní postup <bdi>{flowName}</bdi> čeká na vaše schválení",
+      "flowRunCompleted": "Pracovní postup <bdi>{flowName}</bdi> byl dokončen",
+      "flowRunFailed": "Pracovní postup <bdi>{flowName}</bdi> selhal",
+      "mention": "<bdi>{actorName}</bdi> vás zmínil v komentáři",
+      "reportExportFailed": "Export vaší zprávy se nezdařil",
       "reportExportSucceeded": "Vaše zpráva je připravena"
     },
     "loadOlder": "Načíst starší",

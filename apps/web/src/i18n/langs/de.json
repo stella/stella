@@ -2855,11 +2855,11 @@
   "notifications": {
     "empty": "Noch keine Benachrichtigungen",
     "kind": {
-      "announcement": "{title}",
-      "flowRunAwaitingApproval": "Workflow {flowName} wartet auf Ihre Freigabe",
-      "flowRunCompleted": "Workflow {flowName} abgeschlossen",
-      "flowRunFailed": "Workflow {flowName} fehlgeschlagen",
-      "mention": "{actorName} hat Sie in einem Kommentar erwähnt",
+      "announcement": "<bdi>{title}</bdi>",
+      "flowRunAwaitingApproval": "Workflow <bdi>{flowName}</bdi> wartet auf Ihre Freigabe",
+      "flowRunCompleted": "Workflow <bdi>{flowName}</bdi> abgeschlossen",
+      "flowRunFailed": "Workflow <bdi>{flowName}</bdi> fehlgeschlagen",
+      "mention": "<bdi>{actorName}</bdi> hat Sie in einem Kommentar erwähnt",
       "reportExportFailed": "Ihr Berichtsexport ist fehlgeschlagen",
       "reportExportSucceeded": "Ihr Bericht ist bereit"
     },

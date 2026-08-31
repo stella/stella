@@ -19,10 +19,12 @@ import publishAnnouncement, {
 import listNotifications from "@/api/handlers/notifications/list";
 import markNotificationRead from "@/api/handlers/notifications/read";
 import markAllNotificationsRead from "@/api/handlers/notifications/read-all";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  createNotifications,
+  fanOutNotifications,
   NOTIFICATION_INSERT_BATCH_SIZE,
 } from "@/api/lib/notifications";
 import type { NewNotification } from "@/api/lib/notifications";
@@ -50,12 +52,7 @@ const seeded: SafeId<"notification">[] = [];
  * structural seam lets the same code run against the embedded test database.
  */
 const fanOutDb = () =>
-  asTestRaw<
-    Extract<
-      Parameters<typeof createNotifications>[1],
-      { kind: "systemFanOut" }
-    >["database"]
-  >(testDb);
+  asTestRaw<Parameters<typeof fanOutNotifications>[1]>(testDb);
 
 const seedNotification = async ({
   userId,
@@ -240,6 +237,55 @@ describe("notification list scoping", () => {
     expect(wrote).toHaveLength(0);
   });
 
+  test("RLS hides the caller's own rows from another organization's scope", async () => {
+    // Not the handler's organization filter: this reads the row by primary key
+    // through a scoped connection, so only the policy can be hiding it.
+    const rows = await createScopedDb(
+      testDb,
+      [],
+      ids.orgA,
+      ids.userA1,
+    )(
+      async (tx) =>
+        await tx
+          .select({ id: notifications.id })
+          .from(notifications)
+          .where(eq(notifications.id, otherOrgA1)),
+    );
+
+    expect(rows).toHaveLength(0);
+  });
+
+  test("RLS refuses a row filed against another organization", async () => {
+    const foreignOrgInsert = await Result.tryPromise(
+      async () =>
+        await createScopedDb(
+          testDb,
+          [],
+          ids.orgA,
+          ids.userA1,
+        )(async (tx) => {
+          await tx.insert(notifications).values({
+            id: createSafeId<"notification">(),
+            userId: ids.userA1,
+            organizationId: ids.orgB,
+            kind: NOTIFICATION_KIND.ANNOUNCEMENT,
+            metadata: { title: "wrong firm" },
+            entityType: null,
+            entityId: null,
+            idempotencyKey: "test:rls-org-refusal",
+          });
+        }),
+    );
+
+    expect(Result.isError(foreignOrgInsert)).toBe(true);
+    const wrote = await testDb
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(eq(notifications.idempotencyKey, "test:rls-org-refusal"));
+    expect(wrote).toHaveLength(0);
+  });
+
   test("rejects a cursor it did not issue", async () => {
     const result = await listNotifications.handler(
       asTestRaw<ListContext>({
@@ -333,7 +379,7 @@ describe("unread count", () => {
   });
 });
 
-describe("createNotifications", () => {
+describe("fanOutNotifications", () => {
   test("an idempotency key replayed for the same user writes one row", async () => {
     const row: NewNotification = {
       kind: NOTIFICATION_KIND.FLOW_RUN_COMPLETED,
@@ -345,14 +391,8 @@ describe("createNotifications", () => {
       idempotencyKey: "test:dedupe",
     };
 
-    await createNotifications([row], {
-      kind: "systemFanOut",
-      database: fanOutDb(),
-    });
-    await createNotifications([row], {
-      kind: "systemFanOut",
-      database: fanOutDb(),
-    });
+    await fanOutNotifications([row], fanOutDb());
+    await fanOutNotifications([row], fanOutDb());
 
     const written = await testDb
       .select({ id: notifications.id })
@@ -372,12 +412,12 @@ describe("createNotifications", () => {
       idempotencyKey: "test:shared-announcement",
     } as const;
 
-    await createNotifications(
+    await fanOutNotifications(
       [
         { ...shared, userId: ids.userA1 },
         { ...shared, userId: ids.userA2 },
       ],
-      { kind: "systemFanOut", database: fanOutDb() },
+      fanOutDb(),
     );
 
     const written = await testDb
@@ -405,10 +445,7 @@ describe("createNotifications", () => {
       }),
     );
 
-    await createNotifications(rows, {
-      kind: "systemFanOut",
-      database: fanOutDb(),
-    });
+    await fanOutNotifications(rows, fanOutDb());
 
     const written = await testDb
       .select({ id: notifications.id, key: notifications.idempotencyKey })
@@ -466,5 +503,50 @@ describe("announcements", () => {
         }),
       ),
     ).toMatchObject({ code: 500 });
+  });
+
+  test("an operator's broadcast reaches the firm and names its publisher", async () => {
+    const recorded: AuditEvent[] = [];
+    const context = contextFor({
+      userId: ids.userAdmin,
+      organizationId: ids.orgA,
+    });
+    const result = await createPublishAnnouncementEndpoint({
+      getOperatorUserIds: () => ids.userAdmin,
+      database: fanOutDb(),
+    }).handler(
+      asTestRaw<AnnounceContext>({
+        ...context,
+        recordAuditEvent: async (_tx: unknown, event: AuditEvent) => {
+          recorded.push(event);
+        },
+        body: { title: "Scheduled maintenance", announcementKey: "k3" },
+      }),
+    );
+
+    const key = `announcement:${ids.orgA}:k3`;
+    const written = await testDb
+      .select({ id: notifications.id, userId: notifications.userId })
+      .from(notifications)
+      .where(eq(notifications.idempotencyKey, key));
+    seeded.push(...written.map(({ id }) => id));
+
+    expect(result).toEqual({ recipientCount: written.length });
+    expect(written.length).toBeGreaterThan(0);
+
+    // The rows say who received the announcement; only the audit event says
+    // who published it.
+    expect(recorded).toEqual([
+      {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ANNOUNCEMENT,
+        resourceId: key,
+        workspaceId: null,
+        metadata: {
+          title: "Scheduled maintenance",
+          recipientCount: written.length,
+        },
+      },
+    ]);
   });
 });

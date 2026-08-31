@@ -12,7 +12,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
-  createNotifications,
+  fanOutNotifications,
   resolveMentionTargets,
 } from "@/api/lib/notifications";
 import type { NewNotification } from "@/api/lib/notifications";
@@ -98,13 +98,14 @@ const createItemComment = createSafeHandler(
           idempotencyKey: `mention:${result.id}`,
         }),
       );
-      // Detached, not fire-and-forget: the comment is already committed and
-      // the author must not see the write fail because a colleague's badge
-      // could not be filed, but the failure still reaches error capture.
-      detached(
-        createNotifications(rows, { kind: "systemFanOut" }),
-        "notifications.list-item-mention",
-      );
+      // Fanned out after the comment commits, not inside its transaction: a
+      // mention names OTHER people, and the user-and-organization RLS scope
+      // this handler runs under refuses a row addressed to somebody else, so
+      // there is no transaction that can hold both writes. Detached rather
+      // than awaited because the comment is already durable and its author
+      // must not see the write fail over a colleague's badge — the rejection
+      // still reaches error capture rather than being swallowed.
+      detached(fanOutNotifications(rows), "notifications.list-item-mention");
     }
 
     return Result.ok({ id: result.id });

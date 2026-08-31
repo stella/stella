@@ -98,47 +98,42 @@ const chunked = <T>(items: readonly T[], size: number): T[][] => {
 };
 
 /**
- * Structural handle the fan-out writes through. Declared structurally rather
- * than as `typeof rootDb` so the batching behaviour can be exercised against
- * the embedded test database; production call sites always take the default.
+ * Structural handle the owner-connection paths read and write through.
+ * Declared structurally rather than as `typeof rootDb` so the fan-out and the
+ * announcement audience can be exercised against the embedded test database;
+ * production call sites always take the default.
  */
-type NotificationFanOutDb = {
+export type NotificationFanOutDb = {
   transaction: <T>(fn: (tx: Transaction) => Promise<T>) => Promise<T>;
+  select: (typeof rootDb)["select"];
 };
 
 /**
- * Who a batch of notifications is written as.
+ * One recipient stream owed a content-free "your notifications changed" ping.
  *
- * `callerTransaction` is a recipient writing their OWN row: the caller's RLS
- * scope already admits it, so the row lands atomically with whatever write
- * caused it instead of in a second round trip that a crash could lose.
- * `systemFanOut` is a write addressed to OTHER people (a mentioned colleague,
- * every member of a firm), which no caller's scope can admit — it goes through
- * the owner connection, and the recipient and organization it names are always
- * server-derived.
+ * Handed back rather than sent from inside the write so the ping cannot
+ * outrun the row it announces: a client answers each event with exactly one
+ * re-read, so a ping delivered before its transaction commits buys the reader
+ * a stale badge until something unrelated refetches.
  */
-export type NotificationWriter =
-  | { kind: "callerTransaction"; tx: Transaction }
-  | { kind: "systemFanOut"; database?: NotificationFanOutDb | undefined };
+export type NotificationPing = {
+  userId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
+};
 
-/**
- * File notifications and ping their recipients' streams.
- *
- * Under `callerTransaction` the ping is sent before that transaction commits.
- * That is deliberate rather than sloppy: the event is content-free, so a
- * rollback costs a client one wasted re-read of a list that did not change,
- * whereas deferring the ping would mean every caller had to remember to send
- * it — the kind of discipline that eventually goes missing at one call site.
- *
- * Rejections propagate — the caller decides whether to fail the request or
- * hand it to `detached`, which captures. Nothing is swallowed here.
- */
-export const createNotifications = async (
+type NotificationInsertRow = {
+  userId: string;
+  organizationId: SafeId<"organization">;
+};
+
+const insertNotifications = async (
   rows: readonly NewNotification[],
-  writer: NotificationWriter,
-): Promise<void> => {
+  writeBatch: (
+    insert: (tx: Transaction) => Promise<NotificationInsertRow[]>,
+  ) => Promise<NotificationInsertRow[]>,
+): Promise<NotificationPing[]> => {
   if (rows.length === 0) {
-    return;
+    return [];
   }
 
   const values = rows.map((row) => ({
@@ -152,45 +147,95 @@ export const createNotifications = async (
     idempotencyKey: row.idempotencyKey,
   }));
 
-  const insert = async (
-    tx: Transaction,
-    batch: typeof values,
-  ): Promise<{ userId: string; organizationId: SafeId<"organization"> }[]> =>
-    await tx
-      .insert(notifications)
-      .values(batch)
-      .onConflictDoNothing()
-      .returning({
-        userId: notifications.userId,
-        organizationId: notifications.organizationId,
-      });
-
-  const inserted: { userId: string; organizationId: SafeId<"organization"> }[] =
-    [];
+  const inserted: NotificationInsertRow[] = [];
   for (const batch of chunked(values, NOTIFICATION_INSERT_BATCH_SIZE)) {
     // oxlint-disable-next-line no-await-in-loop -- batches are written in order so one oversized fan-out cannot hold every pool connection at once
-    const batchRows = await (writer.kind === "callerTransaction"
-      ? insert(writer.tx, batch)
-      : (writer.database ?? rootDb).transaction(
-          async (tx) => await insert(tx, batch),
-        ));
+    const batchRows = await writeBatch(
+      async (tx) =>
+        await tx
+          .insert(notifications)
+          .values(batch)
+          .onConflictDoNothing()
+          .returning({
+            userId: notifications.userId,
+            organizationId: notifications.organizationId,
+          }),
+    );
     inserted.push(...batchRows);
   }
 
-  // One content-free ping per recipient stream. Collapsed per (user,
-  // organization) so an announcement does not emit a burst to the same tab.
-  const pinged = new Set<string>();
+  // One ping per recipient stream. Collapsed per (user, organization) so an
+  // announcement does not emit a burst to the same tab.
+  const seen = new Set<string>();
+  const pings: NotificationPing[] = [];
   for (const row of inserted) {
     const key = `${row.userId}:${row.organizationId}`;
-    if (pinged.has(key)) {
+    if (seen.has(key)) {
       continue;
     }
-    pinged.add(key);
-    broadcastToUser(
-      brandPersistedUserId(row.userId),
-      row.organizationId,
-      newNotificationRealtimeEvent(),
-    );
+    seen.add(key);
+    pings.push({
+      userId: brandPersistedUserId(row.userId),
+      organizationId: row.organizationId,
+    });
+  }
+  return pings;
+};
+
+/**
+ * File notifications a recipient is writing for THEMSELVES, in the caller's
+ * own transaction: the user-and-organization RLS scope already admits those
+ * rows, so they land atomically with whatever write caused them instead of in
+ * a second round trip that a crash could lose.
+ *
+ * Returns the pings the caller must send with {@link pingNotificationRecipients}
+ * AFTER that transaction commits. Nothing is broadcast here, because when this
+ * returns the rows are still invisible to everybody, the recipient included.
+ *
+ * Rejections propagate: filing the notification is part of the caller's write,
+ * so it fails or rolls back with it.
+ */
+export const createNotificationsInTransaction = async (
+  rows: readonly NewNotification[],
+  tx: Transaction,
+): Promise<NotificationPing[]> =>
+  await insertNotifications(rows, async (insert) => await insert(tx));
+
+/**
+ * File notifications addressed to OTHER people (a mentioned colleague, every
+ * member of a firm) and ping them.
+ *
+ * No caller's RLS scope can admit a row addressed to somebody else, so this
+ * writes through the owner connection; the recipient and organization it names
+ * are always server-derived. Its own transaction has committed by the time
+ * this returns, so the pings go out here and no caller has to remember them.
+ *
+ * Rejections propagate — the caller decides whether to fail the request or
+ * hand it to `detached`, which captures. Nothing is swallowed here.
+ */
+export const fanOutNotifications = async (
+  rows: readonly NewNotification[],
+  database: NotificationFanOutDb = rootDb,
+): Promise<void> => {
+  pingNotificationRecipients(
+    await insertNotifications(
+      rows,
+      async (insert) => await database.transaction(insert),
+    ),
+  );
+};
+
+/**
+ * Send the content-free pings {@link createNotificationsInTransaction} handed
+ * back, once the transaction they belong to has committed. The event carries
+ * no payload, so a recipient's client answers it by re-reading the ordinary
+ * authorized endpoint.
+ */
+export const pingNotificationRecipients = (
+  pings: readonly NotificationPing[],
+): void => {
+  for (const { organizationId, userId } of pings) {
+    broadcastToUser(userId, organizationId, newNotificationRealtimeEvent());
   }
 };
 
@@ -286,8 +331,9 @@ export const resolveMentionTargets = async (
 export const listAnnouncementRecipients = async (
   organizationId: SafeId<"organization">,
   limit: number,
+  database: NotificationFanOutDb = rootDb,
 ): Promise<{ userId: string }[]> =>
-  await rootDb
+  await database
     .select({ userId: organizationMember.userId })
     .from(organizationMember)
     .where(eq(organizationMember.organizationId, organizationId))

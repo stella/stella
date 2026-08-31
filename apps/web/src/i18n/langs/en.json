@@ -2855,11 +2855,11 @@
   "notifications": {
     "empty": "No notifications yet",
     "kind": {
-      "announcement": "{title}",
-      "flowRunAwaitingApproval": "Workflow {flowName} is waiting for your approval",
-      "flowRunCompleted": "Workflow {flowName} finished",
-      "flowRunFailed": "Workflow {flowName} failed",
-      "mention": "{actorName} mentioned you in a comment",
+      "announcement": "<bdi>{title}</bdi>",
+      "flowRunAwaitingApproval": "Workflow <bdi>{flowName}</bdi> is waiting for your approval",
+      "flowRunCompleted": "Workflow <bdi>{flowName}</bdi> finished",
+      "flowRunFailed": "Workflow <bdi>{flowName}</bdi> failed",
+      "mention": "<bdi>{actorName}</bdi> mentioned you in a comment",
       "reportExportFailed": "Your report export failed",
       "reportExportSucceeded": "Your report is ready"
     },

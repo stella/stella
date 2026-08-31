@@ -25,12 +25,15 @@ import {
 } from "bun:test";
 import { asc, eq } from "drizzle-orm";
 
+import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
+
 import { organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   fields,
   flowDefinitions,
   flowRunSteps,
+  notifications,
   properties,
   workspaces,
 } from "@/api/db/schema";
@@ -137,12 +140,19 @@ const executeFlowStepWithTestModel = async (
     loadAIConfig: async () => null,
   });
 
+type ResolveReviewGateDependencies = NonNullable<
+  Parameters<typeof resolveFlowReviewGateWithDependencies>[1]
+>;
+const reviewGateDatabase =
+  asTestRaw<NonNullable<ResolveReviewGateDependencies["database"]>>(testDb);
+
 const resolveFlowReviewGate = async (
   options: Parameters<typeof resolveFlowReviewGateWithDependencies>[0],
 ) =>
   await resolveFlowReviewGateWithDependencies(options, {
     broadcastUpdate,
     enqueueStep: enqueueFlowStepMock,
+    database: reviewGateDatabase,
   });
 
 // ── Fixture data ─────────────────────────────────────────
@@ -268,6 +278,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     const reviewed = await resolveFlowReviewGate({
       safeDb,
       workspaceId,
+      organizationId,
       runId,
       userId,
       decision: "approved",
@@ -420,6 +431,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     const rejected = await resolveFlowReviewGate({
       safeDb,
       workspaceId,
+      organizationId,
       runId,
       userId,
       decision: "rejected",
@@ -437,5 +449,86 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     expect(run?.status).toBe("cancelled");
     // Rejecting must never chain into the (absent) create-document step.
     expect(enqueuedSteps).toHaveLength(0);
+  });
+
+  test("approving a final review gate completes the run and files its pointer", async () => {
+    // The worker never sees this terminal path: the gate is the last step, so
+    // `completeStepAndAdvance` is not what finishes the run. Without the
+    // review-resolution branch the advertised completion notification would
+    // exist only for runs that end on some other kind of step.
+    const definitionId = createSafeId<"flowDefinition">();
+    await testDb.insert(flowDefinitions).values({
+      id: definitionId,
+      organizationId,
+      name: "Gate-terminated flow",
+      steps: [AI_STEP, REVIEW_GATE_STEP],
+      trigger: MANUAL_TRIGGER,
+      enabled: true,
+      createdByUserId: userId,
+    });
+
+    const safeDb = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [workspaceId], organizationId, userId),
+    );
+    const started = await startFlowRun({
+      safeDb,
+      organizationId,
+      workspaceId,
+      definitionId,
+      triggerSource: { type: "manual", userId },
+      inputEntityIds: [],
+      enqueueStep: enqueueFlowStepMock,
+    });
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const { runId } = started.value;
+
+    enqueuedSteps.length = 0;
+    await executeFlowStepWithTestModel(
+      { runId, stepIndex: 0 },
+      new AbortController().signal,
+    );
+    expect(enqueuedSteps.pop()).toEqual({ runId, stepIndex: 1 });
+    await executeFlowStepWithTestModel(
+      { runId, stepIndex: 1 },
+      new AbortController().signal,
+    );
+
+    const approved = await resolveFlowReviewGate({
+      safeDb,
+      workspaceId,
+      organizationId,
+      runId,
+      userId,
+      decision: "approved",
+      note: null,
+    });
+    if (Result.isError(approved)) {
+      throw approved.error;
+    }
+    expect(approved.value.status).toBe("completed");
+    expect(enqueuedSteps).toHaveLength(0);
+
+    const filed = await testDb
+      .select({
+        userId: notifications.userId,
+        organizationId: notifications.organizationId,
+        kind: notifications.kind,
+        entityId: notifications.entityId,
+        metadata: notifications.metadata,
+      })
+      .from(notifications)
+      .where(eq(notifications.idempotencyKey, `flow-run-completed:${runId}`));
+
+    expect(filed).toEqual([
+      {
+        userId,
+        organizationId,
+        kind: NOTIFICATION_KIND.FLOW_RUN_COMPLETED,
+        entityId: runId,
+        metadata: { flowName: "Gate-terminated flow" },
+      },
+    ]);
   });
 });

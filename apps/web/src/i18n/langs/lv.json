@@ -2855,11 +2855,11 @@
   "notifications": {
     "empty": "Pagaidām nav paziņojumu",
     "kind": {
-      "announcement": "{title}",
-      "flowRunAwaitingApproval": "Darbplūsma {flowName} gaida jūsu apstiprinājumu",
-      "flowRunCompleted": "Darbplūsma {flowName} ir pabeigta",
-      "flowRunFailed": "Darbplūsma {flowName} neizdevās",
-      "mention": "{actorName} pieminēja jūs komentārā",
+      "announcement": "<bdi>{title}</bdi>",
+      "flowRunAwaitingApproval": "Darbplūsma <bdi>{flowName}</bdi> gaida jūsu apstiprinājumu",
+      "flowRunCompleted": "Darbplūsma <bdi>{flowName}</bdi> ir pabeigta",
+      "flowRunFailed": "Darbplūsma <bdi>{flowName}</bdi> neizdevās",
+      "mention": "<bdi>{actorName}</bdi> pieminēja jūs komentārā",
       "reportExportFailed": "Neizdevās eksportēt pārskatu",
       "reportExportSucceeded": "Jūsu pārskats ir gatavs"
     },

@@ -13,7 +13,7 @@ import {
   sql,
   timestamptz,
   user,
-  userPolicies,
+  userOrganizationPolicies,
 } from "./common";
 
 const NOTIFICATION_KIND_SQL_VALUES = NOTIFICATION_KINDS.map((kind) =>
@@ -29,10 +29,11 @@ const NOTIFICATION_ENTITY_TYPE_SQL_VALUES = NOTIFICATION_ENTITY_TYPES.map(
  * state — `readAt IS NULL` means unread, so there is no boolean to disagree
  * with the timestamp.
  *
- * `organizationId` records the organization the event happened in, not a
- * second owner: the list endpoint filters to the caller's ACTIVE organization
- * so a user who belongs to several firms does not see one firm's activity
- * while working in another. RLS still pins every row to its own user.
+ * `organizationId` records the organization the event happened in. The list
+ * endpoint filters to the caller's ACTIVE organization so a user who belongs
+ * to several firms does not see one firm's activity while working in another,
+ * and RLS pins both recipient and organization so that separation survives a
+ * handler that forgets the filter.
  *
  * `idempotencyKey` makes producers replay-safe: a retried worker job, a BullMQ
  * redelivery, or two workers racing the same run insert the same key and the
@@ -87,6 +88,6 @@ export const notifications = p.pgTable(
       "notifications_entity_pointer_check",
       sql`(${table.entityType} IS NULL) = (${table.entityId} IS NULL)`,
     ),
-    ...userPolicies(),
+    ...userOrganizationPolicies(),
   ],
 );

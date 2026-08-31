@@ -2855,11 +2855,11 @@
   "notifications": {
     "empty": "Teavitusi veel pole",
     "kind": {
-      "announcement": "{title}",
-      "flowRunAwaitingApproval": "Töövoog {flowName} ootab teie kinnitust",
-      "flowRunCompleted": "Töövoog {flowName} on lõpetatud",
-      "flowRunFailed": "Töövoog {flowName} ebaõnnestus",
-      "mention": "{actorName} mainis teid kommentaaris",
+      "announcement": "<bdi>{title}</bdi>",
+      "flowRunAwaitingApproval": "Töövoog <bdi>{flowName}</bdi> ootab teie kinnitust",
+      "flowRunCompleted": "Töövoog <bdi>{flowName}</bdi> on lõpetatud",
+      "flowRunFailed": "Töövoog <bdi>{flowName}</bdi> ebaõnnestus",
+      "mention": "<bdi>{actorName}</bdi> mainis teid kommentaaris",
       "reportExportFailed": "Aruande eksportimine ebaõnnestus",
       "reportExportSucceeded": "Teie aruanne on valmis"
     },

@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { BellIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -5,13 +7,16 @@ import { useTranslations } from "use-intl";
 import type { REALTIME_EVENT_TYPE } from "@stll/api-contract";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import type { NotificationKind } from "@stll/api-contract/notifications";
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
@@ -34,20 +39,29 @@ import { useUserEventsSSE } from "@/lib/user-events-sse";
  */
 export const NotificationBell = () => {
   const t = useTranslations();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const organizationId = useAuthenticatedUser().activeOrganizationId;
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useInfiniteQuery(notificationsOptions({ organizationId }));
+  const {
+    data,
+    error: listError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch,
+  } = useInfiniteQuery(notificationsOptions({ organizationId }));
 
   // The count travels with every page and is computed server-side, so it stays
-  // right no matter how little history this client holds.
+  // right no matter how little history this client holds. A failed read is not
+  // "nothing unread": the badge stays dark either way, so the error has to be
+  // said out loud rather than rendered as the calm empty state.
   const unreadCount = data?.pages.at(0)?.unreadCount ?? 0;
   const items = data ? data.pages.flatMap((page) => page.items) : [];
 
   useUnreadFaviconDot(unreadCount > 0);
 
-  useUserEventsSSE(({ type: eventType }) => {
+  useUserEventsSSE(organizationId, ({ type: eventType }) => {
     // The user channel carries a single event kind today; this bind makes a
     // second kind a compile error here instead of a silently ignored event.
     eventType satisfies typeof REALTIME_EVENT_TYPE.NEW_NOTIFICATION;
@@ -56,6 +70,16 @@ export const NotificationBell = () => {
       "notification-bell.refetch-first-page",
     );
   });
+
+  useExternalSyncEffect(() => {
+    if (listError === null) {
+      return;
+    }
+    analytics.captureError(listError);
+    stellaToast.error(
+      userErrorFromThrown(listError, t("common.unexpectedError")),
+    );
+  }, [analytics, listError, t]);
 
   const reportFailure = (error: unknown) => {
     stellaToast.add({
@@ -135,26 +159,16 @@ export const NotificationBell = () => {
         </div>
         <Separator />
         <div className="max-h-96 overflow-y-auto">
-          {items.length === 0 ? (
-            <p className="text-muted-foreground px-3 py-6 text-center text-sm">
-              {t("notifications.empty")}
-            </p>
-          ) : (
-            <ul>
-              {items.map((notification) => (
-                <NotificationRow
-                  key={notification.id}
-                  notification={notification}
-                  onRead={() => {
-                    detached(
-                      markRead(notification),
-                      "notification-bell.mark-read",
-                    );
-                  }}
-                />
-              ))}
-            </ul>
-          )}
+          <NotificationPanelBody
+            items={items}
+            listError={listError}
+            onRead={(notification) => {
+              detached(markRead(notification), "notification-bell.mark-read");
+            }}
+            onRetry={() => {
+              detached(refetch(), "notification-bell.retry");
+            }}
+          />
           {hasNextPage && (
             <div className="px-3 py-2">
               <Button
@@ -173,6 +187,61 @@ export const NotificationBell = () => {
         </div>
       </PopoverPopup>
     </Popover>
+  );
+};
+
+type NotificationPanelBodyProps = {
+  items: Notification[];
+  listError: Error | null;
+  onRead: (notification: Notification) => void;
+  onRetry: () => void;
+};
+
+/**
+ * The panel's three states, kept apart on purpose. A failed read renders as a
+ * failure with a way out, never as the "you are all caught up" copy: the
+ * reader would otherwise be told there is nothing waiting when the truth is
+ * that nobody could look.
+ */
+const NotificationPanelBody = ({
+  items,
+  listError,
+  onRead,
+  onRetry,
+}: NotificationPanelBodyProps) => {
+  const t = useTranslations();
+
+  if (listError !== null) {
+    return (
+      <div className="text-muted-foreground flex flex-col items-center gap-3 px-3 py-6 text-center text-sm">
+        <p>{userErrorFromThrown(listError, t("common.unexpectedError"))}</p>
+        <Button onClick={onRetry} size="sm" variant="outline">
+          {t("common.retry")}
+        </Button>
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <p className="text-muted-foreground px-3 py-6 text-center text-sm">
+        {t("notifications.empty")}
+      </p>
+    );
+  }
+
+  return (
+    <ul>
+      {items.map((notification) => (
+        <NotificationRow
+          key={notification.id}
+          notification={notification}
+          onRead={() => {
+            onRead(notification);
+          }}
+        />
+      ))}
+    </ul>
   );
 };
 
@@ -256,16 +325,25 @@ const parameter = (
 // generic per call and exceeds TypeScript's instantiation depth; the hook's
 // inferred `t` does not. Parameterised branches pass literal keys for the
 // same reason; NOTIFICATION_MESSAGE_KEY stays the totality gate.
+// The return type is annotated, not inferred: React 19's `ReactNode` admits a
+// promise, so `t.rich`'s inferred return reads as a maybe-async function.
 const NotificationMessage = ({
   notification: { kind, metadata },
 }: {
   notification: Notification;
-}) => {
+}): ReactNode => {
   const t = useTranslations();
+  // Every dynamic fragment below is somebody's name, a flow's name, or an
+  // operator's title: user-authored text of unknown direction dropped into a
+  // sentence whose direction comes from the UI locale. Without the isolate,
+  // a Latin name inside an Arabic sentence drags neighbouring punctuation
+  // across it. `bdi` is the tag the message declares; `BidiText` renders it.
+  const bdi = (chunks: ReactNode) => <BidiText>{chunks}</BidiText>;
   switch (kind) {
     case NOTIFICATION_KIND.MENTION:
-      return t("notifications.kind.mention", {
+      return t.rich("notifications.kind.mention", {
         actorName: parameter(metadata, "actorName"),
+        bdi,
       });
     case NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED:
       return t(
@@ -276,19 +354,23 @@ const NotificationMessage = ({
         NOTIFICATION_MESSAGE_KEY[NOTIFICATION_KIND.REPORT_EXPORT_FAILED],
       );
     case NOTIFICATION_KIND.FLOW_RUN_COMPLETED:
-      return t("notifications.kind.flowRunCompleted", {
+      return t.rich("notifications.kind.flowRunCompleted", {
+        bdi,
         flowName: parameter(metadata, "flowName"),
       });
     case NOTIFICATION_KIND.FLOW_RUN_FAILED:
-      return t("notifications.kind.flowRunFailed", {
+      return t.rich("notifications.kind.flowRunFailed", {
+        bdi,
         flowName: parameter(metadata, "flowName"),
       });
     case NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL:
-      return t("notifications.kind.flowRunAwaitingApproval", {
+      return t.rich("notifications.kind.flowRunAwaitingApproval", {
+        bdi,
         flowName: parameter(metadata, "flowName"),
       });
     case NOTIFICATION_KIND.ANNOUNCEMENT:
-      return t("notifications.kind.announcement", {
+      return t.rich("notifications.kind.announcement", {
+        bdi,
         title: parameter(metadata, "title"),
       });
     default:

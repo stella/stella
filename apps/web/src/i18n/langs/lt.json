@@ -2855,11 +2855,11 @@
   "notifications": {
     "empty": "Pranešimų kol kas nėra",
     "kind": {
-      "announcement": "{title}",
-      "flowRunAwaitingApproval": "Darbo eiga {flowName} laukia jūsų patvirtinimo",
-      "flowRunCompleted": "Darbo eiga {flowName} baigta",
-      "flowRunFailed": "Darbo eiga {flowName} nepavyko",
-      "mention": "{actorName} paminėjo jus komentare",
+      "announcement": "<bdi>{title}</bdi>",
+      "flowRunAwaitingApproval": "Darbo eiga <bdi>{flowName}</bdi> laukia jūsų patvirtinimo",
+      "flowRunCompleted": "Darbo eiga <bdi>{flowName}</bdi> baigta",
+      "flowRunFailed": "Darbo eiga <bdi>{flowName}</bdi> nepavyko",
+      "mention": "<bdi>{actorName}</bdi> paminėjo jus komentare",
       "reportExportFailed": "Nepavyko eksportuoti ataskaitos",
       "reportExportSucceeded": "Jūsų ataskaita paruošta"
     },

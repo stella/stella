@@ -2855,11 +2855,11 @@
   "notifications": {
     "empty": "Nenhuma notificação ainda",
     "kind": {
-      "announcement": "{title}",
-      "flowRunAwaitingApproval": "O fluxo de trabalho {flowName} aguarda sua aprovação",
-      "flowRunCompleted": "O fluxo de trabalho {flowName} foi concluído",
-      "flowRunFailed": "O fluxo de trabalho {flowName} falhou",
-      "mention": "{actorName} mencionou você em um comentário",
+      "announcement": "<bdi>{title}</bdi>",
+      "flowRunAwaitingApproval": "O fluxo de trabalho <bdi>{flowName}</bdi> aguarda sua aprovação",
+      "flowRunCompleted": "O fluxo de trabalho <bdi>{flowName}</bdi> foi concluído",
+      "flowRunFailed": "O fluxo de trabalho <bdi>{flowName}</bdi> falhou",
+      "mention": "<bdi>{actorName}</bdi> mencionou você em um comentário",
       "reportExportFailed": "Falha ao exportar seu relatório",
       "reportExportSucceeded": "Seu relatório está pronto"
     },

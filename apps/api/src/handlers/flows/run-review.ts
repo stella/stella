@@ -28,6 +28,7 @@ const reviewFlowRun = createSafeHandler(
     workspaceId,
     params,
     body,
+    session,
     user,
     recordAuditEvent,
   }) {
@@ -35,6 +36,7 @@ const reviewFlowRun = createSafeHandler(
       resolveFlowReviewGate({
         safeDb,
         workspaceId,
+        organizationId: session.activeOrganizationId,
         runId: params.runId,
         userId: user.id,
         decision: body.decision,

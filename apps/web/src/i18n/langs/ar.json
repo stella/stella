@@ -2855,11 +2855,11 @@
   "notifications": {
     "empty": "لا توجد إشعارات بعد",
     "kind": {
-      "announcement": "{title}",
-      "flowRunAwaitingApproval": "مسار العمل {flowName} بانتظار موافقتك",
-      "flowRunCompleted": "اكتمل مسار العمل {flowName}",
-      "flowRunFailed": "فشل مسار العمل {flowName}",
-      "mention": "ذكرك {actorName} في تعليق",
+      "announcement": "<bdi>{title}</bdi>",
+      "flowRunAwaitingApproval": "مسار العمل <bdi>{flowName}</bdi> بانتظار موافقتك",
+      "flowRunCompleted": "اكتمل مسار العمل <bdi>{flowName}</bdi>",
+      "flowRunFailed": "فشل مسار العمل <bdi>{flowName}</bdi>",
+      "mention": "ذكرك <bdi>{actorName}</bdi> في تعليق",
       "reportExportFailed": "فشل تصدير تقريرك",
       "reportExportSucceeded": "تقريرك جاهز"
     },

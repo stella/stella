@@ -24,7 +24,7 @@ const reconnectDelayMs = (failures: number): number =>
   );
 
 /**
- * Subscribe to the signed-in user's own event stream.
+ * Subscribe to the signed-in user's own event stream, for one organization.
  *
  * Separate from the workspace stream on purpose: this one follows the person,
  * not the matter they happen to have open, so the bell keeps working on
@@ -32,11 +32,20 @@ const reconnectDelayMs = (failures: number): number =>
  * "your notifications changed", and the handler re-reads through the ordinary
  * authorized endpoint.
  *
+ * `organizationId` never travels in the URL: the server reads the firm from
+ * the session, which is the only source allowed to name it. It is this hook's
+ * key instead — the server binds a connection to the active firm when it
+ * opens, so a stream opened before an in-app switch would keep delivering the
+ * firm the reader left. Tearing down and reopening on the change is what makes
+ * the badge follow the switch, the same way the workspace stream reopens on
+ * `workspaceId`.
+ *
  * Reconnects are deliberately quiet here: an outage costs a delayed badge, not
  * lost data, and the workspace stream already reports connection failures for
  * the same session.
  */
 export const useUserEventsSSE = (
+  organizationId: string,
   onEvent: (event: UserRealtimeEvent) => void,
 ): void => {
   const handleEvent = useLatestCallback(onEvent);
@@ -86,7 +95,7 @@ export const useUserEventsSSE = (
       }
       source?.close();
     };
-  }, [handleEvent]);
+  }, [handleEvent, organizationId]);
 };
 
 const jsonOrNull = (raw: string): unknown => {
