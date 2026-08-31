@@ -126,11 +126,15 @@ export const parseLastTranslationTarget = (
 type DefaultDocumentTranslationTargetOptions = {
   /**
    * What the rest of the matter is written in, most common first (the
-   * preparation endpoint ranks them).
+   * preparation endpoint ranks them). `null` while the preparation has not
+   * answered: nothing is known yet, which is not the same as "no other
+   * documents".
    */
-  matterLanguages: readonly {
-    language: DocumentTranslationSourceLanguageCode;
-  }[];
+  matterLanguages:
+    | readonly {
+        language: DocumentTranslationSourceLanguageCode;
+      }[]
+    | null;
   /** This browser's last successful choice, or null before the first run. */
   lastUsedTarget: DocumentTranslationTargetLanguageCode | null;
   sourceLanguage: DocumentTranslationSourceLanguageCode | null;
@@ -165,7 +169,9 @@ export const defaultDocumentTranslationTarget = ({
   // Every source language is also an offered target, so a matter language is
   // proposable as-is; this annotation is what keeps the two catalogs bound.
   const matterTargets: DocumentTranslationTargetLanguageCode[] =
-    matterLanguages.map(({ language }) => language);
+    matterLanguages === null
+      ? []
+      : matterLanguages.map(({ language }) => language);
   const fromMatter = matterTargets.find(translatesTheSource);
   if (fromMatter !== undefined) {
     return fromMatter;

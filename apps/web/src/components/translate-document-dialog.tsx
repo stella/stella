@@ -235,7 +235,7 @@ export const TranslateDocumentDialog = (
       ? targetSelection.language
       : defaultDocumentTranslationTarget({
           lastUsedTarget: lastTarget,
-          matterLanguages: preparationQuery.data?.matterLanguages ?? [],
+          matterLanguages: preparationQuery.data?.matterLanguages ?? null,
           sourceLanguage: sourceLang,
           supportedTargets: DOCUMENT_TRANSLATION_TARGET_CODES,
           uiLocale: locale,
