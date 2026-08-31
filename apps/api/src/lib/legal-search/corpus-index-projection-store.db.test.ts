@@ -655,10 +655,6 @@ test("subject-scoped replacement cannot retire another applied revision", async 
     .set({ projectionEpoch: 2n })
     .where(eq(caseLawDecisions.id, DECISION_ID));
   await db
-    .update(caseLawDecisions)
-    .set({ projectionEpoch: 2n })
-    .where(eq(caseLawDecisions.id, DECISION_ID));
-  await db
     .update(corpusIndexProjectionStates)
     .set({
       desiredEpoch: 2n,
@@ -737,6 +733,10 @@ test("a rerouted replacement is owned by its desired route", async () => {
   await db.execute(
     sql`ALTER TABLE corpus_index_projection_intents ENABLE TRIGGER corpus_index_projection_intents_insert_guard`,
   );
+  await db
+    .update(caseLawDecisions)
+    .set({ projectionEpoch: 2n })
+    .where(eq(caseLawDecisions.id, DECISION_ID));
   await db
     .update(corpusIndexProjectionStates)
     .set({
