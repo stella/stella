@@ -68,6 +68,9 @@ const MERGE_COMMIT_POLL_ATTEMPTS = 5;
 const CONTENTS_ENDPOINT_ENTRY_LIMIT = 1000;
 const PULL_NUMBER_PATTERN = /^\d+$/u;
 
+export const mergeBarMigrationDirectory = (repo: string): string | null =>
+  repo === DEFAULT_REPO ? MIGRATION_DIRECTORY : null;
+
 // --- Gate model -------------------------------------------------------------
 
 const GATE_IDS = [
@@ -674,9 +677,13 @@ const createGhGateway = ({
         ),
         "sha",
       );
+      const migrationDirectory = mergeBarMigrationDirectory(repo);
+      if (migrationDirectory === null) {
+        return { baseDirectories: [], addedDirectories: [], baseSha };
+      }
       const baseDirectories = runGh([
         "api",
-        `repos/${repo}/contents/${MIGRATION_DIRECTORY}?ref=${baseSha}`,
+        `repos/${repo}/contents/${migrationDirectory}?ref=${baseSha}`,
         "--jq",
         '.[] | select(.type == "dir") | .name',
       ])
@@ -687,7 +694,7 @@ const createGhGateway = ({
       // pass on the exact ordering it exists to catch, so refuse instead.
       if (baseDirectories.length >= CONTENTS_ENDPOINT_ENTRY_LIMIT) {
         panic(
-          `${MIGRATION_DIRECTORY} has ${baseDirectories.length} entries at ` +
+          `${migrationDirectory} has ${baseDirectories.length} entries at ` +
             `${baseSha}, at or past the contents endpoint's ` +
             `${CONTENTS_ENDPOINT_ENTRY_LIMIT}-entry limit. The listing may be ` +
             "truncated; switch this gate to the git tree API before merging.",
@@ -704,7 +711,7 @@ const createGhGateway = ({
         .split("\n")
         .filter(
           (file) =>
-            file.startsWith(`${MIGRATION_DIRECTORY}/`) &&
+            file.startsWith(`${migrationDirectory}/`) &&
             file.endsWith("/migration.sql"),
         )
         .map((file) => file.slice(0, file.lastIndexOf("/")));
