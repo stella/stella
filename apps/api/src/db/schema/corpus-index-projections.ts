@@ -413,6 +413,22 @@ export const corpusIndexProjectionStates = p.pgTable(
       )
       .where(corpusIndexProjectionNeedsWork(t)),
     p
+      .index("corpus_index_projection_states_replacement_route_idx")
+      .on(
+        t.family,
+        t.generation,
+        t.desiredIndexId,
+        t.updatedAt,
+        t.entityId,
+      )
+      .where(
+        sql`${t.desiredAction} = 'upsert'
+          AND ${t.appliedAction} = 'upsert'
+          AND ${t.appliedRevision} IS NOT NULL
+          AND ${t.appliedIndexId} IS NOT NULL
+          AND ${t.desiredEpoch} > ${t.appliedEpoch}`,
+      ),
+    p
       .index("corpus_index_projection_states_blocked_idx")
       .on(t.family, t.generation, t.entityId)
       .where(corpusIndexProjectionIsBlocked(t.workStatus)),

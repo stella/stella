@@ -17,7 +17,7 @@ SET statement_timeout = 0;
 SET lock_timeout = 0;
 --> statement-breakpoint
 
--- stella-migration-safety: reviewed destructive-change - retry cleanup only;
+-- stella-migration-safety: reviewed drop-object - retry cleanup only;
 -- a cancelled concurrent build can leave an INVALID index with this name.
 DROP INDEX CONCURRENTLY IF EXISTS "corpus_index_projection_states_pending_route_idx";
 --> statement-breakpoint
@@ -41,6 +41,30 @@ CREATE INDEX CONCURRENTLY "corpus_index_projection_states_pending_route_idx"
         OR "applied_index_id" IS DISTINCT FROM "desired_index_id"
       )
     );
+--> statement-breakpoint
+
+-- Replacement claims intentionally include blocked desired work: cleanup of
+-- an already published older revision remains required even when the newer
+-- projection exhausted its append retries. That broader predicate cannot use
+-- the pending-work index, so give route workers their exact sparse queue.
+-- stella-migration-safety: reviewed drop-object - retry cleanup only; a
+-- cancelled concurrent build can leave an INVALID index with this name.
+DROP INDEX CONCURRENTLY IF EXISTS "corpus_index_projection_states_replacement_route_idx";
+--> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts
+CREATE INDEX CONCURRENTLY "corpus_index_projection_states_replacement_route_idx"
+  ON "corpus_index_projection_states" (
+    "family",
+    "generation",
+    "desired_index_id",
+    "updated_at",
+    "entity_id"
+  )
+  WHERE "desired_action" = 'upsert'
+    AND "applied_action" = 'upsert'
+    AND "applied_revision" IS NOT NULL
+    AND "applied_index_id" IS NOT NULL
+    AND "desired_epoch" > "applied_epoch";
 --> statement-breakpoint
 
 SET statement_timeout = '5s';
