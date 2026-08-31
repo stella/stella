@@ -40,6 +40,27 @@ export type CorpusIndexProjectionSubject =
       entityId: SafeId<"legislationDocument">;
     };
 
+export type CorpusIndexProjectionSource =
+  | { family: "case_law"; sourceId: SafeId<"caseLawSource"> }
+  | { family: "legislation"; sourceId: SafeId<"legislationSource"> };
+
+const ACTIVE_CORPUS_PROJECTION_SOURCE_LOCK = Symbol(
+  "active-corpus-projection-source-lock",
+);
+
+/** Opaque proof that the active-generation check and source lock both passed. */
+export type ActiveCorpusProjectionSourceLock = {
+  readonly [ACTIVE_CORPUS_PROJECTION_SOURCE_LOCK]: true;
+  readonly family: CorpusIndexProjectionSubject["family"];
+};
+
+const activeCorpusProjectionSourceLock = (
+  family: CorpusIndexProjectionSubject["family"],
+): ActiveCorpusProjectionSourceLock => ({
+  [ACTIVE_CORPUS_PROJECTION_SOURCE_LOCK]: true,
+  family,
+});
+
 export class CorpusIndexProjectionSubjectMissingError extends TaggedError(
   "CorpusIndexProjectionSubjectMissingError",
 )<{ message: string; subject: CorpusIndexProjectionSubject }> {}
@@ -47,6 +68,16 @@ export class CorpusIndexProjectionSubjectMissingError extends TaggedError(
 type LockedProjectionInput = {
   epoch: bigint;
   input: CorpusIndexProjectionInput;
+};
+
+type LockedCaseLawProjectionSource = {
+  sourceId: SafeId<"caseLawSource">;
+  sourceDescriptor: Parameters<typeof isRedistributable>[0];
+};
+
+type LockedLegislationProjectionSource = {
+  sourceId: SafeId<"legislationSource">;
+  sourceDescriptor: Parameters<typeof isRedistributable>[0];
 };
 
 export type CaseLawProjectionCanonicalInput = {
@@ -143,14 +174,11 @@ export const legislationProjectionInputFromCanonical = ({
   eli,
 });
 
-const lockCaseLawProjectionInput = async (
+const lockCaseLawProjectionSource = async (
   tx: Transaction,
   subject: Extract<CorpusIndexProjectionSubject, { family: "case_law" }>,
-): Promise<LockedProjectionInput> => {
-  // Source-policy writers own the source row before walking its documents.
-  // Take the compatible source lock first so per-document projection never
-  // inverts that order or exclusively serializes every decision in a source.
-  const sourceRows = await tx
+): Promise<LockedCaseLawProjectionSource> => {
+  const rows = await tx
     .select({
       sourceId: caseLawSources.id,
       sourceDescriptor: caseLawSources.descriptor,
@@ -163,13 +191,159 @@ const lockCaseLawProjectionInput = async (
     .where(eq(caseLawDecisions.id, subject.entityId))
     .limit(1)
     .for("share", { of: caseLawSources });
-  const source = sourceRows.at(0);
+  const source = rows.at(0);
   if (source === undefined) {
     throw new CorpusIndexProjectionSubjectMissingError({
       message: `Case-law projection subject does not exist: ${subject.entityId}`,
       subject,
     });
   }
+  return source;
+};
+
+const lockLegislationProjectionSource = async (
+  tx: Transaction,
+  subject: Extract<CorpusIndexProjectionSubject, { family: "legislation" }>,
+): Promise<LockedLegislationProjectionSource> => {
+  const rows = await tx
+    .select({
+      sourceId: legislationSources.id,
+      sourceDescriptor: legislationSources.descriptor,
+    })
+    .from(legislationSources)
+    .innerJoin(
+      legislationDocuments,
+      eq(legislationDocuments.sourceId, legislationSources.id),
+    )
+    .where(eq(legislationDocuments.id, subject.entityId))
+    .limit(1)
+    .for("share", { of: legislationSources });
+  const source = rows.at(0);
+  if (source === undefined) {
+    throw new CorpusIndexProjectionSubjectMissingError({
+      message: `Legislation projection subject does not exist: ${subject.entityId}`,
+      subject,
+    });
+  }
+  return source;
+};
+
+/** Take the source-policy half of the canonical projection lock order. */
+export const lockCorpusProjectionSourceTx = async (
+  tx: Transaction,
+  subject: CorpusIndexProjectionSubject,
+): Promise<void> => {
+  switch (subject.family) {
+    case "case_law":
+      await lockCaseLawProjectionSource(tx, subject);
+      return;
+    case "legislation":
+      await lockLegislationProjectionSource(tx, subject);
+      return;
+    default:
+      return subject satisfies never;
+  }
+};
+
+/** Lock source policy before inserting a canonical subject that has no row yet. */
+export const lockCorpusProjectionSourceByIdTx = async (
+  tx: Transaction,
+  source: CorpusIndexProjectionSource,
+): Promise<void> => {
+  switch (source.family) {
+    case "case_law": {
+      const row = (
+        await tx
+          .select({ id: caseLawSources.id })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, source.sourceId))
+          .for("share")
+          .limit(1)
+      ).at(0);
+      if (row === undefined) {
+        return panic(
+          `Case-law projection source does not exist: ${source.sourceId}`,
+        );
+      }
+      return;
+    }
+    case "legislation": {
+      const row = (
+        await tx
+          .select({ id: legislationSources.id })
+          .from(legislationSources)
+          .where(eq(legislationSources.id, source.sourceId))
+          .for("share")
+          .limit(1)
+      ).at(0);
+      if (row === undefined) {
+        return panic(
+          `Legislation projection source does not exist: ${source.sourceId}`,
+        );
+      }
+      return;
+    }
+    default:
+      return source satisfies never;
+  }
+};
+
+const hasActiveCorpusProjectionTx = async (
+  tx: Transaction,
+  family: CorpusIndexProjectionSubject["family"],
+): Promise<boolean> =>
+  (
+    await tx
+      .select({ generation: corpusIndexGenerations.generation })
+      .from(corpusIndexGenerations)
+      .where(
+        and(
+          eq(corpusIndexGenerations.family, family),
+          or(
+            eq(corpusIndexGenerations.status, "building"),
+            eq(corpusIndexGenerations.status, "serving"),
+          ),
+        ),
+      )
+      .limit(1)
+  ).length > 0;
+
+/**
+ * Take source policy first only while this family has an active projection.
+ * A null result stays null for the caller's transaction: registration
+ * bootstrap covers a generation that becomes visible after this check.
+ */
+export const lockActiveCorpusProjectionSourceTx = async (
+  tx: Transaction,
+  subject: CorpusIndexProjectionSubject,
+): Promise<ActiveCorpusProjectionSourceLock | null> => {
+  if (!(await hasActiveCorpusProjectionTx(tx, subject.family))) {
+    return null;
+  }
+  await lockCorpusProjectionSourceTx(tx, subject);
+  return activeCorpusProjectionSourceLock(subject.family);
+};
+
+/** Source-id variant for inserts whose canonical subject row does not exist yet. */
+export const lockActiveCorpusProjectionSourceByIdTx = async (
+  tx: Transaction,
+  source: CorpusIndexProjectionSource,
+): Promise<ActiveCorpusProjectionSourceLock | null> => {
+  if (!(await hasActiveCorpusProjectionTx(tx, source.family))) {
+    return null;
+  }
+  await lockCorpusProjectionSourceByIdTx(tx, source);
+  return activeCorpusProjectionSourceLock(source.family);
+};
+
+const lockCaseLawProjectionInput = async (
+  tx: Transaction,
+  subject: Extract<CorpusIndexProjectionSubject, { family: "case_law" }>,
+): Promise<LockedProjectionInput> => {
+  // Source-policy writers own the source row before walking its documents.
+  // Take the compatible source lock first so per-document projection never
+  // inverts that order or exclusively serializes every decision in a source.
+  const source = await lockCaseLawProjectionSource(tx, subject);
   const rows = await tx
     .select({
       documentId: caseLawDecisions.id,
@@ -233,26 +407,7 @@ const lockLegislationProjectionInput = async (
   tx: Transaction,
   subject: Extract<CorpusIndexProjectionSubject, { family: "legislation" }>,
 ): Promise<LockedProjectionInput> => {
-  const sourceRows = await tx
-    .select({
-      sourceId: legislationSources.id,
-      sourceDescriptor: legislationSources.descriptor,
-    })
-    .from(legislationSources)
-    .innerJoin(
-      legislationDocuments,
-      eq(legislationDocuments.sourceId, legislationSources.id),
-    )
-    .where(eq(legislationDocuments.id, subject.entityId))
-    .limit(1)
-    .for("share", { of: legislationSources });
-  const source = sourceRows.at(0);
-  if (source === undefined) {
-    throw new CorpusIndexProjectionSubjectMissingError({
-      message: `Legislation projection subject does not exist: ${subject.entityId}`,
-      subject,
-    });
-  }
+  const source = await lockLegislationProjectionSource(tx, subject);
   const rows = await tx
     .select({
       documentId: legislationDocuments.id,
@@ -680,6 +835,25 @@ export const reconcileCorpusProjectionDesiredStateTx = async (
     changed: values.length > 0,
     generationCount: manifests.length,
   };
+};
+
+/** Reconcile after a canonical mutation while retaining its source-lock proof. */
+export const synchronizeLockedCorpusProjectionDesiredStateTx = async (
+  tx: Transaction,
+  {
+    lock,
+    subject,
+  }: {
+    lock: ActiveCorpusProjectionSourceLock;
+    subject: CorpusIndexProjectionSubject;
+  },
+): Promise<void> => {
+  if (lock.family !== subject.family) {
+    return panic(
+      `Corpus projection source lock family ${lock.family} cannot synchronize ${subject.family}`,
+    );
+  }
+  await reconcileCorpusProjectionDesiredStateTx(tx, subject);
 };
 
 /** Seed one newly registered generation without invalidating existing ones. */

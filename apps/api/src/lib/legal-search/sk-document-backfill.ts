@@ -57,6 +57,11 @@ import {
 } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import {
+  type ActiveCorpusProjectionSourceLock,
+  lockActiveCorpusProjectionSourceTx,
+  synchronizeLockedCorpusProjectionDesiredStateTx,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import {
   corpusContentHash,
   corpusMirrorColumns,
   corpusPayloadDisposition,
@@ -632,6 +637,7 @@ export const storeBackfilledDocument = async ({
   const applyStoredPayload = async (
     tx: Transaction,
     written: WriteCorpusResult | null,
+    projectionLock: ActiveCorpusProjectionSourceLock | null,
   ): Promise<boolean> => {
     // Under canonical storage the payload this store just wrote to object
     // storage is the one readers get, so persisting it into the columns as
@@ -656,12 +662,24 @@ export const storeBackfilledDocument = async ({
       })
       .where(ownerPredicate)
       .returning({ id: caseLawDecisions.id });
+    if (applied.length > 0 && projectionLock !== null) {
+      await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+        lock: projectionLock,
+        subject: { family: "case_law", entityId: decision.id },
+      });
+    }
     return applied.length > 0;
   };
 
   let stored: boolean;
   if (writeCorpus === null) {
-    stored = await scopedDb(async (tx) => await applyStoredPayload(tx, null));
+    stored = await scopedDb(async (tx) => {
+      const projectionLock = await lockActiveCorpusProjectionSourceTx(tx, {
+        family: "case_law",
+        entityId: decision.id,
+      });
+      return await applyStoredPayload(tx, null, projectionLock);
+    });
   } else {
     const intent = await reserveCaseLawCorpusUploadIntent({
       contentHash: corpusContentHash(payload),
@@ -673,8 +691,8 @@ export const storeBackfilledDocument = async ({
       return "superseded";
     }
     const outcome = await writeReservedCaseLawCorpusUpload({
-      apply: async ({ tx, written }) => ({
-        type: (await applyStoredPayload(tx, written))
+      apply: async ({ projectionLock, tx, written }) => ({
+        type: (await applyStoredPayload(tx, written, projectionLock))
           ? "applied"
           : "superseded",
       }),
@@ -838,8 +856,12 @@ export const markDocumentUnavailable = async (
   scopedDb: ScopedDb,
 ): Promise<void> => {
   await scopedDb(async (tx) => {
+    const projectionLock = await lockActiveCorpusProjectionSourceTx(tx, {
+      family: "case_law",
+      entityId: decisionId,
+    });
     // audit: skip — queue backfill of public case-law text; no user action
-    await tx
+    const updated = await tx
       .update(caseLawDecisions)
       .set({
         fulltext: "",
@@ -855,7 +877,14 @@ export const markDocumentUnavailable = async (
           isNull(caseLawDecisions.fulltext),
           storesNoCorpusDocument,
         ),
-      );
+      )
+      .returning({ id: caseLawDecisions.id });
+    if (updated.length > 0 && projectionLock !== null) {
+      await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+        lock: projectionLock,
+        subject: { family: "case_law", entityId: decisionId },
+      });
+    }
   });
 };
 

@@ -24,6 +24,11 @@ import {
 } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { removeDecisionFromIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  CorpusIndexProjectionSubjectMissingError,
+  lockActiveCorpusProjectionSourceTx,
+  synchronizeLockedCorpusProjectionDesiredStateTx,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import { deleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import {
@@ -172,6 +177,22 @@ export const redactCaseLawDecision = async ({
     throw error;
   }
   const fenced = await scopedDb(async (tx) => {
+    const sourceLock = await Result.tryPromise({
+      try: async () =>
+        await lockActiveCorpusProjectionSourceTx(tx, {
+          family: "case_law",
+          entityId: decisionId,
+        }),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(sourceLock)) {
+      if (
+        sourceLock.error instanceof CorpusIndexProjectionSubjectMissingError
+      ) {
+        return null;
+      }
+      throw sourceLock.error;
+    }
     const decision = (
       await tx
         .select({
@@ -210,6 +231,12 @@ export const redactCaseLawDecision = async ({
       decisionId,
       tx,
     });
+    if (sourceLock.value !== null) {
+      await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+        lock: sourceLock.value,
+        subject: { family: "case_law", entityId: decisionId },
+      });
+    }
     return { cancelledIntents, decision };
   });
 

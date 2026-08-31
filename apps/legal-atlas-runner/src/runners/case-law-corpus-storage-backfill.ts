@@ -18,6 +18,10 @@ import {
 } from "@/api/lib/db/timestamp-cas";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { legacyOperationalCorpusGeneration } from "@/api/lib/legal-search/corpus-family";
+import {
+  lockActiveCorpusProjectionSourceTx,
+  synchronizeLockedCorpusProjectionDesiredStateTx,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import type {
   DecisionSection,
@@ -216,8 +220,12 @@ const backfillRow = async (
     }
     const result = outcome.written;
 
-    const recorded = await ingestionDb((tx) =>
-      tx
+    const recorded = await ingestionDb(async (tx) => {
+      const projectionLock = await lockActiveCorpusProjectionSourceTx(tx, {
+        family: "case_law",
+        entityId: row.id,
+      });
+      const rows = await tx
         .update(caseLawDecisions)
         .set({
           textS3Key: result.textKey,
@@ -239,8 +247,15 @@ const backfillRow = async (
             ),
           ),
         )
-        .returning({ id: caseLawDecisions.id }),
-    );
+        .returning({ id: caseLawDecisions.id });
+      if (rows.length > 0 && projectionLock !== null) {
+        await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+          lock: projectionLock,
+          subject: { family: "case_law", entityId: row.id },
+        });
+      }
+      return rows;
+    });
 
     // A refused CAS is not success: the objects exist but the row still
     // points nowhere, and only the recording makes the work durable.
@@ -295,8 +310,12 @@ const backfillLegislationRow = async (
     }
     const result = outcome.written;
 
-    const recorded = await ingestionDb((tx) =>
-      tx
+    const recorded = await ingestionDb(async (tx) => {
+      const projectionLock = await lockActiveCorpusProjectionSourceTx(tx, {
+        family: "legislation",
+        entityId: row.id,
+      });
+      const rows = await tx
         .update(legislationDocuments)
         .set({
           textS3Key: result.textKey,
@@ -318,8 +337,15 @@ const backfillLegislationRow = async (
             ),
           ),
         )
-        .returning({ id: legislationDocuments.id }),
-    );
+        .returning({ id: legislationDocuments.id });
+      if (rows.length > 0 && projectionLock !== null) {
+        await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+          lock: projectionLock,
+          subject: { family: "legislation", entityId: row.id },
+        });
+      }
+      return rows;
+    });
 
     return recorded.length > 0 ? "written" : "skipped";
   } catch (error) {

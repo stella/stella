@@ -74,6 +74,12 @@ import {
   writeReservedCaseLawCorpusUpload,
 } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import {
+  type ActiveCorpusProjectionSourceLock,
+  lockActiveCorpusProjectionSourceByIdTx,
+  lockActiveCorpusProjectionSourceTx,
+  synchronizeLockedCorpusProjectionDesiredStateTx,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import type {
   CorpusPayload,
   WriteCorpusResult,
@@ -959,6 +965,43 @@ const processDecisionAttempt = async ({
     };
   }
 
+  const synchronizeSettledProjection = async (): Promise<void> => {
+    if (existing === undefined) {
+      return;
+    }
+    await scopedDb(async (tx) => {
+      const projectionLock = await lockActiveCorpusProjectionSourceTx(tx, {
+        family: "case_law",
+        entityId: existing.id,
+      });
+      if (projectionLock === null) {
+        return;
+      }
+      const current = (
+        await tx
+          .select({
+            corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
+            redactedAt: caseLawDecisions.redactedAt,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, existing.id))
+          .for("update")
+          .limit(1)
+      ).at(0);
+      if (
+        current === undefined ||
+        current.redactedAt !== null ||
+        current.corpusMirrorStatus !== CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED
+      ) {
+        return;
+      }
+      await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+        lock: projectionLock,
+        subject: { family: "case_law", entityId: existing.id },
+      });
+    });
+  };
+
   const storedPartialObservation = existing
     ? partialObservationFromMetadata(existing.metadata)
     : { caseNumberIsPlaceholder: false, isListingOnly: false };
@@ -984,8 +1027,12 @@ const processDecisionAttempt = async ({
         const watermarkAdvanced = await scopedDb(
           // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
           async (tx) => {
+            const projectionActive = await lockActiveCorpusProjectionSourceTx(
+              tx,
+              { family: "case_law", entityId: existing.id },
+            );
             // audit: skip — background case-law observation watermark; public data
-            return (
+            const advanced = (
               await tx
                 .update(caseLawDecisions)
                 .set({
@@ -1007,6 +1054,13 @@ const processDecisionAttempt = async ({
                 )
                 .returning({ id: caseLawDecisions.id })
             ).at(0);
+            if (advanced !== undefined && projectionActive !== null) {
+              await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+                lock: projectionActive,
+                subject: { family: "case_law", entityId: existing.id },
+              });
+            }
+            return advanced;
           },
         );
         if (!watermarkAdvanced) {
@@ -1042,6 +1096,9 @@ const processDecisionAttempt = async ({
             (current.sourceObservationOrder !== null &&
               current.sourceObservationOrder >= observationOrder)
           ) {
+            if (current !== undefined) {
+              await synchronizeSettledProjection();
+            }
             return {
               status: PROCESS_DECISION_STATUS.COMPLETE,
               inserted: false,
@@ -1091,8 +1148,12 @@ const processDecisionAttempt = async ({
         const watermarkAdvanced = await scopedDb(
           // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
           async (tx) => {
+            const projectionActive = await lockActiveCorpusProjectionSourceTx(
+              tx,
+              { family: "case_law", entityId: existing.id },
+            );
             // audit: skip — background case-law ingestion ordering metadata; public case-law data, not user actions
-            return (
+            const advanced = (
               await tx
                 .update(caseLawDecisions)
                 .set({
@@ -1118,6 +1179,13 @@ const processDecisionAttempt = async ({
                 )
                 .returning({ id: caseLawDecisions.id })
             ).at(0);
+            if (advanced !== undefined && projectionActive !== null) {
+              await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+                lock: projectionActive,
+                subject: { family: "case_law", entityId: existing.id },
+              });
+            }
+            return advanced;
           },
         );
         if (!watermarkAdvanced) {
@@ -1153,6 +1221,9 @@ const processDecisionAttempt = async ({
             (current.sourceObservationOrder !== null &&
               current.sourceObservationOrder >= observationOrder)
           ) {
+            if (current !== undefined) {
+              await synchronizeSettledProjection();
+            }
             return {
               status: PROCESS_DECISION_STATUS.COMPLETE,
               inserted: false,
@@ -1618,11 +1689,33 @@ const processDecisionAttempt = async ({
     );
   };
 
+  const reconcileStableProjection = async (
+    tx: Transaction,
+    id: SafeId<"caseLawDecision">,
+    projectionLock: ActiveCorpusProjectionSourceLock | null,
+  ): Promise<void> => {
+    if (
+      projectionLock === null ||
+      corpusPlan.type === "postgres-mirrored" ||
+      corpusPlan.type === "object-storage"
+    ) {
+      return;
+    }
+    await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+      lock: projectionLock,
+      subject: { family: "case_law", entityId: id },
+    });
+  };
+
   const writeDecisionRow = async (
     slug?: string,
   ): Promise<DecisionRowWriteStatus> =>
     await scopedDb(async (tx) => {
       // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
+      const projectionLock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
+        family: "case_law",
+        sourceId,
+      });
       if (existing) {
         // A refresh with no document of its own may not overwrite one.
         // Ordinary empty refreshes therefore guard a separate payload
@@ -1811,6 +1904,7 @@ const processDecisionAttempt = async ({
         // Citations are read out of the document, so a refresh that
         // carries no document has nothing to say about them either.
         if (!incomingCarriesDocument) {
+          await reconcileStableProjection(tx, existing.id, projectionLock);
           return DECISION_ROW_WRITE_STATUS.APPLIED;
         }
 
@@ -1835,6 +1929,7 @@ const processDecisionAttempt = async ({
           await resolveCitationsForDecision(tx, existing.id);
         }
 
+        await reconcileStableProjection(tx, existing.id, projectionLock);
         return DECISION_ROW_WRITE_STATUS.APPLIED;
       }
 
@@ -1901,6 +1996,7 @@ const processDecisionAttempt = async ({
         // standing walk to come round, and the citator trails the crawl.
         await resolveCitationsForDecision(tx, decisionRow.id);
       }
+      await reconcileStableProjection(tx, decisionRow.id, projectionLock);
       return DECISION_ROW_WRITE_STATUS.APPLIED;
     });
 
@@ -2056,8 +2152,8 @@ const processDecisionAttempt = async ({
           : sql`NOT ${pgPayloadCarriesDocument}`,
       );
       const upload = await writeReservedCaseLawCorpusUpload({
-        apply: async ({ tx, written }) => ({
-          type: (await settleCaseLawCorpusMirrorTx({
+        apply: async ({ projectionLock, tx, written }) => {
+          const applied = await settleCaseLawCorpusMirrorTx({
             decisionId,
             persistedSourceHash,
             observationOrder,
@@ -2065,10 +2161,18 @@ const processDecisionAttempt = async ({
             mode: corpus.mode,
             tx,
             written,
-          }))
-            ? "applied"
-            : "superseded",
-        }),
+          });
+          if (!applied) {
+            return { type: "superseded" };
+          }
+          if (projectionLock !== null) {
+            await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+              lock: projectionLock,
+              subject: { family: "case_law", entityId: decisionId },
+            });
+          }
+          return { type: "applied" };
+        },
         decisionId,
         intentId: intent.intentId,
         preflight: async (tx) =>
