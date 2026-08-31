@@ -261,7 +261,7 @@ if (!databaseUrl || !runPostgresTests) {
           generation: legacyGeneration,
           cluster: "q08",
           manifestDigest: "a".repeat(64),
-          status: "serving",
+          status: "building",
         });
 
         const writer = writerDb.transaction(async (tx) => {
