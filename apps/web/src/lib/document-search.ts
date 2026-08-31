@@ -7,20 +7,21 @@ import {
 } from "@stll/folio-core/utils/findReplace";
 import type { FindMatch } from "@stll/folio-core/utils/findReplace";
 import { findSearchMatchRanges } from "@stll/text-normalize";
+import type { SearchMatchRange } from "@stll/text-normalize";
 
 import {
   getSearchTextCandidates,
   selectNonOverlappingSearchMatches,
 } from "@/lib/search-text";
-import type { SearchTextMatch, SearchTextQuery } from "@/lib/search-text";
+import type { SearchTextQuery } from "@/lib/search-text";
 
 const documentSearchOptions = createDefaultFindOptions();
 
-const searchTextMatchKey = ({ end, start }: SearchTextMatch) =>
+const searchTextMatchKey = ({ end, start }: SearchMatchRange) =>
   `${String(start)}:${String(end)}`;
 
 const selectNonOverlappingSearchTextMatches = (
-  matches: Iterable<SearchTextMatch>,
+  matches: Iterable<SearchMatchRange>,
   maxMatches: number,
 ) =>
   selectNonOverlappingSearchMatches({
@@ -60,7 +61,7 @@ export const findSearchTextMatches = (
   }
   const candidates = getSearchTextCandidates(searchText);
   if (typeof searchText !== "string") {
-    const matches = new Map<string, SearchTextMatch>();
+    const matches = new Map<string, SearchMatchRange>();
     for (const candidate of candidates) {
       for (const match of findTextCandidateMatches({
         candidate,
@@ -84,7 +85,7 @@ export const findSearchTextMatches = (
     return phraseMatches;
   }
 
-  const matches = new Map<string, SearchTextMatch>();
+  const matches = new Map<string, SearchMatchRange>();
   for (const candidate of candidates.slice(1)) {
     for (const match of findTextCandidateMatches({
       candidate,

@@ -1,3 +1,5 @@
+import { foldSearchMatchText } from "@stll/text-normalize";
+
 import {
   filterToolEntries,
   type ToolFilterEntry,
@@ -50,22 +52,16 @@ export type PublicToolBrowseFilters = ToolFilters & {
   task: PublicToolTask | null;
 };
 
-const normalizeSearchText = (value: string): string =>
-  value
-    .normalize("NFKD")
-    .replace(/\p{Mark}/gu, "")
-    .toLocaleLowerCase("en");
-
 const matchesSearchQuery = (
   entry: PublicToolBrowseEntry,
   query: string,
 ): boolean => {
-  const terms = normalizeSearchText(query).trim().split(/\s+/u).filter(Boolean);
+  const terms = foldSearchMatchText(query).trim().split(/\s+/u).filter(Boolean);
   if (terms.length === 0) {
     return true;
   }
 
-  const haystack = normalizeSearchText(
+  const haystack = foldSearchMatchText(
     [
       entry.displayName,
       entry.description,

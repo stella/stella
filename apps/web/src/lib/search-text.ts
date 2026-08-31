@@ -1,16 +1,11 @@
-import type { SearchMatchRange as FoldedMatchRange } from "@stll/text-normalize";
+import type { SearchMatchRange } from "@stll/text-normalize";
 
 const SINGLE_SEARCH_TERM = /^[\p{L}\p{N}]$/u;
 
-// The folding core with original-index mapping lives in @stll/text-normalize
-// (search-match.ts) so the desktop clipboard search shares one behavior with
-// the web previews.
-export type SearchTextMatch = FoldedMatchRange;
-
-type SearchMatchRange = SearchTextMatch & { group: number };
+type GroupedSearchMatchRange = SearchMatchRange & { group: number };
 
 type SelectNonOverlappingSearchMatchesOptions<T> = {
-  getRange: (match: T) => SearchMatchRange;
+  getRange: (match: T) => GroupedSearchMatchRange;
   matches: Iterable<T>;
   maxMatches: number;
 };
