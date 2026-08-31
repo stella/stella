@@ -19,14 +19,6 @@ const MARGIN_X = 84;
 /** Baseline of the last headline line; earlier lines stack upward from it. */
 const HEADLINE_BASELINE = 450;
 
-/**
- * Colour count for the palette encoding below. resvg emits 24-bit PNG, which
- * is ~700 kB for an image that is mostly gradient; 128 colours reduces that to
- * ~90 kB with no banding visible at card size. Cards are fetched by every
- * crawler that sees a link, so the difference is worth the quantization pass.
- */
-const CARD_PALETTE_COLOURS = 128;
-
 type OgCardOptions = {
   headline: string;
   /** Small label opposite the wordmark; the changelog's version. */
@@ -35,6 +27,13 @@ type OgCardOptions = {
   direction?: CardDirection;
 };
 
+/**
+ * Truecolor PNG, ~540 kB at maximum zlib level. The card is mostly a soft
+ * gradient, and palette quantization (Bun.Image, 128 or 256 colours)
+ * posterizes it into visible contour bands; its dither option smears the
+ * headline instead of hiding them. The size is the price of a smooth gradient
+ * until a quantizer with a working error-diffusion pass is available.
+ */
 export const renderOgCard = async (options: OgCardOptions): Promise<Buffer> => {
   const face = CARD_FACES[options.direction ?? "ltr"];
   const rendered = new Resvg(cardSvg(options), {
@@ -44,7 +43,7 @@ export const renderOgCard = async (options: OgCardOptions): Promise<Buffer> => {
 
   Bun.Image.backend = "bun";
   return await new Bun.Image(rendered.asPng())
-    .png({ palette: true, colors: CARD_PALETTE_COLOURS })
+    .png({ compressionLevel: 9 })
     .buffer();
 };
 
