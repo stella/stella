@@ -113,6 +113,11 @@ export type {
 } from "./kanban-view";
 export { WorkspaceKanbanGroupingPicker } from "./kanban-grouping-picker";
 export { WorkspaceViewSwitcher } from "./view-switcher";
+export {
+  ResponsiveActionToolbar,
+  ResponsiveActionToolbarItem,
+} from "./responsive-action-toolbar";
+export type { ResponsiveActionToolbarSlot } from "./responsive-action-toolbar";
 export type {
   WorkspaceViewSwitcherEditing,
   WorkspaceViewSwitcherItem,
