@@ -18,7 +18,7 @@ import {
   readReservedCorpusProjectionMaterialsTx,
   type CorpusProjectionMaterial,
 } from "@/api/lib/legal-search/corpus-index-projection-materials";
-import type { CorpusProjectionScopedWorkSelection } from "@/api/lib/legal-search/corpus-index-projection-scope";
+import type { CorpusProjectionAppendScopedWorkSelection } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   abandonCorpusProjectionAppendTx,
   cancelCorpusProjectionReservationTx,
@@ -64,7 +64,7 @@ export const CORPUS_PROJECTION_PAYLOAD_READ_CONCURRENCY_MAX = 32;
 
 type ExecuteCorpusProjectionAppendCycleOptions<
   Family extends CorpusProjectionIntentLease["family"],
-> = CorpusProjectionScopedWorkSelection<Family> & {
+> = CorpusProjectionAppendScopedWorkSelection<Family> & {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
   generation: string;

@@ -1,6 +1,10 @@
 import { panic } from "better-result";
 
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
+import {
+  type CorpusIndexManifest,
+  requireCorpusIndexIdForManifest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import type { CorpusIndexProjectionSubject } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 
 export const CORPUS_PROJECTION_WORK_SCOPE_MAX_ENTITY_COUNT = 256;
@@ -21,9 +25,18 @@ export type CorpusProjectionWorkScope<Family extends CorpusFamily> =
       entityIds: readonly CorpusProjectionEntityId<Family>[];
     };
 
-export type CorpusProjectionScopedWorkSelection<Family extends CorpusFamily> = {
+export type CorpusProjectionAppendWorkScope<Family extends CorpusFamily> =
+  | CorpusProjectionWorkScope<Family>
+  | {
+      type: "route";
+      indexId: string;
+    };
+
+export type CorpusProjectionAppendScopedWorkSelection<
+  Family extends CorpusFamily,
+> = {
   family: Family;
-  scope: CorpusProjectionWorkScope<NoInfer<Family>>;
+  scope: CorpusProjectionAppendWorkScope<NoInfer<Family>>;
 };
 
 export type CorpusProjectionScopedWorkOptions<Family extends CorpusFamily> = {
@@ -31,18 +44,26 @@ export type CorpusProjectionScopedWorkOptions<Family extends CorpusFamily> = {
   scope?: CorpusProjectionWorkScope<NoInfer<Family>>;
 };
 
+export type CorpusProjectionAppendScopedWorkOptions<
+  Family extends CorpusFamily,
+> = {
+  family: Family;
+  scope?: CorpusProjectionAppendWorkScope<NoInfer<Family>>;
+};
+
 /**
- * Return null for a generation walk or the exact bounded subject set. Callers
- * place the returned IDs in the same SQL statement that claims work, so an
- * allowlist check can never race a later broad claim.
+ * Return null for generation and route walks, or the exact bounded subject
+ * set. Callers place the returned IDs in the same SQL statement that claims
+ * work, so an allowlist check can never race a later broad claim.
  */
 export const entityIdsForCorpusProjectionWorkScope = <
   Family extends CorpusFamily,
 >(
-  scope: CorpusProjectionWorkScope<Family>,
+  scope: CorpusProjectionAppendWorkScope<Family>,
 ): CorpusProjectionEntityId<Family>[] | null => {
   switch (scope.type) {
     case "generation":
+    case "route":
       return null;
     case "subjects":
       if (
@@ -56,6 +77,29 @@ export const entityIdsForCorpusProjectionWorkScope = <
         );
       }
       return [...scope.entityIds];
+    default:
+      return scope satisfies never;
+  }
+};
+
+/**
+ * Return the manifest-validated route predicate, or null when the scope is
+ * not physical-route scoped. Validation runs against the registered manifest
+ * read in the claiming transaction; Plane can select policy, but cannot
+ * invent a physical index id.
+ */
+export const indexIdForCorpusProjectionWorkScope = <
+  Family extends CorpusFamily,
+>(
+  scope: CorpusProjectionAppendWorkScope<Family>,
+  manifest: CorpusIndexManifest,
+): string | null => {
+  switch (scope.type) {
+    case "generation":
+    case "subjects":
+      return null;
+    case "route":
+      return requireCorpusIndexIdForManifest(manifest, scope.indexId);
     default:
       return scope satisfies never;
   }

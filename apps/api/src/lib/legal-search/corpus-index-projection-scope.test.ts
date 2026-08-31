@@ -2,11 +2,14 @@ import { expect, test } from "bun:test";
 import { expectTypeOf } from "expect-type";
 
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
   CORPUS_PROJECTION_WORK_SCOPE_MAX_ENTITY_COUNT,
   entityIdsForCorpusProjectionWorkScope,
+  indexIdForCorpusProjectionWorkScope,
+  type CorpusProjectionAppendScopedWorkOptions,
   type CorpusProjectionScopedWorkOptions,
 } from "./corpus-index-projection-scope";
 
@@ -36,10 +39,41 @@ test("a subject scope couples entity identities to its family", () => {
   >();
 });
 
+type RouteScope = {
+  family: "case_law";
+  scope: { type: "route"; indexId: string };
+};
+
+test("route scope is available only to append work", () => {
+  expectTypeOf<RouteScope>().toExtend<
+    CorpusProjectionAppendScopedWorkOptions<"case_law">
+  >();
+  expectTypeOf<RouteScope>().not.toExtend<
+    CorpusProjectionScopedWorkOptions<"case_law">
+  >();
+});
+
 test("a generation scope has no entity predicate", () => {
   expect(
     entityIdsForCorpusProjectionWorkScope(CORPUS_PROJECTION_GENERATION_SCOPE),
   ).toBeNull();
+});
+
+test("a route scope has one manifest-validated physical predicate", () => {
+  const scope = { type: "route", indexId: "case_law_v5_pol" } as const;
+  expect(entityIdsForCorpusProjectionWorkScope(scope)).toBeNull();
+  expect(
+    indexIdForCorpusProjectionWorkScope(
+      scope,
+      CORPUS_INDEX_MANIFESTS.case_law_v5,
+    ),
+  ).toBe("case_law_v5_pol");
+  expect(() =>
+    indexIdForCorpusProjectionWorkScope(
+      { type: "route", indexId: "case_law_v5_hun" },
+      CORPUS_INDEX_MANIFESTS.case_law_v5,
+    ),
+  ).toThrow("Corpus index id is not a manifest route");
 });
 
 test("a subject scope preserves its exact identities", () => {
