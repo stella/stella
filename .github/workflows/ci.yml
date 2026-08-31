@@ -144,12 +144,7 @@ jobs:
           package_checks_required=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              .github/workflows/ci.yml|.github/actions/setup-playwright/action.yml)
-                # This workflow owns package-check scheduling and the
-                # browser test setup, so either change must exercise both.
-                package_checks_required=true
-                ;;
-              .github/*|.provenance.yml|provenance/*)
+              .provenance.yml|provenance/*)
                 ;;
               *)
                 package_checks_required=true
@@ -258,7 +253,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           if [[ "$package_checks_required" != "true" ]]; then
-            echo "::notice::Only workflow/provenance files changed; skipping package CI checks."
+            echo "::notice::Only provenance files changed; skipping package CI checks."
           fi
 
   changeset:
