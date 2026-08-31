@@ -37,7 +37,7 @@ type OgCardOptions = {
 
 export const renderOgCard = async (options: OgCardOptions): Promise<Buffer> => {
   const face = CARD_FACES[options.direction ?? "ltr"];
-  const rendered = new Resvg(cardSvg(options), {
+  const rendered = new Resvg(await cardSvg(options), {
     fitTo: { mode: "width", value: WIDTH },
     font: { fontFiles: [face.path], loadSystemFonts: false },
   }).render();
@@ -48,11 +48,11 @@ export const renderOgCard = async (options: OgCardOptions): Promise<Buffer> => {
     .buffer();
 };
 
-const cardSvg = ({
+const cardSvg = async ({
   headline,
   badge,
   direction = "ltr",
-}: OgCardOptions): string => {
+}: OgCardOptions): Promise<string> => {
   const rtl = direction === "rtl";
   // The whole card mirrors, not just the text: an Arabic reader starts at the
   // right edge, so the wordmark and the headline both anchor there.
@@ -73,6 +73,7 @@ const cardSvg = ({
     )
     .join("\n  ");
 
+  const backgroundImage = await cardBackground();
   return String.raw`<svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <style>
@@ -85,7 +86,7 @@ const cardSvg = ({
     </style>
   </defs>
 
-  <image href="data:image/png;base64,${cardBackground()}" x="0" y="0" width="${WIDTH}" height="${HEIGHT}" preserveAspectRatio="xMidYMid slice" />
+  <image href="data:image/png;base64,${backgroundImage}" x="0" y="0" width="${WIDTH}" height="${HEIGHT}" preserveAspectRatio="xMidYMid slice" />
   <rect width="${WIDTH}" height="${HEIGHT}" fill="#F7FAFF" fill-opacity="0.04" />
 
   <image
@@ -104,26 +105,33 @@ const cardSvg = ({
 
 const WORDMARK_WIDTH = 236;
 
-let background: string | undefined;
+let background: Promise<string> | undefined;
 
 /**
- * The hero gradient, pre-scaled to card size once. The source is a 3.4 MB
- * print-resolution PNG; re-decoding it per card dominated render time when
- * every page started getting one.
+ * The hero gradient, pre-scaled to card size once. Re-decoding the full-size
+ * source per card dominated render time when every page started getting one.
  */
-const cardBackground = (): string => {
-  background ??= new Resvg(
-    String.raw`<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg"><image href="data:image/png;base64,${readFileSync(
-      resolveLandingPath("public", "brand", "stella-gradient-1.png"),
-    ).toString(
-      "base64",
-    )}" x="0" y="0" width="${WIDTH}" height="${HEIGHT}" preserveAspectRatio="xMidYMid slice" /></svg>`,
-    { fitTo: { mode: "width", value: WIDTH } },
-  )
-    .render()
-    .asPng()
-    .toString("base64");
-  return background;
+const cardBackground = async (): Promise<string> => {
+  background ??= (async () => {
+    Bun.Image.backend = "bun";
+    const source = await new Bun.Image(
+      readFileSync(
+        resolveLandingPath("public", "brand", "stella-gradient-1.webp"),
+      ),
+    )
+      .resize(WIDTH)
+      .png({ palette: true, colors: CARD_PALETTE_COLOURS })
+      .toBase64();
+
+    return new Resvg(
+      String.raw`<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg"><image href="data:image/png;base64,${source}" x="0" y="0" width="${WIDTH}" height="${HEIGHT}" preserveAspectRatio="xMidYMid slice" /></svg>`,
+      { fitTo: { mode: "width", value: WIDTH } },
+    )
+      .render()
+      .asPng()
+      .toString("base64");
+  })();
+  return await background;
 };
 
 const logos = new Map<string, string>();

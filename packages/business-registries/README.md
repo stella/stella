@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/assets/banner.png" alt="stll/business-registries" width="100%" />
+  <img src="https://raw.githubusercontent.com/stella/stella/main/.github/assets/banners/business-registries.webp" alt="stll/business-registries" width="100%" />
 </p>
 
 # @stll/business-registries

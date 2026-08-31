@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/assets/banner.png" alt="stll/mcp" width="100%" />
+  <img src="https://raw.githubusercontent.com/stella/stella/main/.github/assets/banners/mcp.webp" alt="stll/mcp" width="100%" />
 </p>
 
 # stella MCP server

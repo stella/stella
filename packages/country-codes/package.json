@@ -19,7 +19,6 @@
     "directory": "packages/country-codes"
   },
   "files": [
-    ".github/assets/banner.png",
     "dist",
     "src",
     "README.md"
