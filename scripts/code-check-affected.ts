@@ -75,6 +75,7 @@ const TURBO_ROOT_INPUT_PREFIX = "$TURBO_ROOT$/";
 const RECURSIVE_GLOB_SUFFIX = "/**";
 
 const ROOT_CHECKS = {
+  assets: "assets",
   env: "env",
   pluginFixtures: "plugin-fixtures",
   pluginRegistry: "plugin-registry",
@@ -84,6 +85,7 @@ const ROOT_CHECKS = {
 type RootCheck = (typeof ROOT_CHECKS)[keyof typeof ROOT_CHECKS];
 const ROOT_CHECK_ORDER: readonly RootCheck[] = [
   ROOT_CHECKS.env,
+  ROOT_CHECKS.assets,
   ROOT_CHECKS.pluginRegistry,
   ROOT_CHECKS.pluginFixtures,
   ROOT_CHECKS.rootScriptLint,
@@ -201,6 +203,7 @@ export const planCheck = ({
     );
   const rootCheckSet = new Set<RootCheck>([
     ROOT_CHECKS.env,
+    ROOT_CHECKS.assets,
     ROOT_CHECKS.repoTypecheck,
   ]);
   for (const changedPath of changedPaths) {
@@ -385,6 +388,9 @@ export const scopedCommands = (plan: ScopedCheckPlan): string[][] => {
   const rootChecks = new Set(plan.rootChecks);
   if (rootChecks.has(ROOT_CHECKS.env)) {
     commands.push(["bun", "run", "env:check"]);
+  }
+  if (rootChecks.has(ROOT_CHECKS.assets)) {
+    commands.push(["bun", "run", "assets:check"]);
   }
   if (rootChecks.has(ROOT_CHECKS.pluginRegistry)) {
     commands.push(["bun", "scripts/check-oxlint-plugin-registry.ts"]);
