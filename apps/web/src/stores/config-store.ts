@@ -7,7 +7,7 @@ import type {
   MattersFilters,
   MattersSortKey,
 } from "@/lib/workspaces/types";
-import { ALL_COLUMNS } from "@/lib/workspaces/types";
+import { ALL_COLUMNS, MATTERS_SORT_KEYS } from "@/lib/workspaces/types";
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null;
@@ -49,6 +49,56 @@ type ConfigState = {
   toggleMattersColumn: (id: MattersColumnId) => void;
   toggleGroupCollapsed: (groupId: string) => void;
 };
+
+export const CONFIG_STORE_VERSION = 2;
+
+const isMattersColumnId = (value: unknown): value is MattersColumnId =>
+  typeof value === "string" &&
+  ALL_COLUMNS.some((columnId) => columnId === value);
+
+const isMattersSortKey = (value: unknown): value is MattersSortKey =>
+  typeof value === "string" &&
+  MATTERS_SORT_KEYS.some((sortKey) => sortKey === value);
+
+const readPersistedMatters = (persisted: unknown): MattersConfig => {
+  if (!isRecord(persisted)) {
+    return DEFAULT_MATTERS;
+  }
+
+  return {
+    viewMode:
+      persisted["viewMode"] === "grid" || persisted["viewMode"] === "table"
+        ? persisted["viewMode"]
+        : DEFAULT_MATTERS.viewMode,
+    sortKey: isMattersSortKey(persisted["sortKey"])
+      ? persisted["sortKey"]
+      : DEFAULT_MATTERS.sortKey,
+    sortDesc:
+      typeof persisted["sortDesc"] === "boolean"
+        ? persisted["sortDesc"]
+        : DEFAULT_MATTERS.sortDesc,
+    groupBy:
+      persisted["groupBy"] === "none" || persisted["groupBy"] === "client"
+        ? persisted["groupBy"]
+        : DEFAULT_MATTERS.groupBy,
+    hiddenColumns: Array.isArray(persisted["hiddenColumns"])
+      ? persisted["hiddenColumns"].filter(isMattersColumnId)
+      : DEFAULT_MATTERS.hiddenColumns,
+    clientFilter: null,
+    collapsedGroups: [],
+    filters: {},
+  };
+};
+
+export const toPersistedConfigState = (state: ConfigState) => ({
+  matters: readPersistedMatters(state.matters),
+});
+
+export const migratePersistedConfigState = (persisted: unknown) => ({
+  matters: readPersistedMatters(
+    isRecord(persisted) ? persisted["matters"] : null,
+  ),
+});
 
 export const useConfigStore = create<ConfigState>()(
   persist(
@@ -113,16 +163,14 @@ export const useConfigStore = create<ConfigState>()(
     }),
     {
       name: getStorageKey("config"),
-      version: 1,
-      migrate: () => null,
+      version: CONFIG_STORE_VERSION,
+      migrate: migratePersistedConfigState,
+      partialize: toPersistedConfigState,
       merge: (persisted, current) => {
-        if (!isRecord(persisted)) {
-          return current;
-        }
-        const prev = isRecord(persisted["matters"]) ? persisted["matters"] : {};
+        const { matters } = migratePersistedConfigState(persisted);
         return {
           ...current,
-          matters: { ...DEFAULT_MATTERS, ...prev },
+          matters,
         };
       },
     },
