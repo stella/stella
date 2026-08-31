@@ -26,10 +26,16 @@ import { ConditionBuilder } from "@stll/workspace-ui/conditions";
 import { FieldValue } from "@stll/workspace-ui/field-value";
 import { SortChips } from "@stll/workspace-ui/sorts";
 import { WorkspaceViewSwitcher } from "@stll/workspace-ui/view-switcher";
+import {
+  ResponsiveActionToolbar,
+  ResponsiveActionToolbarItem,
+} from "@stll/workspace-ui/responsive-action-toolbar";
 ```
 
 The package also exposes a root entry for code that uses several workspace
-surfaces together. The subpaths remain the clearest way to declare a module's
+surfaces together. Focused modules, including the responsive action toolbar,
+are intentionally available through explicit subpaths; use those subpaths to
+declare a module's
 boundary.
 
 ## Development
