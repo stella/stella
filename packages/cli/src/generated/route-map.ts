@@ -15661,7 +15661,14 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "entityId",
                   },
                   {
-                    kind: "string-array",
+                    kind: "enum-array",
+                    enum: [
+                      "needs-review",
+                      "important",
+                      "follow-up",
+                      "contradiction",
+                      "verified",
+                    ],
                     repeatable: true,
                     flag: "--base-manual-flags",
                     prop: "baseManualFlags",
@@ -15670,7 +15677,14 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "baseManualFlags",
                   },
                   {
-                    kind: "string-array",
+                    kind: "enum-array",
+                    enum: [
+                      "needs-review",
+                      "important",
+                      "follow-up",
+                      "contradiction",
+                      "verified",
+                    ],
                     repeatable: true,
                     flag: "--manual-flags",
                     prop: "manualFlags",
@@ -15715,21 +15729,33 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         baseManualFlags: {
-                          maxItems: 16,
+                          maxItems: 5,
                           type: "array",
                           items: {
-                            minLength: 1,
-                            maxLength: 64,
+                            default: "needs-review",
                             type: "string",
+                            enum: [
+                              "needs-review",
+                              "important",
+                              "follow-up",
+                              "contradiction",
+                              "verified",
+                            ],
                           },
                         },
                         manualFlags: {
-                          maxItems: 16,
+                          maxItems: 5,
                           type: "array",
                           items: {
-                            minLength: 1,
-                            maxLength: 64,
+                            default: "needs-review",
                             type: "string",
+                            enum: [
+                              "needs-review",
+                              "important",
+                              "follow-up",
+                              "contradiction",
+                              "verified",
+                            ],
                           },
                         },
                         locked: {
@@ -21524,7 +21550,7 @@ export const generatedRouteMap: RouteNode = {
                           required: ["version", "items"],
                           properties: {
                             version: {
-                              const: 2,
+                              const: 3,
                               type: "number",
                             },
                             items: {
@@ -21584,7 +21610,7 @@ export const generatedRouteMap: RouteNode = {
                                       "sourceId",
                                       "issue",
                                       "severity",
-                                      "tiers",
+                                      "standard",
                                       "ask",
                                       "enabled",
                                     ],
@@ -21612,104 +21638,225 @@ export const generatedRouteMap: RouteNode = {
                                           "low",
                                         ],
                                       },
-                                      tiers: {
-                                        type: "object",
-                                        required: [
-                                          "acceptable",
-                                          "fallback",
-                                          "notAcceptable",
-                                        ],
-                                        properties: {
-                                          acceptable: {
+                                      standard: {
+                                        anyOf: [
+                                          {
                                             type: "object",
-                                            required: ["rules"],
+                                            required: ["source", "tiers"],
                                             properties: {
-                                              rules: {
-                                                maxItems: 50,
-                                                type: "array",
-                                                items: {
-                                                  type: "object",
-                                                  required: ["id", "text"],
-                                                  properties: {
-                                                    id: {
-                                                      format: "uuid",
-                                                      type: "string",
-                                                    },
-                                                    text: {
-                                                      minLength: 1,
-                                                      maxLength: 500,
-                                                      type: "string",
-                                                    },
-                                                  },
-                                                },
+                                              source: {
+                                                const: "tiers",
+                                                type: "string",
                                               },
-                                              ideal: {
-                                                anyOf: [
-                                                  {
+                                              tiers: {
+                                                type: "object",
+                                                required: [
+                                                  "acceptable",
+                                                  "fallback",
+                                                  "notAcceptable",
+                                                ],
+                                                properties: {
+                                                  acceptable: {
                                                     type: "object",
-                                                    required: [
-                                                      "source",
-                                                      "clauseId",
-                                                    ],
+                                                    required: ["rules"],
                                                     properties: {
-                                                      source: {
-                                                        const: "clause",
-                                                        type: "string",
+                                                      rules: {
+                                                        maxItems: 50,
+                                                        type: "array",
+                                                        items: {
+                                                          type: "object",
+                                                          required: [
+                                                            "id",
+                                                            "text",
+                                                          ],
+                                                          properties: {
+                                                            id: {
+                                                              format: "uuid",
+                                                              type: "string",
+                                                            },
+                                                            text: {
+                                                              minLength: 1,
+                                                              maxLength: 500,
+                                                              type: "string",
+                                                            },
+                                                          },
+                                                        },
                                                       },
-                                                      clauseId: {
-                                                        format: "uuid",
-                                                        type: "string",
-                                                      },
-                                                      clauseVersion: {
-                                                        minimum: 1,
+                                                      ideal: {
                                                         anyOf: [
                                                           {
-                                                            format: "integer",
-                                                            default: 0,
-                                                            type: "string",
+                                                            type: "object",
+                                                            required: [
+                                                              "source",
+                                                              "clauseId",
+                                                            ],
+                                                            properties: {
+                                                              source: {
+                                                                const: "clause",
+                                                                type: "string",
+                                                              },
+                                                              clauseId: {
+                                                                format: "uuid",
+                                                                type: "string",
+                                                              },
+                                                              clauseVersion: {
+                                                                minimum: 1,
+                                                                anyOf: [
+                                                                  {
+                                                                    format:
+                                                                      "integer",
+                                                                    default: 0,
+                                                                    type: "string",
+                                                                  },
+                                                                  {
+                                                                    minimum: 1,
+                                                                    type: "integer",
+                                                                  },
+                                                                ],
+                                                              },
+                                                            },
                                                           },
                                                           {
-                                                            minimum: 1,
-                                                            type: "integer",
+                                                            type: "object",
+                                                            required: [
+                                                              "source",
+                                                              "text",
+                                                            ],
+                                                            properties: {
+                                                              source: {
+                                                                const: "inline",
+                                                                type: "string",
+                                                              },
+                                                              text: {
+                                                                maxLength: 10000,
+                                                                type: "string",
+                                                              },
+                                                            },
                                                           },
                                                         ],
                                                       },
                                                     },
                                                   },
-                                                  {
+                                                  fallback: {
                                                     type: "object",
-                                                    required: [
-                                                      "source",
-                                                      "text",
-                                                    ],
+                                                    required: ["entries"],
                                                     properties: {
-                                                      source: {
-                                                        const: "inline",
-                                                        type: "string",
-                                                      },
-                                                      text: {
-                                                        maxLength: 10000,
-                                                        type: "string",
+                                                      entries: {
+                                                        maxItems: 10,
+                                                        type: "array",
+                                                        items: {
+                                                          type: "object",
+                                                          required: [
+                                                            "id",
+                                                            "text",
+                                                          ],
+                                                          properties: {
+                                                            id: {
+                                                              format: "uuid",
+                                                              type: "string",
+                                                            },
+                                                            text: {
+                                                              minLength: 1,
+                                                              maxLength: 10000,
+                                                              type: "string",
+                                                            },
+                                                            label: {
+                                                              maxLength: 256,
+                                                              type: "string",
+                                                            },
+                                                          },
+                                                        },
                                                       },
                                                     },
                                                   },
-                                                ],
+                                                  notAcceptable: {
+                                                    type: "object",
+                                                    required: ["rules"],
+                                                    properties: {
+                                                      rules: {
+                                                        maxItems: 50,
+                                                        type: "array",
+                                                        items: {
+                                                          type: "object",
+                                                          required: [
+                                                            "id",
+                                                            "text",
+                                                          ],
+                                                          properties: {
+                                                            id: {
+                                                              format: "uuid",
+                                                              type: "string",
+                                                            },
+                                                            text: {
+                                                              minLength: 1,
+                                                              maxLength: 500,
+                                                              type: "string",
+                                                            },
+                                                          },
+                                                        },
+                                                      },
+                                                    },
+                                                  },
+                                                },
                                               },
                                             },
                                           },
-                                          fallback: {
+                                          {
                                             type: "object",
-                                            required: ["entries"],
+                                            required: [
+                                              "source",
+                                              "termKind",
+                                              "passages",
+                                            ],
                                             properties: {
-                                              entries: {
-                                                maxItems: 10,
+                                              source: {
+                                                const: "reference",
+                                                type: "string",
+                                              },
+                                              termKind: {
+                                                default: "parameter",
+                                                type: "string",
+                                                enum: [
+                                                  "parameter",
+                                                  "enumeration",
+                                                  "presence",
+                                                  "language",
+                                                ],
+                                              },
+                                              passages: {
+                                                minItems: 1,
+                                                maxItems: 12,
                                                 type: "array",
                                                 items: {
                                                   type: "object",
-                                                  required: ["id", "text"],
+                                                  required: [
+                                                    "workspaceId",
+                                                    "entityId",
+                                                    "fileFieldId",
+                                                    "entityVersionId",
+                                                    "blockId",
+                                                    "text",
+                                                  ],
                                                   properties: {
-                                                    id: {
+                                                    workspaceId: {
                                                       format: "uuid",
+                                                      type: "string",
+                                                    },
+                                                    entityId: {
+                                                      format: "uuid",
+                                                      type: "string",
+                                                    },
+                                                    fileFieldId: {
+                                                      format: "uuid",
+                                                      type: "string",
+                                                    },
+                                                    entityVersionId: {
+                                                      format: "uuid",
+                                                      type: "string",
+                                                    },
+                                                    blockId: {
+                                                      minLength: 1,
+                                                      maxLength: 128,
                                                       type: "string",
                                                     },
                                                     text: {
@@ -21717,41 +21864,12 @@ export const generatedRouteMap: RouteNode = {
                                                       maxLength: 10000,
                                                       type: "string",
                                                     },
-                                                    label: {
-                                                      maxLength: 256,
-                                                      type: "string",
-                                                    },
                                                   },
                                                 },
                                               },
                                             },
                                           },
-                                          notAcceptable: {
-                                            type: "object",
-                                            required: ["rules"],
-                                            properties: {
-                                              rules: {
-                                                maxItems: 50,
-                                                type: "array",
-                                                items: {
-                                                  type: "object",
-                                                  required: ["id", "text"],
-                                                  properties: {
-                                                    id: {
-                                                      format: "uuid",
-                                                      type: "string",
-                                                    },
-                                                    text: {
-                                                      minLength: 1,
-                                                      maxLength: 500,
-                                                      type: "string",
-                                                    },
-                                                  },
-                                                },
-                                              },
-                                            },
-                                          },
-                                        },
+                                        ],
                                       },
                                       check: {
                                         anyOf: [
@@ -22166,6 +22284,10 @@ export const generatedRouteMap: RouteNode = {
                                             },
                                           },
                                         ],
+                                      },
+                                      purpose: {
+                                        maxLength: 240,
+                                        type: "string",
                                       },
                                       guidance: {
                                         maxLength: 2000,
@@ -22587,6 +22709,80 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "from-run": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "playbooks", "from-run"],
+                capabilityId: "playbooks.from-run",
+                description:
+                  "Save the position list a completed document review ran against as a new draft playbook in the organization, taking the same create path a hand-authored playbook takes (validation, the per-organization limit, the draft status). Position ids are preserved, so decisions already taken on those positions stay attached to them.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--workspace-id",
+                    prop: "workspaceId",
+                    required: true,
+                    part: "body",
+                    partPath: "workspaceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--run-id",
+                    prop: "runId",
+                    required: true,
+                    part: "body",
+                    partPath: "runId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: false,
+                    part: "body",
+                    partPath: "name",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "knowledge_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["workspaceId", "runId"],
+                      properties: {
+                        workspaceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        runId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        name: {
+                          minLength: 1,
+                          maxLength: 256,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "from-starter": {
               kind: "capability-leaf",
               spec: {
@@ -22636,7 +22832,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "playbooks", "get"],
                 capabilityId: "playbooks.get",
                 description:
-                  "Read one playbook definition in full: its name, description, document-type scope, positions, status, and approval metadata. Use playbooks.list for the paginated overview.",
+                  "Read one playbook definition in full: its name, description, document-type scope, positions, status, approval metadata, and how the organization has decided each position across past reviews. Use playbooks.list for the paginated overview.",
                 access: "read",
                 flags: [
                   {
@@ -23110,7 +23306,7 @@ export const generatedRouteMap: RouteNode = {
                           required: ["version", "items"],
                           properties: {
                             version: {
-                              const: 2,
+                              const: 3,
                               type: "number",
                             },
                             items: {
@@ -23170,7 +23366,7 @@ export const generatedRouteMap: RouteNode = {
                                       "sourceId",
                                       "issue",
                                       "severity",
-                                      "tiers",
+                                      "standard",
                                       "ask",
                                       "enabled",
                                     ],
@@ -23198,104 +23394,225 @@ export const generatedRouteMap: RouteNode = {
                                           "low",
                                         ],
                                       },
-                                      tiers: {
-                                        type: "object",
-                                        required: [
-                                          "acceptable",
-                                          "fallback",
-                                          "notAcceptable",
-                                        ],
-                                        properties: {
-                                          acceptable: {
+                                      standard: {
+                                        anyOf: [
+                                          {
                                             type: "object",
-                                            required: ["rules"],
+                                            required: ["source", "tiers"],
                                             properties: {
-                                              rules: {
-                                                maxItems: 50,
-                                                type: "array",
-                                                items: {
-                                                  type: "object",
-                                                  required: ["id", "text"],
-                                                  properties: {
-                                                    id: {
-                                                      format: "uuid",
-                                                      type: "string",
-                                                    },
-                                                    text: {
-                                                      minLength: 1,
-                                                      maxLength: 500,
-                                                      type: "string",
-                                                    },
-                                                  },
-                                                },
+                                              source: {
+                                                const: "tiers",
+                                                type: "string",
                                               },
-                                              ideal: {
-                                                anyOf: [
-                                                  {
+                                              tiers: {
+                                                type: "object",
+                                                required: [
+                                                  "acceptable",
+                                                  "fallback",
+                                                  "notAcceptable",
+                                                ],
+                                                properties: {
+                                                  acceptable: {
                                                     type: "object",
-                                                    required: [
-                                                      "source",
-                                                      "clauseId",
-                                                    ],
+                                                    required: ["rules"],
                                                     properties: {
-                                                      source: {
-                                                        const: "clause",
-                                                        type: "string",
+                                                      rules: {
+                                                        maxItems: 50,
+                                                        type: "array",
+                                                        items: {
+                                                          type: "object",
+                                                          required: [
+                                                            "id",
+                                                            "text",
+                                                          ],
+                                                          properties: {
+                                                            id: {
+                                                              format: "uuid",
+                                                              type: "string",
+                                                            },
+                                                            text: {
+                                                              minLength: 1,
+                                                              maxLength: 500,
+                                                              type: "string",
+                                                            },
+                                                          },
+                                                        },
                                                       },
-                                                      clauseId: {
-                                                        format: "uuid",
-                                                        type: "string",
-                                                      },
-                                                      clauseVersion: {
-                                                        minimum: 1,
+                                                      ideal: {
                                                         anyOf: [
                                                           {
-                                                            format: "integer",
-                                                            default: 0,
-                                                            type: "string",
+                                                            type: "object",
+                                                            required: [
+                                                              "source",
+                                                              "clauseId",
+                                                            ],
+                                                            properties: {
+                                                              source: {
+                                                                const: "clause",
+                                                                type: "string",
+                                                              },
+                                                              clauseId: {
+                                                                format: "uuid",
+                                                                type: "string",
+                                                              },
+                                                              clauseVersion: {
+                                                                minimum: 1,
+                                                                anyOf: [
+                                                                  {
+                                                                    format:
+                                                                      "integer",
+                                                                    default: 0,
+                                                                    type: "string",
+                                                                  },
+                                                                  {
+                                                                    minimum: 1,
+                                                                    type: "integer",
+                                                                  },
+                                                                ],
+                                                              },
+                                                            },
                                                           },
                                                           {
-                                                            minimum: 1,
-                                                            type: "integer",
+                                                            type: "object",
+                                                            required: [
+                                                              "source",
+                                                              "text",
+                                                            ],
+                                                            properties: {
+                                                              source: {
+                                                                const: "inline",
+                                                                type: "string",
+                                                              },
+                                                              text: {
+                                                                maxLength: 10000,
+                                                                type: "string",
+                                                              },
+                                                            },
                                                           },
                                                         ],
                                                       },
                                                     },
                                                   },
-                                                  {
+                                                  fallback: {
                                                     type: "object",
-                                                    required: [
-                                                      "source",
-                                                      "text",
-                                                    ],
+                                                    required: ["entries"],
                                                     properties: {
-                                                      source: {
-                                                        const: "inline",
-                                                        type: "string",
-                                                      },
-                                                      text: {
-                                                        maxLength: 10000,
-                                                        type: "string",
+                                                      entries: {
+                                                        maxItems: 10,
+                                                        type: "array",
+                                                        items: {
+                                                          type: "object",
+                                                          required: [
+                                                            "id",
+                                                            "text",
+                                                          ],
+                                                          properties: {
+                                                            id: {
+                                                              format: "uuid",
+                                                              type: "string",
+                                                            },
+                                                            text: {
+                                                              minLength: 1,
+                                                              maxLength: 10000,
+                                                              type: "string",
+                                                            },
+                                                            label: {
+                                                              maxLength: 256,
+                                                              type: "string",
+                                                            },
+                                                          },
+                                                        },
                                                       },
                                                     },
                                                   },
-                                                ],
+                                                  notAcceptable: {
+                                                    type: "object",
+                                                    required: ["rules"],
+                                                    properties: {
+                                                      rules: {
+                                                        maxItems: 50,
+                                                        type: "array",
+                                                        items: {
+                                                          type: "object",
+                                                          required: [
+                                                            "id",
+                                                            "text",
+                                                          ],
+                                                          properties: {
+                                                            id: {
+                                                              format: "uuid",
+                                                              type: "string",
+                                                            },
+                                                            text: {
+                                                              minLength: 1,
+                                                              maxLength: 500,
+                                                              type: "string",
+                                                            },
+                                                          },
+                                                        },
+                                                      },
+                                                    },
+                                                  },
+                                                },
                                               },
                                             },
                                           },
-                                          fallback: {
+                                          {
                                             type: "object",
-                                            required: ["entries"],
+                                            required: [
+                                              "source",
+                                              "termKind",
+                                              "passages",
+                                            ],
                                             properties: {
-                                              entries: {
-                                                maxItems: 10,
+                                              source: {
+                                                const: "reference",
+                                                type: "string",
+                                              },
+                                              termKind: {
+                                                default: "parameter",
+                                                type: "string",
+                                                enum: [
+                                                  "parameter",
+                                                  "enumeration",
+                                                  "presence",
+                                                  "language",
+                                                ],
+                                              },
+                                              passages: {
+                                                minItems: 1,
+                                                maxItems: 12,
                                                 type: "array",
                                                 items: {
                                                   type: "object",
-                                                  required: ["id", "text"],
+                                                  required: [
+                                                    "workspaceId",
+                                                    "entityId",
+                                                    "fileFieldId",
+                                                    "entityVersionId",
+                                                    "blockId",
+                                                    "text",
+                                                  ],
                                                   properties: {
-                                                    id: {
+                                                    workspaceId: {
                                                       format: "uuid",
+                                                      type: "string",
+                                                    },
+                                                    entityId: {
+                                                      format: "uuid",
+                                                      type: "string",
+                                                    },
+                                                    fileFieldId: {
+                                                      format: "uuid",
+                                                      type: "string",
+                                                    },
+                                                    entityVersionId: {
+                                                      format: "uuid",
+                                                      type: "string",
+                                                    },
+                                                    blockId: {
+                                                      minLength: 1,
+                                                      maxLength: 128,
                                                       type: "string",
                                                     },
                                                     text: {
@@ -23303,41 +23620,12 @@ export const generatedRouteMap: RouteNode = {
                                                       maxLength: 10000,
                                                       type: "string",
                                                     },
-                                                    label: {
-                                                      maxLength: 256,
-                                                      type: "string",
-                                                    },
                                                   },
                                                 },
                                               },
                                             },
                                           },
-                                          notAcceptable: {
-                                            type: "object",
-                                            required: ["rules"],
-                                            properties: {
-                                              rules: {
-                                                maxItems: 50,
-                                                type: "array",
-                                                items: {
-                                                  type: "object",
-                                                  required: ["id", "text"],
-                                                  properties: {
-                                                    id: {
-                                                      format: "uuid",
-                                                      type: "string",
-                                                    },
-                                                    text: {
-                                                      minLength: 1,
-                                                      maxLength: 500,
-                                                      type: "string",
-                                                    },
-                                                  },
-                                                },
-                                              },
-                                            },
-                                          },
-                                        },
+                                        ],
                                       },
                                       check: {
                                         anyOf: [
@@ -23752,6 +24040,10 @@ export const generatedRouteMap: RouteNode = {
                                             },
                                           },
                                         ],
+                                      },
+                                      purpose: {
+                                        maxLength: 240,
+                                        type: "string",
                                       },
                                       guidance: {
                                         maxLength: 2000,
