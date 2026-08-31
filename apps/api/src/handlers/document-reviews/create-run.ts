@@ -119,7 +119,9 @@ const createDocumentReviewRun = createSafeHandler(
     // passage from a matter they cannot open is refused, not graded blind.
     const pinnedPassageIds = referencePassageIds(positions);
     const readablePassageIds = yield* Result.await(
-      safeDb((tx) => readableReferencePassageIds(tx, pinnedPassageIds)),
+      safeDb(
+        async (tx) => await readableReferencePassageIds(tx, pinnedPassageIds),
+      ),
     );
     if (pinnedPassageIds.some((id) => !readablePassageIds.has(id))) {
       return Result.err(
