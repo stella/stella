@@ -27,6 +27,7 @@ const JURISDICTION = "CZE";
 /** The display citation a decision's own text states. */
 const WORK = "89/2012 Sb.";
 const WORK_ELI = "/eli/cz/sb/2012/89";
+const REDACTED_WORK = "123/2020 Sb.";
 /** A work the corpus does not hold: cited by number, with no ELI to key on. */
 const UNHELD_WORK = "99/1963 Sb.";
 const ANCHOR_A = "s1";
@@ -37,6 +38,7 @@ const closedSourceId = createSafeId<"caseLawSource">();
 const highAuthorityId = createSafeId<"caseLawDecision">();
 const lowAuthorityId = createSafeId<"caseLawDecision">();
 const closedDecisionId = createSafeId<"caseLawDecision">();
+const redactedDecisionId = createSafeId<"caseLawDecision">();
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -153,6 +155,16 @@ beforeAll(
         id: closedDecisionId,
         sourceId: closedSourceId,
       }),
+      {
+        ...decisionRow({
+          caseNumber: "redacted",
+          citationAuthority: 200,
+          decisionDate: "2026-02-01",
+          id: redactedDecisionId,
+          sourceId: openSourceId,
+        }),
+        redactedAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
     ]);
 
     await db.insert(caseLawProvisionCitations).values([
@@ -185,6 +197,22 @@ beforeAll(
         decisionDate: "2026-01-01",
         decisionId: closedDecisionId,
         spanStart: 50,
+      }),
+      provisionRow({
+        anchor: ANCHOR_A,
+        decisionDate: "2026-02-01",
+        decisionId: redactedDecisionId,
+        spanStart: 55,
+        workEli: null,
+        workIdentifier: REDACTED_WORK,
+      }),
+      provisionRow({
+        anchor: ANCHOR_A,
+        decisionDate: "2025-01-01",
+        decisionId: lowAuthorityId,
+        spanStart: 65,
+        workEli: null,
+        workIdentifier: REDACTED_WORK,
       }),
       // Cited by number only: the corpus does not hold this act, so the row
       // carries no ELI and no reader can arrive at it from a statute page.
@@ -232,7 +260,9 @@ type CitingDecisionsQuery = {
   anchor?: string;
   cursor?: string;
   eli?: string;
+  excerpt?: "required";
   limit: number;
+  sort?: "authority" | "newest";
   work?: string;
 };
 
@@ -240,7 +270,9 @@ const readCitingDecisions = async ({
   anchor,
   cursor,
   eli,
+  excerpt,
   limit,
+  sort,
   work,
 }: CitingDecisionsQuery) =>
   await listCitingDecisionsHandler(
@@ -250,6 +282,8 @@ const readCitingDecisions = async ({
       ...(anchor === undefined ? {} : { anchor }),
       ...(cursor === undefined ? {} : { cursor }),
       ...(eli === undefined ? {} : { eli }),
+      ...(excerpt === undefined ? {} : { excerpt }),
+      ...(sort === undefined ? {} : { sort }),
       ...(work === undefined ? {} : { work }),
     },
     caseLawDb,
@@ -312,6 +346,32 @@ test("citing decisions order by decision date, newest first", async () => {
   expect(page.items.map((item) => item.decisionId)).not.toContain(
     closedDecisionId,
   );
+});
+
+test("a tombstoned decision keeps its citation edge without its excerpt", async () => {
+  const page = await citingDecisions({ limit: 10, work: REDACTED_WORK });
+
+  expect(page.items).toHaveLength(2);
+  expect(page.items.at(0)).toMatchObject({
+    caseNumber: "redacted",
+    decisionId: redactedDecisionId,
+    sentenceText: null,
+  });
+});
+
+test("excerpt-required authority reads fill their budget before limiting", async () => {
+  const page = await citingDecisions({
+    excerpt: "required",
+    limit: 1,
+    sort: "authority",
+    work: REDACTED_WORK,
+  });
+
+  expect(page.items).toHaveLength(1);
+  expect(page.items.at(0)).toMatchObject({
+    caseNumber: "low",
+    sentenceText: `sentence ${ANCHOR_A} 65`,
+  });
 });
 
 test("citing decisions page through a stable cursor", async () => {
