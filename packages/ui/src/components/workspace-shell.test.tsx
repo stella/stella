@@ -26,7 +26,9 @@ describe("WorkspaceShell", () => {
     expect(markup).toContain('data-slot="workspace-shell-top-bar"');
     expect(markup).toContain("sticky top-0 z-20 shrink-0");
     expect(markup).toContain('data-slot="workspace-shell-content"');
-    expect(markup).toContain("min-h-0 flex-1 overflow-auto overscroll-contain");
+    expect(markup).toContain(
+      "flex min-h-0 flex-1 flex-col overflow-auto overscroll-contain",
+    );
   });
 
   test("owns a controlled compact navigation without mounting its portal on desktop", () => {

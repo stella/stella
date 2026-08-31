@@ -113,7 +113,7 @@ export const WorkspaceShell = ({
           {topBar({ compactNavigationTrigger })}
         </div>
         <div
-          className="min-h-0 flex-1 overflow-auto overscroll-contain"
+          className="flex min-h-0 flex-1 flex-col overflow-auto overscroll-contain"
           data-slot="workspace-shell-content"
         >
           {children}
