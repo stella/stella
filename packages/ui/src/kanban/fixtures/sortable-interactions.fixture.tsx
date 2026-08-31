@@ -109,8 +109,15 @@ const SortableVirtualCell = ({
   />
 );
 
+const mouseActivationDistance =
+  new URLSearchParams(window.location.search).get("mouseActivationDistance") ===
+  "1"
+    ? 1
+    : undefined;
+
 const SortableFixture = () => (
   <KanbanSortableBoard
+    mouseActivationDistance={mouseActivationDistance}
     onDragStart={() => {
       document.documentElement.dataset["dragStartedAt"] = String(
         performance.now(),

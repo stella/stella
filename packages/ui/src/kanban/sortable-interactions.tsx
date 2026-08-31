@@ -448,6 +448,8 @@ const getTouchDocument = (event: Event): Document => {
 export type KanbanSortableBoardProps = {
   children: React.ReactNode;
   onDragEnd: (event: KanbanDragEndEvent) => void;
+  /** Minimum pointer movement before a mouse drag activates. */
+  mouseActivationDistance?: number | undefined;
   collisionDetection?: CollisionDetection | undefined;
   keyboardCoordinates?: KeyboardCoordinateGetter | undefined;
   autoScroll?: boolean | AutoScrollOptions | undefined;
@@ -522,6 +524,7 @@ export const useKanbanDropTarget = ({
 export const KanbanSortableBoard = ({
   children,
   onDragEnd,
+  mouseActivationDistance,
   collisionDetection,
   keyboardCoordinates,
   autoScroll,
@@ -537,7 +540,10 @@ export const KanbanSortableBoard = ({
   const [activeId, setActiveId] = React.useState<UniqueIdentifier | null>(null);
   const [interactionReady, setInteractionReady] = React.useState(false);
   const interactionReadyNotified = React.useRef(false);
-  const defaultSensors = useKanbanSortableSensors(keyboardCoordinates);
+  const defaultSensors = useKanbanSortableSensors(
+    keyboardCoordinates,
+    mouseActivationDistance,
+  );
 
   // dnd-kit registers child droppables after commit. Keep the sensor list
   // stable, but hold sortable sources and virtual cells disabled until that
@@ -607,10 +613,11 @@ export const KanbanSortableBoard = ({
 
 export const useKanbanSortableSensors = (
   keyboardCoordinates: KeyboardCoordinateGetter = kanbanKeyboardCoordinates,
+  mouseActivationDistance: number = KANBAN_MOUSE_ACTIVATION_DISTANCE,
 ) =>
   useSensors(
     useSensor(KanbanMouseSensor, {
-      activationConstraint: { distance: KANBAN_MOUSE_ACTIVATION_DISTANCE },
+      activationConstraint: { distance: mouseActivationDistance },
     }),
     useSensor(KanbanTouchSensor, {
       activationConstraint: KANBAN_TOUCH_ACTIVATION_CONSTRAINT,
