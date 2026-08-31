@@ -45,8 +45,6 @@ import {
   Menu,
   MenuItem,
   MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
@@ -60,6 +58,17 @@ import {
 import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
+import type { ReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
+import { REVIEW_SECTION_LABEL_CLASS } from "@/components/ai-suggestions/review-passage-side";
+import {
+  POSITION_HEADER_META_CLASS,
+  PositionHeader,
+} from "@/components/ai-suggestions/review-position-header";
+import {
+  ReferencePassageList,
+  type ReferenceNameLookup,
+  SeverityChip,
+} from "@/components/ai-suggestions/review-position-row";
 import { ConditionBuilder } from "@/components/conditions/condition-builder";
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
 import {
@@ -83,9 +92,18 @@ import {
   type Position,
   type PositionAskContent,
   type PositionErrors,
-  type PositionSeverity,
+  type PositionStandard,
+  type PositionTiers,
+  positionTiers,
+  type ReferencePassage,
+  referencePassagesText,
   type TierRule,
 } from "@/lib/knowledge/playbook-types";
+import {
+  adoptableIdealText,
+  isUnsettledPosition,
+  type PositionDecisionSummary,
+} from "@/lib/knowledge/position-decisions";
 import { clauseDetailOptions, clausesOptions } from "@/lib/knowledge/queries";
 
 // Drag payload shared by the position cards; the parent list interprets a drop
@@ -109,35 +127,6 @@ const ASK_CONTENT_LABEL_KEYS = {
   int: "knowledge.playbooks.contentType.int",
   "single-select": "knowledge.playbooks.contentType.singleSelect",
 } as const satisfies Record<AskContentType, TranslationKey>;
-
-const SEVERITIES = [
-  "blocker",
-  "high",
-  "medium",
-  "low",
-] as const satisfies readonly PositionSeverity[];
-
-type MissingPositionSeverity = Exclude<
-  PositionSeverity,
-  (typeof SEVERITIES)[number]
->;
-
-true satisfies MissingPositionSeverity extends never ? true : never;
-
-const SEVERITY_LABEL_KEYS = {
-  blocker: "knowledge.playbooks.severity.blocker",
-  high: "knowledge.playbooks.severity.high",
-  medium: "knowledge.playbooks.severity.medium",
-  low: "knowledge.playbooks.severity.low",
-} as const satisfies Record<PositionSeverity, TranslationKey>;
-
-// Static per-key so the hardcoded-colour lint treats each as a token reference.
-const SEVERITY_CHIP_CLASS = {
-  blocker: "bg-destructive/12 text-destructive",
-  high: "bg-warning/15 text-warning-foreground",
-  medium: "bg-primary/12 text-primary",
-  low: "bg-muted text-muted-foreground",
-} as const satisfies Record<PositionSeverity, string>;
 
 // Cycled named colors for single-select choices; every member is in the schema's
 // option-color enum, so the produced content always validates.
@@ -168,9 +157,6 @@ const EXPECTATION_LABEL_KEYS = {
 
 const isAskContentType = (value: string): value is AskContentType =>
   ASK_CONTENT_TYPES.some((contentType) => contentType === value);
-
-const isSeverity = (value: string): value is PositionSeverity =>
-  SEVERITIES.some((severity) => severity === value);
 
 // ── Discriminated-union builders (explicit construction) ──
 
@@ -219,6 +205,13 @@ type PositionEditorProps = {
   open: boolean;
   errors: PositionErrors;
   showErrors: boolean;
+  /** What the org's reviewers have done with this position, when the playbook
+   *  detail carries the projection. */
+  decision?: PositionDecisionSummary | undefined;
+  referenceNames?: ReferenceNameLookup | undefined;
+  /** The words behind every reference passage the playbook quotes, read once
+   *  for the whole position list. */
+  passageTexts: ReferencePassageTexts;
   onOpenChange: (open: boolean) => void;
   onChange: (position: Position) => void;
   onRemove: () => void;
@@ -237,6 +230,9 @@ export const PositionEditor = ({
   open,
   errors,
   showErrors,
+  decision,
+  referenceNames,
+  passageTexts,
   onOpenChange,
   onChange,
   onRemove,
@@ -335,109 +331,118 @@ export const PositionEditor = ({
       id={`position-${sourceId}`}
       ref={setCardRef}
     >
-      <div className="flex items-center gap-2 px-3 py-2.5">
-        <Button
-          aria-label={t("knowledge.playbooks.reorderPosition")}
-          className="shrink-0 cursor-grab"
-          onKeyDown={handleGripKeyDown}
-          ref={setGripRef}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <GripVerticalIcon />
-        </Button>
-        <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-          {String(index + 1).padStart(2, "0")}
-        </span>
-
-        <Input
-          aria-invalid={showErrors && errors.issue !== undefined}
-          className="hover:border-input focus-visible:bg-background h-8 flex-1 border-transparent bg-transparent px-1.5 text-sm font-medium shadow-none"
-          onChange={(e) => onChange({ ...position, issue: e.target.value })}
-          onFocus={() => {
-            if (!open) {
-              onOpenChange(true);
-            }
-          }}
-          placeholder={t("knowledge.playbooks.issuePlaceholder")}
-          value={position.issue}
-        />
-
-        {position.mode === "graded" ? (
-          <SeverityChip
-            onChange={(severity) => onChange({ ...position, severity })}
-            severity={position.severity}
+      <PositionHeader
+        actions={
+          <>
+            <Switch
+              aria-label={t("knowledge.playbooks.enablePosition")}
+              checked={position.enabled}
+              className="shrink-0"
+              onCheckedChange={(enabled) => onChange({ ...position, enabled })}
+            />
+            <Button
+              aria-label={t("knowledge.playbooks.duplicatePosition")}
+              onClick={onDuplicate}
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+            >
+              <CopyIcon />
+            </Button>
+            <Button
+              aria-label={t("knowledge.playbooks.deletePosition")}
+              onClick={onRemove}
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+            >
+              <Trash2Icon />
+            </Button>
+            <Button
+              aria-controls={bodyId}
+              aria-expanded={open}
+              aria-label={
+                open
+                  ? t("knowledge.playbooks.collapsePosition")
+                  : t("knowledge.playbooks.expandPosition")
+              }
+              onClick={() => onOpenChange(!open)}
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+            >
+              <ChevronDownIcon
+                className={cn("transition-transform", open && "rotate-180")}
+              />
+            </Button>
+          </>
+        }
+        index={index}
+        label={
+          <>
+            {position.mode === "graded" ? (
+              <SeverityChip
+                onChange={(severity) => onChange({ ...position, severity })}
+                severity={position.severity}
+              />
+            ) : (
+              <span className={POSITION_HEADER_META_CLASS}>
+                {t("knowledge.playbooks.extractOnlyBadge")}
+              </span>
+            )}
+            {!open && position.mode === "graded" && (
+              <CollapsedTierDots position={position} />
+            )}
+            {!position.enabled && (
+              <span
+                className={cn(POSITION_HEADER_META_CLASS, "hidden sm:inline")}
+              >
+                {t("knowledge.playbooks.disabledBadge")}
+              </span>
+            )}
+          </>
+        }
+        leading={
+          <Button
+            aria-label={t("knowledge.playbooks.reorderPosition")}
+            className="shrink-0 cursor-grab"
+            onKeyDown={handleGripKeyDown}
+            ref={setGripRef}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <GripVerticalIcon />
+          </Button>
+        }
+        title={
+          <Input
+            aria-invalid={showErrors && errors.issue !== undefined}
+            className="hover:border-input focus-visible:bg-background h-8 w-full border-transparent bg-transparent px-1.5 text-sm font-medium shadow-none"
+            onChange={(e) => onChange({ ...position, issue: e.target.value })}
+            onFocus={() => {
+              if (!open) {
+                onOpenChange(true);
+              }
+            }}
+            placeholder={t("knowledge.playbooks.issuePlaceholder")}
+            value={position.issue}
           />
-        ) : (
-          <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium">
-            {t("knowledge.playbooks.extractOnlyBadge")}
-          </span>
-        )}
-
-        {!open && position.mode === "graded" && (
-          <CollapsedTierDots position={position} />
-        )}
-
-        {!position.enabled && (
-          <span className="bg-muted text-muted-foreground hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium sm:inline">
-            {t("knowledge.playbooks.disabledBadge")}
-          </span>
-        )}
-
-        <Switch
-          aria-label={t("knowledge.playbooks.enablePosition")}
-          checked={position.enabled}
-          className="shrink-0"
-          onCheckedChange={(enabled) => onChange({ ...position, enabled })}
-        />
-
-        <Button
-          aria-label={t("knowledge.playbooks.duplicatePosition")}
-          onClick={onDuplicate}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <CopyIcon />
-        </Button>
-        <Button
-          aria-label={t("knowledge.playbooks.deletePosition")}
-          onClick={onRemove}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <Trash2Icon />
-        </Button>
-        <Button
-          aria-controls={bodyId}
-          aria-expanded={open}
-          aria-label={
-            open
-              ? t("knowledge.playbooks.collapsePosition")
-              : t("knowledge.playbooks.expandPosition")
-          }
-          onClick={() => onOpenChange(!open)}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <ChevronDownIcon
-            className={cn("transition-transform", open && "rotate-180")}
-          />
-        </Button>
-      </div>
+        }
+      />
 
       {open && (
         <div className="space-y-3 px-3 pt-1 pb-3" id={bodyId}>
           {position.mode === "graded" ? (
             <GradedBody
+              decision={decision}
               errors={errors}
               onChange={onChange}
               onConvertMode={onConvertMode}
               organizationId={organizationId}
+              passageTexts={passageTexts}
               position={position}
+              referenceNames={referenceNames}
               showErrors={showErrors}
             />
           ) : (
@@ -463,7 +468,17 @@ export const PositionEditor = ({
 // ── Collapsed tier dots ───────────────────────────────
 
 const CollapsedTierDots = ({ position }: { position: GradedPosition }) => {
-  const { tiers } = position;
+  const t = useTranslations();
+  const tiers = positionTiers(position);
+  // A reference standard has no ladder to count; the collapsed row says where
+  // the standard comes from instead.
+  if (tiers === null) {
+    return (
+      <span className={cn(POSITION_HEADER_META_CLASS, "hidden sm:inline")}>
+        {t("knowledge.playbooks.referenceStandard")}
+      </span>
+    );
+  }
   const counts = [
     { key: "ok", value: tiers.acceptable.rules.length, cls: "bg-success" },
     { key: "warn", value: tiers.fallback.entries.length, cls: "bg-warning" },
@@ -483,7 +498,7 @@ const CollapsedTierDots = ({ position }: { position: GradedPosition }) => {
       {counts.map((entry) => (
         <span className="flex items-center gap-1" key={entry.key}>
           <span className={cn("size-1.5 rounded-full", entry.cls)} />
-          <span className="text-muted-foreground text-[11px] tabular-nums">
+          <span className="text-muted-foreground text-xs tabular-nums">
             {entry.value}
           </span>
         </span>
@@ -492,54 +507,16 @@ const CollapsedTierDots = ({ position }: { position: GradedPosition }) => {
   );
 };
 
-// ── Severity chip (menu picker) ───────────────────────
-
-const SeverityChip = ({
-  severity,
-  onChange,
-}: {
-  severity: PositionSeverity;
-  onChange: (severity: PositionSeverity) => void;
-}) => {
-  const t = useTranslations();
-  return (
-    <Menu>
-      <MenuTrigger
-        aria-label={t("knowledge.playbooks.severityLabel")}
-        className={cn(
-          "focus-visible:ring-ring shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold focus-visible:ring-2 focus-visible:outline-none",
-          SEVERITY_CHIP_CLASS[severity],
-        )}
-      >
-        {t(SEVERITY_LABEL_KEYS[severity])}
-      </MenuTrigger>
-      <MenuPopup>
-        <MenuRadioGroup
-          onValueChange={(value) => {
-            if (typeof value === "string" && isSeverity(value)) {
-              onChange(value);
-            }
-          }}
-          value={severity}
-        >
-          {SEVERITIES.map((option) => (
-            <MenuRadioItem key={option} value={option}>
-              {t(SEVERITY_LABEL_KEYS[option])}
-            </MenuRadioItem>
-          ))}
-        </MenuRadioGroup>
-      </MenuPopup>
-    </Menu>
-  );
-};
-
-// ── Graded body (tier ladder + footer) ────────────────
+// ── Graded body (standard + footer) ───────────────────
 
 const GradedBody = ({
   organizationId,
   position,
   errors,
   showErrors,
+  decision,
+  referenceNames,
+  passageTexts,
   onChange,
   onConvertMode,
 }: {
@@ -547,35 +524,35 @@ const GradedBody = ({
   position: GradedPosition;
   errors: PositionErrors;
   showErrors: boolean;
+  decision: PositionDecisionSummary | undefined;
+  referenceNames: ReferenceNameLookup | undefined;
+  passageTexts: ReferencePassageTexts;
   onChange: (position: Position) => void;
   onConvertMode: () => void;
 }) => {
   const t = useTranslations();
-  const { tiers } = position;
+  const { standard } = position;
 
-  const setAcceptableRules = (rules: TierRule[]) =>
-    onChange({
-      ...position,
-      tiers: { ...tiers, acceptable: { ...tiers.acceptable, rules } },
-    });
-  const setNotAcceptableRules = (rules: TierRule[]) =>
-    onChange({
-      ...position,
-      tiers: { ...tiers, notAcceptable: { rules } },
-    });
-  const setEntries = (entries: FallbackEntry[]) =>
-    onChange({ ...position, tiers: { ...tiers, fallback: { entries } } });
-  const setIdeal = (ideal: IdealLanguage | undefined) =>
-    onChange({
-      ...position,
+  const setStandard = (next: PositionStandard) =>
+    onChange({ ...position, standard: next });
+
+  // Adopting accepted language is an ordinary playbook edit: it writes the
+  // wording a reviewer already accepted into the acceptable tier's ideal.
+  const adoptIdeal = (text: string) => {
+    if (standard.source !== "tiers") {
+      return;
+    }
+    setStandard({
+      source: "tiers",
       tiers: {
-        ...tiers,
+        ...standard.tiers,
         acceptable: {
-          ...tiers.acceptable,
-          ...(ideal !== undefined ? { ideal } : {}),
+          ...standard.tiers.acceptable,
+          ideal: { source: "inline", text },
         },
       },
     });
+  };
 
   return (
     <>
@@ -585,6 +562,165 @@ const GradedBody = ({
         </p>
       )}
 
+      <PositionDecisionLine
+        decision={decision}
+        onAdoptIdeal={adoptIdeal}
+        standard={standard}
+      />
+
+      {standard.source === "reference" ? (
+        <ReferenceStandardSection
+          onConvertToRules={() =>
+            setStandard({
+              source: "tiers",
+              tiers: {
+                acceptable: {
+                  rules: [],
+                  ideal: {
+                    source: "inline",
+                    text: referencePassagesText(
+                      standard.passages,
+                      passageTexts.textById,
+                    ),
+                  },
+                },
+                fallback: { entries: [] },
+                notAcceptable: { rules: [] },
+              },
+            })
+          }
+          passages={standard.passages}
+          referenceNames={referenceNames}
+          texts={passageTexts}
+        />
+      ) : (
+        <TierLadder
+          clauseInvalid={showErrors && errors.clause !== undefined}
+          onChange={(tiers) => setStandard({ source: "tiers", tiers })}
+          organizationId={organizationId}
+          tiers={standard.tiers}
+        />
+      )}
+
+      <NegotiationSection onChange={onChange} position={position} />
+
+      <GradedFooter
+        onChange={onChange}
+        onConvertMode={onConvertMode}
+        position={position}
+      />
+    </>
+  );
+};
+
+// ── Decision overlay ──────────────────────────────────
+// What the org's reviewers actually did with this position, over the findings
+// already durable on their runs. One line, and — when they settled on wording
+// this position has none of — the one action that turns that into a standard.
+
+const PositionDecisionLine = ({
+  decision,
+  standard,
+  onAdoptIdeal,
+}: {
+  decision: PositionDecisionSummary | undefined;
+  standard: PositionStandard;
+  onAdoptIdeal: (text: string) => void;
+}) => {
+  const t = useTranslations();
+  if (decision === undefined) {
+    return null;
+  }
+  const adoptable = adoptableIdealText({ standard, summary: decision });
+  return (
+    <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+      <span className="tabular-nums">
+        {isUnsettledPosition(decision)
+          ? t("knowledge.playbooks.noSettledPosition")
+          : t("knowledge.playbooks.decisionLine", {
+              accepted: decision.accepted,
+              dismissed: decision.dismissed,
+              runs: decision.runs,
+            })}
+      </span>
+      {adoptable !== null && (
+        <InlineAction onClick={() => onAdoptIdeal(adoptable)}>
+          {t("knowledge.playbooks.adoptAsIdeal")}
+        </InlineAction>
+      )}
+    </div>
+  );
+};
+
+// ── Reference standard: the passages a position was derived from ──
+// Read-only: the passages are pinned quotes of a document someone already
+// negotiated, not rows to edit. Turning them into an authored ladder is an
+// explicit conversion, which seeds the acceptable tier's ideal language.
+
+const ReferenceStandardSection = ({
+  passages,
+  referenceNames,
+  texts,
+  onConvertToRules,
+}: {
+  passages: readonly ReferencePassage[];
+  referenceNames: ReferenceNameLookup | undefined;
+  texts: ReferencePassageTexts;
+  onConvertToRules: () => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <section className="border-border rounded-lg border">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <span className={REVIEW_SECTION_LABEL_CLASS}>
+          {t("knowledge.playbooks.referenceStandard")}
+        </span>
+        <div className="ms-auto">
+          <InlineAction onClick={onConvertToRules}>
+            {t("knowledge.playbooks.convertToRules")}
+          </InlineAction>
+        </div>
+      </div>
+      <div className="px-3 pb-3">
+        <ReferencePassageList
+          passages={passages}
+          referenceNames={referenceNames}
+          texts={texts}
+        />
+      </div>
+    </section>
+  );
+};
+
+// ── Tier ladder ───────────────────────────────────────
+
+const TierLadder = ({
+  organizationId,
+  tiers,
+  clauseInvalid,
+  onChange,
+}: {
+  organizationId: string;
+  tiers: PositionTiers;
+  clauseInvalid: boolean;
+  onChange: (tiers: PositionTiers) => void;
+}) => {
+  const t = useTranslations();
+
+  const setAcceptableRules = (rules: TierRule[]) =>
+    onChange({ ...tiers, acceptable: { ...tiers.acceptable, rules } });
+  const setNotAcceptableRules = (rules: TierRule[]) =>
+    onChange({ ...tiers, notAcceptable: { rules } });
+  const setEntries = (entries: FallbackEntry[]) =>
+    onChange({ ...tiers, fallback: { entries } });
+  const setIdeal = (ideal: IdealLanguage) =>
+    onChange({
+      ...tiers,
+      acceptable: { ...tiers.acceptable, ideal },
+    });
+
+  return (
+    <>
       <TierSection
         icon={<CheckMark />}
         onAddRule={() =>
@@ -626,16 +762,13 @@ const GradedBody = ({
         ))}
         {tiers.acceptable.ideal !== undefined && (
           <IdealEditor
-            clauseInvalid={showErrors && errors.clause !== undefined}
+            clauseInvalid={clauseInvalid}
             ideal={tiers.acceptable.ideal}
             onChange={setIdeal}
             onRemove={() =>
               onChange({
-                ...position,
-                tiers: {
-                  ...tiers,
-                  acceptable: { rules: tiers.acceptable.rules },
-                },
+                ...tiers,
+                acceptable: { rules: tiers.acceptable.rules },
               })
             }
             organizationId={organizationId}
@@ -724,14 +857,6 @@ const GradedBody = ({
           />
         ))}
       </TierSection>
-
-      <NegotiationSection onChange={onChange} position={position} />
-
-      <GradedFooter
-        onChange={onChange}
-        onConvertMode={onConvertMode}
-        position={position}
-      />
     </>
   );
 };

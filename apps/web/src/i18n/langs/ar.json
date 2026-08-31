@@ -1498,43 +1498,47 @@
     "applyAs": "بصيغة",
     "applyDirect": "مباشر",
     "applyTracked": "تعقّب التغييرات",
-    "areaUnspecified": "غير محدّد",
     "barLabel": "مراجعة الاقتراحات",
-    "byArea": "حسب المجال",
-    "bySeverity": "حسب الخطورة",
+    "change": {
+      "deleteParagraph": "حذف فقرة",
+      "replacement": "«{find}» → «{replace}»"
+    },
     "countHigh": "{count, plural, zero {# عالية} one {# عالية} two {# عاليتان} few {# عالية} many {# عالية} other {# عالية}}",
     "countLow": "{count, plural, zero {# منخفضة} one {# منخفضة} two {# منخفضتان} few {# منخفضة} many {# منخفضة} other {# منخفضة}}",
     "countMedium": "{count, plural, zero {# متوسطة} one {# متوسطة} two {# متوسطتان} few {# متوسطة} many {# متوسطة} other {# متوسطة}}",
     "countUnspecified": "{count, plural, zero {# غير محدّدة} one {# غير محدّدة} two {# غير محدّدتان} few {# غير محدّدة} many {# غير محدّدة} other {# غير محدّدة}}",
-    "dismiss": "إخفاء لوحة المراجعة",
-    "empty": "لا توجد اقتراحات مطابقة للمرشّح الحالي.",
     "finalizePendingNote": "{count, plural, zero {لا توجد اقتراحات قيد المراجعة.} one {لا يزال اقتراح واحد قيد المراجعة.} two {لا يزال اقتراحان قيد المراجعة.} few {لا تزال # اقتراحات قيد المراجعة.} many {لا يزال # اقتراحًا قيد المراجعة.} other {لا يزال # اقتراح قيد المراجعة.}}",
-    "groupBy": "التجميع حسب",
-    "hiddenCount": "{count} مخفي",
     "hideAccepted": "إخفاء الاقتراحات المقبولة",
-    "identityAria": "هوية تعقّب التغييرات لـ {name}",
-    "identitySaved": "تم حفظ الهوية",
     "persistFailed": "تعذّر حفظ تغيير المراجعة",
     "reject": "رفض",
     "rejectAll": "رفض الكل",
     "revert": "تراجع",
-    "savingIdentity": "جارٍ الحفظ…",
     "severityHigh": "عالية",
     "severityLow": "منخفضة",
     "severityMedium": "متوسطة",
     "severityUnspecified": "غير محدّدة",
     "skipped": "تعذّر التطبيق: {reason}",
     "staleResolution": "تمت معالجة هذا الاقتراح بالفعل في مكان آخر.",
-    "statusAccepted": "مقبول",
-    "statusApplying": "جارٍ تطبيق التغيير…",
-    "statusRejected": "مرفوض",
-    "statusSkipped": "تم تخطّيه",
-    "subtitle": "{pending} من {total} قيد الانتظار",
-    "title": "اقتراحات AI",
-    "wordName": "اسم المؤلف في Word",
-    "wordNamePlaceholder": "كيف ستُوقَّع التغييرات المتعقَّبة",
-    "wordShortcut": "الأحرف الأولى",
-    "wordShortcutPlaceholder": "مثال: JK"
+    "summary": {
+      "commentOnParagraph": "{label, select, none {إضافة تعليق إلى فقرة} other {إضافة تعليق إلى الفقرة {label}}}",
+      "commentOnSelection": "إضافة تعليق إلى النص المحدد",
+      "deleteParagraph": "{label, select, none {حذف فقرة} other {حذف الفقرة {label}}}",
+      "deleteTableColumn": "حذف عمود جدول",
+      "deleteTableRow": "حذف صف جدول",
+      "formatSelection": "إعادة تنسيق النص المحدد",
+      "insertAfter": "{label, select, none {إدراج فقرة} other {إدراج فقرة بعد {label}}}",
+      "insertBefore": "{label, select, none {إدراج فقرة} other {إدراج فقرة قبل {label}}}",
+      "insertSignatureBlock": "إدراج جدول توقيع لـ {names}",
+      "insertTableColumn": "إدراج عمود جدول",
+      "insertTableRow": "إدراج صف جدول",
+      "mergeTableCells": "دمج خلايا الجدول",
+      "pageBreakAfter": "{label, select, none {إدراج فاصل صفحات} other {إدراج فاصل صفحات بعد {label}}}",
+      "pageBreakBefore": "{label, select, none {إدراج فاصل صفحات} other {إدراج فاصل صفحات قبل {label}}}",
+      "replaceInBlock": "استبدال «{find}» بـ «{replace}»",
+      "replaceParagraph": "{label, select, none {إعادة صياغة فقرة} other {إعادة صياغة الفقرة {label}}}",
+      "replaceSelection": "استبدال النص المحدد بـ «{replace}»",
+      "splitTableCell": "تقسيم خلية جدول"
+    }
   },
   "emailViewer": {
     "attachments": "المرفقات",
@@ -2192,6 +2196,7 @@
       "workAttention": "متابعة العمل"
     },
     "severity": {
+      "critical": "حرج",
       "info": "معلومة",
       "notice": "تنبيه",
       "warning": "تحذير"
@@ -2310,9 +2315,13 @@
     "review": {
       "actionNeeded": "تحتاج إلى إجراء",
       "addComment": "إضافة كتعليق",
+      "addNote": "إضافة ملاحظة للطرف المقابل",
+      "addNotePlaceholder": "ما ينبغي أن يراه الطرف المقابل",
+      "addNoteSubmit": "إضافة ملاحظة",
       "addReference": "إضافة {name} كمرجع",
       "addTopic": "إضافة موضوع",
       "allDecided": "تم البت في كل النتائج هنا.",
+      "askInChat": "السؤال في الدردشة",
       "assessment": {
         "additionalInTarget": "إضافة في المستند المستهدف",
         "aligned": "منسجم",
@@ -2322,12 +2331,21 @@
         "notComparable": "غير قابل للمقارنة"
       },
       "basisCombined": "{count, plural, zero {مراجعة وفق {name} من دون مستندات مرجعية} one {مراجعة وفق {name} ومقارنة مع مستند مرجعي واحد} two {مراجعة وفق {name} ومقارنة مع مستندين مرجعيين} few {مراجعة وفق {name} ومقارنة مع # مستندات مرجعية} many {مراجعة وفق {name} ومقارنة مع # مستندًا مرجعيًا} other {مراجعة وفق {name} ومقارنة مع # مستند مرجعي}}",
+      "basisDivider": "و / أو",
       "basisPlaybook": "مراجعة وفق {name}",
       "basisReferences": "{count, plural, zero {لا مقارنة مع أي مستند مرجعي} one {مقارنة مع مستند مرجعي واحد} two {مقارنة مع مستندين مرجعيين} few {مقارنة مع # مستندات مرجعية} many {مقارنة مع # مستندًا مرجعيًا} other {مقارنة مع # مستند مرجعي}}",
       "changeBasis": "تغيير أساس المراجعة",
+      "chatDraft": {
+        "finding": "النتيجة:",
+        "impact": "التأثير:",
+        "issue": "المسألة:",
+        "question": "كيف ينبغي أن أعيد صياغة المستند المستهدف في هذه النقطة؟",
+        "rationale": "المبررات:"
+      },
+      "checks": "ما يتم فحصه:",
       "commentFailed": "تعذرت إضافة التعليق",
       "comparedWithReferences": "{count, plural, zero {لم تتم المقارنة مع أي مستند مرجعي} one {تمت المقارنة مع مستند مرجعي واحد} two {تمت المقارنة مع مستندين مرجعيين} few {تمت المقارنة مع # مستندات مرجعية} many {تمت المقارنة مع # مستندًا مرجعيًا} other {تمت المقارنة مع # مستند مرجعي}}",
-      "decidedCount": "{decided, number}/{total, number} تم البت فيها",
+      "decidedCount": "{count, number} مقرَّرة",
       "decision": "القرار",
       "decisionFailed": "تعذر تسجيل قرارك",
       "decisions": {
@@ -2337,20 +2355,89 @@
       "description": "اختر دليل مراجعة مُعدًا أو مستندات مرجعية أو كليهما.",
       "dismiss": "استبعاد",
       "documentChanged": "تغيّر هذا المستند بعد هذه المراجعة.",
+      "export": {
+        "counterparty": "إرسال إلى الطرف المقابل",
+        "counterpartyFailed": "تعذّر تصدير المستند",
+        "counterpartyHint": "المستند مع تغييراتك المتعقَّبة",
+        "counterpartyUnavailable": "افتح المستند لتصديره",
+        "csv": "CSV",
+        "docx": "مستند Word ‏(.docx)",
+        "exporting": "جارٍ التصدير",
+        "internal": "مذكرة داخلية",
+        "internalHint": "النتائج والمبررات والمراجع",
+        "xlsx": "جدول بيانات Excel ‏(.xlsx)"
+      },
       "failed": "فشلت مراجعة المستند",
+      "filterCoverage": "التغطية",
+      "filterDeviations": "الانحرافات",
+      "flag": "تمييز",
+      "flaggedPositions": "{total, plural, zero {لا مواقف مُعلَّمة} one {{flagged, number} من أصل موقف واحد مُعلَّم} two {{flagged, number} من أصل موقفين مُعلَّمين} few {{flagged, number} من أصل # مواقف مُعلَّمة} many {{flagged, number} من أصل # موقفًا مُعلَّمًا} other {{flagged, number} من أصل # موقف مُعلَّم}}",
+      "fromChat": "من الدردشة",
       "fromThisMatter": "من هذا الملف القانوني",
+      "history": {
+        "backToLatest": "العودة إلى الأحدث",
+        "decided": "{decided, number} من {total, number} مقرَّر",
+        "references": "{count, plural, zero {لا مراجع} one {مرجع واحد} two {مرجعان} few {# مراجع} many {# مرجعًا} other {# مرجع}}"
+      },
+      "impact": {
+        "favourable": "مؤاتية",
+        "neutral": "Neutral",
+        "notJudged": "لم تُقيَّم",
+        "unfavourable": "غير مؤاتية"
+      },
+      "impactForSide": {
+        "favourable": "أفضل بالنسبة إلى {role}",
+        "neutral": "لا تأثير بالنسبة إلى {role}",
+        "unfavourable": "أسوأ بالنسبة إلى {role}"
+      },
       "insertFailed": "تعذّر إدراج الصياغة المقترحة",
       "insertSuggestion": "إدراج الصياغة المقترحة",
       "insufficientEvidence": "لا توفر المستندات المقدمة أدلة كافية بشأن هذا الموضوع.",
+      "marginNotes": {
+        "above": "{count, number} أعلى",
+        "below": "{count, number} أسفل",
+        "documentNotRead": "افتح المستند في اللوحة الرئيسية لتثبيت النتائج بجانبه.",
+        "label": "النتائج إلى جانب البنود التي تتعلق بها",
+        "unanchored": "غير مرتبط ببند"
+      },
       "newTopic": "موضوع مراجعة جديد",
+      "noChangeNeeded": "لا حاجة إلى تغيير",
+      "noEditor": "افتح المستند لقبول التغييرات",
       "noMaterialDifferences": "لم تُعثر على فروق جوهرية",
+      "noPassage": "لا يوجد مقتطف",
       "noPlaybooksMatch": "لا توجد أدلة مراجعة مطابقة.",
       "noReferencesFound": "لا توجد مستندات DOCX مطابقة.",
+      "notCompared": "لم تتم المقارنة",
+      "notComparedCount": "لم تتم المقارنة: {count, number}",
+      "noteAdded": "أُضيفت ملاحظة للطرف المقابل",
+      "openPlaybooks": "فتح أدلة المراجعة",
+      "pane": {
+        "document": "اللوحة: النتائج إلى جانب المستند",
+        "margin": "الهامش: النتائج إلى جانب بنودها",
+        "review": "الرئيسية: النتائج في اللوحة العريضة"
+      },
+      "passageUnavailable": "نص المرجع غير متاح",
+      "passagesCount": "{count, plural, zero {لا مقاطع} one {مقطع واحد} two {مقطعان} few {# مقاطع} many {# مقطعًا} other {# مقطع}}",
+      "pendingCount": "{count, plural, zero {لا نتائج معلّقة} one {نتيجة معلّقة واحدة} two {نتيجتان معلّقتان} few {# نتائج معلّقة} many {# نتيجةً معلَّقةً} other {# نتيجة معلّقة}}",
+      "perspective": {
+        "neutral": "غير محدد",
+        "other": "أخرى…",
+        "otherPlaceholder": "الصفة كما وردت في المستند",
+        "title": "نمثّل"
+      },
       "playbookDeleted": "لم يعد دليل المراجعة هذا موجودًا؛ تُحفظ المراجعة كسجل.",
       "playbookFindings": "نتائج دليل المراجعة",
       "playbookOutdated": "يوجد إصدار معتمد أحدث من دليل المراجعة هذا.",
       "playbookSection": "دليل المراجعة",
       "playbookTopic": "مقترح من دليل المراجعة",
+      "presence": {
+        "absent": "لا",
+        "present": "نعم"
+      },
+      "progressPositions": "{total, plural, zero {لا مواقف} one {{completed, number} من أصل موقف واحد} two {{completed, number} من أصل موقفين} few {{completed, number} من أصل # مواقف} many {{completed, number} من أصل # موقفًا} other {{completed, number} من أصل # موقف}}",
+      "proposing": "جارٍ اقتراح المواقف… {count, number}",
+      "readOnlyRun": "تقرَّر في هذه المراجعة",
+      "recommendation": "التوصية:",
       "referenceDocument": "مستند مرجعي",
       "referenceFindings": "مقارنة المراجع",
       "referenceLimitReached": "تم بلوغ حد المراجع",
@@ -2363,21 +2450,47 @@
       "reopen": "إعادة فتح",
       "results": "نتائج المراجعة",
       "reviewAgain": "إجراء مراجعة أخرى",
+      "reviewPositionsFirst": "مراجعة المواقف أولًا",
       "reviewedAgainstCombined": "{count, plural, zero {تمت المراجعة وفق {name} من دون مستندات مرجعية} one {تمت المراجعة وفق {name} ومستند مرجعي واحد} two {تمت المراجعة وفق {name} ومستندين مرجعيين} few {تمت المراجعة وفق {name} و# مستندات مرجعية} many {تمت المراجعة وفق {name} و# مستندًا مرجعيًا} other {تمت المراجعة وفق {name} و# مستند مرجعي}}",
       "reviewing": "المراجعة قيد التنفيذ…",
       "reviewingHint": "قد يستغرق ذلك بضع دقائق للمستندات الكبيرة.",
       "run": "بدء المراجعة",
+      "runStatus": {
+        "queued": "قيد الانتظار"
+      },
+      "saveAsPlaybook": "حفظ كدليل مراجعة",
+      "saveAsPlaybookFailed": "تعذّر حفظ هذه المراجعة كدليل مراجعة",
+      "savedAsPlaybook": "تم الحفظ كدليل مراجعة",
       "scoreTopics": "مراجعة هذه الموضوعات",
       "searchPlaybooks": "البحث في أدلة المراجعة",
+      "showInDocument": "إظهار في المستند",
       "sizeConfirmStart": "بدء المراجعة",
       "sizeConfirmTitle": "مراجعة كبيرة",
+      "skipReason": {
+        "dealSpecificValue": "قيمة خاصة بهذه الصفقة",
+        "lowerWeight": "أهمية تجارية أقل",
+        "structural": "اختلاف هيكلي"
+      },
+      "standardColumn": "المعيار",
+      "standardColumnFrom": "المعيار ({name})",
+      "suggestionSkipped": "لم يعد يطابق المستند",
+      "suggestionStaged": "أُدرِج كتغيير متعقَّب في المستند",
+      "summary": {
+        "forParty": "لصالح {role}",
+        "noSide": "بلا طرف",
+        "proposedFromReferences": "مواقف مقترحة من المراجع"
+      },
+      "targetAsReference": "لا يمكن أن يكون المستند قيد المراجعة مرجعًا لنفسه.",
+      "targetColumn": "هذا المستند",
       "targetDocument": "المستند المستهدف",
       "title": "مراجعة المستند",
       "topicContext": "سياق إضافي",
       "topicContextPlaceholder": "ما الذي ينبغي أن تراعيه المراجعة في هذا الموضوع؟",
       "topicName": "اسم الموضوع",
       "topicsDescription": "أكّد الموضوعات المقترحة أو أضف موضوعاتك أو سياقًا إضافيًا قبل التقييم.",
-      "topicsTitle": "ما الذي ينبغي أن تغطيه هذه المراجعة؟"
+      "topicsTitle": "ما الذي ينبغي أن تغطيه هذه المراجعة؟",
+      "why": "لماذا",
+      "whyItMatters": "لماذا يهم:"
     },
     "showPane": "إظهار اللوحة",
     "swapViews": "تبديل العرض الرئيسي واللوحة الجانبية",
@@ -2515,6 +2628,7 @@
       "addOption": "إضافة خيار",
       "addPosition": "إضافة موقف",
       "addRule": "القاعدة",
+      "adoptAsIdeal": "اعتماد كصياغة مثالية",
       "advanced": "تغيير طريقة العمل",
       "all": "جميع أدلة المراجعة",
       "approval": {
@@ -2548,10 +2662,12 @@
       "convertToExtractDescription": "سيؤدي هذا إلى إزالة سلّم المستويات والتقييم لهذا الموقف. لا يمكن التراجع عن هذا الإجراء.",
       "convertToExtractTitle": "تحويل إلى استخراج فقط؟",
       "convertToGraded": "إضافة قواعد للتقييم",
+      "convertToRules": "التحويل إلى قواعد",
       "createPlaybook": "دليل مراجعة جديد",
       "created": "تم إنشاء دليل المراجعة",
       "customizeAnswer": "تغيير الإجابة المستخرجة",
       "customizeAnswerHint": "تعديل السؤال أو تنسيق الإجابة.",
+      "decisionLine": "{runs, plural, zero {مقبول {accepted, number} · مستبعد {dismissed, number} · عبر لا مراجعات} one {مقبول {accepted, number} · مستبعد {dismissed, number} · عبر مراجعة واحدة} two {مقبول {accepted, number} · مستبعد {dismissed, number} · عبر مراجعتين} few {مقبول {accepted, number} · مستبعد {dismissed, number} · عبر # مراجعات} many {مقبول {accepted, number} · مستبعد {dismissed, number} · عبر # مراجعةً} other {مقبول {accepted, number} · مستبعد {dismissed, number} · عبر # مراجعة}}",
       "deleteFailed": "فشل حذف دليل المراجعة",
       "deletePlaybook": "حذف دليل المراجعة",
       "deletePosition": "حذف الموقف",
@@ -2607,6 +2723,7 @@
         "title": "التفاوض"
       },
       "noPositions": "لا توجد مواقف بعد. أضِف الأول.",
+      "noSettledPosition": "لا يوجد موقف مستقر",
       "optionPlaceholder": "قيمة الخيار",
       "optionsLabel": "الخيارات",
       "outline": "الهيكل",
@@ -2615,6 +2732,7 @@
       "recent": "المستخدمة مؤخراً",
       "recommended": "بدايات موصى بها",
       "redLinePlaceholder": "صياغة غير مقبولة على الإطلاق",
+      "referenceStandard": "من المرجع",
       "removeCheck": "إزالة الفحص",
       "removeIdeal": "إزالة الصياغة المثالية",
       "reorderPosition": "إعادة ترتيب الموقف",
@@ -2641,20 +2759,6 @@
         "viewClause": "عرض البند",
         "violatedRedLine": "الخط الأحمر المخالف:"
       },
-      "risk": {
-        "complianceLabel": "الامتثال",
-        "flaggedCount": "المواقف المحددة: {flagged} من {total}",
-        "notApplicableExcluded": "({count} غير قابلة للتطبيق، مستبعدة)",
-        "riskLevel": {
-          "critical": "حرج",
-          "high": "مرتفع",
-          "low": "منخفض",
-          "medium": "متوسط",
-          "none": "لا مخاطر"
-        },
-        "summaryTitle": "ملخص المخاطر",
-        "topIssuesTitle": "أهم المسائل"
-      },
       "ruleNumber": "القاعدة {index}",
       "rulePlaceholder": "مثال: ألا تتجاوز مهلة السداد 30 يومًا",
       "saveFailed": "فشل حفظ دليل المراجعة",
@@ -2674,6 +2778,12 @@
       },
       "switchToAuto": "إنشاء السؤال والتنسيق تلقائيًا",
       "switchToManual": "تخصيص السؤال وتنسيق الإجابة",
+      "termKind": {
+        "enumeration": "تعداد",
+        "language": "Language",
+        "parameter": "معلمة",
+        "presence": "الوجود"
+      },
       "tier": {
         "acceptable": "مقبول",
         "fallback": "بديل",
@@ -2684,6 +2794,7 @@
       "updated": "تم تحديث دليل المراجعة",
       "updatedAt": "آخر تحديث: {date}",
       "verdict": {
+        "additional": "إضافي",
         "compliant": "مطابِق",
         "deviation": "انحراف",
         "fallback": "بديل",
@@ -4523,6 +4634,10 @@
           "trigger": "بدأه",
           "webhook": "خطاف ويب"
         },
+        "documentReview": {
+          "decided": "بتّ في {count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتين} few {# نتائج} many {# نتيجة} other {# نتيجة}} في مراجعة المستند",
+          "started": "بدأ مراجعة المستند"
+        },
         "empty": "لا يوجد نشاط في هذا الملف القانوني بعد.",
         "filterLabel": "تصفية النشاط",
         "filters": {
@@ -4562,12 +4677,15 @@
           "automation": "الأتمتة",
           "court": "سجل المحكمة",
           "document": "مستند",
+          "documentReview": "مراجعة المستند",
           "folder": "مجلد",
           "link": "رابط",
           "matter": "الملف القانوني",
           "message": "رسالة",
+          "playbook": "قواعد دليل المراجعة",
           "task": "عنصر جدول أعمال",
-          "team": "فريق الملف القانوني"
+          "team": "فريق الملف القانوني",
+          "translation": "ترجمة"
         },
         "title": "النشاط",
         "views": {

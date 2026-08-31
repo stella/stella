@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm";
+
 import type {
   FolioAIEditApplyMode,
   FolioAIEditSeverity,
@@ -15,6 +17,7 @@ import {
   wsDataScopePolicies,
   timestamptz,
 } from "./common";
+import { documentReviewFindings } from "./document-reviews";
 import { entities } from "./entities";
 
 /**
@@ -95,12 +98,21 @@ export const docxSuggestions = p.pgTable(
       (): AnyPgColumn => chatThreads.id,
       { onDelete: "set null" },
     ),
+    // The review finding this suggestion carries the fix for, when a document
+    // review staged it. Nullable + set-null for the same reason as the thread
+    // link: an applied tracked change outlives the finding that proposed it.
+    // The named FK is declared below, because drizzle's derived name for this
+    // column pair exceeds PostgreSQL's 63-character identifier limit.
+    originReviewFindingId: safeUuid<"documentReviewFinding">(
+      "origin_review_finding_id",
+    ),
     /**
      * Matters whose content contributed to this suggestion, carried over from
-     * the originating thread's own data scope and narrowed to what the author
-     * could read at the time. Empty means nothing outside this matter fed it.
-     * Non-empty values gate RLS reads the way `chat_threads.data_workspace_ids`
-     * does, so model text restating another matter cannot outlive access to it.
+     * the originating thread's own data scope (or, for a review-staged fix,
+     * the run's reference matters) and narrowed to what the author could read
+     * at the time. Empty means nothing outside this matter fed it. Non-empty
+     * values gate RLS reads the way `chat_threads.data_workspace_ids` does, so
+     * model text restating another matter cannot outlive access to it.
      */
     sourceDataWorkspaceIds: safeWorkspaceId("source_data_workspace_ids")
       .array()
@@ -148,6 +160,21 @@ export const docxSuggestions = p.pgTable(
         foreignColumns: [entities.id, entities.workspaceId],
       })
       .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "docx_suggestions_origin_review_finding_fk",
+        columns: [table.originReviewFindingId],
+        foreignColumns: [documentReviewFindings.id],
+      })
+      .onDelete("set null"),
+    // One suggestion per finding. This is what makes re-finalizing a run
+    // converge: the staging insert is a plain `ON CONFLICT DO NOTHING` against
+    // this key rather than a read-then-insert that a concurrent replay could
+    // interleave with.
+    p
+      .uniqueIndex("docx_suggestions_origin_review_finding_uidx")
+      .on(table.originReviewFindingId)
+      .where(sql`${table.originReviewFindingId} IS NOT NULL`),
     ...wsDataScopePolicies("source_data_workspace_ids"),
   ],
 );

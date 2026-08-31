@@ -9,7 +9,7 @@ import type {
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 
 const positionsWithIssue = (issue: string): PlaybookPositions => ({
-  version: 2,
+  version: 3,
   items: [
     {
       mode: "extract",

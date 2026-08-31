@@ -12,7 +12,8 @@ import type {
   PlaybookPositions,
   Position,
 } from "@/api/lib/workflow/playbook-positions";
-import type { GradedPosition } from "@/api/lib/workflow/position-runtime";
+import { isTierStandard } from "@/api/lib/workflow/position-runtime";
+import type { TierStandardPosition } from "@/api/lib/workflow/position-runtime";
 
 // Auto-ASK derivation (save-time). A graded position with `ask.mode === "auto"`
 // derives its extraction question + content type from the issue and tier rules
@@ -51,23 +52,24 @@ const contentForType = (
 
 // The canonical grading inputs the derived question depends on, in stored order.
 // Ideal language is deliberately excluded: it drives FIX, not what to extract.
-const canonicalRulesInput = (position: GradedPosition) => ({
-  issue: position.issue,
-  acceptableRuleTexts: position.tiers.acceptable.rules.map((rule) => rule.text),
-  fallbackTexts: position.tiers.fallback.entries.map((entry) => entry.text),
-  notAcceptableRuleTexts: position.tiers.notAcceptable.rules.map(
-    (rule) => rule.text,
-  ),
-  check: position.check ?? null,
-});
+const canonicalRulesInput = (position: TierStandardPosition) => {
+  const { tiers } = position.standard;
+  return {
+    issue: position.issue,
+    acceptableRuleTexts: tiers.acceptable.rules.map((rule) => rule.text),
+    fallbackTexts: tiers.fallback.entries.map((entry) => entry.text),
+    notAcceptableRuleTexts: tiers.notAcceptable.rules.map((rule) => rule.text),
+    check: position.check ?? null,
+  };
+};
 
-export const computeRulesHash = (position: GradedPosition): string =>
+export const computeRulesHash = (position: TierStandardPosition): string =>
   new Bun.CryptoHasher("sha256")
     .update(JSON.stringify(canonicalRulesInput(position)))
     .digest("hex");
 
-const buildDeriveAskUserMessage = (position: GradedPosition): string => {
-  const { tiers } = position;
+const buildDeriveAskUserMessage = (position: TierStandardPosition): string => {
+  const { tiers } = position.standard;
   const lines = [`Issue: ${position.issue}`];
   if (tiers.acceptable.rules.length > 0) {
     lines.push("", "Acceptable rules:");
@@ -153,7 +155,7 @@ export type DeriveAutoAsksDeps = {
 // A graded position whose ask is `auto` and needs (re)derivation: no stored
 // `derived`, or its `rulesHash` no longer matches the current grading inputs.
 const needsDerivation = (
-  position: GradedPosition,
+  position: TierStandardPosition,
   rulesHash: string,
 ): boolean => {
   if (position.ask.mode !== "auto") {
@@ -163,7 +165,7 @@ const needsDerivation = (
 };
 
 const deriveOne = async (
-  position: GradedPosition,
+  position: TierStandardPosition,
   rulesHash: string,
   deps: DeriveAutoAsksDeps,
   generate: DeriveAskGenerate,
@@ -212,10 +214,15 @@ export const deriveAutoAsks = async (
   deps: DeriveAutoAsksDeps,
 ): Promise<PlaybookPositions> => {
   const generate = deps.generate ?? defaultDeriveAskGenerate;
-  const pending: { index: number; position: GradedPosition; hash: string }[] =
-    [];
+  const pending: {
+    index: number;
+    position: TierStandardPosition;
+    hash: string;
+  }[] = [];
   for (const [index, position] of positions.items.entries()) {
-    if (position.mode !== "graded") {
+    // A reference standard has no rules to derive an ASK from; its grading
+    // reads the target document against the pinned passages instead.
+    if (!isTierStandard(position)) {
       continue;
     }
     const hash = computeRulesHash(position);
@@ -247,5 +254,5 @@ export const deriveAutoAsks = async (
     }
   }
 
-  return { version: 2, items };
+  return { version: 3, items };
 };

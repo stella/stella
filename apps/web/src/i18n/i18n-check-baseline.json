@@ -87,6 +87,7 @@
     "chat.suggestionStatus.rejected",
     "chat.tool.delete_clause",
     "chat.tool.delete_matter",
+    "chat.tool.docxReplaceSummary",
     "chat.tool.run_playbook",
     "chat.toolCall.field",
     "clauses.body",
@@ -105,10 +106,7 @@
     "docxReview.severityHigh",
     "docxReview.severityLow",
     "docxReview.severityMedium",
-    "docxReview.statusAccepted",
-    "docxReview.statusRejected",
-    "docxReview.statusSkipped",
-    "docxReview.wordShortcutPlaceholder",
+    "docxReview.summary.replaceInBlock",
     "errors.failedToDeleteTemplate",
     "errors.failedToSaveTemplate",
     "fileDetail.current",
@@ -167,9 +165,6 @@
     "knowledge.playbooks.review.fixAccepted",
     "knowledge.playbooks.review.playbookLabel",
     "knowledge.playbooks.review.reject",
-    "knowledge.playbooks.risk.riskLevel.high",
-    "knowledge.playbooks.risk.riskLevel.low",
-    "knowledge.playbooks.risk.riskLevel.medium",
     "knowledge.playbooks.severity.high",
     "knowledge.playbooks.severity.low",
     "knowledge.playbooks.severity.medium",
@@ -218,7 +213,6 @@
     "selfhost.dismissUpdate",
     "settings.account.title",
     "settings.account.twoFactor.enabledStatus",
-    "settings.account.wordEditShortcutPlaceholder",
     "settings.organization.ai",
     "settings.organization.anonymization.deleteAction",
     "settings.organization.anonymization.labelPickerAriaLabel",
@@ -618,6 +612,15 @@
     "inspector.metadata.documentProperties.keys.slides": [
       "pt-BR"
     ],
+    "inspector.review.export.docx": [
+      "cs"
+    ],
+    "inspector.review.export.xlsx": [
+      "cs"
+    ],
+    "inspector.review.passagesCount": [
+      "fr"
+    ],
     "inspector.review.playbookSection": [
       "cs",
       "es",
@@ -626,6 +629,12 @@
       "pl",
       "pt-BR",
       "sk"
+    ],
+    "inspector.review.standardColumn": [
+      "cs"
+    ],
+    "inspector.review.standardColumnFrom": [
+      "cs"
     ],
     "knowledge.agentSkills.formDescription": [
       "fr"

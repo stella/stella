@@ -181,12 +181,13 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 44,
+    "count": 45,
     "files": {
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/status.ts": 8,
       "apps/api/src/handlers/chat/delete-thread.ts": 2,
+      "apps/api/src/handlers/document-reviews/propose-positions-stream.ts": 1,
       "apps/api/src/handlers/entities/copy-to-workspace.ts": 1,
       "apps/api/src/handlers/entities/copy-utils.ts": 4,
       "apps/api/src/handlers/legislation/search-index.ts": 1,
@@ -253,7 +254,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 743,
+    "count": 745,
     "files": {
       "apps/api/scripts/ai-provider-canary.ts": 4,
       "apps/api/scripts/backfill-image-thumbnails.ts": 9,
@@ -367,7 +368,7 @@
       "apps/api/src/lib/document-processing-handoff.ts": 1,
       "apps/api/src/lib/document-processing-queue.ts": 1,
       "apps/api/src/lib/document-reference.ts": 2,
-      "apps/api/src/lib/document-review/review-grade.ts": 1,
+      "apps/api/src/lib/document-review/review-grade.ts": 3,
       "apps/api/src/lib/docx-stamp.ts": 2,
       "apps/api/src/lib/docx/adapt-ai-fields.ts": 1,
       "apps/api/src/lib/docx/discover-clause-slots.ts": 1,
@@ -461,8 +462,7 @@
       "apps/web/src/components/ai-config-providers-editor.tsx": 2,
       "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 1,
       "apps/web/src/components/ai-suggestions/host.tsx": 1,
-      "apps/web/src/components/ai-suggestions/review-panel.impl.tsx": 1,
-      "apps/web/src/components/autocomplete/use-autocomplete-stream.ts": 1,
+      "apps/web/src/components/ai-suggestions/review-redline-preview.tsx": 1,
       "apps/web/src/components/chat-editor-provider.tsx": 7,
       "apps/web/src/components/chat-mention-list.tsx": 2,
       "apps/web/src/components/chat/chat-anon-decorations-extension.ts": 1,
@@ -512,6 +512,7 @@
       "apps/web/src/lib/pdf/pdfjs-loader.ts": 1,
       "apps/web/src/lib/pdf/uint8array-to-hex-polyfill.logic.ts": 2,
       "apps/web/src/lib/slot.tsx": 1,
+      "apps/web/src/lib/sse-events.ts": 1,
       "apps/web/src/lib/workspaces/queries/docx-suggestions.ts": 1,
       "apps/web/src/lib/workspaces/queries/entities.ts": 3,
       "apps/web/src/lib/workspaces/queries/legal-lists.ts": 1,
@@ -626,9 +627,9 @@
     "files": {}
   },
   "capability-domain-action-verbs": {
-    "count": 163,
+    "count": 164,
     "files": {
-      "apps/api/scripts/lib/capability-catalog.ts": 163
+      "apps/api/scripts/lib/capability-catalog.ts": 164
     }
   },
   "cli-shadowed-namespaces": {

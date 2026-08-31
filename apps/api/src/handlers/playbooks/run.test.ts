@@ -31,7 +31,7 @@ const opened = {
     provenance: "draft",
     definitionSnapshot: {
       name: "Vendor agreement review",
-      positions: { version: 2, items: [] },
+      positions: { version: 3, items: [] },
     },
   },
   materializedPropertyIds: [propertyId],
@@ -55,7 +55,7 @@ const runColumnsProjection = async () => {
         findFirst: async () => ({
           id: playbookId,
           name: "Vendor agreement review",
-          positions: { version: 2, items: [] },
+          positions: { version: 3, items: [] },
           scope: null,
         }),
       },

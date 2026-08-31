@@ -26,7 +26,10 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
-import { useReviewStore } from "@/components/ai-suggestions/review-store";
+import {
+  REVIEW_SUGGESTION_ORIGIN,
+  useReviewStore,
+} from "@/components/ai-suggestions/review-store";
 import { DocxBrowserEditor } from "@/components/docx/docx-browser-editor";
 import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
 import { getDocxEditBlockReason } from "@/components/docx/docx-browser-editor.logic";
@@ -54,6 +57,7 @@ import {
   MetadataPanelSkeleton,
   TabFacetBar,
 } from "@/components/inspector/file-facets";
+import type { Facet } from "@/components/inspector/file-facets";
 import {
   FACETS,
   FULLVIEW_FACETS,
@@ -71,7 +75,6 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { PlaybookFacet } from "@/components/inspector/playbook-facet";
-import { SuggestionsFacet } from "@/components/inspector/suggestions-facet";
 import { VersionsFacet } from "@/components/inspector/versions-facet";
 import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
 import {
@@ -136,6 +139,10 @@ type FileTabPanelProps = {
   matterOrigin: MatterOrigin | null;
   minimized: boolean;
   mountedPdfIds: ReadonlySet<string>;
+  /** The document route's file field while its main pane is showing the
+   *  review; `null` in the default arrangement. That tab reads the document
+   *  itself, so it keeps its preview instead of the metadata persona. */
+  documentReviewPaneFieldId: string | null;
   pdfRouteJustification: string | null;
   peekPdfViewId: string;
   ribbonLabelContextMenuOpenAt: (event: MouseEvent<HTMLElement>) => void;
@@ -150,6 +157,29 @@ type FileTabPanelProps = {
   setScaleOffsets: Dispatch<SetStateAction<Map<string, number>>>;
   startRename: (tab: FileTab) => void;
   tab: FileTab;
+};
+
+/**
+ * Glow the chat input under the file viewer when a reviewer opens the
+ * document-review facet on a document the chat has already proposed changes
+ * to, so they see the "From chat" group came from the composer right below.
+ *
+ * Gated on there being such a proposal: the facet is also the playbook-review
+ * launcher, and pulsing the composer every time someone opens it would say
+ * nothing.
+ */
+const pulseChatInputForReview = (facet: Facet, entityId: string): void => {
+  if (facet !== "playbook") {
+    return;
+  }
+  const store = useReviewStore.getState();
+  // No entry at all means the chat has proposed nothing for this document.
+  const hasChatProposal = store.sessions[entityId]?.some(
+    (item) => item.origin === REVIEW_SUGGESTION_ORIGIN.chat,
+  );
+  if (hasChatProposal === true) {
+    store.pulseChatInput(entityId);
+  }
 };
 
 /** Strip the file extension (e.g. ".pdf", ".docx") from a filename. */
@@ -419,6 +449,7 @@ export const FileTabPanel = ({
   matterOrigin,
   minimized,
   mountedPdfIds,
+  documentReviewPaneFieldId,
   pdfRouteJustification,
   peekPdfViewId,
   ribbonLabelContextMenuOpenAt,
@@ -643,6 +674,12 @@ export const FileTabPanel = ({
     isEditingNativeDocx &&
     env.VITE_FEATURE_FOLIO_COLLAB &&
     env.VITE_COLLAB_URL !== undefined;
+  // This tab is the route's document while the route's own pane is showing the
+  // review: the inspector is where the document is read, so the fullscreen
+  // persona keeps its preview.
+  const readsDocumentInInspector = documentReviewPaneFieldId === tab.id;
+  const fullViewFacet =
+    tab.facet ?? (readsDocumentInInspector ? "preview" : "metadata");
   const desktopOpenButton =
     desktopEditTarget !== null ? (
       <DesktopOpenButton
@@ -682,193 +719,6 @@ export const FileTabPanel = ({
       side="bottom"
     />
   );
-
-  // "Expanded" persona: the route already renders the file in
-  // its main content (full folio), so the inspector tab drops
-  // the file chrome (zoom, file viewer) and
-  // shows itself as a metadata panel — same tab state, different
-  // rendering.
-  if (isMetadataLaneExpanded) {
-    return (
-      <div
-        className={cn(
-          "bg-background flex flex-1 flex-col overflow-hidden",
-          !isActive && "hidden",
-        )}
-        key={renderId}
-      >
-        <FullViewPreviewGuard
-          facet={tab.facet}
-          flashMinimize={flashMinimizeButton}
-          setFileFacet={setFileFacet}
-          tabId={tab.id}
-        />
-        <InspectorTabHeader
-          actions={
-            <>
-              {downloadButton}
-              {desktopOpenButton}
-              <Tooltip
-                content={t("workspaces.pdf.backToPeek")}
-                render={
-                  <Button
-                    className={cn(
-                      "transition-[color,background-color,box-shadow]",
-                      flashingMinimizeTabId === tab.id &&
-                        "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
-                    )}
-                    onClick={() => {
-                      handleMinimizeFromFullView(tab);
-                    }}
-                    size="icon-xs"
-                    variant="ghost"
-                  >
-                    <Minimize2Icon className="size-3.5" />
-                  </Button>
-                }
-              />
-            </>
-          }
-          label={stripExtension(tab.label)}
-          matter={
-            matterOrigin ? (
-              <MatterOriginLink
-                color={matterOrigin.color}
-                id={matterOrigin.id}
-                name={matterOrigin.name}
-                onClick={matterOrigin.onClick}
-              />
-            ) : undefined
-          }
-          onClose={() => handleCloseTab(tab.id)}
-          onLabelContextMenu={ribbonLabelContextMenuOpenAt}
-          onStartRename={() => startRename(tab)}
-          rename={{
-            active: editingTabId === tab.id,
-            value: editValue,
-            onChange: setEditValue,
-            onCommit: () => commitRename(tab),
-            onCancel: () => setEditingTabId(null),
-          }}
-        />
-        <TabFacetBar
-          // Preview is intentionally absent in fullscreen — the
-          // main view IS the preview. If the user enters Full
-          // view with Preview active in sidepeek, the
-          // FullViewPreviewGuard above swaps to Metadata and
-          // pulses the Minimize button so they know how to get
-          // a side-by-side view back.
-          baseFacets={FULLVIEW_FACETS}
-          entityId={tab.entityId}
-          facet={tab.facet ?? "metadata"}
-          fieldId={tab.id}
-          fileName={tab.fileName}
-          mimeType={tab.mimeType}
-          onChange={(next) => {
-            setFileFacet(tab.id, next);
-            if (next === "suggestions") {
-              // Glow the chat input under the file viewer so
-              // the user sees the suggestions they're reading
-              // came from the chat right below — closes the
-              // loop between panel and producer.
-              useReviewStore.getState().pulseChatInput(tab.entityId);
-            }
-          }}
-          pulseSeq={tab.facetPulseSeq}
-          workspaceId={tab.workspaceId}
-        />
-        <div className="flex min-h-0 flex-1 flex-col">
-          {(tab.facet ?? "metadata") === "metadata" && (
-            <Suspense fallback={<MetadataPanelSkeleton />}>
-              <EntityMetadataPanel
-                activeJustificationFieldId={pdfRouteJustification}
-                currentFilePropertyId={filePropertyId ?? null}
-                entityId={tab.entityId}
-                fileFieldId={tab.id}
-                onAiFieldClick={({ fieldId, propertyId }) => {
-                  // Keep the inspector tab in sync so
-                  // peek-back lands on the same selection.
-                  openFile({
-                    ...tab,
-                    justificationFieldId: fieldId,
-                    propertyId,
-                  });
-                  detached(
-                    navigate({
-                      to: "/workspaces/$workspaceId/$viewId/document",
-                      params: {
-                        workspaceId: tab.workspaceId,
-                        viewId: peekPdfViewId,
-                      },
-                      replace: true,
-                      search: (prev) => ({
-                        ...prev,
-                        entity: tab.entityId,
-                        field: tab.id,
-                        justification: fieldId,
-                        justificationPage: 1,
-                      }),
-                    }),
-                    "file-tab-panel.navigate",
-                  );
-                }}
-                workspaceId={tab.workspaceId}
-              />
-            </Suspense>
-          )}
-          {tab.facet === "attachments" && isEmailDisplay && (
-            <EmailAttachmentsFacet
-              chatMode={emailChatMode}
-              entityId={tab.entityId}
-              fieldId={tab.id}
-              fileName={tab.fileName}
-              onResetZoom={resetEmailAttachmentZoom}
-              onSelectedIdChange={setSelectedEmailAttachmentId}
-              onZoomIn={() => zoomEmailAttachment("in")}
-              onZoomOut={() => zoomEmailAttachment("out")}
-              overlayActivation={emailAttachmentOverlayActivation}
-              scaleOffset={emailAttachmentScaleOffset}
-              selectedId={selectedEmailAttachmentId}
-              workspaceId={tab.workspaceId}
-            />
-          )}
-          {tab.facet === "versions" && (
-            <VersionsFacet
-              currentFieldId={tab.id}
-              entityId={tab.entityId}
-              workspaceId={tab.workspaceId}
-            />
-          )}
-          {tab.facet === "suggestions" && (
-            <SuggestionsFacet
-              entityId={tab.entityId}
-              fileFieldId={tab.id}
-              workspaceId={tab.workspaceId}
-            />
-          )}
-          {tab.facet === "playbook" && (
-            <PlaybookFacet
-              entityId={tab.entityId}
-              fileFieldId={tab.id}
-              workspaceId={tab.workspaceId}
-            />
-          )}
-          {tab.facet === "anonymization" && (
-            <AnonymizationFacet
-              activeFieldId={tab.id}
-              entityId={tab.entityId}
-              isVisible={isActive}
-              workspaceId={tab.workspaceId}
-            />
-          )}
-          {/* No preview branch in fullscreen: the main view
-           *  IS the preview. FullViewPreviewGuard above swaps
-           *  a stale "preview" facet to "metadata" on entry
-           *  and pulses the Minimize button. */}
-        </div>
-      </div>
-    );
-  }
 
   const promptDocxUnlock = () => {
     const compatibility = docxCompatibilityByTab.get(tab.id);
@@ -1279,29 +1129,27 @@ export const FileTabPanel = ({
 
   const viewerPane = (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      {tab.justificationFieldId !== undefined &&
-        !isEmailDisplay &&
-        !isMarkdownDisplay && (
-          <Suspense
-            fallback={
-              <div
-                className={cn(
-                  "text-muted-foreground flex items-center border-b px-3 text-xs italic",
-                  TOOLBAR_ROW_HEIGHT,
-                )}
-              >
-                {t("common.loading")}...
-              </div>
-            }
-          >
-            <DocumentAiSourceBar
-              activeTab={tab}
-              fieldId={tab.justificationFieldId}
-              isActiveTab={isActive}
-              workspaceId={tab.workspaceId}
-            />
-          </Suspense>
-        )}
+      {tab.justificationFieldId && !isEmailDisplay && !isMarkdownDisplay && (
+        <Suspense
+          fallback={
+            <div
+              className={cn(
+                "text-muted-foreground flex items-center border-b px-3 text-xs italic",
+                TOOLBAR_ROW_HEIGHT,
+              )}
+            >
+              {t("common.loading")}...
+            </div>
+          }
+        >
+          <DocumentAiSourceBar
+            activeTab={tab}
+            fieldId={tab.justificationFieldId}
+            isActiveTab={isActive}
+            workspaceId={tab.workspaceId}
+          />
+        </Suspense>
+      )}
       <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
         {fileViewer}
         {previewOverlay}
@@ -1314,6 +1162,192 @@ export const FileTabPanel = ({
       {viewerPane}
     </div>
   );
+
+  // "Expanded" persona: the route already renders the file in
+  // its main content (full folio), so the inspector tab drops
+  // the file chrome (zoom, file viewer) and
+  // shows itself as a metadata panel — same tab state, different
+  // rendering.
+  if (isMetadataLaneExpanded) {
+    return (
+      <div
+        className={cn(
+          "bg-background flex flex-1 flex-col overflow-hidden",
+          !isActive && "hidden",
+        )}
+        key={renderId}
+      >
+        {/* The guard exists because the main view is normally the preview.
+            When the route has handed that pane to the review, it is not, and
+            the preview belongs here. */}
+        {!readsDocumentInInspector && (
+          <FullViewPreviewGuard
+            facet={tab.facet}
+            flashMinimize={flashMinimizeButton}
+            setFileFacet={setFileFacet}
+            tabId={tab.id}
+          />
+        )}
+        <InspectorTabHeader
+          actions={
+            <>
+              {downloadButton}
+              {desktopOpenButton}
+              <Tooltip
+                content={t("workspaces.pdf.backToPeek")}
+                render={
+                  <Button
+                    className={cn(
+                      "transition-[color,background-color,box-shadow]",
+                      flashingMinimizeTabId === tab.id &&
+                        "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
+                    )}
+                    onClick={() => {
+                      handleMinimizeFromFullView(tab);
+                    }}
+                    size="icon-xs"
+                    variant="ghost"
+                  >
+                    <Minimize2Icon className="size-3.5" />
+                  </Button>
+                }
+              />
+            </>
+          }
+          label={stripExtension(tab.label)}
+          matter={
+            matterOrigin ? (
+              <MatterOriginLink
+                color={matterOrigin.color}
+                id={matterOrigin.id}
+                name={matterOrigin.name}
+                onClick={matterOrigin.onClick}
+              />
+            ) : undefined
+          }
+          onClose={() => handleCloseTab(tab.id)}
+          onLabelContextMenu={ribbonLabelContextMenuOpenAt}
+          onStartRename={() => startRename(tab)}
+          rename={{
+            active: editingTabId === tab.id,
+            value: editValue,
+            onChange: setEditValue,
+            onCommit: () => commitRename(tab),
+            onCancel: () => setEditingTabId(null),
+          }}
+        />
+        <TabFacetBar
+          // Preview is intentionally absent in fullscreen — the
+          // main view IS the preview. If the user enters Full
+          // view with Preview active in sidepeek, the
+          // FullViewPreviewGuard above swaps to Metadata and
+          // pulses the Minimize button so they know how to get
+          // a side-by-side view back. The exception is the swapped
+          // arrangement, where this panel is the only place the
+          // document can be read.
+          baseFacets={readsDocumentInInspector ? FACETS : FULLVIEW_FACETS}
+          entityId={tab.entityId}
+          facet={fullViewFacet}
+          fieldId={tab.id}
+          fileName={tab.fileName}
+          mimeType={tab.mimeType}
+          onChange={(next) => {
+            setFileFacet(tab.id, next);
+            pulseChatInputForReview(next, tab.entityId);
+          }}
+          pulseSeq={tab.facetPulseSeq}
+          workspaceId={tab.workspaceId}
+        />
+        <div className="flex min-h-0 flex-1 flex-col">
+          {/* The document itself, when the main pane is showing the review
+              instead. Same viewer the sidepeek persona mounts, so the block
+              scroll a finding requests lands in it unchanged. */}
+          {readsDocumentInInspector && fullViewFacet === "preview" && (
+            <div className="flex min-h-0 min-w-0 flex-1">{viewerContent}</div>
+          )}
+          {fullViewFacet === "metadata" && (
+            <Suspense fallback={<MetadataPanelSkeleton />}>
+              <EntityMetadataPanel
+                activeJustificationFieldId={pdfRouteJustification}
+                currentFilePropertyId={filePropertyId ?? null}
+                entityId={tab.entityId}
+                fileFieldId={tab.id}
+                onAiFieldClick={({ fieldId, propertyId }) => {
+                  // Keep the inspector tab in sync so
+                  // peek-back lands on the same selection.
+                  openFile({
+                    ...tab,
+                    justificationFieldId: fieldId,
+                    propertyId,
+                  });
+                  detached(
+                    navigate({
+                      to: "/workspaces/$workspaceId/$viewId/document",
+                      params: {
+                        workspaceId: tab.workspaceId,
+                        viewId: peekPdfViewId,
+                      },
+                      replace: true,
+                      search: (prev) => ({
+                        ...prev,
+                        entity: tab.entityId,
+                        field: tab.id,
+                        justification: fieldId,
+                        justificationPage: 1,
+                      }),
+                    }),
+                    "file-tab-panel.navigate",
+                  );
+                }}
+                workspaceId={tab.workspaceId}
+              />
+            </Suspense>
+          )}
+          {fullViewFacet === "attachments" && isEmailDisplay && (
+            <EmailAttachmentsFacet
+              chatMode={emailChatMode}
+              entityId={tab.entityId}
+              fieldId={tab.id}
+              fileName={tab.fileName}
+              onResetZoom={resetEmailAttachmentZoom}
+              onSelectedIdChange={setSelectedEmailAttachmentId}
+              onZoomIn={() => zoomEmailAttachment("in")}
+              onZoomOut={() => zoomEmailAttachment("out")}
+              overlayActivation={emailAttachmentOverlayActivation}
+              scaleOffset={emailAttachmentScaleOffset}
+              selectedId={selectedEmailAttachmentId}
+              workspaceId={tab.workspaceId}
+            />
+          )}
+          {fullViewFacet === "versions" && (
+            <VersionsFacet
+              currentFieldId={tab.id}
+              entityId={tab.entityId}
+              workspaceId={tab.workspaceId}
+            />
+          )}
+          {fullViewFacet === "playbook" && (
+            <PlaybookFacet
+              entityId={tab.entityId}
+              fileFieldId={tab.id}
+              workspaceId={tab.workspaceId}
+            />
+          )}
+          {fullViewFacet === "anonymization" && (
+            <AnonymizationFacet
+              activeFieldId={tab.id}
+              entityId={tab.entityId}
+              isVisible={isActive}
+              workspaceId={tab.workspaceId}
+            />
+          )}
+          {/* Without the swap there is no preview branch here: the main
+           *  view IS the preview, and FullViewPreviewGuard above moves a
+           *  stale "preview" facet to "metadata" on entry. */}
+        </div>
+      </div>
+    );
+  }
 
   const sidepeekFacet = tab.facet ?? "preview";
 
@@ -1332,6 +1366,7 @@ export const FileTabPanel = ({
       mimeType={tab.mimeType}
       onChange={(next) => {
         setFileFacet(tab.id, next);
+        pulseChatInputForReview(next, tab.entityId);
       }}
       pulseSeq={tab.facetPulseSeq}
       workspaceId={tab.workspaceId}
@@ -1418,70 +1453,6 @@ export const FileTabPanel = ({
               currentFieldId={tab.id}
               entityId={tab.entityId}
               workspaceId={tab.workspaceId}
-            />
-          )}
-          {sidepeekFacet === "suggestions" && (
-            <SuggestionsFacet
-              entityId={tab.entityId}
-              fileFieldId={tab.id}
-              workspaceId={tab.workspaceId}
-              // Quick fix: sidepeek's DOCX editor unmounts when
-              // the user switches off Preview, so Accept on a
-              // suggestion has no live editor to apply against.
-              // Route to the DOCX main view, where the editor is
-              // mounted by default and the same `<SuggestionsFacet>`
-              // (rendered by the fullscreen branch above) reuses
-              // the registration.
-              // Replace with an in-app approval flow that doesn't need the
-              // full editor mounted.
-              //
-              // Only the *active* tab is allowed to redirect.
-              // Non-active PDF tabs stay mounted (CSS-hidden) so
-              // their facet panels still run effects; without
-              // this gate a background tab whose facet happens
-              // to be "suggestions" would hijack the route to
-              // its own document view. Per Codex review on
-              // PR #80.
-              {...(isActive
-                ? {
-                    onMissingEditor: () => {
-                      // Pre-select the suggestions facet on
-                      // the inspector store so the document
-                      // route's inspector lands directly on
-                      // this panel instead of the default
-                      // Preview.
-                      setFileFacet(tab.id, "suggestions");
-                      // Replace the current history entry
-                      // rather than pushing a new one. This is
-                      // an automatic, user-didn't-click-anything
-                      // redirect: pushing creates a back-button
-                      // trap (Back returns to the previous
-                      // sidepeek state, which immediately
-                      // remounts SuggestionsFacet without an
-                      // editor and pushes again — bouncing).
-                      // With `replace` the same Back gesture
-                      // takes the user out of the suggestions
-                      // flow entirely. Per Codex review on
-                      // PR #80.
-                      detached(
-                        navigate({
-                          to: "/workspaces/$workspaceId/$viewId/document",
-                          params: {
-                            workspaceId: tab.workspaceId,
-                            viewId: peekPdfViewId,
-                          },
-                          replace: true,
-                          search: (prev) => ({
-                            ...prev,
-                            entity: tab.entityId,
-                            field: tab.id,
-                          }),
-                        }),
-                        "file-tab-panel.navigate",
-                      );
-                    },
-                  }
-                : {})}
             />
           )}
           {sidepeekFacet === "playbook" && (

@@ -8,6 +8,7 @@ import {
   INSPECTOR_PANE_DEFAULT_WIDTH,
   INSPECTOR_PANE_MAX_WIDTH,
   INSPECTOR_PANE_MIN_WIDTH,
+  resolveInspectorPaneMaxWidth,
   resolveInspectorPaneWidth,
 } from "./pane-width";
 
@@ -225,6 +226,14 @@ export const useInspectorPaneWidth = ({
     }
   };
 
+  // What the ceiling actually is at this viewport, not the absolute one: with
+  // a viewport-relative maximum, `End` and the reported `aria-valuemax` would
+  // otherwise name a width the pane cannot take.
+  const maxWidth = resolveInspectorPaneMaxWidth({
+    sidebarWidth,
+    viewportWidth,
+  });
+
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     const next = resolveKeyboardWidth({
       currentWidth: desiredWidth,
@@ -236,10 +245,7 @@ export const useInspectorPaneWidth = ({
     }
     event.preventDefault();
     setDesiredWidth(
-      Math.min(
-        Math.max(next, INSPECTOR_PANE_MIN_WIDTH),
-        INSPECTOR_PANE_MAX_WIDTH,
-      ),
+      Math.min(Math.max(next, INSPECTOR_PANE_MIN_WIDTH), maxWidth),
     );
   };
 
@@ -257,7 +263,7 @@ export const useInspectorPaneWidth = ({
     resetWidth,
     resizeHandleProps: {
       "aria-orientation": "vertical",
-      "aria-valuemax": INSPECTOR_PANE_MAX_WIDTH,
+      "aria-valuemax": maxWidth,
       "aria-valuemin": INSPECTOR_PANE_MIN_WIDTH,
       "aria-valuenow": width,
       onKeyDown: handleKeyDown,

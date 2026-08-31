@@ -1498,43 +1498,47 @@
     "applyAs": "como",
     "applyDirect": "Directo",
     "applyTracked": "Control de cambios",
-    "areaUnspecified": "Sin especificar",
     "barLabel": "Revisión de sugerencias",
-    "byArea": "Por área",
-    "bySeverity": "Por gravedad",
+    "change": {
+      "deleteParagraph": "Eliminar párrafo",
+      "replacement": "“{find}” → “{replace}”"
+    },
     "countHigh": "{count, plural, one {# alta} other {# altas}}",
     "countLow": "{count, plural, one {# baja} other {# bajas}}",
     "countMedium": "{count, plural, one {# media} other {# medias}}",
     "countUnspecified": "{count, plural, one {# sin especificar} other {# sin especificar}}",
-    "dismiss": "Ocultar panel de revisión",
-    "empty": "Ninguna sugerencia coincide con el filtro actual.",
     "finalizePendingNote": "{count, plural, one {# sugerencia sigue pendiente de revisión.} other {# sugerencias siguen pendientes de revisión.}}",
-    "groupBy": "Agrupar por",
-    "hiddenCount": "{count} ocultas",
     "hideAccepted": "Ocultar sugerencias aceptadas",
-    "identityAria": "Identidad de control de cambios para {name}",
-    "identitySaved": "Identidad guardada",
     "persistFailed": "No se pudo guardar tu cambio de revisión",
     "reject": "Rechazar",
     "rejectAll": "Rechazar todo",
     "revert": "Revertir",
-    "savingIdentity": "Guardando…",
     "severityHigh": "Alta",
     "severityLow": "Baja",
     "severityMedium": "Media",
     "severityUnspecified": "Sin especificar",
     "skipped": "No se pudo aplicar: {reason}",
     "staleResolution": "Esta sugerencia ya se resolvió en otro lugar.",
-    "statusAccepted": "Aceptada",
-    "statusApplying": "Aplicando cambio…",
-    "statusRejected": "Rechazada",
-    "statusSkipped": "Omitida",
-    "subtitle": "{pending} de {total} pendientes",
-    "title": "Sugerencias de IA",
-    "wordName": "Nombre del autor en Word",
-    "wordNamePlaceholder": "Cómo se firmará el control de cambios",
-    "wordShortcut": "Iniciales",
-    "wordShortcutPlaceholder": "p. ej. JK"
+    "summary": {
+      "commentOnParagraph": "{label, select, none {Comentar un párrafo} other {Comentar el párrafo {label}}}",
+      "commentOnSelection": "Comentar el texto seleccionado",
+      "deleteParagraph": "{label, select, none {Eliminar un párrafo} other {Eliminar el párrafo {label}}}",
+      "deleteTableColumn": "Eliminar una columna de tabla",
+      "deleteTableRow": "Eliminar una fila de tabla",
+      "formatSelection": "Reformatear el texto seleccionado",
+      "insertAfter": "{label, select, none {Insertar un párrafo} other {Insertar un párrafo después de {label}}}",
+      "insertBefore": "{label, select, none {Insertar un párrafo} other {Insertar un párrafo antes de {label}}}",
+      "insertSignatureBlock": "Insertar una tabla de firmas para {names}",
+      "insertTableColumn": "Insertar una columna de tabla",
+      "insertTableRow": "Insertar una fila de tabla",
+      "mergeTableCells": "Combinar celdas de tabla",
+      "pageBreakAfter": "{label, select, none {Insertar un salto de página} other {Insertar un salto de página después de {label}}}",
+      "pageBreakBefore": "{label, select, none {Insertar un salto de página} other {Insertar un salto de página antes de {label}}}",
+      "replaceInBlock": "Reemplazar “{find}” por “{replace}”",
+      "replaceParagraph": "{label, select, none {Reescribir un párrafo} other {Reescribir el párrafo {label}}}",
+      "replaceSelection": "Reemplazar el texto seleccionado por “{replace}”",
+      "splitTableCell": "Dividir una celda de tabla"
+    }
   },
   "emailViewer": {
     "attachments": "Archivos adjuntos",
@@ -2192,6 +2196,7 @@
       "workAttention": "Seguimiento del trabajo"
     },
     "severity": {
+      "critical": "Crítico",
       "info": "Información",
       "notice": "Aviso",
       "warning": "Advertencia"
@@ -2310,9 +2315,13 @@
     "review": {
       "actionNeeded": "Requiere acción",
       "addComment": "Añadir como comentario",
+      "addNote": "Añadir nota para la contraparte",
+      "addNotePlaceholder": "Lo que la contraparte debe ver",
+      "addNoteSubmit": "Añadir nota",
       "addReference": "Añadir {name} como referencia",
       "addTopic": "Añadir tema",
       "allDecided": "Todos los hallazgos aquí están decididos.",
+      "askInChat": "Preguntar en el chat",
       "assessment": {
         "additionalInTarget": "Adicional en el documento objetivo",
         "aligned": "Alineado",
@@ -2322,12 +2331,21 @@
         "notComparable": "No comparable"
       },
       "basisCombined": "{count, plural, one {Revisión según {name} y comparación con # documento de referencia} other {Revisión según {name} y comparación con # documentos de referencia}}",
+      "basisDivider": "y / o",
       "basisPlaybook": "Revisión según {name}",
       "basisReferences": "{count, plural, one {Comparación con # documento de referencia} other {Comparación con # documentos de referencia}}",
       "changeBasis": "Cambiar la base de revisión",
+      "chatDraft": {
+        "finding": "Hallazgo:",
+        "impact": "Impacto:",
+        "issue": "Tema:",
+        "question": "¿Cómo debería reformular el documento objetivo en este punto?",
+        "rationale": "Justificación:"
+      },
+      "checks": "Se comprueba:",
       "commentFailed": "No se pudo añadir el comentario",
       "comparedWithReferences": "{count, plural, one {Comparado con # documento de referencia} other {Comparado con # documentos de referencia}}",
-      "decidedCount": "{decided, number}/{total, number} decididos",
+      "decidedCount": "{count, number} decidido",
       "decision": "Decisión",
       "decisionFailed": "No se pudo registrar tu decisión",
       "decisions": {
@@ -2337,20 +2355,89 @@
       "description": "Elige un playbook elaborado, documentos de referencia o ambos.",
       "dismiss": "Descartar",
       "documentChanged": "Este documento cambió después de esta revisión.",
+      "export": {
+        "counterparty": "Enviar a la contraparte",
+        "counterpartyFailed": "No se pudo exportar el documento",
+        "counterpartyHint": "El documento con el seguimiento de tus cambios",
+        "counterpartyUnavailable": "Abre el documento para exportarlo",
+        "csv": "CSV",
+        "docx": "Archivo Word (.docx)",
+        "exporting": "Exportando",
+        "internal": "Informe interno",
+        "internalHint": "Hallazgos, justificación y referencias",
+        "xlsx": "Archivo Excel (.xlsx)"
+      },
       "failed": "La revisión del documento falló",
+      "filterCoverage": "Cobertura",
+      "filterDeviations": "Desviaciones",
+      "flag": "Señalar",
+      "flaggedPositions": "{total, plural, one {{flagged, number} de # posición señalada} other {{flagged, number} de # posiciones señaladas}}",
+      "fromChat": "Desde el chat",
       "fromThisMatter": "De este asunto",
+      "history": {
+        "backToLatest": "Volver a la última versión",
+        "decided": "{decided, number} de {total, number} decidido",
+        "references": "{count, plural, one {# referencia} other {# referencias}}"
+      },
+      "impact": {
+        "favourable": "Favorable",
+        "neutral": "Neutral",
+        "notJudged": "No evaluado",
+        "unfavourable": "Desfavorable"
+      },
+      "impactForSide": {
+        "favourable": "Mejor para {role}",
+        "neutral": "Sin efecto para {role}",
+        "unfavourable": "Peor para {role}"
+      },
       "insertFailed": "No se pudo insertar la redacción sugerida",
       "insertSuggestion": "Insertar redacción sugerida",
       "insufficientEvidence": "Los documentos proporcionados no aportan pruebas suficientes sobre este tema.",
+      "marginNotes": {
+        "above": "{count, number} arriba",
+        "below": "{count, number} abajo",
+        "documentNotRead": "Abre el documento en el panel principal para anclar los hallazgos junto a él.",
+        "label": "Hallazgos junto a las cláusulas correspondientes",
+        "unanchored": "No vinculado a ninguna cláusula"
+      },
       "newTopic": "Nuevo tema de revisión",
+      "noChangeNeeded": "No se necesita ningún cambio",
+      "noEditor": "Abre el documento para aceptar los cambios",
       "noMaterialDifferences": "No se encontraron diferencias relevantes",
+      "noPassage": "Ningún pasaje",
       "noPlaybooksMatch": "No hay playbooks coincidentes.",
       "noReferencesFound": "No hay documentos DOCX coincidentes.",
+      "notCompared": "No comparado",
+      "notComparedCount": "No comparado: {count, number}",
+      "noteAdded": "Nota añadida para la contraparte",
+      "openPlaybooks": "Abrir playbooks",
+      "pane": {
+        "document": "Panel: hallazgos junto al documento",
+        "margin": "Margen: hallazgos junto a sus cláusulas",
+        "review": "Principal: hallazgos en el panel ancho"
+      },
+      "passageUnavailable": "Texto de referencia no disponible",
+      "passagesCount": "{count, plural, one {# pasaje} other {# pasajes}}",
+      "pendingCount": "{count, plural, one {# pendiente} other {# pendiente}}",
+      "perspective": {
+        "neutral": "No especificado",
+        "other": "Otro…",
+        "otherPlaceholder": "Rol tal como lo nombra el documento",
+        "title": "Representamos a"
+      },
       "playbookDeleted": "Este playbook ya no existe; la revisión se conserva como registro.",
       "playbookFindings": "Resultados del playbook",
       "playbookOutdated": "Existe una versión aprobada más reciente de este playbook.",
       "playbookSection": "Playbook",
       "playbookTopic": "Propuesto por el playbook",
+      "presence": {
+        "absent": "Ausente",
+        "present": "Presente"
+      },
+      "progressPositions": "{total, plural, one {{completed, number} de # posición} other {{completed, number} de # posiciones}}",
+      "proposing": "Proponiendo posiciones… {count, number}",
+      "readOnlyRun": "Decidido en esta revisión",
+      "recommendation": "Recomendación:",
       "referenceDocument": "Documento de referencia",
       "referenceFindings": "Comparación con referencias",
       "referenceLimitReached": "Se alcanzó el límite de referencias",
@@ -2363,21 +2450,47 @@
       "reopen": "Reabrir",
       "results": "Resultados de la revisión",
       "reviewAgain": "Iniciar otra revisión",
+      "reviewPositionsFirst": "Revisar primero las posiciones",
       "reviewedAgainstCombined": "{count, plural, one {Revisado según {name} y comparado con # documento de referencia} other {Revisado según {name} y comparado con # documentos de referencia}}",
       "reviewing": "Revisión en curso…",
       "reviewingHint": "Esto puede tardar unos minutos con documentos grandes.",
       "run": "Iniciar revisión",
+      "runStatus": {
+        "queued": "En cola"
+      },
+      "saveAsPlaybook": "Guardar como playbook",
+      "saveAsPlaybookFailed": "No se pudo guardar esta revisión como playbook",
+      "savedAsPlaybook": "Guardado como playbook",
       "scoreTopics": "Revisar estos temas",
       "searchPlaybooks": "Buscar playbooks",
+      "showInDocument": "Mostrar en el documento",
       "sizeConfirmStart": "Iniciar revisión",
       "sizeConfirmTitle": "Revisión extensa",
+      "skipReason": {
+        "dealSpecificValue": "Valor específico de la operación",
+        "lowerWeight": "Menor peso comercial",
+        "structural": "Diferencia estructural"
+      },
+      "standardColumn": "El estándar",
+      "standardColumnFrom": "El estándar ({name})",
+      "suggestionSkipped": "Ya no coincide con el documento",
+      "suggestionStaged": "Insertado en el documento con seguimiento de cambios",
+      "summary": {
+        "forParty": "para {role}",
+        "noSide": "ninguna parte",
+        "proposedFromReferences": "posiciones propuestas a partir de las referencias"
+      },
+      "targetAsReference": "El documento revisado no puede ser su propia referencia.",
+      "targetColumn": "Este documento",
       "targetDocument": "Documento objetivo",
       "title": "Revisión del documento",
       "topicContext": "Contexto adicional",
       "topicContextPlaceholder": "¿Qué debe considerar la revisión sobre este tema?",
       "topicName": "Nombre del tema",
       "topicsDescription": "Confirma los temas propuestos, añade los tuyos o aporta más contexto antes de evaluarlos.",
-      "topicsTitle": "¿Qué debe abarcar esta revisión?"
+      "topicsTitle": "¿Qué debe abarcar esta revisión?",
+      "why": "Por qué",
+      "whyItMatters": "Por qué importa:"
     },
     "showPane": "Mostrar panel",
     "swapViews": "Intercambiar la vista principal y el panel lateral",
@@ -2515,6 +2628,7 @@
       "addOption": "Añadir opción",
       "addPosition": "Añadir posición",
       "addRule": "Regla",
+      "adoptAsIdeal": "Adoptar como redacción ideal",
       "advanced": "Cambiar cómo funciona",
       "all": "Todos los playbooks",
       "approval": {
@@ -2548,10 +2662,12 @@
       "convertToExtractDescription": "Esto elimina la escala de niveles y la evaluación de esta posición. Esta acción no se puede deshacer.",
       "convertToExtractTitle": "¿Convertir a solo extracción?",
       "convertToGraded": "Añadir reglas de evaluación",
+      "convertToRules": "Convertir en reglas",
       "createPlaybook": "Nuevo playbook",
       "created": "Playbook creado",
       "customizeAnswer": "Cambiar la respuesta extraída",
       "customizeAnswerHint": "Editar la pregunta o el formato de respuesta.",
+      "decisionLine": "{runs, plural, one {aceptado {accepted, number} · descartado {dismissed, number} · en # revisión} other {aceptado {accepted, number} · descartado {dismissed, number} · en # revisiones}}",
       "deleteFailed": "No se pudo eliminar el playbook",
       "deletePlaybook": "Eliminar playbook",
       "deletePosition": "Eliminar posición",
@@ -2607,6 +2723,7 @@
         "title": "Negociación"
       },
       "noPositions": "Aún no hay posiciones. Añade la primera.",
+      "noSettledPosition": "Ninguna posición establecida",
       "optionPlaceholder": "Valor de la opción",
       "optionsLabel": "Opciones",
       "outline": "Esquema",
@@ -2615,6 +2732,7 @@
       "recent": "Usados recientemente",
       "recommended": "Plantillas recomendadas",
       "redLinePlaceholder": "Redacción que nunca es aceptable",
+      "referenceStandard": "De la referencia",
       "removeCheck": "Eliminar verificación",
       "removeIdeal": "Eliminar la redacción ideal",
       "reorderPosition": "Reordenar posición",
@@ -2641,20 +2759,6 @@
         "viewClause": "Ver cláusula",
         "violatedRedLine": "Viola la línea roja:"
       },
-      "risk": {
-        "complianceLabel": "Cumplimiento",
-        "flaggedCount": "{flagged} de {total} posiciones señaladas",
-        "notApplicableExcluded": "({count} no aplicables, excluidas)",
-        "riskLevel": {
-          "critical": "Crítico",
-          "high": "Alto",
-          "low": "Bajo",
-          "medium": "Medio",
-          "none": "Sin riesgo"
-        },
-        "summaryTitle": "Resumen de riesgos",
-        "topIssuesTitle": "Principales problemas"
-      },
       "ruleNumber": "Regla {index}",
       "rulePlaceholder": "p. ej. El plazo de pago no debe superar los 30 días",
       "saveFailed": "No se pudo guardar el playbook",
@@ -2674,6 +2778,12 @@
       },
       "switchToAuto": "Generar automáticamente la pregunta y el formato",
       "switchToManual": "Personalizar la pregunta y el formato de respuesta",
+      "termKind": {
+        "enumeration": "Enumeración",
+        "language": "Language",
+        "parameter": "Parámetro",
+        "presence": "Presencia"
+      },
       "tier": {
         "acceptable": "Aceptable",
         "fallback": "Alternativa",
@@ -2684,6 +2794,7 @@
       "updated": "Playbook actualizado",
       "updatedAt": "Actualizado: {date}",
       "verdict": {
+        "additional": "Adicional",
         "compliant": "Conforme",
         "deviation": "Desviación",
         "fallback": "Alternativa",
@@ -4523,6 +4634,10 @@
           "trigger": "Iniciado por",
           "webhook": "Enlace web"
         },
+        "documentReview": {
+          "decided": "Decidió {count, plural, one {# hallazgo} other {# hallazgos}} en la revisión de",
+          "started": "Inició una revisión de"
+        },
         "empty": "Aún no hay actividad en este asunto.",
         "filterLabel": "Filtrar actividad",
         "filters": {
@@ -4562,12 +4677,15 @@
           "automation": "automatización",
           "court": "registro judicial",
           "document": "documento",
+          "documentReview": "revisión de documento",
           "folder": "carpeta",
           "link": "enlace",
           "matter": "asunto",
           "message": "mensaje",
+          "playbook": "reglas del playbook",
           "task": "elemento de agenda",
-          "team": "equipo del asunto"
+          "team": "equipo del asunto",
+          "translation": "traducción"
         },
         "title": "Actividad",
         "views": {

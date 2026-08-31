@@ -1,6 +1,6 @@
 /**
  * AcceptAllButton — the single owner of the "accept all" affordance,
- * shared by the inspector ReviewPanel footer and the floating
+ * shared by the document-review facet's header and the floating
  * ReviewBar so the confirm-threshold behaviour can never drift.
  *
  * Up to {@link ACCEPT_ALL_CONFIRM_THRESHOLD} pending suggestions is a

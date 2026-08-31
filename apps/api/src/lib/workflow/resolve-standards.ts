@@ -10,7 +10,8 @@ import type {
   Position,
   ResolvedTiers,
 } from "@/api/lib/workflow/playbook-positions";
-import type { GradedPosition } from "@/api/lib/workflow/position-runtime";
+import { isTierStandard } from "@/api/lib/workflow/position-runtime";
+import type { TierStandardPosition } from "@/api/lib/workflow/position-runtime";
 
 // Shared tier resolution: turn each graded position's tiered ladder into a
 // run-time snapshot (`ResolvedTiers`) of ideal text, ranked fallbacks, and
@@ -29,10 +30,9 @@ const MAX_FALLBACKS = 10;
 const capText = (text: string): string =>
   text.length > MAX_STANDARD_TEXT ? text.slice(0, MAX_STANDARD_TEXT) : text;
 
-const gradedPositions = (positions: readonly Position[]): GradedPosition[] =>
-  positions.filter(
-    (position): position is GradedPosition => position.mode === "graded",
-  );
+const tierStandardPositions = (
+  positions: readonly Position[],
+): TierStandardPosition[] => positions.filter(isTierStandard);
 
 type ClauseSnapshot = {
   preferredBody: string;
@@ -47,12 +47,12 @@ export const loadClauseSnapshots = async (
   organizationId: SafeId<"organization">,
   positions: readonly Position[],
 ): Promise<Map<string, ClauseSnapshot>> => {
-  const graded = gradedPositions(positions);
+  const graded = tierStandardPositions(positions);
   const clauseIds = [
     ...new Set(
       graded.flatMap((position) =>
-        position.tiers.acceptable.ideal?.source === "clause"
-          ? [position.tiers.acceptable.ideal.clauseId]
+        position.standard.tiers.acceptable.ideal?.source === "clause"
+          ? [position.standard.tiers.acceptable.ideal.clauseId]
           : [],
       ),
     ),
@@ -66,7 +66,7 @@ export const loadClauseSnapshots = async (
   // latest body when an ideal has no pinned version), so restrict the history
   // read to those exact pairs instead of every version of each clause.
   const pinnedVersionPairs = graded.flatMap((position) => {
-    const ideal = position.tiers.acceptable.ideal;
+    const ideal = position.standard.tiers.acceptable.ideal;
     return ideal?.source === "clause" && ideal.clauseVersion !== undefined
       ? [
           {
@@ -170,10 +170,10 @@ type ResolvedFallback = { rank: number; label?: string; text: string };
 // its final position and capped at MAX_FALLBACKS, so a grader's `matched.rank`
 // indexes this array directly.
 export const resolveTiers = (
-  position: GradedPosition,
+  position: TierStandardPosition,
   clauseSnapshots: ReadonlyMap<string, ClauseSnapshot>,
 ): ResolvedTiers => {
-  const { tiers } = position;
+  const { tiers } = position.standard;
 
   const acceptableRules: ResolvedTiers["acceptableRules"] = [];
   for (const rule of tiers.acceptable.rules) {

@@ -32,7 +32,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 // eslint-disable-next-line no-restricted-imports -- brands field/entity ids returned by queryEntities (server-validated, workspace-scoped) to re-hydrate their justifications and review decisions
 import { toSafeId } from "@/api/lib/branded-types";
 import { compareByLocale } from "@/api/lib/collation";
-import { DOCUMENT_REVIEW_CHECK_KIND } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewDecision } from "@/api/lib/document-review/run-contract";
 import type { QueryEntityResult } from "@/api/lib/entities/query-entities";
 import { queryEntities } from "@/api/lib/entities/query-entities";
@@ -994,10 +993,6 @@ export const loadReviewDecisions = async ({
               and(
                 eq(documentReviewFindings.workspaceId, workspaceId),
                 inArray(documentReviewFindings.entityId, entityIds),
-                eq(
-                  documentReviewFindings.checkKind,
-                  DOCUMENT_REVIEW_CHECK_KIND.PLAYBOOK,
-                ),
                 inArray(documentReviewFindings.positionId, positionIds),
               ),
             )
@@ -1016,9 +1011,6 @@ export const loadReviewDecisions = async ({
       ),
     );
     for (const row of rows) {
-      if (row.positionId === null) {
-        continue;
-      }
       byKey.set(reviewDecisionKey(row.entityId, row.positionId), row.decision);
     }
     return Result.ok(byKey);

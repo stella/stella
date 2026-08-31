@@ -1498,43 +1498,47 @@
     "applyAs": "kā",
     "applyDirect": "Tieši",
     "applyTracked": "Izsekotās izmaiņas",
-    "areaUnspecified": "Nenorādīts",
     "barLabel": "Ieteikumu pārskatīšana",
-    "byArea": "Pēc jomas",
-    "bySeverity": "Pēc nopietnības",
+    "change": {
+      "deleteParagraph": "Dzēst rindkopu",
+      "replacement": "„{find}” → „{replace}”"
+    },
     "countHigh": "{count, plural, zero {# augstu} one {# augsta} other {# augstas}}",
     "countLow": "{count, plural, zero {# zemu} one {# zema} other {# zemas}}",
     "countMedium": "{count, plural, zero {# vidēju} one {# vidēja} other {# vidējas}}",
     "countUnspecified": "{count, plural, zero {# nenorādītu} one {# nenorādīta} other {# nenorādītas}}",
-    "dismiss": "Slēpt pārskatīšanas paneli",
-    "empty": "Pašreizējam filtram neatbilst neviens ieteikums.",
     "finalizePendingNote": "{count, plural, zero {# ieteikumu joprojām gaida pārskatīšanu.} one {# ieteikums joprojām gaida pārskatīšanu.} other {# ieteikumi joprojām gaida pārskatīšanu.}}",
-    "groupBy": "Grupēt pēc",
-    "hiddenCount": "{count} paslēpti",
     "hideAccepted": "Slēpt pieņemtos ieteikumus",
-    "identityAria": "Izsekoto izmaiņu identitāte lietotājam {name}",
-    "identitySaved": "Identitāte saglabāta",
     "persistFailed": "Neizdevās saglabāt jūsu pārskatīšanas izmaiņas",
     "reject": "Noraidīt",
     "rejectAll": "Noraidīt visu",
     "revert": "Atjaunot",
-    "savingIdentity": "Saglabā…",
     "severityHigh": "Augsta",
     "severityLow": "Zema",
     "severityMedium": "Vidēja",
     "severityUnspecified": "Nenorādīta",
     "skipped": "Neizdevās lietot: {reason}",
     "staleResolution": "Šis ieteikums jau ir atrisināts citur.",
-    "statusAccepted": "Pieņemts",
-    "statusApplying": "Lieto izmaiņu…",
-    "statusRejected": "Noraidīts",
-    "statusSkipped": "Izlaists",
-    "subtitle": "{pending} no {total} gaida apstiprinājumu",
-    "title": "AI ieteikumi",
-    "wordName": "Word autora vārds",
-    "wordNamePlaceholder": "Kā tiks parakstītas izsekotās izmaiņas",
-    "wordShortcut": "Iniciāļi",
-    "wordShortcutPlaceholder": "piem., JK"
+    "summary": {
+      "commentOnParagraph": "{label, select, none {Pievienot komentāru rindkopai} other {Pievienot komentāru rindkopai {label}}}",
+      "commentOnSelection": "Pievienot komentāru atlasītajam tekstam",
+      "deleteParagraph": "{label, select, none {Dzēst rindkopu} other {Dzēst rindkopu {label}}}",
+      "deleteTableColumn": "Dzēst tabulas kolonnu",
+      "deleteTableRow": "Dzēst tabulas rindu",
+      "formatSelection": "Pārformatēt atlasīto tekstu",
+      "insertAfter": "{label, select, none {Ievietot rindkopu} other {Ievietot rindkopu aiz {label}}}",
+      "insertBefore": "{label, select, none {Ievietot rindkopu} other {Ievietot rindkopu pirms {label}}}",
+      "insertSignatureBlock": "Ievietot parakstu tabulu personām: {names}",
+      "insertTableColumn": "Ievietot tabulas kolonnu",
+      "insertTableRow": "Ievietot tabulas rindu",
+      "mergeTableCells": "Apvienot tabulas šūnas",
+      "pageBreakAfter": "{label, select, none {Ievietot lapas pārtraukumu} other {Ievietot lapas pārtraukumu aiz {label}}}",
+      "pageBreakBefore": "{label, select, none {Ievietot lapas pārtraukumu} other {Ievietot lapas pārtraukumu pirms {label}}}",
+      "replaceInBlock": "Aizstāt „{find}” ar „{replace}”",
+      "replaceParagraph": "{label, select, none {Pārrakstīt rindkopu} other {Pārrakstīt rindkopu {label}}}",
+      "replaceSelection": "Aizstāt atlasīto tekstu ar „{replace}”",
+      "splitTableCell": "Sadalīt tabulas šūnu"
+    }
   },
   "emailViewer": {
     "attachments": "Pielikumi",
@@ -2192,6 +2196,7 @@
       "workAttention": "Darba uzraudzība"
     },
     "severity": {
+      "critical": "Kritisks",
       "info": "Informācija",
       "notice": "Paziņojums",
       "warning": "Brīdinājums"
@@ -2310,9 +2315,13 @@
     "review": {
       "actionNeeded": "Nepieciešama rīcība",
       "addComment": "Pievienot kā komentāru",
+      "addNote": "Pievienot piezīmi pretpusei",
+      "addNotePlaceholder": "Ko pretpusei vajadzētu redzēt",
+      "addNoteSubmit": "Pievienot piezīmi",
       "addReference": "Pievienot {name} kā atsauci",
       "addTopic": "Pievienot tēmu",
       "allDecided": "Par visiem šeit redzamajiem secinājumiem ir pieņemts lēmums.",
+      "askInChat": "Jautāt tērzēšanā",
       "assessment": {
         "additionalInTarget": "Papildus mērķa dokumentā",
         "aligned": "Saskaņots",
@@ -2322,12 +2331,21 @@
         "notComparable": "Nav salīdzināms"
       },
       "basisCombined": "{count, plural, zero {Pārbaude pēc {name} bez atsauces dokumentiem} one {Pārbaude pēc {name} un salīdzinājums ar # atsauces dokumentu} other {Pārbaude pēc {name} un salīdzinājums ar # atsauces dokumentiem}}",
+      "basisDivider": "un / vai",
       "basisPlaybook": "Pārbaude pēc {name}",
       "basisReferences": "{count, plural, zero {Nav atsauces dokumentu} one {Salīdzinājums ar # atsauces dokumentu} other {Salīdzinājums ar # atsauces dokumentiem}}",
       "changeBasis": "Mainīt pārbaudes pamatu",
+      "chatDraft": {
+        "finding": "Secinājums:",
+        "impact": "Ietekme:",
+        "issue": "Tēma:",
+        "question": "Kā man vajadzētu pārformulēt mērķa dokumentu šajā jautājumā?",
+        "rationale": "Pamatojums:"
+      },
+      "checks": "Tiek pārbaudīts:",
       "commentFailed": "Komentāru neizdevās pievienot",
       "comparedWithReferences": "{count, plural, zero {Nav salīdzināts ne ar vienu atsauces dokumentu} one {Salīdzināts ar # atsauces dokumentu} other {Salīdzināts ar # atsauces dokumentiem}}",
-      "decidedCount": "Izlemts: {decided, number}/{total, number}",
+      "decidedCount": "{count, number} izlemti",
       "decision": "Lēmums",
       "decisionFailed": "Lēmumu neizdevās saglabāt",
       "decisions": {
@@ -2337,20 +2355,89 @@
       "description": "Izvēlieties sagatavotu pārbaudes ceļvedi, atsauces dokumentus vai abus.",
       "dismiss": "Noraidīt",
       "documentChanged": "Šis dokuments pēc šīs pārbaudes ir mainījies.",
+      "export": {
+        "counterparty": "Sūtīt pretpusei",
+        "counterpartyFailed": "Neizdevās eksportēt dokumentu",
+        "counterpartyHint": "Dokuments ar jūsu izsekotajām izmaiņām",
+        "counterpartyUnavailable": "Atveriet dokumentu, lai to eksportētu",
+        "csv": "CSV",
+        "docx": "Word dokuments (.docx)",
+        "exporting": "Eksportē",
+        "internal": "Iekšējs memorands",
+        "internalHint": "Secinājumi, pamatojums un atsauces",
+        "xlsx": "Excel izklājlapa (.xlsx)"
+      },
       "failed": "Neizdevās pārbaudīt dokumentu",
+      "filterCoverage": "Aptvērums",
+      "filterDeviations": "Novirzes",
+      "flag": "Atzīmēt",
+      "flaggedPositions": "{total, plural, zero {Nav atzīmētu pozīciju} one {{flagged, number} no # pozīcijas atzīmēta} other {{flagged, number} no # pozīcijām atzīmētas}}",
+      "fromChat": "No tērzēšanas",
       "fromThisMatter": "No šīs lietas",
+      "history": {
+        "backToLatest": "Atpakaļ pie jaunākās",
+        "decided": "{decided, number} no {total, number} izlemts",
+        "references": "{count, plural, zero {# atsauču} one {# atsauce} other {# atsauces}}"
+      },
+      "impact": {
+        "favourable": "Labvēlīgs",
+        "neutral": "Neutral",
+        "notJudged": "Nav vērtēts",
+        "unfavourable": "Nelabvēlīgs"
+      },
+      "impactForSide": {
+        "favourable": "Labāk ({role})",
+        "neutral": "Bez ietekmes ({role})",
+        "unfavourable": "Sliktāk ({role})"
+      },
       "insertFailed": "Neizdevās ievietot ieteikto formulējumu",
       "insertSuggestion": "Ievietot ieteikto formulējumu",
       "insufficientEvidence": "Iesniegtajos dokumentos nav pietiekamu pierādījumu par šo tēmu.",
+      "marginNotes": {
+        "above": "{count, number} augstāk",
+        "below": "{count, number} zemāk",
+        "documentNotRead": "Atveriet dokumentu galvenajā rūtī, lai piespraustu secinājumus tam blakus.",
+        "label": "Secinājumi blakus klauzulām, par kurām tie ir",
+        "unanchored": "Nav saistīts ar klauzulu"
+      },
       "newTopic": "Jauna pārbaudes tēma",
+      "noChangeNeeded": "Izmaiņas nav nepieciešamas",
+      "noEditor": "Atveriet dokumentu, lai apstiprinātu izmaiņas",
       "noMaterialDifferences": "Būtiskas atšķirības nav atrastas",
+      "noPassage": "Fragmenta nav",
       "noPlaybooksMatch": "Nav atbilstošu pārbaudes ceļvežu.",
       "noReferencesFound": "Nav atrasti atbilstoši DOCX dokumenti.",
+      "notCompared": "Nav salīdzināts",
+      "notComparedCount": "Nav salīdzināts: {count, number}",
+      "noteAdded": "Pretpusei pievienota piezīme",
+      "openPlaybooks": "Atvērt pārbaudes ceļvežus",
+      "pane": {
+        "document": "Panelis: secinājumi blakus dokumentam",
+        "margin": "Mala: secinājumi blakus savām klauzulām",
+        "review": "Galvenais: secinājumi platajā panelī"
+      },
+      "passageUnavailable": "Atsauces teksts nav pieejams",
+      "passagesCount": "{count, plural, zero {# fragmentu} one {# fragments} other {# fragmenti}}",
+      "pendingCount": "{count, plural, zero {# neizlemtu secinājumu} one {# neizlemts secinājums} other {# neizlemti secinājumi}}",
+      "perspective": {
+        "neutral": "Nav norādīts",
+        "other": "Cits…",
+        "otherPlaceholder": "Loma tā, kā tā minēta dokumentā",
+        "title": "Mēs pārstāvam"
+      },
       "playbookDeleted": "Šī pārbaudes ceļveža vairs nav; pārbaude tiek saglabāta kā ieraksts.",
       "playbookFindings": "Pārbaudes ceļveža secinājumi",
       "playbookOutdated": "Ir pieejama jaunāka apstiprināta šī pārbaudes ceļveža versija.",
       "playbookSection": "Pārbaudes ceļvedis",
       "playbookTopic": "Pievienots no playbook",
+      "presence": {
+        "absent": "Nē",
+        "present": "Jā"
+      },
+      "progressPositions": "{total, plural, zero {Nav pozīciju} one {{completed, number} no # pozīcijas} other {{completed, number} no # pozīcijām}}",
+      "proposing": "Tiek piedāvātas pozīcijas… {count, number}",
+      "readOnlyRun": "Izlemts šajā pārbaudē",
+      "recommendation": "Ieteikums:",
       "referenceDocument": "Atsauces dokuments",
       "referenceFindings": "Atsauču salīdzinājums",
       "referenceLimitReached": "Sasniegts atsauču limits",
@@ -2363,21 +2450,47 @@
       "reopen": "Atvērt atkārtoti",
       "results": "Pārbaudes rezultāti",
       "reviewAgain": "Sākt citu pārbaudi",
+      "reviewPositionsFirst": "Vispirms pārskatīt pozīcijas",
       "reviewedAgainstCombined": "{count, plural, zero {Pārbaudīts pēc {name} bez atsauces dokumentiem} one {Pārbaudīts pēc {name} un salīdzināts ar # atsauces dokumentu} other {Pārbaudīts pēc {name} un salīdzināts ar # atsauces dokumentiem}}",
       "reviewing": "Pārbaude notiek…",
       "reviewingHint": "Lielu dokumentu pārbaude var aizņemt dažas minūtes.",
       "run": "Sākt pārbaudi",
+      "runStatus": {
+        "queued": "Rindā"
+      },
+      "saveAsPlaybook": "Saglabāt kā pārbaudes ceļvedi",
+      "saveAsPlaybookFailed": "Neizdevās saglabāt šo pārbaudi kā pārbaudes ceļvedi",
+      "savedAsPlaybook": "Saglabāts kā pārbaudes ceļvedis",
       "scoreTopics": "Pārbaudīt šīs tēmas",
       "searchPlaybooks": "Meklēt pārbaudes ceļvežus",
+      "showInDocument": "Rādīt dokumentā",
       "sizeConfirmStart": "Sākt pārbaudi",
       "sizeConfirmTitle": "Apjomīga pārbaude",
+      "skipReason": {
+        "dealSpecificValue": "Konkrētam darījumam raksturīga vērtība",
+        "lowerWeight": "Mazāks komerciālais svars",
+        "structural": "Strukturāla atšķirība"
+      },
+      "standardColumn": "Standarts",
+      "standardColumnFrom": "Standarts ({name})",
+      "suggestionSkipped": "Vairs neatbilst dokumentam",
+      "suggestionStaged": "Iekļauts dokumentā kā izsekota izmaiņa",
+      "summary": {
+        "forParty": "{role} labā",
+        "noSide": "Nav puses",
+        "proposedFromReferences": "Pozīcijas, kas ierosinātas no atsaucēm"
+      },
+      "targetAsReference": "Pārbaudāmais dokuments nevar būt savs paša atsauces dokuments.",
+      "targetColumn": "Šis dokuments",
       "targetDocument": "Mērķa dokuments",
       "title": "Dokumenta pārbaude",
       "topicContext": "Papildu konteksts",
       "topicContextPlaceholder": "Kas pārbaudē jāņem vērā par šo tēmu?",
       "topicName": "Tēmas nosaukums",
       "topicsDescription": "Apstipriniet ieteiktās tēmas, pievienojiet savas vai papildiniet kontekstu pirms vērtēšanas.",
-      "topicsTitle": "Kas jāaptver šajā pārbaudē?"
+      "topicsTitle": "Kas jāaptver šajā pārbaudē?",
+      "why": "Kāpēc",
+      "whyItMatters": "Kāpēc tas ir svarīgi:"
     },
     "showPane": "Rādīt paneli",
     "swapViews": "Apmainīt galveno skatu un sānu paneli",
@@ -2515,6 +2628,7 @@
       "addOption": "Pievienot iespēju",
       "addPosition": "Pievienot pozīciju",
       "addRule": "Noteikums",
+      "adoptAsIdeal": "Pieņemt kā ideālu formulējumu",
       "advanced": "Mainīt darbību",
       "all": "Visi pārbaudes ceļveži",
       "approval": {
@@ -2548,10 +2662,12 @@
       "convertToExtractDescription": "Tas noņems šīs pozīcijas pakāpju sistēmu un vērtējumu. To nevar atsaukt.",
       "convertToExtractTitle": "Pārveidot par tikai izvilkšanu?",
       "convertToGraded": "Pievienot vērtēšanas noteikumus",
+      "convertToRules": "Pārveidot par noteikumiem",
       "createPlaybook": "Jauns pārbaudes ceļvedis",
       "created": "Pārbaudes ceļvedis izveidots",
       "customizeAnswer": "Mainīt izgūto atbildi",
       "customizeAnswerHint": "Rediģēt jautājumu vai atbildes formātu.",
+      "decisionLine": "{runs, plural, zero {pieņemts {accepted, number} · noraidīts {dismissed, number} · # pārbaudēs} one {pieņemts {accepted, number} · noraidīts {dismissed, number} · # pārbaudē} other {pieņemts {accepted, number} · noraidīts {dismissed, number} · # pārbaudēs}}",
       "deleteFailed": "Neizdevās izdzēst pārbaudes ceļvedi",
       "deletePlaybook": "Dzēst pārbaudes ceļvedi",
       "deletePosition": "Dzēst pozīciju",
@@ -2607,6 +2723,7 @@
         "title": "Sarunas"
       },
       "noPositions": "Vēl nav pozīciju. Pievienojiet pirmo.",
+      "noSettledPosition": "Nav noteiktas pozīcijas",
       "optionPlaceholder": "Iespējas vērtība",
       "optionsLabel": "Iespējas",
       "outline": "Struktūra",
@@ -2615,6 +2732,7 @@
       "recent": "Nesen izmantotie",
       "recommended": "Ieteicamie sākuma ceļveži",
       "redLinePlaceholder": "Formulējums, kas nekad nav pieņemams",
+      "referenceStandard": "No atsauces",
       "removeCheck": "Noņemt pārbaudi",
       "removeIdeal": "Noņemt ideālo formulējumu",
       "reorderPosition": "Pārkārtot pozīciju",
@@ -2641,20 +2759,6 @@
         "viewClause": "Skatīt klauzulu",
         "violatedRedLine": "Pārkāptā sarkanā līnija:"
       },
-      "risk": {
-        "complianceLabel": "Atbilstība",
-        "flaggedCount": "Atzīmētas {flagged} no {total} pozīcijām",
-        "notApplicableExcluded": "({count} nav piemērojams, izslēgts)",
-        "riskLevel": {
-          "critical": "Kritisks",
-          "high": "Augsts",
-          "low": "Zems",
-          "medium": "Vidējs",
-          "none": "Nav riska"
-        },
-        "summaryTitle": "Risku kopsavilkums",
-        "topIssuesTitle": "Būtiskākās problēmas"
-      },
       "ruleNumber": "Noteikums {index}",
       "rulePlaceholder": "piem. Samaksas termiņš nedrīkst pārsniegt 30 dienas",
       "saveFailed": "Neizdevās saglabāt pārbaudes ceļvedi",
@@ -2674,6 +2778,12 @@
       },
       "switchToAuto": "Automātiski izveidot jautājumu un formātu",
       "switchToManual": "Pielāgot jautājumu un atbildes formātu",
+      "termKind": {
+        "enumeration": "Uzskaitījums",
+        "language": "Language",
+        "parameter": "Parametrs",
+        "presence": "Klātbūtne"
+      },
       "tier": {
         "acceptable": "Pieņemams",
         "fallback": "Alternatīva",
@@ -2684,6 +2794,7 @@
       "updated": "Pārbaudes ceļvedis atjaunināts",
       "updatedAt": "Atjaunināts {date}",
       "verdict": {
+        "additional": "Papildu",
         "compliant": "Atbilst",
         "deviation": "Novirze",
         "fallback": "Alternatīva",
@@ -4523,6 +4634,10 @@
           "trigger": "Uzsāka",
           "webhook": "Tīmekļa aizķere"
         },
+        "documentReview": {
+          "decided": "Pieņēma lēmumu par {count, plural, zero {# secinājumiem} one {# secinājumu} other {# secinājumiem}} dokumenta pārbaudē:",
+          "started": "Sāka dokumenta pārbaudi:"
+        },
         "empty": "Šajā lietā vēl nav darbību.",
         "filterLabel": "Filtrēt darbības",
         "filters": {
@@ -4562,12 +4677,15 @@
           "automation": "automatizācija",
           "court": "tiesas ieraksts",
           "document": "dokuments",
+          "documentReview": "dokumenta pārbaude",
           "folder": "mape",
           "link": "saite",
           "matter": "lieta",
           "message": "ziņa",
+          "playbook": "pārbaudes ceļveža noteikumi",
           "task": "darba kārtības vienums",
-          "team": "lietas komanda"
+          "team": "lietas komanda",
+          "translation": "tulkojums"
         },
         "title": "Darbības",
         "views": {

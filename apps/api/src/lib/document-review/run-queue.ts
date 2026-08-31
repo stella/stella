@@ -12,9 +12,8 @@
  * may retry deliberately by creating a new run.
  *
  * Convergence: the job id is derived from the run id, only a `queued` row is
- * claimable, and findings upsert on `(runId, topicId, checkKind)`. A
- * re-delivered job is therefore either a no-op or writes exactly the rows it
- * wrote before.
+ * claimable, and findings upsert on `(runId, positionId)`. A re-delivered job
+ * is therefore either a no-op or writes exactly the rows it wrote before.
  */
 
 import { panic, Result } from "better-result";
@@ -42,7 +41,6 @@ import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
-import type { DocumentReviewTopic } from "@/api/lib/document-review/contract";
 import {
   buildDocumentReviewFindingRow,
   recountDocumentReviewFindingProgress,
@@ -51,17 +49,15 @@ import {
 import type { DocumentReviewFindingRow } from "@/api/lib/document-review/finding-write";
 import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
 import type { ReviewFile } from "@/api/lib/document-review/prepare-review-files";
-import { compareReferenceDocuments } from "@/api/lib/document-review/reference-compare";
+import {
+  readReferencePassageTexts,
+  referencePassageIds,
+} from "@/api/lib/document-review/reference-passages";
 import { extractAskContents } from "@/api/lib/document-review/review-extract";
 import type { ReviewAsk } from "@/api/lib/document-review/review-extract";
 import { buildFindings } from "@/api/lib/document-review/review-grade";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
-import {
-  basisPerspective,
-  basisPlaybook,
-  basisReferences,
-  DOCUMENT_REVIEW_RUN_EXECUTOR,
-} from "@/api/lib/document-review/run-contract";
+import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
 import type {
   DocumentReviewFindingPayload,
   DocumentReviewRunBasis,
@@ -84,33 +80,34 @@ import {
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
 import type { ResolvedTiers } from "@/api/lib/workflow/playbook-positions";
-import { resolveEffectiveAsk } from "@/api/lib/workflow/position-runtime";
+import {
+  isTierStandard,
+  resolveEffectiveAsk,
+} from "@/api/lib/workflow/position-runtime";
 import {
   loadClauseSnapshots,
   resolveTiers,
 } from "@/api/lib/workflow/resolve-standards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-/**
- * Rolling-deploy boundary for the cross-matter reference contract.
- *
- * Old workers listen only to the legacy queue and assume every reference is
- * in the target matter. New producers therefore publish to a new queue; new
- * workers drain both until no deployed release can publish v1. Remove the
- * legacy worker and the migration's compatibility trigger together after
- * that boundary, then restore the current worker's concurrency to two.
- */
-const LEGACY_QUEUE_NAME = "document-review-runs";
 const QUEUE_NAME = "document-review-runs-v2";
 const QUEUE_CONTRACT_VERSION = 2;
 const JOB_NAME = "run-document-review";
-// One slot per queue preserves the previous total concurrency of two while
-// the rolling-deploy bridge listens to both contracts.
-const WORKER_CONCURRENCY = 1;
+const WORKER_CONCURRENCY = 2;
 // One attempt: every pass runs metered model calls, so a BullMQ retry would
 // double the spend. Failures are persisted on the row instead.
 const JOB_ATTEMPTS = 1;
-const REVIEW_TIMEOUT_MS = 120_000;
+/**
+ * Budget for the whole run, not for one call.
+ *
+ * Grading walks the confirmed positions a batch at a time, so a long review is
+ * many sequential calls; each of those already carries its own timeout. A
+ * budget sized for a single call would abort the rest of the run silently —
+ * every remaining position would come back ungraded and the run would still
+ * report itself complete. This bound only has to stay under the reconciler's
+ * `STUCK_RUNNING_MS`, which is what catches a worker that actually died.
+ */
+const REVIEW_TIMEOUT_MS = 15 * 60 * 1000;
 const SERVICE_TIER = "standard" as const;
 const ORPHAN_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
 /** A worker-executed `running` row this old lost its worker to a hard death. */
@@ -245,58 +242,48 @@ export const reconcileStuckDocumentReviewRuns = async (): Promise<number> => {
 };
 
 export const initDocumentReviewRunWorker = () => {
-  const createWorker = (
-    queueName: typeof LEGACY_QUEUE_NAME | typeof QUEUE_NAME,
-  ) => {
-    const worker = new Worker<DocumentReviewRunWorkerJobData>(
-      queueName,
-      async (job) => {
-        if (
-          queueName === QUEUE_NAME &&
-          job.data.contractVersion !== QUEUE_CONTRACT_VERSION
-        ) {
-          panic("Document review v2 queue received a non-v2 job");
-        }
-        await processDocumentReviewRunJob(job.data);
-      },
-      {
-        connection: createBullMqConnection(),
-        concurrency: WORKER_CONCURRENCY,
-      },
-    );
-
-    worker.on("failed", (job, error) => {
-      // The job body already persists failures onto the row; this is the last
-      // resort if the process itself threw before that could run.
-      if (job) {
-        markRunFailed(job.data, "internal").catch((markError: unknown) => {
-          captureError(markError, {
-            runId: job.data.runId,
-            workspaceId: job.data.workspaceId,
-          });
-        });
+  const worker = new Worker<DocumentReviewRunWorkerJobData>(
+    QUEUE_NAME,
+    async (job) => {
+      if (job.data.contractVersion !== QUEUE_CONTRACT_VERSION) {
+        panic("Document review v2 queue received a non-v2 job");
       }
-      const runId = job ? job.data.runId : "";
-      const workspaceId = job ? job.data.workspaceId : "";
-      captureError(error, { runId, workspaceId });
-      logger.error("document_review_run.failed", {
-        runId,
-        "error.type": errorTag(error),
-        queue: queueName,
-        workspaceId,
+      await processDocumentReviewRunJob(job.data);
+    },
+    {
+      connection: createBullMqConnection(),
+      concurrency: WORKER_CONCURRENCY,
+    },
+  );
+
+  worker.on("failed", (job, error) => {
+    // The job body already persists failures onto the row; this is the last
+    // resort if the process itself threw before that could run.
+    if (job) {
+      markRunFailed(job.data, "internal").catch((markError: unknown) => {
+        captureError(markError, {
+          runId: job.data.runId,
+          workspaceId: job.data.workspaceId,
+        });
       });
+    }
+    const runId = job ? job.data.runId : "";
+    const workspaceId = job ? job.data.workspaceId : "";
+    captureError(error, { runId, workspaceId });
+    logger.error("document_review_run.failed", {
+      runId,
+      "error.type": errorTag(error),
+      queue: QUEUE_NAME,
+      workspaceId,
     });
+  });
 
-    worker.on(
-      "error",
-      createQueueWorkerErrorLogger("document_review_run.worker_error", {
-        queue: queueName,
-      }),
-    );
-    return worker;
-  };
-
-  const workers = [createWorker(LEGACY_QUEUE_NAME), createWorker(QUEUE_NAME)];
+  worker.on(
+    "error",
+    createQueueWorkerErrorLogger("document_review_run.worker_error", {
+      queue: QUEUE_NAME,
+    }),
+  );
 
   const runReconcile = async (): Promise<void> => {
     const recovered = await reconcileStuckDocumentReviewRuns();
@@ -315,14 +302,13 @@ export const initDocumentReviewRunWorker = () => {
   });
 
   logger.info("document_review_run.worker_started", {
-    concurrency: String(WORKER_CONCURRENCY * workers.length),
-    queueCount: String(workers.length),
+    concurrency: String(WORKER_CONCURRENCY),
   });
 
   return {
     close: async () => {
       await closeReconcile();
-      await Promise.all(workers.map(async (worker) => await worker.close()));
+      await worker.close();
     },
   };
 };
@@ -360,7 +346,6 @@ const brandActor = (data: DocumentReviewRunJobDataV1): RunActor => {
 /** The run fields the worker executes from, read at claim time. */
 type ClaimedRun = {
   basis: DocumentReviewRunBasis;
-  topics: DocumentReviewTopic[];
   entityId: SafeId<"entity">;
   fileFieldId: SafeId<"field">;
   entityVersionId: SafeId<"entityVersion">;
@@ -387,7 +372,6 @@ const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
       )
       .returning({
         basis: documentReviewRuns.basis,
-        topics: documentReviewRuns.topics,
         entityId: documentReviewRuns.entityId,
         fileFieldId: documentReviewRuns.fileFieldId,
         entityVersionId: documentReviewRuns.entityVersionId,
@@ -538,9 +522,12 @@ const executeRun = async (
   actor: RunActor,
   run: ClaimedRun,
 ): Promise<DocumentReviewRunErrorCode | null> => {
-  const plan = planReviewRun({ basis: run.basis, topics: run.topics });
+  const plan = planReviewRun({
+    basis: run.basis,
+    executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
+  });
 
-  const references = basisReferences(run.basis);
+  const references = run.basis.references;
   const pins: PinnedDocument[] = [
     {
       workspaceId: actor.workspaceId,
@@ -614,25 +601,14 @@ const executeRun = async (
     workspaceId: actor.workspaceId,
   };
 
-  // Both passes are independent reads over the same prepared blocks, so they
-  // run concurrently exactly as the interactive client dispatched them.
-  const [playbookOutcome, referenceOutcome] = await Promise.all([
-    runPlaybookPass({
-      actor,
-      deps,
-      plan,
-      run,
-      targetFile: resolved.files.slice(0, 1),
-    }),
-    runReferencePass({
-      actor,
-      deps,
-      plan,
-      run,
-      references: preparedReferences,
-      target: preparedTarget,
-    }),
-  ]);
+  const gradingOutcome = await runGradingPass({
+    actor,
+    deps,
+    plan,
+    run,
+    target: preparedTarget,
+    targetFile: resolved.files.slice(0, 1),
+  });
   await actor.scopedDb(
     async (tx) =>
       await recountDocumentReviewFindingProgress({
@@ -641,34 +617,52 @@ const executeRun = async (
         runId: actor.runId,
       }),
   );
-  if (playbookOutcome !== null) {
-    return playbookOutcome;
-  }
-  if (referenceOutcome !== null) {
-    return referenceOutcome;
+  if (gradingOutcome !== null) {
+    return gradingOutcome;
   }
 
   return await finalizeRun(actor, run, plan);
 };
 
-const runPlaybookPass = async ({
+/**
+ * One pass over the run's positions.
+ *
+ * Extraction reads only the positions whose standard is an authored ladder: a
+ * reference standard is compared against the document's own blocks and needs
+ * no ASK. `buildFindings` then grades both kinds and returns one finding per
+ * position, in the plan's order.
+ *
+ * Grading is several model calls, so its findings are committed as each call
+ * returns rather than in one write at the end: `document_review_runs.completed`
+ * is what the review surface polls, and a review that reports nothing until it
+ * is finished is a review that looks stuck.
+ */
+const runGradingPass = async ({
   actor,
   deps,
   plan,
   run,
+  target,
   targetFile,
 }: {
   actor: RunActor;
   deps: PassDeps;
   plan: ReviewRunPlan;
   run: ClaimedRun;
+  target: PreparedDocxFile;
   targetFile: ResolvedFile[];
 }): Promise<DocumentReviewRunErrorCode | null> => {
-  if (basisPlaybook(run.basis) === null || plan.playbookChecks.length === 0) {
+  if (plan.positions.length === 0) {
     return null;
   }
 
-  const positions = plan.playbookChecks.map((check) => check.position);
+  const positions = plan.positions.map((planned) => planned.position);
+  // The words behind every pinned passage, read with service access: the
+  // author proved they could read these rows when the run was created.
+  const passageTextById = await readReferencePassageTexts(
+    rootDb,
+    referencePassageIds(positions),
+  );
   const clauseSnapshots = await actor.scopedDb(
     async (tx) =>
       await loadClauseSnapshots(tx, actor.organizationId, positions),
@@ -676,11 +670,14 @@ const runPlaybookPass = async ({
   const tiersBySourceId = new Map<string, ResolvedTiers>();
   const asks: ReviewAsk[] = [];
   for (const position of positions) {
-    if (position.mode === "graded") {
+    if (isTierStandard(position)) {
       tiersBySourceId.set(
         position.sourceId,
         resolveTiers(position, clauseSnapshots),
       );
+    } else if (position.mode === "graded") {
+      // A reference standard is graded against the document itself.
+      continue;
     }
     const ask = resolveEffectiveAsk(position);
     const content = ask.content;
@@ -705,105 +702,50 @@ const runPlaybookPass = async ({
     return "playbook_check_failed";
   }
 
+  const plannedByPositionId = new Map(
+    plan.positions.map((planned) => [planned.positionId, planned]),
+  );
+  const toRows = (findings: readonly ReviewFinding[]): FindingRow[] => {
+    const rows: FindingRow[] = [];
+    for (const finding of findings) {
+      const planned = plannedByPositionId.get(finding.positionId);
+      if (planned === undefined) {
+        continue;
+      }
+      rows.push(
+        buildFindingRow({
+          actor,
+          run,
+          positionId: planned.positionId,
+          positionTitle: planned.title,
+          payload: { finding },
+        }),
+      );
+    }
+    return rows;
+  };
+
   const graded: ReviewFinding[] = await buildFindings({
     positions,
+    passageTextById,
     contentBySourceId: extraction.value.contentBySourceId,
     tiersBySourceId,
+    target,
+    perspective: run.basis.perspective,
+    referenceEntityVersionIds: run.basis.references.map(
+      (reference) => reference.entityVersionId,
+    ),
+    // Each model call's findings are committed as it returns, so the run's
+    // `completed` moves through a long review instead of jumping at the end.
+    onGraded: async (findings) => {
+      await upsertFindings(actor, toRows(findings));
+    },
     ...deps,
   });
 
-  const checkByPositionId = new Map(
-    plan.playbookChecks.map((check) => [check.positionId, check]),
-  );
-  const rows: FindingRow[] = [];
-  for (const finding of graded) {
-    const check = checkByPositionId.get(finding.positionId);
-    if (check === undefined) {
-      continue;
-    }
-    rows.push(
-      buildFindingRow({
-        actor,
-        run,
-        topicId: check.topicId,
-        topicTitle: check.topicTitle,
-        positionId: check.positionId,
-        payload: { checkKind: "playbook", finding },
-      }),
-    );
-  }
-  await upsertFindings(actor, rows);
-  return null;
-};
-
-const runReferencePass = async ({
-  actor,
-  deps,
-  plan,
-  run,
-  references,
-  target,
-}: {
-  actor: RunActor;
-  deps: PassDeps;
-  plan: ReviewRunPlan;
-  run: ClaimedRun;
-  references: PreparedDocxFile[];
-  target: PreparedDocxFile;
-}): Promise<DocumentReviewRunErrorCode | null> => {
-  if (plan.referenceTopics.length === 0 || references.length === 0) {
-    return null;
-  }
-
-  const perspective = basisPerspective(run.basis);
-  if (perspective === null) {
-    // The plan only schedules reference topics for a basis that pins
-    // references, and every such basis names a side.
-    return panic("Reference pass planned for a basis without a perspective");
-  }
-
-  const comparison = await compareReferenceDocuments({
-    abortSignal: deps.abortSignal,
-    orgAIConfig: deps.orgAIConfig,
-    organizationId: deps.organizationId,
-    perspective,
-    promptCachingEnabled: deps.promptCachingEnabled,
-    references,
-    referenceEntityVersionIds: basisReferences(run.basis).map(
-      (reference) => reference.entityVersionId,
-    ),
-    serviceTier: deps.serviceTier,
-    target,
-    targetEntityVersionId: run.entityVersionId,
-    topics: plan.referenceTopics,
-    usageMetering: deps.usageMetering,
-    workspaceId: deps.workspaceId,
-  });
-  if (Result.isError(comparison)) {
-    return "reference_check_failed";
-  }
-
-  const titleByTopicId = new Map(
-    plan.referenceTopics.map((topic) => [topic.topicId, topic.title]),
-  );
-  const rows: FindingRow[] = [];
-  for (const finding of comparison.value) {
-    const topicTitle = titleByTopicId.get(finding.topicId);
-    if (topicTitle === undefined) {
-      continue;
-    }
-    rows.push(
-      buildFindingRow({
-        actor,
-        run,
-        topicId: finding.topicId,
-        topicTitle,
-        positionId: null,
-        payload: { checkKind: "reference", finding },
-      }),
-    );
-  }
-  await upsertFindings(actor, rows);
+  // The whole set, once: the positions decided without a model are in no
+  // batch, and the upsert converges on rows a batch already wrote.
+  await upsertFindings(actor, toRows(graded));
   return null;
 };
 
@@ -812,16 +754,14 @@ type FindingRow = DocumentReviewFindingRow;
 const buildFindingRow = ({
   actor,
   run,
-  topicId,
-  topicTitle,
   positionId,
+  positionTitle,
   payload,
 }: {
   actor: RunActor;
   run: ClaimedRun;
-  topicId: string;
-  topicTitle: string;
-  positionId: string | null;
+  positionId: string;
+  positionTitle: string;
   payload: DocumentReviewFindingPayload;
 }): FindingRow =>
   buildDocumentReviewFindingRow({
@@ -831,16 +771,13 @@ const buildFindingRow = ({
     entityId: run.entityId,
     fileFieldId: run.fileFieldId,
     entityVersionId: run.entityVersionId,
-    topicId,
-    topicTitle,
     positionId,
+    positionTitle,
     payload,
   });
 
-/** Commit a pass's findings and record how many the run holds so far, so a
- *  client polling the run sees progress land pass by pass rather than only
- *  at the end. Counted in the same transaction as the write, so the number
- *  can never run ahead of the rows. */
+/** Commit the pass's findings and record how many the run holds, in the same
+ *  transaction as the write, so the number can never run ahead of the rows. */
 const upsertFindings = async (
   actor: RunActor,
   rows: readonly FindingRow[],
@@ -868,8 +805,8 @@ const upsertFindings = async (
 
 /**
  * Complete the run once the committed finding set is exactly the planned one.
- * A shortfall means a pass silently produced less than it promised, which is an
- * internal failure rather than a completed review.
+ * A shortfall means the pass silently produced less than it promised, which is
+ * an internal failure rather than a completed review.
  */
 const finalizeRun = async (
   actor: RunActor,
@@ -884,7 +821,7 @@ const finalizeRun = async (
         runId: actor.runId,
         entityId: run.entityId,
         fileFieldId: run.fileFieldId,
-        basisType: run.basis.type,
+        executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
         expectedFindingCount: plan.expectedFindingCount,
       }),
   );

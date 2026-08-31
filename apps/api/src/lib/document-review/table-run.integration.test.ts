@@ -32,6 +32,7 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
 import type {
   DocumentReviewFindingPayload,
   PinnedPlaybook,
@@ -107,13 +108,16 @@ const gradedPosition: Position = {
   sourceId: POSITION_ID,
   issue: "Termination notice",
   severity: "high",
-  tiers: {
-    acceptable: {
-      rules: [],
-      ideal: { source: "inline", text: "Thirty days' written notice." },
+  standard: {
+    source: "tiers",
+    tiers: {
+      acceptable: {
+        rules: [],
+        ideal: { source: "inline", text: "Thirty days' written notice." },
+      },
+      fallback: { entries: [] },
+      notAcceptable: { rules: [] },
     },
-    fallback: { entries: [] },
-    notAcceptable: { rules: [] },
   },
   ask: {
     mode: "manual",
@@ -131,20 +135,18 @@ const pinnedPlaybook = (
   provenance: "draft",
   definitionSnapshot: {
     name: "Termination review",
-    positions: { version: 2, items: [gradedPosition] },
+    positions: { version: 3, items: [gradedPosition] },
   },
 });
 
-const playbookPayload: Extract<
-  DocumentReviewFindingPayload,
-  { checkKind: "playbook" }
-> = {
-  checkKind: "playbook",
+const playbookPayload: DocumentReviewFindingPayload = {
   finding: {
     positionId: POSITION_ID,
     issue: "Termination notice",
     severity: "high",
+    standardSource: "tiers",
     verdict: "deviation",
+    delta: { kind: "language" },
     extracted: { value: "14 days", text: "14 days" },
     rationale: "The period is shorter than the preferred position.",
     citations: [],
@@ -161,7 +163,7 @@ const seedPlaybookDefinition = async (): Promise<
     id: definitionId,
     organizationId: ids.orgA,
     name: "Termination review",
-    positions: { version: 2, items: [gradedPosition] },
+    positions: { version: 3, items: [gradedPosition] },
   });
   return definitionId;
 };
@@ -250,10 +252,8 @@ const seedFinding = async (
     entityId: ids.entityA1,
     fileFieldId: ids.fileFieldA1,
     entityVersionId: ids.entityVersionA1,
-    topicId: POSITION_ID,
-    topicTitle: "Termination notice",
-    checkKind: "playbook",
     positionId: POSITION_ID,
+    positionTitle: "Termination notice",
     outcome: "deviation",
     payload: playbookPayload,
   });
@@ -395,10 +395,15 @@ describe("opening runs for a files table", () => {
       runId: firstRunId,
       entityId: ids.entityA1,
       fileFieldId: ids.fileFieldA1,
-      basisType: "playbook",
+      executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
       expectedFindingCount: 1,
     });
-    expect(finalized).toEqual({ type: "completed", committed: 1, carried: 0 });
+    expect(finalized).toEqual({
+      type: "completed",
+      committed: 1,
+      carried: 0,
+      staged: 0,
+    });
 
     const decidedAt = new Date();
     await testDb
@@ -427,13 +432,14 @@ describe("opening runs for a files table", () => {
       runId: secondRunId,
       entityId: ids.entityA1,
       fileFieldId: ids.fileFieldA1,
-      basisType: "playbook",
+      executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
       expectedFindingCount: 1,
     });
     expect(refinalized).toEqual({
       type: "completed",
       committed: 1,
       carried: 1,
+      staged: 0,
     });
 
     const carried = await testDb

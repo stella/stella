@@ -19,7 +19,6 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import { Menu, MenuItem, MenuPopup, MenuSeparator } from "@stll/ui/menu";
@@ -588,6 +587,7 @@ const VersionItem = ({
   const t = useTranslations();
   const isSelected = version.file?.fieldId === currentFieldId;
   const isCurrent = version.id === currentVersionId;
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [contextAnchor, setContextAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
@@ -732,52 +732,47 @@ const VersionItem = ({
           {canDelete && (
             <>
               <MenuSeparator />
-              <AlertDialog>
-                <AlertDialogTrigger
-                  render={
-                    <MenuItem closeOnClick={false} variant="destructive" />
-                  }
-                >
-                  <Trash2Icon />
-                  {t("fileDetail.deleteVersion")}
-                </AlertDialogTrigger>
-                <AlertDialogPopup>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      {t("fileDetail.deleteVersion")}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {t("fileDetail.confirmDeleteVersion", {
-                        version: `v${version.versionNumber}`,
-                      })}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogClose render={<Button variant="ghost" />}>
-                      {t("common.cancel")}
-                    </AlertDialogClose>
-                    <AlertDialogClose
-                      render={
-                        <Button
-                          onClick={() => {
-                            detached(
-                              onDelete(version.id),
-                              "versions-sidebar.delete",
-                            );
-                          }}
-                          variant="destructive"
-                        />
-                      }
-                    >
-                      {t("common.delete")}
-                    </AlertDialogClose>
-                  </AlertDialogFooter>
-                </AlertDialogPopup>
-              </AlertDialog>
+              <MenuItem
+                onClick={() => setDeleteOpen(true)}
+                variant="destructive"
+              >
+                <Trash2Icon />
+                {t("fileDetail.deleteVersion")}
+              </MenuItem>
             </>
           )}
         </MenuPopup>
       </Menu>
+      {/* Outside the menu so the menu can close under the confirmation. */}
+      <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("fileDetail.deleteVersion")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("fileDetail.confirmDeleteVersion", {
+                version: `v${version.versionNumber}`,
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <AlertDialogClose
+              render={
+                <Button
+                  onClick={() => {
+                    detached(onDelete(version.id), "versions-sidebar.delete");
+                  }}
+                  variant="destructive"
+                />
+              }
+            >
+              {t("common.delete")}
+            </AlertDialogClose>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import type {
   EntityPriority,
   OcrExportStatus,
+  ReviewFlag,
   TaskStatus,
 } from "@stll/api-contract";
 import type { ListItemType } from "@stll/api-contract/entity-options";
@@ -182,7 +183,9 @@ export type WorkspaceField = {
 
 export type WorkspaceCellMetadata = {
   version: 1;
-  manualFlags: string[];
+  /** The shared reviewer vocabulary (see `REVIEW_FLAGS`), the same list a
+   *  document-review finding's flags come from. */
+  manualFlags: ReviewFlag[];
   flagProvenance?: Record<
     string,
     {

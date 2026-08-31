@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   playbookPositionsSchema,
+  POSITION_PURPOSE_MAX_LENGTH,
   positionSchema,
 } from "@/api/lib/workflow/playbook-positions";
 
@@ -25,26 +26,29 @@ const gradedPosition = {
   issue: "Governing law",
   severity: "high",
   ask: { mode: "manual", question: "Which law governs?", content: textContent },
-  tiers: {
-    acceptable: {
-      rules: [{ id: RULE_ID, text: "Governed by the laws of England." }],
+  standard: {
+    source: "tiers",
+    tiers: {
+      acceptable: {
+        rules: [{ id: RULE_ID, text: "Governed by the laws of England." }],
+      },
+      fallback: { entries: [] },
+      notAcceptable: { rules: [] },
     },
-    fallback: { entries: [] },
-    notAcceptable: { rules: [] },
   },
   enabled: true,
 };
 
 describe("playbookPositionsSchema — container version", () => {
-  test("accepts version 2", () => {
+  test("accepts version 3", () => {
     expect(
-      Value.Check(playbookPositionsSchema, { version: 2, items: [] }),
+      Value.Check(playbookPositionsSchema, { version: 3, items: [] }),
     ).toBe(true);
   });
 
-  test("rejects the retired version 1", () => {
+  test("rejects the retired version 2", () => {
     expect(
-      Value.Check(playbookPositionsSchema, { version: 1, items: [] }),
+      Value.Check(playbookPositionsSchema, { version: 2, items: [] }),
     ).toBe(false);
   });
 });
@@ -70,9 +74,9 @@ describe("positionSchema — extract / graded discriminated union", () => {
     expect(Value.Check(positionSchema, rest)).toBe(false);
   });
 
-  test("rejects a graded position missing tiers", () => {
-    const { tiers, ...rest } = gradedPosition;
-    void tiers;
+  test("rejects a graded position missing a standard", () => {
+    const { standard, ...rest } = gradedPosition;
+    void standard;
     expect(Value.Check(positionSchema, rest)).toBe(false);
   });
 
@@ -80,9 +84,12 @@ describe("positionSchema — extract / graded discriminated union", () => {
     expect(
       Value.Check(positionSchema, {
         ...gradedPosition,
-        tiers: {
-          ...gradedPosition.tiers,
-          acceptable: { rules: [{ text: "Missing its id." }] },
+        standard: {
+          source: "tiers",
+          tiers: {
+            ...gradedPosition.standard.tiers,
+            acceptable: { rules: [{ text: "Missing its id." }] },
+          },
         },
       }),
     ).toBe(false);
@@ -91,6 +98,31 @@ describe("positionSchema — extract / graded discriminated union", () => {
   test("rejects an unknown mode", () => {
     expect(
       Value.Check(positionSchema, { ...extractPosition, mode: "review" }),
+    ).toBe(false);
+  });
+});
+
+describe("purpose — what the term is for, on either standard", () => {
+  test("accepts a graded position without a purpose", () => {
+    expect(Value.Check(positionSchema, gradedPosition)).toBe(true);
+  });
+
+  test("accepts a purpose on a tiers-standard position an author wrote", () => {
+    expect(
+      Value.Check(positionSchema, {
+        ...gradedPosition,
+        purpose:
+          "Fixes whose courts decide a dispute; drives cost and enforceability for both sides.",
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects a purpose past one sentence's worth", () => {
+    expect(
+      Value.Check(positionSchema, {
+        ...gradedPosition,
+        purpose: "x".repeat(POSITION_PURPOSE_MAX_LENGTH + 1),
+      }),
     ).toBe(false);
   });
 });

@@ -1498,43 +1498,47 @@
     "applyAs": "mint",
     "applyDirect": "Közvetlen",
     "applyTracked": "Követett módosítások",
-    "areaUnspecified": "Nincs megadva",
     "barLabel": "Javaslatok áttekintése",
-    "byArea": "Terület szerint",
-    "bySeverity": "Súlyosság szerint",
+    "change": {
+      "deleteParagraph": "Bekezdés törlése",
+      "replacement": "„{find}” → „{replace}”"
+    },
     "countHigh": "{count, plural, one {# magas} other {# magas}}",
     "countLow": "{count, plural, one {# alacsony} other {# alacsony}}",
     "countMedium": "{count, plural, one {# közepes} other {# közepes}}",
     "countUnspecified": "{count, plural, one {# nincs megadva} other {# nincs megadva}}",
-    "dismiss": "Áttekintő panel elrejtése",
-    "empty": "Egyetlen javaslat sem felel meg az aktuális szűrőnek.",
     "finalizePendingNote": "{count, plural, one {# javaslat még felülvizsgálatra vár.} other {# javaslat még felülvizsgálatra vár.}}",
-    "groupBy": "Csoportosítás",
-    "hiddenCount": "{count} rejtett",
     "hideAccepted": "Elfogadott javaslatok elrejtése",
-    "identityAria": "Követett módosítások szerzője: {name}",
-    "identitySaved": "Azonosító mentve",
     "persistFailed": "Nem sikerült menteni a felülvizsgálati módosítást",
     "reject": "Elutasítás",
     "rejectAll": "Összes elutasítása",
     "revert": "Visszaállítás",
-    "savingIdentity": "Mentés…",
     "severityHigh": "Magas",
     "severityLow": "Alacsony",
     "severityMedium": "Közepes",
     "severityUnspecified": "Nincs megadva",
     "skipped": "Nem sikerült alkalmazni: {reason}",
     "staleResolution": "Ezt a javaslatot már máshol elbírálták.",
-    "statusAccepted": "Elfogadva",
-    "statusApplying": "Módosítás alkalmazása…",
-    "statusRejected": "Elutasítva",
-    "statusSkipped": "Kihagyva",
-    "subtitle": "{total} / {pending} függőben",
-    "title": "AI-javaslatok",
-    "wordName": "Word szerzőjének neve",
-    "wordNamePlaceholder": "Hogyan írja alá a követett módosításokat",
-    "wordShortcut": "Monogram",
-    "wordShortcutPlaceholder": "pl. JK"
+    "summary": {
+      "commentOnParagraph": "{label, select, none {Megjegyzés hozzáadása egy bekezdéshez} other {Megjegyzés hozzáadása a(z) {label} bekezdéshez}}",
+      "commentOnSelection": "Megjegyzés hozzáadása a kijelölt szöveghez",
+      "deleteParagraph": "{label, select, none {Bekezdés törlése} other {A(z) {label} bekezdés törlése}}",
+      "deleteTableColumn": "Táblázatoszlop törlése",
+      "deleteTableRow": "Táblázatsor törlése",
+      "formatSelection": "A kijelölt szöveg újraformázása",
+      "insertAfter": "{label, select, none {Bekezdés beszúrása} other {Bekezdés beszúrása a(z) {label} után}}",
+      "insertBefore": "{label, select, none {Bekezdés beszúrása} other {Bekezdés beszúrása a(z) {label} elé}}",
+      "insertSignatureBlock": "Aláírási tábla beszúrása {names} részére",
+      "insertTableColumn": "Táblázatoszlop beszúrása",
+      "insertTableRow": "Táblázatsor beszúrása",
+      "mergeTableCells": "Táblázatcellák egyesítése",
+      "pageBreakAfter": "{label, select, none {Oldaltörés beszúrása} other {Oldaltörés beszúrása a(z) {label} után}}",
+      "pageBreakBefore": "{label, select, none {Oldaltörés beszúrása} other {Oldaltörés beszúrása a(z) {label} elé}}",
+      "replaceInBlock": "„{find}” cseréje erre: „{replace}”",
+      "replaceParagraph": "{label, select, none {Bekezdés átírása} other {A(z) {label} bekezdés átírása}}",
+      "replaceSelection": "A kijelölt szöveg cseréje erre: „{replace}”",
+      "splitTableCell": "Táblázatcella felosztása"
+    }
   },
   "emailViewer": {
     "attachments": "Mellékletek",
@@ -2192,6 +2196,7 @@
       "workAttention": "Munkafigyelés"
     },
     "severity": {
+      "critical": "Kritikus",
       "info": "Információ",
       "notice": "Értesítés",
       "warning": "Figyelmeztetés"
@@ -2310,9 +2315,13 @@
     "review": {
       "actionNeeded": "Teendő",
       "addComment": "Hozzáadás megjegyzésként",
+      "addNote": "Megjegyzés hozzáadása az ellenfélnek",
+      "addNotePlaceholder": "Amit az ellenfélnek látnia kell",
+      "addNoteSubmit": "Megjegyzés hozzáadása",
       "addReference": "{name} hozzáadása referenciaként",
       "addTopic": "Téma hozzáadása",
       "allDecided": "Itt minden megállapítás eldöntve.",
+      "askInChat": "Kérdezze meg a chatben",
       "assessment": {
         "additionalInTarget": "További elem a céldokumentumban",
         "aligned": "Összhangban",
@@ -2322,12 +2331,21 @@
         "notComparable": "Nem összehasonlítható"
       },
       "basisCombined": "{count, plural, one {Ellenőrzés a(z) {name} alapján, összevetés # referenciadokumentummal} other {Ellenőrzés a(z) {name} alapján, összevetés # referenciadokumentummal}}",
+      "basisDivider": "és / vagy",
       "basisPlaybook": "Ellenőrzés a(z) {name} alapján",
       "basisReferences": "{count, plural, one {Összevetés # referenciadokumentummal} other {Összevetés # referenciadokumentummal}}",
       "changeBasis": "Ellenőrzési alap módosítása",
+      "chatDraft": {
+        "finding": "Megállapítás:",
+        "impact": "Hatás:",
+        "issue": "Téma:",
+        "question": "Hogyan írjam át ezen a ponton a céldokumentumot?",
+        "rationale": "Indokolás:"
+      },
+      "checks": "Vizsgált szempont:",
       "commentFailed": "A megjegyzést nem sikerült hozzáadni",
       "comparedWithReferences": "{count, plural, one {Összevetve # referenciadokumentummal} other {Összevetve # referenciadokumentummal}}",
-      "decidedCount": "{decided, number}/{total, number} eldöntve",
+      "decidedCount": "{count, number} eldöntve",
       "decision": "Döntés",
       "decisionFailed": "A döntést nem sikerült rögzíteni",
       "decisions": {
@@ -2337,20 +2355,89 @@
       "description": "Válasszon egy kidolgozott playbookot, referenciadokumentumokat vagy mindkettőt.",
       "dismiss": "Elvetés",
       "documentChanged": "A dokumentum az ellenőrzés óta megváltozott.",
+      "export": {
+        "counterparty": "Küldés az ellenfélnek",
+        "counterpartyFailed": "A dokumentumot nem sikerült exportálni",
+        "counterpartyHint": "A dokumentum az Ön követett módosításaival",
+        "counterpartyUnavailable": "Nyissa meg a dokumentumot az exportáláshoz",
+        "csv": "CSV",
+        "docx": "Word-dokumentum (.docx)",
+        "exporting": "Exportálás",
+        "internal": "Belső feljegyzés",
+        "internalHint": "Megállapítások, indokolás és referenciák",
+        "xlsx": "Excel-munkafüzet (.xlsx)"
+      },
       "failed": "A dokumentum ellenőrzése nem sikerült",
+      "filterCoverage": "Lefedettség",
+      "filterDeviations": "Eltérések",
+      "flag": "Megjelölés",
+      "flaggedPositions": "{total, plural, one {{flagged, number} megjelölve # álláspontból} other {{flagged, number} megjelölve # álláspontból}}",
+      "fromChat": "Chatből",
       "fromThisMatter": "Ebből az ügyből",
+      "history": {
+        "backToLatest": "Vissza a legutóbbihoz",
+        "decided": "{decided, number}/{total, number} eldöntve",
+        "references": "{count, plural, one {# referencia} other {# referencia}}"
+      },
+      "impact": {
+        "favourable": "Kedvező",
+        "neutral": "Neutral",
+        "notJudged": "Nem értékelt",
+        "unfavourable": "Kedvezőtlen"
+      },
+      "impactForSide": {
+        "favourable": "Jobb {role} számára",
+        "neutral": "Nincs hatás {role} számára",
+        "unfavourable": "Rosszabb {role} számára"
+      },
       "insertFailed": "A javasolt szöveget nem sikerült beilleszteni",
       "insertSuggestion": "Javasolt szöveg beillesztése",
       "insufficientEvidence": "A megadott dokumentumok nem tartalmaznak elegendő bizonyítékot ehhez a témához.",
+      "marginNotes": {
+        "above": "{count, number} fent",
+        "below": "{count, number} lent",
+        "documentNotRead": "Nyissa meg a dokumentumot a fő panelen, hogy a megállapításokat mellé rögzíthesse.",
+        "label": "Megállapítások az érintett kikötések mellett",
+        "unanchored": "Nincs kikötéshez kötve"
+      },
       "newTopic": "Új ellenőrzési téma",
+      "noChangeNeeded": "Nincs szükség módosításra",
+      "noEditor": "Nyissa meg a dokumentumot a módosítások elfogadásához",
       "noMaterialDifferences": "Nem találtunk lényeges eltérést",
+      "noPassage": "Nincs szövegrész",
       "noPlaybooksMatch": "Nincs egyező playbook.",
       "noReferencesFound": "Nincs egyező DOCX-dokumentum.",
+      "notCompared": "Nem összevetve",
+      "notComparedCount": "Nem összevetve: {count, number}",
+      "noteAdded": "Megjegyzés hozzáadva az ellenfélnek",
+      "openPlaybooks": "Playbookok megnyitása",
+      "pane": {
+        "document": "Panel: megállapítások a dokumentum mellett",
+        "margin": "Margó: megállapítások a kikötéseik mellett",
+        "review": "Fő: megállapítások a széles panelen"
+      },
+      "passageUnavailable": "A referenciaszöveg nem érhető el",
+      "passagesCount": "{count, plural, one {# szövegrész} other {# szövegrész}}",
+      "pendingCount": "{count, plural, one {# függőben} other {# függőben}}",
+      "perspective": {
+        "neutral": "Nincs megadva",
+        "other": "Egyéb…",
+        "otherPlaceholder": "A szerepkör úgy, ahogy a dokumentum nevezi",
+        "title": "Képviseljük:"
+      },
       "playbookDeleted": "Ez a playbook már nem létezik; az ellenőrzés feljegyzésként megmarad.",
       "playbookFindings": "Playbook megállapításai",
       "playbookOutdated": "A playbooknak van újabb jóváhagyott verziója.",
       "playbookSection": "Playbook",
       "playbookTopic": "A playbook alapján",
+      "presence": {
+        "absent": "Nem",
+        "present": "Igen"
+      },
+      "progressPositions": "{total, plural, one {{completed, number} / # álláspont} other {{completed, number} / # álláspont}}",
+      "proposing": "Álláspontok javaslása… {count, number}",
+      "readOnlyRun": "Ebben az ellenőrzésben eldöntve",
+      "recommendation": "Ajánlás:",
       "referenceDocument": "Referenciadokumentum",
       "referenceFindings": "Referencia-összehasonlítás",
       "referenceLimitReached": "Elérte a referencialimitet",
@@ -2363,21 +2450,47 @@
       "reopen": "Újranyitás",
       "results": "Ellenőrzési eredmények",
       "reviewAgain": "Új ellenőrzés indítása",
+      "reviewPositionsFirst": "Először az álláspontok ellenőrzése",
       "reviewedAgainstCombined": "{count, plural, one {Ellenőrizve a(z) {name} alapján és összevetve # referenciadokumentummal} other {Ellenőrizve a(z) {name} alapján és összevetve # referenciadokumentummal}}",
       "reviewing": "Ellenőrzés folyamatban…",
       "reviewingHint": "Nagy dokumentumok esetén ez néhány percet is igénybe vehet.",
       "run": "Ellenőrzés indítása",
+      "runStatus": {
+        "queued": "Sorba állítva"
+      },
+      "saveAsPlaybook": "Mentés playbookként",
+      "saveAsPlaybookFailed": "Ezt az ellenőrzést nem sikerült playbookként menteni",
+      "savedAsPlaybook": "Playbookként mentve",
       "scoreTopics": "Témák ellenőrzése",
       "searchPlaybooks": "Playbookok keresése",
+      "showInDocument": "Megjelenítés a dokumentumban",
       "sizeConfirmStart": "Ellenőrzés indítása",
       "sizeConfirmTitle": "Nagy terjedelmű ellenőrzés",
+      "skipReason": {
+        "dealSpecificValue": "Ügyletspecifikus érték",
+        "lowerWeight": "Kisebb üzleti súly",
+        "structural": "Szerkezeti eltérés"
+      },
+      "standardColumn": "Etalon",
+      "standardColumnFrom": "Etalon ({name})",
+      "suggestionSkipped": "Már nem egyezik a dokumentummal",
+      "suggestionStaged": "Előkészítve követett módosításként a dokumentumban",
+      "summary": {
+        "forParty": "{role} számára",
+        "noSide": "nincs oldal",
+        "proposedFromReferences": "a referenciákból javasolt álláspontok"
+      },
+      "targetAsReference": "Az ellenőrzött dokumentum nem lehet saját referenciája.",
+      "targetColumn": "Ez a dokumentum",
       "targetDocument": "Céldokumentum",
       "title": "Dokumentum ellenőrzése",
       "topicContext": "További kontextus",
       "topicContextPlaceholder": "Mit vegyen figyelembe az ellenőrzés ennél a témánál?",
       "topicName": "Téma neve",
       "topicsDescription": "Erősítse meg a javasolt témákat, adjon hozzá sajátot, vagy egészítse ki a kontextust az értékelés előtt.",
-      "topicsTitle": "Mire terjedjen ki az ellenőrzés?"
+      "topicsTitle": "Mire terjedjen ki az ellenőrzés?",
+      "why": "Miért",
+      "whyItMatters": "Miért fontos:"
     },
     "showPane": "Panel megjelenítése",
     "swapViews": "A fő nézet és az oldalsó panel felcserélése",
@@ -2515,6 +2628,7 @@
       "addOption": "Lehetőség hozzáadása",
       "addPosition": "Álláspont hozzáadása",
       "addRule": "Szabály",
+      "adoptAsIdeal": "Elfogadás ideális szövegként",
       "advanced": "Működés módosítása",
       "all": "Minden playbook",
       "approval": {
@@ -2548,10 +2662,12 @@
       "convertToExtractDescription": "Ezzel eltávolítja a szintlétrát és az értékelést ennél az álláspontnál. Ez nem vonható vissza.",
       "convertToExtractTitle": "Átalakítja csak kinyerésre?",
       "convertToGraded": "Értékelési szabályok hozzáadása",
+      "convertToRules": "Átalakítás szabályokká",
       "createPlaybook": "Új playbook",
       "created": "Playbook létrehozva",
       "customizeAnswer": "A kinyert válasz módosítása",
       "customizeAnswerHint": "A kérdés vagy a válaszformátum szerkesztése.",
+      "decisionLine": "{runs, plural, one {elfogadva {accepted, number} · elvetve {dismissed, number} · # ellenőrzésben} other {elfogadva {accepted, number} · elvetve {dismissed, number} · # ellenőrzésben}}",
       "deleteFailed": "A playbook törlése nem sikerült",
       "deletePlaybook": "Playbook törlése",
       "deletePosition": "Álláspont törlése",
@@ -2607,6 +2723,7 @@
         "title": "Tárgyalás"
       },
       "noPositions": "Még nincsenek álláspontok. Adja hozzá az elsőt.",
+      "noSettledPosition": "Nincs kialakult álláspont",
       "optionPlaceholder": "Lehetőség értéke",
       "optionsLabel": "Lehetőségek",
       "outline": "Vázlat",
@@ -2615,6 +2732,7 @@
       "recent": "Nemrég használt",
       "recommended": "Ajánlott kiindulópontok",
       "redLinePlaceholder": "Megfogalmazás, amely soha nem elfogadható",
+      "referenceStandard": "A referenciából",
       "removeCheck": "Ellenőrzés eltávolítása",
       "removeIdeal": "Ideális megfogalmazás eltávolítása",
       "reorderPosition": "Álláspont átrendezése",
@@ -2641,20 +2759,6 @@
         "viewClause": "Záradék megtekintése",
         "violatedRedLine": "Nem elfogadható szabályt sért:"
       },
-      "risk": {
-        "complianceLabel": "Megfelelőség",
-        "flaggedCount": "{flagged} megjelölt pozíció a(z) {total} közül",
-        "notApplicableExcluded": "({count} nem alkalmazható, kizárva)",
-        "riskLevel": {
-          "critical": "Kritikus",
-          "high": "Magas",
-          "low": "Alacsony",
-          "medium": "Közepes",
-          "none": "Nincs kockázat"
-        },
-        "summaryTitle": "Kockázati összefoglaló",
-        "topIssuesTitle": "Legfontosabb kérdések"
-      },
       "ruleNumber": "{index}. szabály",
       "rulePlaceholder": "pl. A fizetési határidő nem haladhatja meg a 30 napot",
       "saveFailed": "A playbook mentése nem sikerült",
@@ -2674,6 +2778,12 @@
       },
       "switchToAuto": "Kérdés és formátum automatikus létrehozása",
       "switchToManual": "A kérdés és a válaszformátum testreszabása",
+      "termKind": {
+        "enumeration": "Felsorolás",
+        "language": "Language",
+        "parameter": "Paraméter",
+        "presence": "Jelenlét"
+      },
       "tier": {
         "acceptable": "Elfogadható",
         "fallback": "Alternatíva",
@@ -2684,6 +2794,7 @@
       "updated": "Playbook frissítve",
       "updatedAt": "Frissítve: {date}",
       "verdict": {
+        "additional": "További",
         "compliant": "Megfelel",
         "deviation": "Eltérés",
         "fallback": "Alternatív megfogalmazás",
@@ -4523,6 +4634,10 @@
           "trigger": "Kezdeményezte",
           "webhook": "Webes esemény"
         },
+        "documentReview": {
+          "decided": "Eldöntött {count, plural, one {# megállapítást} other {# megállapítást}} ebben az ellenőrzésben:",
+          "started": "Ellenőrzést indított ezen:"
+        },
         "empty": "Ebben az ügyben még nincs tevékenység.",
         "filterLabel": "Tevékenység szűrése",
         "filters": {
@@ -4562,12 +4677,15 @@
           "automation": "automatizálás",
           "court": "bírósági bejegyzés",
           "document": "dokumentum",
+          "documentReview": "dokumentumellenőrzés",
           "folder": "mappa",
           "link": "hivatkozás",
           "matter": "ügy",
           "message": "üzenet",
+          "playbook": "playbook szabályai",
           "task": "napirendi elem",
-          "team": "ügycsapat"
+          "team": "ügycsapat",
+          "translation": "fordítás"
         },
         "title": "Tevékenység",
         "views": {

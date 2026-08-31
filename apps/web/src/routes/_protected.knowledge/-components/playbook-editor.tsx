@@ -41,6 +41,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { useReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -63,8 +64,12 @@ import {
   type Position,
   type PositionErrors,
   type PositionSeverity,
+  positionReferencePassages,
+  positionTiers,
   validatePosition,
 } from "@/lib/knowledge/playbook-types";
+import type { PositionDecisionSummary } from "@/lib/knowledge/position-decisions";
+import { readPositionDecisions } from "@/lib/knowledge/position-decisions";
 import {
   documentTypesOptions,
   knowledgeKeys,
@@ -198,6 +203,9 @@ const PlaybookEditorLoader = ({
       initialPositions={detail.positions.items}
       key={reloadKey}
       onBack={onBack}
+      // Derived from the org's findings on every read, so it tracks the cache
+      // rather than freezing at mount like the `initial*` seeds.
+      positionDecisions={readPositionDecisions(detail.positionDecisions)}
       onReload={() => setReloadKey((current) => current + 1)}
       onSaved={onSaved}
       organizationId={organizationId}
@@ -227,6 +235,9 @@ type PlaybookEditorFormProps = {
   initialPositions: Position[];
   initialStatus: PlaybookApprovalStatus;
   initialApprovedAt: string | null;
+  /** What the org's reviewers did with each position, by `sourceId`; empty
+   *  for a playbook that has never been run. */
+  positionDecisions?: ReadonlyMap<string, PositionDecisionSummary> | undefined;
   /** Concurrency token; tracks the cached detail, null for a new playbook. */
   updatedAt: string | null;
   onBack: () => void;
@@ -248,6 +259,7 @@ const PlaybookEditorForm = ({
   initialPositions,
   initialStatus,
   initialApprovedAt,
+  positionDecisions,
   updatedAt,
   onBack,
   onSaved,
@@ -359,6 +371,12 @@ const PlaybookEditorForm = ({
     ]),
   );
 
+  // One read for the whole card list: a reference position quotes passages by
+  // id, and the words come from the matters those references live in.
+  const passageTexts = useReferencePassageTexts(
+    positionReferencePassages(positions),
+  );
+
   const setOpen = (sourceId: string, open: boolean) => {
     setOpenIds((prev) => {
       const next = new Set(prev);
@@ -411,13 +429,16 @@ const PlaybookEditorForm = ({
       updatePosition(sourceId, extractToGraded(position));
       return;
     }
-    const { tiers } = position;
-    const hasTierContent =
+    const tiers = positionTiers(position);
+    // A reference standard always carries content (its passages are the
+    // standard), so converting it to an extract position always confirms.
+    const hasStandardContent =
+      tiers === null ||
       tiers.acceptable.rules.length > 0 ||
       tiers.fallback.entries.length > 0 ||
       tiers.notAcceptable.rules.length > 0 ||
       tiers.acceptable.ideal !== undefined;
-    if (hasTierContent) {
+    if (hasStandardContent) {
       setConvertConfirmId(sourceId);
       return;
     }
@@ -916,6 +937,7 @@ const PlaybookEditorForm = ({
               <ul className="space-y-3">
                 {positions.map((position, index) => (
                   <PositionEditor
+                    decision={positionDecisions?.get(position.sourceId)}
                     errors={errorsById.get(position.sourceId) ?? {}}
                     index={index}
                     key={position.sourceId}
@@ -929,6 +951,7 @@ const PlaybookEditorForm = ({
                     onReorder={reorderPosition}
                     open={openIds.has(position.sourceId)}
                     organizationId={organizationId}
+                    passageTexts={passageTexts}
                     position={position}
                     showErrors={attemptedSave}
                     total={positions.length}

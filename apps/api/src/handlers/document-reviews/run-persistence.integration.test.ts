@@ -4,12 +4,11 @@
  *
  *  - one unfinished run per document (the 409 the create endpoint returns is a
  *    friendly restatement of this index, not the guarantee itself),
- *  - `(runId, topicId, checkKind)` convergence, so a redelivered job overwrites
- *    the judgment it already wrote instead of adding a second one,
- *  - the per-kind outcome vocabularies staying unmerged.
+ *  - `(runId, positionId)` convergence, so a redelivered job overwrites the
+ *    judgment it already wrote instead of adding a second one,
+ *  - the outcome vocabulary the column will accept at all.
  */
 
-import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -18,8 +17,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, eq, inArray, sql } from "drizzle-orm";
-import nodePath from "node:path";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
@@ -38,7 +36,6 @@ import type {
   DocumentReviewRunStatus,
 } from "@/api/lib/document-review/run-contract";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { installPgliteMigration } from "@/api/tests/pglite-schema";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -51,15 +48,11 @@ setDefaultTimeout(120_000);
 let testDb: TestDatabase;
 let ids: TestIds;
 
-const ROLLING_BASIS_BRIDGE_MIGRATION = nodePath.resolve(
-  import.meta.dir,
-  "../../../drizzle/20260825135100_document_review_rolling_basis_bridge/migration.sql",
-);
-
 const seededRunIds: SafeId<"documentReviewRun">[] = [];
 
-const TOPIC_ID = "44444444-4444-4444-8444-444444444444";
+const REFERENCE_POSITION_ID = "44444444-4444-4444-8444-444444444444";
 const POSITION_ID = "11111111-1111-4111-8111-111111111111";
+const REFERENCE_PASSAGE_ID = "66666666-6666-4666-8666-666666666666";
 const CONTENT_SHA256 = "a".repeat(64);
 
 /** The reviewed document a case owns. Runs pin these by value (no foreign
@@ -79,8 +72,43 @@ const reviewTarget = (): ReviewTarget => ({
 /** The pinned reference document every fixture finding cites. */
 const REFERENCE_FILE_FIELD_ID = toSafeId<"field">(Bun.randomUUIDv7());
 
+/** A run whose positions were proposed from that precedent and never saved. */
 const referenceBasis: DocumentReviewRunBasis = {
-  type: "references",
+  playbook: {
+    definitionId: null,
+    versionId: null,
+    provenance: "ephemeral",
+    definitionSnapshot: {
+      name: "Positions confirmed for this review",
+      positions: {
+        version: 3,
+        items: [
+          {
+            mode: "graded",
+            sourceId: REFERENCE_POSITION_ID,
+            issue: "Governing law",
+            severity: "high",
+            standard: {
+              source: "reference",
+              termKind: "parameter",
+              passages: [
+                {
+                  id: REFERENCE_PASSAGE_ID,
+                  workspaceId: Bun.randomUUIDv7(),
+                  entityId: Bun.randomUUIDv7(),
+                  fileFieldId: REFERENCE_FILE_FIELD_ID,
+                  entityVersionId: Bun.randomUUIDv7(),
+                  blockId: "para-9",
+                },
+              ],
+            },
+            ask: { mode: "auto" },
+            enabled: true,
+          },
+        ],
+      },
+    },
+  },
   perspective: { type: "party", role: "Buyer", name: null },
   references: [
     {
@@ -94,18 +122,6 @@ const referenceBasis: DocumentReviewRunBasis = {
     },
   ],
 };
-
-/** Each fixture is pinned to its own member of the payload union rather than
- *  to the union itself, so a shape that drifts from the engine's finding type
- *  fails here instead of being widened away. */
-type ReferenceFindingPayload = Extract<
-  DocumentReviewFindingPayload,
-  { checkKind: "reference" }
->;
-type PlaybookFindingPayload = Extract<
-  DocumentReviewFindingPayload,
-  { checkKind: "playbook" }
->;
 
 /** bun-types declares `.rejects.toThrow` as void, so awaiting it trips
  *  type-aware lint; capture the rejection explicitly instead. */
@@ -158,37 +174,41 @@ const APPLICATION_TIMING_CHECK =
 
 const referencePayload = (
   text: string,
-  topicId: string = TOPIC_ID,
-): ReferenceFindingPayload => ({
-  checkKind: "reference",
+  positionId: string = REFERENCE_POSITION_ID,
+): DocumentReviewFindingPayload => ({
   finding: {
-    findingId: `reference-${topicId}`,
-    topicId,
+    positionId,
     issue: "Governing law",
-    assessment: "different",
+    severity: "high",
+    standardSource: "reference",
+    verdict: "deviation",
+    delta: { kind: "language" },
+    extracted: null,
     consensus: "single",
+    rationale: text,
     explanation: { type: "comparison", text },
     // Cited on both sides, as a real comparison finding is: the carry-over
     // test turns on whether the quoted evidence changed, so a fixture with no
     // citations could never exercise it.
-    targetCitations: [{ blockId: "para-7", text }],
+    citations: [{ blockId: "para-7", text }],
     referenceCitations: [
       {
         fileFieldId: REFERENCE_FILE_FIELD_ID,
-        citations: [{ blockId: "para-9", text }],
+        passages: [{ id: REFERENCE_PASSAGE_ID, blockId: "para-9" }],
       },
     ],
     fix: null,
   },
 });
 
-const playbookPayload: PlaybookFindingPayload = {
-  checkKind: "playbook",
+const playbookPayload: DocumentReviewFindingPayload = {
   finding: {
     positionId: POSITION_ID,
     issue: "Governing law",
     severity: "high",
+    standardSource: "tiers",
     verdict: "compliant",
+    delta: { kind: "language" },
     extracted: null,
     rationale: null,
     citations: [],
@@ -217,15 +237,6 @@ const seedRun = async ({
     entityVersionId: target.entityVersionId,
     contentSha256: CONTENT_SHA256,
     basis: referenceBasis,
-    topics: [
-      {
-        type: "reference",
-        topicId: TOPIC_ID,
-        title: "Governing law",
-        context: "",
-        included: true,
-      },
-    ],
     status,
     total,
     requestedBy: ids.userA1,
@@ -249,20 +260,14 @@ const upsertReferenceFinding = async (
       entityId: target.entityId,
       fileFieldId: target.fileFieldId,
       entityVersionId: target.entityVersionId,
-      topicId: TOPIC_ID,
-      topicTitle: "Governing law",
-      checkKind: "reference",
-      positionId: null,
-      outcome: payload.finding.assessment,
+      positionId: REFERENCE_POSITION_ID,
+      positionTitle: "Governing law",
+      outcome: payload.finding.verdict,
       payload,
     })
     .onConflictDoUpdate({
-      target: [
-        documentReviewFindings.runId,
-        documentReviewFindings.topicId,
-        documentReviewFindings.checkKind,
-      ],
-      set: { payload, outcome: payload.finding.assessment },
+      target: [documentReviewFindings.runId, documentReviewFindings.positionId],
+      set: { payload, outcome: payload.finding.verdict },
     });
 };
 
@@ -281,10 +286,6 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  await installPgliteMigration({
-    db: testDb,
-    migrationPath: ROLLING_BASIS_BRIDGE_MIGRATION,
-  });
 });
 
 afterAll(async () => {
@@ -352,7 +353,7 @@ describe("document review run persistence", () => {
     );
   });
 
-  test("converges on one finding per topic per kind when a job replays", async () => {
+  test("converges on one finding per position when a job replays", async () => {
     const target = reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target });
@@ -367,25 +368,21 @@ describe("document review run persistence", () => {
       .where(eq(documentReviewFindings.runId, runId));
 
     expect(rows.length).toBe(1);
-    const stored = rows.at(0)?.payload;
-    expect(stored?.checkKind).toBe("reference");
-    if (stored?.checkKind === "reference") {
-      expect(stored.finding.explanation).toEqual({
-        type: "comparison",
-        text: "Replayed pass",
-      });
-    }
+    expect(rows.at(0)?.payload.finding.explanation).toEqual({
+      type: "comparison",
+      text: "Replayed pass",
+    });
   });
 
   test("recounts durable progress after interleaved pass commits", async () => {
     const target = reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target, total: 2 });
-    const topicIds = [
+    const positionIds = [
       "55555555-5555-4555-8555-555555555551",
       "55555555-5555-4555-8555-555555555552",
     ];
-    const rows = topicIds.map((topicId, index) =>
+    const rows = positionIds.map((positionId, index) =>
       buildDocumentReviewFindingRow({
         organizationId: ids.orgA,
         workspaceId: ids.wsA1,
@@ -393,10 +390,9 @@ describe("document review run persistence", () => {
         entityId: target.entityId,
         fileFieldId: target.fileFieldId,
         entityVersionId: target.entityVersionId,
-        topicId,
-        topicTitle: `Concurrent topic ${index + 1}`,
-        positionId: null,
-        payload: referencePayload(`Concurrent pass ${index + 1}`, topicId),
+        positionId,
+        positionTitle: `Concurrent position ${index + 1}`,
+        payload: referencePayload(`Concurrent pass ${index + 1}`, positionId),
       }),
     );
 
@@ -444,20 +440,12 @@ describe("document review run persistence", () => {
     expect(afterRecount.at(0)?.completed).toBe(2);
   });
 
-  test("keeps the two outcome vocabularies apart", async () => {
+  test("refuses an outcome outside the one vocabulary", async () => {
     const target = reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target });
 
-    const insertOutcome = async ({
-      checkKind,
-      outcome,
-      positionId,
-    }: {
-      checkKind: "playbook" | "reference";
-      outcome: string;
-      positionId: string | null;
-    }): Promise<void> => {
+    const insertOutcome = async (outcome: string | null): Promise<void> => {
       await testDb.insert(documentReviewFindings).values({
         id: toSafeId<"documentReviewFinding">(Bun.randomUUIDv7()),
         organizationId: ids.orgA,
@@ -466,64 +454,24 @@ describe("document review run persistence", () => {
         entityId: target.entityId,
         fileFieldId: target.fileFieldId,
         entityVersionId: target.entityVersionId,
-        topicId: Bun.randomUUIDv7(),
-        topicTitle: "Governing law",
-        checkKind,
-        positionId,
+        positionId: Bun.randomUUIDv7(),
+        positionTitle: "Governing law",
         outcome,
-        payload:
-          checkKind === "playbook"
-            ? playbookPayload
-            : referencePayload("vocabulary probe"),
+        payload: playbookPayload,
       });
     };
 
-    // A verdict tier is not a comparison assessment, and vice versa.
+    // The comparison vocabulary was merged into the verdict tiers at grading
+    // time; its words must not reach the column.
     expect(
-      violationText(
-        await rejectionOf(
-          insertOutcome({
-            checkKind: "reference",
-            outcome: "compliant",
-            positionId: null,
-          }),
-        ),
-      ),
-    ).toContain(FINDING_OUTCOME_CHECK);
-    expect(
-      violationText(
-        await rejectionOf(
-          insertOutcome({
-            checkKind: "playbook",
-            outcome: "different",
-            positionId: POSITION_ID,
-          }),
-        ),
-      ),
-    ).toContain(FINDING_OUTCOME_CHECK);
-    // Only a playbook-kind row grades a position.
-    expect(
-      violationText(
-        await rejectionOf(
-          insertOutcome({
-            checkKind: "reference",
-            outcome: "aligned",
-            positionId: POSITION_ID,
-          }),
-        ),
-      ),
+      violationText(await rejectionOf(insertOutcome("aligned"))),
     ).toContain(FINDING_OUTCOME_CHECK);
 
-    await insertOutcome({
-      checkKind: "playbook",
-      outcome: "compliant",
-      positionId: POSITION_ID,
-    });
-    await insertOutcome({
-      checkKind: "reference",
-      outcome: "aligned",
-      positionId: null,
-    });
+    // Every verdict tier is storable, including the one the merge added, and
+    // null for an extract-only position.
+    await insertOutcome("compliant");
+    await insertOutcome("additional");
+    await insertOutcome(null);
   });
 
   test("keeps a decision and its moment inseparable", async () => {
@@ -547,11 +495,9 @@ describe("document review run persistence", () => {
         entityId: target.entityId,
         fileFieldId: target.fileFieldId,
         entityVersionId: target.entityVersionId,
-        topicId: Bun.randomUUIDv7(),
-        topicTitle: "Governing law",
-        checkKind: "reference",
-        positionId: null,
-        outcome: payload.finding.assessment,
+        positionId: Bun.randomUUIDv7(),
+        positionTitle: "Governing law",
+        outcome: payload.finding.verdict,
         payload,
         decision,
         decidedBy: ids.userA1,
@@ -577,93 +523,6 @@ describe("document review run persistence", () => {
     ).toContain(DECISION_TIMING_CHECK);
 
     await insertDecision({ decision: "dismissed", decidedAt: new Date() });
-  });
-
-  test("normalizes a v1 basis inserted after the migration backfill", async () => {
-    const target = reviewTarget();
-    const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
-    seededRunIds.push(runId);
-    const legacyReferences = [
-      {
-        entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
-        fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
-        entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
-        contentSha256: "c".repeat(64),
-        name: "First legacy precedent",
-      },
-      {
-        entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
-        fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
-        entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
-        contentSha256: "d".repeat(64),
-        name: "Second legacy precedent",
-      },
-    ];
-    const legacyBasis = {
-      type: "references",
-      references: legacyReferences,
-    };
-    const topics = [
-      {
-        type: "reference",
-        topicId: TOPIC_ID,
-        title: "Governing law",
-        context: "",
-        included: true,
-      },
-    ];
-
-    await testDb.execute(sql`
-      INSERT INTO "document_review_runs" (
-        "id",
-        "organization_id",
-        "workspace_id",
-        "entity_id",
-        "file_field_id",
-        "entity_version_id",
-        "content_sha256",
-        "basis",
-        "topics",
-        "status",
-        "total",
-        "requested_by"
-      ) VALUES (
-        ${runId},
-        ${ids.orgA},
-        ${ids.wsA1},
-        ${target.entityId},
-        ${target.fileFieldId},
-        ${target.entityVersionId},
-        ${CONTENT_SHA256},
-        ${JSON.stringify(legacyBasis)}::text::jsonb,
-        ${JSON.stringify(topics)}::text::jsonb,
-        'queued',
-        1,
-        ${ids.userA1}
-      )
-    `);
-
-    const rows = await testDb
-      .select({ basis: documentReviewRuns.basis })
-      .from(documentReviewRuns)
-      .where(eq(documentReviewRuns.id, runId));
-    const basis = rows.at(0)?.basis;
-    expect(basis?.type).toBe("references");
-    if (basis?.type !== "references") {
-      panic("The v1 reference basis was not normalized");
-    }
-    expect(basis.perspective).toEqual({ type: "neutral" });
-    expect(basis.references).toEqual(
-      legacyReferences.map((reference) => ({
-        entityId: reference.entityId,
-        fileFieldId: reference.fileFieldId,
-        entityVersionId: reference.entityVersionId,
-        contentSha256: reference.contentSha256,
-        name: reference.name,
-        workspaceId: ids.wsA1,
-        workspaceName: expect.any(String),
-      })),
-    );
   });
 
   test("keeps an applied edit and its moment inseparable", async () => {
@@ -692,11 +551,9 @@ describe("document review run persistence", () => {
         entityId: target.entityId,
         fileFieldId: target.fileFieldId,
         entityVersionId: target.entityVersionId,
-        topicId: Bun.randomUUIDv7(),
-        topicTitle: "Governing law",
-        checkKind: "reference",
-        positionId: null,
-        outcome: payload.finding.assessment,
+        positionId: Bun.randomUUIDv7(),
+        positionTitle: "Governing law",
+        outcome: payload.finding.verdict,
         payload,
         applicationStatus,
         appliedBy: ids.userA1,
@@ -758,7 +615,6 @@ describe("document review run persistence", () => {
       runId: repeatRun,
       entityId: target.entityId,
       fileFieldId: target.fileFieldId,
-      basisType: referenceBasis.type,
     });
     expect(carried).toBe(1);
     expect(await decisionsOf(repeatRun)).toEqual([
@@ -780,7 +636,6 @@ describe("document review run persistence", () => {
       runId: changedRun,
       entityId: target.entityId,
       fileFieldId: target.fileFieldId,
-      basisType: referenceBasis.type,
     });
     expect(carriedAfterChange).toBe(0);
     expect(await decisionsOf(changedRun)).toEqual([

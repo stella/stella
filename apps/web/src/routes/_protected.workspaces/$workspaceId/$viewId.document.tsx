@@ -40,6 +40,10 @@ import { stellaToast } from "@stll/ui/toast";
 import "@stll/folio-react/editor.css";
 import { cn, composeRefs } from "@stll/ui/utils";
 
+import {
+  documentReviewPartiesOptions,
+  documentReviewRunsOptions,
+} from "@/components/ai-suggestions/document-review-queries";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import {
   useDocxFitZoom,
@@ -47,8 +51,15 @@ import {
 } from "@/components/docx-preview-zoom";
 import { shouldUseDocxBrowserEditor } from "@/components/docx/docx-browser-editor.logic";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
+import {
+  DOCUMENT_PANE,
+  DOCUMENT_PANE_SEARCH_VALUES,
+} from "@/components/inspector/document-pane";
+import type { DocumentPane } from "@/components/inspector/document-pane";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import PdfViewer, { PDFSuspenseFallback } from "@/components/pdf/pdf-viewer";
 import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
@@ -128,6 +139,9 @@ export const Route = createFileRoute(
     block: v.optional(v.string()),
     panel: v.optional(v.picklist(["versions"])),
     editing: v.optional(v.boolean()),
+    // Which pane reads the document review. Absent is the default
+    // arrangement: the document here, the review in the inspector.
+    pane: v.optional(v.picklist(DOCUMENT_PANE_SEARCH_VALUES)),
   }),
   search: {
     middlewares: [stripSearchParams({ pdfPage: 1 })],
@@ -210,6 +224,46 @@ export const Route = createFileRoute(
           docxSuggestionsOptions({
             workspaceId: params.workspaceId,
             entityId: deps.entity,
+          }),
+          (error: unknown) => {
+            getAnalytics().captureError(error);
+          },
+        ),
+        "document.prefetch",
+      );
+
+      // The review facet opens on this document's run history, and that answer
+      // carries the latest run in full — so one loader-started read leaves both
+      // the facet's decision and the run panel warm. Without it the first click
+      // on the review tab waits through two dependent rounds behind a skeleton.
+      // DOCX only: the facet does not mount for any other field type.
+      detached(
+        prefetchRouteQuery(
+          context.queryClient,
+          documentReviewRunsOptions({
+            workspaceId: params.workspaceId,
+            entityId: deps.entity,
+            fileFieldId: deps.field,
+          }),
+          (error: unknown) => {
+            getAnalytics().captureError(error);
+          },
+        ),
+        "document.prefetch",
+      );
+
+      // "We act for" is the first thing the review launcher asks, and the
+      // answer is a detection over the document itself — cached per version
+      // server-side, so on every open but the first it costs a round trip and
+      // nothing else. Started here so the chips are on screen with the
+      // launcher rather than after it. DOCX only, like the facet.
+      detached(
+        prefetchRouteQuery(
+          context.queryClient,
+          documentReviewPartiesOptions({
+            workspaceId: params.workspaceId,
+            entityId: deps.entity,
+            fileFieldId: deps.field,
           }),
           (error: unknown) => {
             getAnalytics().captureError(error);
@@ -329,23 +383,23 @@ const AnonymizeScrollSync = () => {
 
 const InspectorFieldLifecycle = ({ fieldId }: { fieldId: string }) => {
   useMountEffect(() => () => {
-    const inspectorState = useInspectorTabsStore.getState();
-    for (const tab of inspectorState.tabs) {
-      if (tab.type !== "pdf" || tab.id !== fieldId) {
-        continue;
-      }
-
-      if (tab.metadataLane === "expanded" && tab.facet === "suggestions") {
-        inspectorState.setFileFacet(fieldId, "metadata");
-      }
-      break;
-    }
-
-    inspectorState.setFileMetadataLane(fieldId, "closed");
+    useInspectorTabsStore.getState().setFileMetadataLane(fieldId, "closed");
   });
 
   return null;
 };
+
+/**
+ * Which facet the document's inspector tab opens on, per arrangement. Total
+ * over the pane vocabulary so a new arrangement cannot leave the inspector on
+ * whatever the previous one happened to open; `undefined` is the tab's own
+ * default, which the unswapped arrangement keeps.
+ */
+const INSPECTOR_FACET_BY_PANE = {
+  document: undefined,
+  review: "preview",
+  margin: "playbook",
+} as const satisfies Record<DocumentPane, FileFacet | undefined>;
 
 type InspectorFileOpenLifecycleProps = {
   entityId: string;
@@ -355,10 +409,13 @@ type InspectorFileOpenLifecycleProps = {
   pdfFileId: string | null;
   propertyId: string;
   workspaceId: string;
+  /** Which facet the tab should open on; the tab's own default otherwise. */
+  facet?: FileFacet | undefined;
 };
 
 const InspectorFileOpenLifecycle = ({
   entityId,
+  facet,
   fieldId,
   fileLabel,
   mimeType,
@@ -378,6 +435,7 @@ const InspectorFileOpenLifecycle = ({
       pdfFileId,
       propertyId,
       metadataLane: "expanded",
+      ...(facet === undefined ? {} : { facet }),
     });
   });
 
@@ -477,6 +535,9 @@ function RouteComponentInner({
   });
   const pageNumber = Route.useSearch({ select: (s) => s.pdfPage ?? 1 });
   const initialBlockId = Route.useSearch({ select: (s) => s.block });
+  const pane = Route.useSearch({
+    select: (s) => s.pane ?? DOCUMENT_PANE.document,
+  });
   const requestBlockScroll = useInspectorCommandStore(
     (s) => s.requestBlockScroll,
   );
@@ -613,6 +674,15 @@ function RouteComponentInner({
   const activeFileLabel =
     activeFileContent?.fileName ?? resolvedVersionFile?.fileName ?? fieldId;
   const isDocxFile = activeMimeType === DOCX_MIME;
+  // The panes have traded places: the findings get this column's full width
+  // and the document moves to the inspector's preview. Only a DOCX has a
+  // review to show, so anything else reads as the default arrangement.
+  const showsReviewPane = pane === DOCUMENT_PANE.review && isDocxFile;
+  // Which facet the document's inspector tab opens on in each arrangement:
+  // the document itself exactly when this column is not showing it, and the
+  // review otherwise. `undefined` leaves the tab's own default alone, which is
+  // what a file with no review to show wants.
+  const inspectorFacet = isDocxFile ? INSPECTOR_FACET_BY_PANE[pane] : undefined;
   const usesNativeDocxDisplay = isDocxFile;
   const officeViewerFormat = getNativeOfficeViewerFormat(activeMimeType);
   const filePropertyId =
@@ -708,9 +778,13 @@ function RouteComponentInner({
       {filePropertyId && activeMimeType !== undefined && (
         <InspectorFileOpenLifecycle
           entityId={entityId}
+          // In the swapped arrangement the inspector is where the document is
+          // read, so the tab opens on its preview rather than its metadata; in
+          // the margin arrangement it is where the findings are.
+          facet={inspectorFacet}
           fieldId={fieldId}
           fileLabel={activeFileLabel}
-          key={`${fieldId}:${filePropertyId}:${activeMimeType}:${activePdfFileId}:${activeFileLabel}`}
+          key={`${fieldId}:${filePropertyId}:${activeMimeType}:${activePdfFileId}:${activeFileLabel}:${pane}`}
           mimeType={activeMimeType}
           pdfFileId={activePdfFileId}
           propertyId={filePropertyId}
@@ -727,7 +801,7 @@ function RouteComponentInner({
 
         {/* Center: DOCX editor, PDF viewer, or redline comparison */}
         <section className="flex h-full min-w-0 flex-1 flex-col">
-          {!usesEmbeddedDocumentToolbar && (
+          {!usesEmbeddedDocumentToolbar && !showsReviewPane && (
             <div
               className={cn(
                 "bg-background/80 supports-[backdrop-filter]:bg-background/65 flex shrink-0 items-center justify-center gap-2 border-b px-4 backdrop-blur",
@@ -754,6 +828,16 @@ function RouteComponentInner({
           )}
           <div className="relative min-h-0 flex-1">
             {(() => {
+              if (showsReviewPane) {
+                return (
+                  <PlaybookFacet
+                    entityId={entityId}
+                    fileFieldId={fieldId}
+                    workspaceId={workspaceId}
+                  />
+                );
+              }
+
               if (filePreviewState === "error") {
                 const error = versionDataQuery.error;
                 if (error instanceof Error) {

@@ -1,5 +1,8 @@
 import JSZip from "jszip";
 
+import { isReviewFlag } from "@stll/api-contract";
+import type { ReviewFlag } from "@stll/api-contract";
+
 import type { JustificationContent } from "@/api/db/schema";
 import { escapeCSV } from "@/api/lib/csv";
 import type { QueryEntityResult } from "@/api/lib/entities/query-entities";
@@ -43,15 +46,9 @@ export const SPREADSHEET_EXPORT_LIMITS = {
 
 const TRUNCATION_MARKER = "\n[truncated]";
 
-const CELL_FLAG_IDS = [
-  "needs-review",
-  "important",
-  "follow-up",
-  "contradiction",
-  "verified",
-] as const;
-
-type CellFlagId = (typeof CELL_FLAG_IDS)[number];
+// The one reviewer-flag vocabulary; a flag added there gets a fill and a sort
+// rank below, or fails typecheck.
+type CellFlagId = ReviewFlag;
 
 export type ExportTable = {
   columns: ExportColumn[];
@@ -102,9 +99,6 @@ type ExportNumberCell = {
 type ExportCell = ExportTextCell | ExportNumberCell;
 
 type ExportRow = ExportCell[];
-
-const isCellFlagId = (value: string): value is CellFlagId =>
-  CELL_FLAG_IDS.some((flagId) => flagId === value);
 
 const stripInvalidXmlTextChars = (value: string): string =>
   value.replace(/[^\t\n\r\x20-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu, "");
@@ -369,7 +363,7 @@ const getExportCellStyle = (
   }
 
   const firstKnownFlag = metadata.manualFlags.find((flag) =>
-    isCellFlagId(flag),
+    isReviewFlag(flag),
   );
   if (!firstKnownFlag) {
     return "default";

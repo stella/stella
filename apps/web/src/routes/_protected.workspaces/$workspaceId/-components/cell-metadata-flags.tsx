@@ -1,21 +1,12 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { LucideIcon } from "lucide-react";
-import {
-  CheckIcon,
-  CheckCircle2Icon,
-  HelpCircleIcon,
-  LockIcon,
-  LockOpenIcon,
-  MessageSquareWarningIcon,
-  ShieldAlertIcon,
-  StarIcon,
-  XIcon,
-} from "lucide-react";
+import { CheckCircle2Icon, LockIcon, LockOpenIcon, XIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { isReviewFlag, REVIEW_FLAG } from "@stll/api-contract";
+import type { ReviewFlag } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   MenuGroup,
@@ -26,6 +17,11 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { useLatest } from "@stll/ui/use-latest";
 
+import {
+  REVIEW_FLAG_PRESENTATION,
+  ReviewFlagMenuItems,
+  useReviewFlagLabel,
+} from "@/components/review-flags";
 import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
 import { useMountEffect } from "@/hooks/use-effect";
@@ -42,60 +38,29 @@ import {
   useCellMetadataOverridesStore,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-overrides-store";
 
-const NO_MANUAL_FLAGS: readonly string[] = Object.freeze([]);
+const NO_MANUAL_FLAGS: readonly ReviewFlag[] = Object.freeze([]);
 
-const VERIFIED_FLAG_ID = "verified";
+const VERIFIED_FLAG_ID = REVIEW_FLAG.VERIFIED;
 
-type CellFlagDefinitionShape = {
-  id: string;
-  icon: LucideIcon;
-  color: string;
-  background: string;
-};
+// One vocabulary, one presentation: the cell corner, the cell menu and the
+// review finding card all read `REVIEW_FLAG_PRESENTATION`.
+type CellFlagId = ReviewFlag;
 
-const VERIFIED_CELL_FLAG = {
-  id: VERIFIED_FLAG_ID,
-  icon: CheckCircle2Icon,
-  color: "var(--option-emerald)",
-  background: "var(--option-emerald-bg)",
-} as const satisfies CellFlagDefinitionShape;
-
-const CELL_FLAGS = [
-  {
-    id: "needs-review",
-    icon: HelpCircleIcon,
-    color: "var(--option-amber)",
-    background: "var(--option-amber-bg)",
-  },
-  {
-    id: "important",
-    icon: StarIcon,
-    color: "var(--option-blue)",
-    background: "var(--option-blue-bg)",
-  },
-  {
-    id: "follow-up",
-    icon: MessageSquareWarningIcon,
-    color: "var(--option-violet)",
-    background: "var(--option-violet-bg)",
-  },
-  {
-    id: "contradiction",
-    icon: ShieldAlertIcon,
-    color: "var(--option-red)",
-    background: "var(--option-red-bg)",
-  },
-  VERIFIED_CELL_FLAG,
-] as const satisfies readonly CellFlagDefinitionShape[];
-
-type CellFlagId = (typeof CELL_FLAGS)[number]["id"];
-
-type CellFlagDefinition = Omit<CellFlagDefinitionShape, "id"> & {
+type CellFlagDefinition = (typeof REVIEW_FLAG_PRESENTATION)[CellFlagId] & {
   id: CellFlagId;
 };
 
-export const getCellFlagById = (flagId: string) =>
-  CELL_FLAGS.find((flag) => flag.id === flagId);
+const cellFlagDefinition = (id: CellFlagId): CellFlagDefinition => ({
+  ...REVIEW_FLAG_PRESENTATION[id],
+  id,
+});
+
+const VERIFIED_CELL_FLAG = cellFlagDefinition(VERIFIED_FLAG_ID);
+
+export const getCellFlagById = (
+  flagId: string,
+): CellFlagDefinition | undefined =>
+  isReviewFlag(flagId) ? cellFlagDefinition(flagId) : undefined;
 
 // Determines which active flag colors the cell background tint when
 // several flags coexist. Verified wins (the desired final state),
@@ -112,34 +77,26 @@ type MissingTintPriority = Exclude<CellFlagId, (typeof TINT_PRIORITY)[number]>;
 
 true satisfies MissingTintPriority extends never ? true : never;
 
-const FLAG_LABEL_KEYS = {
-  "needs-review": "workspaces.table.flags.needsReview",
-  important: "workspaces.table.flags.important",
-  "follow-up": "workspaces.table.flags.followUp",
-  contradiction: "workspaces.table.flags.contradiction",
-  verified: "workspaces.table.flags.verified",
-} as const;
-
 type FlagProvenance = NonNullable<
   WorkspaceCellMetadata["flagProvenance"]
 >[string];
 
 type LockProvenance = NonNullable<WorkspaceCellMetadata["lockProvenance"]>;
 
-export const useFlagLabel = () => {
-  const t = useTranslations();
-  return (flagId: CellFlagId) => t(FLAG_LABEL_KEYS[flagId]);
-};
+export const useFlagLabel = useReviewFlagLabel;
 
-const normalizeManualFlags = (flags: readonly string[]) =>
+const normalizeManualFlags = (flags: readonly ReviewFlag[]): ReviewFlag[] =>
   [...new Set(flags)].toSorted();
 
-const haveSameFlags = (a: string[], b: string[]) =>
+const haveSameFlags = (
+  a: readonly ReviewFlag[],
+  b: readonly ReviewFlag[],
+): boolean =>
   a.length === b.length && a.every((flag, index) => flag === b[index]);
 
 type UpdateCellMetadataVariables = {
-  baseManualFlags: string[];
-  manualFlags: string[];
+  baseManualFlags: ReviewFlag[];
+  manualFlags: ReviewFlag[];
   locked?: boolean;
 };
 
@@ -445,29 +402,10 @@ export const CellMetadataMenuSection = ({
     <>
       <MenuGroup>
         <MenuGroupLabel>{t("workspaces.table.flagCell")}</MenuGroupLabel>
-        {CELL_FLAGS.map((flag) => {
-          const Icon = flag.icon;
-          const checked = activeFlags.some((f) => f.id === flag.id);
-          return (
-            <MenuItem
-              className="min-h-7 py-0.5 text-sm"
-              closeOnClick={false}
-              key={flag.id}
-              onClick={() => toggleFlag(flag.id)}
-            >
-              <Icon
-                className="size-3.5 shrink-0 opacity-75"
-                style={{ color: flag.color }}
-              />
-              <span className="min-w-0 flex-1 truncate">
-                {t(FLAG_LABEL_KEYS[flag.id])}
-              </span>
-              {checked && (
-                <CheckIcon className="text-muted-foreground ms-3 size-3.5 shrink-0" />
-              )}
-            </MenuItem>
-          );
-        })}
+        <ReviewFlagMenuItems
+          active={activeFlags.map((flag) => flag.id)}
+          onToggle={toggleFlag}
+        />
       </MenuGroup>
       {activeFlags.length > 0 && (
         <>
@@ -559,7 +497,7 @@ export const useCellMetadataFlags = ({
   // the merge base for the next flush so a rapid add-then-remove
   // diffs against the in-flight value rather than the now-stale
   // server snapshot.
-  const lastSentRef = useRef<string[] | null>(null);
+  const lastSentRef = useRef<ReviewFlag[] | null>(null);
 
   // Once the server-side metadata catches up with what we last sent,
   // drop the in-flight base so the next flush diffs against the
@@ -642,7 +580,7 @@ export const useCellMetadataFlags = ({
   };
 
   const writeOverride = (
-    next: { manualFlags: string[]; locked?: boolean | undefined },
+    next: { manualFlags: ReviewFlag[]; locked?: boolean | undefined },
     options?: { immediate?: boolean },
   ) => {
     const { storedLocked } = readLatest();

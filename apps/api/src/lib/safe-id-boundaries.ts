@@ -83,6 +83,11 @@ export const brandPersistedDocumentReviewRunId = (
   runId: string,
 ): SafeId<"documentReviewRun"> => toSafeId<"documentReviewRun">(runId);
 
+export const brandPersistedDocumentReviewReferencePassageId = (
+  passageId: string,
+): SafeId<"documentReviewReferencePassage"> =>
+  toSafeId<"documentReviewReferencePassage">(passageId);
+
 export const brandPersistedDocumentTranslationRunId = (
   runId: string,
 ): SafeId<"documentTranslationRun"> =>

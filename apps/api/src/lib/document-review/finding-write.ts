@@ -13,7 +13,6 @@ import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { findingOutcome } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewFindingPayload } from "@/api/lib/document-review/run-contract";
 
 export type DocumentReviewFindingRow =
@@ -26,10 +25,8 @@ export type BuildDocumentReviewFindingRowArgs = {
   entityId: SafeId<"entity">;
   fileFieldId: SafeId<"field">;
   entityVersionId: SafeId<"entityVersion">;
-  topicId: string;
-  topicTitle: string;
-  /** Set only on a playbook-kind row, which grades one playbook position. */
-  positionId: string | null;
+  positionId: string;
+  positionTitle: string;
   payload: DocumentReviewFindingPayload;
 };
 
@@ -40,9 +37,8 @@ export const buildDocumentReviewFindingRow = ({
   entityId,
   fileFieldId,
   entityVersionId,
-  topicId,
-  topicTitle,
   positionId,
+  positionTitle,
   payload,
 }: BuildDocumentReviewFindingRowArgs): DocumentReviewFindingRow => ({
   id: createSafeId<"documentReviewFinding">(),
@@ -52,19 +48,16 @@ export const buildDocumentReviewFindingRow = ({
   entityId,
   fileFieldId,
   entityVersionId,
-  topicId,
-  topicTitle,
-  checkKind: payload.checkKind,
   positionId,
-  outcome: findingOutcome(payload),
+  positionTitle,
+  outcome: payload.finding.verdict,
   payload,
 });
 
 /**
- * Commit findings on the `(runId, topicId, checkKind)` key. A replayed write
- * overwrites the row it wrote before rather than adding a second judgment for
- * the same topic, so duplicate delivery converges instead of doubling the
- * review.
+ * Commit findings on the `(runId, positionId)` key. A replayed write overwrites
+ * the row it wrote before rather than adding a second judgment for the same
+ * position, so duplicate delivery converges instead of doubling the review.
  *
  * The reviewer's disposition is deliberately absent from the update set: a
  * re-delivery must refresh what the engine said, never reset what a lawyer
@@ -82,15 +75,10 @@ export const upsertDocumentReviewFindings = async (
     .insert(documentReviewFindings)
     .values([...rows])
     .onConflictDoUpdate({
-      target: [
-        documentReviewFindings.runId,
-        documentReviewFindings.topicId,
-        documentReviewFindings.checkKind,
-      ],
+      target: [documentReviewFindings.runId, documentReviewFindings.positionId],
       set: {
         entityVersionId: sql`excluded.entity_version_id`,
-        topicTitle: sql`excluded.topic_title`,
-        positionId: sql`excluded.position_id`,
+        positionTitle: sql`excluded.position_title`,
         outcome: sql`excluded.outcome`,
         payload: sql`excluded.payload`,
         updatedAt: new Date(),

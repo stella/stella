@@ -1,9 +1,10 @@
+import { useRef } from "react";
 import type { RefObject } from "react";
 
 import type { DocxEditorRef } from "@stll/folio-react";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 
 // A block that is not on screen yet is retried quickly while the editor
@@ -78,27 +79,45 @@ export const useDocxBlockScroll = ({
     (s) => s.clearPendingBlockScroll,
   );
 
+  // The request currently being served, by `seq`. A request is served exactly
+  // once — and every request is served, including a repeat of the block the
+  // reader is already parked on, because each carries a fresh `seq`.
+  const servedSeqRef = useRef<number | null>(null);
+  // The schedule is cancelled by the next request or by unmount, never by this
+  // effect's own cleanup: acknowledging a scroll clears the store, which would
+  // otherwise re-run the effect and cancel the settle passes that make the
+  // landing stick on a document still laying itself out.
+  const cancelScrollRef = useRef<(() => void) | null>(null);
+
+  useMountEffect(() => () => {
+    cancelScrollRef.current?.();
+  });
+
   useExternalSyncEffect(() => {
-    if (pendingBlockScroll === null || pendingBlockScroll.tabId !== fieldId) {
-      return undefined;
+    if (
+      pendingBlockScroll === null ||
+      pendingBlockScroll.tabId !== fieldId ||
+      servedSeqRef.current === pendingBlockScroll.seq
+    ) {
+      return;
     }
+    const { blockId, seq, text } = pendingBlockScroll;
+    servedSeqRef.current = seq;
 
-    debugDocxBlockScroll("hook:pending", {
-      blockId: pendingBlockScroll.blockId,
-      fieldId,
-    });
+    debugDocxBlockScroll("hook:pending", { blockId, fieldId, seq });
 
-    return scheduleDocxBlockScroll({
-      blockId: pendingBlockScroll.blockId,
-      text: pendingBlockScroll.text,
-      onSuccess: clearPendingBlockScroll,
+    cancelScrollRef.current?.();
+    cancelScrollRef.current = scheduleDocxBlockScroll({
+      blockId,
+      text,
+      onSuccess: () => {
+        clearPendingBlockScroll(seq);
+      },
       attemptScroll: (target) => attemptDocxScroll(editorRef, target),
     });
   }, [clearPendingBlockScroll, editorRef, fieldId, pendingBlockScroll]);
 
   useExternalSyncEffect(() => {
-    let cancelScroll: (() => void) | null = null;
-
     // `FOLIO_SCROLL_EVENT` isn't in the WindowEventMap because it's
     // a custom in-app channel; receive Event and narrow inside.
     const handler: EventListener = (event) => {
@@ -139,8 +158,11 @@ export const useDocxBlockScroll = ({
         fieldId,
       });
 
-      cancelScroll?.();
-      cancelScroll = scheduleDocxBlockScroll({
+      // One scroll in flight per editor, whichever path asked for it: a
+      // broadcast and a queued command racing each other would land the
+      // reader on whichever block finished retrying last.
+      cancelScrollRef.current?.();
+      cancelScrollRef.current = scheduleDocxBlockScroll({
         blockId,
         text,
         attemptScroll: (target) => attemptDocxScroll(editorRef, target),
@@ -149,7 +171,6 @@ export const useDocxBlockScroll = ({
 
     window.addEventListener(FOLIO_SCROLL_EVENT, handler);
     return () => {
-      cancelScroll?.();
       window.removeEventListener(FOLIO_SCROLL_EVENT, handler);
     };
   }, [editorRef, fieldId]);

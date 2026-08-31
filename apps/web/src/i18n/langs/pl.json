@@ -1498,43 +1498,47 @@
     "applyAs": "jako",
     "applyDirect": "Bezpośrednio",
     "applyTracked": "Śledzenie zmian",
-    "areaUnspecified": "Nieokreślony",
     "barLabel": "Przegląd sugestii",
-    "byArea": "Według obszaru",
-    "bySeverity": "Według wagi",
+    "change": {
+      "deleteParagraph": "Usuń akapit",
+      "replacement": "„{find}” → „{replace}”"
+    },
     "countHigh": "{count, plural, one {# wysoka} few {# wysokie} many {# wysokich} other {# wysokiej}}",
     "countLow": "{count, plural, one {# niska} few {# niskie} many {# niskich} other {# niskiej}}",
     "countMedium": "{count, plural, one {# średnia} few {# średnie} many {# średnich} other {# średniej}}",
     "countUnspecified": "{count, plural, one {# nieokreślona} few {# nieokreślone} many {# nieokreślonych} other {# nieokreślonej}}",
-    "dismiss": "Ukryj panel przeglądu",
-    "empty": "Żadna sugestia nie pasuje do bieżącego filtra.",
     "finalizePendingNote": "{count, plural, one {# sugestia nadal oczekuje na przegląd.} few {# sugestie nadal oczekują na przegląd.} many {# sugestii nadal oczekuje na przegląd.} other {# sugestii nadal oczekuje na przegląd.}}",
-    "groupBy": "Grupuj według",
-    "hiddenCount": "ukryto: {count}",
     "hideAccepted": "Ukryj zaakceptowane sugestie",
-    "identityAria": "Tożsamość śledzonych zmian dla {name}",
-    "identitySaved": "Zapisano tożsamość",
     "persistFailed": "Nie udało się zapisać zmiany przeglądu",
     "reject": "Odrzuć",
     "rejectAll": "Odrzuć wszystkie",
     "revert": "Cofnij",
-    "savingIdentity": "Zapisywanie…",
     "severityHigh": "Wysoka",
     "severityLow": "Niska",
     "severityMedium": "Średnia",
     "severityUnspecified": "Nieokreślona",
     "skipped": "Nie udało się zastosować: {reason}",
     "staleResolution": "Ta sugestia została już rozstrzygnięta gdzie indziej.",
-    "statusAccepted": "Zaakceptowano",
-    "statusApplying": "Stosowanie zmiany…",
-    "statusRejected": "Odrzucono",
-    "statusSkipped": "Pominięto",
-    "subtitle": "{pending} z {total} oczekuje",
-    "title": "Sugestie AI",
-    "wordName": "Nazwa autora w programie Word",
-    "wordNamePlaceholder": "Jak będą podpisywane śledzone zmiany",
-    "wordShortcut": "Inicjały",
-    "wordShortcutPlaceholder": "np. JK"
+    "summary": {
+      "commentOnParagraph": "{label, select, none {Skomentuj akapit} other {Skomentuj akapit {label}}}",
+      "commentOnSelection": "Skomentuj zaznaczony tekst",
+      "deleteParagraph": "{label, select, none {Usuń akapit} other {Usuń akapit {label}}}",
+      "deleteTableColumn": "Usuń kolumnę tabeli",
+      "deleteTableRow": "Usuń wiersz tabeli",
+      "formatSelection": "Przeformatuj zaznaczony tekst",
+      "insertAfter": "{label, select, none {Wstaw akapit} other {Wstaw akapit za {label}}}",
+      "insertBefore": "{label, select, none {Wstaw akapit} other {Wstaw akapit przed {label}}}",
+      "insertSignatureBlock": "Wstaw tabelę podpisów dla {names}",
+      "insertTableColumn": "Wstaw kolumnę tabeli",
+      "insertTableRow": "Wstaw wiersz tabeli",
+      "mergeTableCells": "Scal komórki tabeli",
+      "pageBreakAfter": "{label, select, none {Wstaw podział strony} other {Wstaw podział strony za {label}}}",
+      "pageBreakBefore": "{label, select, none {Wstaw podział strony} other {Wstaw podział strony przed {label}}}",
+      "replaceInBlock": "Zastąp „{find}” tekstem „{replace}”",
+      "replaceParagraph": "{label, select, none {Przeformułuj akapit} other {Przeformułuj akapit {label}}}",
+      "replaceSelection": "Zastąp zaznaczony tekst tekstem „{replace}”",
+      "splitTableCell": "Podziel komórkę tabeli"
+    }
   },
   "emailViewer": {
     "attachments": "Załączniki",
@@ -2192,6 +2196,7 @@
       "workAttention": "Monitorowanie pracy"
     },
     "severity": {
+      "critical": "Krytyczne",
       "info": "Informacja",
       "notice": "Uwaga",
       "warning": "Ostrzeżenie"
@@ -2310,9 +2315,13 @@
     "review": {
       "actionNeeded": "Wymaga działania",
       "addComment": "Dodaj jako komentarz",
+      "addNote": "Dodaj notatkę dla kontrahenta",
+      "addNotePlaceholder": "Co ma zobaczyć kontrahent",
+      "addNoteSubmit": "Dodaj notatkę",
       "addReference": "Dodaj {name} jako referencję",
       "addTopic": "Dodaj temat",
       "allDecided": "Wszystkie ustalenia zostały rozstrzygnięte.",
+      "askInChat": "Zapytaj w czacie",
       "assessment": {
         "additionalInTarget": "Dodatkowe w dokumencie docelowym",
         "aligned": "Spójne",
@@ -2322,12 +2331,21 @@
         "notComparable": "Nieporównywalne"
       },
       "basisCombined": "{count, plural, one {Kontrola według {name} i porównanie z # dokumentem referencyjnym} few {Kontrola według {name} i porównanie z # dokumentami referencyjnymi} many {Kontrola według {name} i porównanie z # dokumentami referencyjnymi} other {Kontrola według {name} i porównanie z # dokumentami referencyjnymi}}",
+      "basisDivider": "i / lub",
       "basisPlaybook": "Kontrola według {name}",
       "basisReferences": "{count, plural, one {Porównanie z # dokumentem referencyjnym} few {Porównanie z # dokumentami referencyjnymi} many {Porównanie z # dokumentami referencyjnymi} other {Porównanie z # dokumentami referencyjnymi}}",
       "changeBasis": "Zmień podstawę weryfikacji",
+      "chatDraft": {
+        "finding": "Ustalenie:",
+        "impact": "Wpływ:",
+        "issue": "Temat:",
+        "question": "Jak mam przeredagować dokument docelowy w tym miejscu?",
+        "rationale": "Uzasadnienie:"
+      },
+      "checks": "Sprawdzane jest:",
       "commentFailed": "Nie udało się dodać komentarza",
       "comparedWithReferences": "{count, plural, one {Porównano z # dokumentem referencyjnym} few {Porównano z # dokumentami referencyjnymi} many {Porównano z # dokumentami referencyjnymi} other {Porównano z # dokumentami referencyjnymi}}",
-      "decidedCount": "Rozstrzygnięto {decided, number}/{total, number}",
+      "decidedCount": "rozstrzygnięto {count, number}",
       "decision": "Decyzja",
       "decisionFailed": "Nie udało się zapisać decyzji",
       "decisions": {
@@ -2337,20 +2355,89 @@
       "description": "Wybierz przygotowany playbook, dokumenty referencyjne lub oba.",
       "dismiss": "Odrzuć",
       "documentChanged": "Ten dokument zmienił się po tej weryfikacji.",
+      "export": {
+        "counterparty": "Wyślij do kontrahenta",
+        "counterpartyFailed": "Nie udało się wyeksportować dokumentu",
+        "counterpartyHint": "Dokument z Twoimi śledzonymi zmianami",
+        "counterpartyUnavailable": "Otwórz dokument, aby go wyeksportować",
+        "csv": "CSV",
+        "docx": "Dokument Word (.docx)",
+        "exporting": "Eksportowanie",
+        "internal": "Notatka wewnętrzna",
+        "internalHint": "Ustalenia, uzasadnienie i referencje",
+        "xlsx": "Arkusz Excel (.xlsx)"
+      },
       "failed": "Nie udało się sprawdzić dokumentu",
+      "filterCoverage": "Pokrycie",
+      "filterDeviations": "Odstępstwa",
+      "flag": "Oznacz",
+      "flaggedPositions": "{total, plural, one {oznaczono {flagged, number} z # stanowiska} few {oznaczono {flagged, number} z # stanowisk} many {oznaczono {flagged, number} z # stanowisk} other {oznaczono {flagged, number} z # stanowisk}}",
+      "fromChat": "Z czatu",
       "fromThisMatter": "Z tej sprawy",
+      "history": {
+        "backToLatest": "Wróć do najnowszej",
+        "decided": "rozstrzygnięto {decided, number} z {total, number}",
+        "references": "{count, plural, one {# referencja} few {# referencje} many {# referencji} other {# referencji}}"
+      },
+      "impact": {
+        "favourable": "Korzystne",
+        "neutral": "Neutral",
+        "notJudged": "Nieocenione",
+        "unfavourable": "Niekorzystne"
+      },
+      "impactForSide": {
+        "favourable": "Lepsze dla {role}",
+        "neutral": "Bez wpływu na {role}",
+        "unfavourable": "Gorsze dla {role}"
+      },
       "insertFailed": "Nie udało się wstawić proponowanego brzmienia",
       "insertSuggestion": "Wstaw proponowane brzmienie",
       "insufficientEvidence": "Dostarczone dokumenty nie zawierają wystarczających informacji na ten temat.",
+      "marginNotes": {
+        "above": "{count, number} powyżej",
+        "below": "{count, number} poniżej",
+        "documentNotRead": "Otwórz dokument w głównym panelu, aby przypiąć obok niego ustalenia.",
+        "label": "Ustalenia obok klauzul, których dotyczą",
+        "unanchored": "Niepowiązane z klauzulą"
+      },
       "newTopic": "Nowy temat przeglądu",
+      "noChangeNeeded": "Brak potrzeby zmiany",
+      "noEditor": "Otwórz dokument, aby zaakceptować zmiany",
       "noMaterialDifferences": "Nie znaleziono istotnych różnic",
+      "noPassage": "Brak fragmentu",
       "noPlaybooksMatch": "Brak pasujących playbooków.",
       "noReferencesFound": "Nie znaleziono pasujących dokumentów DOCX.",
+      "notCompared": "Nieporównane",
+      "notComparedCount": "Nieporównane: {count, number}",
+      "noteAdded": "Dodano notatkę dla kontrahenta",
+      "openPlaybooks": "Otwórz playbooki",
+      "pane": {
+        "document": "Panel: ustalenia obok dokumentu",
+        "margin": "Margines: ustalenia obok swoich klauzul",
+        "review": "Główny: ustalenia w szerokim panelu"
+      },
+      "passageUnavailable": "Tekst referencyjny niedostępny",
+      "passagesCount": "{count, plural, one {# fragment} few {# fragmenty} many {# fragmentów} other {# fragmentu}}",
+      "pendingCount": "{count, plural, one {# oczekujące} few {# oczekujące} many {# oczekujących} other {# oczekujących}}",
+      "perspective": {
+        "neutral": "Nie określono",
+        "other": "Inna…",
+        "otherPlaceholder": "Rola tak, jak nazywa ją dokument",
+        "title": "Reprezentujemy"
+      },
       "playbookDeleted": "Ten playbook już nie istnieje; weryfikacja jest zachowana jako zapis.",
       "playbookFindings": "Ustalenia z playbooka",
       "playbookOutdated": "Istnieje nowsza zatwierdzona wersja tego playbooka.",
       "playbookSection": "Playbook",
       "playbookTopic": "Temat z playbooka",
+      "presence": {
+        "absent": "Nie",
+        "present": "Tak"
+      },
+      "progressPositions": "{total, plural, one {{completed, number} z # stanowiska} few {{completed, number} z # stanowisk} many {{completed, number} z # stanowisk} other {{completed, number} z # stanowisk}}",
+      "proposing": "Proponowanie stanowisk… {count, number}",
+      "readOnlyRun": "Rozstrzygnięto w tej weryfikacji",
+      "recommendation": "Rekomendacja:",
       "referenceDocument": "Dokument referencyjny",
       "referenceFindings": "Porównanie z referencjami",
       "referenceLimitReached": "Osiągnięto limit referencji",
@@ -2363,21 +2450,47 @@
       "reopen": "Otwórz ponownie",
       "results": "Wyniki weryfikacji",
       "reviewAgain": "Uruchom kolejną weryfikację",
+      "reviewPositionsFirst": "Najpierw przejrzyj stanowiska",
       "reviewedAgainstCombined": "{count, plural, one {Sprawdzono według {name} i porównano z # dokumentem referencyjnym} few {Sprawdzono według {name} i porównano z # dokumentami referencyjnymi} many {Sprawdzono według {name} i porównano z # dokumentami referencyjnymi} other {Sprawdzono według {name} i porównano z # dokumentami referencyjnymi}}",
       "reviewing": "Weryfikacja w toku…",
       "reviewingHint": "W przypadku obszernych dokumentów może to potrwać kilka minut.",
       "run": "Rozpocznij weryfikację",
+      "runStatus": {
+        "queued": "W kolejce"
+      },
+      "saveAsPlaybook": "Zapisz jako playbook",
+      "saveAsPlaybookFailed": "Nie udało się zapisać tej weryfikacji jako playbooka",
+      "savedAsPlaybook": "Zapisano jako playbook",
       "scoreTopics": "Sprawdź te tematy",
       "searchPlaybooks": "Szukaj playbooków",
+      "showInDocument": "Pokaż w dokumencie",
       "sizeConfirmStart": "Rozpocznij weryfikację",
       "sizeConfirmTitle": "Obszerna weryfikacja",
+      "skipReason": {
+        "dealSpecificValue": "Wartość właściwa dla transakcji",
+        "lowerWeight": "Mniejsza waga handlowa",
+        "structural": "Różnica strukturalna"
+      },
+      "standardColumn": "Wzorzec",
+      "standardColumnFrom": "Wzorzec ({name})",
+      "suggestionSkipped": "Już nie pasuje do dokumentu",
+      "suggestionStaged": "Przygotowano jako śledzoną zmianę w dokumencie",
+      "summary": {
+        "forParty": "dla {role}",
+        "noSide": "bez strony",
+        "proposedFromReferences": "stanowiska zaproponowane z referencji"
+      },
+      "targetAsReference": "Sprawdzany dokument nie może być własną referencją.",
+      "targetColumn": "Ten dokument",
       "targetDocument": "Dokument docelowy",
       "title": "Weryfikacja dokumentu",
       "topicContext": "Dodatkowy kontekst",
       "topicContextPlaceholder": "Co należy uwzględnić przy ocenie tego tematu?",
       "topicName": "Nazwa tematu",
       "topicsDescription": "Potwierdź proponowane tematy, dodaj własne lub uzupełnij kontekst przed oceną.",
-      "topicsTitle": "Co ma obejmować ten przegląd?"
+      "topicsTitle": "Co ma obejmować ten przegląd?",
+      "why": "Dlaczego",
+      "whyItMatters": "Dlaczego to istotne:"
     },
     "showPane": "Pokaż panel",
     "swapViews": "Zamień widok główny z panelem bocznym",
@@ -2515,6 +2628,7 @@
       "addOption": "Dodaj opcję",
       "addPosition": "Dodaj stanowisko",
       "addRule": "Reguła",
+      "adoptAsIdeal": "Przyjmij jako idealne brzmienie",
       "advanced": "Zmień działanie",
       "all": "Wszystkie playbooki",
       "approval": {
@@ -2548,10 +2662,12 @@
       "convertToExtractDescription": "Spowoduje to usunięcie poziomów oceny i samej oceny dla tego stanowiska. Tej czynności nie można cofnąć.",
       "convertToExtractTitle": "Przekształcić na tylko ekstrakcję?",
       "convertToGraded": "Dodaj reguły oceny",
+      "convertToRules": "Przekształć w reguły",
       "createPlaybook": "Nowy playbook",
       "created": "Playbook utworzony",
       "customizeAnswer": "Zmień wyodrębnianą odpowiedź",
       "customizeAnswerHint": "Edytuj pytanie lub format odpowiedzi.",
+      "decisionLine": "{runs, plural, one {zaakceptowano {accepted, number} · odrzucono {dismissed, number} · w # weryfikacji} few {zaakceptowano {accepted, number} · odrzucono {dismissed, number} · w # weryfikacjach} many {zaakceptowano {accepted, number} · odrzucono {dismissed, number} · w # weryfikacjach} other {zaakceptowano {accepted, number} · odrzucono {dismissed, number} · w # weryfikacjach}}",
       "deleteFailed": "Nie udało się usunąć playbooka",
       "deletePlaybook": "Usuń playbook",
       "deletePosition": "Usuń stanowisko",
@@ -2607,6 +2723,7 @@
         "title": "Negocjacje"
       },
       "noPositions": "Brak stanowisk. Dodaj pierwsze.",
+      "noSettledPosition": "Brak ustalonego stanowiska",
       "optionPlaceholder": "Wartość opcji",
       "optionsLabel": "Opcje",
       "outline": "Spis treści",
@@ -2615,6 +2732,7 @@
       "recent": "Ostatnio używane",
       "recommended": "Polecane szablony",
       "redLinePlaceholder": "Brzmienie, które nigdy nie jest akceptowalne",
+      "referenceStandard": "Z referencji",
       "removeCheck": "Usuń kontrolę",
       "removeIdeal": "Usuń idealne brzmienie",
       "reorderPosition": "Zmień kolejność stanowiska",
@@ -2641,20 +2759,6 @@
         "viewClause": "Zobacz klauzulę",
         "violatedRedLine": "Narusza nieakceptowalną regułę:"
       },
-      "risk": {
-        "complianceLabel": "Zgodność",
-        "flaggedCount": "Oznaczono {flagged} z {total} pozycji",
-        "notApplicableExcluded": "({count} nie dotyczy, wykluczono)",
-        "riskLevel": {
-          "critical": "Krytyczne",
-          "high": "Wysokie",
-          "low": "Niskie",
-          "medium": "Średnie",
-          "none": "Brak ryzyka"
-        },
-        "summaryTitle": "Podsumowanie ryzyka",
-        "topIssuesTitle": "Najważniejsze kwestie"
-      },
       "ruleNumber": "Reguła {index}",
       "rulePlaceholder": "np. Termin płatności nie może przekraczać 30 dni",
       "saveFailed": "Nie udało się zapisać playbooka",
@@ -2674,6 +2778,12 @@
       },
       "switchToAuto": "Generuj pytanie i format automatycznie",
       "switchToManual": "Dostosuj pytanie i format odpowiedzi",
+      "termKind": {
+        "enumeration": "Wyliczenie",
+        "language": "Language",
+        "parameter": "Parametr",
+        "presence": "Obecność"
+      },
       "tier": {
         "acceptable": "Akceptowalne",
         "fallback": "Alternatywne",
@@ -2684,6 +2794,7 @@
       "updated": "Playbook zaktualizowany",
       "updatedAt": "Zaktualizowano: {date}",
       "verdict": {
+        "additional": "Dodatkowe",
         "compliant": "Zgodne",
         "deviation": "Odstępstwo",
         "fallback": "Alternatywne brzmienie",
@@ -4523,6 +4634,10 @@
           "trigger": "Zainicjował(a)",
           "webhook": "Wywołanie sieciowe"
         },
+        "documentReview": {
+          "decided": "Rozstrzygnął(-ęła) {count, plural, one {# ustalenie} few {# ustalenia} many {# ustaleń} other {# ustaleń}} w przeglądzie dokumentu",
+          "started": "Rozpoczął(-ęła) przegląd dokumentu"
+        },
         "empty": "Brak aktywności w tej sprawie.",
         "filterLabel": "Filtruj aktywność",
         "filters": {
@@ -4562,12 +4677,15 @@
           "automation": "automatyzacja",
           "court": "wpis sądowy",
           "document": "dokument",
+          "documentReview": "przegląd dokumentu",
           "folder": "folder",
           "link": "link",
           "matter": "sprawa",
           "message": "wiadomość",
+          "playbook": "zasady playbooka",
           "task": "element agendy",
-          "team": "zespół sprawy"
+          "team": "zespół sprawy",
+          "translation": "tłumaczenie"
         },
         "title": "Aktywność",
         "views": {

@@ -16,21 +16,20 @@ import type { Transaction } from "@/api/db/root";
 import { documentReviewRuns, entities, fields } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { DocumentReviewTopic } from "@/api/lib/document-review/contract";
+import { NEUTRAL_PERSPECTIVE } from "@/api/lib/document-review/contract";
 import {
   DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
   DOCUMENT_REVIEW_RUN_EXECUTOR,
 } from "@/api/lib/document-review/run-contract";
-import type { PinnedPlaybook } from "@/api/lib/document-review/run-contract";
+import type {
+  DocumentReviewRunBasis,
+  DocumentReviewRunExecutor,
+  PinnedPlaybook,
+} from "@/api/lib/document-review/run-contract";
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
 import type { DocTypeGate } from "@/api/lib/workflow/materialize-playbook-run";
-import type { Position } from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
-import { selectEnabledPositions } from "@/api/lib/workflow/position-runtime";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-
-/** `document_review_findings.topic_title` is varchar(256). */
-const TOPIC_TITLE_MAX_LENGTH = 256;
 
 /**
  * Documents one playbook run opens durable review runs for.
@@ -40,8 +39,7 @@ const TOPIC_TITLE_MAX_LENGTH = 256;
  * every client, and nothing outside this module needs this number.
  *
  * The bound is about how much one run may write, not about how many documents a
- * matter may hold: each run pins the playbook snapshot and the topic list by
- * value.
+ * matter may hold: each run pins the playbook snapshot by value.
  */
 export const PLAYBOOK_RUN_DOCUMENTS_MAX = 500;
 
@@ -71,37 +69,6 @@ export type CreatePlaybookTableRunsArgs = {
   /** Resolved document-type gate, or null for a workspace-wide playbook. */
   docTypeGate: DocTypeGate | null;
   projection: PlaybookRunProjection;
-};
-
-/**
- * The topics a table run confirms on the reviewer's behalf: every enabled
- * position the playbook carries.
- *
- * Which ones depends on the projection, because the two produce findings from
- * different engines. Under `columns` only a graded position materializes a
- * verdict column, so only a graded position can yield a finding; an
- * extract-only position stays what it has always been on the table, an ASK
- * column. Under `none` no column exists to hold anything, so an extract-only
- * position's value is carried by a finding with no verdict, exactly as the
- * single-document review records it.
- */
-export const buildTableRunTopics = (
-  positions: readonly Position[],
-  projection: PlaybookRunProjection,
-): DocumentReviewTopic[] => {
-  const enabled = selectEnabledPositions(positions);
-  const included =
-    projection === PLAYBOOK_RUN_PROJECTION.COLUMNS
-      ? enabled.filter((position) => position.mode === "graded")
-      : enabled;
-  return included.map((position) => ({
-    type: "playbook",
-    topicId: position.sourceId,
-    positionId: position.sourceId,
-    title: position.issue.slice(0, TOPIC_TITLE_MAX_LENGTH),
-    context: "",
-    included: true,
-  }));
 };
 
 /** One DOCX document of the matter, pinned as the run will record it. */
@@ -185,12 +152,23 @@ export const createPlaybookTableRuns = async ({
   docTypeGate,
   projection,
 }: CreatePlaybookTableRunsArgs): Promise<CreatePlaybookTableRunsResult> => {
-  const topics = buildTableRunTopics(
-    playbook.definitionSnapshot.positions.items,
-    projection,
-  );
-  const basis = { type: "playbook", playbook } as const;
-  const { expectedFindingCount } = planReviewRun({ basis, topics });
+  // Under `columns` the property DAG carries the run, so it starts already
+  // claimed and no job is enqueued for it. Under `none` the review worker owns
+  // it, and it waits in `queued` for the job the caller enqueues. Which one it
+  // is decides what the run can promise, so the executor is resolved before the
+  // plan rather than after it.
+  const startsClaimed = projection === PLAYBOOK_RUN_PROJECTION.COLUMNS;
+  const executor: DocumentReviewRunExecutor = startsClaimed
+    ? DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE
+    : DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER;
+  // A table run compares against the playbook alone: no reference document is
+  // pinned, so there is no side for a comparison to be judged for.
+  const basis: DocumentReviewRunBasis = {
+    playbook,
+    references: [],
+    perspective: NEUTRAL_PERSPECTIVE,
+  };
+  const { expectedFindingCount } = planReviewRun({ basis, executor });
   if (expectedFindingCount === 0) {
     return {
       runs: [],
@@ -251,14 +229,7 @@ export const createPlaybookTableRuns = async ({
     };
   }
 
-  // Under `columns` the property DAG carries the run, so it starts already
-  // claimed and no job is enqueued for it. Under `none` the review worker owns
-  // it, and it waits in `queued` for the job the caller enqueues.
-  const startsClaimed = projection === PLAYBOOK_RUN_PROJECTION.COLUMNS;
   const status = startsClaimed ? "running" : "queued";
-  const executor = startsClaimed
-    ? DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE
-    : DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER;
   const startedAt = startsClaimed ? new Date() : null;
 
   const offered = pending.map((document) => ({
@@ -271,9 +242,9 @@ export const createPlaybookTableRuns = async ({
 
   // One statement for the whole matter, with the pinned snapshot bound once
   // instead of once per document. A row-per-document insert would ship the
-  // playbook and its topic list again for every document — the bytes the run
-  // pins by value, multiplied by the size of the matter — so the documents ride
-  // in as a five-column VALUES list and the constants are joined onto them.
+  // playbook snapshot again for every document — the bytes the run pins by
+  // value, multiplied by the size of the matter — so the documents ride in as a
+  // five-column VALUES list and the constants are joined onto them.
   //
   // `::text::jsonb`, never a bare `::jsonb`: a bare cast fixes the bind
   // parameter's type, so the driver re-encodes the already-serialized string
@@ -287,7 +258,7 @@ export const createPlaybookTableRuns = async ({
   await tx.execute(sql`
     INSERT INTO ${documentReviewRuns} (
       id, organization_id, workspace_id, entity_id, file_field_id,
-      entity_version_id, content_sha256, playbook_definition_id, basis, topics,
+      entity_version_id, content_sha256, playbook_definition_id, basis,
       status, executor, total, requested_by, started_at
     )
     SELECT target.id,
@@ -299,7 +270,6 @@ export const createPlaybookTableRuns = async ({
            target.content_sha256,
            ${playbook.definitionId}::uuid,
            ${JSON.stringify(basis)}::text::jsonb,
-           ${JSON.stringify(topics)}::text::jsonb,
            ${status}::text,
            ${executor}::text,
            ${expectedFindingCount}::integer,

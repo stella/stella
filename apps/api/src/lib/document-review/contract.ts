@@ -1,37 +1,12 @@
-// The review topic shape the document-review engine consumes. It is a plain
-// type, not an Elysia schema: the engine runs from handlers today and from a
-// background worker later, and lib may not import a handler slice. The wire
-// schema in `handlers/document-reviews/schemas.ts` is bound to this type, so a
-// request-shape change that stops matching the engine fails typecheck there.
+// Plain vocabulary shared by the document-review engine and the surfaces that
+// read a run. Plain types, not Elysia schemas: the engine runs from handlers
+// and from a background worker, and lib may not import a handler slice. The
+// wire schemas in `handlers/document-reviews/schemas.ts` are bound to these
+// types, so a request-shape change that stops matching the engine fails
+// typecheck there.
 
-type ReviewTopicBase = {
-  topicId: string;
-  title: string;
-  context: string;
-  included: boolean;
-};
-
-export type DocumentReviewTopic =
-  | (ReviewTopicBase & { type: "playbook"; positionId: string })
-  | (ReviewTopicBase & { type: "reference" })
-  | (ReviewTopicBase & { type: "custom" });
-
-// Reference-comparison outcome vocabulary. It lives here rather than in
-// `reference-compare.ts` so the persisted-run schema can derive its CHECK
-// constraint from the same const the model's output schema is built from,
-// without the database module importing the AI stack.
-export const REFERENCE_ASSESSMENTS = [
-  "aligned",
-  "different",
-  "missing-from-target",
-  "additional-in-target",
-  "deal-specific",
-  "not-comparable",
-] as const;
-export type ReferenceAssessment = (typeof REFERENCE_ASSESSMENTS)[number];
-
-// How consistently the references agreed about a topic. `single` is the
-// degenerate one-reference case, normalized after the model answers.
+// How consistently the reference passages agreed about a position. `single` is
+// the degenerate one-passage-source case, normalized after the model answers.
 export const REFERENCE_CONSENSUS_VALUES = [
   "single",
   "consistent",
@@ -63,6 +38,37 @@ export const REVIEW_PARTY_NAME_MAX_LENGTH = 200;
  *  than this is not a two-document comparison. */
 export const REVIEW_PARTIES_MAX = 8;
 
+// Something the reference document covers that the proposal pass deliberately
+// did not turn into a position — deal mechanics, structural differences
+// between a preliminary and a final agreement, party and schedule particulars.
+// Reported rather than dropped: a checklist that silently omits half the
+// document reads as if the other half were compliant.
+export type ReviewSkippedTerm = { subject: string; reason: ReviewSkipReason };
+
+/**
+ * Why a subject was read and not compared.
+ *
+ * Coded, not prose: the reasons the prompt itself hands the model are decided
+ * here and rendered in the reader's language, so a Czech reviewer is not told
+ * "deal-specific value" in English. `other` carries the model's own words,
+ * which follow the document rather than the interface.
+ *
+ * `lower-weight` is the reason the checklist's own size produces: the term is
+ * comparable and was simply outweighed by the ones that fit under the
+ * proposal cap.
+ */
+export type ReviewSkipReason =
+  | { kind: "deal-specific-value" }
+  | { kind: "structural" }
+  | { kind: "lower-weight" }
+  | { kind: "other"; text: string };
+
+export const REVIEW_SKIP_SUBJECT_MAX_LENGTH = 256;
+export const REVIEW_SKIP_REASON_MAX_LENGTH = 300;
+/** Skips the proposal pass reports at most. Enough to show the reviewer the
+ *  shape of what was left out; it is not an inventory of the document. */
+export const REVIEW_SKIPPED_MAX = 40;
+
 /** The role and, when known, the party, as one phrase: "the Purchaser
  *  (Example Holdings a.s.)". */
 export const perspectivePartyPhrase = (party: ReviewParty): string =>
@@ -70,7 +76,7 @@ export const perspectivePartyPhrase = (party: ReviewParty): string =>
     ? `the ${party.role}`
     : `the ${party.role} (${party.name})`;
 
-// Which way a topic's difference cuts for the chosen side.
+// Which way a position's difference cuts for the chosen side.
 export const REFERENCE_IMPACTS = [
   "favourable",
   "unfavourable",
@@ -79,6 +85,6 @@ export const REFERENCE_IMPACTS = [
 ] as const;
 export type ReferenceImpact = (typeof REFERENCE_IMPACTS)[number];
 
-// How much the difference matters commercially or legally for that side.
-export const REFERENCE_SEVERITIES = ["high", "medium", "low"] as const;
-export type ReferenceSeverity = (typeof REFERENCE_SEVERITIES)[number];
+// How much a difference matters is a property of the position, not of the
+// comparison: `PositionSeverity` on the position the finding answers is the
+// one severity a reader sees.

@@ -27,10 +27,11 @@ import type {
 } from "@/api/lib/workflow/playbook-positions";
 import type {
   EffectiveAsk,
-  GradedPosition,
+  TierStandardPosition,
 } from "@/api/lib/workflow/position-runtime";
 import {
   gradedPositionRule,
+  isTierStandard,
   resolveEffectiveAsk,
   selectEnabledPositions,
 } from "@/api/lib/workflow/position-runtime";
@@ -412,11 +413,14 @@ export const materializePlaybookRun = async ({
       });
     }
 
-    // Extract-only positions materialize a value column with no verdict.
-    if (position.mode === "extract") {
+    // Extract-only positions materialize a value column with no verdict, and a
+    // reference standard has no ladder a verdict column could hold: it is
+    // graded against the document's own blocks, which the files-table path
+    // never reads.
+    if (!isTierStandard(position)) {
       continue;
     }
-    const gradedPosition: GradedPosition = position;
+    const gradedPosition: TierStandardPosition = position;
 
     const verdictId =
       verdictIdBySourceId.get(position.sourceId) ?? createSafeId<"property">();

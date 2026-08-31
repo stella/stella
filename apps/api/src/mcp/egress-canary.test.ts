@@ -1604,6 +1604,7 @@ describe("MCP anonymization canary corpus", () => {
       const rationaleSeed = mkSeed(tool, 13);
       const talkingPointSeed = mkSeed(tool, 14);
       const escalationSeed = mkSeed(tool, 15);
+      const purposeSeed = mkSeed(tool, 16);
       const tx = {
         query: {
           playbookDefinitions: {
@@ -1613,7 +1614,7 @@ describe("MCP anonymization canary corpus", () => {
               description: descriptionSeed,
               scope: "organization",
               positions: {
-                version: 2,
+                version: 3,
                 items: [
                   // Graded, manual ask: exercises the manual question plus every
                   // tier text field (acceptable/not-acceptable rules, inline
@@ -1623,6 +1624,7 @@ describe("MCP anonymization canary corpus", () => {
                     sourceId: "11111111-1111-4111-8111-111111111111",
                     issue: issueSeed,
                     severity: "high",
+                    purpose: purposeSeed,
                     guidance: guidanceSeed,
                     negotiation: {
                       rationale: rationaleSeed,
@@ -1635,32 +1637,35 @@ describe("MCP anonymization canary corpus", () => {
                       question: questionSeed,
                       content: { type: "text" },
                     },
-                    tiers: {
-                      acceptable: {
-                        rules: [
-                          {
-                            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-                            text: acceptableRuleSeed,
-                          },
-                        ],
-                        ideal: { source: "inline", text: idealSeed },
-                      },
-                      fallback: {
-                        entries: [
-                          {
-                            id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-                            text: fallbackTextSeed,
-                            label: fallbackLabelSeed,
-                          },
-                        ],
-                      },
-                      notAcceptable: {
-                        rules: [
-                          {
-                            id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-                            text: notAcceptableRuleSeed,
-                          },
-                        ],
+                    standard: {
+                      source: "tiers",
+                      tiers: {
+                        acceptable: {
+                          rules: [
+                            {
+                              id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                              text: acceptableRuleSeed,
+                            },
+                          ],
+                          ideal: { source: "inline", text: idealSeed },
+                        },
+                        fallback: {
+                          entries: [
+                            {
+                              id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                              text: fallbackTextSeed,
+                              label: fallbackLabelSeed,
+                            },
+                          ],
+                        },
+                        notAcceptable: {
+                          rules: [
+                            {
+                              id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                              text: notAcceptableRuleSeed,
+                            },
+                          ],
+                        },
                       },
                     },
                   },
@@ -1679,10 +1684,13 @@ describe("MCP anonymization canary corpus", () => {
                         rulesHash: "hash",
                       },
                     },
-                    tiers: {
-                      acceptable: { rules: [] },
-                      fallback: { entries: [] },
-                      notAcceptable: { rules: [] },
+                    standard: {
+                      source: "tiers",
+                      tiers: {
+                        acceptable: { rules: [] },
+                        fallback: { entries: [] },
+                        notAcceptable: { rules: [] },
+                      },
                     },
                   },
                 ],
@@ -1716,6 +1724,7 @@ describe("MCP anonymization canary corpus", () => {
         rationaleSeed,
         talkingPointSeed,
         escalationSeed,
+        purposeSeed,
       ];
       expectNoSeedLeak(result, seeds);
       expectSeedsQueuedForAnonymization(seeds);

@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { docxSuggestions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { syncReviewFindingForSuggestion } from "@/api/lib/document-review/suggestion-finding-sync";
 
 import { tResolveDocxSuggestionBody } from "./schemas";
 
@@ -15,6 +16,10 @@ import { tResolveDocxSuggestionBody } from "./schemas";
  * affected-row count is the source of truth (per the check-then-act rule),
  * so two concurrent resolves cannot both win and an already-resolved row is
  * a no-op `{ updated: false }` rather than a silent double-write.
+ *
+ * When the row came from a document review, the same write resolves the
+ * finding behind it: accepting a redline here and accepting the finding in the
+ * review list are one act, so they are one transaction.
  */
 const resolveDocxSuggestion = createSafeHandler(
   {
@@ -26,7 +31,14 @@ const resolveDocxSuggestion = createSafeHandler(
     }),
     body: tResolveDocxSuggestionBody,
   },
-  async function* ({ workspaceId, params, body, user, safeDb }) {
+  async function* ({
+    workspaceId,
+    params,
+    body,
+    recordAuditEvent,
+    user,
+    safeDb,
+  }) {
     // Apply-mode is carried only on an acceptance (required there by the
     // discriminated body); a rejection stores none.
     const appliedMode = body.status === "accepted" ? body.appliedMode : null;
@@ -35,7 +47,9 @@ const resolveDocxSuggestion = createSafeHandler(
       safeDb(async (tx) => {
         // audit: skip — the audit trail is the row itself: this write records
         // resolvedByUserId + resolvedAt (who resolved it, when). A separate
-        // audit_log row would duplicate that with no added accountability.
+        // audit_log row would duplicate that with no added accountability. The
+        // linked review finding is different: a reviewer decision is audited
+        // wherever it is taken, which the sync below does.
         const rows = await tx
           .update(docxSuggestions)
           .set({
@@ -52,7 +66,22 @@ const resolveDocxSuggestion = createSafeHandler(
               eq(docxSuggestions.status, "pending"),
             ),
           )
-          .returning({ id: docxSuggestions.id });
+          .returning({
+            id: docxSuggestions.id,
+            originReviewFindingId: docxSuggestions.originReviewFindingId,
+          });
+
+        const resolved = rows.at(0);
+        if (resolved !== undefined && resolved.originReviewFindingId !== null) {
+          await syncReviewFindingForSuggestion({
+            tx,
+            workspaceId,
+            findingId: resolved.originReviewFindingId,
+            status: body.status,
+            userId: user.id,
+            recordAuditEvent,
+          });
+        }
         return rows;
       }),
     );

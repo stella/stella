@@ -3,6 +3,7 @@ import Elysia from "elysia";
 import approvePlaybookDefinition from "@/api/handlers/playbooks/approve";
 import createPlaybookDefinition from "@/api/handlers/playbooks/create";
 import deletePlaybookDefinition from "@/api/handlers/playbooks/delete";
+import createPlaybookFromRun from "@/api/handlers/playbooks/from-run";
 import createPlaybookFromStarter from "@/api/handlers/playbooks/from-starter";
 import getPlaybookDefinition from "@/api/handlers/playbooks/get";
 import listPlaybookDefinitions from "@/api/handlers/playbooks/list";
@@ -39,6 +40,10 @@ export const playbooksRoute = new Elysia({
   .post("/from-starter", createPlaybookFromStarter.handler, {
     body: createPlaybookFromStarter.config.body,
     permissions: createPlaybookFromStarter.config.permissions,
+  })
+  .post("/from-run", createPlaybookFromRun.handler, {
+    body: createPlaybookFromRun.config.body,
+    permissions: createPlaybookFromRun.config.permissions,
   })
   .get("/:playbookId", getPlaybookDefinition.handler, {
     params: getPlaybookDefinition.config.params,

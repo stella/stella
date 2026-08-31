@@ -16,10 +16,13 @@ const gradedBase = {
   issue: "Governing law",
   severity: "high",
   ask: { mode: "manual", question: "Which law?", content: textContent },
-  tiers: {
-    acceptable: { rules: [{ id: RULE_ID, text: "England." }] },
-    fallback: { entries: [] },
-    notAcceptable: { rules: [] },
+  standard: {
+    source: "tiers",
+    tiers: {
+      acceptable: { rules: [{ id: RULE_ID, text: "England." }] },
+      fallback: { entries: [] },
+      notAcceptable: { rules: [] },
+    },
   },
   enabled: true,
 } satisfies Position;

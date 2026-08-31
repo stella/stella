@@ -50,7 +50,11 @@ import {
   brandPersistedPlaybookDefinitionId,
 } from "@/api/lib/safe-id-boundaries";
 import { startWorkflow } from "@/api/lib/workflow-queue";
-import type { Position } from "@/api/lib/workflow/playbook-positions";
+import type {
+  Position,
+  PositionStandard,
+  Tiers,
+} from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
@@ -370,8 +374,9 @@ const playbookListTextFieldSpecs = (
 ];
 
 type GradedPosition = Extract<Position, { mode: "graded" }>;
+type TierStandard = Extract<PositionStandard, { source: "tiers" }>;
 type InlineIdeal = Extract<
-  NonNullable<GradedPosition["tiers"]["acceptable"]["ideal"]>,
+  NonNullable<TierStandard["tiers"]["acceptable"]["ideal"]>,
   { source: "inline" }
 >;
 
@@ -380,6 +385,14 @@ const gradedPositions = (
 ): readonly GradedPosition[] =>
   positions.flatMap((position) =>
     position.mode === "graded" ? [position] : [],
+  );
+
+// Only a tier standard carries authored prose. A reference standard's passages
+// are quoted from a document the reader already has access to, and are
+// redacted through the document's own path rather than the playbook's.
+const tierLadders = (positions: readonly Position[]): readonly Tiers[] =>
+  gradedPositions(positions).flatMap((position) =>
+    position.standard.source === "tiers" ? [position.standard.tiers] : [],
   );
 
 // Ask objects that carry a directly-authored question: every extract position
@@ -408,7 +421,10 @@ const inlineIdealItems = (
   positions: readonly Position[],
 ): readonly InlineIdeal[] =>
   gradedPositions(positions).flatMap((position) => {
-    const { ideal } = position.tiers.acceptable;
+    if (position.standard.source !== "tiers") {
+      return [];
+    }
+    const { ideal } = position.standard.tiers.acceptable;
     return ideal?.source === "inline" ? [ideal] : [];
   });
 
@@ -464,7 +480,7 @@ type PlaybookDetailPayload = {
 
 /**
  * Every redactable field on one playbook detail response: the playbook's own
- * name/description, and per position its issue, guidance, and ask question
+ * name/description, and per position its issue, purpose, guidance, and ask question
  * (the manual/extract question, or an auto position's derived question) —
  * plus, for a graded position, each tier rule (acceptable and not-acceptable
  * red lines), inline ideal language, and each fallback entry's text and label.
@@ -520,6 +536,15 @@ const playbookDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
+    path: "playbook.positions.items[].purpose",
+    items: (payload) => gradedPositions(payload.playbook.positions.items),
+    scope: () => organizationId,
+    read: (item) => item.purpose,
+    apply: (item, value) => {
+      item.purpose = value;
+    },
+  }),
+  defineTextFieldSpec({
     path: "playbook.positions.items[].guidance",
     items: (payload) => payload.playbook.positions.items,
     scope: () => organizationId,
@@ -559,10 +584,10 @@ const playbookDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
-    path: "playbook.positions.items[].tiers.acceptable.rules[].text",
+    path: "playbook.positions.items[].standard.tiers.acceptable.rules[].text",
     items: (payload) =>
-      gradedPositions(payload.playbook.positions.items).flatMap(
-        (position) => position.tiers.acceptable.rules,
+      tierLadders(payload.playbook.positions.items).flatMap(
+        (tiers) => tiers.acceptable.rules,
       ),
     scope: () => organizationId,
     read: (item) => item.text,
@@ -571,7 +596,7 @@ const playbookDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
-    path: "playbook.positions.items[].tiers.acceptable.ideal.text",
+    path: "playbook.positions.items[].standard.tiers.acceptable.ideal.text",
     items: (payload) => inlineIdealItems(payload.playbook.positions.items),
     scope: () => organizationId,
     read: (item) => item.text,
@@ -580,10 +605,10 @@ const playbookDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
-    path: "playbook.positions.items[].tiers.fallback.entries[].text",
+    path: "playbook.positions.items[].standard.tiers.fallback.entries[].text",
     items: (payload) =>
-      gradedPositions(payload.playbook.positions.items).flatMap(
-        (position) => position.tiers.fallback.entries,
+      tierLadders(payload.playbook.positions.items).flatMap(
+        (tiers) => tiers.fallback.entries,
       ),
     scope: () => organizationId,
     read: (item) => item.text,
@@ -592,10 +617,10 @@ const playbookDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
-    path: "playbook.positions.items[].tiers.fallback.entries[].label",
+    path: "playbook.positions.items[].standard.tiers.fallback.entries[].label",
     items: (payload) =>
-      gradedPositions(payload.playbook.positions.items).flatMap(
-        (position) => position.tiers.fallback.entries,
+      tierLadders(payload.playbook.positions.items).flatMap(
+        (tiers) => tiers.fallback.entries,
       ),
     scope: () => organizationId,
     read: (item) => item.label,
@@ -604,10 +629,10 @@ const playbookDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
-    path: "playbook.positions.items[].tiers.notAcceptable.rules[].text",
+    path: "playbook.positions.items[].standard.tiers.notAcceptable.rules[].text",
     items: (payload) =>
-      gradedPositions(payload.playbook.positions.items).flatMap(
-        (position) => position.tiers.notAcceptable.rules,
+      tierLadders(payload.playbook.positions.items).flatMap(
+        (tiers) => tiers.notAcceptable.rules,
       ),
     scope: () => organizationId,
     read: (item) => item.text,

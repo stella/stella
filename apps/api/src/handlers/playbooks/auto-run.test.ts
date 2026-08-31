@@ -31,7 +31,7 @@ const opened = {
     provenance: "draft",
     definitionSnapshot: {
       name: "Vendor agreement review",
-      positions: { version: 2, items: [] },
+      positions: { version: 3, items: [] },
     },
   },
   materializedPropertyIds: [propertyId],
@@ -68,7 +68,7 @@ describe("auto-run playbooks handler", () => {
       {
         id: playbookId,
         name: "Vendor agreement review",
-        positions: { version: 2, items: [] },
+        positions: { version: 3, items: [] },
         scope: null,
       },
     ]);

@@ -10,6 +10,7 @@ export const createInspectorCommandSlice = (
   desktopOpenAttention: null,
   pendingRenameTabId: null,
   pendingBlockScroll: null,
+  blockScrollSeq: 0,
   pendingPdfPageScroll: null,
   pendingDocxEditTabId: null,
   pendingFileChatDraft: null,
@@ -67,12 +68,20 @@ export const createInspectorCommandSlice = (
 
   requestBlockScroll: ({ tabId, blockId, text }) =>
     set((state) => {
-      state.pendingBlockScroll = { tabId, blockId, text };
+      state.blockScrollSeq += 1;
+      state.pendingBlockScroll = {
+        tabId,
+        blockId,
+        text,
+        seq: state.blockScrollSeq,
+      };
     }),
 
-  clearPendingBlockScroll: () =>
+  clearPendingBlockScroll: (seq) =>
     set((state) => {
-      state.pendingBlockScroll = null;
+      if (state.pendingBlockScroll?.seq === seq) {
+        state.pendingBlockScroll = null;
+      }
     }),
 
   requestPdfPageScroll: ({ tabId, pageNumber }) =>

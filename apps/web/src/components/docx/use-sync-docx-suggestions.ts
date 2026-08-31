@@ -125,11 +125,18 @@ export const useSyncDocxSuggestions = ({
         return [];
       }
 
+      const blockId = folioOperationBlockId(op);
+      const displayLabel = blocksById.get(blockId)?.displayLabel;
+      const blockLabel =
+        displayLabel !== undefined && displayLabel.length > 0
+          ? displayLabel
+          : undefined;
       const item: ReviewSuggestion = {
         id: row.id,
-        blockId: folioOperationBlockId(op),
+        origin: row.origin,
+        blockId,
         type: op.type,
-        summary: summarizeOperation(op),
+        summary: summarizeOperation(op, blockLabel),
         preview,
         severity: row.severity,
         area: row.area,
@@ -141,6 +148,9 @@ export const useSyncDocxSuggestions = ({
         snapshot,
         persisted: true,
       };
+      if (blockLabel !== undefined) {
+        item.blockLabel = blockLabel;
+      }
       const comment = row.comment ?? folioOperationComment(op)?.text;
       if (comment !== undefined) {
         item.comment = comment;

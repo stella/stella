@@ -69,7 +69,7 @@ export const buildPlaybookSavePayload = ({
           trigger: resolvedTrigger,
         };
   const positionsPayload: PlaybookPositionsValue = {
-    version: 2,
+    version: 3,
     items: positions.map(normalizePosition),
   };
 

@@ -9,6 +9,8 @@ import {
   groupActivityItems,
   resolveSelectedActivityGroup,
   resolveVisibleActivityTriggerType,
+  ROW_ACTION_LABEL_KEYS,
+  TARGET_LABEL_KEYS,
   toMatterActivityDateRange,
 } from "./activity-panel.logic";
 
@@ -440,5 +442,136 @@ describe("groupActivityItems", () => {
     expect(activityDayKey("2026-07-30T12:00:00.000Z")).toBe(
       activityDayKey("2026-07-30T18:00:00.000Z"),
     );
+  });
+});
+
+describe("review decision folding", () => {
+  const reviewer = {
+    deletedAt: null,
+    id: "user-1",
+    image: null,
+    name: "Reviewer",
+    type: "user",
+  } satisfies MatterActivityItem["performer"];
+
+  const decision = (
+    id: string,
+    { activityAt, runId = null }: { activityAt: string; runId?: string | null },
+  ) =>
+    item(id, {
+      action: "review",
+      activityAt,
+      performer: reviewer,
+      runId,
+      target: { id: "run-1", kind: "documentReviewRun" },
+    });
+
+  test("collapses a sitting of decisions on one review into one row", () => {
+    const groups = groupActivityItems([
+      decision("1", { activityAt: "2026-07-30T12:00:00.000Z" }),
+      decision("2", { activityAt: "2026-07-30T12:10:00.000Z" }),
+      decision("3", { activityAt: "2026-07-30T12:35:00.000Z" }),
+    ]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.type).toBe("review_decisions");
+    expect(groups[0]?.items).toHaveLength(3);
+  });
+
+  test("folds decisions carrying a run id, which belong to their review", () => {
+    const groups = groupActivityItems([
+      decision("1", { activityAt: "2026-07-30T12:00:00.000Z", runId: "run-a" }),
+      decision("2", { activityAt: "2026-07-30T12:01:00.000Z", runId: "run-a" }),
+    ]);
+
+    expect(groups.map(({ type }) => type)).toEqual(["review_decisions"]);
+  });
+
+  test("starts a new row past the window, on another review, or another actor", () => {
+    const later = groupActivityItems([
+      decision("1", { activityAt: "2026-07-30T12:00:00.000Z" }),
+      decision("2", { activityAt: "2026-07-30T12:31:00.000Z" }),
+    ]);
+    expect(later).toHaveLength(2);
+
+    const otherRun = groupActivityItems([
+      decision("1", { activityAt: "2026-07-30T12:00:00.000Z" }),
+      item("2", {
+        action: "review",
+        activityAt: "2026-07-30T12:01:00.000Z",
+        performer: reviewer,
+        runId: null,
+        target: { id: "run-2", kind: "documentReviewRun" },
+      }),
+    ]);
+    expect(otherRun).toHaveLength(2);
+
+    const otherActor = groupActivityItems([
+      decision("1", { activityAt: "2026-07-30T12:00:00.000Z" }),
+      item("2", {
+        action: "review",
+        activityAt: "2026-07-30T12:01:00.000Z",
+        performer: { ...reviewer, id: "user-2", name: "Second reviewer" },
+        runId: null,
+        target: { id: "run-1", kind: "documentReviewRun" },
+      }),
+    ]);
+    expect(otherActor).toHaveLength(2);
+  });
+
+  test("leaves the run's own start as its own row", () => {
+    const groups = groupActivityItems([
+      item("1", {
+        action: "execute",
+        activityAt: "2026-07-30T12:00:00.000Z",
+        performer: reviewer,
+        runId: null,
+        target: { id: "run-1", kind: "documentReviewRun" },
+      }),
+      decision("2", { activityAt: "2026-07-30T12:01:00.000Z" }),
+    ]);
+
+    expect(groups.map(({ type }) => type)).toEqual([
+      "single",
+      "review_decisions",
+    ]);
+  });
+
+  test("keeps folded decisions folded in the list view", () => {
+    const groups = expandActivityGroupsForList(
+      groupActivityItems([
+        decision("1", { activityAt: "2026-07-30T12:00:00.000Z" }),
+        decision("2", { activityAt: "2026-07-30T12:01:00.000Z" }),
+      ]),
+    );
+
+    expect(groups).toHaveLength(1);
+  });
+});
+
+describe("feed labels", () => {
+  // The maps are typed `Record<Kind, TranslationKey>`, so a missing key or a
+  // kind without a label fails the build. What is left to check is that no two
+  // kinds share a label and that "automation" labels only automation.
+  test("every target kind and action carries a label of its own", () => {
+    const targetLabels = Object.values(TARGET_LABEL_KEYS);
+    expect(new Set(targetLabels).size).toBe(targetLabels.length);
+    expect(Object.keys(TARGET_LABEL_KEYS)).toContain("documentReviewRun");
+    for (const [kind, key] of Object.entries(TARGET_LABEL_KEYS)) {
+      expect(key.startsWith("workspaces.overview.activity.targets.")).toBe(
+        true,
+      );
+      expect(key === "workspaces.overview.activity.targets.automation").toBe(
+        kind === "automation",
+      );
+    }
+
+    const actionLabels = Object.values(ROW_ACTION_LABEL_KEYS);
+    expect(new Set(actionLabels).size).toBe(actionLabels.length);
+    for (const key of actionLabels) {
+      expect(key.startsWith("workspaces.overview.activity.actorActions.")).toBe(
+        true,
+      );
+    }
   });
 });

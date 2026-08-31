@@ -1,7 +1,11 @@
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { ENTITY_KINDS } from "@stll/api-contract";
+import {
+  ENTITY_KINDS,
+  REVIEW_FLAGS,
+  REVIEW_FLAGS_MAX_ITEMS,
+} from "@stll/api-contract";
 
 import type { JsonObject } from "@/api/lib/json-value";
 import {
@@ -328,9 +332,13 @@ const cellLockReasonSchema = t.UnionEnum(["manual-edit", "explicit"]);
 
 export const cellMetadataSchema = t.Object({
   version: v1,
-  manualFlags: t.Array(t.String({ minLength: 1, maxLength: 64 }), {
-    maxItems: 16,
+  // One flag vocabulary for every reviewed thing (see `REVIEW_FLAGS`), so a
+  // cell and a review finding cannot drift into two sets of the same idea.
+  manualFlags: t.Array(t.UnionEnum([...REVIEW_FLAGS]), {
+    maxItems: REVIEW_FLAGS_MAX_ITEMS,
   }),
+  // Keyed by flag; only the flags actually set appear, so the key stays a
+  // plain string rather than a total record over the vocabulary.
   flagProvenance: t.Optional(
     t.Record(
       t.String({ minLength: 1, maxLength: 64 }),

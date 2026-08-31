@@ -4,6 +4,7 @@ import { remapNodePropertyIds } from "@/api/lib/conditions/ast-utils";
 import type {
   PlaybookPositions,
   Position,
+  PositionStandard,
   Tiers,
 } from "@/api/lib/workflow/playbook-positions";
 
@@ -20,7 +21,7 @@ export const instantiateStarterPositions = (
   );
 
   return {
-    version: 2,
+    version: 3,
     items: positions.items.map((position) =>
       regeneratePositionIds(position, sourceIdMap),
     ),
@@ -42,7 +43,7 @@ const regeneratePositionIds = (
   const regenerated = {
     ...position,
     sourceId,
-    tiers: regenerateTierIds(position.tiers),
+    standard: regenerateStandardIds(position.standard),
   };
   if (position.check?.kind !== "constraint") {
     return regenerated;
@@ -60,6 +61,13 @@ const regeneratePositionIds = (
     },
   };
 };
+
+// A reference standard carries no authored ids: its passages are identified by
+// the document version and block they were quoted from.
+const regenerateStandardIds = (standard: PositionStandard): PositionStandard =>
+  standard.source === "tiers"
+    ? { source: "tiers", tiers: regenerateTierIds(standard.tiers) }
+    : standard;
 
 const regenerateTierIds = (tiers: Tiers): Tiers => ({
   acceptable: {

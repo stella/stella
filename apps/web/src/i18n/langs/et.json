@@ -1498,43 +1498,47 @@
     "applyAs": "kui",
     "applyDirect": "Otse",
     "applyTracked": "Jälitatud muudatustena",
-    "areaUnspecified": "Määramata",
     "barLabel": "Soovituste ülevaatus",
-    "byArea": "Valdkonna järgi",
-    "bySeverity": "Raskusastme järgi",
+    "change": {
+      "deleteParagraph": "Kustuta lõik",
+      "replacement": "„{find}“ → „{replace}“"
+    },
     "countHigh": "{count, plural, one {# kõrge} other {# kõrge}}",
     "countLow": "{count, plural, one {# madal} other {# madal}}",
     "countMedium": "{count, plural, one {# keskmine} other {# keskmine}}",
     "countUnspecified": "{count, plural, one {# määramata} other {# määramata}}",
-    "dismiss": "Peida ülevaatuspaan",
-    "empty": "Ükski soovitus ei vasta praegusele filtrile.",
     "finalizePendingNote": "{count, plural, one {# soovitus ootab veel ülevaatust.} other {# soovitust ootab veel ülevaatust.}}",
-    "groupBy": "Rühmita",
-    "hiddenCount": "{count} peidetud",
     "hideAccepted": "Peida nõustutud soovitused",
-    "identityAria": "Jälitatud muudatuste identiteet kasutajale {name}",
-    "identitySaved": "Identiteet salvestatud",
     "persistFailed": "Teie ülevaatusmuudatust ei õnnestunud salvestada",
     "reject": "Lükka tagasi",
     "rejectAll": "Lükka kõik tagasi",
     "revert": "Taasta",
-    "savingIdentity": "Salvestamine…",
     "severityHigh": "Kõrge",
     "severityLow": "Madal",
     "severityMedium": "Keskmine",
     "severityUnspecified": "Määramata",
     "skipped": "Ei saanud rakendada: {reason}",
     "staleResolution": "See ettepanek on juba mujal lahendatud.",
-    "statusAccepted": "Nõustutud",
-    "statusApplying": "Muudatuse rakendamine…",
-    "statusRejected": "Tagasi lükatud",
-    "statusSkipped": "Vahele jäetud",
-    "subtitle": "{pending}/{total} ootel",
-    "title": "AI soovitused",
-    "wordName": "Wordi autori nimi",
-    "wordNamePlaceholder": "Kuidas jälitatud muudatused allkirjastatakse",
-    "wordShortcut": "Initsiaalid",
-    "wordShortcutPlaceholder": "nt JK"
+    "summary": {
+      "commentOnParagraph": "{label, select, none {Lisa kommentaar lõigule} other {Lisa kommentaar lõigule {label}}}",
+      "commentOnSelection": "Lisa kommentaar valitud tekstile",
+      "deleteParagraph": "{label, select, none {Kustuta lõik} other {Kustuta lõik {label}}}",
+      "deleteTableColumn": "Kustuta tabeli veerg",
+      "deleteTableRow": "Kustuta tabeli rida",
+      "formatSelection": "Vorminda valitud tekst ümber",
+      "insertAfter": "{label, select, none {Lisa lõik} other {Lisa lõik pärast lõiku {label}}}",
+      "insertBefore": "{label, select, none {Lisa lõik} other {Lisa lõik enne lõiku {label}}}",
+      "insertSignatureBlock": "Lisa allkirjatabel {names} jaoks",
+      "insertTableColumn": "Lisa tabeli veerg",
+      "insertTableRow": "Lisa tabeli rida",
+      "mergeTableCells": "Ühenda tabeli lahtrid",
+      "pageBreakAfter": "{label, select, none {Lisa lehepiir} other {Lisa lehepiir pärast lõiku {label}}}",
+      "pageBreakBefore": "{label, select, none {Lisa lehepiir} other {Lisa lehepiir enne lõiku {label}}}",
+      "replaceInBlock": "Asenda „{find}“ sõnaga „{replace}“",
+      "replaceParagraph": "{label, select, none {Kirjuta lõik ümber} other {Kirjuta lõik {label} ümber}}",
+      "replaceSelection": "Asenda valitud tekst sõnaga „{replace}“",
+      "splitTableCell": "Tükelda tabeli lahter"
+    }
   },
   "emailViewer": {
     "attachments": "Manused",
@@ -2192,6 +2196,7 @@
       "workAttention": "Töö jälgimine"
     },
     "severity": {
+      "critical": "Kriitiline",
       "info": "Teave",
       "notice": "Teade",
       "warning": "Hoiatus"
@@ -2310,9 +2315,13 @@
     "review": {
       "actionNeeded": "Vajab tegutsemist",
       "addComment": "Lisa kommentaarina",
+      "addNote": "Lisa märkus vastaspoolele",
+      "addNotePlaceholder": "Mida vastaspool peaks nägema",
+      "addNoteSubmit": "Lisa märkus",
       "addReference": "Lisa {name} võrdlusena",
       "addTopic": "Lisa teema",
       "allDecided": "Kõik siinsed leiud on otsustatud.",
+      "askInChat": "Küsi vestluses",
       "assessment": {
         "additionalInTarget": "Sihtdokumendis lisaks",
         "aligned": "Kooskõlas",
@@ -2322,12 +2331,21 @@
         "notComparable": "Pole võrreldav"
       },
       "basisCombined": "{count, plural, one {Kontroll juhendi {name} alusel ja võrdlus # võrdlusdokumendiga} other {Kontroll juhendi {name} alusel ja võrdlus # võrdlusdokumendiga}}",
+      "basisDivider": "ja / või",
       "basisPlaybook": "Kontroll juhendi {name} alusel",
       "basisReferences": "{count, plural, one {Võrdlus # võrdlusdokumendiga} other {Võrdlus # võrdlusdokumendiga}}",
       "changeBasis": "Muuda ülevaatuse alust",
+      "chatDraft": {
+        "finding": "Leid:",
+        "impact": "Mõju:",
+        "issue": "Teema:",
+        "question": "Kuidas peaksin sihtdokumenti selles punktis ümber sõnastama?",
+        "rationale": "Põhjendus:"
+      },
+      "checks": "Kontrollitakse:",
       "commentFailed": "Kommentaari lisamine ebaõnnestus",
       "comparedWithReferences": "{count, plural, one {Võrreldud # võrdlusdokumendiga} other {Võrreldud # võrdlusdokumendiga}}",
-      "decidedCount": "{decided, number}/{total, number} otsustatud",
+      "decidedCount": "{count, number} otsustatud",
       "decision": "Otsus",
       "decisionFailed": "Otsust ei õnnestunud salvestada",
       "decisions": {
@@ -2337,20 +2355,89 @@
       "description": "Valige koostatud kontrolljuhend, võrdlusdokumendid või mõlemad.",
       "dismiss": "Jäta kõrvale",
       "documentChanged": "See dokument on pärast seda ülevaatust muutunud.",
+      "export": {
+        "counterparty": "Saada vastaspoolele",
+        "counterpartyFailed": "Dokumendi eksportimine ebaõnnestus",
+        "counterpartyHint": "Dokument koos teie jälitatud muudatustega",
+        "counterpartyUnavailable": "Avage dokument, et see eksportida",
+        "csv": "CSV",
+        "docx": "Word dokument (.docx)",
+        "exporting": "Eksportimine",
+        "internal": "Sisemine memo",
+        "internalHint": "Leiud, põhjendused ja võrdlused",
+        "xlsx": "Exceli arvutustabel (.xlsx)"
+      },
       "failed": "Dokumendi ülevaatamine ebaõnnestus",
+      "filterCoverage": "Kaetus",
+      "filterDeviations": "Kõrvalekalded",
+      "flag": "Märgista",
+      "flaggedPositions": "{total, plural, one {{flagged, number} ühest seisukohast märgistatud} other {{flagged, number} #-st seisukohast märgistatud}}",
+      "fromChat": "Vestlusest",
       "fromThisMatter": "Sellest toimikust",
+      "history": {
+        "backToLatest": "Tagasi uusima juurde",
+        "decided": "{decided, number}/{total, number} otsustatud",
+        "references": "{count, plural, one {# võrdlusdokument} other {# võrdlusdokumenti}}"
+      },
+      "impact": {
+        "favourable": "Soodne",
+        "neutral": "Neutral",
+        "notJudged": "Hindamata",
+        "unfavourable": "Ebasoodne"
+      },
+      "impactForSide": {
+        "favourable": "Parem {role} jaoks",
+        "neutral": "Ilma mõjuta {role} jaoks",
+        "unfavourable": "Halvem {role} jaoks"
+      },
       "insertFailed": "Soovitatud sõnastust ei saanud lisada",
       "insertSuggestion": "Lisa soovitatud sõnastus",
       "insufficientEvidence": "Esitatud dokumendid ei anna selle teema kohta piisavalt tõendeid.",
+      "marginNotes": {
+        "above": "{count, number} üleval",
+        "below": "{count, number} allpool",
+        "documentNotRead": "Ava dokument peapaanil, et kinnitada leiud selle kõrvale.",
+        "label": "Leiud nende klauslite kõrval, mida need puudutavad",
+        "unanchored": "Ei ole seotud ühegi klausliga"
+      },
       "newTopic": "Uus läbivaatuse teema",
+      "noChangeNeeded": "Muudatust pole vaja",
+      "noEditor": "Avage dokument, et muudatusi aktsepteerida",
       "noMaterialDifferences": "Olulisi erinevusi ei leitud",
+      "noPassage": "Väljavõtet pole",
       "noPlaybooksMatch": "Sobivaid kontrolljuhendeid ei leitud.",
       "noReferencesFound": "Sobivaid DOCX-dokumente ei leitud.",
+      "notCompared": "Võrdlemata",
+      "notComparedCount": "Võrdlemata: {count, number}",
+      "noteAdded": "Vastaspoolele lisati märkus",
+      "openPlaybooks": "Ava playbookid",
+      "pane": {
+        "document": "Paneel: leiud dokumendi kõrval",
+        "margin": "Veeris: leiud oma klauslite kõrval",
+        "review": "Peamine: leiud laial paneelil"
+      },
+      "passageUnavailable": "Võrdlusteksti pole saadaval",
+      "passagesCount": "{count, plural, one {# lõik} other {# lõiku}}",
+      "pendingCount": "{count, plural, one {# ootel leid} other {# ootel leidu}}",
+      "perspective": {
+        "neutral": "Täpsustamata",
+        "other": "Muu…",
+        "otherPlaceholder": "Roll nii, nagu dokument seda nimetab",
+        "title": "Me esindame"
+      },
       "playbookDeleted": "Seda kontrolljuhendit enam ei ole; ülevaatus säilib kirjena.",
       "playbookFindings": "Kontrolljuhendi leiud",
       "playbookOutdated": "Sellest kontrolljuhendist on olemas uuem kinnitatud versioon.",
       "playbookSection": "Kontrolljuhend",
       "playbookTopic": "Lisatud playbook’ist",
+      "presence": {
+        "absent": "Ei",
+        "present": "Jah"
+      },
+      "progressPositions": "{total, plural, one {{completed, number} ühest seisukohast} other {{completed, number} #-st seisukohast}}",
+      "proposing": "Seisukohtade pakkumine… {count, number}",
+      "readOnlyRun": "Otsustatud selle ülevaatuse käigus",
+      "recommendation": "Soovitus:",
       "referenceDocument": "Võrdlusdokument",
       "referenceFindings": "Võrdluste võrdlus",
       "referenceLimitReached": "Võrdluste limiit on täis",
@@ -2363,21 +2450,47 @@
       "reopen": "Ava uuesti",
       "results": "Ülevaatuse tulemused",
       "reviewAgain": "Alusta uut ülevaatust",
+      "reviewPositionsFirst": "Vaata seisukohad kõigepealt üle",
       "reviewedAgainstCombined": "{count, plural, one {Kontrollitud juhendi {name} alusel ja võrreldud # võrdlusdokumendiga} other {Kontrollitud juhendi {name} alusel ja võrreldud # võrdlusdokumendiga}}",
       "reviewing": "Ülevaatamine käib…",
       "reviewingHint": "Suurte dokumentide puhul võib selleks kuluda mõni minut.",
       "run": "Alusta ülevaatust",
+      "runStatus": {
+        "queued": "Ootel"
+      },
+      "saveAsPlaybook": "Salvesta playbookina",
+      "saveAsPlaybookFailed": "Selle ülevaatuse salvestamine playbookina ebaõnnestus",
+      "savedAsPlaybook": "Salvestatud playbookina",
       "scoreTopics": "Vaata need teemad läbi",
       "searchPlaybooks": "Otsi kontrolljuhendeid",
+      "showInDocument": "Näita dokumendis",
       "sizeConfirmStart": "Alusta kontrolli",
       "sizeConfirmTitle": "Mahukas kontroll",
+      "skipReason": {
+        "dealSpecificValue": "Tehingupõhine väärtus",
+        "lowerWeight": "Väiksem äriline kaal",
+        "structural": "Struktuurne erinevus"
+      },
+      "standardColumn": "Standardtekst",
+      "standardColumnFrom": "Standardtekst ({name})",
+      "suggestionSkipped": "Ei vasta enam dokumendile",
+      "suggestionStaged": "Lisatud dokumenti jälitatud muudatusena",
+      "summary": {
+        "forParty": "{role} jaoks",
+        "noSide": "Pool puudub",
+        "proposedFromReferences": "Võrdlustest pakutud seisukohad"
+      },
+      "targetAsReference": "Ülevaadatav dokument ei saa olla iseenda võrdlusdokument.",
+      "targetColumn": "See dokument",
       "targetDocument": "Sihtdokument",
       "title": "Dokumendi ülevaatus",
       "topicContext": "Lisakontekst",
       "topicContextPlaceholder": "Mida peaks läbivaatus selle teema puhul arvestama?",
       "topicName": "Teema nimi",
       "topicsDescription": "Kinnita pakutud teemad, lisa enda omad või täienda enne hindamist konteksti.",
-      "topicsTitle": "Mida peaks see läbivaatus hõlmama?"
+      "topicsTitle": "Mida peaks see läbivaatus hõlmama?",
+      "why": "Miks",
+      "whyItMatters": "Miks see on oluline:"
     },
     "showPane": "Kuva paneel",
     "swapViews": "Vaheta põhivaade ja külgpaneel",
@@ -2515,6 +2628,7 @@
       "addOption": "Lisa valik",
       "addPosition": "Lisa seisukoht",
       "addRule": "Reegel",
+      "adoptAsIdeal": "Võta ideaalse sõnastusena kasutusele",
       "advanced": "Muuda toimimist",
       "all": "Kõik playbookid",
       "approval": {
@@ -2548,10 +2662,12 @@
       "convertToExtractDescription": "See eemaldab selle seisukoha tasemeredeli ja hindamise. Seda ei saa tagasi võtta.",
       "convertToExtractTitle": "Teisendada ainult väljavõtteks?",
       "convertToGraded": "Lisa hindamisreeglid",
+      "convertToRules": "Teisenda reegliteks",
       "createPlaybook": "Uus playbook",
       "created": "Playbook loodud",
       "customizeAnswer": "Muuda eraldatavat vastust",
       "customizeAnswerHint": "Muuda küsimust või vastuse vormingut.",
+      "decisionLine": "{runs, plural, one {aktsepteeritud {accepted, number} · kõrvale jäetud {dismissed, number} · # ülevaatuse jooksul} other {aktsepteeritud {accepted, number} · kõrvale jäetud {dismissed, number} · # ülevaatuse jooksul}}",
       "deleteFailed": "Playbooki kustutamine ebaõnnestus",
       "deletePlaybook": "Kustuta playbook",
       "deletePosition": "Kustuta seisukoht",
@@ -2607,6 +2723,7 @@
         "title": "Läbirääkimised"
       },
       "noPositions": "Seisukohti veel pole. Lisage esimene.",
+      "noSettledPosition": "Kindlaks määratud seisukoht puudub",
       "optionPlaceholder": "Valiku väärtus",
       "optionsLabel": "Valikud",
       "outline": "Struktuur",
@@ -2615,6 +2732,7 @@
       "recent": "Hiljuti kasutatud",
       "recommended": "Soovitatud lähtekohad",
       "redLinePlaceholder": "Sõnastus, mis pole kunagi vastuvõetav",
+      "referenceStandard": "Võrdlusdokumendist",
       "removeCheck": "Eemalda kontroll",
       "removeIdeal": "Eemalda ideaalne sõnastus",
       "reorderPosition": "Sorteeri seisukoht ümber",
@@ -2641,20 +2759,6 @@
         "viewClause": "Vaata klauslit",
         "violatedRedLine": "Rikutud punane joon:"
       },
-      "risk": {
-        "complianceLabel": "Vastavus",
-        "flaggedCount": "{flagged} positsiooni {total}-st on märgitud",
-        "notApplicableExcluded": "({count} ei kohaldu, välja jäetud)",
-        "riskLevel": {
-          "critical": "Kriitiline",
-          "high": "Kõrge",
-          "low": "Madal",
-          "medium": "Keskmine",
-          "none": "Risk puudub"
-        },
-        "summaryTitle": "Riskide kokkuvõte",
-        "topIssuesTitle": "Olulisemad küsimused"
-      },
       "ruleNumber": "Reegel {index}",
       "rulePlaceholder": "nt Maksetähtaeg ei tohi ületada 30 päeva",
       "saveFailed": "Playbooki salvestamine ebaõnnestus",
@@ -2674,6 +2778,12 @@
       },
       "switchToAuto": "Loo küsimus ja vorming automaatselt",
       "switchToManual": "Kohanda küsimust ja vastuse vormingut",
+      "termKind": {
+        "enumeration": "Loend",
+        "language": "Language",
+        "parameter": "Parameeter",
+        "presence": "Olemasolu"
+      },
       "tier": {
         "acceptable": "Vastuvõetav",
         "fallback": "Alternatiiv",
@@ -2684,6 +2794,7 @@
       "updated": "Playbook uuendatud",
       "updatedAt": "Uuendatud {date}",
       "verdict": {
+        "additional": "Täiendav",
         "compliant": "Vastav",
         "deviation": "Kõrvalekalle",
         "fallback": "Alternatiiv",
@@ -4523,6 +4634,10 @@
           "trigger": "Algataja",
           "webhook": "Veebihaak"
         },
+        "documentReview": {
+          "decided": "Otsustas {count, plural, one {# leiu} other {# leidu}} dokumendi ülevaatuses",
+          "started": "Alustas ülevaatust dokumendile"
+        },
         "empty": "Selles toimikus pole veel tegevust.",
         "filterLabel": "Filtreeri tegevust",
         "filters": {
@@ -4562,12 +4677,15 @@
           "automation": "automatiseerimine",
           "court": "kohtukirje",
           "document": "dokument",
+          "documentReview": "dokumendi ülevaatus",
           "folder": "kaust",
           "link": "link",
           "matter": "toimik",
           "message": "sõnum",
+          "playbook": "playbooki reeglid",
           "task": "päevakorrapunkt",
-          "team": "toimiku meeskond"
+          "team": "toimiku meeskond",
+          "translation": "tõlge"
         },
         "title": "Tegevus",
         "views": {

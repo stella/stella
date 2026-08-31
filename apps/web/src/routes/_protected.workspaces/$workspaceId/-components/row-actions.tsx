@@ -36,7 +36,6 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -172,6 +171,13 @@ type TranslationDialogState =
   | { type: "closed" }
   | { target: TranslationTarget; type: "open" };
 
+/** What a confirmed deletion removes, captured when it was requested. */
+type DeleteRequest = {
+  ids: string[];
+  isBulk: boolean;
+  name: string;
+};
+
 const getTranslationTarget = ({
   cellMetadataTarget,
   entity,
@@ -263,6 +269,9 @@ export const RowActions = ({
   const retryCell = useRetryCell(toSafeId<"workspace">(workspaceId));
   const canCreateEntity = usePermissions({ entity: ["create"] });
   const [copyToMatterOpen, setCopyToMatterOpen] = useState(false);
+  const [deleteRequest, setDeleteRequest] = useState<DeleteRequest | null>(
+    null,
+  );
   const [copyToMatterEntities, setCopyToMatterEntities] = useState<
     CopyToMatterEntity[]
   >([]);
@@ -748,18 +757,24 @@ export const RowActions = ({
     }
   };
 
-  const handleDelete = () => {
-    const ids = isBulk
-      ? selectedEntities.map((e) => e.entityId)
-      : [entity.entityId];
+  // The menu clears the bulk selection as it closes, so the targets are
+  // captured when deletion is requested, not when it is confirmed.
+  const requestDelete = () => {
+    setDeleteRequest({
+      ids: bulkTargets.map((target) => target.entityId),
+      isBulk,
+      name,
+    });
+  };
+  const handleDelete = ({ ids, isBulk: bulk, name: label }: DeleteRequest) => {
     deleteEntities.mutate(
       { workspaceId, entityIds: ids },
       {
         onSuccess: () => {
           stellaToast.add({
-            title: isBulk
+            title: bulk
               ? t("common.deletedCount", { count: ids.length })
-              : t("workspaces.deletedItem", { name }),
+              : t("workspaces.deletedItem", { name: label }),
             type: "success",
           });
         },
@@ -942,14 +957,12 @@ export const RowActions = ({
           hasPdfConversion={hasPdfConversion}
           isBulk={isBulk}
           isCellContext={isCellContext}
-          name={name}
           onCopyToMatter={openCopyToMatterDialog}
-          onDelete={handleDelete}
+          onDelete={requestDelete}
           onDownload={handleDownload}
           onDuplicate={handleDuplicate}
           onOcrExport={handleOcrExport}
           onZipDownload={handleZipDownload}
-          selectedCount={bulkTargets.length}
         />
       </MenuPopup>
       <CopyToMatterDialog
@@ -958,6 +971,20 @@ export const RowActions = ({
         open={copyToMatterOpen}
         sourceWorkspaceId={workspaceId}
       />
+      {deleteRequest !== null && (
+        <RowDeleteDialog
+          isBulk={deleteRequest.isBulk}
+          name={deleteRequest.name}
+          onConfirm={() => handleDelete(deleteRequest)}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) {
+              setDeleteRequest(null);
+            }
+          }}
+          open
+          selectedCount={deleteRequest.ids.length}
+        />
+      )}
       <RowTranslationDialog
         canCreateEntity={canCreateEntity}
         entity={entity}
@@ -1314,14 +1341,12 @@ type RowFileOperationsMenuProps = {
   hasPdfConversion: boolean;
   isBulk: boolean;
   isCellContext: boolean;
-  name: string;
   onCopyToMatter: () => void;
   onDelete: () => void;
   onDownload: (variant?: DownloadVariant) => Promise<void>;
   onDuplicate: () => Promise<void>;
   onOcrExport: (source: OcrSource, format: OcrExportFormat) => Promise<void>;
   onZipDownload: () => Promise<void>;
-  selectedCount: number;
 };
 
 const RowFileOperationsMenu = ({
@@ -1333,14 +1358,12 @@ const RowFileOperationsMenu = ({
   hasPdfConversion,
   isBulk,
   isCellContext,
-  name,
   onCopyToMatter,
   onDelete,
   onDownload,
   onDuplicate,
   onOcrExport,
   onZipDownload,
-  selectedCount,
 }: RowFileOperationsMenuProps) => {
   const t = useTranslations();
   if (isCellContext) {
@@ -1456,41 +1479,63 @@ const RowFileOperationsMenu = ({
         {t("workspaces.copyToMatter.menuItem")}
       </MenuItem>
       <MenuSeparator />
-      <AlertDialog>
-        <AlertDialogTrigger
-          render={<MenuItem closeOnClick={false} variant="destructive" />}
-        >
-          <Trash2Icon />
-          {t("common.delete")}
-        </AlertDialogTrigger>
-        <AlertDialogPopup>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {isBulk
-                ? t("workspaces.deleteItems", { count: selectedCount })
-                : t("workspaces.deleteItem")}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {isBulk
-                ? t("workspaces.deleteItemsDescription", {
-                    count: selectedCount,
-                  })
-                : t("common.deleteConfirmDescription", { name })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="ghost" />}>
-              {t("common.cancel")}
-            </AlertDialogClose>
-            <AlertDialogClose
-              render={<Button onClick={onDelete} variant="destructive" />}
-            >
-              {t("common.delete")}
-            </AlertDialogClose>
-          </AlertDialogFooter>
-        </AlertDialogPopup>
-      </AlertDialog>
+      {/* Only requests the deletion: the confirmation lives outside the menu
+          so the menu can close under it like every other dialog here. */}
+      <MenuItem onClick={onDelete} variant="destructive">
+        <Trash2Icon />
+        {t("common.delete")}
+      </MenuItem>
     </>
+  );
+};
+
+type RowDeleteDialogProps = {
+  isBulk: boolean;
+  name: string;
+  onConfirm: () => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  selectedCount: number;
+};
+
+const RowDeleteDialog = ({
+  isBulk,
+  name,
+  onConfirm,
+  onOpenChange,
+  open,
+  selectedCount,
+}: RowDeleteDialogProps) => {
+  const t = useTranslations();
+  return (
+    <AlertDialog onOpenChange={onOpenChange} open={open}>
+      <AlertDialogPopup>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {isBulk
+              ? t("workspaces.deleteItems", { count: selectedCount })
+              : t("workspaces.deleteItem")}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {isBulk
+              ? t("workspaces.deleteItemsDescription", {
+                  count: selectedCount,
+                })
+              : t("common.deleteConfirmDescription", { name })}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogClose render={<Button variant="ghost" />}>
+            {t("common.cancel")}
+          </AlertDialogClose>
+          <AlertDialogClose
+            render={<Button onClick={onConfirm} variant="destructive" />}
+          >
+            {t("common.delete")}
+          </AlertDialogClose>
+        </AlertDialogFooter>
+      </AlertDialogPopup>
+    </AlertDialog>
   );
 };
 

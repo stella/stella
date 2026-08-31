@@ -2,11 +2,10 @@
  * Document-review sessions: a client cache over durable server runs.
  *
  * A review is a row on the server, not a promise in this tab. The store keeps
- * only what the server does not: the basis and topics a reviewer is still
- * assembling, the id of the run the facet is tracking, and the fix/comment
- * state of the open editor session (revision ids are editor-scoped and mean
- * nothing after a reload, so they never leave the client). Status, progress
- * and findings are read back from the run itself.
+ * only what the server does not: the setup and the position list a reviewer is
+ * still assembling, and the id of the run the facet is tracking. Status,
+ * progress, findings and the staged redlines are read back from the run and
+ * from the AI-suggestions store.
  *
  * A session key with no entry means "the facet has not decided yet" — that is
  * what lets a freshly opened facet restore the document's latest run instead of
@@ -16,27 +15,30 @@
 import { Result } from "better-result";
 import { create } from "zustand";
 
+import { REVIEW_START_MODE } from "@/components/ai-suggestions/document-review-basis.logic";
 import type {
-  ReviewBasis,
-  ReviewParty,
+  ReferenceFile,
   ReviewPerspective,
+  ReviewSetup,
+  ReviewSkippedTerm,
+  ReviewStartMode,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import {
-  perspectiveFromBasis,
-  playbookIdFromBasis,
-  referencesFromBasis,
-} from "@/components/ai-suggestions/document-review-basis.logic";
+  mergeStreamedPosition,
+  REVIEW_PROPOSAL_EVENT,
+  streamReviewProposal,
+} from "@/components/ai-suggestions/document-review-proposal-stream";
+import type { IndexedPosition } from "@/components/ai-suggestions/document-review-proposal-stream";
 import { fetchDocumentReviewRuns } from "@/components/ai-suggestions/document-review-queries";
-import type { DocumentReviewFindingRow } from "@/components/ai-suggestions/document-review-queries";
 import { resolveRunConflictAttachment } from "@/components/ai-suggestions/document-review-run.logic";
 import { runSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import type { RunSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import type { Position } from "@/lib/knowledge/playbook-types";
 import { toSafeId } from "@/lib/safe-id";
 
-const TOPIC_PROPOSAL_TIMEOUT_MS = 130_000;
 const RUN_CREATE_TIMEOUT_MS = 30_000;
 
 /** The create endpoint answers this when the document already has a run in
@@ -44,109 +46,10 @@ const RUN_CREATE_TIMEOUT_MS = 30_000;
  *  findings, so the client attaches to the active one instead. */
 const RUN_ALREADY_ACTIVE_STATUS = 409;
 
-export const SEVERITY_ORDER = ["blocker", "high", "medium", "low"] as const;
-
-export type PlaybookSeverity = (typeof SEVERITY_ORDER)[number];
-
-const PLAYBOOK_VERDICT_POLICY = {
-  compliant: { risk: "clear", negotiation: "unavailable" },
-  fallback: { risk: "flagged", negotiation: "available" },
-  deviation: { risk: "flagged", negotiation: "available" },
-  missing: { risk: "flagged", negotiation: "unavailable" },
-  // Outside the compliance ladder: the position does not pertain to this
-  // document, so it is neither a pass nor a flagged gap and is excluded from
-  // the compliance denominator (see `computeRiskRollup`).
-  "not-applicable": { risk: "clear", negotiation: "unavailable" },
-} as const satisfies Record<
-  string,
-  {
-    risk: "clear" | "flagged";
-    negotiation: "available" | "unavailable";
-  }
->;
-
-export type PlaybookVerdict = keyof typeof PLAYBOOK_VERDICT_POLICY;
-
-export type FlaggedPlaybookVerdict = {
-  [TVerdict in PlaybookVerdict]: (typeof PLAYBOOK_VERDICT_POLICY)[TVerdict]["risk"] extends "flagged"
-    ? TVerdict
-    : never;
-}[PlaybookVerdict];
-
-type NegotiablePlaybookVerdict = {
-  [TVerdict in PlaybookVerdict]: (typeof PLAYBOOK_VERDICT_POLICY)[TVerdict]["negotiation"] extends "available"
-    ? TVerdict
-    : never;
-}[PlaybookVerdict];
-
-export const isFlaggedPlaybookVerdict = (
-  verdict: PlaybookVerdict,
-): verdict is FlaggedPlaybookVerdict =>
-  PLAYBOOK_VERDICT_POLICY[verdict].risk === "flagged";
-
-export const isNegotiablePlaybookVerdict = (
-  verdict: PlaybookVerdict,
-): verdict is NegotiablePlaybookVerdict =>
-  PLAYBOOK_VERDICT_POLICY[verdict].negotiation === "available";
-
-export type PlaybookCitation = { blockId: string; text: string };
-export type ReviewFindingFix = {
-  kind: "replaceBlock" | "insertAfterBlock";
-  blockId: string;
-  text: string;
-};
-
-export type PlaybookMatchedRef =
-  | { kind: "fallback"; label?: string; text: string }
-  | { kind: "redLine"; ruleId: string; text: string };
-
-export type PlaybookFinding = {
-  positionId: string;
-  issue: string;
-  severity: PlaybookSeverity;
-  verdict: PlaybookVerdict | null;
-  extracted: { value: string; text: string } | null;
-  rationale: string | null;
-  citations: PlaybookCitation[];
-  fix: ReviewFindingFix | null;
-  matchedRef?: PlaybookMatchedRef | null;
-};
-
-/** The reference-comparison finding as the run persisted it. Inferred from the
- *  run read rather than restated here, so the card cannot drift from the shape
- *  the engine writes. */
-export type ReferenceFinding = Extract<
-  DocumentReviewFindingRow["payload"],
-  { checkKind: "reference" }
->["finding"];
-export type ReferenceAssessment = ReferenceFinding["assessment"];
-export type ReferenceConsensus = ReferenceFinding["consensus"];
-
-export type ReviewFixStatus = "pending" | "applied" | "accepted";
-
-export type ReviewFixState = {
-  status: ReviewFixStatus;
-  revisionIds: readonly number[] | null;
-};
-
-export type ReviewCommentState = { status: "applying" } | { status: "applied" };
-
-export type ReviewTopic =
-  | {
-      type: "playbook";
-      topicId: string;
-      positionId: string;
-      title: string;
-      context: string;
-      included: boolean;
-    }
-  | {
-      type: "reference" | "custom";
-      topicId: string;
-      title: string;
-      context: string;
-      included: boolean;
-    };
+export const reviewSessionKey = (
+  entityId: string,
+  fileFieldId: string,
+): string => `${entityId}:${fileFieldId}`;
 
 /**
  * Where the client-side flow stands. It deliberately does not mirror the run's
@@ -155,15 +58,10 @@ export type ReviewTopic =
  */
 export type ReviewStatus =
   | "idle"
-  | "proposing-topics"
-  | "editing-topics"
+  | "proposing-positions"
+  | "editing-positions"
   | "starting"
   | "error";
-
-export type ReviewResults = {
-  playbook: PlaybookFinding[] | null;
-  references: ReferenceFinding[] | null;
-};
 
 /**
  * Whether the facet may still adopt the document's latest server run. A
@@ -173,21 +71,56 @@ export type ReviewResults = {
  */
 export type ReviewRestoreMode = "allowed" | "dismissed";
 
+/**
+ * Which of the document's runs the facet is showing: the one this session
+ * tracks (the newest, or the one it started), or an earlier run the reviewer
+ * opened from the history. A history run is a record, not a workspace: the
+ * facet renders it read-only and offers the way back.
+ */
+export type ReviewRunSelection =
+  | { type: "tracked" }
+  | { type: "history"; runId: string };
+
+export const TRACKED_RUN_SELECTION: ReviewRunSelection = { type: "tracked" };
+
+/**
+ * The proposal as the stream has delivered it so far.
+ *
+ * Separate from the session's `positions` on purpose: this is what the model
+ * proposed, in the order it proposed it, and it never changes once written —
+ * `positions` is the plan the reviewer may then edit. Keeping the two apart is
+ * what lets the streamed cards stay on screen while the run they started is
+ * already claiming its findings.
+ */
+export type ReviewProposal = {
+  status: "streaming" | "done" | "failed";
+  /** The seeded positions, then each streamed one in the proposal's own
+   *  order. */
+  positions: Position[];
+  /** What the pass read and deliberately did not turn into a position. */
+  skipped: ReviewSkippedTerm[];
+};
+
 export type DocumentReviewSession = {
   status: ReviewStatus;
-  basis: ReviewBasis | null;
-  fixState: Record<string, ReviewFixState>;
-  commentState: Record<string, ReviewCommentState>;
+  setup: ReviewSetup | null;
   error: string | null;
   /** The durable run this facet tracks, or `null` while none has started. */
   runId: string | null;
   restore: ReviewRestoreMode;
+  /** Which run is on screen: the tracked one, or one opened from history. */
+  selection: ReviewRunSelection;
   /** Guards a stale response from overwriting a newer request's session. */
   requestId: string | null;
-  topics: ReviewTopic[];
-  /** The target's parties as the topic proposal read them; what the
-   *  reviewer picks a side from while confirming topics. */
-  parties: ReviewParty[];
+  /** The list the run will be measured by, while the reviewer confirms it. */
+  positions: Position[];
+  /** What the position proposal read but deliberately did not turn into a
+   *  position; empty when no proposal ran (a playbook-only setup, or none
+   *  started yet). */
+  skipped: ReviewSkippedTerm[];
+  /** The streamed proposal behind this session, or `null` when none has been
+   *  asked for (a playbook-only setup, or a restored run). */
+  proposal: ReviewProposal | null;
   /**
    * A refused start whose estimated size needs the reviewer's explicit
    * go-ahead; the dialog re-issues the stored request with the estimate
@@ -209,38 +142,39 @@ export type RunSizeConfirmation = RunSizeConfirmationDetail & {
   args: StartRunArgs;
 };
 
-export const reviewSessionKey = (
-  entityId: string,
-  fileFieldId: string,
-): string => `${entityId}:${fileFieldId}`;
-
 export type StartReviewResult =
   | { ok: true }
   | { ok: false; message: string; error: ReviewRequestError | null };
 
 type StartReviewArgs = {
   workspaceId: string;
-  basis: ReviewBasis;
+  setup: ReviewSetup;
   entityId: string;
   fileFieldId: string;
   unexpectedErrorMessage: string;
-  seededTopics: ReviewTopic[];
+  /** What the proposal is followed by: the run, or the confirm step. */
+  startMode: ReviewStartMode;
+  /** The picked playbook's enabled positions, when there is one. */
+  seededPositions: Position[];
 };
 
 /** What a run needs, flattened from whatever produced it: the launcher's
- *  basis, the confirmed topic editor, or a failed run being retried. */
+ *  setup, the confirmed position list, or a failed run being retried. */
 export type StartRunArgs = {
   workspaceId: string;
   entityId: string;
   fileFieldId: string;
   playbookId: string | null;
-  references: readonly {
-    workspaceId: string;
-    entityId: string;
-    fileFieldId: string;
-  }[];
+  references: readonly Pick<
+    ReferenceFile,
+    "workspaceId" | "entityId" | "fileFieldId"
+  >[];
   perspective: ReviewPerspective;
-  topics: readonly ReviewTopic[];
+  positions: readonly Position[];
+  /** What the proposal read and left off the checklist. Pinned on the run
+   *  with the positions, so the results can still say how much of the document
+   *  was never compared; empty for a run with no proposal behind it. */
+  skipped: readonly ReviewSkippedTerm[];
   unexpectedErrorMessage: string;
   /** Restated size estimate after a confirmation answer. */
   confirmedUnits?: number;
@@ -248,24 +182,16 @@ export type StartRunArgs = {
 
 type State = {
   sessions: Record<string, DocumentReviewSession>;
+  /**
+   * The side last chosen for each document, kept past the session it was
+   * chosen in. Going back to the launcher blanks the session, and re-picking
+   * "we act for the Purchaser" on every re-run of the same contract is the
+   * kind of retyping a reviewer notices.
+   */
+  perspectiveByDocument: Record<string, ReviewPerspective>;
 };
 
 type Actions = {
-  beginComment: (
-    entityId: string,
-    fileFieldId: string,
-    findingId: string,
-  ) => boolean;
-  completeComment: (
-    entityId: string,
-    fileFieldId: string,
-    findingId: string,
-  ) => void;
-  cancelComment: (
-    entityId: string,
-    fileFieldId: string,
-    findingId: string,
-  ) => void;
   startReview: (args: StartReviewArgs) => Promise<StartReviewResult>;
   startRun: (args: StartRunArgs) => Promise<StartReviewResult>;
   /** Replay the parked request with its estimate restated. */
@@ -274,46 +200,70 @@ type Actions = {
     fileFieldId: string,
   ) => Promise<StartReviewResult>;
   dismissRunSize: (entityId: string, fileFieldId: string) => void;
-  confirmTopics: (
+  confirmPositions: (
     workspaceId: string,
     entityId: string,
     fileFieldId: string,
     unexpectedErrorMessage: string,
   ) => Promise<StartReviewResult>;
-  setTopics: (
+  setPositions: (
     entityId: string,
     fileFieldId: string,
-    topics: ReviewTopic[],
+    positions: Position[],
   ) => void;
-  /** Which of the target's sides the run will be judged for; only while
-   *  the topics are being confirmed, which is when the sides are known. */
+  /** Which of the target's sides the run is judged for. Chosen on the
+   *  launcher, and changeable again while the positions are confirmed;
+   *  remembered for the document either way. */
   setPerspective: (
     entityId: string,
     fileFieldId: string,
     perspective: ReviewPerspective,
   ) => void;
-  setFixState: (
+  resetSession: (entityId: string, fileFieldId: string) => void;
+  /** Open one of the document's earlier runs, read-only. */
+  viewHistoricalRun: (
     entityId: string,
     fileFieldId: string,
-    findingId: string,
-    next: ReviewFixState,
+    runId: string,
   ) => void;
-  resetSession: (entityId: string, fileFieldId: string) => void;
+  /** Back to the run this session tracks. */
+  viewTrackedRun: (entityId: string, fileFieldId: string) => void;
 };
 
 const blankSession = (): DocumentReviewSession => ({
   status: "idle",
-  basis: null,
-  fixState: {},
-  commentState: {},
+  setup: null,
   error: null,
   runId: null,
   restore: "allowed",
+  selection: TRACKED_RUN_SELECTION,
   requestId: null,
-  topics: [],
-  parties: [],
+  positions: [],
+  skipped: [],
+  proposal: null,
   sizeConfirmation: null,
 });
+
+/** What the proposal read and left off the checklist. A session with no
+ *  proposal behind it — a playbook-only setup, or a restored run — left
+ *  nothing out, rather than having read nothing. */
+const proposalSkipped = (
+  session: DocumentReviewSession,
+): ReviewSkippedTerm[] =>
+  session.proposal === null ? [] : session.proposal.skipped;
+
+const referenceRefs = (
+  references: StartRunArgs["references"],
+): {
+  workspaceId: ReturnType<typeof toSafeId<"workspace">>;
+  entityId: ReturnType<typeof toSafeId<"entity">>;
+  fileFieldId: ReturnType<typeof toSafeId<"field">>;
+}[] =>
+  references.map((reference) => ({
+    workspaceId: toSafeId<"workspace">(reference.workspaceId),
+    entityId: toSafeId<"entity">(reference.entityId),
+    fileFieldId: toSafeId<"field">(reference.fileFieldId),
+  }));
 
 const requestRun = async ({
   workspaceId,
@@ -322,7 +272,8 @@ const requestRun = async ({
   playbookId,
   references,
   perspective,
-  topics,
+  positions,
+  skipped,
   confirmedUnits,
 }: Omit<StartRunArgs, "unexpectedErrorMessage">) => {
   // Both channels are read here rather than handed on as one response: the
@@ -336,18 +287,17 @@ const requestRun = async ({
           entityId: toSafeId<"entity">(entityId),
           fileFieldId: toSafeId<"field">(fileFieldId),
         },
-        ...(playbookId === null
-          ? {}
-          : { playbookId: toSafeId<"playbookDefinition">(playbookId) }),
-        references: references.map((reference) => ({
-          workspaceId: toSafeId<"workspace">(reference.workspaceId),
-          entityId: toSafeId<"entity">(reference.entityId),
-          fileFieldId: toSafeId<"field">(reference.fileFieldId),
-        })),
+        playbookId:
+          playbookId === null
+            ? null
+            : toSafeId<"playbookDefinition">(playbookId),
+        // The whole confirmed list, disabled entries included: the run pins it
+        // as its snapshot, and "Save as playbook" keeps exactly what was
+        // confirmed. Grading skips the disabled ones server-side.
+        positions: [...positions],
+        references: referenceRefs(references),
         perspective,
-        // The run stores the confirmed plan, and the endpoint rejects an
-        // unconfirmed topic: send exactly what the reviewer approved.
-        topics: topics.filter((topic) => topic.included),
+        skipped: [...skipped],
         ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
       },
       { fetch: { signal: AbortSignal.timeout(RUN_CREATE_TIMEOUT_MS) } },
@@ -355,526 +305,630 @@ const requestRun = async ({
   return { data, error };
 };
 
-export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
-  sessions: {},
+export const usePlaybookReviewStore = create<State & Actions>()((set, get) => {
+  /**
+   * The in-flight proposal stream per document. Scoped to the store rather
+   * than the module: it is a connection, not state anything renders, and a
+   * component subscribing to it would re-render on a value it can do nothing
+   * with — but it still belongs to one store, so a second store (a test, a
+   * second mount) cannot hang up the first one's requests. Starting a
+   * proposal hangs up the previous one for the same document; so does going
+   * back to the launcher, because nobody is left to read the rest of the
+   * checklist and the tokens are still being paid for.
+   */
+  const proposalStreams = new Map<string, AbortController>();
 
-  startReview: async ({
-    workspaceId,
-    basis,
-    entityId,
-    fileFieldId,
-    unexpectedErrorMessage,
-    seededTopics,
-  }) => {
-    const key = reviewSessionKey(entityId, fileFieldId);
-    const existing = get().sessions[key];
-    if (
-      existing?.status === "starting" ||
-      existing?.status === "proposing-topics"
-    ) {
-      return { ok: true };
-    }
+  const abortProposalStream = (key: string) => {
+    proposalStreams.get(key)?.abort();
+    proposalStreams.delete(key);
+  };
 
-    const references = referencesFromBasis(basis);
-    const playbookId = playbookIdFromBasis(basis);
-    if (references.length === 0) {
-      // No reference documents means no topics to agree on: the playbook's
-      // enabled positions are the plan, so the run starts immediately.
+  return {
+    sessions: {},
+    perspectiveByDocument: {},
+
+    startReview: async ({
+      workspaceId,
+      setup,
+      entityId,
+      fileFieldId,
+      unexpectedErrorMessage,
+      startMode,
+      seededPositions,
+    }) => {
+      const key = reviewSessionKey(entityId, fileFieldId);
+      const existing = get().sessions[key];
+      if (
+        existing?.status === "starting" ||
+        existing?.status === "proposing-positions"
+      ) {
+        return { ok: true };
+      }
+      set((state) => ({
+        perspectiveByDocument: {
+          ...state.perspectiveByDocument,
+          [key]: setup.perspective,
+        },
+      }));
+
+      if (setup.references.length === 0) {
+        // No reference documents means no positions to agree on: the playbook's
+        // enabled positions are the plan, so the run starts immediately.
+        set((state) => ({
+          sessions: {
+            ...state.sessions,
+            [key]: { ...blankSession(), setup, positions: seededPositions },
+          },
+        }));
+        return await get().startRun({
+          workspaceId,
+          entityId,
+          fileFieldId,
+          playbookId: setup.playbookId,
+          references: [],
+          perspective: setup.perspective,
+          positions: seededPositions,
+          // No reference documents means no proposal, so nothing was read and
+          // left uncompared.
+          skipped: [],
+          unexpectedErrorMessage,
+        });
+      }
+
+      const requestId = crypto.randomUUID();
       set((state) => ({
         sessions: {
           ...state.sessions,
           [key]: {
             ...blankSession(),
-            ...(existing === undefined
-              ? {}
-              : {
-                  fixState: existing.fixState,
-                  commentState: existing.commentState,
-                }),
-            basis,
-            topics: seededTopics,
+            status: "proposing-positions",
+            setup,
+            requestId,
+            positions: seededPositions,
+            proposal: {
+              status: "streaming",
+              positions: [...seededPositions],
+              skipped: [],
+            },
           },
         },
       }));
+
+      abortProposalStream(key);
+      const controller = new AbortController();
+      proposalStreams.set(key, controller);
+
+      // Streamed positions are placed by the index the server states rather than
+      // by arrival, and the seeds keep the front: the stream never re-sends
+      // them, so the list is seeds first, proposal second, in the proposal's own
+      // order.
+      let streamed: IndexedPosition[] = [];
+      const proposalPositions = (): Position[] => [
+        ...seededPositions,
+        ...streamed.map((entry) => entry.position),
+      ];
+
+      /** Fold one frame into the session, or answer `false` when this request is
+       *  no longer the one the session is waiting for. */
+      const applyEvent = (
+        apply: (proposal: ReviewProposal) => ReviewProposal,
+      ): boolean => {
+        let current = false;
+        set((state) => {
+          const session = state.sessions[key];
+          if (session?.requestId !== requestId || session.proposal === null) {
+            return state;
+          }
+          current = true;
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: { ...session, proposal: apply(session.proposal) },
+            },
+          };
+        });
+        return current;
+      };
+
+      const streamResult = await Result.tryPromise(
+        async () =>
+          await streamReviewProposal({
+            workspaceId,
+            target: { entityId, fileFieldId },
+            references: setup.references.map((reference) => ({
+              workspaceId: reference.workspaceId,
+              entityId: reference.entityId,
+              fileFieldId: reference.fileFieldId,
+            })),
+            seededPositions,
+            perspective: setup.perspective,
+            signal: controller.signal,
+            onEvent: (event) => {
+              switch (event.type) {
+                case REVIEW_PROPOSAL_EVENT.PARTIES:
+                  // The launcher asked the same question before the reviewer
+                  // picked a side, and the side is already in the request this
+                  // stream is answering. Restating it changes nothing.
+                  return true;
+                case REVIEW_PROPOSAL_EVENT.POSITION: {
+                  streamed = mergeStreamedPosition(streamed, event);
+                  return applyEvent((proposal) => ({
+                    ...proposal,
+                    positions: proposalPositions(),
+                  }));
+                }
+                case REVIEW_PROPOSAL_EVENT.SKIPPED:
+                  return applyEvent((proposal) => ({
+                    ...proposal,
+                    skipped: [...proposal.skipped, event.skipped],
+                  }));
+                case REVIEW_PROPOSAL_EVENT.DONE:
+                  // The counts are the server's statement of what it sent. A
+                  // frame this client could not read was dropped on arrival,
+                  // so a shortfall here means the list is not the proposal
+                  // the server made, and the reviewer must not start from it.
+                  return applyEvent((proposal) =>
+                    event.positionCount === streamed.length &&
+                    event.skippedCount === proposal.skipped.length
+                      ? { ...proposal, status: "done" }
+                      : { ...proposal, status: "failed" },
+                  );
+                case REVIEW_PROPOSAL_EVENT.ERROR:
+                  // Whatever already streamed stays valid; the list is simply
+                  // not complete, and the reviewer decides what to do with it.
+                  applyEvent((proposal) => ({ ...proposal, status: "failed" }));
+                  return false;
+                default:
+                  event satisfies never;
+                  return true;
+              }
+            },
+          }),
+      );
+
+      if (proposalStreams.get(key) === controller) {
+        proposalStreams.delete(key);
+      }
+
+      const session = get().sessions[key];
+      if (session?.requestId !== requestId) {
+        // Superseded: the reviewer went back to the launcher, or started
+        // another proposal for the same document.
+        return { ok: true };
+      }
+
+      const refusal =
+        !Result.isError(streamResult) && !streamResult.value.ok
+          ? streamResult.value.error
+          : null;
+      const proposalStatus = session.proposal?.status ?? "failed";
+      if (
+        Result.isError(streamResult) ||
+        refusal !== null ||
+        proposalStatus === "failed"
+      ) {
+        const message =
+          refusal === null
+            ? unexpectedErrorMessage
+            : userErrorMessage(refusal, unexpectedErrorMessage);
+        set((state) => {
+          const current = state.sessions[key];
+          if (current?.requestId !== requestId) {
+            return state;
+          }
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: {
+                ...current,
+                status: "error",
+                error: message,
+                requestId: null,
+                proposal:
+                  current.proposal === null
+                    ? null
+                    : { ...current.proposal, status: "failed" },
+              },
+            },
+          };
+        });
+        return { ok: false, message, error: refusal };
+      }
+
+      const proposed = session.proposal?.positions ?? seededPositions;
+      if (startMode === REVIEW_START_MODE.confirmFirst) {
+        set((state) => {
+          const current = state.sessions[key];
+          if (current?.requestId !== requestId) {
+            return state;
+          }
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: {
+                ...current,
+                status: "editing-positions",
+                positions: proposed,
+                skipped: proposalSkipped(current),
+                requestId: null,
+              },
+            },
+          };
+        });
+        return { ok: true };
+      }
+
+      // Start immediately. The streamed cards stay on screen until the run's own
+      // progress replaces them, so the reviewer never watches the list they were
+      // reading get taken away for a spinner.
+      set((state) => {
+        const current = state.sessions[key];
+        if (current?.requestId !== requestId) {
+          return state;
+        }
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: {
+              ...current,
+              skipped: proposalSkipped(current),
+              requestId: null,
+            },
+          },
+        };
+      });
       return await get().startRun({
         workspaceId,
         entityId,
         fileFieldId,
-        playbookId,
-        references: [],
-        perspective: perspectiveFromBasis(basis),
-        topics: seededTopics,
+        playbookId: setup.playbookId,
+        references: setup.references,
+        perspective: setup.perspective,
+        positions: proposed.filter((position) => position.enabled),
+        skipped: proposalSkipped(session),
         unexpectedErrorMessage,
       });
-    }
+    },
 
-    const requestId = crypto.randomUUID();
-    set((state) => ({
-      sessions: {
-        ...state.sessions,
-        [key]: {
-          ...blankSession(),
-          ...(existing === undefined
-            ? {}
-            : {
-                fixState: existing.fixState,
-                commentState: existing.commentState,
-              }),
-          status: "proposing-topics",
-          basis,
-          requestId,
-          topics: seededTopics,
-        },
-      },
-    }));
-
-    const proposalResult = await Result.tryPromise(async () => {
-      const { data, error } = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["document-reviews"].topics.post(
-          {
-            target: {
-              entityId: toSafeId<"entity">(entityId),
-              fileFieldId: toSafeId<"field">(fileFieldId),
-            },
-            references: references.map((reference) => ({
-              workspaceId: toSafeId<"workspace">(reference.workspaceId),
-              entityId: toSafeId<"entity">(reference.entityId),
-              fileFieldId: toSafeId<"field">(reference.fileFieldId),
-            })),
-            seededTopics,
-          },
-          {
-            fetch: {
-              signal: AbortSignal.timeout(TOPIC_PROPOSAL_TIMEOUT_MS),
-            },
-          },
-        );
-      return { data, error };
-    });
-    const proposalError = Result.isError(proposalResult)
-      ? null
-      : proposalResult.value.error;
-    if (Result.isError(proposalResult) || proposalError) {
-      const message = proposalError
-        ? userErrorMessage(proposalError, unexpectedErrorMessage)
-        : unexpectedErrorMessage;
-      set((state) => {
-        const current = state.sessions[key];
-        if (current?.requestId !== requestId) {
-          return state;
-        }
-        return {
-          sessions: {
-            ...state.sessions,
-            [key]: {
-              ...current,
-              status: "error",
-              error: message,
-              requestId: null,
-            },
-          },
-        };
-      });
-      return { ok: false, message, error: proposalError };
-    }
-
-    set((state) => {
-      const current = state.sessions[key];
-      if (current?.requestId !== requestId) {
-        return state;
-      }
-      const proposed = proposalResult.value.data;
-      return {
-        sessions: {
-          ...state.sessions,
-          [key]: {
-            ...current,
-            status: "editing-topics",
-            topics: proposed === null ? seededTopics : proposed.topics,
-            parties: proposed === null ? [] : proposed.parties,
-            requestId: null,
-          },
-        },
-      };
-    });
-    return { ok: true };
-  },
-
-  confirmRunSize: async (entityId, fileFieldId) => {
-    const key = reviewSessionKey(entityId, fileFieldId);
-    const confirmation = get().sessions[key]?.sizeConfirmation;
-    if (!confirmation) {
-      return { ok: true };
-    }
-    return await get().startRun({
-      ...confirmation.args,
-      confirmedUnits: confirmation.estimatedUnits,
-    });
-  },
-
-  dismissRunSize: (entityId, fileFieldId) => {
-    const key = reviewSessionKey(entityId, fileFieldId);
-    set((state) => {
-      const current = state.sessions[key];
-      if (!current?.sizeConfirmation) {
-        return state;
-      }
-      return {
-        sessions: {
-          ...state.sessions,
-          [key]: { ...current, sizeConfirmation: null },
-        },
-      };
-    });
-  },
-
-  startRun: async ({
-    workspaceId,
-    entityId,
-    fileFieldId,
-    playbookId,
-    references,
-    perspective,
-    topics,
-    unexpectedErrorMessage,
-    confirmedUnits,
-  }) => {
-    const key = reviewSessionKey(entityId, fileFieldId);
-    const requestId = crypto.randomUUID();
-    set((state) => {
-      const current = state.sessions[key];
-      return {
-        sessions: {
-          ...state.sessions,
-          [key]: {
-            ...(current ?? blankSession()),
-            status: "starting",
-            error: null,
-            runId: null,
-            requestId,
-            topics: [...topics],
-            sizeConfirmation: null,
-          },
-        },
-      };
-    });
-
-    const requestResult = await Result.tryPromise(
-      async () =>
-        await requestRun({
-          workspaceId,
-          entityId,
-          fileFieldId,
-          playbookId,
-          references,
-          perspective,
-          topics,
-          ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
-        }),
-    );
-
-    const responseError = Result.isError(requestResult)
-      ? null
-      : requestResult.value.error;
-
-    if (responseError) {
-      const confirmationDetail = runSizeConfirmationDetail(responseError);
-      if (confirmationDetail) {
-        // Not a failure: the server wants the size restated. Park the
-        // request on the session; the dialog replays it on confirm.
-        set((state) => {
-          const current = state.sessions[key];
-          if (current?.requestId !== requestId) {
-            return state;
-          }
-          return {
-            sessions: {
-              ...state.sessions,
-              [key]: {
-                ...current,
-                status: "idle",
-                error: null,
-                requestId: null,
-                sizeConfirmation: {
-                  ...confirmationDetail,
-                  args: {
-                    workspaceId,
-                    entityId,
-                    fileFieldId,
-                    playbookId,
-                    references,
-                    perspective,
-                    topics,
-                    unexpectedErrorMessage,
-                  },
-                },
-              },
-            },
-          };
-        });
+    confirmRunSize: async (entityId, fileFieldId) => {
+      const key = reviewSessionKey(entityId, fileFieldId);
+      const confirmation = get().sessions[key]?.sizeConfirmation;
+      if (!confirmation) {
         return { ok: true };
       }
-    }
+      return await get().startRun({
+        ...confirmation.args,
+        confirmedUnits: confirmation.estimatedUnits,
+      });
+    },
 
-    if (responseError && isRunAlreadyActive(responseError)) {
-      // Another tab (or a reload that raced this click) already started a run
-      // for this document. Attach to it: it is executing the same document,
-      // and a second run is exactly what the server refused to create.
-      const attached = await Result.tryPromise(
-        async () =>
-          await fetchDocumentReviewRuns({ workspaceId, entityId, fileFieldId }),
-      );
-      const attachedRunId = Result.isError(attached)
-        ? null
-        : resolveRunConflictAttachment(attached.value.items);
-      if (attachedRunId !== null) {
-        set((state) => {
-          const current = state.sessions[key];
-          if (current?.requestId !== requestId) {
-            return state;
-          }
-          return {
-            sessions: {
-              ...state.sessions,
-              [key]: {
-                ...current,
-                status: "idle",
-                error: null,
-                runId: attachedRunId,
-                requestId: null,
-              },
-            },
-          };
-        });
-        return { ok: true };
-      }
-    }
-
-    if (Result.isError(requestResult) || responseError) {
-      const message = responseError
-        ? userErrorMessage(responseError, unexpectedErrorMessage)
-        : unexpectedErrorMessage;
+    dismissRunSize: (entityId, fileFieldId) => {
+      const key = reviewSessionKey(entityId, fileFieldId);
       set((state) => {
         const current = state.sessions[key];
-        if (current?.requestId !== requestId) {
+        if (!current?.sizeConfirmation) {
           return state;
         }
         return {
           sessions: {
             ...state.sessions,
-            [key]: {
-              ...current,
-              status: "error",
-              error: message,
-              requestId: null,
-            },
+            [key]: { ...current, sizeConfirmation: null },
           },
         };
       });
-      return { ok: false, message, error: responseError };
-    }
+    },
 
-    const created = requestResult.value.data;
-    if (created === null) {
-      set((state) => {
-        const current = state.sessions[key];
-        if (current?.requestId !== requestId) {
-          return state;
-        }
-        return {
-          sessions: {
-            ...state.sessions,
-            [key]: {
-              ...current,
-              status: "error",
-              error: unexpectedErrorMessage,
-              requestId: null,
-            },
-          },
-        };
-      });
-      return { ok: false, message: unexpectedErrorMessage, error: null };
-    }
-
-    const runId = created.runId;
-    set((state) => {
-      const current = state.sessions[key];
-      if (current?.requestId !== requestId) {
-        return state;
-      }
-      return {
-        sessions: {
-          ...state.sessions,
-          [key]: {
-            ...current,
-            status: "idle",
-            error: null,
-            // A new run supersedes whatever the previous one left applied: the
-            // fixes it proposes are keyed by its own findings.
-            fixState: {},
-            commentState: {},
-            runId,
-            requestId: null,
-          },
-        },
-      };
-    });
-    return { ok: true };
-  },
-
-  confirmTopics: async (
-    workspaceId,
-    entityId,
-    fileFieldId,
-    unexpectedErrorMessage,
-  ) => {
-    const key = reviewSessionKey(entityId, fileFieldId);
-    const session = get().sessions[key];
-    if (!session?.basis || session.status !== "editing-topics") {
-      return { ok: true };
-    }
-    return await get().startRun({
+    startRun: async ({
       workspaceId,
       entityId,
       fileFieldId,
-      playbookId: playbookIdFromBasis(session.basis),
-      references: referencesFromBasis(session.basis),
-      perspective: perspectiveFromBasis(session.basis),
-      topics: session.topics,
+      playbookId,
+      references,
+      perspective,
+      positions,
+      skipped,
       unexpectedErrorMessage,
-    });
-  },
-
-  setPerspective: (entityId, fileFieldId, perspective) => {
-    const key = reviewSessionKey(entityId, fileFieldId);
-    set((state) => {
-      const current = state.sessions[key];
-      if (
-        !current?.basis ||
-        current.status !== "editing-topics" ||
-        current.basis.type === "playbook"
-      ) {
-        return state;
-      }
-      return {
-        sessions: {
-          ...state.sessions,
-          [key]: { ...current, basis: { ...current.basis, perspective } },
-        },
-      };
-    });
-  },
-
-  setTopics: (entityId, fileFieldId, topics) => {
-    const key = reviewSessionKey(entityId, fileFieldId);
-    set((state) => {
-      const current = state.sessions[key];
-      if (!current || current.status !== "editing-topics") {
-        return state;
-      }
-      return {
-        sessions: {
-          ...state.sessions,
-          [key]: { ...current, topics, error: null },
-        },
-      };
-    });
-  },
-
-  // Fix and comment state can be the first thing a restored review writes:
-  // the facet adopts a server run without a session, so these upsert one
-  // rather than dropping the reviewer's edit on the floor.
-  setFixState: (entityId, fileFieldId, findingId, next) => {
-    const key = reviewSessionKey(entityId, fileFieldId);
-    set((state) => {
-      const current = state.sessions[key] ?? blankSession();
-      return {
-        sessions: {
-          ...state.sessions,
-          [key]: {
-            ...current,
-            fixState: { ...current.fixState, [findingId]: next },
-          },
-        },
-      };
-    });
-  },
-
-  beginComment: (entityId, fileFieldId, findingId) => {
-    const key = reviewSessionKey(entityId, fileFieldId);
-    if (get().sessions[key]?.commentState[findingId] !== undefined) {
-      return false;
-    }
-    set((state) => {
-      const session = state.sessions[key] ?? blankSession();
-      return {
-        sessions: {
-          ...state.sessions,
-          [key]: {
-            ...session,
-            commentState: {
-              ...session.commentState,
-              [findingId]: { status: "applying" },
+      confirmedUnits,
+    }) => {
+      const key = reviewSessionKey(entityId, fileFieldId);
+      const requestId = crypto.randomUUID();
+      set((state) => {
+        const current = state.sessions[key];
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: {
+              ...(current ?? blankSession()),
+              status: "starting",
+              error: null,
+              runId: null,
+              selection: TRACKED_RUN_SELECTION,
+              requestId,
+              positions: [...positions],
+              sizeConfirmation: null,
             },
           },
-        },
-      };
-    });
-    return true;
-  },
+        };
+      });
 
-  completeComment: (entityId, fileFieldId, findingId) => {
-    const key = reviewSessionKey(entityId, fileFieldId);
-    set((state) => {
-      const current = state.sessions[key];
-      if (current?.commentState[findingId]?.status !== "applying") {
-        return state;
+      const requestResult = await Result.tryPromise(
+        async () =>
+          await requestRun({
+            workspaceId,
+            entityId,
+            fileFieldId,
+            playbookId,
+            references,
+            perspective,
+            positions,
+            skipped,
+            ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
+          }),
+      );
+
+      const responseError = Result.isError(requestResult)
+        ? null
+        : requestResult.value.error;
+
+      if (responseError) {
+        const confirmationDetail = runSizeConfirmationDetail(responseError);
+        if (confirmationDetail) {
+          // Not a failure: the server wants the size restated. Park the
+          // request on the session; the dialog replays it on confirm.
+          set((state) => {
+            const current = state.sessions[key];
+            if (current?.requestId !== requestId) {
+              return state;
+            }
+            return {
+              sessions: {
+                ...state.sessions,
+                [key]: {
+                  ...current,
+                  status: "idle",
+                  error: null,
+                  requestId: null,
+                  sizeConfirmation: {
+                    ...confirmationDetail,
+                    args: {
+                      workspaceId,
+                      entityId,
+                      fileFieldId,
+                      playbookId,
+                      references,
+                      perspective,
+                      positions,
+                      skipped,
+                      unexpectedErrorMessage,
+                    },
+                  },
+                },
+              },
+            };
+          });
+          return { ok: true };
+        }
       }
-      return {
-        sessions: {
-          ...state.sessions,
-          [key]: {
-            ...current,
-            commentState: {
-              ...current.commentState,
-              [findingId]: { status: "applied" },
+
+      if (responseError && isRunAlreadyActive(responseError)) {
+        // Another tab (or a reload that raced this click) already started a run
+        // for this document. Attach to it: it is executing the same document,
+        // and a second run is exactly what the server refused to create.
+        const attached = await Result.tryPromise(
+          async () =>
+            await fetchDocumentReviewRuns({
+              workspaceId,
+              entityId,
+              fileFieldId,
+            }),
+        );
+        const attachedRunId = Result.isError(attached)
+          ? null
+          : resolveRunConflictAttachment(attached.value.items);
+        if (attachedRunId !== null) {
+          set((state) => {
+            const current = state.sessions[key];
+            if (current?.requestId !== requestId) {
+              return state;
+            }
+            return {
+              sessions: {
+                ...state.sessions,
+                [key]: {
+                  ...current,
+                  status: "idle",
+                  error: null,
+                  runId: attachedRunId,
+                  requestId: null,
+                },
+              },
+            };
+          });
+          return { ok: true };
+        }
+      }
+
+      if (Result.isError(requestResult) || responseError) {
+        const message = responseError
+          ? userErrorMessage(responseError, unexpectedErrorMessage)
+          : unexpectedErrorMessage;
+        set((state) => {
+          const current = state.sessions[key];
+          if (current?.requestId !== requestId) {
+            return state;
+          }
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: {
+                ...current,
+                status: "error",
+                error: message,
+                requestId: null,
+              },
+            },
+          };
+        });
+        return { ok: false, message, error: responseError };
+      }
+
+      const created = requestResult.value.data;
+      if (created === null) {
+        set((state) => {
+          const current = state.sessions[key];
+          if (current?.requestId !== requestId) {
+            return state;
+          }
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: {
+                ...current,
+                status: "error",
+                error: unexpectedErrorMessage,
+                requestId: null,
+              },
+            },
+          };
+        });
+        return { ok: false, message: unexpectedErrorMessage, error: null };
+      }
+
+      const runId = created.runId;
+      set((state) => {
+        const current = state.sessions[key];
+        if (current?.requestId !== requestId) {
+          return state;
+        }
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: {
+              ...current,
+              status: "idle",
+              error: null,
+              runId,
+              requestId: null,
             },
           },
-        },
-      };
-    });
-  },
+        };
+      });
+      return { ok: true };
+    },
 
-  cancelComment: (entityId, fileFieldId, findingId) => {
-    const key = reviewSessionKey(entityId, fileFieldId);
-    set((state) => {
-      const current = state.sessions[key];
-      if (current?.commentState[findingId]?.status !== "applying") {
-        return state;
+    confirmPositions: async (
+      workspaceId,
+      entityId,
+      fileFieldId,
+      unexpectedErrorMessage,
+    ) => {
+      const key = reviewSessionKey(entityId, fileFieldId);
+      const session = get().sessions[key];
+      if (!session?.setup || session.status !== "editing-positions") {
+        return { ok: true };
       }
-      const { [findingId]: _cancelled, ...commentState } = current.commentState;
-      return {
+      return await get().startRun({
+        workspaceId,
+        entityId,
+        fileFieldId,
+        playbookId: session.setup.playbookId,
+        references: session.setup.references,
+        perspective: session.setup.perspective,
+        positions: session.positions,
+        skipped: session.skipped,
+        unexpectedErrorMessage,
+      });
+    },
+
+    setPerspective: (entityId, fileFieldId, perspective) => {
+      const key = reviewSessionKey(entityId, fileFieldId);
+      set((state) => {
+        const current = state.sessions[key];
+        const remembered = {
+          perspectiveByDocument: {
+            ...state.perspectiveByDocument,
+            [key]: perspective,
+          },
+        };
+        // A run is already measuring by the side it was given; changing it here
+        // would only disagree with the row.
+        if (!current?.setup || current.status !== "editing-positions") {
+          return remembered;
+        }
+        return {
+          ...remembered,
+          sessions: {
+            ...state.sessions,
+            [key]: { ...current, setup: { ...current.setup, perspective } },
+          },
+        };
+      });
+    },
+
+    setPositions: (entityId, fileFieldId, positions) => {
+      const key = reviewSessionKey(entityId, fileFieldId);
+      set((state) => {
+        const current = state.sessions[key];
+        if (!current || current.status !== "editing-positions") {
+          return state;
+        }
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: { ...current, positions, error: null },
+          },
+        };
+      });
+    },
+
+    /**
+     * Back to the launcher. The blank session stays in the map with the restore
+     * dismissed: choosing a new setup is a decision the facet must remember, or
+     * the document's finished run would be put straight back on screen.
+     */
+    resetSession: (entityId, fileFieldId) => {
+      const key = reviewSessionKey(entityId, fileFieldId);
+      abortProposalStream(key);
+      set((state) => ({
         sessions: {
           ...state.sessions,
-          [key]: { ...current, commentState },
+          [key]: { ...blankSession(), restore: "dismissed" },
         },
-      };
-    });
-  },
+      }));
+    },
 
-  /**
-   * Back to the launcher. The blank session stays in the map with the restore
-   * dismissed: choosing a new basis is a decision the facet must remember, or
-   * the document's finished run would be put straight back on screen.
-   */
-  resetSession: (entityId, fileFieldId) => {
-    const key = reviewSessionKey(entityId, fileFieldId);
-    set((state) => ({
-      sessions: {
-        ...state.sessions,
-        [key]: { ...blankSession(), restore: "dismissed" },
-      },
-    }));
-  },
-}));
+    /**
+     * Show an earlier run. Only the selection moves: the tracked run, the
+     * restore decision and any half-assembled setup stay exactly as they were,
+     * so "Back to latest" is a return rather than a reconstruction.
+     */
+    viewHistoricalRun: (entityId, fileFieldId, runId) => {
+      const key = reviewSessionKey(entityId, fileFieldId);
+      set((state) => {
+        const current = state.sessions[key] ?? blankSession();
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: { ...current, selection: { type: "history", runId } },
+          },
+        };
+      });
+    },
+
+    viewTrackedRun: (entityId, fileFieldId) => {
+      const key = reviewSessionKey(entityId, fileFieldId);
+      set((state) => {
+        const current = state.sessions[key];
+        if (current === undefined) {
+          return state;
+        }
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: { ...current, selection: TRACKED_RUN_SELECTION },
+          },
+        };
+      });
+    },
+  };
+});

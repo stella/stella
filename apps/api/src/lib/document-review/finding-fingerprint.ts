@@ -9,11 +9,10 @@
  *
  * What the fingerprint covers, and why only this:
  *
- *  - the check kind and the stored outcome — a changed verdict is by
- *    definition a new judgment;
- *  - the extracted value and the text it was read from (playbook kind);
- *  - the literal excerpts of every verified citation, per cited document
- *    (reference kind).
+ *  - the stored outcome — a changed verdict is by definition a new judgment;
+ *  - the extracted value and the text it was read from;
+ *  - the literal excerpts of every verified citation, on the document's side
+ *    and on the standard's, per cited document.
  *
  * What it deliberately excludes:
  *
@@ -21,14 +20,15 @@
  *    and a positional `seq-NNNN` otherwise, so an edit elsewhere in the
  *    document renumbers untouched paragraphs. Fingerprinting position would
  *    reopen decisions about text nobody changed.
- *  - model prose (rationale, explanation, severity, fix). Two runs phrase the
- *    same conclusion differently; treating that as new evidence would make
- *    carry-over almost never fire.
+ *  - model prose (rationale, explanation, recommendation, fix) and the delta's
+ *    typing. Two runs phrase the same conclusion differently; treating that as
+ *    new evidence would make carry-over almost never fire.
  *
  * Excerpts are whitespace-normalized before comparison: re-extraction can
  * differ in wrapping without differing in content.
  */
 
+import { arrayOrEmpty } from "@/api/lib/array";
 import { stableStringify } from "@/api/lib/chat/stable-stringify";
 import type { DocumentReviewFindingPayload } from "@/api/lib/document-review/run-contract";
 
@@ -52,60 +52,42 @@ const citationExcerpts = (
     .filter((text) => text.length > 0)
     .toSorted();
 
-/** The evidence a finding rests on, per check kind. Discriminated so a new
- *  kind cannot be fingerprinted without deciding what its evidence is. */
-type FindingEvidence =
-  | {
-      checkKind: "playbook";
-      extractedValue: string | null;
-      extractedText: string | null;
-      citations: readonly string[];
-    }
-  | {
-      checkKind: "reference";
-      targetCitations: readonly string[];
-      referenceCitations: readonly {
-        fileFieldId: string;
-        citations: readonly string[];
-      }[];
-    };
+/** The evidence a finding rests on: what the document said, and what it was
+ *  measured against. */
+type FindingEvidence = {
+  extractedValue: string | null;
+  extractedText: string | null;
+  citations: readonly string[];
+  standardCitations: readonly {
+    fileFieldId: string;
+    citations: readonly string[];
+  }[];
+};
 
 const findingEvidence = (
   payload: DocumentReviewFindingPayload,
 ): FindingEvidence => {
-  switch (payload.checkKind) {
-    case "playbook": {
-      const extracted = payload.finding.extracted;
-      return {
-        checkKind: "playbook",
-        extractedValue:
-          extracted === null ? null : normalizeExcerpt(extracted.value),
-        extractedText:
-          extracted === null ? null : normalizeExcerpt(extracted.text),
-        citations: citationExcerpts(payload.finding.citations),
-      };
-    }
-    case "reference":
-      return {
-        checkKind: "reference",
-        targetCitations: citationExcerpts(payload.finding.targetCitations),
-        // Evidence from a different reference document is different evidence,
-        // so each file's excerpts stay attributed to it. Sorted by the pinned
-        // file field id, which is stable across runs.
-        referenceCitations: payload.finding.referenceCitations
-          .map((entry) => ({
-            fileFieldId: entry.fileFieldId,
-            citations: citationExcerpts(entry.citations),
-          }))
-          .toSorted((left, right) =>
-            left.fileFieldId < right.fileFieldId
-              ? -1
-              : Number(left.fileFieldId > right.fileFieldId),
-          ),
-      };
-    default:
-      return payload satisfies never;
-  }
+  const { finding } = payload;
+  const extracted = finding.extracted;
+  return {
+    extractedValue:
+      extracted === null ? null : normalizeExcerpt(extracted.value),
+    extractedText: extracted === null ? null : normalizeExcerpt(extracted.text),
+    citations: citationExcerpts(finding.citations),
+    // Evidence from a different reference document is different evidence, so
+    // each file's excerpts stay attributed to it. Sorted by the pinned file
+    // field id, which is stable across runs.
+    standardCitations: arrayOrEmpty(finding.referenceCitations)
+      .map((entry) => ({
+        fileFieldId: entry.fileFieldId,
+        citations: entry.passages.map((passage) => passage.id).toSorted(),
+      }))
+      .toSorted((left, right) =>
+        left.fileFieldId < right.fileFieldId
+          ? -1
+          : Number(left.fileFieldId > right.fileFieldId),
+      ),
+  };
 };
 
 /**
@@ -123,7 +105,6 @@ export const findingFingerprint = (
   new Bun.CryptoHasher("sha256")
     .update(
       stableStringify({
-        checkKind: payload.checkKind,
         outcome,
         evidence: findingEvidence(payload),
       }),

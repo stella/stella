@@ -138,6 +138,15 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   documentTranslationRun: { type: "non_resource", reason: "job" },
   documentTranslationUnit: { type: "non_resource", reason: "subresource" },
   documentReviewFinding: { type: "non_resource", reason: "subresource" },
+  // Detected parties are recomputed from the entity version and its prompt
+  // version, like `entityVersionAiSummary`: nothing addresses one directly.
+  documentReviewParty: { type: "non_resource", reason: "projection" },
+  // The words of a reference block, keyed by the version and block they were
+  // read from; the document itself is the resource.
+  documentReviewReferencePassage: {
+    type: "non_resource",
+    reason: "projection",
+  },
   documentReviewRun: { type: "non_resource", reason: "job" },
   documentType: {
     type: "resource",

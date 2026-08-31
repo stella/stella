@@ -3,9 +3,12 @@
  *
  * Everything the run will be judged by is pinned here, before any model call:
  * the target document's version and content hash, each reference's version and
- * hash, the playbook snapshot, and the confirmed topic list. The worker then
- * executes from the row alone, so the result stays intelligible after the
- * playbook, the references, or the document move on.
+ * hash, and the confirmed position list. When the reviewer picked a playbook,
+ * the pin records which one and whether it was approved; when the positions
+ * were proposed for this run alone, the pin is ephemeral and carries no
+ * definition. Either way the worker executes from the row alone, so the result
+ * stays intelligible after the playbook, the references, or the document move
+ * on.
  */
 
 import { panic, Result } from "better-result";
@@ -13,9 +16,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { documentReviewRuns } from "@/api/db/schema";
 import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-selection";
-import { validateReviewTopics } from "@/api/handlers/document-reviews/review-topics";
 import { createDocumentReviewRunBodySchema } from "@/api/handlers/document-reviews/schemas";
-import type { DocumentReviewTopic } from "@/api/handlers/document-reviews/schemas";
 import {
   assertRunSizeConfirmedForHandler,
   createSafeHandler,
@@ -25,9 +26,16 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
-import type { ReviewPerspective } from "@/api/lib/document-review/contract";
+import {
+  readableReferencePassageIds,
+  referencePassageIds,
+} from "@/api/lib/document-review/reference-passages";
 import { resolvePlaybookPin } from "@/api/lib/document-review/resolve-playbook-pin";
-import { DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES } from "@/api/lib/document-review/run-contract";
+import {
+  DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
+  DOCUMENT_REVIEW_RUN_EXECUTOR,
+  PLAYBOOK_PIN_PROVENANCE,
+} from "@/api/lib/document-review/run-contract";
 import type {
   DocumentReviewRunBasis,
   PinnedPlaybook,
@@ -39,10 +47,12 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 import { estimateDocumentRunUnits } from "@/api/lib/usage/run-estimate";
+import type { Position } from "@/api/lib/workflow/playbook-positions";
+import { findDuplicatePositionSourceId } from "@/api/lib/workflow/playbook-positions-validation";
 
 const config = {
   description:
-    "Start an asynchronous review of one document against a playbook and/or reference documents. Returns a run ID to poll.",
+    "Start an asynchronous review of one document against a confirmed list of positions. Returns a run ID to poll.",
   // entity:update because every run processes an existing target document
   // (and, when applied, writes edits back onto it) the same way
   // entities/ocr/create.ts does; workspace:read alone would let a member
@@ -57,32 +67,23 @@ const config = {
   body: createDocumentReviewRunBodySchema,
 } satisfies HandlerConfig;
 
-/** Build the discriminated basis from what the request actually pinned. */
-const buildBasis = ({
-  playbook,
-  references,
-  perspective,
-}: {
-  playbook: PinnedPlaybook | null;
-  references: readonly PinnedReference[];
-  perspective: ReviewPerspective;
-}): DocumentReviewRunBasis | null => {
-  if (playbook !== null && references.length > 0) {
-    return {
-      type: "combined",
-      playbook,
-      references: [...references],
-      perspective,
-    };
-  }
-  if (playbook !== null) {
-    return { type: "playbook", playbook };
-  }
-  if (references.length > 0) {
-    return { type: "references", references: [...references], perspective };
-  }
-  return null;
-};
+/**
+ * The pin for a position list that was never saved as a playbook. The
+ * positions are still pinned by value, exactly as an approved snapshot is, so
+ * the run reads the same way; what it lacks is a definition to be newer than
+ * it, which `provenance` says outright rather than leaving to a null check.
+ */
+const EPHEMERAL_PLAYBOOK_NAME = "Positions confirmed for this review";
+
+const ephemeralPin = (positions: readonly Position[]): PinnedPlaybook => ({
+  definitionId: null,
+  versionId: null,
+  provenance: PLAYBOOK_PIN_PROVENANCE.EPHEMERAL,
+  definitionSnapshot: {
+    name: EPHEMERAL_PLAYBOOK_NAME,
+    positions: { version: 3, items: [...positions] },
+  },
+});
 
 const createDocumentReviewRun = createSafeHandler(
   config,
@@ -98,10 +99,37 @@ const createDocumentReviewRun = createSafeHandler(
   }) {
     const organizationId = session.activeOrganizationId;
 
-    const topics: DocumentReviewTopic[] = body.topics;
-    const validTopics = validateReviewTopics(topics, "comparison");
-    if (Result.isError(validTopics)) {
-      return Result.err(validTopics.error);
+    const positions: Position[] = body.positions;
+    const duplicateSourceId = findDuplicatePositionSourceId({
+      version: 3,
+      items: positions,
+    });
+    if (duplicateSourceId !== null) {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: "Positions must have unique sourceIds",
+        }),
+      );
+    }
+
+    // A reference-derived position pins passages by id, and the grader reads
+    // those rows with service access on this caller's behalf. So every pinned
+    // passage must be one the caller's own transaction can read now; a
+    // passage from a matter they cannot open is refused, not graded blind.
+    const pinnedPassageIds = referencePassageIds(positions);
+    const readablePassageIds = yield* Result.await(
+      safeDb(
+        async (tx) => await readableReferencePassageIds(tx, pinnedPassageIds),
+      ),
+    );
+    if (pinnedPassageIds.some((id) => !readablePassageIds.has(id))) {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          message: "A position quotes a reference passage you cannot read.",
+        }),
+      );
     }
 
     const target = { ...body.target, workspaceId };
@@ -180,14 +208,21 @@ const createDocumentReviewRun = createSafeHandler(
       });
     }
 
-    const playbookId = body.playbookId;
-    let playbook: PinnedPlaybook | null = null;
-    if (playbookId !== undefined) {
-      // The config's blanket entity:update grant covers a references-only
-      // review; pinning a playbook additionally requires playbook:apply,
-      // mirrored here the way playbooks/run.ts's config permission and the
-      // MCP run_playbook tool's in-handler check both require it, since a
-      // request may omit playbookId and the top-level gate cannot demand it
+    // The named playbook only supplies provenance: which definition these
+    // positions belong to, and whether it was approved. What is graded is the
+    // confirmed list in the request, which the reviewer may have edited or
+    // extended with reference-derived positions.
+    const { playbookId } = body;
+    let playbook: PinnedPlaybook;
+    if (playbookId === null) {
+      playbook = ephemeralPin(positions);
+    } else {
+      // The config's blanket entity:update grant covers a review whose
+      // positions were confirmed for this run alone; naming a playbook
+      // additionally requires playbook:apply, mirrored here the way
+      // playbooks/run.ts's config permission and the MCP run_playbook tool's
+      // in-handler check both require it, since a request may leave
+      // playbookId null and the top-level gate cannot demand it
       // unconditionally.
       if (!hasMemberPermission(memberRole, { playbook: ["apply"] })) {
         return Result.err(
@@ -219,29 +254,33 @@ const createDocumentReviewRun = createSafeHandler(
           new HandlerError({ status: 404, message: "Playbook not found" }),
         );
       }
-      playbook = resolvePlaybookPin(loaded);
+      const pin = resolvePlaybookPin(loaded);
+      playbook = {
+        definitionId: pin.definitionId,
+        versionId: pin.versionId,
+        provenance: pin.provenance,
+        definitionSnapshot: {
+          name: pin.definitionSnapshot.name,
+          positions: { version: 3, items: positions },
+        },
+      };
     }
 
-    const basis = buildBasis({
+    const basis: DocumentReviewRunBasis = {
       playbook,
       references,
       perspective: body.perspective,
-    });
-    if (basis === null) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "A review needs a playbook, a reference document, or both.",
-        }),
-      );
-    }
+    };
 
-    const plan = planReviewRun({ basis, topics });
+    const plan = planReviewRun({
+      basis,
+      executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
+    });
     if (plan.expectedFindingCount === 0) {
       return Result.err(
         new HandlerError({
           status: 422,
-          message: "None of the confirmed topics can be reviewed.",
+          message: "None of the confirmed positions can be reviewed.",
         }),
       );
     }
@@ -279,6 +318,19 @@ const createDocumentReviewRun = createSafeHandler(
     }
 
     const pinnedTarget = selection.value.target;
+    const targetDocumentName =
+      nameByEntityId.get(pinnedTarget.entityId) ?? null;
+    // The side the run judged from, by role alone: the party's name is the
+    // document's business, and the audit record does not need it to say what
+    // the review was.
+    const perspectiveRole =
+      basis.perspective.type === "party" ? basis.perspective.role : null;
+    // Null for positions confirmed for this run alone: those have no playbook
+    // to name, and `referenceCount` says what they were drawn from instead.
+    const playbookBasisName =
+      playbook.provenance === PLAYBOOK_PIN_PROVENANCE.EPHEMERAL
+        ? null
+        : playbook.definitionSnapshot.name;
     const runId = createSafeId<"documentReviewRun">();
     const inserted = yield* Result.await(
       safeDb(async (tx) => {
@@ -311,9 +363,11 @@ const createDocumentReviewRun = createSafeHandler(
           fileFieldId: pinnedTarget.file.fileFieldId,
           entityVersionId: pinnedTarget.entityVersionId,
           contentSha256: pinnedTarget.file.sha256Hex,
-          playbookDefinitionId: playbook?.definitionId,
+          playbookDefinitionId: playbook.definitionId,
           basis,
-          topics,
+          // Pinned by value with everything else the reviewer confirmed: what
+          // the proposal left uncompared is part of what this run covered.
+          skipped: body.skipped,
           status: "queued",
           total: plan.expectedFindingCount,
           requestedBy: user.id,
@@ -323,11 +377,17 @@ const createDocumentReviewRun = createSafeHandler(
           action: AUDIT_ACTION.EXECUTE,
           resourceType: AUDIT_RESOURCE_TYPE.DOCUMENT_REVIEW_RUN,
           resourceId: runId,
+          // The reviewed document and what the run was judged against, pinned
+          // the way the run row pins them: the matter's activity names the
+          // document and its basis without re-reading a row that may be gone.
           metadata: {
-            basisType: basis.type,
+            documentName: targetDocumentName,
+            entityId: pinnedTarget.entityId,
             expectedFindingCount: plan.expectedFindingCount,
-            playbookProvenance:
-              playbook === null ? "none" : playbook.provenance,
+            fileFieldId: pinnedTarget.file.fileFieldId,
+            perspectiveRole,
+            playbookName: playbookBasisName,
+            playbookProvenance: playbook.provenance,
             referenceCount: references.length,
           },
         });

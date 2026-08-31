@@ -1,7 +1,9 @@
 import { create } from "zustand";
 
+import type { ReviewFlag } from "@stll/api-contract";
+
 export type CellOverride = {
-  manualFlags: string[];
+  manualFlags: ReviewFlag[];
   locked: boolean | undefined;
 };
 

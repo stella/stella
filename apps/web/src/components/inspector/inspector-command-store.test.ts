@@ -9,6 +9,7 @@ beforeEach(() => {
     desktopOpenAttention: null,
     pendingRenameTabId: null,
     pendingBlockScroll: null,
+    blockScrollSeq: 0,
     pendingPdfPageScroll: null,
     pendingDocxEditTabId: null,
   });
@@ -51,11 +52,39 @@ describe("inspector commands", () => {
       tabId: "open-tab",
       blockId: "block-1",
       text: undefined,
+      seq: 1,
     });
     expect(useInspectorCommandStore.getState().pendingPdfPageScroll).toEqual({
       tabId: "open-tab",
       pageNumber: 7,
     });
+  });
+
+  test("asking for the same block twice is two distinguishable requests", () => {
+    const commands = useInspectorCommandStore.getState();
+    commands.requestBlockScroll({ tabId: "field-1", blockId: "block-1" });
+    const first = useInspectorCommandStore.getState().pendingBlockScroll;
+    commands.clearPendingBlockScroll(first?.seq ?? -1);
+    expect(useInspectorCommandStore.getState().pendingBlockScroll).toBeNull();
+
+    commands.requestBlockScroll({ tabId: "field-1", blockId: "block-1" });
+    const second = useInspectorCommandStore.getState().pendingBlockScroll;
+
+    expect(second?.blockId).toBe("block-1");
+    expect(second?.seq).toBe((first?.seq ?? 0) + 1);
+  });
+
+  test("a stale acknowledgement never swallows a newer block-scroll request", () => {
+    const commands = useInspectorCommandStore.getState();
+    commands.requestBlockScroll({ tabId: "field-1", blockId: "block-1" });
+    const stale = useInspectorCommandStore.getState().pendingBlockScroll;
+    commands.requestBlockScroll({ tabId: "field-1", blockId: "block-2" });
+
+    commands.clearPendingBlockScroll(stale?.seq ?? -1);
+
+    expect(
+      useInspectorCommandStore.getState().pendingBlockScroll?.blockId,
+    ).toBe("block-2");
   });
 
   test("a PDF page request remains bound to its exact file tab", () => {

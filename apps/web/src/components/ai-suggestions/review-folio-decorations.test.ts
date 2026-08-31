@@ -23,6 +23,7 @@ const suggestion = (
   area: "Payment",
   blockId: "A1",
   id: "suggestion-1",
+  origin: "chat",
   pendingOperation: {
     blockId: "A1",
     find: "30 days",

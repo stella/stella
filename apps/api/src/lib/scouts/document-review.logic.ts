@@ -27,8 +27,9 @@ const ESCALATING_POSITION_SEVERITIES: ReadonlySet<PositionSeverity> = new Set([
 
 /**
  * One finding's inbox severity from its verdict tier and the graded
- * position's own severity. Compliant and not-applicable findings carry no
- * inbox weight and return `null`.
+ * position's own severity. Verdicts outside the compliance ladder
+ * (`compliant`, `additional`, `not-applicable`) carry no inbox weight and
+ * return `null`.
  */
 export const findingSeverity = (
   verdict: VerdictTier | null,
@@ -43,6 +44,7 @@ export const findingSeverity = (
     case "fallback":
       return SIGNAL_SEVERITY.NOTICE;
     case "compliant":
+    case "additional":
     case "not-applicable":
     case null:
       return null;
@@ -59,13 +61,14 @@ const truncate = (value: string): string =>
     ? value
     : `${value.slice(0, REVIEW_QUOTE_MAX_CHARS - 1)}…`;
 
-/** Playbook findings become inbox findings; reference comparisons are out of scope. */
+/** Findings graded against an authored tier ladder become inbox findings;
+ *  reference comparisons are out of scope. */
 export const toReviewSignalFindings = (
   payloads: readonly DocumentReviewFindingPayload[],
 ): ReviewSignalFinding[] =>
   payloads
     .flatMap((payload) => {
-      if (payload.checkKind !== "playbook") {
+      if (payload.finding.standardSource !== "tiers") {
         return [];
       }
       const severity = findingSeverity(

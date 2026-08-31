@@ -2,10 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import {
   INSPECTOR_CONTENT_MIN_WIDTH,
+  INSPECTOR_EDITOR_MIN_WIDTH,
   INSPECTOR_PANE_MAX_WIDTH,
   INSPECTOR_PANE_MIN_WIDTH,
   INSPECTOR_RAIL_WIDTH,
   resolveInspectorDockWidth,
+  resolveInspectorPaneMaxWidth,
   resolveInspectorPaneWidth,
   shouldForceSidebarCollapsed,
 } from "./pane-width";
@@ -80,6 +82,69 @@ describe("resolveInspectorPaneWidth", () => {
         sidebarWidth: 0,
         viewportWidth: 0,
       }),
+    ).toBe(INSPECTOR_PANE_MIN_WIDTH);
+  });
+});
+
+describe("resolveInspectorPaneMaxWidth", () => {
+  // The complaint this answers: the pane stopped at a fixed 800px however
+  // much room the viewport had, so a wide screen could not give the two
+  // compared passages more than half the space they needed.
+  test("gives a wide viewport more than the old fixed 800px cap", () => {
+    expect(
+      resolveInspectorPaneMaxWidth({
+        sidebarWidth: COLLAPSED_SIDEBAR_WIDTH,
+        viewportWidth: 2560,
+      }),
+    ).toBeGreaterThan(800);
+  });
+
+  test("never exceeds the absolute ceiling, however wide the viewport", () => {
+    expect(
+      resolveInspectorPaneMaxWidth({
+        sidebarWidth: COLLAPSED_SIDEBAR_WIDTH,
+        viewportWidth: 7680,
+      }),
+    ).toBe(INSPECTOR_PANE_MAX_WIDTH);
+  });
+
+  test("leaves the editor its readable measure wherever the pane is not at its own minimum", () => {
+    for (let viewportWidth = 768; viewportWidth <= 3840; viewportWidth += 1) {
+      for (const sidebarWidth of [
+        COLLAPSED_SIDEBAR_WIDTH,
+        EXPANDED_SIDEBAR_WIDTH,
+      ]) {
+        const max = resolveInspectorPaneMaxWidth({
+          sidebarWidth,
+          viewportWidth,
+        });
+        if (max === INSPECTOR_PANE_MIN_WIDTH) {
+          continue;
+        }
+        expect(viewportWidth - max).toBeGreaterThanOrEqual(
+          INSPECTOR_EDITOR_MIN_WIDTH,
+        );
+      }
+    }
+  });
+
+  // A viewport-relative ceiling that dipped as the window grew would make the
+  // pane snap narrower mid-resize.
+  test("never shrinks as the viewport grows", () => {
+    let previous = 0;
+    for (let viewportWidth = 768; viewportWidth <= 3840; viewportWidth += 1) {
+      const max = resolveInspectorPaneMaxWidth({
+        sidebarWidth: EXPANDED_SIDEBAR_WIDTH,
+        viewportWidth,
+      });
+      expect(max).toBeGreaterThanOrEqual(previous);
+      previous = max;
+    }
+  });
+
+  test("falls back to the minimum before the viewport is known", () => {
+    expect(
+      resolveInspectorPaneMaxWidth({ sidebarWidth: 0, viewportWidth: 0 }),
     ).toBe(INSPECTOR_PANE_MIN_WIDTH);
   });
 });

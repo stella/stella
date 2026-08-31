@@ -494,7 +494,7 @@ export const ToolApprovalCard = ({
     return true;
   };
 
-  const handleOpenReviewPanel = getDocxReviewPanelHandler({
+  const handleOpenReviewFacet = getDocxReviewPanelHandler({
     isDocxEditBatch,
     part,
   });
@@ -507,22 +507,22 @@ export const ToolApprovalCard = ({
         isApprovalRequested && !isProcessing
           ? "border-border bg-muted/30"
           : "bg-muted/40 border-transparent",
-        handleOpenReviewPanel &&
+        handleOpenReviewFacet &&
           "hover:bg-muted/50 cursor-pointer transition-colors",
       )}
-      onClick={handleOpenReviewPanel ?? undefined}
+      onClick={handleOpenReviewFacet ?? undefined}
       onKeyDown={
-        handleOpenReviewPanel
+        handleOpenReviewFacet
           ? (event) => {
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
-                handleOpenReviewPanel();
+                handleOpenReviewFacet();
               }
             }
           : undefined
       }
-      role={handleOpenReviewPanel ? "button" : undefined}
-      tabIndex={handleOpenReviewPanel ? 0 : undefined}
+      role={handleOpenReviewFacet ? "button" : undefined}
+      tabIndex={handleOpenReviewFacet ? 0 : undefined}
     >
       {automaticResponse?.shouldRespond && (
         <AutomaticApprovalResponse
@@ -718,6 +718,11 @@ const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
  * reads everywhere else in the app. The id itself is what the user least needs
  * to see when deciding whether to allow a write.
  */
+// Clicking a DOCX-edit-batch card jumps the user to the document-review
+// facet for the entity those edits target, where the batch lists under
+// "From chat". The output's `queued` ids are the same client-side
+// suggestion ids the review store keys its session entries by, so we look
+// up the entity by matching any of them.
 const getDocxReviewPanelHandler = ({
   isDocxEditBatch,
   part,
@@ -754,7 +759,7 @@ const getDocxReviewPanelHandler = ({
       return;
     }
     inspector.setActive(tab.id);
-    inspector.setFileFacet(tab.id, "suggestions", { pulse: true });
+    inspector.setFileFacet(tab.id, "playbook", { pulse: true });
   };
 };
 
@@ -791,11 +796,19 @@ const getToolApprovalState = ({
   const isExternalMcpApproval = isExternalMcpToolName(name);
   const showsExternalInput =
     isExternalMcpApproval || isExternalInputChatToolName(name);
+  // High-impact writes may only be approved once or denied: no persistent
+  // grant can auto-approve a later call.
   const isApprovalOnce = isApprovalOnceChatToolName(name);
   const canAllowInConversation =
     name !== "apply-active-docx-edits" &&
     !isApprovalOnce &&
     !isNonPersistentGrantChatToolName(name);
+  /**
+   * DOCX edit batches always go to the side review panel — never
+   * gated by a chat-level Allow/Deny. The card collapses to a
+   * compact status and auto-approves once so the queueing
+   * handler can register the suggestions.
+   */
   const isDocxEditBatch = name === "apply-active-docx-edits";
   const externalMcpProviderName = getExternalMcpProviderName(name);
 

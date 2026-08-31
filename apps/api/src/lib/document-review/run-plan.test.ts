@@ -1,27 +1,36 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import type { DocumentReviewTopic } from "@/api/lib/document-review/contract";
+import { NEUTRAL_PERSPECTIVE } from "@/api/lib/document-review/contract";
 import type {
   DocumentReviewRunBasis,
   PinnedPlaybook,
   PinnedReference,
 } from "@/api/lib/document-review/run-contract";
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
-import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
+import type {
+  PlaybookPositions,
+  ReferencePassage,
+} from "@/api/lib/workflow/playbook-positions";
 
 const GRADEABLE_POSITION_ID = "11111111-1111-4111-8111-111111111111";
 const UNANSWERABLE_POSITION_ID = "22222222-2222-4222-8222-222222222222";
 const DISABLED_POSITION_ID = "33333333-3333-4333-8333-333333333333";
-const GRADEABLE_TOPIC_ID = "44444444-4444-4444-8444-444444444444";
-const UNANSWERABLE_TOPIC_ID = "55555555-5555-4555-8555-555555555555";
-const DISABLED_TOPIC_ID = "66666666-6666-4666-8666-666666666666";
-const REFERENCE_TOPIC_ID = "77777777-7777-4777-8777-777777777777";
+const REFERENCE_POSITION_ID = "77777777-7777-4777-8777-777777777777";
 
 const textContent = { version: 1, type: "text" } as const;
 
+const passage: ReferencePassage = {
+  id: Bun.randomUUIDv7(),
+  workspaceId: Bun.randomUUIDv7(),
+  entityId: Bun.randomUUIDv7(),
+  fileFieldId: Bun.randomUUIDv7(),
+  entityVersionId: Bun.randomUUIDv7(),
+  blockId: "b-1",
+};
+
 const positions: PlaybookPositions = {
-  version: 2,
+  version: 3,
   items: [
     {
       mode: "extract",
@@ -46,6 +55,21 @@ const positions: PlaybookPositions = {
       ask: { question: "Is this still required?", content: textContent },
       enabled: false,
     },
+    {
+      // A reference standard carries no ASK: the worker compares it against
+      // the document's own blocks.
+      mode: "graded",
+      sourceId: REFERENCE_POSITION_ID,
+      issue: "Claims time bar",
+      severity: "high",
+      standard: {
+        source: "reference",
+        termKind: "parameter",
+        passages: [passage],
+      },
+      ask: { mode: "auto" },
+      enabled: true,
+    },
   ],
 };
 
@@ -66,114 +90,57 @@ const reference: PinnedReference = {
   name: "Precedent SPA",
 };
 
-const playbookTopic = (
-  topicId: string,
-  positionId: string,
-  included = true,
-): DocumentReviewTopic => ({
-  type: "playbook",
-  topicId,
-  positionId,
-  title: `Topic ${topicId}`,
-  context: "",
-  included,
-});
-
-const referenceTopic = (
-  topicId: string,
-  included = true,
-): DocumentReviewTopic => ({
-  type: "reference",
-  topicId,
-  title: `Topic ${topicId}`,
-  context: "",
-  included,
-});
-
-const allTopics: DocumentReviewTopic[] = [
-  playbookTopic(GRADEABLE_TOPIC_ID, GRADEABLE_POSITION_ID),
-  playbookTopic(UNANSWERABLE_TOPIC_ID, UNANSWERABLE_POSITION_ID),
-  playbookTopic(DISABLED_TOPIC_ID, DISABLED_POSITION_ID),
-  referenceTopic(REFERENCE_TOPIC_ID),
-];
+const basis: DocumentReviewRunBasis = {
+  playbook,
+  references: [reference],
+  perspective: { type: "party", role: "Buyer", name: null },
+};
 
 describe("planReviewRun", () => {
-  test("plans one playbook check per confirmed, executable position", () => {
-    const basis: DocumentReviewRunBasis = { type: "playbook", playbook };
-    const plan = planReviewRun({ basis, topics: allTopics });
+  test("the worker plans every enabled position it can answer", () => {
+    const plan = planReviewRun({ basis, executor: "worker" });
 
-    expect(plan.playbookChecks.map((check) => check.positionId)).toEqual([
+    expect(plan.positions.map((planned) => planned.positionId)).toEqual([
       GRADEABLE_POSITION_ID,
+      REFERENCE_POSITION_ID,
     ]);
-    expect(plan.referenceTopics).toEqual([]);
-    expect(plan.expectedFindingCount).toBe(1);
+    expect(plan.expectedFindingCount).toBe(2);
   });
 
-  test("compares every confirmed topic when the basis pins references", () => {
-    const basis: DocumentReviewRunBasis = {
-      type: "references",
-      references: [reference],
-      perspective: { type: "party", role: "Buyer", name: null },
-    };
-    const plan = planReviewRun({ basis, topics: allTopics });
+  test("the plan carries the title its finding row will hold", () => {
+    const plan = planReviewRun({ basis, executor: "worker" });
 
-    expect(plan.playbookChecks).toEqual([]);
-    expect(plan.referenceTopics.map((topic) => topic.topicId)).toEqual([
-      GRADEABLE_TOPIC_ID,
-      UNANSWERABLE_TOPIC_ID,
-      DISABLED_TOPIC_ID,
-      REFERENCE_TOPIC_ID,
+    expect(plan.positions.map((planned) => planned.title)).toEqual([
+      "Termination notice",
+      "Claims time bar",
     ]);
-    expect(plan.expectedFindingCount).toBe(4);
   });
 
-  test("a combined basis expects both kinds for the same topics", () => {
-    const basis: DocumentReviewRunBasis = {
-      type: "combined",
-      playbook,
-      references: [reference],
-      perspective: { type: "party", role: "Buyer", name: null },
-    };
-    const plan = planReviewRun({ basis, topics: allTopics });
+  test("the table path plans only graded tier-standard positions", () => {
+    // It grades through materialized verdict columns: an extract position has
+    // none, and a reference standard cannot fill one.
+    const plan = planReviewRun({ basis, executor: "table" });
 
-    // One playbook finding for the single executable position plus one
-    // comparison finding per confirmed topic: the exact row count the worker
-    // must observe before it may complete the run.
-    expect(plan.expectedFindingCount).toBe(5);
+    expect(plan.positions).toEqual([]);
+    expect(plan.expectedFindingCount).toBe(0);
   });
 
-  test("an unconfirmed topic is planned for neither kind", () => {
-    const basis: DocumentReviewRunBasis = {
-      type: "combined",
-      playbook,
-      references: [reference],
-      perspective: { type: "party", role: "Buyer", name: null },
-    };
+  test("a basis with no enabled position promises nothing", () => {
     const plan = planReviewRun({
-      basis,
-      topics: [
-        playbookTopic(GRADEABLE_TOPIC_ID, GRADEABLE_POSITION_ID, false),
-        referenceTopic(REFERENCE_TOPIC_ID),
-      ],
-    });
-
-    expect(plan.playbookChecks).toEqual([]);
-    expect(plan.referenceTopics.map((topic) => topic.topicId)).toEqual([
-      REFERENCE_TOPIC_ID,
-    ]);
-    expect(plan.expectedFindingCount).toBe(1);
-  });
-
-  test("a playbook topic naming an unknown position is not planned", () => {
-    const basis: DocumentReviewRunBasis = { type: "playbook", playbook };
-    const plan = planReviewRun({
-      basis,
-      topics: [
-        playbookTopic(
-          GRADEABLE_TOPIC_ID,
-          "88888888-8888-4888-8888-888888888888",
-        ),
-      ],
+      basis: {
+        playbook: {
+          definitionId: null,
+          versionId: null,
+          provenance: "ephemeral",
+          definitionSnapshot: {
+            name: "Positions confirmed for this review",
+            positions: { version: 3, items: [] },
+          },
+        },
+        references: [],
+        perspective: NEUTRAL_PERSPECTIVE,
+      },
+      executor: "worker",
     });
 
     expect(plan.expectedFindingCount).toBe(0);

@@ -13,7 +13,6 @@ export const FILE_FACETS = [
   "attachments",
   "metadata",
   "versions",
-  "suggestions",
   "playbook",
   "anonymization",
 ] as const;
@@ -164,7 +163,18 @@ export type InspectorCommandState = {
     tabId: string;
     blockId: string;
     text?: string | undefined;
+    /**
+     * Identifies THIS request. Monotonic across the store, so asking twice
+     * for the same block produces two distinguishable requests: the consumer
+     * keys "already handled" on `seq`, which is what makes a repeated
+     * "Show in document" on the block the reader is already parked on scroll
+     * (and flash) again instead of reading as the request it already served.
+     */
+    seq: number;
   } | null;
+  /** Last issued {@link pendingBlockScroll} sequence. Never reset by a clear,
+   *  so a cleared-and-re-requested scroll is never mistaken for the old one. */
+  blockScrollSeq: number;
   pendingPdfPageScroll: {
     tabId: string;
     pageNumber: number;
@@ -314,7 +324,10 @@ export type InspectorCommandActions = {
     blockId: string;
     text?: string | undefined;
   }) => void;
-  clearPendingBlockScroll: () => void;
+  /** Retires one handled block-scroll request. A `seq` that no longer matches
+   *  the pending request is a no-op, so a slow consumer finishing an old
+   *  scroll cannot swallow a newer one. */
+  clearPendingBlockScroll: (seq: number) => void;
   requestPdfPageScroll: (request: {
     tabId: string;
     pageNumber: number;

@@ -18,6 +18,7 @@ import {
   ChatTabPanel,
   ChatTabPanelShell,
 } from "@/components/inspector/chat-tab-panel";
+import { DOCUMENT_PANE } from "@/components/inspector/document-pane";
 import { ExternalReferencePanel } from "@/components/inspector/external-reference-panel";
 import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
 import { FileTabPanel } from "@/components/inspector/file-tab-panel";
@@ -196,6 +197,13 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const routeOwnedEditingFieldId = pdfRouteMatch?.search.editing
     ? (pdfRouteMatch.search.field ?? null)
     : null;
+  // The document route can hand its main pane to the review, in which case the
+  // inspector is where that document is read. Only that one field's tab swaps:
+  // every other tab keeps the fullscreen persona.
+  const documentReviewPaneFieldId =
+    pdfRouteMatch?.search.pane === DOCUMENT_PANE.review
+      ? (pdfRouteMatch.search.field ?? null)
+      : null;
 
   // A revive suggestion for a route-owned view is only meaningful
   // while its owner route stays presented — leaving the route takes
@@ -632,6 +640,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             matterOrigin={matterOrigin}
             minimized={minimized}
             mountedPdfIds={mountedPdfIds}
+            documentReviewPaneFieldId={documentReviewPaneFieldId}
             pdfRouteJustification={pdfRouteJustification}
             peekPdfViewId={peekPdfViewId}
             ribbonLabelContextMenuOpenAt={ribbonContextMenu.openAt}

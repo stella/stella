@@ -16,7 +16,9 @@ import type {
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
 
+import { describeOperationSummary } from "@/components/ai-suggestions/review-operation-labels";
 import type { ReviewSuggestionPreview } from "@/components/ai-suggestions/review-store";
+import { getTranslator } from "@/i18n/i18n-store";
 
 /**
  * A single block as the AI saw it at proposal time. Structurally a
@@ -34,54 +36,25 @@ export type SnapshotBlock = {
 export const PREVIEW_CONTEXT_CHARS = 60;
 export const PREVIEW_ANCHOR_CHARS = 80;
 
-export const summarizeOperation = (operation: FolioAIEditOperation): string => {
-  switch (operation.type) {
-    case "replaceInBlock":
-      return `Replace “${operation.find}” with “${operation.replace}”`;
-    case "replaceBlock":
-      return `Replace block ${operation.blockId}`;
-    case "insertAfterBlock":
-    case "insertBeforeBlock": {
-      const direction =
-        operation.type === "insertAfterBlock" ? "after" : "before";
-      if (operation.pageBreakBefore === true && operation.text.length === 0) {
-        return `Insert page break ${direction} ${operation.blockId}`;
-      }
-      if (operation.styleId !== undefined) {
-        return `Insert ${operation.styleId} ${direction} ${operation.blockId}: ${operation.text}`;
-      }
-      return `Insert ${direction} ${operation.blockId}: ${operation.text}`;
-    }
-    case "deleteBlock":
-      return `Delete block ${operation.blockId}`;
-    case "commentOnBlock":
-      return `Comment on ${operation.blockId}`;
-    case "insertSignatureTable": {
-      const names = operation.parties.map((p) => p.name).join(", ");
-      return `Insert signature table for ${names}`;
-    }
-    case "insertTableRow":
-      return "Insert table row";
-    case "deleteTableRow":
-      return "Delete table row";
-    case "insertTableColumn":
-      return "Insert table column";
-    case "deleteTableColumn":
-      return "Delete table column";
-    case "mergeTableCells":
-      return "Merge table cells";
-    case "splitTableCell":
-      return "Split table cell";
-    case "replaceRange":
-      return `Replace selected text with “${operation.replace}”`;
-    case "commentOnRange":
-      return "Comment on selected text";
-    case "formatRange":
-      return "Format selected text";
-    default:
-      operation satisfies never;
-      return "";
-  }
+/**
+ * The stored one-line summary of an operation, in the reader's language.
+ *
+ * Translated at queue / hydration time because it is a stored field: the card,
+ * its accessible label and the screen-reader summary all read it back. A
+ * language switch therefore leaves an already-queued summary in the old
+ * language until the session is re-hydrated from the server, which is the
+ * cheap side of the trade against threading a translator through every
+ * producer.
+ *
+ * `blockLabel` is the clause number from the snapshot the AI saw. Block ids
+ * never appear: see `review-operation-labels`.
+ */
+export const summarizeOperation = (
+  operation: FolioAIEditOperation,
+  blockLabel?: string,
+): string => {
+  const { key, values } = describeOperationSummary(operation, blockLabel);
+  return getTranslator()(key, values);
 };
 
 /** The block a folio operation anchors to; range ops carry it on the handle. */

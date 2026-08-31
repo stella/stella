@@ -5,8 +5,11 @@ import { propertyContentSchema } from "@/api/db/schema-validators";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import {
+  POSITION_SEVERITIES,
+  POSITION_TERM_KINDS,
   positionRuleSchema,
   positionSeveritySchema,
+  positionTermKindSchema,
   resolvedTiersSchema,
 } from "@/api/lib/workflow/playbook-position-facets";
 
@@ -16,12 +19,20 @@ import {
 // property tool (defined in schema-validators) can embed them without an import
 // cycle. The grading engine consumes these too, so re-export them from this one
 // module.
-export { positionRuleSchema, positionSeveritySchema, resolvedTiersSchema };
+export {
+  POSITION_SEVERITIES,
+  POSITION_TERM_KINDS,
+  positionRuleSchema,
+  positionSeveritySchema,
+  positionTermKindSchema,
+  resolvedTiersSchema,
+};
 export type PositionRule = Static<typeof positionRuleSchema>;
 export type PositionSeverity = Static<typeof positionSeveritySchema>;
+export type PositionTermKind = Static<typeof positionTermKindSchema>;
 export type ResolvedTiers = Static<typeof resolvedTiersSchema>;
 
-const version2 = t.Literal(2);
+const version3 = t.Literal(3);
 
 // ── Tier lines: identified plain-language rules and fallback entries ──
 // `id` is client-generated so reorder/DnD and finding citations reference a
@@ -75,6 +86,44 @@ export const tiersSchema = t.Object({
   }),
 });
 export type Tiers = Static<typeof tiersSchema>;
+
+// ── Reference passage: one quoted block of a reference document ──
+// Provenance only. The words live in `document_review_reference_passages`,
+// one row per (version, block), owned by the matter the reference belongs to
+// and read under that matter's row security; `id` names that row. A position
+// therefore never carries another matter's text into the playbook or run that
+// holds it, and a reader sees the quote exactly when they can open its source.
+export const referencePassageSchema = t.Object({
+  id: t.String({ format: "uuid" }),
+  workspaceId: t.String({ format: "uuid" }),
+  entityId: t.String({ format: "uuid" }),
+  fileFieldId: t.String({ format: "uuid" }),
+  entityVersionId: t.String({ format: "uuid" }),
+  blockId: t.String({ minLength: 1, maxLength: 128 }),
+});
+export type ReferencePassage = Static<typeof referencePassageSchema>;
+
+// ── Standard: what "how it should be" is, for one graded position ──
+// `tiers` is authored (an editor, a starter pack); `reference` is derived from
+// a document someone already negotiated. Grading dispatches on `source`, so a
+// position from either origin produces the same finding.
+export const positionStandardSchema = t.Union([
+  t.Object({ source: t.Literal("tiers"), tiers: tiersSchema }),
+  t.Object({
+    source: t.Literal("reference"),
+    // What shape of term this position is about. Grading answers a position
+    // with exactly this kind of difference (or `language`, when the term
+    // turned out not to be locatable), so a changed number can never come
+    // back as a whole-clause rewrite.
+    termKind: positionTermKindSchema,
+    // Wide enough for an enumeration to quote every limb: a list-shaped term
+    // graded against a truncated list is graded against the wrong standard.
+    // Anything past this is not one term.
+    passages: t.Array(referencePassageSchema, { minItems: 1, maxItems: 12 }),
+  }),
+]);
+export type PositionStandard = Static<typeof positionStandardSchema>;
+export type PositionStandardSource = PositionStandard["source"];
 
 // ── Deterministic check: an Advanced-only override ──
 // When present, grading is deterministic (presence/condition, no LLM) and the
@@ -154,14 +203,31 @@ export const negotiationSchema = t.Object({
 });
 export type Negotiation = Static<typeof negotiationSchema>;
 
+// ── Purpose: what the term is FOR ─────────────────────
+// One sentence on the legal and economic function the term performs in this
+// kind of deal, written from the side the review takes ("Caps the seller's
+// exposure for warranty claims; drives the buyer's recovery ceiling").
+//
+// `guidance` says what a later comparison examines; `purpose` says why anyone
+// negotiates the term at all. A reviewer confirming a proposed checklist reads
+// a short quotation out of a document they may not have written, so without
+// this they are asked to approve a term whose function is never stated.
+//
+// Optional and independent of `standard.source`: a reference-derived position
+// gets one from the proposal pass, and a playbook author can write one for a
+// tiers-standard position by hand. Reviewer-facing only — grading never reads
+// it.
+export const POSITION_PURPOSE_MAX_LENGTH = 240;
+
 const gradedPositionSchema = t.Object({
   mode: t.Literal("graded"),
   sourceId: t.String({ format: "uuid" }),
   issue: t.String({ minLength: 1, maxLength: 256 }),
   severity: positionSeveritySchema,
-  tiers: tiersSchema,
+  standard: positionStandardSchema,
   check: t.Optional(deterministicCheckSchema),
   ask: askConfigSchema,
+  purpose: t.Optional(t.String({ maxLength: POSITION_PURPOSE_MAX_LENGTH })),
   guidance: t.Optional(t.String({ maxLength: 2000 })),
   negotiation: t.Optional(negotiationSchema),
   enabled: t.Boolean(),
@@ -174,10 +240,10 @@ export const positionSchema = t.Union([
 export type Position = Static<typeof positionSchema>;
 
 // ── Positions container (version-tagged JSONB) ────────
-// Hard `t.Literal(2)`: no multi-version dispatch. Playbooks never shipped
-// publicly, so v1 is migrated once and no runtime v1 read path survives.
+// Hard `t.Literal(3)`: no multi-version dispatch. Each version is lifted once
+// by a migration and no runtime read path for an older one survives.
 export const playbookPositionsSchema = t.Object({
-  version: version2,
+  version: version3,
   items: t.Array(positionSchema, { maxItems: 200 }),
 });
 export type PlaybookPositions = Static<typeof playbookPositionsSchema>;

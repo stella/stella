@@ -11,6 +11,8 @@ import {
   ChevronDownIcon,
   Clock3Icon,
   DownloadIcon,
+  LanguagesIcon,
+  ListChecksIcon,
   ListIcon,
   ListFilterIcon,
   ScaleIcon,
@@ -102,6 +104,8 @@ import {
   groupActivityItems,
   resolveVisibleActivityTriggerType,
   resolveSelectedActivityGroup,
+  ROW_ACTION_LABEL_KEYS,
+  TARGET_LABEL_KEYS,
   toSingleActivityGroup,
   toMatterActivityDateRange,
   toMatterActivityDatePickerValues,
@@ -1325,7 +1329,7 @@ const ActivityList = ({
                     type="button"
                   >
                     <span className="block">
-                      <ActivityAction item={item} />
+                      <ActivityAction group={group} />
                     </span>
                     <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-1.5 font-medium">
                       <span className="flex size-5 items-center justify-center">
@@ -1367,8 +1371,12 @@ const ActivityDetailsSheet = ({
   const item = group.items[0];
   const showProvenance =
     resolveVisibleActivityTriggerType(item.trigger.type) !== null;
+  // Every decision in a folded review sitting is about the same document, so
+  // the group opens it the way a single row does.
   const openTarget =
-    group.items.length === 1 ? getOpenTarget(item, workspaceId) : undefined;
+    group.items.length === 1 || group.type === "review_decisions"
+      ? getOpenTarget(item, workspaceId)
+      : undefined;
   const rows = [
     {
       label: t("workspaces.overview.activity.details.dateTime"),
@@ -1627,7 +1635,7 @@ const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
       <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5">
         <span aria-hidden="true" />
         <span>
-          <ActivityAction item={item} />
+          <ActivityAction group={group} />
         </span>
       </span>
       <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-1.5 font-medium">
@@ -1656,59 +1664,29 @@ const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
   );
 };
 
-const ActivityAction = ({ item }: { item: MatterActivityItem }) => {
+/**
+ * The row's sentence about what happened. A document review states itself: the
+ * run row names the document it started on, and a sitting of decisions states
+ * how many findings it settled, so neither reads as a bare verb over an
+ * unnamed automation.
+ */
+const ActivityAction = ({ group }: { group: ActivityGroup }) => {
   const t = useTranslations();
-  switch (item.action) {
-    case "add":
-      return t("workspaces.overview.activity.actorActions.added");
-    case "create":
-      return t("workspaces.overview.activity.actorActions.created");
-    case "update":
-      return t("workspaces.overview.activity.actorActions.updated");
-    case "delete":
-      return t("workspaces.overview.activity.actorActions.deleted");
-    case "remove":
-      return t("workspaces.overview.activity.actorActions.removed");
-    case "execute":
-      return t("workspaces.overview.activity.actorActions.executed");
-    case "review":
-      return t("workspaces.overview.activity.actorActions.reviewed");
-    case "cancel":
-      return t("workspaces.overview.activity.actorActions.cancelled");
-    default:
-      return item.action satisfies never;
+  const item = group.items[0];
+  if (group.type === "review_decisions") {
+    return t("workspaces.overview.activity.documentReview.decided", {
+      count: group.items.length,
+    });
   }
+  if (item.target.kind === "documentReviewRun" && item.action === "execute") {
+    return t("workspaces.overview.activity.documentReview.started");
+  }
+  return t(ROW_ACTION_LABEL_KEYS[item.action]);
 };
 
 const TargetName = ({ item }: { item: MatterActivityItem }) => {
   const t = useTranslations();
-  if (item.target.name) {
-    return item.target.name;
-  }
-  switch (item.target.kind) {
-    case "document":
-      return t("workspaces.overview.activity.targets.document");
-    case "folder":
-      return t("workspaces.overview.activity.targets.folder");
-    case "message":
-      return t("workspaces.overview.activity.targets.message");
-    case "link":
-      return t("workspaces.overview.activity.targets.link");
-    case "task":
-      return t("workspaces.overview.activity.targets.task");
-    case "matter":
-      return t("workspaces.overview.activity.targets.matter");
-    case "team":
-      return t("workspaces.overview.activity.targets.team");
-    case "court":
-      return t("workspaces.overview.activity.targets.court");
-    case "automation":
-      return t("workspaces.overview.activity.targets.automation");
-    default: {
-      const exhaustive: never = item.target.kind;
-      return exhaustive;
-    }
-  }
+  return item.target.name || t(TARGET_LABEL_KEYS[item.target.kind]);
 };
 
 const TriggerLabelWithSource = ({
@@ -1797,6 +1775,19 @@ const targetIcon = (item: MatterActivityItem) => {
           mimeType={item.target.mimeType}
         />
       );
+    // A review row is about its document, so it wears the document's icon.
+    case "documentReviewRun":
+      return (
+        <DocumentIcon
+          className="size-3.5"
+          fileName={item.target.name}
+          mimeType={item.target.mimeType}
+        />
+      );
+    case "translationRun":
+      return <LanguagesIcon className="text-muted-foreground size-3.5" />;
+    case "playbook":
+      return <ListChecksIcon className="text-muted-foreground size-3.5" />;
     case "matter":
       return (
         <MatterIcon
@@ -1876,7 +1867,7 @@ const getOpenTarget = (item: MatterActivityItem, workspaceId: string) => {
       });
   }
   if (
-    target.kind !== "document" ||
+    (target.kind !== "document" && target.kind !== "documentReviewRun") ||
     !target.fieldId ||
     !target.name ||
     !target.mimeType ||

@@ -7,27 +7,34 @@ import {
 import type { DeriveAskGenerate } from "@/api/handlers/playbooks/derive-ask";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
-import type { GradedPosition } from "@/api/lib/workflow/position-runtime";
+import type { TierStandardPosition } from "@/api/lib/workflow/position-runtime";
 
 const textContent = { version: 1, type: "text" } as const;
 
-const graded = (overrides: Partial<GradedPosition> = {}): GradedPosition => ({
+const graded = (
+  overrides: Partial<TierStandardPosition> = {},
+): TierStandardPosition => ({
   mode: "graded",
   sourceId: "11111111-1111-4111-8111-111111111111",
   issue: "Governing law",
   severity: "high",
   ask: { mode: "auto" },
-  tiers: {
-    acceptable: { rules: [{ id: "ar-1", text: "A common-law jurisdiction." }] },
-    fallback: { entries: [] },
-    notAcceptable: { rules: [] },
+  standard: {
+    source: "tiers",
+    tiers: {
+      acceptable: {
+        rules: [{ id: "ar-1", text: "A common-law jurisdiction." }],
+      },
+      fallback: { entries: [] },
+      notAcceptable: { rules: [] },
+    },
   },
   enabled: true,
   ...overrides,
 });
 
-const container = (position: GradedPosition): PlaybookPositions => ({
-  version: 2,
+const container = (position: TierStandardPosition): PlaybookPositions => ({
+  version: 3,
   items: [position],
 });
 
@@ -44,12 +51,15 @@ describe("computeRulesHash — stability", () => {
 
   test("changing a rule text produces a new hash", () => {
     const changed = graded({
-      tiers: {
-        acceptable: {
-          rules: [{ id: "ar-1", text: "A civil-law jurisdiction." }],
+      standard: {
+        source: "tiers",
+        tiers: {
+          acceptable: {
+            rules: [{ id: "ar-1", text: "A civil-law jurisdiction." }],
+          },
+          fallback: { entries: [] },
+          notAcceptable: { rules: [] },
         },
-        fallback: { entries: [] },
-        notAcceptable: { rules: [] },
       },
     });
     expect(computeRulesHash(changed)).not.toBe(computeRulesHash(graded()));

@@ -1,227 +1,311 @@
 import { describe, expect, test } from "bun:test";
 
-import type { DocumentReviewFindingRow } from "@/components/ai-suggestions/document-review-queries";
-import type { ReviewFindingDecisionRow } from "@/components/ai-suggestions/document-review-run.logic";
+import type { ReviewFinding } from "@/components/ai-suggestions/document-review-queries";
 import type {
-  PlaybookFinding,
-  ReferenceFinding,
-  ReviewTopic,
-} from "@/components/ai-suggestions/playbook-review-store";
+  PinnedPosition,
+  RestoredReviewFinding,
+} from "@/components/ai-suggestions/document-review-run.logic";
 import {
   buildReviewResultItems,
-  isReviewResultActionable,
-  isReviewResultActionNeeded,
-  reviewItemDecision,
+  buildRunHistoryBasisSentence,
+  buildRunSummarySentence,
+  firstSentence,
+  isReviewDeviation,
+  isUndecidedDeviation,
+  sortReviewResultItems,
+  tallyReviewFlags,
 } from "@/components/inspector/playbook-review-results.logic";
 import { toSafeId } from "@/lib/safe-id";
 
-/** The playbook finding exactly as a run persists it, taken from the run read
- *  rather than restated. `PlaybookFinding` is hand-written, so this is what
- *  binds the two together. */
-type PersistedPlaybookFinding = Extract<
-  DocumentReviewFindingRow["payload"],
-  { checkKind: "playbook" }
->["finding"];
+const position = (
+  sourceId: string,
+  issue: string = "Notice period",
+): PinnedPosition => ({
+  mode: "graded",
+  sourceId,
+  issue,
+  severity: "medium",
+  standard: {
+    source: "tiers",
+    tiers: {
+      acceptable: { rules: [] },
+      fallback: { entries: [] },
+      notAcceptable: { rules: [] },
+    },
+  },
+  ask: { mode: "auto" },
+  enabled: true,
+});
 
-const playbookTopic: ReviewTopic = {
-  type: "playbook",
-  topicId: "11111111-1111-4111-8111-111111111111",
-  positionId: "11111111-1111-4111-8111-111111111111",
-  title: "Notice period",
-  context: "",
-  included: true,
-};
-
-const playbookFinding: PlaybookFinding = {
-  positionId: playbookTopic.positionId,
+const finding = (overrides: Partial<ReviewFinding>): ReviewFinding => ({
+  positionId: "position-1",
   issue: "Notice period",
-  severity: "high",
-  verdict: "deviation",
+  severity: "medium",
+  standardSource: "tiers",
+  verdict: "compliant",
+  delta: { kind: "language" },
   extracted: null,
-  rationale: "The period is shorter than the preferred position.",
+  rationale: null,
   citations: [],
   fix: null,
+  ...overrides,
+});
+
+const row = (
+  id: string,
+  overrides: Omit<Partial<RestoredReviewFinding>, "finding"> & {
+    finding?: Partial<ReviewFinding>;
+  } = {},
+): RestoredReviewFinding => {
+  const { finding: findingOverrides, ...rest } = overrides;
+  const positionId = rest.positionId ?? "position-1";
+  return {
+    id: toSafeId<"documentReviewFinding">(id),
+    positionId,
+    title: "Notice period",
+    decision: "open",
+    flags: [],
+    applicationStatus: "pending",
+    suggestionId: null,
+    ...rest,
+    finding: finding({ positionId, ...findingOverrides }),
+  };
 };
 
-const referenceFinding: ReferenceFinding = {
-  findingId: `reference-${playbookTopic.topicId}`,
-  topicId: playbookTopic.topicId,
-  issue: "Notice period",
-  assessment: "different",
-  consensus: "single",
-  explanation: {
-    type: "comparison",
-    text: "The reference uses a longer period.",
-  },
-  targetCitations: [],
-  referenceCitations: [],
-  fix: null,
-};
+const FIRST_ID = "0198f2c4-1e55-7c31-9a10-3b1d2f4c5e70";
+const SECOND_ID = "0198f2c4-1e55-7c31-9a10-3b1d2f4c5e71";
+const THIRD_ID = "0198f2c4-1e55-7c31-9a10-3b1d2f4c5e72";
 
-const playbookRow: ReviewFindingDecisionRow = {
-  id: toSafeId<"documentReviewFinding">("0198f2c4-6a55-7c31-9a10-3b1d2f4c5e70"),
-  topicId: playbookTopic.topicId,
-  checkKind: "playbook",
-  decision: "open",
-  applicationStatus: "pending",
-};
-
-const referenceRow: ReviewFindingDecisionRow = {
-  id: toSafeId<"documentReviewFinding">("0198f2c4-6a55-7c31-9a10-3b1d2f4c5e71"),
-  topicId: playbookTopic.topicId,
-  checkKind: "reference",
-  decision: "open",
-  applicationStatus: "pending",
-};
-
-describe("review result composition", () => {
-  test("joins playbook and reference assessments into one confirmed topic", () => {
-    const results = buildReviewResultItems({
-      topics: [playbookTopic],
-      playbookFindings: [playbookFinding],
-      referenceFindings: [referenceFinding],
-      decisions: [playbookRow, referenceRow],
+describe("joining findings to the positions they judged", () => {
+  test("carries each position and its place in the confirmed list", () => {
+    const items = buildReviewResultItems({
+      positions: [position("position-1"), position("position-2")],
+      findings: [row(SECOND_ID, { positionId: "position-2" })],
     });
 
-    expect(results).toEqual([
-      {
-        id: playbookTopic.topicId,
-        title: "Notice period",
-        playbook: playbookFinding,
-        reference: referenceFinding,
-        decisions: [playbookRow, referenceRow],
-      },
-    ]);
-    expect(results.every(isReviewResultActionable)).toBe(true);
+    expect(items).toHaveLength(1);
+    expect(items.at(0)?.position?.sourceId).toBe("position-2");
+    expect(items.at(0)?.order).toBe(1);
   });
 
-  test("preserves confirmed topic order and omits excluded topics", () => {
-    const referenceTopic: ReviewTopic = {
-      type: "reference",
-      topicId: "22222222-2222-4222-8222-222222222222",
-      title: "Payment timing",
-      context: "",
-      included: false,
-    };
-
-    const results = buildReviewResultItems({
-      topics: [referenceTopic, playbookTopic],
-      playbookFindings: [playbookFinding],
-      referenceFindings: [referenceFinding],
-      decisions: [playbookRow, referenceRow],
+  test("a finding whose position left the snapshot still renders, sorted last", () => {
+    const items = buildReviewResultItems({
+      positions: [position("position-1")],
+      findings: [row(FIRST_ID, { positionId: "gone" })],
     });
 
-    expect(results.map((result) => result.id)).toEqual([playbookTopic.topicId]);
-  });
-
-  test("renders a finding persisted by the files-table run path", () => {
-    // What the table path writes: a graded verdict with its rationale and the
-    // extracted value, and no citations — the workflow's batch extraction does
-    // not verify folio anchors, so there is nothing to cite and nothing to
-    // ground a fix on. Pinned with `satisfies` against the persisted payload,
-    // so a producer-side shape change fails here instead of rendering as
-    // `undefined` in the results list.
-    const persisted = {
-      positionId: playbookTopic.positionId,
-      issue: "Notice period",
-      severity: "high",
-      verdict: "deviation",
-      extracted: { value: "14 days", text: "14 days" },
-      rationale: "The period is shorter than the preferred position.",
-      citations: [],
-      fix: null,
-    } satisfies PersistedPlaybookFinding;
-
-    const results = buildReviewResultItems({
-      topics: [playbookTopic],
-      playbookFindings: [persisted],
-      referenceFindings: null,
-      decisions: [playbookRow],
-    });
-
-    expect(results).toEqual([
-      {
-        id: playbookTopic.topicId,
-        title: "Notice period",
-        playbook: persisted,
-        reference: null,
-        decisions: [playbookRow],
-      },
-    ]);
-    expect(results.every(isReviewResultActionable)).toBe(true);
-  });
-
-  test("fails when an engine returns a result outside confirmed topics", () => {
-    expect(() =>
-      buildReviewResultItems({
-        topics: [playbookTopic],
-        playbookFindings: [
-          { ...playbookFinding, positionId: "unconfirmed-position" },
-        ],
-        referenceFindings: null,
-        decisions: [playbookRow],
-      }),
-    ).toThrow("Review topic");
+    expect(items.at(0)?.position).toBeNull();
+    expect(items.at(0)?.order).toBe(1);
   });
 });
 
-const decidedItem = (
-  playbookDecision: ReviewFindingDecisionRow["decision"],
-  referenceDecision: ReviewFindingDecisionRow["decision"],
-) => {
-  const item = buildReviewResultItems({
-    topics: [playbookTopic],
-    playbookFindings: [playbookFinding],
-    referenceFindings: [referenceFinding],
-    decisions: [
-      { ...playbookRow, decision: playbookDecision },
-      { ...referenceRow, decision: referenceDecision },
-    ],
-  }).at(0);
-  if (item === undefined) {
-    throw new Error("The confirmed topic produced no result item");
-  }
-  return item;
-};
-
-describe("what still needs the reviewer", () => {
-  test("a flagged finding nobody has answered needs action", () => {
-    const item = decidedItem("open", "open");
-
-    expect(reviewItemDecision(item)).toBe("open");
-    expect(isReviewResultActionNeeded(item)).toBe(true);
+describe("what counts as a deviation", () => {
+  test("a flagged verdict is one", () => {
+    const [item] = buildReviewResultItems({
+      positions: [position("position-1")],
+      findings: [row(FIRST_ID, { finding: { verdict: "deviation" } })],
+    });
+    expect(item !== undefined && isReviewDeviation(item)).toBe(true);
   });
 
-  test("accepting or dismissing takes the finding off the list", () => {
-    for (const decision of ["accepted", "dismissed"] as const) {
-      const item = decidedItem(decision, decision);
-
-      expect(reviewItemDecision(item)).toBe(decision);
-      // The finding is unchanged; only the reviewer's answer to it moved.
-      expect(isReviewResultActionable(item)).toBe(true);
-      expect(isReviewResultActionNeeded(item)).toBe(false);
-    }
+  test("an unfavourable impact is one whatever the verdict says", () => {
+    const [item] = buildReviewResultItems({
+      positions: [position("position-1")],
+      findings: [
+        row(FIRST_ID, {
+          finding: { verdict: "additional", impact: "unfavourable" },
+        }),
+      ],
+    });
+    expect(item !== undefined && isReviewDeviation(item)).toBe(true);
   });
 
-  test("a card whose checks were decided differently still needs the reviewer", () => {
-    const mixed = decidedItem("accepted", "dismissed");
-    const partly = decidedItem("accepted", "open");
-
-    expect(reviewItemDecision(mixed)).toBe("open");
-    expect(isReviewResultActionNeeded(mixed)).toBe(true);
-    expect(reviewItemDecision(partly)).toBe("open");
-    expect(isReviewResultActionNeeded(partly)).toBe(true);
+  test("a compliant finding with no adverse impact is not", () => {
+    const [item] = buildReviewResultItems({
+      positions: [position("position-1")],
+      findings: [row(FIRST_ID, { finding: { impact: "favourable" } })],
+    });
+    expect(item !== undefined && isReviewDeviation(item)).toBe(false);
   });
 
-  test("a finding that was never flagged needs no action, decided or not", () => {
-    const aligned = buildReviewResultItems({
-      topics: [playbookTopic],
-      playbookFindings: [{ ...playbookFinding, verdict: "compliant" }],
-      referenceFindings: [{ ...referenceFinding, assessment: "aligned" }],
-      decisions: [playbookRow, referenceRow],
+  test("deciding a deviation takes it off the filter without changing it", () => {
+    const [item] = buildReviewResultItems({
+      positions: [position("position-1")],
+      findings: [
+        row(FIRST_ID, {
+          decision: "dismissed",
+          finding: { verdict: "deviation" },
+        }),
+      ],
+    });
+    expect(item !== undefined && isReviewDeviation(item)).toBe(true);
+    expect(item !== undefined && isUndecidedDeviation(item)).toBe(false);
+  });
+});
+
+describe("counting the flags a reviewer set", () => {
+  test("counts every flag, and names the ones nobody used", () => {
+    const items = buildReviewResultItems({
+      positions: [position("position-1"), position("position-2")],
+      findings: [
+        row(FIRST_ID, { flags: ["follow-up", "important"] }),
+        row(SECOND_ID, { positionId: "position-2", flags: ["follow-up"] }),
+      ],
     });
 
-    expect(aligned.filter(isReviewResultActionable)).toEqual([]);
-    expect(aligned.filter(isReviewResultActionNeeded)).toEqual([]);
+    expect(tallyReviewFlags(items)).toEqual({
+      "needs-review": 0,
+      important: 1,
+      "follow-up": 2,
+      contradiction: 0,
+      verified: 0,
+    });
+  });
+});
+
+describe("the one caption sentence the card shows", () => {
+  test("cuts at the first full stop", () => {
+    expect(
+      firstSentence(
+        "The notice period is shorter than the standard. The standard asks for 60 days.",
+      ),
+    ).toBe("The notice period is shorter than the standard.");
+  });
+
+  test("keeps a single-sentence caption whole", () => {
+    expect(firstSentence("The clause matches the standard")).toBe(
+      "The clause matches the standard",
+    );
+  });
+
+  test("does not cut at an abbreviation or an initial", () => {
+    expect(
+      firstSentence("Shorter than market, e.g. the precedent at 60 days."),
+    ).toBe("Shorter than market, e.g. the precedent at 60 days.");
+    expect(firstSentence("Signed by J. Novak on behalf of the seller.")).toBe(
+      "Signed by J. Novak on behalf of the seller.",
+    );
+  });
+
+  test("does not cut inside a decimal", () => {
+    expect(firstSentence("The cap is 1.5x fees. The standard is 1x.")).toBe(
+      "The cap is 1.5x fees.",
+    );
+  });
+});
+
+// The two phrases the caller resolves in its own locale; the sentence only
+// has to place them.
+const PROPOSED_FROM_REFERENCES = "positions proposed from the references";
+const NO_SIDE = "no side";
+
+describe("what the run says it read", () => {
+  const reference = {
+    workspaceId: "workspace-1",
+    workspaceName: null,
+    entityId: "entity-1",
+    fileFieldId: "field-1",
+    name: "Precedent SPA",
+    fileName: "precedent.docx",
+  };
+
+  test("names the document, its version, the references, the playbook and the side", () => {
+    expect(
+      buildRunSummarySentence({
+        targetName: "Draft SPA",
+        targetVersionNumber: 4,
+        references: [reference],
+        playbookName: "SPA (buyer)",
+        playbookProposed: false,
+        proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
+        sideLabel: "for the Purchaser",
+      }),
+    ).toBe("Draft SPA v4 · Precedent SPA · SPA (buyer) · for the Purchaser");
+  });
+
+  test("says where an unsaved run's positions came from, and that no side was chosen", () => {
+    expect(
+      buildRunSummarySentence({
+        targetName: "Draft SPA",
+        targetVersionNumber: null,
+        references: [reference],
+        playbookName: "Positions confirmed for this review",
+        playbookProposed: true,
+        proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
+        sideLabel: NO_SIDE,
+      }),
+    ).toBe(
+      "Draft SPA · Precedent SPA · positions proposed from the references · no side",
+    );
+  });
+});
+
+describe("the order the list is read in", () => {
+  test("sorts by severity, then by the confirmed position order", () => {
+    const items = buildReviewResultItems({
+      positions: [
+        position("position-1"),
+        position("position-2"),
+        position("position-3"),
+      ],
+      findings: [
+        row(FIRST_ID, {
+          positionId: "position-1",
+          finding: { severity: "low" },
+        }),
+        row(SECOND_ID, {
+          positionId: "position-2",
+          finding: { severity: "blocker" },
+        }),
+        row(THIRD_ID, {
+          positionId: "position-3",
+          finding: { severity: "blocker" },
+        }),
+      ],
+    });
+
+    expect(sortReviewResultItems(items).map((item) => item.positionId)).toEqual(
+      ["position-2", "position-3", "position-1"],
+    );
+  });
+});
+
+describe("what a history row says a run was measured against", () => {
+  test("names the playbook a run was executed against", () => {
+    expect(
+      buildRunHistoryBasisSentence({
+        playbookName: "Buy-side SPA",
+        playbookProposed: false,
+        proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
+        references: null,
+        sideLabel: "for the Purchaser",
+      }),
+    ).toBe("Buy-side SPA · for the Purchaser");
+  });
+
+  test("names the references a run with no saved playbook compared against", () => {
+    expect(
+      buildRunHistoryBasisSentence({
+        playbookName: "Positions confirmed for this review",
+        playbookProposed: true,
+        proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
+        references: "2 references",
+        sideLabel: NO_SIDE,
+      }),
+    ).toBe("2 references · no side");
+  });
+
+  // A run can pin neither: an ephemeral list confirmed against a playbook
+  // whose name was never saved. The row still has to say something.
+  test("falls back to where the positions came from", () => {
+    expect(
+      buildRunHistoryBasisSentence({
+        playbookName: null,
+        playbookProposed: true,
+        proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
+        references: null,
+        sideLabel: NO_SIDE,
+      }),
+    ).toBe("positions proposed from the references · no side");
   });
 });

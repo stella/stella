@@ -5,7 +5,10 @@ import {
   getReviewBarAction,
   getReviewBarFocusTarget,
   getReviewBarPosition,
+  orderSuggestionsByDocumentPosition,
+  reviewBarHeading,
 } from "./review-bar.logic";
+import { REVIEW_UNSPECIFIED_AREA } from "./review-store";
 import type { ReviewSuggestion, ReviewSuggestionStatus } from "./review-store";
 
 const suggestion = (
@@ -16,6 +19,7 @@ const suggestion = (
   area: "Terms",
   blockId: `block-${id}`,
   id,
+  origin: "chat",
   pendingOperation: null,
   preview: { anchor: id, type: "commentOnBlock" },
   revisionIds: null,
@@ -92,5 +96,136 @@ describe("review bar session progress", () => {
       "resolve",
     );
     expect(getReviewBarAction(suggestion("applying", "applying"))).toBe("busy");
+  });
+});
+
+const onBlock = (
+  id: string,
+  blockId: string,
+  overrides: Partial<ReviewSuggestion> = {},
+): ReviewSuggestion => ({
+  ...suggestion(id, "pending"),
+  blockId,
+  pendingOperation: {
+    id: `op-${id}`,
+    type: "deleteBlock",
+    blockId,
+  },
+  ...overrides,
+});
+
+const block = (id: string, displayLabel?: string) =>
+  displayLabel === undefined ? { id } : { id, displayLabel };
+
+describe("review queue in document order", () => {
+  test("steps through the document top to bottom, not in hydration order", () => {
+    const ordered = orderSuggestionsByDocumentPosition(
+      [onBlock("last", "c"), onBlock("first", "a"), onBlock("middle", "b")],
+      [block("a"), block("b"), block("c")],
+    );
+
+    expect(ordered.map((item) => item.id)).toEqual(["first", "middle", "last"]);
+  });
+
+  test("keeps the store order for suggestions landing on one block", () => {
+    const ordered = orderSuggestionsByDocumentPosition(
+      [onBlock("second", "a"), onBlock("third", "a"), onBlock("outer", "b")],
+      [block("a"), block("b")],
+    );
+
+    expect(ordered.map((item) => item.id)).toEqual([
+      "second",
+      "third",
+      "outer",
+    ]);
+  });
+
+  test("places a suggestion by its clause number when its block id is stale", () => {
+    const stale = onBlock("stale", "gone", { blockLabel: "1.1" });
+    const ordered = orderSuggestionsByDocumentPosition(
+      [onBlock("later", "c"), stale],
+      [block("a", "1.1"), block("c")],
+    );
+
+    expect(ordered.map((item) => item.id)).toEqual(["stale", "later"]);
+  });
+
+  test("sorts blocks the document does not know about last, in store order", () => {
+    const ordered = orderSuggestionsByDocumentPosition(
+      [
+        onBlock("unknown-one", "x"),
+        onBlock("known", "a"),
+        onBlock("unknown-two", "y"),
+      ],
+      [block("a")],
+    );
+
+    expect(ordered.map((item) => item.id)).toEqual([
+      "known",
+      "unknown-one",
+      "unknown-two",
+    ]);
+  });
+
+  test("passes the session through while the editor is still unreadable", () => {
+    const items = [onBlock("one", "c"), onBlock("two", "a")];
+
+    expect(orderSuggestionsByDocumentPosition(items, [])).toBe(items);
+  });
+
+  test("falls back to the suggestion's own block once its operation is consumed", () => {
+    const resolved = onBlock("resolved", "a", {
+      pendingOperation: null,
+      status: "accepted",
+    });
+    const ordered = orderSuggestionsByDocumentPosition(
+      [onBlock("pending", "b"), resolved],
+      [block("a"), block("b")],
+    );
+
+    expect(ordered.map((item) => item.id)).toEqual(["resolved", "pending"]);
+  });
+});
+
+describe("what the bar says a decision is about", () => {
+  test("names the issue a review finding raised", () => {
+    expect(
+      reviewBarHeading({
+        ...suggestion("one", "pending"),
+        origin: "review",
+        area: "Limitation of liability",
+        summary: "Rewrite paragraph 8.2",
+      }),
+    ).toBe("Limitation of liability");
+  });
+
+  test("says what the change does when the chat proposed it", () => {
+    expect(
+      reviewBarHeading({
+        ...suggestion("two", "pending"),
+        origin: "chat",
+        area: "Payment",
+        summary: "Replace “30 days” with “45 days”",
+      }),
+    ).toBe("Replace “30 days” with “45 days”");
+  });
+
+  test('never labels a decision "Unspecified"', () => {
+    expect(
+      reviewBarHeading({
+        ...suggestion("three", "pending"),
+        origin: "review",
+        area: REVIEW_UNSPECIFIED_AREA,
+        summary: "Delete paragraph 4",
+      }),
+    ).toBe("Delete paragraph 4");
+    expect(
+      reviewBarHeading({
+        ...suggestion("four", "pending"),
+        origin: "review",
+        area: "   ",
+        summary: "Delete paragraph 4",
+      }),
+    ).toBe("Delete paragraph 4");
   });
 });

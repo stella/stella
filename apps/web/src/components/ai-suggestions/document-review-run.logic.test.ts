@@ -1,20 +1,30 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  documentReviewRunDetailSeeds,
+  documentReviewRunKeys,
+} from "@/components/ai-suggestions/document-review-queries";
 import type {
   DecidedReviewFinding,
   DocumentReviewDecision,
   DocumentReviewFindingRow,
+  DocumentReviewRunBasis,
   DocumentReviewRunDetail,
 } from "@/components/ai-suggestions/document-review-queries";
 import {
-  applyFindingDecisions,
+  applyFindingDecision,
   documentReviewRunPollInterval,
   resolveReviewRunFreshness,
   resolveReviewRunRestore,
   resolveRunConflictAttachment,
+  restoreReviewRun,
   reviewDecisionProgress,
+  reviewSkeletonCardCount,
 } from "@/components/ai-suggestions/document-review-run.logic";
-import type { ReviewRunHistoryEntry } from "@/components/ai-suggestions/document-review-run.logic";
+import type {
+  ReviewRunHistoryEntry,
+  ReviewRunSkeletonEntry,
+} from "@/components/ai-suggestions/document-review-run.logic";
 import { toSafeId } from "@/lib/safe-id";
 
 const ACTIVE_RUN_ID = "0198f2c4-6a55-7c31-9a10-3b1d2f4c5e60";
@@ -133,40 +143,69 @@ const SECOND_FINDING_ID = toSafeId<"documentReviewFinding">(
   "0198f2c4-1e55-7c31-9a10-3b1d2f4c5e71",
 );
 const REVIEWER_ID = toSafeId<"user">("0198f2c4-1e55-7c31-9a10-3b1d2f4c5e80");
-const TOPIC_ID = "0198f2c4-1e55-7c31-9a10-3b1d2f4c5e90";
+const POSITION_ID = "0198f2c4-1e55-7c31-9a10-3b1d2f4c5e90";
 const REVIEWED_VERSION_ID = toSafeId<"entityVersion">(
   "0198f2c4-1e55-7c31-9a10-3b1d2f4c5ea0",
 );
 const CURRENT_VERSION_ID = toSafeId<"entityVersion">(
   "0198f2c4-1e55-7c31-9a10-3b1d2f4c5ea1",
 );
+const REFERENCE_WORKSPACE_ID = toSafeId<"workspace">(
+  "0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb5",
+);
+const REFERENCE_ENTITY_ID = toSafeId<"entity">(
+  "0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb2",
+);
+const REFERENCE_FIELD_ID = toSafeId<"field">(
+  "0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb3",
+);
 const CONTENT_SHA256 =
   "9f2c1d7c4b6a58e30f1d2c3b4a5968770e1d2c3b4a5968779f2c1d7c4b6a58e3";
+
+const referencePosition =
+  (): DocumentReviewRunBasis["playbook"]["definitionSnapshot"]["positions"]["items"][number] => ({
+    mode: "graded",
+    sourceId: POSITION_ID,
+    issue: "Notice period",
+    severity: "medium",
+    standard: {
+      source: "reference",
+      termKind: "language",
+      passages: [
+        {
+          id: "0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb5",
+          workspaceId: REFERENCE_WORKSPACE_ID,
+          entityId: REFERENCE_ENTITY_ID,
+          fileFieldId: REFERENCE_FIELD_ID,
+          entityVersionId: "0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb4",
+          blockId: "b12",
+        },
+      ],
+    },
+    ask: { mode: "auto" },
+    enabled: true,
+  });
 
 const finding = (
   id: DocumentReviewFindingRow["id"],
   decision: DocumentReviewDecision,
 ): DocumentReviewFindingRow => ({
   id,
-  topicId: TOPIC_ID,
-  topicTitle: "Notice period",
-  checkKind: "reference",
-  positionId: null,
-  outcome: "different",
+  positionId: POSITION_ID,
+  positionTitle: "Notice period",
+  outcome: "deviation",
+  flags: [],
   payload: {
-    checkKind: "reference",
     finding: {
-      findingId: `reference-${TOPIC_ID}`,
-      topicId: TOPIC_ID,
+      positionId: POSITION_ID,
       issue: "Notice period",
-      assessment: "different",
-      consensus: "single",
-      explanation: {
-        type: "comparison",
-        text: "The reference uses a longer period.",
-      },
-      targetCitations: [],
-      referenceCitations: [],
+      severity: "medium",
+      standardSource: "reference",
+      verdict: "deviation",
+      delta: { kind: "language" },
+      extracted: null,
+      rationale: null,
+      citations: [],
       fix: null,
     },
   },
@@ -176,6 +215,7 @@ const finding = (
   applicationStatus: "pending",
   appliedBy: null,
   appliedAt: null,
+  suggestionId: null,
 });
 
 const cachedRun = (
@@ -190,18 +230,22 @@ const cachedRun = (
     entityVersionId: REVIEWED_VERSION_ID,
     contentSha256: CONTENT_SHA256,
     basis: {
-      type: "references",
+      playbook: {
+        definitionId: null,
+        versionId: null,
+        provenance: "ephemeral",
+        definitionSnapshot: {
+          name: "Positions confirmed for this review",
+          positions: { version: 3, items: [referencePosition()] },
+        },
+      },
       perspective: { type: "party", role: "Buyer", name: null },
       references: [
         {
-          workspaceId: toSafeId<"workspace">(
-            "0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb5",
-          ),
+          workspaceId: REFERENCE_WORKSPACE_ID,
           workspaceName: "Precedent matter",
-          entityId: toSafeId<"entity">("0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb2"),
-          fileFieldId: toSafeId<"field">(
-            "0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb3",
-          ),
+          entityId: REFERENCE_ENTITY_ID,
+          fileFieldId: REFERENCE_FIELD_ID,
           entityVersionId: toSafeId<"entityVersion">(
             "0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb4",
           ),
@@ -210,18 +254,12 @@ const cachedRun = (
         },
       ],
     },
-    topics: [
-      {
-        type: "reference",
-        topicId: TOPIC_ID,
-        title: "Notice period",
-        context: "",
-        included: true,
-      },
+    skipped: [
+      { subject: "Long-stop date", reason: { kind: "deal-specific-value" } },
     ],
     total: findings.length,
     completed: findings.length,
-    pipelineVersion: 1,
+    pipelineVersion: 2,
     createdAt: "2026-08-12T08:00:00.000Z",
     startedAt: "2026-08-12T08:00:01.000Z",
     finishedAt: "2026-08-12T08:00:30.000Z",
@@ -242,6 +280,7 @@ const decided = (
   id,
   runId,
   decision,
+  flags: [],
   decidedBy: decision === "open" ? null : REVIEWER_ID,
   decidedAt: decision === "open" ? null : "2026-08-12T09:00:00.000Z",
   applicationStatus: "pending",
@@ -249,14 +288,46 @@ const decided = (
   appliedAt: null,
 });
 
+describe("restoring a run as the join every surface reads", () => {
+  test("pairs each finding payload with the row a decision is written against", () => {
+    const restored = restoreReviewRun(
+      cachedRun([finding(FIRST_FINDING_ID, "open")]),
+    );
+
+    expect(restored.findings).toHaveLength(1);
+    expect(restored.findings.at(0)?.id).toBe(FIRST_FINDING_ID);
+    expect(restored.findings.at(0)?.positionId).toBe(POSITION_ID);
+    expect(restored.findings.at(0)?.suggestionId).toBeNull();
+    expect(restored.findings.at(0)?.finding.verdict).toBe("deviation");
+  });
+
+  test("reads the pinned basis back as one shape, ephemeral included", () => {
+    const { basis } = restoreReviewRun(cachedRun([]));
+
+    expect(basis.playbookId).toBeNull();
+    expect(basis.provenance).toBe("ephemeral");
+    expect(basis.positions.map((position) => position.sourceId)).toEqual([
+      POSITION_ID,
+    ]);
+    expect(basis.references.map((reference) => reference.name)).toEqual([
+      "Master agreement",
+    ]);
+    expect(basis.perspective).toEqual({
+      type: "party",
+      role: "Buyer",
+      name: null,
+    });
+  });
+});
+
 describe("recording a decision in the cached run", () => {
   test("writes the decided row and recounts the run's decisions", () => {
-    const updated = applyFindingDecisions(
+    const updated = applyFindingDecision(
       cachedRun([
         finding(FIRST_FINDING_ID, "open"),
         finding(SECOND_FINDING_ID, "open"),
       ]),
-      [decided(FIRST_FINDING_ID, "accepted")],
+      decided(FIRST_FINDING_ID, "accepted"),
     );
 
     expect(updated?.findings.map((row) => row.decision)).toEqual([
@@ -272,29 +343,10 @@ describe("recording a decision in the cached run", () => {
     });
   });
 
-  test("decides every finding behind one card in a single write", () => {
-    const updated = applyFindingDecisions(
-      cachedRun([
-        finding(FIRST_FINDING_ID, "open"),
-        finding(SECOND_FINDING_ID, "open"),
-      ]),
-      [
-        decided(FIRST_FINDING_ID, "dismissed"),
-        decided(SECOND_FINDING_ID, "dismissed"),
-      ],
-    );
-
-    expect(updated?.run.decisionCounts).toEqual({
-      open: 0,
-      accepted: 0,
-      dismissed: 2,
-    });
-  });
-
   test("reopening withdraws the decider and the moment", () => {
-    const reopened = applyFindingDecisions(
+    const reopened = applyFindingDecision(
       cachedRun([finding(FIRST_FINDING_ID, "accepted")]),
-      [decided(FIRST_FINDING_ID, "open")],
+      decided(FIRST_FINDING_ID, "open"),
     );
 
     const reopenedFinding = reopened?.findings.at(0);
@@ -310,9 +362,10 @@ describe("recording a decision in the cached run", () => {
 
   test("ignores a decision recorded against another run", () => {
     const cached = cachedRun([finding(FIRST_FINDING_ID, "open")]);
-    const updated = applyFindingDecisions(cached, [
+    const updated = applyFindingDecision(
+      cached,
       decided(FIRST_FINDING_ID, "accepted", OTHER_RUN_ID),
-    ]);
+    );
 
     expect(updated?.findings.at(0)?.decision).toBe("open");
     expect(updated?.run.decisionCounts).toEqual({
@@ -324,7 +377,7 @@ describe("recording a decision in the cached run", () => {
 
   test("leaves an empty cache entry empty rather than inventing a run", () => {
     expect(
-      applyFindingDecisions(undefined, [decided(FIRST_FINDING_ID, "accepted")]),
+      applyFindingDecision(undefined, decided(FIRST_FINDING_ID, "accepted")),
     ).toBeUndefined();
   });
 });
@@ -390,5 +443,105 @@ describe("whether a completed review still describes the document", () => {
         currentEntityVersionId: CURRENT_VERSION_ID,
       }),
     ).toEqual({ documentChanged: true, playbook: "missing" });
+  });
+});
+
+const SEEDED_WORKSPACE_ID = "0198f2c4-1e55-7c31-9a10-3b1d2f4c5ec0";
+
+describe("seeding a run's detail from the history answer", () => {
+  test("pairs the latest run with the key the run panel reads", () => {
+    const latest = cachedRun([finding(FIRST_FINDING_ID, "open")]);
+
+    expect(
+      documentReviewRunDetailSeeds(SEEDED_WORKSPACE_ID, { latest }),
+    ).toEqual([
+      [
+        documentReviewRunKeys.detail({
+          workspaceId: SEEDED_WORKSPACE_ID,
+          runId: COMPLETED_RUN_ID,
+        }),
+        latest,
+      ],
+    ]);
+  });
+
+  test("seeds nothing for a document with no runs", () => {
+    expect(
+      documentReviewRunDetailSeeds(SEEDED_WORKSPACE_ID, { latest: null }),
+    ).toEqual([]);
+  });
+
+  test("keys the run the page answered with, not the one asked about", () => {
+    const latest = cachedRun([]);
+    const [seed] = documentReviewRunDetailSeeds(SEEDED_WORKSPACE_ID, {
+      latest: { ...latest, run: { ...latest.run, id: OTHER_RUN_ID } },
+    });
+
+    expect(seed?.[0]).toEqual(
+      documentReviewRunKeys.detail({
+        workspaceId: SEEDED_WORKSPACE_ID,
+        runId: OTHER_RUN_ID,
+      }),
+    );
+  });
+});
+
+const skeletonEntry = (
+  id: string,
+  status: ReviewRunSkeletonEntry["status"],
+  total: number,
+): ReviewRunSkeletonEntry => ({ ...historyEntry(id, status), total });
+
+describe("sizing the wait for a run", () => {
+  test("draws a card per position the run was planned against", () => {
+    expect(
+      reviewSkeletonCardCount({
+        runs: [skeletonEntry(NEWER_COMPLETED_RUN_ID, "completed", 9)],
+        runId: null,
+      }),
+    ).toBe(9);
+  });
+
+  test("sizes the named run, not whichever one would be restored", () => {
+    expect(
+      reviewSkeletonCardCount({
+        runs: [
+          skeletonEntry(NEWER_COMPLETED_RUN_ID, "completed", 9),
+          skeletonEntry(OLDER_COMPLETED_RUN_ID, "completed", 4),
+        ],
+        runId: OLDER_COMPLETED_RUN_ID,
+      }),
+    ).toBe(4);
+  });
+
+  test("falls back while the history has not arrived", () => {
+    expect(reviewSkeletonCardCount({ runs: [], runId: null })).toBe(6);
+  });
+
+  test("falls back for a run named by nothing in the history", () => {
+    expect(
+      reviewSkeletonCardCount({
+        runs: [skeletonEntry(NEWER_COMPLETED_RUN_ID, "completed", 9)],
+        runId: FAILED_RUN_ID,
+      }),
+    ).toBe(6);
+  });
+
+  test("falls back for a queued run, which has planned nothing yet", () => {
+    expect(
+      reviewSkeletonCardCount({
+        runs: [skeletonEntry(ACTIVE_RUN_ID, "queued", 0)],
+        runId: null,
+      }),
+    ).toBe(6);
+  });
+
+  test("caps a long playbook at what the column can hold", () => {
+    expect(
+      reviewSkeletonCardCount({
+        runs: [skeletonEntry(NEWER_COMPLETED_RUN_ID, "completed", 200)],
+        runId: null,
+      }),
+    ).toBe(12);
   });
 });

@@ -12,6 +12,7 @@ import {
 import type { SQL } from "drizzle-orm";
 import { t } from "elysia";
 
+import { REVIEW_FLAG } from "@stll/api-contract";
 import type { ConditionNode } from "@stll/conditions";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -43,9 +44,11 @@ const TABLE_COLUMN_FLAG_EXCLUDED_ENTITY_KINDS = [
   "task",
 ] satisfies EntityKind[];
 const COLUMN_FLAG_TARGET_BATCH_SIZE = 500;
+// `verified` is one of the shared reviewer flags; `locked` is the cell's own
+// state, which this endpoint sets through the same gesture.
 const COLUMN_METADATA_FLAG = {
   locked: "locked",
-  verified: "verified",
+  verified: REVIEW_FLAG.VERIFIED,
 } as const;
 
 const config = {

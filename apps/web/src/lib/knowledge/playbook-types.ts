@@ -2,7 +2,7 @@ import type { api } from "@/lib/api";
 
 // All playbook position types are inferred from the Eden API surface so the
 // editor's working state and save payload stay in lockstep with the backend
-// `playbookPositionsSchema` (v2). Never hand-redefine the Position shape here.
+// `playbookPositionsSchema` (v3). Never hand-redefine the Position shape here.
 
 type PlaybookDetailResponse = Awaited<
   ReturnType<ReturnType<typeof api.playbooks>["get"]>
@@ -15,6 +15,10 @@ type PlaybookDetailData = Exclude<
 
 export type PlaybookPositionsValue = PlaybookDetailData["positions"];
 export type Position = PlaybookPositionsValue["items"][number];
+
+// What the org's reviewers have done with each position, computed from their
+// findings on every read. Keyed by `position.sourceId`.
+export type PlaybookPositionDecisions = PlaybookDetailData["positionDecisions"];
 
 // Scope facets, also inferred rather than hand-listed: a new perspective or
 // trigger added to the backend schema must not need a matching edit here.
@@ -31,7 +35,20 @@ export type GradedPosition = Extract<Position, { mode: "graded" }>;
 export type ExtractPosition = Extract<Position, { mode: "extract" }>;
 
 export type PositionSeverity = GradedPosition["severity"];
-export type PositionTiers = GradedPosition["tiers"];
+
+// How it should be, for one graded position: an authored tier ladder or the
+// passages of a reference document someone already negotiated. Grading
+// dispatches on `source`, and so does every editor below.
+export type PositionStandard = GradedPosition["standard"];
+export type PositionStandardSource = PositionStandard["source"];
+export type TieredStandard = Extract<PositionStandard, { source: "tiers" }>;
+export type ReferenceStandard = Extract<
+  PositionStandard,
+  { source: "reference" }
+>;
+export type ReferencePassage = ReferenceStandard["passages"][number];
+
+export type PositionTiers = TieredStandard["tiers"];
 export type TierRule = PositionTiers["acceptable"]["rules"][number];
 export type FallbackEntry = PositionTiers["fallback"]["entries"][number];
 export type IdealLanguage = NonNullable<PositionTiers["acceptable"]["ideal"]>;
@@ -94,6 +111,61 @@ const emptyTiers = (): PositionTiers => ({
   notAcceptable: { rules: [] },
 });
 
+export const emptyTieredStandard = (): PositionStandard => ({
+  source: "tiers",
+  tiers: emptyTiers(),
+});
+
+/** The tier ladder a position is graded by, or `null` when its standard is a
+ *  reference document's passages instead. */
+export const positionTiers = (
+  position: GradedPosition,
+): PositionTiers | null =>
+  position.standard.source === "tiers" ? position.standard.tiers : null;
+
+/**
+ * Every reference passage a list of positions pins, in the order they appear.
+ * What a surface hands the passage-text read, so one request covers the whole
+ * list rather than one per card.
+ */
+export const positionReferencePassages = (
+  positions: readonly Position[],
+): ReferencePassage[] => {
+  const passages: ReferencePassage[] = [];
+  for (const position of positions) {
+    if (
+      position.mode === "graded" &&
+      position.standard.source === "reference"
+    ) {
+      passages.push(...position.standard.passages);
+    }
+  }
+  return passages;
+};
+
+/**
+ * The passages a reference standard quotes, joined as one block of language:
+ * what "Convert to rules" seeds the acceptable tier's ideal wording with.
+ *
+ * A passage carries an id, not words: the text lives in the matter the
+ * reference belongs to. One whose words this reader did not receive
+ * contributes nothing, so the conversion can only write language already on
+ * screen into the playbook.
+ */
+export const referencePassagesText = (
+  passages: readonly ReferencePassage[],
+  textById: ReadonlyMap<string, string>,
+): string => {
+  const quoted: string[] = [];
+  for (const passage of passages) {
+    const text = textById.get(passage.id)?.trim() ?? "";
+    if (text.length > 0) {
+      quoted.push(text);
+    }
+  }
+  return quoted.join("\n\n");
+};
+
 const textContent = (): PositionAskContent => ({ version: 1, type: "text" });
 
 export const newGradedPosition = (): GradedPosition => ({
@@ -101,7 +173,7 @@ export const newGradedPosition = (): GradedPosition => ({
   sourceId: crypto.randomUUID(),
   issue: "",
   severity: "medium",
-  tiers: emptyTiers(),
+  standard: emptyTieredStandard(),
   ask: { mode: "auto" },
   enabled: true,
 });
@@ -126,9 +198,10 @@ const gradedAskToManual = (ask: GradedAskConfig): AskManual => {
   return { question: "", content: textContent() };
 };
 
-// graded → extract drops the tier ladder + grading; the caller confirms first
-// when tiers are non-empty. The authored ask is preserved: a manual ask carries
-// straight over, an auto ask keeps its derived question/content when present.
+// graded → extract drops the standard + grading; the caller confirms first
+// when the standard carries content. The authored ask is preserved: a manual
+// ask carries straight over, an auto ask keeps its derived question/content
+// when present.
 export const gradedToExtract = (position: GradedPosition): ExtractPosition => {
   const ask = gradedAskToManual(position.ask);
   return {
@@ -141,14 +214,15 @@ export const gradedToExtract = (position: GradedPosition): ExtractPosition => {
   };
 };
 
-// extract → graded is lossless (extract has no tiers): the authored ask survives
-// as a manual override so the derived-question path never silently discards it.
+// extract → graded is lossless (extract has no standard): the authored ask
+// survives as a manual override so the derived-question path never silently
+// discards it.
 export const extractToGraded = (position: ExtractPosition): GradedPosition => ({
   mode: "graded",
   sourceId: position.sourceId,
   issue: position.issue,
   severity: "medium",
-  tiers: emptyTiers(),
+  standard: emptyTieredStandard(),
   ask: {
     mode: "manual",
     question: position.ask.question,
@@ -173,14 +247,15 @@ const withFreshEntryId = (entry: FallbackEntry): FallbackEntry =>
     ? { id: crypto.randomUUID(), text: entry.text, label: entry.label }
     : { id: crypto.randomUUID(), text: entry.text };
 
-export const duplicatePosition = (position: Position): Position => {
-  if (position.mode === "extract") {
-    return { ...position, sourceId: crypto.randomUUID() };
+// A reference standard's passages carry no client-generated ids (they are
+// pinned provenance, not editable rows), so a copy shares them verbatim.
+const duplicateStandard = (standard: PositionStandard): PositionStandard => {
+  if (standard.source === "reference") {
+    return standard;
   }
-  const { tiers } = position;
+  const { tiers } = standard;
   return {
-    ...position,
-    sourceId: crypto.randomUUID(),
+    source: "tiers",
     tiers: {
       acceptable: {
         rules: tiers.acceptable.rules.map(withFreshRuleId),
@@ -188,13 +263,20 @@ export const duplicatePosition = (position: Position): Position => {
           ? { ideal: tiers.acceptable.ideal }
           : {}),
       },
-      fallback: {
-        entries: tiers.fallback.entries.map(withFreshEntryId),
-      },
-      notAcceptable: {
-        rules: tiers.notAcceptable.rules.map(withFreshRuleId),
-      },
+      fallback: { entries: tiers.fallback.entries.map(withFreshEntryId) },
+      notAcceptable: { rules: tiers.notAcceptable.rules.map(withFreshRuleId) },
     },
+  };
+};
+
+export const duplicatePosition = (position: Position): Position => {
+  if (position.mode === "extract") {
+    return { ...position, sourceId: crypto.randomUUID() };
+  }
+  return {
+    ...position,
+    sourceId: crypto.randomUUID(),
+    standard: duplicateStandard(position.standard),
   };
 };
 
@@ -234,12 +316,17 @@ const gradedHasContent = (position: GradedPosition): boolean => {
   if (position.check !== undefined) {
     return true;
   }
-  const { tiers } = position;
+  const tiers = positionTiers(position);
+  // A reference standard is content by construction: the schema requires at
+  // least one quoted passage, and that passage IS the standard.
+  if (tiers === null) {
+    return true;
+  }
   return (
     tiers.acceptable.rules.some((rule) => rule.text.trim().length > 0) ||
     tiers.notAcceptable.rules.some((rule) => rule.text.trim().length > 0) ||
     tiers.fallback.entries.some((entry) => entry.text.trim().length > 0) ||
-    hasUsableIdeal(position.tiers.acceptable.ideal)
+    hasUsableIdeal(tiers.acceptable.ideal)
   );
 };
 
@@ -261,7 +348,7 @@ export const validatePosition = (position: Position): PositionErrors => {
   if (position.mode !== "graded") {
     return errors;
   }
-  const clauseIdeal = position.tiers.acceptable.ideal;
+  const clauseIdeal = positionTiers(position)?.acceptable.ideal;
   if (clauseIdeal?.source === "clause" && clauseIdeal.clauseId.length === 0) {
     errors.clause = "required";
   }
@@ -294,21 +381,12 @@ export const normalizePosition = (position: Position): Position => {
     };
   }
 
-  const { tiers, negotiation: rawNegotiation, ...rest } = position;
-  const ideal = tiers.acceptable.ideal;
-  const keepIdeal = hasUsableIdeal(ideal);
+  const { standard, negotiation: rawNegotiation, ...rest } = position;
   const negotiation = normalizeNegotiation(rawNegotiation);
   return {
     ...rest,
     issue,
-    tiers: {
-      acceptable: {
-        rules: cleanRules(tiers.acceptable.rules),
-        ...(keepIdeal && ideal !== undefined ? { ideal } : {}),
-      },
-      fallback: { entries: cleanEntries(tiers.fallback.entries) },
-      notAcceptable: { rules: cleanRules(tiers.notAcceptable.rules) },
-    },
+    standard: normalizeStandard(standard),
     ask:
       position.ask.mode === "manual"
         ? {
@@ -318,6 +396,28 @@ export const normalizePosition = (position: Position): Position => {
           }
         : position.ask,
     ...(negotiation !== undefined ? { negotiation } : {}),
+  };
+};
+
+// Reference passages are pinned quotes, not editable rows: there is nothing to
+// trim or drop, so only a tier ladder is normalized.
+const normalizeStandard = (standard: PositionStandard): PositionStandard => {
+  if (standard.source === "reference") {
+    return standard;
+  }
+  const { tiers } = standard;
+  const ideal = tiers.acceptable.ideal;
+  const keepIdeal = hasUsableIdeal(ideal);
+  return {
+    source: "tiers",
+    tiers: {
+      acceptable: {
+        rules: cleanRules(tiers.acceptable.rules),
+        ...(keepIdeal && ideal !== undefined ? { ideal } : {}),
+      },
+      fallback: { entries: cleanEntries(tiers.fallback.entries) },
+      notAcceptable: { rules: cleanRules(tiers.notAcceptable.rules) },
+    },
   };
 };
 

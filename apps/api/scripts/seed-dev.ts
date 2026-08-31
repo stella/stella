@@ -5080,27 +5080,30 @@ const buildDdGeneralPosition = (input: DdPositionInput): Position => ({
     question: `What does the agreement provide regarding the following issue: ${input.issue}? Quote the operative wording.`,
     content: { version: 1, type: "text" },
   },
-  tiers: {
-    acceptable: {
-      rules: [],
-      ideal: { source: "inline", text: input.ideal },
-    },
-    fallback: {
-      entries: [
-        {
-          id: seedId(`playbook-dd-general-fb-${input.key}`),
-          label: input.fallback.label,
-          text: input.fallback.text,
-        },
-      ],
-    },
-    notAcceptable: {
-      rules: [
-        {
-          id: seedId(`playbook-dd-general-rl-${input.key}`),
-          text: input.redLine,
-        },
-      ],
+  standard: {
+    source: "tiers",
+    tiers: {
+      acceptable: {
+        rules: [],
+        ideal: { source: "inline", text: input.ideal },
+      },
+      fallback: {
+        entries: [
+          {
+            id: seedId(`playbook-dd-general-fb-${input.key}`),
+            label: input.fallback.label,
+            text: input.fallback.text,
+          },
+        ],
+      },
+      notAcceptable: {
+        rules: [
+          {
+            id: seedId(`playbook-dd-general-rl-${input.key}`),
+            text: input.redLine,
+          },
+        ],
+      },
     },
   },
   guidance: input.guidance,
@@ -5127,7 +5130,7 @@ const seedDdGeneralPlaybook = async (
         "Buyer-side red-flag review of target contracts; applies to every document type.",
       scope: { perspective: "buyer" },
       positions: {
-        version: 2,
+        version: 3,
         items: DD_GENERAL_POSITIONS.map(buildDdGeneralPosition),
       } satisfies PlaybookPositions,
     })
@@ -5166,7 +5169,7 @@ export const seedPlaybooks = async (
         perspective: "buyer",
       },
       positions: {
-        version: 2,
+        version: 3,
         items: [
           {
             mode: "graded",
@@ -5178,23 +5181,26 @@ export const seedPlaybooks = async (
               question: "Jakým právním řádem se smlouva řídí?",
               content: { version: 1, type: "text" },
             },
-            tiers: {
-              acceptable: {
-                rules: [],
-                ideal: {
-                  source: "inline",
-                  text: "Smlouva se řídí právním řádem České republiky.",
-                },
-              },
-              fallback: {
-                entries: [
-                  {
-                    id: seedId("playbook-cz-fb-rozhodne-pravo-eu"),
-                    text: "Smlouva se řídí právem jiného členského státu Evropské unie.",
+            standard: {
+              source: "tiers",
+              tiers: {
+                acceptable: {
+                  rules: [],
+                  ideal: {
+                    source: "inline",
+                    text: "Smlouva se řídí právním řádem České republiky.",
                   },
-                ],
+                },
+                fallback: {
+                  entries: [
+                    {
+                      id: seedId("playbook-cz-fb-rozhodne-pravo-eu"),
+                      text: "Smlouva se řídí právem jiného členského státu Evropské unie.",
+                    },
+                  ],
+                },
+                notAcceptable: { rules: [] },
               },
-              notAcceptable: { rules: [] },
             },
             guidance:
               "Preferujeme volbu českého práva; jiné právo EU je akceptovatelný ústupek.",
@@ -5211,23 +5217,26 @@ export const seedPlaybooks = async (
                 "Je odpovědnost smluvní strany za škodu omezena? Pokud ano, jaká je maximální výše náhrady?",
               content: { version: 1, type: "text" },
             },
-            tiers: {
-              acceptable: {
-                rules: [],
-                ideal: {
-                  source: "inline",
-                  text: "Odpovědnost za škodu je omezena a její celková výše nepřesahuje cenu plnění sjednanou ve smlouvě.",
-                },
-              },
-              fallback: {
-                entries: [
-                  {
-                    id: seedId("playbook-cz-fb-omezeni-odpovednosti-2x"),
-                    text: "Odpovědnost za škodu je omezena na dvojnásobek roční hodnoty plnění.",
+            standard: {
+              source: "tiers",
+              tiers: {
+                acceptable: {
+                  rules: [],
+                  ideal: {
+                    source: "inline",
+                    text: "Odpovědnost za škodu je omezena a její celková výše nepřesahuje cenu plnění sjednanou ve smlouvě.",
                   },
-                ],
+                },
+                fallback: {
+                  entries: [
+                    {
+                      id: seedId("playbook-cz-fb-omezeni-odpovednosti-2x"),
+                      text: "Odpovědnost za škodu je omezena na dvojnásobek roční hodnoty plnění.",
+                    },
+                  ],
+                },
+                notAcceptable: { rules: [] },
               },
-              notAcceptable: { rules: [] },
             },
             guidance:
               "Neomezená odpovědnost je nepřijatelná; vyžaduje eskalaci.",
@@ -5244,10 +5253,13 @@ export const seedPlaybooks = async (
                 "Jaká je splatnost faktur ve dnech? Odpověz pouze číslem.",
               content: { version: 1, type: "int" },
             },
-            tiers: {
-              acceptable: { rules: [] },
-              fallback: { entries: [] },
-              notAcceptable: { rules: [] },
+            standard: {
+              source: "tiers",
+              tiers: {
+                acceptable: { rules: [] },
+                fallback: { entries: [] },
+                notAcceptable: { rules: [] },
+              },
             },
             check: {
               kind: "constraint",
@@ -5281,10 +5293,13 @@ export const seedPlaybooks = async (
                 "Cituj ustanovení smlouvy o mlčenlivosti / ochraně důvěrných informací, je-li ve smlouvě obsaženo.",
               content: { version: 1, type: "text" },
             },
-            tiers: {
-              acceptable: { rules: [] },
-              fallback: { entries: [] },
-              notAcceptable: { rules: [] },
+            standard: {
+              source: "tiers",
+              tiers: {
+                acceptable: { rules: [] },
+                fallback: { entries: [] },
+                notAcceptable: { rules: [] },
+              },
             },
             check: { kind: "presence", expectation: "required" },
             guidance: "Smlouva musí obsahovat závazek mlčenlivosti.",
@@ -5301,10 +5316,13 @@ export const seedPlaybooks = async (
                 "Cituj ustanovení vyžadující souhlas druhé strany při změně ovládání (change of control) jedné ze stran, existuje-li.",
               content: { version: 1, type: "text" },
             },
-            tiers: {
-              acceptable: { rules: [] },
-              fallback: { entries: [] },
-              notAcceptable: { rules: [] },
+            standard: {
+              source: "tiers",
+              tiers: {
+                acceptable: { rules: [] },
+                fallback: { entries: [] },
+                notAcceptable: { rules: [] },
+              },
             },
             check: { kind: "presence", expectation: "restricted" },
             guidance:
@@ -5343,23 +5361,26 @@ export const seedPlaybooks = async (
                 "Jak se řeší spory ze smlouvy — příslušnými soudy ČR, nebo v rozhodčím řízení?",
               content: { version: 1, type: "text" },
             },
-            tiers: {
-              acceptable: {
-                rules: [],
-                ideal: {
-                  source: "inline",
-                  text: "Spory z této smlouvy rozhodují věcně a místně příslušné soudy České republiky.",
-                },
-              },
-              fallback: {
-                entries: [
-                  {
-                    id: seedId("playbook-cz-fb-reseni-sporu-rozhodci"),
-                    text: "Spory se řeší v rozhodčím řízení u Rozhodčího soudu při Hospodářské komoře ČR a Agrární komoře ČR.",
+            standard: {
+              source: "tiers",
+              tiers: {
+                acceptable: {
+                  rules: [],
+                  ideal: {
+                    source: "inline",
+                    text: "Spory z této smlouvy rozhodují věcně a místně příslušné soudy České republiky.",
                   },
-                ],
+                },
+                fallback: {
+                  entries: [
+                    {
+                      id: seedId("playbook-cz-fb-reseni-sporu-rozhodci"),
+                      text: "Spory se řeší v rozhodčím řízení u Rozhodčího soudu při Hospodářské komoře ČR a Agrární komoře ČR.",
+                    },
+                  ],
+                },
+                notAcceptable: { rules: [] },
               },
-              notAcceptable: { rules: [] },
             },
             enabled: true,
           },

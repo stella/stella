@@ -9,6 +9,7 @@ const suggestion = (id: string): ReviewSuggestion => ({
   area: "Parties",
   blockId: "party",
   id,
+  origin: "chat",
   pendingOperation: {
     blockId: "party",
     id,

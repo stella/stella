@@ -1498,43 +1498,47 @@
     "applyAs": "as",
     "applyDirect": "Direct",
     "applyTracked": "Tracked changes",
-    "areaUnspecified": "Unspecified",
     "barLabel": "Suggestion review",
-    "byArea": "By area",
-    "bySeverity": "By severity",
+    "change": {
+      "deleteParagraph": "Delete paragraph",
+      "replacement": "“{find}” → “{replace}”"
+    },
     "countHigh": "{count, plural, one {# high} other {# high}}",
     "countLow": "{count, plural, one {# low} other {# low}}",
     "countMedium": "{count, plural, one {# medium} other {# medium}}",
     "countUnspecified": "{count, plural, one {# unspecified} other {# unspecified}}",
-    "dismiss": "Hide review panel",
-    "empty": "No suggestions match the current filter.",
     "finalizePendingNote": "{count, plural, one {# suggestion is still pending review.} other {# suggestions are still pending review.}}",
-    "groupBy": "Group by",
-    "hiddenCount": "{count} hidden",
     "hideAccepted": "Hide accepted suggestions",
-    "identityAria": "Tracked-change identity for {name}",
-    "identitySaved": "Identity saved",
     "persistFailed": "Couldn't save your review change",
     "reject": "Reject",
     "rejectAll": "Reject all",
     "revert": "Revert",
-    "savingIdentity": "Saving…",
     "severityHigh": "High",
     "severityLow": "Low",
     "severityMedium": "Medium",
     "severityUnspecified": "Unspecified",
     "skipped": "Could not apply: {reason}",
     "staleResolution": "This suggestion was already resolved elsewhere.",
-    "statusAccepted": "Accepted",
-    "statusApplying": "Applying change…",
-    "statusRejected": "Rejected",
-    "statusSkipped": "Skipped",
-    "subtitle": "{pending} of {total} pending",
-    "title": "AI suggestions",
-    "wordName": "Word author name",
-    "wordNamePlaceholder": "How tracked changes will sign",
-    "wordShortcut": "Initials",
-    "wordShortcutPlaceholder": "e.g. JK"
+    "summary": {
+      "commentOnParagraph": "{label, select, none {Comment on a paragraph} other {Comment on paragraph {label}}}",
+      "commentOnSelection": "Comment on the selected text",
+      "deleteParagraph": "{label, select, none {Delete a paragraph} other {Delete paragraph {label}}}",
+      "deleteTableColumn": "Delete a table column",
+      "deleteTableRow": "Delete a table row",
+      "formatSelection": "Reformat the selected text",
+      "insertAfter": "{label, select, none {Insert a paragraph} other {Insert a paragraph after {label}}}",
+      "insertBefore": "{label, select, none {Insert a paragraph} other {Insert a paragraph before {label}}}",
+      "insertSignatureBlock": "Insert a signature block for {names}",
+      "insertTableColumn": "Insert a table column",
+      "insertTableRow": "Insert a table row",
+      "mergeTableCells": "Merge table cells",
+      "pageBreakAfter": "{label, select, none {Insert a page break} other {Insert a page break after {label}}}",
+      "pageBreakBefore": "{label, select, none {Insert a page break} other {Insert a page break before {label}}}",
+      "replaceInBlock": "Replace “{find}” with “{replace}”",
+      "replaceParagraph": "{label, select, none {Rewrite a paragraph} other {Rewrite paragraph {label}}}",
+      "replaceSelection": "Replace the selected text with “{replace}”",
+      "splitTableCell": "Split a table cell"
+    }
   },
   "emailViewer": {
     "attachments": "Attachments",
@@ -2192,6 +2196,7 @@
       "workAttention": "Work monitoring"
     },
     "severity": {
+      "critical": "Critical",
       "info": "Info",
       "notice": "Notice",
       "warning": "Warning"
@@ -2310,9 +2315,13 @@
     "review": {
       "actionNeeded": "Action needed",
       "addComment": "Add as comment",
+      "addNote": "Add note for counterparty",
+      "addNotePlaceholder": "What the counterparty should see",
+      "addNoteSubmit": "Add note",
       "addReference": "Add {name} as a reference",
       "addTopic": "Add topic",
       "allDecided": "Every finding here has been decided.",
+      "askInChat": "Ask in chat",
       "assessment": {
         "additionalInTarget": "Additional in target",
         "aligned": "Consistent with references",
@@ -2322,12 +2331,21 @@
         "notComparable": "Not comparable"
       },
       "basisCombined": "{count, plural, one {Reviews against {name} and compares with # reference document} other {Reviews against {name} and compares with # reference documents}}",
+      "basisDivider": "and / or",
       "basisPlaybook": "Reviews against {name}",
       "basisReferences": "{count, plural, one {Compares with # reference document} other {Compares with # reference documents}}",
       "changeBasis": "Change review basis",
+      "chatDraft": {
+        "finding": "Finding:",
+        "impact": "Impact:",
+        "issue": "Issue:",
+        "question": "How should I redraft the target on this point?",
+        "rationale": "Rationale:"
+      },
+      "checks": "Checks:",
       "commentFailed": "Couldn't add the comment",
       "comparedWithReferences": "{count, plural, one {Compared with # reference document} other {Compared with # reference documents}}",
-      "decidedCount": "{decided, number}/{total, number} decided",
+      "decidedCount": "{count, number} decided",
       "decision": "Decision",
       "decisionFailed": "Couldn't record your decision",
       "decisions": {
@@ -2337,20 +2355,89 @@
       "description": "Choose an authored playbook, reference documents, or both.",
       "dismiss": "Dismiss",
       "documentChanged": "This document changed after this review.",
+      "export": {
+        "counterparty": "Send to counterparty",
+        "counterpartyFailed": "Could not export the document",
+        "counterpartyHint": "The document with your tracked changes",
+        "counterpartyUnavailable": "Open the document to export it",
+        "csv": "CSV",
+        "docx": "Word (.docx)",
+        "exporting": "Exporting",
+        "internal": "Internal memo",
+        "internalHint": "Findings, rationale and references",
+        "xlsx": "Excel (.xlsx)"
+      },
       "failed": "Document review failed",
+      "filterCoverage": "Coverage",
+      "filterDeviations": "Deviations",
+      "flag": "Flag",
+      "flaggedPositions": "{total, plural, one {{flagged, number} of # position flagged} other {{flagged, number} of # positions flagged}}",
+      "fromChat": "From chat",
       "fromThisMatter": "From this matter",
+      "history": {
+        "backToLatest": "Back to latest",
+        "decided": "{decided, number} of {total, number} decided",
+        "references": "{count, plural, one {# reference} other {# references}}"
+      },
+      "impact": {
+        "favourable": "Favourable",
+        "neutral": "No effect",
+        "notJudged": "Not judged",
+        "unfavourable": "Unfavourable"
+      },
+      "impactForSide": {
+        "favourable": "Better for {role}",
+        "neutral": "No effect for {role}",
+        "unfavourable": "Worse for {role}"
+      },
       "insertFailed": "Couldn't insert the suggested wording",
       "insertSuggestion": "Insert suggested wording",
       "insufficientEvidence": "The supplied documents do not provide enough evidence for this topic.",
+      "marginNotes": {
+        "above": "{count, number} above",
+        "below": "{count, number} below",
+        "documentNotRead": "Open the document in the main pane to pin the findings beside it.",
+        "label": "Findings beside the clauses they are about",
+        "unanchored": "Not tied to a clause"
+      },
       "newTopic": "New review topic",
+      "noChangeNeeded": "No change needed",
+      "noEditor": "Open the document to accept changes",
       "noMaterialDifferences": "No material differences found",
+      "noPassage": "No passage",
       "noPlaybooksMatch": "No matching playbooks.",
       "noReferencesFound": "No matching DOCX documents.",
+      "notCompared": "Not compared",
+      "notComparedCount": "Not compared: {count, number}",
+      "noteAdded": "Note added for the counterparty",
+      "openPlaybooks": "Open playbooks",
+      "pane": {
+        "document": "Panel: findings beside the document",
+        "margin": "Margin: findings beside their clauses",
+        "review": "Main: findings in the wide pane"
+      },
+      "passageUnavailable": "Reference text unavailable",
+      "passagesCount": "{count, plural, one {# passage} other {# passages}}",
+      "pendingCount": "{count, plural, one {# pending} other {# pending}}",
+      "perspective": {
+        "neutral": "Not specified",
+        "other": "Other…",
+        "otherPlaceholder": "Role as the document names it",
+        "title": "We act for"
+      },
       "playbookDeleted": "This playbook no longer exists; the review is kept as a record.",
       "playbookFindings": "Playbook findings",
       "playbookOutdated": "A newer approved version of this playbook exists.",
       "playbookSection": "Playbook",
       "playbookTopic": "Seeded from the playbook",
+      "presence": {
+        "absent": "No",
+        "present": "Yes"
+      },
+      "progressPositions": "{total, plural, one {{completed, number} of # position} other {{completed, number} of # positions}}",
+      "proposing": "Proposing positions… {count, number}",
+      "readOnlyRun": "Decided on this run",
+      "recommendation": "Recommendation:",
       "referenceDocument": "Reference document",
       "referenceFindings": "Reference comparison",
       "referenceLimitReached": "Reference limit reached",
@@ -2363,21 +2450,47 @@
       "reopen": "Reopen",
       "results": "Review results",
       "reviewAgain": "Run another review",
+      "reviewPositionsFirst": "Review the positions first",
       "reviewedAgainstCombined": "{count, plural, one {Reviewed against {name} and # reference document} other {Reviewed against {name} and # reference documents}}",
       "reviewing": "Review in progress…",
       "reviewingHint": "This can take up to a couple of minutes for large documents.",
       "run": "Start review",
+      "runStatus": {
+        "queued": "Queued"
+      },
+      "saveAsPlaybook": "Save as playbook",
+      "saveAsPlaybookFailed": "Could not save this review as a playbook",
+      "savedAsPlaybook": "Saved as a playbook",
       "scoreTopics": "Review these topics",
       "searchPlaybooks": "Search playbooks",
+      "showInDocument": "Show in document",
       "sizeConfirmStart": "Start review",
       "sizeConfirmTitle": "Large review",
+      "skipReason": {
+        "dealSpecificValue": "Deal-specific value",
+        "lowerWeight": "Lower commercial weight",
+        "structural": "Structural difference"
+      },
+      "standardColumn": "Standard",
+      "standardColumnFrom": "Standard ({name})",
+      "suggestionSkipped": "No longer matches the document",
+      "suggestionStaged": "Staged as a tracked change in the document",
+      "summary": {
+        "forParty": "for the {role}",
+        "noSide": "no side",
+        "proposedFromReferences": "positions proposed from the references"
+      },
+      "targetAsReference": "The reviewed document cannot be its own reference.",
+      "targetColumn": "This document",
       "targetDocument": "Target document",
       "title": "Review document",
       "topicContext": "Extra context",
       "topicContextPlaceholder": "What should the review consider for this topic?",
       "topicName": "Topic name",
       "topicsDescription": "Confirm the proposed topics, add your own, or give each topic more context before scoring.",
-      "topicsTitle": "What should this review cover?"
+      "topicsTitle": "What should this review cover?",
+      "why": "Why",
+      "whyItMatters": "Why it matters:"
     },
     "showPane": "Show pane",
     "swapViews": "Swap main and side views",
@@ -2515,6 +2628,7 @@
       "addOption": "Add option",
       "addPosition": "Add position",
       "addRule": "Rule",
+      "adoptAsIdeal": "Adopt as ideal language",
       "advanced": "Change how this works",
       "all": "All playbooks",
       "approval": {
@@ -2548,10 +2662,12 @@
       "convertToExtractDescription": "This removes the tier ladder and grading for this position. This can't be undone.",
       "convertToExtractTitle": "Convert to extract only?",
       "convertToGraded": "Add grading rules",
+      "convertToRules": "Convert to rules",
       "createPlaybook": "New playbook",
       "created": "Playbook created",
       "customizeAnswer": "Change extracted answer",
       "customizeAnswerHint": "Edit the question or answer format.",
+      "decisionLine": "{runs, plural, one {accepted {accepted, number} · dismissed {dismissed, number} · across # review} other {accepted {accepted, number} · dismissed {dismissed, number} · across # reviews}}",
       "deleteFailed": "Failed to delete playbook",
       "deletePlaybook": "Delete playbook",
       "deletePosition": "Delete position",
@@ -2607,6 +2723,7 @@
         "title": "Negotiation"
       },
       "noPositions": "No positions yet. Add the first one.",
+      "noSettledPosition": "No settled position",
       "optionPlaceholder": "Option value",
       "optionsLabel": "Options",
       "outline": "Outline",
@@ -2615,6 +2732,7 @@
       "recent": "Recently used",
       "recommended": "Recommended starters",
       "redLinePlaceholder": "Wording that is never acceptable",
+      "referenceStandard": "From the reference",
       "removeCheck": "Remove check",
       "removeIdeal": "Remove ideal language",
       "reorderPosition": "Reorder position",
@@ -2641,20 +2759,6 @@
         "viewClause": "View clause",
         "violatedRedLine": "Violates red line:"
       },
-      "risk": {
-        "complianceLabel": "Compliance",
-        "flaggedCount": "{flagged} of {total} positions flagged",
-        "notApplicableExcluded": "({count} not applicable, excluded)",
-        "riskLevel": {
-          "critical": "Critical",
-          "high": "High",
-          "low": "Low",
-          "medium": "Medium",
-          "none": "No risk"
-        },
-        "summaryTitle": "Risk summary",
-        "topIssuesTitle": "Top issues"
-      },
       "ruleNumber": "Rule {index}",
       "rulePlaceholder": "e.g. Payment terms must not exceed 30 days",
       "saveFailed": "Failed to save playbook",
@@ -2674,6 +2778,12 @@
       },
       "switchToAuto": "Generate question and format automatically",
       "switchToManual": "Customize question and answer format",
+      "termKind": {
+        "enumeration": "Enumeration",
+        "language": "Wording",
+        "parameter": "Parameter",
+        "presence": "Presence"
+      },
       "tier": {
         "acceptable": "Acceptable",
         "fallback": "Fallback",
@@ -2684,6 +2794,7 @@
       "updated": "Playbook updated",
       "updatedAt": "Updated {date}",
       "verdict": {
+        "additional": "Additional",
         "compliant": "Compliant",
         "deviation": "Deviation",
         "fallback": "Fallback",
@@ -4523,6 +4634,10 @@
           "trigger": "Initiated by",
           "webhook": "Webhook"
         },
+        "documentReview": {
+          "decided": "Decided {count, plural, one {# finding} other {# findings}} in the review of",
+          "started": "Started a review of"
+        },
         "empty": "No activity in this matter yet.",
         "filterLabel": "Filter activity",
         "filters": {
@@ -4562,12 +4677,15 @@
           "automation": "automation",
           "court": "court record",
           "document": "document",
+          "documentReview": "document review",
           "folder": "folder",
           "link": "link",
           "matter": "matter",
           "message": "message",
+          "playbook": "playbook rules",
           "task": "agenda item",
-          "team": "matter team"
+          "team": "matter team",
+          "translation": "translation"
         },
         "title": "Matter activity",
         "views": {

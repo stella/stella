@@ -8,27 +8,26 @@
  * an already active run (409).
  */
 
-import { NEUTRAL_PERSPECTIVE } from "@/components/ai-suggestions/document-review-basis.logic";
+import type { ReviewFlag } from "@stll/api-contract";
+
 import type {
   ReferenceFile,
   ReviewPerspective,
+  ReviewSkippedTerm,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import type {
   DecidedReviewFinding,
+  DocumentReviewApplicationStatus,
   DocumentReviewDecision,
   DocumentReviewDecisionCounts,
   DocumentReviewFindingRow,
+  DocumentReviewRunBasis,
   DocumentReviewRunDetail,
   DocumentReviewRunRow,
   DocumentReviewRunStatus,
   DocumentReviewRunSummary,
+  ReviewFinding,
 } from "@/components/ai-suggestions/document-review-queries";
-import type {
-  PlaybookFinding,
-  ReferenceFinding,
-  ReviewResults,
-  ReviewTopic,
-} from "@/components/ai-suggestions/playbook-review-store";
 
 /** Poll cadence while a run is still queued or executing. Fast enough that a
  *  short run feels immediate, slow enough that a long one costs little. */
@@ -104,6 +103,42 @@ export const restoredRunId = (restore: ReviewRunRestore): string | null =>
   restore.type === "none" ? null : restore.runId;
 
 /**
+ * How many result cards the wait should draw when the run behind it is not
+ * loaded yet. The history row already states how many positions the run was
+ * planned against, so the skeleton can be the right height rather than a
+ * guess that resizes under the reader.
+ */
+const REVIEW_SKELETON_CARDS_FALLBACK = 6;
+/** A long playbook would otherwise paint hundreds of grey rows below the fold;
+ *  a wait only has to fill the viewport it is standing in for. */
+const REVIEW_SKELETON_CARDS_MAX = 12;
+
+/** The columns the skeleton reads, on top of what the restore decision needs. */
+export type ReviewRunSkeletonEntry = ReviewRunHistoryEntry &
+  Pick<DocumentReviewRunSummary, "total">;
+
+type ReviewSkeletonCardCountArgs = {
+  runs: readonly ReviewRunSkeletonEntry[];
+  /** The run the wait is for, when it is already known. `null` leaves the
+   *  restore decision to name it, exactly as the facet will. */
+  runId: string | null;
+};
+
+export const reviewSkeletonCardCount = ({
+  runs,
+  runId,
+}: ReviewSkeletonCardCountArgs): number => {
+  const wanted = runId ?? restoredRunId(resolveReviewRunRestore(runs));
+  const total = runs.find((run) => run.id === wanted)?.total ?? 0;
+  // A queued run has planned nothing yet, so it states no total; there is
+  // nothing better than the fallback to draw.
+  if (total <= 0) {
+    return REVIEW_SKELETON_CARDS_FALLBACK;
+  }
+  return Math.min(total, REVIEW_SKELETON_CARDS_MAX);
+};
+
+/**
  * The run a rejected create should attach to. The server refuses a second run
  * while one is active, so that active run is the review this request asked
  * for; if it settled in the meantime, its findings are that answer. Anything
@@ -150,28 +185,36 @@ export const reviewRunView = (
   }
 };
 
+/** Where the run's position list came from. `ephemeral` is the case "Save as
+ *  playbook" exists for: positions confirmed for this run and never saved. */
+export type ReviewPlaybookProvenance =
+  DocumentReviewRunBasis["playbook"]["provenance"];
+
+/** One position exactly as the run pinned it. */
+export type PinnedPosition =
+  DocumentReviewRunBasis["playbook"]["definitionSnapshot"]["positions"]["items"][number];
+
 /**
- * The basis a run was executed against, read back from the run's own pinned
+ * What a run was measured against, read back from the run's own pinned
  * snapshot rather than from today's playbook or document names — a completed
  * review must still describe itself after either has moved on.
  */
 export type RestoredReviewBasis = {
   playbookId: string | null;
   playbookName: string;
+  provenance: ReviewPlaybookProvenance;
+  /** The confirmed position list, in the order the reviewer confirmed it. */
+  positions: readonly PinnedPosition[];
   references: ReferenceFile[];
-  /** The side the run's comparison was judged for; `neutral` for a
-   *  playbook-only run, which had no comparison. */
   perspective: ReviewPerspective;
+  /** What the proposal read and deliberately left off that list. Part of the
+   *  basis for the same reason the positions are: a checklist that silently
+   *  omits half the document reads as if the other half were compliant. */
+  skipped: readonly ReviewSkippedTerm[];
 };
 
 const pinnedReferenceFiles = (
-  references: readonly {
-    workspaceId: string;
-    workspaceName: string;
-    entityId: string;
-    fileFieldId: string;
-    name: string;
-  }[],
+  references: DocumentReviewRunBasis["references"],
 ): ReferenceFile[] =>
   references.map((reference) => ({
     workspaceId: reference.workspaceId,
@@ -184,113 +227,66 @@ const pinnedReferenceFiles = (
     fileName: reference.name,
   }));
 
-export const restoreReviewBasis = (
-  basis: DocumentReviewRunDetail["run"]["basis"],
-): RestoredReviewBasis => {
-  switch (basis.type) {
-    case "playbook":
-      return {
-        playbookId: basis.playbook.definitionId,
-        playbookName: basis.playbook.definitionSnapshot.name,
-        references: [],
-        perspective: NEUTRAL_PERSPECTIVE,
-      };
-    case "references":
-      return {
-        playbookId: null,
-        playbookName: "",
-        references: pinnedReferenceFiles(basis.references),
-        perspective: basis.perspective,
-      };
-    case "combined":
-      return {
-        playbookId: basis.playbook.definitionId,
-        playbookName: basis.playbook.definitionSnapshot.name,
-        references: pinnedReferenceFiles(basis.references),
-        perspective: basis.perspective,
-      };
-    default:
-      basis satisfies never;
-      return {
-        playbookId: null,
-        playbookName: "",
-        references: [],
-        perspective: NEUTRAL_PERSPECTIVE,
-      };
-  }
-};
+export const restoreReviewBasis = ({
+  basis,
+  skipped,
+}: Pick<DocumentReviewRunRow, "basis" | "skipped">): RestoredReviewBasis => ({
+  playbookId: basis.playbook.definitionId,
+  playbookName: basis.playbook.definitionSnapshot.name,
+  provenance: basis.playbook.provenance,
+  positions: basis.playbook.definitionSnapshot.positions.items,
+  references: pinnedReferenceFiles(basis.references),
+  perspective: basis.perspective,
+  skipped,
+});
 
-/** What a reviewer decided about one of the run's findings, kept apart from
- *  the engine payload the cards render: the decision belongs to the row, not
- *  to the judgment the model produced. */
-export type ReviewFindingDecisionRow = Pick<
-  DocumentReviewFindingRow,
-  "id" | "topicId" | "checkKind" | "decision" | "applicationStatus"
->;
+/**
+ * One finding as the run holds it: the engine's judgment, the row identity a
+ * decision is written against, and the DOCX suggestion its fix was staged as.
+ *
+ * The row and the payload are joined here, once, so no surface downstream has
+ * to re-pair them — a run holds exactly one finding per confirmed position.
+ */
+export type RestoredReviewFinding = {
+  id: DocumentReviewFindingRow["id"];
+  positionId: string;
+  title: string;
+  decision: DocumentReviewDecision;
+  /** The reviewer flags on this finding: the same vocabulary the files table's
+   *  cell flags use, set beside the decision rather than instead of it. */
+  flags: readonly ReviewFlag[];
+  applicationStatus: DocumentReviewApplicationStatus;
+  /** The staged DOCX suggestion carrying this finding's fix, when it has one. */
+  suggestionId: string | null;
+  finding: ReviewFinding;
+};
 
 export type RestoredReviewRun = {
   basis: RestoredReviewBasis;
-  topics: ReviewTopic[];
-  results: ReviewResults;
-  decisions: ReviewFindingDecisionRow[];
+  findings: RestoredReviewFinding[];
 };
 
 /**
- * A persisted run rendered as the result join the facet already speaks. The
- * finding payloads are the engine shapes verbatim, so they need no mapping;
- * what this decides is the two states the join distinguishes — a check kind
- * that never ran (`null`) versus one that ran and found nothing (`[]`) — and
- * which confirmed topics actually produced a judgment.
+ * A persisted run rendered as the join every review surface reads. The finding
+ * payload is the engine shape verbatim, so it needs no mapping; what this does
+ * is pair it with its row.
  */
 export const restoreReviewRun = ({
   run,
   findings,
-}: DocumentReviewRunDetail): RestoredReviewRun => {
-  const playbook: PlaybookFinding[] = [];
-  const references: ReferenceFinding[] = [];
-  const decisions: ReviewFindingDecisionRow[] = [];
-  const judgedTopicIds = new Set<string>();
-  for (const finding of findings) {
-    judgedTopicIds.add(finding.topicId);
-    decisions.push({
-      id: finding.id,
-      topicId: finding.topicId,
-      checkKind: finding.checkKind,
-      decision: finding.decision,
-      applicationStatus: finding.applicationStatus,
-    });
-    switch (finding.payload.checkKind) {
-      case "playbook":
-        playbook.push(finding.payload.finding);
-        break;
-      case "reference":
-        references.push(finding.payload.finding);
-        break;
-      default:
-        finding.payload satisfies never;
-        break;
-    }
-  }
-
-  const basis = restoreReviewBasis(run.basis);
-  const ranPlaybookCheck = basis.playbookId !== null;
-  const ranReferenceCheck = basis.references.length > 0;
-
-  return {
-    basis,
-    // Only topics the run actually judged: a confirmed topic whose position
-    // carries no answerable question is planned out of the run server-side,
-    // and a topic with no result at all is what the join treats as drift.
-    topics: run.topics.filter(
-      (topic) => topic.included && judgedTopicIds.has(topic.topicId),
-    ),
-    results: {
-      playbook: ranPlaybookCheck ? playbook : null,
-      references: ranReferenceCheck ? references : null,
-    },
-    decisions,
-  };
-};
+}: DocumentReviewRunDetail): RestoredReviewRun => ({
+  basis: restoreReviewBasis(run),
+  findings: findings.map((row) => ({
+    id: row.id,
+    positionId: row.positionId,
+    title: row.positionTitle,
+    decision: row.decision,
+    flags: row.flags,
+    applicationStatus: row.applicationStatus,
+    suggestionId: row.suggestionId,
+    finding: row.payload.finding,
+  })),
+});
 
 /**
  * Whether a decision settles a finding. Total over the vocabulary, so a new
@@ -336,7 +332,7 @@ const tallyReviewDecisions = (
 };
 
 /**
- * Fold recorded decisions back into the cached run detail.
+ * Fold a recorded decision back into the cached run detail.
  *
  * The endpoint answers with the row it wrote, so the cache is updated from
  * that answer instead of being refetched: a decision changes one field on one
@@ -344,29 +340,28 @@ const tallyReviewDecisions = (
  * for nothing. The counts are recomputed from the updated rows so the header
  * cannot disagree with the cards below it.
  */
-export const applyFindingDecisions = (
+export const applyFindingDecision = (
   detail: DocumentReviewRunDetail | undefined,
-  decided: readonly DecidedReviewFinding[],
+  decided: DecidedReviewFinding,
 ): DocumentReviewRunDetail | undefined => {
   if (detail === undefined) {
     return undefined;
   }
-  const decidedById = new Map(decided.map((row) => [row.id, row]));
   const findings = detail.findings.map((finding) => {
-    const update = decidedById.get(finding.id);
     // A row that belongs to another run is not this cache entry's business:
     // finding ids are unique, so this only guards a mismatched write.
-    if (update === undefined || update.runId !== detail.run.id) {
+    if (finding.id !== decided.id || decided.runId !== detail.run.id) {
       return finding;
     }
     return {
       ...finding,
-      decision: update.decision,
-      decidedBy: update.decidedBy,
-      decidedAt: update.decidedAt,
-      applicationStatus: update.applicationStatus,
-      appliedBy: update.appliedBy,
-      appliedAt: update.appliedAt,
+      decision: decided.decision,
+      flags: decided.flags,
+      decidedBy: decided.decidedBy,
+      decidedAt: decided.decidedAt,
+      applicationStatus: decided.applicationStatus,
+      appliedBy: decided.appliedBy,
+      appliedAt: decided.appliedAt,
     };
   });
   return {

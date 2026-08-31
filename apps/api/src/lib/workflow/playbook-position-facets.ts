@@ -13,13 +13,33 @@ import { tConditionNode } from "@/api/lib/conditions/contract";
 // ── Severity ──────────────────────────────────────────
 // `blocker` is the walk-away / non-negotiable tier; the rest are the
 // conventional 3-tier review scale.
-export const positionSeveritySchema = t.UnionEnum([
+export const POSITION_SEVERITIES = [
   "blocker",
   "high",
   "medium",
   "low",
-]);
+] as const;
+export const positionSeveritySchema = t.UnionEnum([...POSITION_SEVERITIES]);
 export type PositionSeverity = Static<typeof positionSeveritySchema>;
+
+// ── Term kind: what shape of term the position is about ──
+// A position is one reviewable term, and its kind decides how comparing it is
+// expressed, shown and edited:
+//   - `parameter`: one stated quantity (a period, a cap, a threshold, a rate).
+//   - `enumeration`: a list-shaped definition or a set of heads.
+//   - `presence`: a defined term or protection that either exists or does not.
+//   - `language`: a standard of wording with no parameter behind it.
+// This is the same closed vocabulary as `ReviewDeltaKind`, and deliberately so:
+// grading a position may not answer it with a different kind of difference
+// (`review-delta.ts` derives its list from this one).
+export const POSITION_TERM_KINDS = [
+  "parameter",
+  "enumeration",
+  "presence",
+  "language",
+] as const;
+export const positionTermKindSchema = t.UnionEnum([...POSITION_TERM_KINDS]);
+export type PositionTermKind = Static<typeof positionTermKindSchema>;
 
 // ── GRADE: how the extracted answer is judged ─────────
 export const positionRuleSchema = t.Union([

@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import createDocxSuggestions from "@/api/handlers/docx-suggestions/create";
-import { validateDocxSuggestionOperations } from "@/api/handlers/docx-suggestions/operation-validation";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -20,36 +19,6 @@ const ENTITY_ID = toSafeId<"entity">("33333333-3333-4333-8333-333333333333");
 const THREAD_ID = toSafeId<"chatThread">(
   "44444444-4444-4444-8444-444444444444",
 );
-
-describe("DOCX suggestion operation validation", () => {
-  test("returns folio's validated operation output, not the untrusted input object", () => {
-    const inputOperation = {
-      id: "suggestion-1",
-      type: "replaceInBlock" as const,
-      blockId: "block-1",
-      find: "before",
-      replace: "after",
-    };
-    const operations = validateDocxSuggestionOperations([inputOperation]);
-
-    expect(operations).toEqual([inputOperation]);
-    expect(operations?.at(0)).not.toBe(inputOperation);
-  });
-
-  test("rejects malformed operations before persistence", () => {
-    expect(
-      validateDocxSuggestionOperations([
-        {
-          id: "suggestion-1",
-          type: "replaceInBlock",
-          blockId: "block-1",
-          find: null,
-          replace: "after",
-        },
-      ]),
-    ).toBeUndefined();
-  });
-});
 
 describe("DOCX suggestion creation", () => {
   test("records the origin thread's contributing matters on every row", async () => {

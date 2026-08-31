@@ -225,6 +225,13 @@ export {
   VIEW_SORTS_MAX,
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "./limits";
+export {
+  isReviewFlag,
+  REVIEW_FLAG,
+  REVIEW_FLAGS,
+  REVIEW_FLAGS_MAX_ITEMS,
+} from "./review-flags";
+export type { ReviewFlag } from "./review-flags";
 export { GLOBAL_SEARCH_RESULT_TYPES } from "./search";
 export type { GlobalSearchResultType } from "./search";
 export {
@@ -687,7 +694,11 @@ export const MCP_APP_FRAME_TITLE_MAX_CHARS = 200;
 export const MCP_APP_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app" as const;
 export const DOCUMENT_REVIEW_LIMITS = {
   referencesMax: 3,
-  topicsMax: 200,
+  positionsMax: 200,
+  /** Passage texts one read may ask for: a checklist at the proposal cap,
+   *  twelve passages each, with room over. Shared so the client batches by
+   *  the same number the endpoint refuses past. */
+  passageReadMax: 400,
 } as const;
 /**
  * Where a playbook run's results land. Shared so the request body's accepted

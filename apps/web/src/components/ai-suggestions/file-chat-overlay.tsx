@@ -59,6 +59,7 @@ import {
 } from "@/components/ai-suggestions/host";
 import { isNoopReviewOperation } from "@/components/ai-suggestions/review-operation-utils";
 import {
+  REVIEW_SUGGESTION_ORIGIN,
   REVIEW_UNSPECIFIED_AREA,
   useReviewStore,
 } from "@/components/ai-suggestions/review-store";
@@ -623,11 +624,13 @@ const queueReviewSuggestions = ({
         return [];
       }
       queuedIds.push(reportId);
+      const blockLabel = labelsById.get(folioOperationBlockId(folio));
       const base: ReviewSuggestion = {
         id,
+        origin: REVIEW_SUGGESTION_ORIGIN.chat,
         blockId: folioOperationBlockId(folio),
         type: folio.type,
-        summary: summarizeOperation(folio),
+        summary: summarizeOperation(folio, blockLabel),
         preview,
         severity: inputOperationSeverity(input),
         area: inputOperationArea(input),
@@ -638,9 +641,8 @@ const queueReviewSuggestions = ({
         pendingOperation: folio,
         snapshot,
       };
-      const label = labelsById.get(folioOperationBlockId(folio));
-      if (label !== undefined) {
-        base.blockLabel = label;
+      if (blockLabel !== undefined) {
+        base.blockLabel = blockLabel;
       }
       const folioComment = folioOperationComment(folio);
       if (folioComment) {
@@ -652,17 +654,17 @@ const queueReviewSuggestions = ({
 
   useReviewStore.getState().appendSuggestions(entityId, items);
 
-  // Auto-switch the inspector's tab for this entity to the
-  // Suggestions facet with a teaching pulse, so the user
-  // immediately sees where the proposals landed. Locating the tab
-  // by entityId rather than by tab id keeps the chat overlay
-  // ignorant of inspector internals.
+  // Auto-switch the inspector's tab for this entity to the document-review
+  // facet with a teaching pulse, so the user immediately sees where the
+  // proposals landed — they list there under "From chat", beside whatever a
+  // review run found. Locating the tab by entityId rather than by tab id keeps
+  // the chat overlay ignorant of inspector internals.
   const inspectorState = useInspectorTabsStore.getState();
   const tab = inspectorState.tabs.find(
     (candidate) => candidate.type === "pdf" && candidate.entityId === entityId,
   );
   if (tab) {
-    inspectorState.setFileFacet(tab.id, "suggestions", { pulse: true });
+    inspectorState.setFileFacet(tab.id, "playbook", { pulse: true });
   }
 
   // `items` are the suggestions actually appended to the store (client

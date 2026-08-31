@@ -1,11 +1,14 @@
+import { panic } from "better-result";
 import { createHash } from "node:crypto";
 
 import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
 
 import {
   type AuditAction,
+  AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   type AuditActivityCategory,
+  type AuditResourceType,
 } from "@/api/lib/audit-log";
 import { isUuid } from "@/api/lib/custom-schema";
 import type { TimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -103,6 +106,149 @@ export const parseFieldAuditResourceId = (
     type: "cell",
   };
 };
+
+/**
+ * Where a row's target comes from, per audited resource type.
+ *
+ * `null` means the resource never belongs in a matter's activity: the feed
+ * filters those out rather than rendering them under a catch-all label.
+ */
+export type ActivityTargetSource =
+  | "automation"
+  | "court"
+  | "documentReviewRun"
+  | "entity"
+  | "entityVersion"
+  | "field"
+  | "playbook"
+  | "team"
+  | "translationRun"
+  | "userFile"
+  | "workspace";
+
+/**
+ * Total over `AuditResourceType`: a new audited resource does not compile
+ * until it is either given a named target or excluded from the feed. It
+ * replaces an if-chain whose fall-through rendered every unlisted resource as
+ * "automation", so each new resource type silently arrived as an unnamed
+ * automation row.
+ */
+export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
+  // Audited against the entity the obligation governs, so it reads as that
+  // task rather than as a separate record.
+  work_obligation: "entity",
+  entity: "entity",
+  entity_version: "entityVersion",
+  field: "field",
+  user_file: "userFile",
+  workspace: "workspace",
+  workspace_member: "team",
+  workspace_contact: "team",
+  case_law_matter_link: "court",
+  case_law_decision_annotation: "court",
+  bilingual_translation_run: "translationRun",
+  document_translation_run: "translationRun",
+  document_review_run: "documentReviewRun",
+  flow_run: "automation",
+  playbook: "playbook",
+  // Housekeeping and organization-level records: audited for compliance,
+  // never part of what happened in a matter.
+  agent_skill: null,
+  agent_skill_comment: null,
+  agent_skill_proposal: null,
+  ai_memory: null,
+  announcement: null,
+  audit_log: null,
+  billing_code: null,
+  chat_file: null,
+  chat_message: null,
+  chat_thread: null,
+  clause: null,
+  clause_category: null,
+  clause_template_link: null,
+  clause_variant: null,
+  contact: null,
+  contact_directory: null,
+  desktop_edit_session: null,
+  document_type: null,
+  expense: null,
+  flow_definition: null,
+  folio_collab_room: null,
+  invoice: null,
+  legal_list: null,
+  legal_list_generation: null,
+  legal_list_item: null,
+  machine_api_key: null,
+  mcp_gateway_tool: null,
+  organization_settings: null,
+  property: null,
+  rate_entry: null,
+  rate_table: null,
+  report_export: null,
+  saved_search: null,
+  signal: null,
+  style_set: null,
+  template: null,
+  time_entry: null,
+  usage_allocation: null,
+  usage_entitlement: null,
+  usage_event: null,
+  view: null,
+  view_template: null,
+} as const satisfies Record<AuditResourceType, ActivityTargetSource | null>;
+
+/** The allow-list the feed query filters on: every resource type with a named target. */
+export const FEED_ACTIVITY_RESOURCE_TYPES = Object.values(
+  AUDIT_RESOURCE_TYPE,
+).filter(
+  (resourceType) =>
+    ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE[resourceType] !== null,
+);
+
+const isAuditResourceType = (value: string): value is AuditResourceType =>
+  value in ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE;
+
+/**
+ * The row's target source. A miss means a row the allow-list should have
+ * filtered reached the projection, which is a bug rather than a row to label
+ * generically.
+ */
+export const activityTargetSource = (
+  resourceType: string,
+): ActivityTargetSource => {
+  const source = isAuditResourceType(resourceType)
+    ? ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE[resourceType]
+    : null;
+  if (source === null) {
+    return panic(`Activity row has no target source: ${resourceType}`);
+  }
+  return source;
+};
+
+/** The actions the feed narrates; the rest are access records, not activity. */
+export type VisibleActivityAction =
+  | typeof AUDIT_ACTION.CANCEL
+  | typeof AUDIT_ACTION.CREATE
+  | typeof AUDIT_ACTION.DELETE
+  | typeof AUDIT_ACTION.EXECUTE
+  | typeof AUDIT_ACTION.REVIEW
+  | typeof AUDIT_ACTION.UPDATE;
+
+/** Total over `AuditAction`, so a new action must be narrated or excluded. */
+export const VISIBLE_ACTIVITY_ACTION_BY_ACTION = {
+  access: null,
+  cancel: AUDIT_ACTION.CANCEL,
+  create: AUDIT_ACTION.CREATE,
+  delete: AUDIT_ACTION.DELETE,
+  download: null,
+  execute: AUDIT_ACTION.EXECUTE,
+  review: AUDIT_ACTION.REVIEW,
+  update: AUDIT_ACTION.UPDATE,
+} as const satisfies Record<AuditAction, VisibleActivityAction | null>;
+
+export const VISIBLE_ACTIVITY_ACTIONS = Object.values(
+  VISIBLE_ACTIVITY_ACTION_BY_ACTION,
+).filter((action): action is VisibleActivityAction => action !== null);
 
 export type LegacyActivityCategory =
   | "automation"

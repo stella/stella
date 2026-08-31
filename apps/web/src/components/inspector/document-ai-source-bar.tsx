@@ -13,6 +13,10 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { cn } from "@stll/ui/utils";
 
+import {
+  activeDocxKey,
+  useActiveDocxStore,
+} from "@/components/ai-suggestions/active-docx-store";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
@@ -373,6 +377,8 @@ export const DocumentAiSourceBar = ({
         renderCitation: ({ citation, key }) => (
           <SourceCitationChip
             citation={citation}
+            entityId={activeTab.entityId}
+            fieldId={activeTab.id}
             key={key}
             onClick={() => handleCitationClick(citation)}
           />
@@ -475,113 +481,43 @@ export const DocumentAiSourceBar = ({
 };
 
 /**
- * Resolve the page for a folio citation by walking the editor's
- * two parallel DOM trees:
+ * Resolve the page for a folio block via the editor registered for
+ * `(entityId, fieldId)` — the same registry the Suggestions facet uses
+ * to reach a mounted-but-out-of-tree editor. Scoped per editor rather
+ * than a document-wide DOM query: a workspace can have several DOCX
+ * editors mounted, and a chip in one tab must not read another tab's
+ * geometry.
  *
- * - `.paged-editor__hidden-pm` is the ProseMirror source tree.
- *   Each paragraph carries `data-para-id` (the Word `w14:paraId`
- *   we store in the citation) but no page metadata — it lives
- *   outside the paginated layout.
- * - `.layout-page` is the rendered paginated tree. Each visible
- *   paragraph is tagged `data-block-id="block-N"` (sequential, NOT
- *   the paraId) and the enclosing page carries
- *   `data-page-number`.
- *
- * The two trees are walked in the same order, so the Nth paraId
- * paragraph in the PM tree corresponds to the Nth `block-N` in
- * the layout. We use that ordinal as the bridge.
- *
- * Returns `null` while the editor is still mounting or if the
- * block lives on a page that hasn't been paginated yet (folio
- * lays out lazily; later pages only enter the DOM after a scroll
- * to them).
+ * `getBlockRect` returns `null` while the editor is still mounting or
+ * while the block's page hasn't been painted yet (folio lays out
+ * lazily). `onLayoutChange` fires after painted pages change, so the
+ * chip catches up whenever the block actually lands, including after
+ * a `scrollToBlock` triggers a lazy layout pass.
  */
-const getPageNumberFromElement = (element: Element): number | null => {
-  const pageEl = element.closest<HTMLElement>("[data-page-number]");
-  const raw = pageEl?.dataset["pageNumber"] ?? null;
-  const parsed = raw === null ? Number.NaN : Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
-const findFolioBlockPage = (blockId: string): number | null => {
-  // CSS.escape is universally available in modern browsers we
-  // support; the previous "manually escape only quotes" fallback
-  // failed to escape `\`, `]`, or other CSS identifier specials,
-  // which CodeQL correctly flagged as incomplete encoding.
-  const escaped = CSS.escape(blockId);
-
-  // paraId path: find the paragraph in the PM source tree, take
-  // its ordinal, look up the same ordinal in the layout tree.
-  const pmParagraph = document.querySelector(
-    `.paged-editor__hidden-pm [data-para-id="${escaped}"]`,
+const useFolioBlockPage = (
+  entityId: string,
+  fieldId: string,
+  blockId: string,
+): number | null => {
+  const editorRef = useActiveDocxStore(
+    (s) => s.byKey[activeDocxKey(entityId, fieldId)]?.registration.editorRef,
   );
-  if (pmParagraph) {
-    const pmParagraphs = Array.from(
-      document.querySelectorAll(".paged-editor__hidden-pm [data-para-id]"),
-    );
-    const ordinal = pmParagraphs.indexOf(pmParagraph);
-    if (ordinal !== -1) {
-      const layoutBlocks = document.querySelectorAll(
-        ".layout-page [data-block-id]",
-      );
-      const layoutBlock = layoutBlocks[ordinal];
-      if (layoutBlock) {
-        const page = getPageNumberFromElement(layoutBlock);
-        if (page !== null) {
-          return page;
-        }
-      }
-    }
-  }
-
-  // Direct fallback for `seq-NNNN` ids — those map to layout
-  // block ids by extracting the numeric suffix.
-  const seqMatch = /^seq-(?<seq>\d+)$/u.exec(blockId);
-  if (seqMatch) {
-    const direct = document.querySelector(
-      `.layout-page [data-block-id="block-${Number.parseInt(seqMatch.groups?.["seq"] ?? "0", 10)}"]`,
-    );
-    if (direct) {
-      const page = getPageNumberFromElement(direct);
-      if (page !== null) {
-        return page;
-      }
-    }
-  }
-
-  return null;
-};
-
-/**
- * Resolve the page for a folio block. Folio renders virtual pages —
- * a block on page 8 is only added to the DOM when the editor
- * paginates that far. Listen via MutationObserver instead of a
- * bounded retry loop so the chip catches up whenever the block
- * actually lands, including after a `scrollToBlock` triggers a
- * lazy layout pass.
- */
-const useFolioBlockPage = (blockId: string): number | null => {
-  const [page, setPage] = useState<number | null>(() =>
-    findFolioBlockPage(blockId),
-  );
+  const [page, setPage] = useState<number | null>(null);
   useExternalSyncEffect(() => {
-    setPage(findFolioBlockPage(blockId));
-    const observer = new MutationObserver(() => {
-      const next = findFolioBlockPage(blockId);
-      // Only set when changed so we don't churn React state on
-      // every unrelated DOM tick the editor emits during typing.
+    const editor = editorRef?.current ?? null;
+    if (editor === null) {
+      setPage(null);
+      return undefined;
+    }
+    const read = () => {
+      const next = editor.getBlockRect(blockId)?.page ?? null;
+      // Only set when changed so we don't churn React state on every
+      // unrelated layout pass the editor emits during typing.
       setPage((prev) => (prev === next ? prev : next));
-    });
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["data-page-number", "data-para-id", "data-block-id"],
-    });
-    return () => {
-      observer.disconnect();
     };
-  }, [blockId]);
+    read();
+    return editor.onLayoutChange(read);
+  }, [blockId, editorRef]);
   return page;
 };
 
@@ -595,9 +531,13 @@ const UNVERIFIED_CITATION_CHIP_CLASS =
 
 const SourceCitationChip = ({
   citation,
+  entityId,
+  fieldId,
   onClick,
 }: {
   citation: Citation;
+  entityId: string;
+  fieldId: string;
   onClick: () => void;
 }) => {
   const t = useTranslations();
@@ -627,6 +567,8 @@ const SourceCitationChip = ({
   return (
     <DocxSourceCitationChip
       blockId={citation.blockId}
+      entityId={entityId}
+      fieldId={fieldId}
       onClick={onClick}
       tooltip={citation.text.trim() || undefined}
     />
@@ -635,14 +577,18 @@ const SourceCitationChip = ({
 
 const DocxSourceCitationChip = ({
   blockId,
+  entityId,
+  fieldId,
   onClick,
   tooltip,
 }: {
   blockId: string;
+  entityId: string;
+  fieldId: string;
   onClick: () => void;
   tooltip: string | undefined;
 }) => {
-  const page = useFolioBlockPage(blockId);
+  const page = useFolioBlockPage(entityId, fieldId, blockId);
   // Page resolution races the editor's paginator on first mount —
   // fall back to an em dash so the chip stays the same width and
   // the layout doesn't reshuffle when the number lands.
