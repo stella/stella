@@ -240,8 +240,22 @@ if (!databaseUrl || !runPostgresTests) {
       const releaseWriter = Promise.withResolvers<undefined>();
       const writerLocked = Promise.withResolvers<undefined>();
       const activationAttempted = Promise.withResolvers<undefined>();
+      let targetGenerationCreated = false;
 
       try {
+        const existingTarget = (
+          await writerDb
+            .select({ generation: corpusIndexGenerations.generation })
+            .from(corpusIndexGenerations)
+            .where(
+              and(
+                eq(corpusIndexGenerations.family, target.family),
+                eq(corpusIndexGenerations.generation, target.generation),
+              ),
+            )
+            .limit(1)
+        ).at(0);
+        expect(existingTarget).toBeUndefined();
         await writerDb.insert(caseLawSources).values({
           id: sourceId,
           adapterKey: `projection-activation-${suffix}`,
@@ -297,7 +311,9 @@ if (!databaseUrl || !runPostgresTests) {
 
         releaseWriter.resolve(undefined);
         await writer;
-        expect(await activation).toEqual({ epoch: 1n, created: true });
+        const activationResult = await activation;
+        targetGenerationCreated = true;
+        expect(activationResult).toEqual({ epoch: 1n, created: true });
         expect(
           await writerDb.transaction(
             async (tx) =>
@@ -306,16 +322,16 @@ if (!databaseUrl || !runPostgresTests) {
         ).toEqual({ epoch: 1n, changed: false, generationCount: 1 });
       } finally {
         releaseWriter.resolve(undefined);
+        const createdGenerations = targetGenerationCreated
+          ? [legacyGeneration, target.generation]
+          : [legacyGeneration];
         await writerDb
           .update(corpusIndexGenerations)
           .set({ status: "retired" })
           .where(
             and(
               eq(corpusIndexGenerations.family, "case_law"),
-              inArray(corpusIndexGenerations.generation, [
-                legacyGeneration,
-                "case_law_v5",
-              ]),
+              inArray(corpusIndexGenerations.generation, createdGenerations),
             ),
           );
         await writerDb
@@ -332,10 +348,7 @@ if (!databaseUrl || !runPostgresTests) {
           .where(
             and(
               eq(corpusIndexGenerations.family, "case_law"),
-              inArray(corpusIndexGenerations.generation, [
-                legacyGeneration,
-                "case_law_v5",
-              ]),
+              inArray(corpusIndexGenerations.generation, createdGenerations),
             ),
           );
         await Promise.all([writerClient.close(), activationClient.close()]);
