@@ -28,8 +28,8 @@ describe("resolveCorpusStorageMode", () => {
 describe("corpusStorageInvariantViolation", () => {
   const deployed = {
     corpusBucket: "corpus",
-    corpusIndexingEnabled: true,
     isDev: false,
+    projectionOwner: "embedded",
   } as const;
 
   test("canonical without the corpus-index provider is rejected", () => {
@@ -55,34 +55,21 @@ describe("corpusStorageInvariantViolation", () => {
       corpusStorageInvariantViolation({
         ...deployed,
         mode: "dual-write",
+        projectionOwner: undefined,
         searchProvider: "pg-fts",
       }),
     ).toBeNull();
   });
 
-  test("canonical without the corpus indexer is rejected", () => {
-    // The corpus index is the only projection a canonical row can reach,
-    // and the indexer loop is what fills it.
+  test("canonical requires an explicit projection owner", () => {
     expect(
       corpusStorageInvariantViolation({
         ...deployed,
         mode: "canonical",
+        projectionOwner: undefined,
         searchProvider: "corpus-index",
-        corpusIndexingEnabled: false,
       }),
-    ).toContain("CORPUS_INDEXING_ENABLED=true");
-  });
-
-  test("dual-write does not need the corpus indexer", () => {
-    // Its rows keep their tsvector, so pg-fts still serves them.
-    expect(
-      corpusStorageInvariantViolation({
-        ...deployed,
-        mode: "dual-write",
-        searchProvider: "pg-fts",
-        corpusIndexingEnabled: false,
-      }),
-    ).toBeNull();
+    ).toContain("CORPUS_PROJECTION_OWNER");
   });
 
   test("canonical needs the corpus bucket exactly as dual-write does", () => {
@@ -113,8 +100,8 @@ describe("corpusStorageInvariantViolation", () => {
     expect(
       corpusStorageInvariantViolation({
         mode: "off",
+        projectionOwner: undefined,
         searchProvider: "pg-fts",
-        corpusIndexingEnabled: false,
         corpusBucket: undefined,
         isDev: false,
       }),
