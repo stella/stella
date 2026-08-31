@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq, ilike, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { normalizeSearchText } from "@stll/text-normalize";
+import { arabicNormalize } from "@stll/text-normalize";
 
 import { contacts } from "@/api/db/schema";
 import { contactTypeSchema } from "@/api/handlers/contacts/schema";
@@ -30,7 +30,7 @@ const searchContacts = createSafeRootHandler(
     query: searchContactsQuerySchema,
   },
   async function* ({ safeDb, session, query }) {
-    const normalized = normalizeSearchText(query.q);
+    const normalized = arabicNormalize(query.q);
     if (normalized.length === 0) {
       return Result.ok({ items: [] });
     }

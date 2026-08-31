@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type {
   CSSProperties,
   MouseEvent as ReactMouseEvent,
@@ -80,6 +86,7 @@ import {
 } from "../telemetry/desktop-telemetry";
 import {
   adjacentClipboardIndex,
+  CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
   clipboardPointerMoved,
@@ -287,7 +294,7 @@ const ClipboardCard = ({
   );
   let previewContent: ReactNode = (
     <div className={previewClassName} dir="auto">
-      {item.plainText}
+      {item.plainText.slice(0, CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS)}
     </div>
   );
   if (rendersHtml) {
@@ -303,7 +310,7 @@ const ClipboardCard = ({
     );
   }
   if (query) {
-    const searchPreview = clipboardSearchPreviewText(item.plainText, query);
+    const searchPreview = clipboardSearchPreviewText(item, query);
     const highlightedText = highlightClipboardText(searchPreview.text, query);
     previewContent = (
       <div className={previewClassName} dir="auto">
@@ -1174,9 +1181,15 @@ const ClipboardApp = () => {
   )
     ? selectedGroupId
     : null;
+  // Typing must never wait on filtering and card re-render: the rail catches
+  // up in a deferred render that further keystrokes interrupt. Clearing stays
+  // synchronous (the empty filter is free) so the reopen reset can focus the
+  // newest card in the same flushSync commit.
+  const deferredQuery = useDeferredValue(query);
+  const filterQuery = query === "" ? query : deferredQuery;
   const filteredItems = filterClipboardItems(
     snapshot.items,
-    query,
+    filterQuery,
     activeGroupId,
   );
   const groupsById = new Map(snapshot.groups.map((group) => [group.id, group]));
@@ -1189,6 +1202,19 @@ const ClipboardApp = () => {
   );
   const activeItem = filteredItems.at(activeIndex);
   const activeItemId = activeItem?.id;
+  // Copy and delete act on the list the current query produces: while the
+  // deferred render is pending the rail still shows the previous query's
+  // list, and acting on it would hand over the wrong clip. Resolved on
+  // demand inside the key handlers so the keystroke render itself never
+  // pays for a filter; identical to the rendered list once settled.
+  const resolveActionItems = () =>
+    query === filterQuery
+      ? filteredItems
+      : filterClipboardItems(snapshot.items, query, activeGroupId);
+  const resolveActionItem = () => {
+    const items = resolveActionItems();
+    return items.at(Math.min(selectedIndex, Math.max(0, items.length - 1)));
+  };
   const railViewport = useRailViewport(
     timelineRailRef,
     filteredItems.length > 0,
@@ -1271,7 +1297,7 @@ const ClipboardApp = () => {
       snapshot.groups.length % CLIPBOARD_GROUP_COLORS.length,
     ) ?? "gray";
   let emptyStateTitle = t("emptyTitle");
-  if (query) {
+  if (filterQuery) {
     emptyStateTitle = t("noResults");
   } else if (activeGroupId) {
     emptyStateTitle = t("groupEmpty");
@@ -1477,7 +1503,7 @@ const ClipboardApp = () => {
   }, [
     activeGroupId,
     applySnapshotCommand,
-    query,
+    filterQuery,
     railWindow.end,
     railWindow.start,
     snapshot.groups,
@@ -1538,10 +1564,11 @@ const ClipboardApp = () => {
       return;
     }
     if (primaryModifier) {
-      const quickIndex = quickCopyIndex(event.key, filteredItems.length);
+      const actionItems = resolveActionItems();
+      const quickIndex = quickCopyIndex(event.key, actionItems.length);
       if (quickIndex !== null) {
         event.preventDefault();
-        const item = filteredItems.at(quickIndex);
+        const item = actionItems.at(quickIndex);
         if (item) {
           copyItem(item);
         }
@@ -1554,19 +1581,25 @@ const ClipboardApp = () => {
         isComposing: event.isComposing,
         key: event.key,
       };
-      if (activeItem && shouldCopyFromClipboardInput(inputKey)) {
-        event.preventDefault();
-        copyItem(activeItem);
+      if (shouldCopyFromClipboardInput(inputKey)) {
+        const item = resolveActionItem();
+        if (item) {
+          event.preventDefault();
+          copyItem(item);
+        }
       } else if (activeItem && shouldReturnToTimelineFromInput(inputKey)) {
         event.preventDefault();
         selectIndex(activeIndex);
       }
       return;
     }
-    if (isClipboardCopyShortcut(event) && activeItem) {
-      event.preventDefault();
-      copyItem(activeItem);
-      return;
+    if (isClipboardCopyShortcut(event)) {
+      const item = resolveActionItem();
+      if (item) {
+        event.preventDefault();
+        copyItem(item);
+        return;
+      }
     }
     if (
       event.target instanceof HTMLTextAreaElement ||
@@ -1609,14 +1642,20 @@ const ClipboardApp = () => {
       navigate(keyAction);
       return;
     }
-    if (event.key === "Enter" && activeItem) {
-      event.preventDefault();
-      copyItem(activeItem);
+    if (event.key === "Enter") {
+      const item = resolveActionItem();
+      if (item) {
+        event.preventDefault();
+        copyItem(item);
+      }
       return;
     }
-    if ((event.key === "Backspace" || event.key === "Delete") && activeItem) {
-      event.preventDefault();
-      applySnapshotCommand("clipboard_delete_item", { id: activeItem.id });
+    if (event.key === "Backspace" || event.key === "Delete") {
+      const item = resolveActionItem();
+      if (item) {
+        event.preventDefault();
+        applySnapshotCommand("clipboard_delete_item", { id: item.id });
+      }
     }
   };
 
@@ -1725,14 +1764,16 @@ const ClipboardApp = () => {
         {filteredItems.length === 0 ? (
           <div className="text-foreground absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
             <span className="bg-foreground/6 text-foreground/70 grid size-11 place-items-center rounded-2xl shadow-sm/5">
-              {query ? (
+              {filterQuery ? (
                 <SearchIcon aria-hidden="true" className="size-5" />
               ) : (
                 <ClipboardIcon aria-hidden="true" className="size-5" />
               )}
             </span>
             <p className="text-foreground/82 text-wrap-balance max-w-sm text-sm font-medium">
-              {query || activeGroupId ? emptyStateTitle : t("emptyDescription")}
+              {filterQuery || activeGroupId
+                ? emptyStateTitle
+                : t("emptyDescription")}
             </p>
           </div>
         ) : (
@@ -1787,7 +1828,7 @@ const ClipboardApp = () => {
                       })
                     }
                     onSelect={setSelectedIndex}
-                    query={query}
+                    query={filterQuery}
                     sourceVisual={
                       item.sourceApp
                         ? (sourceAppVisuals.get(

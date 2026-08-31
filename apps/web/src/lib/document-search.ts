@@ -6,27 +6,22 @@ import {
   findInParagraph,
 } from "@stll/folio-core/utils/findReplace";
 import type { FindMatch } from "@stll/folio-core/utils/findReplace";
+import { findSearchMatchRanges } from "@stll/text-normalize";
+import type { SearchMatchRange } from "@stll/text-normalize";
 
 import {
-  findNormalizedSearchTextMatches,
   getSearchTextCandidates,
   selectNonOverlappingSearchMatches,
 } from "@/lib/search-text";
-import type { SearchTextMatch, SearchTextQuery } from "@/lib/search-text";
-
-export {
-  findNormalizedSearchTextMatches,
-  getSearchTextCandidates,
-  normalizeSearchText,
-} from "@/lib/search-text";
+import type { SearchTextQuery } from "@/lib/search-text";
 
 const documentSearchOptions = createDefaultFindOptions();
 
-const searchTextMatchKey = ({ end, start }: SearchTextMatch) =>
+const searchTextMatchKey = ({ end, start }: SearchMatchRange) =>
   `${String(start)}:${String(end)}`;
 
 const selectNonOverlappingSearchTextMatches = (
-  matches: Iterable<SearchTextMatch>,
+  matches: Iterable<SearchMatchRange>,
   maxMatches: number,
 ) =>
   selectNonOverlappingSearchMatches({
@@ -46,7 +41,7 @@ const findTextCandidateMatches = ({
   content,
   maxMatches,
 }: FindTextCandidateMatchesOptions) =>
-  findNormalizedSearchTextMatches(content, candidate, { maxMatches });
+  findSearchMatchRanges(content, candidate, { maxMatches });
 
 type FindSearchTextMatchesOptions = {
   maxMatches?: number | undefined;
@@ -66,7 +61,7 @@ export const findSearchTextMatches = (
   }
   const candidates = getSearchTextCandidates(searchText);
   if (typeof searchText !== "string") {
-    const matches = new Map<string, SearchTextMatch>();
+    const matches = new Map<string, SearchMatchRange>();
     for (const candidate of candidates) {
       for (const match of findTextCandidateMatches({
         candidate,
@@ -90,7 +85,7 @@ export const findSearchTextMatches = (
     return phraseMatches;
   }
 
-  const matches = new Map<string, SearchTextMatch>();
+  const matches = new Map<string, SearchMatchRange>();
   for (const candidate of candidates.slice(1)) {
     for (const match of findTextCandidateMatches({
       candidate,
@@ -162,7 +157,7 @@ const findDocumentCandidateMatches = ({
       for (const match of getNativeMatches(candidate).values()) {
         candidateMatches.set(documentMatchKey(match), match);
       }
-      const normalizedMatches = findNormalizedSearchTextMatches(
+      const normalizedMatches = findSearchMatchRanges(
         paragraphText,
         candidate,
         { maxMatches: paragraphLimit },

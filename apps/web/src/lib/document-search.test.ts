@@ -1,15 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
 import { createEmptyDocument } from "@stll/folio-core";
+import {
+  findSearchMatchRanges,
+  foldSearchMatchText,
+} from "@stll/text-normalize";
 
 import {
   findDocumentSearchResult,
   findDocumentSearchMatches,
-  findNormalizedSearchTextMatches,
   findSearchTextMatches,
-  getSearchTextCandidates,
-  normalizeSearchText,
 } from "@/lib/document-search";
+import { getSearchTextCandidates } from "@/lib/search-text";
 
 describe("document search highlighting", () => {
   test("uses the native document find behavior across text runs", () => {
@@ -27,9 +29,7 @@ describe("document search highlighting", () => {
     expect(findSearchTextMatches("準拠法", "法")).toEqual([
       { start: 2, end: 3 },
     ]);
-    expect(findNormalizedSearchTextMatches("Š", "s")).toEqual([
-      { start: 0, end: 1 },
-    ]);
+    expect(findSearchMatchRanges("Š", "s")).toEqual([{ start: 0, end: 1 }]);
   });
 
   test("falls back to web-search terms when an exact query is absent", () => {
@@ -82,27 +82,26 @@ describe("document search highlighting", () => {
   });
 
   test("maps a diacritic-insensitive match back to original offsets", () => {
-    expect(
-      findNormalizedSearchTextMatches("zápis odštepení", "odštěpení"),
-    ).toEqual([{ start: 6, end: 15 }]);
-    expect(normalizeSearchText("ODŠTĚPENÍ")).toBe("odstepeni");
+    expect(findSearchMatchRanges("zápis odštepení", "odštěpení")).toEqual([
+      { start: 6, end: 15 },
+    ]);
+    expect(foldSearchMatchText("ODŠTĚPENÍ")).toBe("odstepeni");
   });
 
-  test("preserves contextual case folding while mapping source offsets", () => {
-    expect(normalizeSearchText("ΟΣ")).toBe("ος");
-    expect(findNormalizedSearchTextMatches("ΟΣ", "ος")).toEqual([
-      { start: 0, end: 2 },
-    ]);
+  test("case-folds final sigma while mapping source offsets", () => {
+    expect(foldSearchMatchText("ΟΣ")).toBe("οσ");
+    expect(findSearchMatchRanges("ΟΣ", "ος")).toEqual([{ start: 0, end: 2 }]);
+    expect(findSearchMatchRanges("ΟΣ", "σ")).toEqual([{ start: 1, end: 2 }]);
   });
 
   test("uses canonical Arabic folds while preserving source offsets", () => {
-    expect(findNormalizedSearchTextMatches("مدرسة", "مدرسه")).toEqual([
+    expect(findSearchMatchRanges("مدرسة", "مدرسه")).toEqual([
       { start: 0, end: 5 },
     ]);
-    expect(findNormalizedSearchTextMatches("مـحـمـد", "محمد")).toEqual([
+    expect(findSearchMatchRanges("مـحـمـد", "محمد")).toEqual([
       { start: 0, end: 7 },
     ]);
-    expect(findNormalizedSearchTextMatches("٢٠٢٤", "2024")).toEqual([
+    expect(findSearchMatchRanges("٢٠٢٤", "2024")).toEqual([
       { start: 0, end: 4 },
     ]);
   });

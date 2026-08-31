@@ -28,7 +28,7 @@ type NormalizedText = {
   text: string;
 };
 
-const normalizeSearchText = (text: string): NormalizedText => {
+const normalizeReaderSearchText = (text: string): NormalizedText => {
   const normalizedChars: string[] = [];
   const startMap: number[] = [];
   const endMap: number[] = [];
@@ -154,7 +154,7 @@ const normalizeSearchText = (text: string): NormalizedText => {
 };
 
 const normalizeQuery = (query: string): string =>
-  normalizeSearchText(query).text.trim();
+  normalizeReaderSearchText(query).text.trim();
 
 export const buildSearchResults = ({
   pieces,
@@ -172,7 +172,7 @@ export const buildSearchResults = ({
   let matchCount = 0;
 
   for (const piece of pieces) {
-    const normalizedPiece = normalizeSearchText(piece.text);
+    const normalizedPiece = normalizeReaderSearchText(piece.text);
     if (normalizedPiece.text.length === 0) {
       continue;
     }

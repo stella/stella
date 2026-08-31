@@ -23,6 +23,15 @@ const ASCII_FOLD_RE = new RegExp(
 );
 
 /**
+ * The replace step of `foldToAscii`, for callers that decompose themselves
+ * (`foldSearchMatchText` decomposes with NFKD and per character). The input
+ * must already be decomposed or table-only characters would hide inside
+ * precomposed letters.
+ */
+export const applyAsciiFolds = (decomposed: string): string =>
+  decomposed.replace(ASCII_FOLD_RE, (char) => ASCII_FOLD_TABLE[char] ?? "");
+
+/**
  * Fold text to its ASCII search key.
  *
  * The contract is parity with `unaccent()` for Latin-script characters: for
@@ -33,6 +42,4 @@ const ASCII_FOLD_RE = new RegExp(
  * the input was Latin, and folding is idempotent.
  */
 export const foldToAscii = (text: string): string =>
-  text
-    .normalize("NFD")
-    .replace(ASCII_FOLD_RE, (char) => ASCII_FOLD_TABLE[char] ?? "");
+  applyAsciiFolds(text.normalize("NFD"));

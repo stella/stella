@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { normalizeSearchText } from "./normalize.js";
+import { arabicNormalize } from "./normalize.js";
 
 // Each group lists spellings a user might type for the same word. After
 // normalization they must all collapse to a single search key.
@@ -41,16 +41,16 @@ const GOLDEN: readonly (readonly [string, string])[] = [
   ["a\u2007b\u3000c", "a b c"], // Unicode space separators collapsed
 ];
 
-describe("normalizeSearchText", () => {
+describe("arabicNormalize", () => {
   test("each equivalence group collapses to one key", () => {
     for (const group of EQUIVALENCE_GROUPS) {
-      const keys = new Set(group.map(normalizeSearchText));
+      const keys = new Set(group.map(arabicNormalize));
       expect(keys.size).toBe(1);
     }
   });
 
   test.each(GOLDEN)("normalize(%p) === %p", (input, expected) => {
-    expect(normalizeSearchText(input)).toBe(expected);
+    expect(arabicNormalize(input)).toBe(expected);
   });
 
   test("is idempotent", () => {
@@ -60,12 +60,12 @@ describe("normalizeSearchText", () => {
       "Hello World",
     ];
     for (const sample of samples) {
-      const once = normalizeSearchText(sample);
-      expect(normalizeSearchText(once)).toBe(once);
+      const once = arabicNormalize(sample);
+      expect(arabicNormalize(once)).toBe(once);
     }
   });
 
   test("leaves fold targets (bare alef, waw, yeh, heh) stable", () => {
-    expect(normalizeSearchText("اويه")).toBe("اويه");
+    expect(arabicNormalize("اويه")).toBe("اويه");
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   adjacentClipboardIndex,
+  CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
   clipboardPointerMoved,
@@ -108,7 +109,7 @@ describe("clipboard search highlighting", () => {
 describe("clipboardSearchPreviewText", () => {
   test("keeps the full text when the first match is near the start", () => {
     const text = "Purchase price is payable at closing.";
-    expect(clipboardSearchPreviewText(text, "closing")).toEqual({
+    expect(clipboardSearchPreviewText({ plainText: text }, "closing")).toEqual({
       text,
       truncated: false,
     });
@@ -116,7 +117,10 @@ describe("clipboardSearchPreviewText", () => {
 
   test("windows a distant match to a word boundary with leading context", () => {
     const text = `${"lorem ipsum dolor sit amet ".repeat(8)}indemnity cap applies`;
-    const preview = clipboardSearchPreviewText(text, "indemnity");
+    const preview = clipboardSearchPreviewText(
+      { plainText: text },
+      "indemnity",
+    );
 
     expect(preview.truncated).toBe(true);
     expect(preview.text.startsWith("ipsum dolor sit amet indemnity cap")).toBe(
@@ -126,7 +130,7 @@ describe("clipboardSearchPreviewText", () => {
 
   test("windows a match hidden below the clamped line count", () => {
     const text = `a\nb\nc\nd\ne\nf\ng\nh\ni\nfinal clause`;
-    const preview = clipboardSearchPreviewText(text, "clause");
+    const preview = clipboardSearchPreviewText({ plainText: text }, "clause");
 
     expect(preview.truncated).toBe(true);
     expect(preview.text.startsWith("final clause")).toBe(true);
@@ -134,7 +138,9 @@ describe("clipboardSearchPreviewText", () => {
 
   test("keeps the full text when only the clip name matched", () => {
     const text = "Body without the term.";
-    expect(clipboardSearchPreviewText(text, "acquisition")).toEqual({
+    expect(
+      clipboardSearchPreviewText({ plainText: text }, "acquisition"),
+    ).toEqual({
       text,
       truncated: false,
     });
@@ -142,10 +148,77 @@ describe("clipboardSearchPreviewText", () => {
 
   test("matches case-insensitively when windowing", () => {
     const text = `${"x".repeat(200)} INDEMNITY tail`;
-    const preview = clipboardSearchPreviewText(text, "indemnity");
+    const preview = clipboardSearchPreviewText(
+      { plainText: text },
+      "indemnity",
+    );
 
     expect(preview.truncated).toBe(true);
     expect(preview.text.startsWith("INDEMNITY tail")).toBe(true);
+  });
+
+  test("caps the preview past what the clamped card can show", () => {
+    const text = `intro clause ${"filler ".repeat(20_000)}`;
+
+    expect(
+      clipboardSearchPreviewText({ plainText: text }, "clause").text,
+    ).toHaveLength(CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS);
+    expect(
+      clipboardSearchPreviewText({ plainText: text }, "").text,
+    ).toHaveLength(CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS);
+  });
+
+  test("caps a windowed distant match", () => {
+    const text = `${"filler ".repeat(100)}indemnity ${"tail ".repeat(20_000)}`;
+    const preview = clipboardSearchPreviewText(
+      { plainText: text },
+      "indemnity",
+    );
+
+    expect(preview.truncated).toBe(true);
+    expect(preview.text).toHaveLength(CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS);
+    expect(preview.text).toContain("indemnity");
+  });
+
+  test("windows to a match found across diacritics", () => {
+    const text = `${"x".repeat(200)} rozsudek Čapek v. Novák`;
+    const preview = clipboardSearchPreviewText({ plainText: text }, "capek");
+
+    expect(preview.truncated).toBe(true);
+    expect(preview.text).toContain("Čapek");
+  });
+});
+
+describe("diacritic-insensitive search", () => {
+  const ACCENTED_ITEM = {
+    copiedAt: "2026-08-23T10:02:00Z",
+    groupId: null,
+    id: "three",
+    name: null,
+    plainText: "Karel Čapek, Uherské Hradiště",
+    sourceApp: null,
+    type: "text",
+  } satisfies ClipboardItem;
+
+  test("a plain query matches accented text and vice versa", () => {
+    expect(filterClipboardItems([ACCENTED_ITEM], "capek hradiste")).toEqual([
+      ACCENTED_ITEM,
+    ]);
+    expect(
+      filterClipboardItems(
+        [{ ...ACCENTED_ITEM, plainText: "soud ve Wrocławi" }],
+        "wroclawi",
+      ),
+    ).toHaveLength(1);
+    expect(filterClipboardItems([TEXT_ITEM], "půrchase")).toEqual([TEXT_ITEM]);
+    expect(filterClipboardItems([TEXT_ITEM], "puerchase")).toEqual([]);
+  });
+
+  test("highlights the accented original for a plain query", () => {
+    expect(highlightClipboardText("Karel Čapek", "capek")).toEqual([
+      { match: false, text: "Karel " },
+      { match: true, text: "Čapek" },
+    ]);
   });
 });
 
