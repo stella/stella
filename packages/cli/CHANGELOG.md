@@ -1,5 +1,12 @@
 # @stll/cli
 
+## 0.7.2
+
+### Patch Changes
+
+- [#2681](https://github.com/stella/stella/pull/2681) [`55fbefc`](https://github.com/stella/stella/commit/55fbefcd2b202ac40d9222ac6c9fb4d3507fe96d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Extend the capability catalog with the document review endpoints: proposing
+  positions from a reference, resolving parties, and saving a run as a playbook.
+
 ## 0.7.1
 
 ### Patch Changes

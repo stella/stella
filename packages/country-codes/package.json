@@ -1,6 +1,6 @@
 {
   "name": "@stll/country-codes",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "ISO 3166-1 alpha-2 country codes — single canonical list and derived TypeScript literal-union type",
   "keywords": [
     "country",
