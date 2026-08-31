@@ -59,7 +59,6 @@ import { readFileSync } from "node:fs";
 import { findMigrationOrderViolation } from "./check-migration-order";
 
 const DEFAULT_REPO = "stella/stella";
-const REQUIRED_CHECK_RUN = "ci-result";
 const MIGRATION_DIRECTORY = "apps/api/drizzle";
 const MERGEABLE_POLL_ATTEMPTS = 8;
 const MERGEABLE_POLL_INTERVAL_MS = 2000;
@@ -67,6 +66,20 @@ const MERGE_COMMIT_POLL_ATTEMPTS = 5;
 // GitHub's REST contents listing silently truncates past this many entries.
 const CONTENTS_ENDPOINT_ENTRY_LIMIT = 1000;
 const PULL_NUMBER_PATTERN = /^\d+$/u;
+
+export const mergeBarRequiredCheckRuns = (repo: string): readonly string[] => {
+  const normalizedRepo = repo.toLowerCase();
+  switch (normalizedRepo) {
+    case "stella/stella":
+      return ["ci-result"];
+    case "stella/stella-infra":
+      return ["Lint & Validate", "Plan (production)", "Plan (staging)"];
+    case "stella/stella-plane":
+      return ["Overlay check"];
+    default:
+      return panic(`No merge-bar check policy is registered for ${repo}`);
+  }
+};
 
 export const mergeBarMigrationDirectory = (repo: string): string | null =>
   repo.toLowerCase() === DEFAULT_REPO ? MIGRATION_DIRECTORY : null;
@@ -134,6 +147,7 @@ type MigrationSnapshot = {
 
 export type MergeBarSnapshot = {
   pullRequest: PullRequestSnapshot;
+  requiredCheckRuns: readonly string[];
   // The SHA the check runs were actually fetched for. Kept separate from
   // `pullRequest.headSha` so a read against a stale commit cannot masquerade
   // as a read against the current one.
@@ -205,10 +219,12 @@ const evaluateRequiredCheck = ({
   checkRuns,
   checkRunsHeadSha,
   headSha,
+  requiredCheckRuns,
 }: {
   checkRuns: readonly CheckRunSnapshot[];
   checkRunsHeadSha: string;
   headSha: string;
+  requiredCheckRuns: readonly string[];
 }): GateVerdict => {
   if (checkRunsHeadSha !== headSha) {
     return {
@@ -219,16 +235,22 @@ const evaluateRequiredCheck = ({
     };
   }
 
-  const required = checkRuns.filter((run) => run.name === REQUIRED_CHECK_RUN);
+  const required = checkRuns.filter((run) =>
+    requiredCheckRuns.includes(run.name),
+  );
+  const observedNames = new Set(required.map(({ name }) => name));
+  const missingNames = requiredCheckRuns.filter(
+    (name) => !observedNames.has(name),
+  );
   // The load-bearing case: an empty list is an ABSENT verdict, not a passing
   // one. Filtering a rollup for failures would report "none" here and merge.
-  if (required.length === 0) {
+  if (missingNames.length > 0) {
     return {
       gate: "required-check",
       status: "fail",
       reason: MERGE_BAR_REASONS.requiredCheckMissing,
       detail:
-        `no \`${REQUIRED_CHECK_RUN}\` check run on ${headSha} ` +
+        `missing required check run(s) ${missingNames.map((name) => `\`${name}\``).join(", ")} on ${headSha} ` +
         `(${checkRuns.length} check run(s) present)`,
     };
   }
@@ -239,7 +261,7 @@ const evaluateRequiredCheck = ({
       gate: "required-check",
       status: "fail",
       reason: MERGE_BAR_REASONS.requiredCheckIncomplete,
-      detail: `\`${REQUIRED_CHECK_RUN}\` is ${incomplete.at(0)?.status ?? "pending"}`,
+      detail: `\`${incomplete.at(0)?.name ?? "required check"}\` is ${incomplete.at(0)?.status ?? "pending"}`,
     };
   }
 
@@ -249,14 +271,14 @@ const evaluateRequiredCheck = ({
       gate: "required-check",
       status: "fail",
       reason: MERGE_BAR_REASONS.requiredCheckNotSuccessful,
-      detail: `\`${REQUIRED_CHECK_RUN}\` concluded ${unsuccessful.at(0)?.conclusion ?? "null"}`,
+      detail: `\`${unsuccessful.at(0)?.name ?? "required check"}\` concluded ${unsuccessful.at(0)?.conclusion ?? "null"}`,
     };
   }
 
   return {
     gate: "required-check",
     status: "pass",
-    detail: `\`${REQUIRED_CHECK_RUN}\` success on ${headSha}`,
+    detail: `${requiredCheckRuns.map((name) => `\`${name}\``).join(", ")} success on ${headSha}`,
   };
 };
 
@@ -386,6 +408,7 @@ export const evaluateMergeBar = (
       checkRuns: snapshot.checkRuns,
       checkRunsHeadSha: snapshot.checkRunsHeadSha,
       headSha: snapshot.pullRequest.headSha,
+      requiredCheckRuns: snapshot.requiredCheckRuns,
     }),
     evaluateReviewThreads(snapshot.reviewThreads),
     evaluateMigrationOrder(snapshot.migrations),
@@ -874,6 +897,7 @@ if (import.meta.main) {
   // shrinks that window to those two calls; it does not remove it.
   const snapshot: MergeBarSnapshot = {
     pullRequest,
+    requiredCheckRuns: mergeBarRequiredCheckRuns(options.repo),
     checkRunsHeadSha: pullRequest.headSha,
     checkRuns: gateway.readCheckRuns(pullRequest.headSha),
     migrations: gateway.readMigrationDirectories(),
