@@ -23,6 +23,7 @@ import {
   type CorpusWriteOutcome,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { LegislationDocumentInput } from "@/api/lib/legal-search/legislation-ingestion-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -50,7 +51,7 @@ const corpus = {
 } satisfies LegislationCorpusDependencies;
 
 const input = (
-  status: LegislationDocumentInput["status"],
+  status: NonNullable<LegislationDocumentInput["status"]>,
 ): LegislationDocumentInput => ({
   sourceId,
   eli: "eli/cz/sb/2012/89",
@@ -68,7 +69,7 @@ beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
   scopedDb = async (callback) =>
-    await db.transaction(async (tx) => await callback(tx));
+    await db.transaction(async (tx) => await callback(asTestRaw(tx)));
 
   await db.insert(legislationSources).values({
     id: sourceId,

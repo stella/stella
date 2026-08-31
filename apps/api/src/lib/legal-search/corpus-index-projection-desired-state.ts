@@ -1,5 +1,5 @@
 import { panic, TaggedError } from "better-result";
-import { and, asc, eq, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
@@ -29,6 +29,13 @@ import {
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 
 const CORPUS_INDEX_MANIFEST_COUNT = Object.keys(CORPUS_INDEX_MANIFESTS).length;
+
+const projectionGenerationsForFamily = (
+  family: CorpusIndexProjectionSubject["family"],
+): string[] =>
+  Object.values(CORPUS_INDEX_MANIFESTS).flatMap((manifest) =>
+    manifest.family === family ? [manifest.generation] : [],
+  );
 
 export type CorpusIndexProjectionSubject =
   | {
@@ -299,6 +306,10 @@ const hasActiveCorpusProjectionTx = async (
       .where(
         and(
           eq(corpusIndexGenerations.family, family),
+          inArray(
+            corpusIndexGenerations.generation,
+            projectionGenerationsForFamily(family),
+          ),
           or(
             eq(corpusIndexGenerations.status, "building"),
             eq(corpusIndexGenerations.status, "serving"),
@@ -309,18 +320,18 @@ const hasActiveCorpusProjectionTx = async (
   ).length > 0;
 
 /**
- * Take source policy first only while this family has an active projection.
- * A null result stays null for the caller's transaction: registration
- * bootstrap covers a generation that becomes visible after this check.
+ * Share-lock source policy before checking activation. Registration takes a
+ * conflicting source-table fence before publishing a building generation, so
+ * a null result remains authoritative until this transaction commits.
  */
 export const lockActiveCorpusProjectionSourceTx = async (
   tx: Transaction,
   subject: CorpusIndexProjectionSubject,
 ): Promise<ActiveCorpusProjectionSourceLock | null> => {
+  await lockCorpusProjectionSourceTx(tx, subject);
   if (!(await hasActiveCorpusProjectionTx(tx, subject.family))) {
     return null;
   }
-  await lockCorpusProjectionSourceTx(tx, subject);
   return activeCorpusProjectionSourceLock(subject.family);
 };
 
@@ -329,10 +340,10 @@ export const lockActiveCorpusProjectionSourceByIdTx = async (
   tx: Transaction,
   source: CorpusIndexProjectionSource,
 ): Promise<ActiveCorpusProjectionSourceLock | null> => {
+  await lockCorpusProjectionSourceByIdTx(tx, source);
   if (!(await hasActiveCorpusProjectionTx(tx, source.family))) {
     return null;
   }
-  await lockCorpusProjectionSourceByIdTx(tx, source);
   return activeCorpusProjectionSourceLock(source.family);
 };
 
@@ -501,6 +512,10 @@ const activeManifests = async (
     .where(
       and(
         eq(corpusIndexGenerations.family, family),
+        inArray(
+          corpusIndexGenerations.generation,
+          projectionGenerationsForFamily(family),
+        ),
         or(
           eq(corpusIndexGenerations.status, "building"),
           eq(corpusIndexGenerations.status, "serving"),

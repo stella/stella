@@ -22,6 +22,7 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { planCorpusDocumentWrite } from "@/api/lib/legal-search/corpus-storage";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -65,7 +66,7 @@ beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client, relations: { ...relations, ...authRelationsPart } });
   scopedDb = async (callback) =>
-    await db.transaction(async (tx) => await callback(tx));
+    await db.transaction(async (tx) => await callback(asTestRaw(tx)));
 
   await db.insert(caseLawSources).values({
     id: sourceId,
