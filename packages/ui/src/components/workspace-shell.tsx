@@ -25,8 +25,8 @@ type WorkspaceCompactNavigation = {
   open: boolean;
   /** Receives close gestures, Escape, backdrop presses, and viewport changes. */
   onOpenChange: (open: boolean) => void;
-  /** Host-styled button; Stella supplies trigger behavior and accessibility. */
-  trigger: ReactElement;
+  /** Host-styled button; null disables compact navigation for single-purpose hosts. */
+  trigger: ReactElement | null;
 };
 
 type WorkspaceNavigation =
@@ -82,7 +82,7 @@ export const WorkspaceShell = ({
   }, [compactNavigationOpen, isCompact, onCompactNavigationOpenChange]);
 
   const compactNavigationTrigger =
-    compactNavigation === null ? null : (
+    compactNavigation === null || compactNavigation.trigger === null ? null : (
       <span className="contents md:hidden">
         <SheetTrigger
           aria-label={compactNavigation.label}

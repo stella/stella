@@ -57,6 +57,34 @@ describe("WorkspaceShell", () => {
     expect(markup).not.toContain("Compact navigation");
     expect(markup).not.toContain('data-slot="sheet-backdrop"');
   });
+
+  test("does not render a dead compact trigger when the host has no compact navigation", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceShell
+        endDock={<aside>Inspector</aside>}
+        navigation={{
+          compact: {
+            content: <nav>Compact navigation</nav>,
+            label: "Open navigation",
+            onOpenChange: () => undefined,
+            open: false,
+            trigger: null,
+          },
+          desktop: <nav data-test="desktop-navigation">Desktop</nav>,
+          mode: "shell-managed",
+        }}
+        topBar={({ compactNavigationTrigger }) => (
+          <header>{compactNavigationTrigger}Header</header>
+        )}
+      >
+        <article>Content</article>
+      </WorkspaceShell>,
+    );
+
+    expect(markup).toContain('data-test="desktop-navigation"');
+    expect(markup).toContain("Header");
+    expect(markup).not.toContain('aria-label="Open navigation"');
+  });
 });
 
 describe("WorkspaceEndRail", () => {
