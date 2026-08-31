@@ -56,9 +56,19 @@ const SortableItem = ({ id }: { id: string }) => {
   if (activator.type === "card") {
     return (
       <div data-sortable-item={id} ref={setNodeRef} style={style}>
-        <KanbanCardDragSurface bindings={activator.bindings}>
+        <KanbanCardDragSurface
+          bindings={activator.bindings}
+          data-card-drag-surface=""
+        >
           <p data-card-content="">{id}</p>
-          <button data-card-control="" type="button">
+          <button
+            data-card-control=""
+            onPointerDown={() => {
+              document.documentElement.dataset["cardControlPointerDown"] =
+                "seen";
+            }}
+            type="button"
+          >
             Keep {id} control interactive
           </button>
         </KanbanCardDragSurface>
