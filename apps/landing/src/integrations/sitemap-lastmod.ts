@@ -4,7 +4,7 @@
 // date on 134 unchanged pages, which crawlers learn to ignore.
 import type { AstroIntegration } from "astro";
 import { panic } from "better-result";
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 
 const SRC = "apps/landing/src";
 const MESSAGES = `${SRC}/i18n/messages`;
@@ -13,20 +13,20 @@ const BLOG = `${SRC}/content/blog`;
 const CHANGELOG = "docs/changelog";
 
 // A trailing slash marks a directory: any file below it counts.
+// Release notes and their dates feed both the changelog page and the
+// homepage's latest-release badge and grid (src/lib/changelog.ts).
+const CHANGELOG_SOURCES = [
+  `${SRC}/data/changelog-release-dates.json`,
+  `${CHANGELOG}/`,
+] as const;
+
 const UTILITY_SOURCES: ReadonlyMap<string, readonly string[]> = new Map([
   ["ai-info", [`${SRC}/pages/ai-info.astro`, `${SRC}/data/ai-facts.ts`]],
   [
     "security",
     [`${SRC}/pages/security.astro`, `${SRC}/data/security-controls.ts`],
   ],
-  [
-    "changelog",
-    [
-      `${SRC}/pages/changelog.astro`,
-      `${SRC}/data/changelog-release-dates.json`,
-      `${CHANGELOG}/`,
-    ],
-  ],
+  ["changelog", [`${SRC}/pages/changelog.astro`, ...CHANGELOG_SOURCES]],
   ["press", [`${SRC}/pages/press.astro`]],
   ["privacy", [`${SRC}/pages/privacy.astro`]],
   ["terms", [`${SRC}/pages/terms.astro`]],
@@ -61,6 +61,7 @@ export const sitemapSources = ({
       `${SRC}/components/HomePage.astro`,
       `${SRC}/data/product-story.ts`,
       messages,
+      ...CHANGELOG_SOURCES,
     ];
   }
   const slug = tail.at(0);
@@ -146,32 +147,41 @@ export const parseGitLog = (log: string): ReadonlyMap<string, string> => {
 
 const GIT_LOG_MAX_BYTES = 64 * 1024 * 1024;
 
-const git = (args: readonly string[], cwd?: string): string =>
-  execFileSync("git", args, {
+// undefined when git is not installed or the command fails (for example a
+// build from a source archive with no repository).
+const git = (args: readonly string[], cwd?: string): string | undefined => {
+  const result = spawnSync("git", args, {
     cwd,
     encoding: "utf-8",
     maxBuffer: GIT_LOG_MAX_BYTES,
-  }).trim();
+  });
+  return result.error === undefined && result.status === 0
+    ? result.stdout.trim()
+    : undefined;
+};
 
-// undefined = no usable history (shallow checkout).
+// undefined = no usable history: no git, no repository, or a shallow clone.
 const readGitDates = (): ReadonlyMap<string, string> | undefined => {
-  if (git(["rev-parse", "--is-shallow-repository"]) === "true") {
+  const shallow = git(["rev-parse", "--is-shallow-repository"]);
+  if (shallow === undefined || shallow === "true") {
     return undefined;
   }
   const root = git(["rev-parse", "--show-toplevel"]);
-  return parseGitLog(
-    git(
-      [
-        "log",
-        `--format=${RECORD_SEPARATOR}%cI`,
-        "--name-only",
-        "--",
-        SRC,
-        CHANGELOG,
-      ],
-      root,
-    ),
+  if (root === undefined) {
+    return undefined;
+  }
+  const log = git(
+    [
+      "log",
+      `--format=${RECORD_SEPARATOR}%cI`,
+      "--name-only",
+      "--",
+      SRC,
+      CHANGELOG,
+    ],
+    root,
   );
+  return log === undefined ? undefined : parseGitLog(log);
 };
 
 type SitemapLastmodOptions = {
@@ -200,7 +210,7 @@ export const sitemapLastmod = ({
           const dateBySource = readGitDates();
           if (dateBySource === undefined) {
             logger.warn(
-              "shallow checkout: the sitemap will carry no <lastmod>",
+              "no usable git history: the sitemap will carry no <lastmod>",
             );
           }
           history = { dateBySource };

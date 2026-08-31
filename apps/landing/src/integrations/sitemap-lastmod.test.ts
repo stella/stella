@@ -15,11 +15,13 @@ const sources = (pathname: string) =>
   sitemapSources({ pathname, localeTagByPath });
 
 describe("sitemapSources", () => {
-  test("home pages date from the home component and their locale catalog", () => {
+  test("home pages date from the home component, locale catalog and the releases they show", () => {
     expect(sources("/")).toEqual([
       "apps/landing/src/components/HomePage.astro",
       "apps/landing/src/data/product-story.ts",
       "apps/landing/src/i18n/messages/en.json",
+      "apps/landing/src/data/changelog-release-dates.json",
+      "docs/changelog/",
     ]);
     expect(sources("/pt-br/")).toContain(
       "apps/landing/src/i18n/messages/pt-BR.json",
