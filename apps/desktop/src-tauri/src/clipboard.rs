@@ -123,7 +123,7 @@ pub struct ClipboardSourceApp {
   pub name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClipboardSourceAppVisual {
   pub color: Option<String>,
@@ -250,6 +250,14 @@ impl ClipboardItem {
         source_app.as_ref()
       }
     }
+  }
+
+  /// Key of the item's entry in the source-app visual map; mirrors the
+  /// lookup key built in `frontmost_source_app`.
+  fn source_visual_key(&self) -> Option<&str> {
+    self
+      .source_app()
+      .map(|source_app| source_app.identifier.as_deref().unwrap_or(&source_app.name))
   }
 
   fn set_group_id(&mut self, new_group_id: Option<String>) {
@@ -416,6 +424,8 @@ pub struct PersistedClipboardState {
   pub items: Vec<ClipboardItem>,
   #[serde(default)]
   pub retention: ClipboardRetention,
+  #[serde(default)]
+  pub source_app_visuals: Vec<ClipboardSourceAppVisual>,
 }
 
 pub struct ClipboardManager {
@@ -578,6 +588,11 @@ impl ClipboardManager {
           self.groups = state.groups;
           self.items = state.items;
           self.retention = state.retention;
+          self.source_app_visuals = state
+            .source_app_visuals
+            .into_iter()
+            .map(|visual| (visual.key.clone(), visual))
+            .collect();
         }
         ClipboardPersistence::Encrypted(store)
       }
@@ -931,11 +946,24 @@ impl ClipboardManager {
         return Ok(());
       }
     };
+    let referenced_keys: HashSet<&str> = self
+      .items
+      .iter()
+      .filter_map(ClipboardItem::source_visual_key)
+      .collect();
+    let mut source_app_visuals: Vec<ClipboardSourceAppVisual> = self
+      .source_app_visuals
+      .values()
+      .filter(|visual| referenced_keys.contains(visual.key.as_str()))
+      .cloned()
+      .collect();
+    source_app_visuals.sort_by(|left, right| left.key.cmp(&right.key));
     let state = PersistedClipboardState {
       capture_status: self.capture_status,
       groups: self.groups.clone(),
       items: self.items.clone(),
       retention: self.retention,
+      source_app_visuals,
     };
     store.persist(&state).map_err(|error| {
       tracing::warn!(error = %error, "clipboard history persistence failed");
@@ -2080,6 +2108,7 @@ mod tests {
         text_item(now, "current"),
       ],
       retention: ClipboardRetention::Month,
+      source_app_visuals: Vec::new(),
     };
     store.persist(&state).unwrap();
 
@@ -2095,6 +2124,74 @@ mod tests {
       .unwrap();
     assert_eq!(persisted.items.len(), 1);
     assert_eq!(persisted.items[0].plain_text(), "current");
+
+    std::fs::remove_file(store_path).unwrap();
+  }
+
+  fn editor_capture() -> ClipboardCapture {
+    ClipboardCapture {
+      copied_at: Utc::now(),
+      html: None,
+      plain_text: "clause".to_string(),
+      rtf: None,
+      source_app: Some(ClipboardSourceApp {
+        identifier: Some("com.example.editor".to_string()),
+        name: "Editor".to_string(),
+      }),
+      source_app_visual: Some(ClipboardSourceAppVisual {
+        color: Some("#336699".to_string()),
+        icon_data_url: Some("data:image/png;base64,QUJD".to_string()),
+        key: "com.example.editor".to_string(),
+      }),
+    }
+  }
+
+  #[test]
+  fn source_app_visuals_survive_a_restart() {
+    let store_path = unique_store_path();
+    let mut manager = ClipboardManager::new();
+    manager.install(ClipboardLoad::Encrypted {
+      store: ClipboardStore::new([9; 32], store_path.clone()),
+      state: None,
+    });
+    assert!(manager.capture(editor_capture()).unwrap());
+
+    let store = ClipboardStore::new([9; 32], store_path.clone());
+    let state = store.load().unwrap().unwrap();
+    let mut restarted = ClipboardManager::new();
+    restarted.install(ClipboardLoad::Encrypted {
+      store,
+      state: Some(state),
+    });
+
+    let snapshot = restarted.snapshot();
+    assert_eq!(snapshot.source_app_visuals.len(), 1);
+    assert_eq!(snapshot.source_app_visuals[0].key, "com.example.editor");
+    assert_eq!(
+      snapshot.source_app_visuals[0].icon_data_url.as_deref(),
+      Some("data:image/png;base64,QUJD")
+    );
+
+    std::fs::remove_file(store_path).unwrap();
+  }
+
+  #[test]
+  fn unreferenced_source_app_visuals_are_not_persisted() {
+    let store_path = unique_store_path();
+    let mut manager = ClipboardManager::new();
+    manager.install(ClipboardLoad::Encrypted {
+      store: ClipboardStore::new([9; 32], store_path.clone()),
+      state: None,
+    });
+    assert!(manager.capture(editor_capture()).unwrap());
+    let id = manager.items[0].id().to_string();
+    assert!(manager.delete_item(&id).unwrap());
+
+    let persisted = ClipboardStore::new([9; 32], store_path.clone())
+      .load()
+      .unwrap()
+      .unwrap();
+    assert!(persisted.source_app_visuals.is_empty());
 
     std::fs::remove_file(store_path).unwrap();
   }
