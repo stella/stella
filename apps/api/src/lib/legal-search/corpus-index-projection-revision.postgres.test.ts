@@ -307,6 +307,18 @@ if (!databaseUrl || !runPostgresTests) {
       } finally {
         releaseWriter.resolve(undefined);
         await writerDb
+          .update(corpusIndexGenerations)
+          .set({ status: "retired" })
+          .where(
+            and(
+              eq(corpusIndexGenerations.family, "case_law"),
+              inArray(corpusIndexGenerations.generation, [
+                legacyGeneration,
+                "case_law_v5",
+              ]),
+            ),
+          );
+        await writerDb
           .delete(corpusIndexProjectionStates)
           .where(eq(corpusIndexProjectionStates.entityId, decisionId));
         await writerDb
