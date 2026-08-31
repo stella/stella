@@ -253,7 +253,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 743,
+    "count": 745,
     "files": {
       "apps/api/scripts/ai-provider-canary.ts": 4,
       "apps/api/scripts/backfill-image-thumbnails.ts": 9,
