@@ -222,39 +222,43 @@ const editorPlainText = (editor: HTMLDivElement) => {
 type RichTextAreaProps = {
   item: ClipboardEditorContext["item"];
   label: string;
+  onInput: () => void;
 };
 
 const RichTextArea = memo(
-  forwardRef<HTMLDivElement, RichTextAreaProps>(({ item, label }, ref) => {
-    const plainTextLines = item.plainText.split("\n");
-    const content =
-      item.type === "formattedText"
-        ? {
-            // safe-html: Clipboard HTML was sanitized by Rust before IPC.
-            dangerouslySetInnerHTML: { __html: item.html },
-          }
-        : {
-            children: plainTextLines.map((line, index) => (
-              <Fragment key={index}>
-                {index > 0 ? <br /> : null}
-                {line}
-              </Fragment>
-            )),
-          };
-    return (
-      <div
-        aria-label={label}
-        autoFocus
-        className="clipboard-rich-editor bg-card ring-border focus:ring-ring min-h-0 flex-1 overflow-y-auto rounded-[22px] p-5 text-sm leading-6 ring-1 outline-none ring-inset focus:ring-2"
-        contentEditable
-        dir="auto"
-        ref={ref}
-        role="textbox"
-        suppressContentEditableWarning
-        {...content}
-      />
-    );
-  }),
+  forwardRef<HTMLDivElement, RichTextAreaProps>(
+    ({ item, label, onInput }, ref) => {
+      const plainTextLines = item.plainText.split("\n");
+      const content =
+        item.type === "formattedText"
+          ? {
+              // safe-html: Clipboard HTML was sanitized by Rust before IPC.
+              dangerouslySetInnerHTML: { __html: item.html },
+            }
+          : {
+              children: plainTextLines.map((line, index) => (
+                <Fragment key={index}>
+                  {index > 0 ? <br /> : null}
+                  {line}
+                </Fragment>
+              )),
+            };
+      return (
+        <div
+          aria-label={label}
+          autoFocus
+          className="clipboard-rich-editor bg-card ring-border focus:ring-ring min-h-0 flex-1 overflow-y-auto rounded-[22px] p-5 text-sm leading-6 ring-1 outline-none ring-inset focus:ring-2"
+          contentEditable
+          dir="auto"
+          onInput={onInput}
+          ref={ref}
+          role="textbox"
+          suppressContentEditableWarning
+          {...content}
+        />
+      );
+    },
+  ),
 );
 
 RichTextArea.displayName = "RichTextArea";
@@ -262,6 +266,10 @@ RichTextArea.displayName = "RichTextArea";
 const ClipboardEditor = () => {
   const t = useTranslations("clipboard");
   const editorRef = useRef<HTMLDivElement>(null);
+  // Text and HTML are regenerated from the DOM on save and never round-trip
+  // byte-for-byte, so an untouched editor submits the stored content instead:
+  // a group-only save must not read as a content edit.
+  const editedRef = useRef(false);
   const [state, setState] = useState<EditorState>({ type: "loading" });
   const loadError = t("errorReadHistory");
   const requestClose = () => {
@@ -329,6 +337,7 @@ const ClipboardEditor = () => {
     const editor = editorRef.current;
     if (editor) {
       applyFormat(editor, command);
+      editedRef.current = true;
     }
   };
 
@@ -337,11 +346,17 @@ const ClipboardEditor = () => {
     if (state.type !== "ready" || !editor) {
       return;
     }
-    const plainText = editorPlainText(editor);
+    const { item } = state.context;
+    const plainText = editedRef.current
+      ? editorPlainText(editor)
+      : item.plainText;
     if (!plainText.trim()) {
       return;
     }
-    const html = editor.innerHTML;
+    let html: string | null = item.type === "formattedText" ? item.html : null;
+    if (editedRef.current) {
+      html = editor.innerHTML;
+    }
     setState({
       context: state.context,
       groupId: state.groupId,
@@ -478,6 +493,9 @@ const ClipboardEditor = () => {
           item={item}
           key={item.id}
           label={t("clipText")}
+          onInput={() => {
+            editedRef.current = true;
+          }}
           ref={editorRef}
         />
 
