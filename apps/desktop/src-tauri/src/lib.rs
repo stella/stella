@@ -103,6 +103,7 @@ pub fn run() {
     .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
     .manage::<ClipboardEditorState>(Arc::new(std::sync::Mutex::new(None)))
     .manage(clipboard_window::ClipboardStartupTrace::default())
+    .manage(clipboard_window::ClipboardWindowPark::default())
     .setup(move |app| {
       let handle = app.handle().clone();
       let initial_deep_links = app.deep_link().get_current()?;
