@@ -1,3 +1,5 @@
+x-quickwit09-index-root-uri: &quickwit09-index-root-uri s3://stella-quickwit-09/indexes
+
 services:
   postgres:
     profiles: [dev]
@@ -56,12 +58,17 @@ services:
     depends_on:
       rustfs:
         condition: service_healthy
+    environment:
+      QUICKWIT09_INDEX_ROOT_URI: *quickwit09-index-root-uri
     entrypoint: >
       /bin/sh -c "
+      quickwit09_bucket=$${QUICKWIT09_INDEX_ROOT_URI#s3://} &&
+      quickwit09_bucket=$${quickwit09_bucket%%/*} &&
       mc alias set rustfs http://rustfs:9000 stella-rustfs-dev stella-rustfs-dev-secret &&
       mc mb rustfs/stella --ignore-existing &&
       mc mb rustfs/stella-legal-corpus --ignore-existing &&
-      mc mb rustfs/stella-quickwit --ignore-existing
+      mc mb rustfs/stella-quickwit --ignore-existing &&
+      mc mb rustfs/$${quickwit09_bucket} --ignore-existing
       "
 
   valkey:
@@ -116,8 +123,59 @@ services:
       - "127.0.0.1:${STELLA_QUICKWIT_REST_PORT:-7280}:7280"
       - "127.0.0.1:${STELLA_QUICKWIT_GRPC_PORT:-7281}:7281"
     depends_on:
-      rustfs:
+      rustfs-setup:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7280/health/livez"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Quickwit 0.9 for the v5/v2 projection contract. This deliberately does
+  # not upgrade `quickwit` in place: 0.9 migrates its metastore on first use,
+  # and a migrated metastore cannot be opened safely by 0.8 after rollback.
+  # Run both generations for local blue/green testing with:
+  #   docker compose --profile dev --profile quickwit --profile quickwit09 up
+  # Point v5/v2 mutations at http://127.0.0.1:7290 through
+  # CORPUS_INDEX_Q09_ENDPOINT; q08 remains available on port 7280.
+  quickwit09-postgres-setup:
+    profiles: [quickwit09]
+    image: postgres:18.4@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636
+    environment:
+      PGPASSWORD: postgres
+    depends_on:
+      postgres:
         condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        if ! psql -h postgres -U postgres -d postgres -tAc \
+          "SELECT 1 FROM pg_database WHERE datname = 'stella_quickwit_09'" | grep -qx 1; then
+          createdb -h postgres -U postgres stella_quickwit_09
+        fi
+
+  quickwit09:
+    profiles: [quickwit09]
+    image: quickwit/quickwit:0.9.0@sha256:1e6169bf4e98a489fca397105f1698c1d80a0f9779f3cf652973bac8a0c3b2bd
+    command: run
+    environment:
+      QW_CLUSTER_ID: stella-local-q09
+      QW_METASTORE_URI: postgres://postgres:postgres@postgres:5432/stella_quickwit_09
+      QW_DEFAULT_INDEX_ROOT_URI: *quickwit09-index-root-uri
+      AWS_ACCESS_KEY_ID: stella-rustfs-dev
+      AWS_SECRET_ACCESS_KEY: stella-rustfs-dev-secret
+      AWS_REGION: us-east-1
+      QW_S3_ENDPOINT: http://rustfs:9000
+      QW_S3_FORCE_PATH_STYLE_ACCESS: "true"
+    ports:
+      - "127.0.0.1:${STELLA_QUICKWIT_Q09_REST_PORT:-7290}:7280"
+      - "127.0.0.1:${STELLA_QUICKWIT_Q09_GRPC_PORT:-7291}:7281"
+    depends_on:
+      quickwit09-postgres-setup:
+        condition: service_completed_successfully
+      rustfs-setup:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7280/health/livez"]
       interval: 10s
