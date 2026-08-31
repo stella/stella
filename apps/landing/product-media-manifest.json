@@ -1,0 +1,484 @@
+{
+  "assets": [
+    {
+      "bytes": 255396,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-agent-dark-poster.jpg",
+      "sha256": "224dcbc5714bc9861e59b930070d65f959eeaee9cfd47a29cda68d42ea5f8408"
+    },
+    {
+      "bytes": 416408,
+      "contentType": "video/mp4",
+      "path": "media/products/story-agent-dark.mp4",
+      "sha256": "a2bf2b3044ed13e6f9c9630c64708a26d123989eb6c02642e69b94787dc2535a"
+    },
+    {
+      "bytes": 265012,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-agent-hero-dark-poster.jpg",
+      "sha256": "91de95fb092fb9ebc8ae6c792763f2b3e9e173b7447d7c64381a0ba72c44a01c"
+    },
+    {
+      "bytes": 466185,
+      "contentType": "video/mp4",
+      "path": "media/products/story-agent-hero-dark.mp4",
+      "sha256": "04aaeac374f8e01a8c0c93b082b62c38261988869c26d3c60583f1e037403531"
+    },
+    {
+      "bytes": 277590,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-agent-hero-poster.jpg",
+      "sha256": "7ad94a6dc1abc3fee157e31e845bc0ff194ad0f0bc49b5a6986f883c7008ee30"
+    },
+    {
+      "bytes": 468663,
+      "contentType": "video/mp4",
+      "path": "media/products/story-agent-hero.mp4",
+      "sha256": "f0c4c53c0bc18cd27e6bef02ae2f985949ec74982dd603261a9b2576c212737e"
+    },
+    {
+      "bytes": 273476,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-agent-poster.jpg",
+      "sha256": "b034ee3db71c329338fe58783aa4a3d455b7142968431a04280903a32024f4e4"
+    },
+    {
+      "bytes": 472678,
+      "contentType": "video/mp4",
+      "path": "media/products/story-agent.mp4",
+      "sha256": "99d0ce40374d33204a943cb27480ecdb114f8a15719ca3b8ecb88727aa9a037b"
+    },
+    {
+      "bytes": 208760,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-cli-dark-poster.jpg",
+      "sha256": "dd7b8d2a4e2645a3020c2d2e4b951667f0f26dff1ec55ce98fcb250870874cc7"
+    },
+    {
+      "bytes": 253331,
+      "contentType": "video/mp4",
+      "path": "media/products/story-cli-dark.mp4",
+      "sha256": "7f9eae109c1376b56df90ca9b3bf83b607efc54894728e71dbaaa8fdc24eae86"
+    },
+    {
+      "bytes": 224860,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-cli-hero-dark-poster.jpg",
+      "sha256": "22bdee98d5f3225ae637dd809047a172afbce0e1a0c0afe48e542e136627c779"
+    },
+    {
+      "bytes": 218473,
+      "contentType": "video/mp4",
+      "path": "media/products/story-cli-hero-dark.mp4",
+      "sha256": "73d0f6db63998ee443b1cbc25555b576d005002761a816f340bd39453981f67e"
+    },
+    {
+      "bytes": 243410,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-cli-hero-poster.jpg",
+      "sha256": "4ec948fa9ea9785370798d3f526ace3007a551da9dcf027990aabce81537f084"
+    },
+    {
+      "bytes": 276288,
+      "contentType": "video/mp4",
+      "path": "media/products/story-cli-hero.mp4",
+      "sha256": "14d5f0926c71f5fd51e4db46e0ec28b37009aca65cf58f5e5a17212a919b2ed0"
+    },
+    {
+      "bytes": 227750,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-cli-poster.jpg",
+      "sha256": "fab2f47538c563c199cc1cc361014a73f7fdfb29fc0da7a28b93cb002dd0a514"
+    },
+    {
+      "bytes": 185199,
+      "contentType": "video/mp4",
+      "path": "media/products/story-cli.mp4",
+      "sha256": "7f5f92e7d78710a5c91f8ce4980a969b3be4d8ae03d3f279db82dfd8cf8a4793"
+    },
+    {
+      "bytes": 372350,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-editor-dark-poster.jpg",
+      "sha256": "94b935bea2eb9f83226b45774d58ed2ea3e42d760d28a37138732b1cb4e83e1d"
+    },
+    {
+      "bytes": 1824550,
+      "contentType": "video/mp4",
+      "path": "media/products/story-editor-dark.mp4",
+      "sha256": "a4b64716154afb884dfa40473c941fbcdd906cdb5718bc56c4ca451067d62bef"
+    },
+    {
+      "bytes": 390571,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-editor-hero-dark-poster.jpg",
+      "sha256": "faf4880163d98a05ae59aff2655f6ec39258bb6c297e3f3b633f974ff5efd25a"
+    },
+    {
+      "bytes": 1909672,
+      "contentType": "video/mp4",
+      "path": "media/products/story-editor-hero-dark.mp4",
+      "sha256": "be833ea0df9e2b9b9116cd99104d76dba7e66051adbc73803fffe28f11304d33"
+    },
+    {
+      "bytes": 384726,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-editor-hero-poster.jpg",
+      "sha256": "50079c22440c801d606fae0d6435ea8670850c8e8b8e3b96f92b97c14d340f39"
+    },
+    {
+      "bytes": 1891889,
+      "contentType": "video/mp4",
+      "path": "media/products/story-editor-hero.mp4",
+      "sha256": "9dffb2d3b5ea558c6873177d44a08c8c13ff4ef153e687a7f91b10a30e576155"
+    },
+    {
+      "bytes": 420383,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-editor-portrait-dark-poster.jpg",
+      "sha256": "932c7dd6988628e83e6076f6678eaf30e938979d3dc1d02bbf36d2d6f3e77866"
+    },
+    {
+      "bytes": 2219931,
+      "contentType": "video/mp4",
+      "path": "media/products/story-editor-portrait-dark.mp4",
+      "sha256": "6ff48aafc707d04c6290225d429a3be5055bc28784258f061f6ff665114fa404"
+    },
+    {
+      "bytes": 395763,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-editor-portrait-poster.jpg",
+      "sha256": "37f938e55a211c74122448183d3f896289703db51cc589b92ca24a5447d45665"
+    },
+    {
+      "bytes": 2291139,
+      "contentType": "video/mp4",
+      "path": "media/products/story-editor-portrait.mp4",
+      "sha256": "94a71902286fe58732cf1d5b1f15479bfb3798307d72479b7ae045aaa60e0c25"
+    },
+    {
+      "bytes": 367663,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-editor-poster.jpg",
+      "sha256": "c88e71133752194f2a13846fbefff36bc314462a693638fb3da4417c455bb628"
+    },
+    {
+      "bytes": 1756407,
+      "contentType": "video/mp4",
+      "path": "media/products/story-editor.mp4",
+      "sha256": "a64a7376842e9dd4374ff609d53bfdb9c8f4d3be7ef742d9844d0f5b2dc8ac7a"
+    },
+    {
+      "bytes": 337346,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-review-citation-dark-poster.jpg",
+      "sha256": "9655a0f0dc2369f64b6aa5a2549523fd59492cfe7d8c3ebb44af1b5753736d53"
+    },
+    {
+      "bytes": 650367,
+      "contentType": "video/mp4",
+      "path": "media/products/story-review-citation-dark.mp4",
+      "sha256": "04c7cab9df7fd4c5c039663def5c4bd6a99e0883ec64ab2a020dc1f41caf73c8"
+    },
+    {
+      "bytes": 337119,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-review-citation-poster.jpg",
+      "sha256": "ef4e53285fcffa4b43b4219fea40b5dfadc1d2a1bda4b13cecb6fc8fd474d95e"
+    },
+    {
+      "bytes": 554233,
+      "contentType": "video/mp4",
+      "path": "media/products/story-review-citation.mp4",
+      "sha256": "bd9b370622b33bd2ed2206ab9b8ec033201cf762b0a4d30c8a0390c12ed12a1e"
+    },
+    {
+      "bytes": 350406,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-review-dark-poster.jpg",
+      "sha256": "43217db4dd456c74b8401cb5a72edd1508ddaf9ab203143c71298606ec98492c"
+    },
+    {
+      "bytes": 196040,
+      "contentType": "video/mp4",
+      "path": "media/products/story-review-dark.mp4",
+      "sha256": "8e3222f77eba151f6ed1a1fc128577755d5e2574d129b75d8a6b3a16c02ad62e"
+    },
+    {
+      "bytes": 371617,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-review-hero-dark-poster.jpg",
+      "sha256": "abddc1325a3834d3a35189f1f9741ddd9334e83d179d91b227217a2dc49723a5"
+    },
+    {
+      "bytes": 213176,
+      "contentType": "video/mp4",
+      "path": "media/products/story-review-hero-dark.mp4",
+      "sha256": "1bf6c865eaed6a1d02b205f6edeaccd803b12352dc0fe6e9bc3314007fd58892"
+    },
+    {
+      "bytes": 371529,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-review-hero-poster.jpg",
+      "sha256": "595af2341b4597d4c9ef989160ff015fb9acb44a0e1c79c1c2d40d09ed94f5ef"
+    },
+    {
+      "bytes": 197114,
+      "contentType": "video/mp4",
+      "path": "media/products/story-review-hero.mp4",
+      "sha256": "a86accfaa7ce32a683391eff584a65f5086a124b67d3822090fdaf7c419e0346"
+    },
+    {
+      "bytes": 372348,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-review-poster.jpg",
+      "sha256": "b3f3b094ea9287e213324e6d4d6f186f4c3fdeae886d2d4cdd5f9f8b5a45411c"
+    },
+    {
+      "bytes": 422741,
+      "contentType": "video/mp4",
+      "path": "media/products/story-review.mp4",
+      "sha256": "7dd0301559e37a21b0475e8017cf5dd2e4824a98539ff9d67d57db92d424607c"
+    },
+    {
+      "bytes": 168390,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-template-fill-dark-poster.jpg",
+      "sha256": "b20470273e7e270488dcfb19c371cca5e7cfeca534a7850d8c1342c7b80c20e3"
+    },
+    {
+      "bytes": 366506,
+      "contentType": "video/mp4",
+      "path": "media/products/story-template-fill-dark.mp4",
+      "sha256": "2415c8822cef348ea996b177d938ab4e1c1ff7b43e6654d4ee7b39a8c9e85da0"
+    },
+    {
+      "bytes": 189909,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-template-fill-poster.jpg",
+      "sha256": "a2a2cdb26fa20a3f2a681b1e720233a65f8941fa2d7e920153ca40ff348ca3e0"
+    },
+    {
+      "bytes": 307626,
+      "contentType": "video/mp4",
+      "path": "media/products/story-template-fill.mp4",
+      "sha256": "b3a7950a7147af8bca74599bd05e98577c3820b1d4f362564543970d99f205bb"
+    },
+    {
+      "bytes": 297777,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-templates-dark-poster.jpg",
+      "sha256": "fb30fd5ca1d578b97b63a7fc62d4fac706a7c02d0409a5263d64029f20b4e70b"
+    },
+    {
+      "bytes": 778514,
+      "contentType": "video/mp4",
+      "path": "media/products/story-templates-dark.mp4",
+      "sha256": "2035408e7e4ab9b76e9c47d7e9f4d31e9211efc54d2f4c65815d736009d552fb"
+    },
+    {
+      "bytes": 307596,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-templates-poster.jpg",
+      "sha256": "be945b49274a0ab20a31634f576b932e83f8d67df0f962d912d1adeea4f93c20"
+    },
+    {
+      "bytes": 698812,
+      "contentType": "video/mp4",
+      "path": "media/products/story-templates.mp4",
+      "sha256": "9e1fd4273544a0f02283002c2afedaf46ab42678d08f4f1a731c7f3490fe34ee"
+    },
+    {
+      "bytes": 310623,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-workspace-dark-poster.jpg",
+      "sha256": "6c4bf4c282dfdce9b9a7c9961951a0e304c5f171e1a487ea98dc47372d0a35a8"
+    },
+    {
+      "bytes": 278228,
+      "contentType": "video/mp4",
+      "path": "media/products/story-workspace-dark.mp4",
+      "sha256": "68cc50c8e35d40de614dd0c0d18b7abee1accc5a6d67073033596df7a22727c2"
+    },
+    {
+      "bytes": 311243,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-workspace-hero-dark-poster.jpg",
+      "sha256": "b5c05e407b4001a2259f5b0dd0b6acdc4df796b234c46bf94f9eec65ebda215d"
+    },
+    {
+      "bytes": 186253,
+      "contentType": "video/mp4",
+      "path": "media/products/story-workspace-hero-dark.mp4",
+      "sha256": "1fa7f0dad376718b2ba91667629191dbd977dc1debd98a98ac67bb4e22ee7cd3"
+    },
+    {
+      "bytes": 336783,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-workspace-hero-poster.jpg",
+      "sha256": "db8a4b7dc21b8de5ac646567558183ddd6b79103cc2c717768ca12af19fb238c"
+    },
+    {
+      "bytes": 319197,
+      "contentType": "video/mp4",
+      "path": "media/products/story-workspace-hero.mp4",
+      "sha256": "f56b62414d83236bce6e0aedcd04d767bacb2e247484283670fc989dd1d4a296"
+    },
+    {
+      "bytes": 304394,
+      "contentType": "image/jpeg",
+      "path": "media/products/story-workspace-poster.jpg",
+      "sha256": "aaf4c6514744d38fc72436ed4de70506419d9d2e12f196bb8a9626c70cb6ef97"
+    },
+    {
+      "bytes": 180297,
+      "contentType": "video/mp4",
+      "path": "media/products/story-workspace.mp4",
+      "sha256": "084b885ecfb93b9f36bb81c087671c3ce8b740c1f99d4f06d06e26d96d06dd35"
+    }
+  ],
+  "baseUrl": "https://downloads.stll.app/landing/product-media/v1",
+  "recordings": [
+    {
+      "artifactsHash": "8f56ab75428299e3d615a81dfba575437ca430e8ec3cd4f58aed0d04a4361923",
+      "captureId": "agent",
+      "theme": "dark"
+    },
+    {
+      "artifactsHash": "2bf87914a026f9902cf7bdc258f9104f65d981ac1e7874414dc0ea654e0c641c",
+      "captureId": "agent",
+      "theme": "light"
+    },
+    {
+      "artifactsHash": "0003c5f95bbf6e6d5ef11366a560c78bff6677a651c7488df49de3d371839034",
+      "captureId": "agent-hero",
+      "theme": "dark"
+    },
+    {
+      "artifactsHash": "27a416bccca42c3c9118daffda93942df5e7661ad8010bdb47f4e0db061e5f73",
+      "captureId": "agent-hero",
+      "theme": "light"
+    },
+    {
+      "artifactsHash": "9970b7bbc3b9decd9c7533fbbce3e60ac5e4c008560f9365b5aaa2fe74e64f1f",
+      "captureId": "cli",
+      "theme": "dark"
+    },
+    {
+      "artifactsHash": "2c48d16460b713dcdfb58b28f546c078b2bc1e78a54e60d1eb8eb65a6a3fc200",
+      "captureId": "cli",
+      "theme": "light"
+    },
+    {
+      "artifactsHash": "841c0f66ac7f36366f9a7932c43bf002219cb9e8c327031891c8620f27ba12b4",
+      "captureId": "cli-hero",
+      "theme": "dark"
+    },
+    {
+      "artifactsHash": "6b7556a4b86e9e7ee527479111b0c8671c9b3022d58cb98ed2866e81e97dda57",
+      "captureId": "cli-hero",
+      "theme": "light"
+    },
+    {
+      "artifactsHash": "b93c61b1c8e4cf8aac4316a7d5962f91ad54979c482ee8f4ad132a3c355455d7",
+      "captureId": "editor",
+      "theme": "dark"
+    },
+    {
+      "artifactsHash": "a73663ae6fc4e06c6348d0ba9988fd4fdbdf026342849e4355fb3d7f28f0b88b",
+      "captureId": "editor",
+      "theme": "light"
+    },
+    {
+      "artifactsHash": "6cb3d8b87eac11bc7f789fbfa9f745496823ae71f53db05d4c531c651161cbb4",
+      "captureId": "editor-hero",
+      "theme": "dark"
+    },
+    {
+      "artifactsHash": "421e9d44dbdf26db61386ccb596b4983c33caf82278fa509e45f4dc411cf0bd2",
+      "captureId": "editor-hero",
+      "theme": "light"
+    },
+    {
+      "artifactsHash": "c0d8b1d8e0b7755986aaefeff063b3b96f52fc810be246ebf9f35360fb473e2b",
+      "captureId": "editor-portrait",
+      "theme": "dark"
+    },
+    {
+      "artifactsHash": "e215e2753af636b64588fe28785c1d3f805f40120bd39388290d9a51e04943f6",
+      "captureId": "editor-portrait",
+      "theme": "light"
+    },
+    {
+      "artifactsHash": "876ef124e06ec83281a790dfc6d424b7ab9bfd463ca8c51542c7d46f60a160bb",
+      "captureId": "review",
+      "theme": "dark"
+    },
+    {
+      "artifactsHash": "2036d5aed4af4ffafec6a6373f38964c7f7eb6b9e684db0d45a8038040433fef",
+      "captureId": "review",
+      "theme": "light"
+    },
+    {
+      "artifactsHash": "be40a6f150f73073a901f4bec07d90138daf79af87ec9624ed9c966d0e1656ca",
+      "captureId": "review-citation",
+      "theme": "dark"
+    },
+    {
+      "artifactsHash": "8d5224dfcd00e767390ebe643d2b6aedcd8803994be03dc351d58a6a3faf569f",
+      "captureId": "review-citation",
+      "theme": "light"
+    },
+    {
+      "artifactsHash": "d6adf3b06a9698b7abe7b2958e764c2f101586de667b31fa3853a59a3b72a54e",
+      "captureId": "review-hero",
+      "theme": "dark"
+    },
+    {
+      "artifactsHash": "37c7ea04cf749b272ec6055cc2d1c0ce03c23e20c81bf239f29d15a1b2cec133",
+      "captureId": "review-hero",
+      "theme": "light"
+    },
+    {
+      "artifactsHash": "4ecee485ce98d10b7251a30add807057ac101d3253b9163830ee01465852b868",
+      "captureId": "template-fill",
+      "theme": "dark"
+    },
+    {
+      "artifactsHash": "c041de7be2a13dcdeea32efa826797eefda08f98897a1501f336275be2d3d6a2",
+      "captureId": "template-fill",
+      "theme": "light"
+    },
+    {
+      "artifactsHash": "0a30d91fb4602a4035da8984c2ed413f1f8f273f531c6af334cff9cbf5ac0725",
+      "captureId": "templates",
+      "theme": "dark"
+    },
+    {
+      "artifactsHash": "368c6775b963b14081e4ff7f6544c9294cd6a5c0a4509b892c24ba2fae29fa27",
+      "captureId": "templates",
+      "theme": "light"
+    },
+    {
+      "artifactsHash": "d4d9522ddd8c22447b20d43d21cd991147844658ddd8188bf5e0a1bba767a997",
+      "captureId": "workspace",
+      "theme": "dark"
+    },
+    {
+      "artifactsHash": "e16ad597f3e1415603e3a282fcbf2d7fb1bab4b211a7048dca0e4236153efb4c",
+      "captureId": "workspace",
+      "theme": "light"
+    },
+    {
+      "artifactsHash": "99ca42d8176a48da46f4640563067b0c984f97445ec6fbbeb521a88b3f610407",
+      "captureId": "workspace-hero",
+      "theme": "dark"
+    },
+    {
+      "artifactsHash": "c68ef1a32cc3c4e249caa7f234a4b675498313c51c4d8ba0e73f989c1c53e0c4",
+      "captureId": "workspace-hero",
+      "theme": "light"
+    }
+  ],
+  "version": 1
+}
