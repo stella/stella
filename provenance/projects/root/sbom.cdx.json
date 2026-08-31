@@ -847,6 +847,9 @@
             "location": "apps/web/src/components/mcp-icon.tsx#1"
           },
           {
+            "location": "apps/web/src/components/notification-bell.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#1"
           },
           {
@@ -1123,6 +1126,12 @@
             "location": "apps/web/src/features/guides/guide-help-drawer.tsx#1"
           },
           {
+            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/inbox/signal-inspector-registration.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/statutes/components/provision-ask-actions.tsx#1"
           },
           {
@@ -1295,6 +1304,15 @@
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
@@ -1508,12 +1526,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.tsx#1"
@@ -2038,7 +2050,7 @@
             "location": "packages/ui/src/kanban/subgroup-board.tsx#2"
           },
           {
-            "location": "packages/ui/src/kanban/virtual-cell.tsx#7"
+            "location": "packages/ui/src/kanban/virtual-cell.tsx#8"
           },
           {
             "location": "packages/ui/src/review/review-author-avatar.tsx#1"
@@ -3796,6 +3808,9 @@
             "location": "apps/web/src/components/mcp-icon.tsx#1"
           },
           {
+            "location": "apps/web/src/components/notification-bell.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#1"
           },
           {
@@ -4072,6 +4087,12 @@
             "location": "apps/web/src/features/guides/guide-help-drawer.tsx#1"
           },
           {
+            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/inbox/signal-inspector-registration.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/statutes/components/provision-ask-actions.tsx#1"
           },
           {
@@ -4244,6 +4265,15 @@
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
@@ -4457,12 +4487,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.tsx#1"
@@ -4987,7 +5011,7 @@
             "location": "packages/ui/src/kanban/subgroup-board.tsx#2"
           },
           {
-            "location": "packages/ui/src/kanban/virtual-cell.tsx#7"
+            "location": "packages/ui/src/kanban/virtual-cell.tsx#8"
           },
           {
             "location": "packages/ui/src/review/review-author-avatar.tsx#1"
@@ -5233,10 +5257,16 @@
             "location": "packages/ui/src/kanban/sortable-edge.ts#1"
           },
           {
-            "location": "packages/ui/src/kanban/sortable-interactions.tsx#14"
+            "location": "packages/ui/src/kanban/sortable-interactions.logic.ts#10"
           },
           {
-            "location": "packages/ui/src/kanban/sortable-interactions.tsx#27"
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#16"
+          },
+          {
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#33"
+          },
+          {
+            "location": "packages/ui/src/kanban/virtual-cell.tsx#10"
           }
         ]
       },
@@ -5296,10 +5326,13 @@
         ],
         "occurrences": [
           {
-            "location": "packages/ui/src/kanban/sortable-interactions.tsx#32"
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#34"
           },
           {
-            "location": "packages/ui/src/kanban/sortable-interactions.tsx#33"
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#35"
+          },
+          {
+            "location": "packages/ui/src/kanban/virtual-cell.tsx#16"
           }
         ]
       },
@@ -7571,6 +7604,9 @@
             "location": "apps/web/src/components/mcp-icon.tsx#1"
           },
           {
+            "location": "apps/web/src/components/notification-bell.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#1"
           },
           {
@@ -7847,6 +7883,12 @@
             "location": "apps/web/src/features/guides/guide-help-drawer.tsx#1"
           },
           {
+            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/inbox/signal-inspector-registration.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/statutes/components/provision-ask-actions.tsx#1"
           },
           {
@@ -8019,6 +8061,15 @@
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
@@ -8232,12 +8283,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.tsx#1"
@@ -8762,7 +8807,7 @@
             "location": "packages/ui/src/kanban/subgroup-board.tsx#2"
           },
           {
-            "location": "packages/ui/src/kanban/virtual-cell.tsx#7"
+            "location": "packages/ui/src/kanban/virtual-cell.tsx#8"
           },
           {
             "location": "packages/ui/src/review/review-author-avatar.tsx#1"
@@ -9115,6 +9160,9 @@
         "occurrences": [
           {
             "location": "apps/api/scripts/exact-mirror-guard.ts#34"
+          },
+          {
+            "location": "apps/api/src/handlers/signals/schema.ts#1"
           },
           {
             "location": "apps/api/src/lib/conditions/contract.ts#9"
@@ -10942,6 +10990,9 @@
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#3"
           },
           {
@@ -11380,6 +11431,9 @@
             "location": "apps/web/src/lib/files/queries.ts#1"
           },
           {
+            "location": "apps/web/src/lib/inbox/queries.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/knowledge/queries/binding-catalog.ts#1"
           },
           {
@@ -11387,6 +11441,12 @@
           },
           {
             "location": "apps/web/src/lib/knowledge/queries.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/notification-queries.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/notification-queries.ts#2"
           },
           {
             "location": "apps/web/src/lib/organization/ai-config-queries.ts#1"
@@ -11474,9 +11534,6 @@
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/legal-lists.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/workspaces/queries/my-tasks.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/my-work.ts#1"
@@ -11770,6 +11827,9 @@
             "location": "apps/web/src/components/matter-target-picker.tsx#8"
           },
           {
+            "location": "apps/web/src/components/notification-bell.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#7"
           },
           {
@@ -11905,6 +11965,12 @@
             "location": "apps/web/src/features/chat/components/chat-web-search-toggle.tsx#2"
           },
           {
+            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#7"
+          },
+          {
+            "location": "apps/web/src/features/inbox/components/signal-inspector-view.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/statutes/components/provision-citing-decisions.tsx#3"
           },
           {
@@ -11963,6 +12029,15 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/index.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#3"
@@ -12133,12 +12208,6 @@
             "location": "apps/web/src/routes/_protected.settings/route.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/index.tsx#7"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#18"
           },
           {
@@ -12280,7 +12349,7 @@
             "location": "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/auth/organization.tsx#5"
+            "location": "apps/web/src/routes/auth/organization.tsx#9"
           },
           {
             "location": "apps/web/src/routes/consent.tsx#3"
@@ -12718,6 +12787,12 @@
             "location": "apps/web/src/features/case-law/components/top-bar-citations.tsx#2"
           },
           {
+            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#8"
+          },
+          {
+            "location": "apps/web/src/features/inbox/components/signal-inspector-view.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/statutes/components/provision-inspector-view.tsx#5"
           },
           {
@@ -12779,6 +12854,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/index.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx#4"
@@ -12928,12 +13006,6 @@
             "location": "apps/web/src/routes/_protected.settings/route.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/index.tsx#12"
-          },
-          {
             "location": "apps/web/src/routes/_protected.tsx#10"
           },
           {
@@ -13042,7 +13114,7 @@
             "location": "apps/web/src/routes/auth/index.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/auth/organization.tsx#11"
+            "location": "apps/web/src/routes/auth/organization.tsx#15"
           },
           {
             "location": "apps/web/src/routes/auth/otp.tsx#1"
@@ -13275,6 +13347,9 @@
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#16"
           },
           {
+            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#5"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#5"
           },
           {
@@ -13284,7 +13359,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/auth/organization.tsx#12"
+            "location": "apps/web/src/routes/auth/organization.tsx#16"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#4"
@@ -13552,7 +13627,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#14"
           },
           {
-            "location": "packages/ui/src/kanban/virtual-cell.tsx#9"
+            "location": "packages/ui/src/kanban/virtual-cell.tsx#21"
           }
         ]
       },
@@ -15329,6 +15404,9 @@
             "location": "apps/web/src/components/mcp-icon.tsx#1"
           },
           {
+            "location": "apps/web/src/components/notification-bell.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#1"
           },
           {
@@ -15605,6 +15683,12 @@
             "location": "apps/web/src/features/guides/guide-help-drawer.tsx#1"
           },
           {
+            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/inbox/signal-inspector-registration.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/statutes/components/provision-ask-actions.tsx#1"
           },
           {
@@ -15777,6 +15861,15 @@
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
@@ -15990,12 +16083,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.tsx#1"
@@ -16520,7 +16607,7 @@
             "location": "packages/ui/src/kanban/subgroup-board.tsx#2"
           },
           {
-            "location": "packages/ui/src/kanban/virtual-cell.tsx#7"
+            "location": "packages/ui/src/kanban/virtual-cell.tsx#8"
           },
           {
             "location": "packages/ui/src/review/review-author-avatar.tsx#1"
@@ -18409,6 +18496,18 @@
             "location": "apps/api/src/handlers/memories/update.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/notifications/announce.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/notifications/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/notifications/read-all.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/notifications/read.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/operator/query.ts#1"
           },
           {
@@ -18631,6 +18730,33 @@
             "location": "apps/api/src/handlers/sharepoint/status.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/signals/acceptances/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/signals/assignments/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/signals/dismissals/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/signals/get.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/signals/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/signals/read.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/signals/requests/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/signals/snoozes/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/signals/transition.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/skills/comments/create.ts#1"
           },
           {
@@ -18785,9 +18911,6 @@
           },
           {
             "location": "apps/api/src/handlers/tasks/get.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/tasks/my-tasks-route.ts#1"
           },
           {
             "location": "apps/api/src/handlers/template-packs/get.ts#1"
@@ -19576,6 +19699,9 @@
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-revision.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-scope.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts#1"
           },
           {
@@ -19631,6 +19757,9 @@
           },
           {
             "location": "apps/api/src/lib/memory/persist-explicit-memory.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/notifications.ts#1"
           },
           {
             "location": "apps/api/src/lib/oauth-connections.ts#1"
@@ -19735,6 +19864,12 @@
             "location": "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts#1"
           },
           {
+            "location": "apps/api/src/lib/scouts/document-deadlines.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/scouts/infosoud-hearings.logic.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/search/extract-content.ts#12"
           },
           {
@@ -19754,6 +19889,9 @@
           },
           {
             "location": "apps/api/src/lib/security-canary.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/signals/scout.ts#1"
           },
           {
             "location": "apps/api/src/lib/skills/install.ts#1"
@@ -19865,6 +20003,9 @@
           },
           {
             "location": "apps/api/src/lib/workflow-target-queries.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/workspace-deletion.ts#1"
           },
           {
             "location": "apps/api/src/mcp/anonymization-core.ts#1"
@@ -20225,6 +20366,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-contact-import-request.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-signal-actions.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-import-dialog.logic.ts#1"
@@ -20605,6 +20749,9 @@
             "location": "apps/web/src/components/workspaces/properties/inline-option-editor.tsx#3"
           },
           {
+            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#9"
+          },
+          {
             "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#4"
           },
           {
@@ -20639,6 +20786,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#25"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#20"
@@ -20695,7 +20848,7 @@
             "location": "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/auth/organization.tsx#13"
+            "location": "apps/web/src/routes/auth/organization.tsx#17"
           },
           {
             "location": "apps/web/src/routes/tools/-components/copy-button.tsx#3"
@@ -20867,6 +21020,12 @@
           },
           {
             "location": "apps/api/src/lib/bullmq-queue.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/document-deadline-scout-worker.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/document-processing-enqueue.ts#1"
           },
           {
             "location": "apps/api/src/lib/document-processing-queue.ts#2"
@@ -22547,6 +22706,21 @@
             "location": "apps/api/src/handlers/memories/update.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/notifications/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/notifications/list.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/notifications/read-all.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/notifications/read-model.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/notifications/read.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/operator/query.ts#2"
           },
           {
@@ -22679,6 +22853,15 @@
             "location": "apps/api/src/handlers/sharepoint/status.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/signals/read.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/signals/read.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/signals/transition.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/skills/comments/create.ts#2"
           },
           {
@@ -22779,9 +22962,6 @@
           },
           {
             "location": "apps/api/src/handlers/tasks/entity-links-delete.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/tasks/my-tasks.ts#1"
           },
           {
             "location": "apps/api/src/handlers/template-packs/organization-context.ts#1"
@@ -22895,6 +23075,12 @@
             "location": "apps/api/src/handlers/usage/unassign-seat.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/user-files/read-content.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/user-files/read-thumbnail.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/verify/resolve-auth.ts#1"
           },
           {
@@ -22959,9 +23145,6 @@
           },
           {
             "location": "apps/api/src/handlers/workspaces/create.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/workspaces/delete.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/duplicate.ts#2"
@@ -23438,6 +23621,9 @@
             "location": "apps/api/src/lib/memory/persist-explicit-memory.ts#2"
           },
           {
+            "location": "apps/api/src/lib/notifications.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/oauth-connections.ts#2"
           },
           {
@@ -23522,6 +23708,12 @@
             "location": "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts#2"
           },
           {
+            "location": "apps/api/src/lib/scouts/document-deadlines.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/scouts/document-review.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/search/chat-thread-scope-sql.ts#1"
           },
           {
@@ -23597,6 +23789,9 @@
             "location": "apps/api/src/lib/sharepoint-disable-purge.ts#21"
           },
           {
+            "location": "apps/api/src/lib/signals/scout.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/skills/install.ts#2"
           },
           {
@@ -23654,6 +23849,9 @@
             "location": "apps/api/src/lib/views/template-properties.ts#2"
           },
           {
+            "location": "apps/api/src/lib/work-obligations/eligibility.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/work-obligations/legacy-work-obligation.ts#1"
           },
           {
@@ -23682,6 +23880,9 @@
           },
           {
             "location": "apps/api/src/lib/workflow-target-queries.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/workspace-deletion.ts#2"
           },
           {
             "location": "apps/api/src/mcp/billing-tools.ts#2"
@@ -24889,6 +25090,18 @@
             "location": "apps/api/src/handlers/memories/update.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/notifications/announce.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/notifications/list.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/notifications/read-model.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/notifications/routes.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/operator/query.ts#4"
           },
           {
@@ -25051,6 +25264,12 @@
             "location": "apps/api/src/handlers/sharepoint/set-enablement.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/signals/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/signals/schema.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/skills/comments/create.ts#3"
           },
           {
@@ -25196,12 +25415,6 @@
           },
           {
             "location": "apps/api/src/handlers/tasks/entity-links-delete.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/tasks/my-tasks-route.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/tasks/my-tasks.ts#2"
           },
           {
             "location": "apps/api/src/handlers/tasks/routes.ts#1"
@@ -25447,10 +25660,10 @@
             "location": "apps/api/src/handlers/usage/unassign-seat.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/user-files/read-content.ts#2"
+            "location": "apps/api/src/handlers/user-files/read-content.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/user-files/read-thumbnail.ts#2"
+            "location": "apps/api/src/handlers/user-files/read-thumbnail.ts#3"
           },
           {
             "location": "apps/api/src/handlers/user-files/routes.ts#1"
@@ -25757,7 +25970,7 @@
           "name": "Felix Boehm <me@feedic.com>"
         }
       ],
-      "bom-ref": "pkg:npm/entities@4.5.0",
+      "bom-ref": "pkg:npm/entities@8.0.0",
       "description": "Encode & decode XML and HTML entities with ease & speed",
       "evidence": {
         "identity": [
@@ -25786,7 +25999,7 @@
       "externalReferences": [
         {
           "type": "vcs",
-          "url": "git://github.com/fb55/entities.git"
+          "url": "https://github.com/fb55/entities.git"
         }
       ],
       "group": "",
@@ -25809,7 +26022,7 @@
           "value": "apps/api/node_modules/entities/package.json"
         }
       ],
-      "purl": "pkg:npm/entities@4.5.0",
+      "purl": "pkg:npm/entities@8.0.0",
       "scope": "required",
       "tags": [
         "decode",
@@ -25817,7 +26030,7 @@
         "xml"
       ],
       "type": "library",
-      "version": "4.5.0"
+      "version": "8.0.0"
     },
     {
       "bom-ref": "pkg:npm/expect-type@1.4.0",
@@ -25889,7 +26102,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-router@57.0.14",
+      "bom-ref": "pkg:npm/expo-router@57.0.15",
       "description": "Expo Router is a file-based router for React Native and web applications.",
       "evidence": {
         "identity": [
@@ -25945,13 +26158,13 @@
           "value": "apps/mobile/node_modules/expo-router/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-router@57.0.14",
+      "purl": "pkg:npm/expo-router@57.0.15",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "57.0.14"
+      "version": "57.0.15"
     },
     {
       "authors": [
@@ -26742,7 +26955,7 @@
             "location": "apps/web/src/components/flows/flow-meta.ts#9"
           },
           {
-            "location": "apps/web/src/components/workspace-primary-nav.ts#10"
+            "location": "apps/web/src/components/workspace-primary-nav.ts#11"
           },
           {
             "location": "apps/web/src/components/workspaces/tasks/task-detail-constants.ts#10"
@@ -27015,6 +27228,9 @@
             "location": "apps/web/src/components/matter-target-picker.tsx#16"
           },
           {
+            "location": "apps/web/src/components/notification-bell.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#8"
           },
           {
@@ -27192,6 +27408,15 @@
             "location": "apps/web/src/features/guides/guide-tour-preview.tsx#7"
           },
           {
+            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#20"
+          },
+          {
+            "location": "apps/web/src/features/inbox/components/signal-inspector-view.tsx#3"
+          },
+          {
+            "location": "apps/web/src/features/inbox/signal-inspector-registration.tsx#3"
+          },
+          {
             "location": "apps/web/src/features/statutes/components/provision-ask-actions.tsx#3"
           },
           {
@@ -27238,6 +27463,15 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#34"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#7"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/index.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#9"
@@ -27391,12 +27625,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/route.tsx#18"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#17"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/index.tsx#23"
           },
           {
             "location": "apps/web/src/routes/_protected.tsx#17"
@@ -27720,7 +27948,7 @@
             "location": "packages/ui/src/components/workspace-shell.tsx#6"
           },
           {
-            "location": "packages/ui/src/kanban/sortable-interactions.tsx#34"
+            "location": "packages/ui/src/kanban/sortable-interactions.tsx#36"
           },
           {
             "location": "packages/ui/src/kanban/subgroup-board.tsx#4"
@@ -29967,6 +30195,9 @@
             "location": "apps/web/src/components/mcp-icon.tsx#1"
           },
           {
+            "location": "apps/web/src/components/notification-bell.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#1"
           },
           {
@@ -30243,6 +30474,12 @@
             "location": "apps/web/src/features/guides/guide-help-drawer.tsx#1"
           },
           {
+            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/inbox/signal-inspector-registration.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/statutes/components/provision-ask-actions.tsx#1"
           },
           {
@@ -30415,6 +30652,15 @@
           },
           {
             "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
@@ -30628,12 +30874,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/index.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.tsx#1"
@@ -31158,7 +31398,7 @@
             "location": "packages/ui/src/kanban/subgroup-board.tsx#2"
           },
           {
-            "location": "packages/ui/src/kanban/virtual-cell.tsx#7"
+            "location": "packages/ui/src/kanban/virtual-cell.tsx#8"
           },
           {
             "location": "packages/ui/src/review/review-author-avatar.tsx#1"
@@ -32642,6 +32882,9 @@
             "location": "apps/web/src/components/matter-target-picker.tsx#17"
           },
           {
+            "location": "apps/web/src/components/notification-bell.tsx#5"
+          },
+          {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#8"
           },
           {
@@ -32903,6 +33146,12 @@
             "location": "apps/web/src/features/guides/guide-help-drawer.tsx#4"
           },
           {
+            "location": "apps/web/src/features/inbox/components/my-work-view.tsx#21"
+          },
+          {
+            "location": "apps/web/src/features/inbox/components/signal-inspector-view.tsx#4"
+          },
+          {
             "location": "apps/web/src/features/statutes/components/provision-ask-actions.tsx#4"
           },
           {
@@ -32991,6 +33240,15 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#36"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/-signal-card.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.inbox/index.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#10"
@@ -33243,12 +33501,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/route.tsx#19"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/-legacy-page.tsx#18"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/index.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.tsx#18"
@@ -33515,7 +33767,7 @@
             "location": "apps/web/src/routes/auth/error.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/auth/organization.tsx#14"
+            "location": "apps/web/src/routes/auth/organization.tsx#18"
           },
           {
             "location": "apps/web/src/routes/auth/route.tsx#2"
@@ -34041,6 +34293,9 @@
             "location": "apps/api/src/lib/scheduler/tasks/memory-extractor.ts#3"
           },
           {
+            "location": "apps/api/src/lib/scouts/document-deadlines.logic.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/secret-brands.ts#17"
           },
           {
@@ -34335,6 +34590,9 @@
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#37"
           },
           {
+            "location": "apps/web/src/routes/_protected.inbox/-new-request-dialog.tsx#9"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-conditions.tsx#14"
           },
           {
@@ -34377,7 +34635,7 @@
             "location": "apps/web/src/routes/auth/index.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/auth/organization.tsx#15"
+            "location": "apps/web/src/routes/auth/organization.tsx#19"
           },
           {
             "location": "apps/web/src/routes/auth/otp.tsx#2"
