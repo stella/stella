@@ -21,10 +21,10 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "expo": "~57.0.15",
+    "expo": "~57.0.16",
     "expo-constants": "~57.0.14",
     "expo-linking": "~57.0.7",
-    "expo-router": "~57.0.15",
+    "expo-router": "~57.0.16",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.1",
     "react": "catalog:react19",
@@ -39,7 +39,7 @@
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
     "bun-types": "catalog:",
-    "expo-doctor": "1.20.2"
+    "expo-doctor": "1.20.3"
   },
   "crawlPosture": "unserved",
   "expo": {
