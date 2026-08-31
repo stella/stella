@@ -204,6 +204,22 @@ export const filterClipboardItems = (
   });
 };
 
+export type ClipboardPointerPosition = {
+  x: number;
+  y: number;
+};
+
+/**
+ * Browsers replay a pointer move at the unchanged screen position after a
+ * scroll so hover state follows the content; only a pointer that actually
+ * moved may change the selection, or arrow-key scrolling would hand it back to
+ * the card that slid under the cursor.
+ */
+export const clipboardPointerMoved = (
+  previous: ClipboardPointerPosition | null,
+  current: ClipboardPointerPosition,
+) => previous === null || previous.x !== current.x || previous.y !== current.y;
+
 export const adjacentClipboardIndex = (
   currentIndex: number,
   direction: "next" | "previous",

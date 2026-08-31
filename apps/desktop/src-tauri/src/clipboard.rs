@@ -975,8 +975,9 @@ fn sanitized_html(raw_html: &str) -> Option<String> {
   ]);
   let html = HtmlSanitizer::new()
     .tags(allowed_tags)
-    .clean(raw_html)
+    .clean(&without_word_list_spacers(raw_html))
     .to_string();
+  let html = collapse_html_whitespace(&html);
   let has_formatting = [
     "b",
     "blockquote",
@@ -992,17 +993,103 @@ fn sanitized_html(raw_html: &str) -> Option<String> {
     "ul",
   ]
   .iter()
-  .any(|tag| contains_opening_tag(&html, tag));
+  .any(|tag| find_opening_tag(&html, tag).is_some());
   if has_formatting { Some(html) } else { None }
 }
 
-fn contains_opening_tag(html: &str, tag: &str) -> bool {
+/// Word separates an auto-numbered list label from its paragraph with a span in
+/// this font holding a run of `&nbsp;`; the run is layout, not text.
+const WORD_LIST_SPACER_FONTS: [&str; 2] = [
+  "font:7.0pt \"Times New Roman\"",
+  "font:7.0pt &quot;Times New Roman&quot;",
+];
+
+fn without_word_list_spacers(raw_html: &str) -> String {
+  let mut output = String::with_capacity(raw_html.len());
+  let mut rest = raw_html;
+  while let Some((start, end)) = next_word_list_spacer(rest) {
+    output.push_str(&rest[..start]);
+    output.push(' ');
+    rest = &rest[end..];
+  }
+  output.push_str(rest);
+  output
+}
+
+/// Byte range of the next spacer `<span>` whose content is only `&nbsp;` and
+/// whitespace. Every index used to slice lands on ASCII, so the slices are valid.
+fn next_word_list_spacer(html: &str) -> Option<(usize, usize)> {
+  let mut search_from = 0;
+  while let Some(offset) = WORD_LIST_SPACER_FONTS
+    .iter()
+    .filter_map(|font| html[search_from..].find(font))
+    .min()
+  {
+    let font_index = search_from + offset;
+    search_from = font_index + 1;
+    let Some(span_start) = html[..font_index].rfind("<span") else {
+      continue;
+    };
+    if html[span_start..font_index].contains('>') {
+      continue;
+    }
+    let content_start = font_index + html[font_index..].find('>')? + 1;
+    let content_len = html[content_start..].find("</span>")?;
+    let content = &html[content_start..content_start + content_len];
+    if content
+      .split("&nbsp;")
+      .all(|chunk| chunk.chars().all(char::is_whitespace))
+    {
+      return Some((span_start, content_start + content_len + "</span>".len()));
+    }
+  }
+  None
+}
+
+/// Collapses source whitespace outside `<pre>` the way HTML renders it, so
+/// previews and derived plain text never inherit the source line wrapping that
+/// Word and browsers put in clipboard HTML.
+fn collapse_html_whitespace(html: &str) -> String {
+  let mut output = String::with_capacity(html.len());
+  let mut rest = html;
+  while let Some(pre_start) = find_opening_tag(rest, "pre") {
+    let pre_end = rest[pre_start..]
+      .find("</pre>")
+      .map_or(rest.len(), |index| pre_start + index + "</pre>".len());
+    push_collapsed_whitespace(&mut output, &rest[..pre_start]);
+    output.push_str(&rest[pre_start..pre_end]);
+    rest = &rest[pre_end..];
+  }
+  push_collapsed_whitespace(&mut output, rest);
+  output.trim().to_string()
+}
+
+fn push_collapsed_whitespace(output: &mut String, html: &str) {
+  let mut pending_space = false;
+  for character in html.chars() {
+    if character.is_ascii_whitespace() {
+      pending_space = true;
+      continue;
+    }
+    if pending_space {
+      output.push(' ');
+      pending_space = false;
+    }
+    output.push(character);
+  }
+  if pending_space {
+    output.push(' ');
+  }
+}
+
+fn find_opening_tag(html: &str, tag: &str) -> Option<usize> {
   let prefix = format!("<{tag}");
-  html.match_indices(&prefix).any(|(index, _)| {
+  html.match_indices(&prefix).find_map(|(index, _)| {
     html
       .as_bytes()
       .get(index + prefix.len())
       .is_some_and(|byte| *byte == b'>' || byte.is_ascii_whitespace())
+      .then_some(index)
   })
 }
 
@@ -1576,6 +1663,66 @@ mod tests {
     assert_eq!(sanitized_html("<span>plain</span>"), None);
     assert_eq!(sanitized_html("line<br>break"), None);
     assert!(sanitized_html("<strong>bold</strong>").is_some());
+  }
+
+  /// Shape of the HTML Word puts on the clipboard: document chrome before the
+  /// fragment, source lines wrapped at ~72 columns, and an auto-numbered list
+  /// label followed by a tiny-font `&nbsp;` spacer.
+  const WORD_CLIPBOARD_HTML: &str = concat!(
+    "<html xmlns:o=\"urn:schemas-microsoft-com:office:office\"\n",
+    "xmlns=\"http://www.w3.org/TR/REC-html40\">\n\n<head>\n",
+    "<meta http-equiv=Content-Type content=\"text/html; charset=utf-8\">\n",
+    "<meta name=Generator content=\"Microsoft Word 15\">\n",
+    "<!--[if gte mso 9]><xml>\n <o:OfficeDocumentSettings>\n",
+    " </o:OfficeDocumentSettings>\n</xml><![endif]-->\n",
+    "<style>\n<!--\n@list l0:level1\n\t{mso-level-tab-stop:none;}\n-->\n</style>\n",
+    "</head>\n\n<body lang=EN-US style='tab-interval:.5in'>\n",
+    "<!--StartFragment-->\n\n",
+    "<p class=MsoListParagraph style='margin-left:.5in;text-indent:-.25in;\n",
+    "mso-list:l0 level1 lfo1'><![if !supportLists]><b><span\n",
+    "style='mso-list:Ignore'>11.<span style='font:7.0pt \"Times New Roman\"'>",
+    "&nbsp;&nbsp;&nbsp;&nbsp; </span></span></b><![endif]><b>General</b>. ",
+    "Neither party has an obligation\nunder this MNDA to disclose ",
+    "Confidential Information to the other or proceed with\nany proposed ",
+    "transaction.</p>\n\n<!--EndFragment-->\n</body>\n\n</html>\n",
+  );
+
+  #[test]
+  fn sanitizer_collapses_word_document_chrome_and_source_line_wrapping() {
+    let html = sanitized_html(WORD_CLIPBOARD_HTML).unwrap();
+
+    assert!(html.starts_with("<p>"), "{html}");
+    assert!(!html.contains('\n'), "{html}");
+    assert!(
+      html.contains("Neither party has an obligation under this MNDA"),
+      "{html}"
+    );
+    assert!(html.contains("<b>General</b>. Neither"), "{html}");
+  }
+
+  #[test]
+  fn sanitizer_replaces_word_list_spacers_with_a_single_space() {
+    let html = sanitized_html(WORD_CLIPBOARD_HTML).unwrap();
+
+    assert!(!html.contains("&nbsp;"), "{html}");
+    assert!(html.contains("11. </span></b><b>General</b>"), "{html}");
+  }
+
+  #[test]
+  fn sanitizer_keeps_meaningful_non_breaking_spaces() {
+    let html = sanitized_html(
+      "<p><b>Section</b>&nbsp;5 <span style='font:7.0pt \"Times New Roman\"'>kept</span></p>",
+    )
+    .unwrap();
+
+    assert_eq!(html, "<p><b>Section</b>&nbsp;5 <span>kept</span></p>");
+  }
+
+  #[test]
+  fn sanitizer_preserves_preformatted_whitespace() {
+    let html = sanitized_html("<p>a\n\n  b</p>\n<pre>a\n  b</pre>\n").unwrap();
+
+    assert_eq!(html, "<p>a b</p> <pre>a\n  b</pre>");
   }
 
   #[test]

@@ -4,6 +4,7 @@ import {
   adjacentClipboardIndex,
   CLIPBOARD_ITEM_DRAG_TYPE,
   clipboardDraggedItemId,
+  clipboardPointerMoved,
   clipboardTimelineKeyAction,
   clipboardRailScrollDelta,
   clipboardRailWindow,
@@ -158,6 +159,16 @@ describe("keyboard indexes", () => {
     expect(adjacentClipboardIndex(1, "previous", 2)).toBe(0);
     expect(adjacentClipboardIndex(0, "previous", 2)).toBeNull();
     expect(adjacentClipboardIndex(0, "next", 0)).toBeNull();
+  });
+
+  test("a pointer move replayed after a scroll does not count as movement", () => {
+    expect(clipboardPointerMoved(null, { x: 10, y: 20 })).toBe(true);
+    expect(clipboardPointerMoved({ x: 10, y: 20 }, { x: 10, y: 20 })).toBe(
+      false,
+    );
+    expect(clipboardPointerMoved({ x: 10, y: 20 }, { x: 11, y: 20 })).toBe(
+      true,
+    );
   });
 
   test("quick copy only accepts visible slots one through nine", () => {
