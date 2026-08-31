@@ -162,7 +162,7 @@ describe("keyboard indexes", () => {
   });
 
   test("a pointer move replayed after a scroll does not count as movement", () => {
-    expect(clipboardPointerMoved(null, { x: 10, y: 20 })).toBe(true);
+    expect(clipboardPointerMoved(null, { x: 10, y: 20 })).toBe(false);
     expect(clipboardPointerMoved({ x: 10, y: 20 }, { x: 10, y: 20 })).toBe(
       false,
     );

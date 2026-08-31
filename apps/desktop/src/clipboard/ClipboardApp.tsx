@@ -1214,6 +1214,9 @@ const ClipboardApp = () => {
     };
     const handleWindowFocus = () => {
       setAgeReferenceTime(Date.now());
+      // The pointer may have moved while the window was hidden; the next
+      // pointer move only seeds the position.
+      railPointerRef.current = null;
       if (welcomeOpen) {
         return;
       }
