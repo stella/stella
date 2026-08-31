@@ -43,7 +43,6 @@ body:has(.clipboard-editor-window) {
 
   min-height: 100dvh;
   border-radius: 28px;
-  clip-path: inset(0 round 28px);
   color-scheme: inherit;
   background-color: color-mix(in srgb, var(--background) 34%, transparent);
   box-shadow: none;
