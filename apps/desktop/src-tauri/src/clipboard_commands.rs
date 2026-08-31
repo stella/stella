@@ -279,7 +279,7 @@ pub fn clipboard_get_editor_context(
     .ok_or_else(|| ITEM_NOT_FOUND_ERROR.to_string())?;
   Ok(ClipboardEditorContext {
     groups: manager.snapshot().groups,
-    item,
+    item: item.for_webview(),
   })
 }
 
