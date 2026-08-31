@@ -2,7 +2,6 @@ import { useState } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  CheckIcon,
   ClipboardListIcon,
   FileTextIcon,
   LinkIcon,
@@ -20,7 +19,6 @@ import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desk
 import { getAnalytics } from "@/lib/analytics/provider";
 import { externalApiOrigin } from "@/lib/api-origins";
 import { connectSelfHostedDesktop } from "@/lib/desktop-bridge";
-import type { DesktopPlatform } from "@/lib/desktop-downloads";
 import { detached } from "@/lib/detached";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
@@ -36,17 +34,6 @@ function DesktopPage() {
   >("idle");
 
   const shortcut = platform === "mac" ? "⌘ ⇧ V" : "Ctrl + Shift + V";
-  const installOpenStep = t("settings.account.desktopInstallOpenStep");
-  const installStepsByPlatform = {
-    mac: [t("settings.account.desktopInstallMacStep"), installOpenStep],
-    other: [
-      t("settings.account.desktopInstallWindowsStep"),
-      t("settings.account.desktopInstallMacStep"),
-      installOpenStep,
-    ],
-    windows: [t("settings.account.desktopInstallWindowsStep"), installOpenStep],
-  } as const satisfies Record<DesktopPlatform, readonly string[]>;
-  const installSteps = installStepsByPlatform[platform];
 
   const handleConnectSelfHostedDesktop = async () => {
     setSelfHostConnectStatus("connecting");
@@ -78,13 +65,7 @@ function DesktopPage() {
       />
       <Frame className="overflow-hidden">
         <FramePanel className="overflow-hidden p-0">
-          <section className="relative isolate grid gap-8 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
-            <img
-              alt=""
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 -z-10 size-full opacity-25"
-              src="/branding/onboarding-gradient-light.svg"
-            />
+          <section className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
             <div className="flex max-w-2xl flex-col items-start">
               <h2 className="text-foreground text-2xl font-semibold tracking-tight text-balance">
                 {t("settings.account.desktopHeroTitle")}
@@ -128,29 +109,6 @@ function DesktopPage() {
             icon={FileTextIcon}
             title={t("settings.account.desktopDocumentsTitle")}
           />
-        </FramePanel>
-      </Frame>
-
-      <Frame>
-        <FramePanel>
-          <section className="space-y-4">
-            <h2 className="text-sm font-medium">
-              {t("settings.account.desktopInstallTitle")}
-            </h2>
-            <ol className="grid gap-3 sm:grid-cols-2">
-              {installSteps.map((step) => (
-                <li
-                  className="bg-muted/48 flex items-start gap-3 rounded-xl p-4 text-sm leading-relaxed"
-                  key={step}
-                >
-                  <span className="bg-foreground text-background mt-0.5 grid size-5 shrink-0 place-items-center rounded-full">
-                    <CheckIcon aria-hidden="true" className="size-3" />
-                  </span>
-                  <span>{step}</span>
-                </li>
-              ))}
-            </ol>
-          </section>
         </FramePanel>
       </Frame>
       {env.VITE_SELFHOST && env.VITE_FEATURE_DESKTOP_EDITING && (
