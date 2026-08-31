@@ -53,6 +53,7 @@ const WINDOWS_MONITOR_PROCESSING_EXCLUSION_FORMAT: &str =
 const MAX_HISTORY_ITEMS: usize = 500;
 const MAX_ITEM_TEXT_BYTES: usize = 64 * 1024;
 const MAX_ITEM_HTML_BYTES: usize = 128 * 1024;
+const MAX_ITEM_RTF_BYTES: usize = 256 * 1024;
 const MAX_ITEM_NAME_CHARACTERS: usize = 80;
 const MAX_HISTORY_BYTES: usize = 16 * 1024 * 1024;
 const RETENTION_SWEEP_INTERVAL: std::time::Duration =
@@ -157,6 +158,11 @@ pub enum ClipboardItem {
     name: Option<String>,
     #[serde(rename = "plainText", alias = "plain_text")]
     plain_text: String,
+    /// The source app's RTF, written back verbatim on paste so RTF-first
+    /// targets receive the original formatting. Never crosses IPC (see
+    /// `for_webview`) and is dropped once the clip is edited.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rtf: Option<String>,
     #[serde(default, rename = "sourceApp", alias = "source_app")]
     source_app: Option<ClipboardSourceApp>,
   },
@@ -167,8 +173,11 @@ impl ClipboardItem {
     let content_bytes = match self {
       Self::Text { plain_text, .. } => plain_text.len(),
       Self::FormattedText {
-        html, plain_text, ..
-      } => plain_text.len() + html.len(),
+        html,
+        plain_text,
+        rtf,
+        ..
+      } => plain_text.len() + html.len() + rtf.as_ref().map_or(0, String::len),
     };
     content_bytes
       + self.name().map_or(0, str::len)
@@ -210,6 +219,21 @@ impl ClipboardItem {
       Self::Text { .. } => None,
       Self::FormattedText { html, .. } => Some(html),
     }
+  }
+
+  fn rtf(&self) -> Option<&str> {
+    match self {
+      Self::Text { .. } => None,
+      Self::FormattedText { rtf, .. } => rtf.as_deref(),
+    }
+  }
+
+  /// The item as the webview sees it: the paste-back payload stays native-side.
+  pub fn for_webview(mut self) -> Self {
+    if let Self::FormattedText { rtf, .. } = &mut self {
+      *rtf = None;
+    }
+    self
   }
 
   fn group_id(&self) -> Option<&str> {
@@ -277,6 +301,7 @@ impl ClipboardItem {
         id,
         name,
         plain_text: new_plain_text,
+        rtf: None,
         source_app,
       },
       None => Self::Text {
@@ -316,6 +341,7 @@ impl ClipboardItem {
         html,
         name,
         plain_text,
+        rtf,
         source_app,
         ..
       } => Self::FormattedText {
@@ -325,6 +351,7 @@ impl ClipboardItem {
         id,
         name: name.clone(),
         plain_text: plain_text.clone(),
+        rtf: rtf.clone(),
         source_app: source_app.clone(),
       },
     }
@@ -520,6 +547,7 @@ struct ClipboardCapture {
   copied_at: DateTime<Utc>,
   html: Option<String>,
   plain_text: String,
+  rtf: Option<String>,
   source_app: Option<ClipboardSourceApp>,
   source_app_visual: Option<ClipboardSourceAppVisual>,
 }
@@ -566,7 +594,12 @@ impl ClipboardManager {
     ClipboardSnapshot {
       capture_status: self.capture_status,
       groups: self.groups.clone(),
-      items: self.items.clone(),
+      items: self
+        .items
+        .iter()
+        .cloned()
+        .map(ClipboardItem::for_webview)
+        .collect(),
       persistence: self.persistence.status(),
       retention: self.retention,
       source_app_visuals,
@@ -784,6 +817,7 @@ impl ClipboardManager {
       copied_at,
       html,
       plain_text,
+      rtf,
       source_app,
       source_app_visual,
     } = capture;
@@ -826,6 +860,7 @@ impl ClipboardManager {
         id,
         name,
         plain_text,
+        rtf,
         source_app,
       },
       None => ClipboardItem::Text {
@@ -1418,6 +1453,15 @@ impl ClipboardHandler for HistoryClipboardHandler {
     } else {
       None
     };
+    let rtf = if html.is_some() && self.clipboard.has(ContentFormat::Rtf) {
+      self
+        .clipboard
+        .get_rich_text()
+        .ok()
+        .filter(|rtf| rtf.len() <= MAX_ITEM_RTF_BYTES)
+    } else {
+      None
+    };
 
     let (source_app, source_app_visual) = frontmost_source_app(&self.app)
       .map(|source| (Some(source.app), source.visual))
@@ -1426,6 +1470,7 @@ impl ClipboardHandler for HistoryClipboardHandler {
       copied_at: Utc::now(),
       html,
       plain_text,
+      rtf,
       source_app,
       source_app_visual,
     };
@@ -1589,6 +1634,9 @@ pub fn write_item(item: &ClipboardItem, plain_text_only: bool) -> Result<(), Str
   if !plain_text_only && let Some(html) = item.html() {
     contents.push(ClipboardContent::Html(html.to_string()));
   }
+  if !plain_text_only && let Some(rtf) = item.rtf() {
+    contents.push(ClipboardContent::Rtf(rtf.to_string()));
+  }
   contents.push(ClipboardContent::Other(
     INTERNAL_CLIPBOARD_FORMAT.to_string(),
     Vec::new(),
@@ -1638,6 +1686,22 @@ mod tests {
         copied_at,
         html: html.map(str::to_string),
         plain_text: plain_text.to_string(),
+        rtf: None,
+        source_app: None,
+        source_app_visual: None,
+      })
+      .unwrap()
+  }
+
+  const WORD_RTF: &str = r"{\rtf1\ansi{\b Clause}}";
+
+  fn capture_with_rtf(manager: &mut ClipboardManager, html: Option<&str>) -> bool {
+    manager
+      .capture(ClipboardCapture {
+        copied_at: Utc::now(),
+        html: html.map(str::to_string),
+        plain_text: "Clause".to_string(),
+        rtf: Some(WORD_RTF.to_string()),
         source_app: None,
         source_app_visual: None,
       })
@@ -1800,6 +1864,7 @@ mod tests {
       copied_at: original_time,
       group_id: Some("research".to_string()),
       html: "<strong>Clause</strong>".to_string(),
+      rtf: None,
       id: "original".to_string(),
       name: Some("Key clause".to_string()),
       plain_text: "Clause".to_string(),
@@ -2112,6 +2177,7 @@ mod tests {
       id: "item-id".to_string(),
       name: Some("Formatted note".to_string()),
       plain_text: "formatted".to_string(),
+      rtf: None,
       source_app: Some(ClipboardSourceApp {
         identifier: Some("com.apple.TextEdit".to_string()),
         name: "TextEdit".to_string(),
@@ -2121,6 +2187,7 @@ mod tests {
     let value = serde_json::to_value(item).unwrap();
 
     assert_eq!(value["type"], "formattedText");
+    assert!(value.get("rtf").is_none());
     assert!(value.get("copiedAt").is_some());
     assert_eq!(value["plainText"], "formatted");
     assert_eq!(value["name"], "Formatted note");
@@ -2278,5 +2345,63 @@ mod tests {
       panic!("formatted edit should produce formatted clipboard content");
     };
     assert_eq!(html, "<strong>new</strong>");
+  }
+
+  #[test]
+  fn captured_rtf_is_persisted_but_never_sent_to_the_webview() {
+    let mut manager = ready_manager();
+    assert!(capture_with_rtf(&mut manager, Some("<b>Clause</b>")));
+
+    assert_eq!(manager.items[0].rtf(), Some(WORD_RTF));
+    let persisted = serde_json::to_value(&manager.items[0]).unwrap();
+    assert_eq!(persisted["rtf"], WORD_RTF);
+    assert_eq!(manager.snapshot().items[0].rtf(), None);
+    let item_id = manager.items[0].id().to_string();
+    assert_eq!(manager.item(&item_id).unwrap().for_webview().rtf(), None);
+  }
+
+  #[test]
+  fn rtf_is_dropped_without_formatting_worth_keeping() {
+    let mut manager = ready_manager();
+    assert!(capture_with_rtf(&mut manager, None));
+
+    assert!(matches!(manager.items[0], ClipboardItem::Text { .. }));
+  }
+
+  #[test]
+  fn editing_a_clip_drops_its_rtf_while_metadata_edits_keep_it() {
+    let mut manager = ready_manager();
+    assert!(capture_with_rtf(&mut manager, Some("<b>Clause</b>")));
+    let item_id = manager.items[0].id().to_string();
+
+    assert!(
+      manager
+        .update_item(&item_id, "Clause", Some("<b>Clause</b>"), None)
+        .unwrap()
+    );
+    assert_eq!(manager.items[0].rtf(), Some(WORD_RTF));
+
+    assert!(
+      manager
+        .update_item(&item_id, "Clause", Some("<b>Clause</b><i>!</i>"), None)
+        .unwrap()
+    );
+    assert_eq!(manager.items[0].rtf(), None);
+  }
+
+  #[test]
+  fn recapturing_the_same_content_refreshes_its_rtf() {
+    let mut manager = ready_manager();
+    assert!(capture(
+      &mut manager,
+      "Clause",
+      Some("<b>Clause</b>"),
+      Utc::now()
+    ));
+    assert_eq!(manager.items[0].rtf(), None);
+
+    assert!(capture_with_rtf(&mut manager, Some("<b>Clause</b>")));
+    assert_eq!(manager.items.len(), 1);
+    assert_eq!(manager.items[0].rtf(), Some(WORD_RTF));
   }
 }
