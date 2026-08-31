@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
 
+import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { compileLegalSourceToDocx } from "@stll/docx-core";
 
 import type { Transaction } from "@/api/db/root";
@@ -41,6 +42,15 @@ import type {
   FlowStepOutput,
   FlowTriggerSource,
 } from "@/api/lib/flows/flow-types";
+import {
+  createNotificationsInTransaction,
+  fanOutNotifications,
+  pingNotificationRecipients,
+} from "@/api/lib/notifications";
+import type {
+  NewNotification,
+  NotificationPing,
+} from "@/api/lib/notifications";
 import { logger } from "@/api/lib/observability/logger";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
@@ -162,6 +172,9 @@ export const executeFlowStep = async (
         runId,
         stepIndex,
         workspaceId: run.workspaceId,
+        organizationId: scope.organizationId,
+        actorUserId,
+        flowName: run.definitionSnapshot.name,
         scopedDb,
         broadcastUpdate,
       });
@@ -189,6 +202,9 @@ export const executeFlowStep = async (
         stepCount: run.definitionSnapshot.steps.length,
         output,
         workspaceId: run.workspaceId,
+        organizationId: scope.organizationId,
+        actorUserId,
+        flowName: run.definitionSnapshot.name,
         scopedDb,
         broadcastUpdate,
         enqueueStep,
@@ -211,6 +227,9 @@ export const executeFlowStep = async (
         stepCount: run.definitionSnapshot.steps.length,
         output,
         workspaceId: run.workspaceId,
+        organizationId: scope.organizationId,
+        actorUserId,
+        flowName: run.definitionSnapshot.name,
         scopedDb,
         broadcastUpdate,
         enqueueStep,
@@ -299,7 +318,7 @@ const resolveRunScope = async (
  * run cleanly rather than panicking.
  */
 const resolveActorUserId = async (
-  run: LoadedRun,
+  run: Pick<LoadedRun, "definitionId" | "triggerSource">,
   database: Pick<typeof rootDb, "query">,
 ): Promise<SafeId<"user"> | null> => {
   if (run.triggerSource.type === "manual") {
@@ -660,6 +679,9 @@ type CompleteStepArgs = {
   stepCount: number;
   output: FlowStepOutput;
   workspaceId: SafeId<"workspace">;
+  organizationId: SafeId<"organization">;
+  actorUserId: SafeId<"user">;
+  flowName: string;
   scopedDb: ReturnType<typeof createRootScopedDb>;
   broadcastUpdate: typeof broadcastFlowRunUpdate;
   enqueueStep: typeof enqueueFlowStep;
@@ -671,6 +693,9 @@ const completeStepAndAdvance = async ({
   stepCount,
   output,
   workspaceId,
+  organizationId,
+  actorUserId,
+  flowName,
   scopedDb,
   broadcastUpdate,
   enqueueStep,
@@ -678,7 +703,7 @@ const completeStepAndAdvance = async ({
   const advance = advanceAfterStep({ stepIndex, stepCount });
   const now = new Date();
 
-  const payload = await scopedDb(async (tx) => {
+  const { payload, pings } = await scopedDb(async (tx) => {
     await tx
       .update(flowRunSteps)
       .set({ status: "completed", output, finishedAt: now })
@@ -686,41 +711,92 @@ const completeStepAndAdvance = async ({
         and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
       );
 
-    if (advance.kind === "finish") {
-      await tx
-        .update(flowRuns)
-        .set({ status: "completed", finishedAt: now })
-        .where(eq(flowRuns.id, runId));
-    } else {
+    if (advance.kind !== "finish") {
       await tx
         .update(flowRuns)
         .set({ status: "running", currentStepIndex: advance.nextStepIndex })
         .where(eq(flowRuns.id, runId));
+      return { payload: await readRunProgress(tx, runId), pings: [] };
     }
-    return await readRunProgress(tx, runId);
+
+    await tx
+      .update(flowRuns)
+      .set({ status: "completed", finishedAt: now })
+      .where(eq(flowRuns.id, runId));
+    // Filed in the same transaction as the terminal status, so the badge and
+    // the run can never disagree, and keyed on the run so a redelivered
+    // worker job cannot raise it twice.
+    const runPings = await createNotificationsInTransaction(
+      [
+        flowRunCompletedNotification({
+          actorUserId,
+          flowName,
+          organizationId,
+          runId,
+        }),
+      ],
+      tx,
+    );
+    return { payload: await readRunProgress(tx, runId), pings: runPings };
   });
 
   broadcastUpdate(workspaceId, payload);
+  pingNotificationRecipients(pings);
 
   if (advance.kind === "advance") {
     await enqueueStep({ runId, stepIndex: advance.nextStepIndex });
   }
 };
 
+type FlowRunCompletedNotificationArgs = {
+  actorUserId: SafeId<"user">;
+  flowName: string;
+  organizationId: SafeId<"organization">;
+  runId: SafeId<"flowRun">;
+};
+
+/**
+ * The "your run finished" pointer, shared by both paths that can make a run
+ * terminal: the last step completing on the worker, and a reviewer approving a
+ * final review gate. One definition so the two cannot drift, and one
+ * run-derived idempotency key so whichever path gets there first wins and the
+ * other is a no-op.
+ */
+const flowRunCompletedNotification = ({
+  actorUserId,
+  flowName,
+  organizationId,
+  runId,
+}: FlowRunCompletedNotificationArgs): NewNotification => ({
+  kind: NOTIFICATION_KIND.FLOW_RUN_COMPLETED,
+  metadata: { flowName },
+  entityType: "flow_run",
+  entityId: runId,
+  organizationId,
+  userId: actorUserId,
+  idempotencyKey: `flow-run-completed:${runId}`,
+});
+
 const pauseAtReviewGate = async ({
   runId,
   stepIndex,
   workspaceId,
+  organizationId,
+  actorUserId,
+  flowName,
   scopedDb,
   broadcastUpdate,
 }: {
   runId: SafeId<"flowRun">;
   stepIndex: number;
   workspaceId: SafeId<"workspace">;
+  organizationId: SafeId<"organization">;
+  actorUserId: SafeId<"user">;
+  flowName: string;
   scopedDb: ReturnType<typeof createRootScopedDb>;
   broadcastUpdate: typeof broadcastFlowRunUpdate;
 }): Promise<void> => {
-  const payload = await scopedDb(async (tx) => {
+  const { payload, pings } = await scopedDb(async (tx) => {
     await tx
       .update(flowRunSteps)
       .set({ status: "awaiting_review" })
@@ -731,9 +807,24 @@ const pauseAtReviewGate = async ({
       .update(flowRuns)
       .set({ status: "awaiting_review" })
       .where(eq(flowRuns.id, runId));
-    return await readRunProgress(tx, runId);
+    const gatePings = await createNotificationsInTransaction(
+      [
+        {
+          kind: NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL,
+          metadata: { flowName },
+          entityType: "flow_run",
+          entityId: runId,
+          organizationId,
+          userId: actorUserId,
+          idempotencyKey: `flow-run-review-gate:${runId}:${stepIndex}`,
+        },
+      ],
+      tx,
+    );
+    return { payload: await readRunProgress(tx, runId), pings: gatePings };
   });
   broadcastUpdate(workspaceId, payload);
+  pingNotificationRecipients(pings);
 };
 
 const readRunProgress = async (
@@ -791,7 +882,7 @@ export const failFlowRunFromWorker = async (
 
   const writeFailure = async (
     tx: Transaction,
-  ): Promise<FlowRunUpdatePayload> => {
+  ): Promise<{ payload: FlowRunUpdatePayload; pings: NotificationPing[] }> => {
     await tx
       .update(flowRunSteps)
       .set({ status: "failed", error: message, finishedAt: now })
@@ -802,13 +893,31 @@ export const failFlowRunFromWorker = async (
       .update(flowRuns)
       .set({ status: "failed", error: message, finishedAt: now })
       .where(eq(flowRuns.id, runId));
-    return await readRunProgress(tx, runId);
+    const actorUserId = scope.actorUserId;
+    const pings =
+      actorUserId === null
+        ? []
+        : await createNotificationsInTransaction(
+            [
+              {
+                kind: NOTIFICATION_KIND.FLOW_RUN_FAILED,
+                metadata: { flowName: run.definitionSnapshot.name },
+                entityType: "flow_run",
+                entityId: runId,
+                organizationId: scope.organizationId,
+                userId: actorUserId,
+                idempotencyKey: `flow-run-failed:${runId}`,
+              },
+            ],
+            tx,
+          );
+    return { payload: await readRunProgress(tx, runId), pings };
   };
 
   // A null actor (automated run whose author was deleted) has no RLS-scoped
   // handle to write through; fall back to `rootDb` so the run still finalizes
   // instead of being stranded non-terminal.
-  const payload =
+  const { payload, pings } =
     scope.actorUserId === null
       ? await rootDb.transaction(writeFailure)
       : await createRootScopedDb({
@@ -817,6 +926,7 @@ export const failFlowRunFromWorker = async (
           workspaceIds: [run.workspaceId],
         })(writeFailure);
   broadcastFlowRunUpdate(run.workspaceId, payload);
+  pingNotificationRecipients(pings);
 };
 
 // ── Request-time services (handler side) ────────────────
@@ -842,6 +952,7 @@ export type FlowRunActionResult = {
 export type ResolveFlowReviewGateOptions = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  organizationId: SafeId<"organization">;
   runId: SafeId<"flowRun">;
   userId: SafeId<"user">;
   decision: FlowReviewDecision;
@@ -857,6 +968,7 @@ export const resolveFlowReviewGate = async (
   {
     safeDb,
     workspaceId,
+    organizationId,
     runId,
     userId,
     decision,
@@ -865,9 +977,16 @@ export const resolveFlowReviewGate = async (
   {
     broadcastUpdate = broadcastFlowRunUpdate,
     enqueueStep = enqueueFlowStep,
+    database = rootDb,
   }: {
     broadcastUpdate?: typeof broadcastFlowRunUpdate;
     enqueueStep?: typeof enqueueFlowStep;
+    /**
+     * Owner connection used only to address the completion pointer: the run's
+     * actor is usually not the reviewer, so neither resolving them nor writing
+     * their row fits the caller's scope.
+     */
+    database?: Pick<typeof rootDb, "query" | "select" | "transaction">;
   } = {},
 ): Promise<Result<FlowRunActionResult, HandlerError | SafeDbError>> =>
   await Result.gen(async function* () {
@@ -879,6 +998,8 @@ export const resolveFlowReviewGate = async (
             id: true,
             status: true,
             currentStepIndex: true,
+            definitionId: true,
+            triggerSource: true,
             definitionSnapshot: true,
           },
         }),
@@ -986,6 +1107,37 @@ export const resolveFlowReviewGate = async (
     );
 
     broadcastUpdate(workspaceId, result.payload);
+
+    // Approving the last gate is the run's other terminal path: the worker
+    // never sees it, so without this the advertised completion pointer would
+    // exist only for runs whose last step was not a review gate. Addressed to
+    // the run's actor, who is usually not the reviewer, so it cannot be
+    // written under the reviewer's own scope; the run-derived key makes it a
+    // no-op if `completeStepAndAdvance` also reaches it.
+    if (resolution.kind === "finish") {
+      const actorUserId = yield* Result.await(
+        Result.tryPromise(async () => await resolveActorUserId(run, database)),
+      );
+      if (actorUserId !== null) {
+        yield* Result.await(
+          Result.tryPromise(
+            async () =>
+              await fanOutNotifications(
+                [
+                  flowRunCompletedNotification({
+                    actorUserId,
+                    flowName: run.definitionSnapshot.name,
+                    organizationId,
+                    runId,
+                  }),
+                ],
+                database,
+              ),
+          ),
+        );
+      }
+    }
+
     if (resolution.kind === "advance") {
       yield* Result.await(
         Result.tryPromise({

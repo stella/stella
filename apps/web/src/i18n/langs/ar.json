@@ -2852,6 +2852,22 @@
     "toggleChat": "تبديل المحادثة",
     "toggleSidebar": "تبديل الشريط الجانبي"
   },
+  "notifications": {
+    "empty": "لا توجد إشعارات بعد",
+    "kind": {
+      "announcement": "<bdi>{title}</bdi>",
+      "flowRunAwaitingApproval": "مسار العمل <bdi>{flowName}</bdi> بانتظار موافقتك",
+      "flowRunCompleted": "اكتمل مسار العمل <bdi>{flowName}</bdi>",
+      "flowRunFailed": "فشل مسار العمل <bdi>{flowName}</bdi>",
+      "mention": "ذكرك <bdi>{actorName}</bdi> في تعليق",
+      "reportExportFailed": "فشل تصدير تقريرك",
+      "reportExportSucceeded": "تقريرك جاهز"
+    },
+    "loadOlder": "تحميل الأقدم",
+    "markAllRead": "تعليم الكل كمقروء",
+    "title": "الإشعارات",
+    "unreadLabel": "{count, plural, zero {لا إشعارات غير مقروءة} one {إشعار واحد غير مقروء} two {إشعاران غير مقروءين} few {# إشعارات غير مقروءة} many {# إشعارًا غير مقروء} other {# إشعار غير مقروء}}"
+  },
   "onboarding": {
     "aiConfigFailed": "تعذّر حفظ إعدادات الذكاء الاصطناعي. يمكنك إكمالها من الإعدادات.",
     "aiSubtitle": "أضف مفتاح API الخاص بك. يمكنك اختيار النماذج لاحقًا من الإعدادات.",

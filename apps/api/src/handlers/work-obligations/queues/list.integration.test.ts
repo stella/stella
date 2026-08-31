@@ -184,10 +184,7 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  for (const work of SEED) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding keeps the insert order readable
-    await seedWork(work);
-  }
+  await Promise.all(SEED.map(seedWork));
 });
 
 afterAll(async () => {

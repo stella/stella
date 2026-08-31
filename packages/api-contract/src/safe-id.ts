@@ -105,6 +105,7 @@ export type SafeIdType =
   | "mcpConnector"
   | "mcpOAuthClient"
   | "mcpUserConnection"
+  | "notification"
   | "organization"
   | "organizationSettings"
   | "pendingUpload"

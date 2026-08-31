@@ -50,7 +50,7 @@ import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import {
   getRequestWorkspacePolicy,
   UNSCOPED_REQUEST,
-} from "@/routes/_protected.inbox/new-request.logic";
+} from "@/routes/_protected.inbox/-new-request.logic";
 
 type RequestSchemaOptions = {
   canCreateUnscoped: boolean;

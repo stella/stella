@@ -4,9 +4,11 @@ import type { RedisOptions } from "bun";
 import {
   parseDesktopEditSessionRealtimeEvent,
   parseOrganizationRealtimeEvent,
+  parseUserRealtimeEvent,
   parseWorkspaceRealtimeEvent,
   type DesktopEditSessionRealtimeEvent,
   type OrganizationRealtimeEvent,
+  type UserRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
@@ -51,6 +53,20 @@ type RedisPayload =
       id: string;
       userId: string;
       originInstanceId?: string | undefined;
+    }
+  | {
+      scope: "user";
+      id: string;
+      organizationId: string;
+      event: UserRealtimeEvent;
+      originInstanceId?: string | undefined;
+      deliveredInline?: boolean | undefined;
+    }
+  | {
+      scope: "user-access-revoked";
+      id: string;
+      organizationId: string;
+      originInstanceId?: string | undefined;
     };
 
 /**
@@ -87,7 +103,9 @@ export const parseRedisPayload = (raw: string): RedisPayload | null => {
     scope !== "workspace" &&
     scope !== "organization" &&
     scope !== "session" &&
-    scope !== "workspace-access-revoked"
+    scope !== "workspace-access-revoked" &&
+    scope !== "user" &&
+    scope !== "user-access-revoked"
   ) {
     return null;
   }
@@ -99,6 +117,37 @@ export const parseRedisPayload = (raw: string): RedisPayload | null => {
     "originInstanceId" in parsed && typeof parsed.originInstanceId === "string"
       ? parsed.originInstanceId
       : undefined;
+
+  if (scope === "user" || scope === "user-access-revoked") {
+    if (
+      !("organizationId" in parsed) ||
+      typeof parsed.organizationId !== "string"
+    ) {
+      return null;
+    }
+    const { organizationId } = parsed;
+    if (scope === "user-access-revoked") {
+      return { scope, id: parsed.id, organizationId, originInstanceId };
+    }
+    if (!("event" in parsed)) {
+      return null;
+    }
+    const userEvent = parseUserRealtimeEvent(parsed.event);
+    return userEvent
+      ? {
+          scope,
+          id: parsed.id,
+          organizationId,
+          event: userEvent,
+          originInstanceId,
+          deliveredInline:
+            "deliveredInline" in parsed &&
+            typeof parsed.deliveredInline === "boolean"
+              ? parsed.deliveredInline
+              : undefined,
+        }
+      : null;
+  }
 
   if (scope === "workspace-access-revoked") {
     if (!("userId" in parsed) || typeof parsed.userId !== "string") {
@@ -244,6 +293,33 @@ export const createSseBroadcastPublisher = ({
         deliveredInline: options.deliveredInline,
       });
     },
+    publishUserEvent: async (
+      userId: SafeId<"user">,
+      organizationId: SafeId<"organization">,
+      event: UserRealtimeEvent,
+      options: PublishOptions = {},
+    ): Promise<void> => {
+      await publishRedisPayload({
+        scope: "user",
+        id: userId,
+        organizationId,
+        event,
+        originInstanceId: options.originInstanceId,
+        deliveredInline: options.deliveredInline,
+      });
+    },
+    publishUserAccessRevoked: async (
+      userId: SafeId<"user">,
+      organizationId: SafeId<"organization">,
+      options: { originInstanceId?: string | undefined } = {},
+    ): Promise<void> => {
+      await publishRedisPayload({
+        scope: "user-access-revoked",
+        id: userId,
+        organizationId,
+        originInstanceId: options.originInstanceId,
+      });
+    },
   };
 };
 
@@ -252,6 +328,8 @@ const defaultPublisher = createSseBroadcastPublisher();
 export const {
   publishOrganizationEvent,
   publishSessionEvent,
+  publishUserAccessRevoked,
+  publishUserEvent,
   publishWorkspaceAccessRevoked,
   publishWorkspaceEvent,
 } = defaultPublisher;

@@ -135,6 +135,16 @@ export const LIMITS = {
   signalsPageSizeMax: 100,
   /** Attachments per manual request. */
   signalRequestAttachmentsMax: 10,
+  /** Notification bell page sizes. The first page fills the panel; older
+   *  pages load on demand, so history is never drained at mount. */
+  notificationsPageSizeDefault: 20,
+  notificationsPageSizeMax: 50,
+  /** Addresses one comment may mention. Caps both the lookup and the fan-out
+   *  so a pasted address list cannot become a broadcast. */
+  mentionTargetsMax: 10,
+  /** Members one announcement may reach. A larger organization is refused
+   *  outright rather than announced to a truncated audience. */
+  announcementRecipientsMax: 5000,
   /** Per-org cap on the editable document-type taxonomy. The taxonomy is
    *  inherently bounded (a few dozen contract categories), so the list
    *  endpoint returns a plain ordered array rather than a paginated page. */

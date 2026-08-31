@@ -56,6 +56,7 @@ import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { meRoute } from "@/api/handlers/me/routes";
 import { memoriesRoute } from "@/api/handlers/memories/routes";
+import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { operatorRoute } from "@/api/handlers/operator/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
@@ -97,7 +98,11 @@ import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cleanup-queue";
 import { captureRequestError } from "@/api/lib/analytics/capture";
 import { getAnalytics } from "@/api/lib/analytics/client";
-import { getAuth, resolveWorkspaceRealtimeAudience } from "@/api/lib/auth";
+import {
+  getAuth,
+  resolveUserRealtimeAuthorization,
+  resolveWorkspaceRealtimeAudience,
+} from "@/api/lib/auth";
 import { initBilingualRunWorker } from "@/api/lib/bilingual/run-queue";
 import { shouldRejectBrowserMutation } from "@/api/lib/browser-origin-guard";
 import {
@@ -558,6 +563,7 @@ const api = new Elysia()
   .use(aiAutocompleteRoute)
   .use(feedbackPublicRoute)
   .use(memoriesRoute)
+  .use(notificationsRoute)
   .use(devPublicRoute)
   .use(smokeRoute)
   .use(operatorRoute)
@@ -743,7 +749,10 @@ const startServer = async (): Promise<void> => {
   // first, before any awaited setup below, so its connection timing
   // matches the previous import-time behavior and completes well before
   // `api.listen()` starts accepting requests.
-  startSse(resolveWorkspaceRealtimeAudience);
+  startSse({
+    user: resolveUserRealtimeAuthorization,
+    workspace: resolveWorkspaceRealtimeAudience,
+  });
 
   // Schema-drift fail-fast. If the runtime expects migrations
   // the database has not received, exit before serving any

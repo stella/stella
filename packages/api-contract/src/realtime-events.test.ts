@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import {
   MAX_RESOURCE_CHANGES_PER_EVENT,
+  newNotificationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
   parseOrganizationRealtimeEvent,
+  parseUserRealtimeEvent,
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
   resourceDeletedRealtimeEvent,
@@ -154,6 +156,44 @@ describe("realtime event contracts", () => {
           requestedAt: "not-a-timestamp",
         },
       }),
+    ).toBeNull();
+  });
+});
+
+describe("user realtime events", () => {
+  test("the notification event carries no notification", () => {
+    const event = newNotificationRealtimeEvent();
+
+    // The user channel fans out to every tab a person has open, including
+    // tabs on another organization. It must therefore never carry a row id,
+    // kind or metadata: the client re-reads through the authorized endpoint.
+    expect(event).toEqual({
+      type: REALTIME_EVENT_TYPE.NEW_NOTIFICATION,
+      data: null,
+    });
+    expect(Object.keys(event)).toEqual(["type", "data"]);
+  });
+
+  test("refuses a payload that smuggles a notification in", () => {
+    expect(
+      parseUserRealtimeEvent({
+        type: REALTIME_EVENT_TYPE.NEW_NOTIFICATION,
+        data: { id: "notification-1", kind: "mention" },
+      }),
+    ).toBeNull();
+    expect(parseUserRealtimeEvent(newNotificationRealtimeEvent())).toEqual(
+      newNotificationRealtimeEvent(),
+    );
+  });
+
+  test("the user channel does not accept workspace events", () => {
+    expect(parseUserRealtimeEvent(RESOURCE_UPDATED_EVENT)).toBeNull();
+    expect(parseUserRealtimeEvent(RESOURCE_SET_UPDATED_EVENT)).toBeNull();
+  });
+
+  test("the workspace channel does not accept the notification event", () => {
+    expect(
+      parseWorkspaceRealtimeEvent(newNotificationRealtimeEvent()),
     ).toBeNull();
   });
 });

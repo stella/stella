@@ -43,6 +43,7 @@ import {
 } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
+import { NotificationBell } from "@/components/notification-bell";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
 import { ShortcutEchoHud } from "@/components/shortcut-echo-hud";
@@ -64,9 +65,13 @@ import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { resolveMatterColor } from "@/lib/matter-colors";
+import { notificationsOptions } from "@/lib/notification-queries";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { usePinnedStore } from "@/lib/pinned-store";
-import { prefetchRouteQuery } from "@/lib/react-query";
+import {
+  prefetchNonCriticalInfiniteQuery,
+  prefetchRouteQuery,
+} from "@/lib/react-query";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { loadAuthContext } from "@/routes/-auth-context";
@@ -176,6 +181,16 @@ export const Route = createFileRoute("/_protected")({
         onPrefetchError,
       ),
       "protected-layout.prefetch",
+    );
+    // Prefetched here so the bell's first page joins the shell's request wave
+    // instead of chaining a new sequential round after hydration.
+    detached(
+      prefetchNonCriticalInfiniteQuery(
+        context.queryClient,
+        notificationsOptions({ organizationId: activeOrganizationId }),
+        onPrefetchError,
+      ),
+      "protected-layout.notifications-prefetch",
     );
     const rolePrefetch = prefetchRouteQuery(
       context.queryClient,
@@ -503,6 +518,7 @@ function ProtectedContent() {
           </Button>
         </>
       )}
+      <NotificationBell />
       {canShowInspectorButton && (
         <div className="contents md:hidden">
           <Separator className="mx-1 h-4" orientation="vertical" />

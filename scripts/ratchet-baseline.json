@@ -253,7 +253,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 741,
+    "count": 742,
     "files": {
       "apps/api/scripts/ai-provider-canary.ts": 4,
       "apps/api/scripts/backfill-image-thumbnails.ts": 9,
@@ -393,6 +393,7 @@
       "apps/api/src/lib/legal-search/reconciliation-store.ts": 1,
       "apps/api/src/lib/mcp-upstream/connections.ts": 3,
       "apps/api/src/lib/mcp-upstream/oauth.ts": 6,
+      "apps/api/src/lib/notifications.ts": 1,
       "apps/api/src/lib/redis-client.ts": 2,
       "apps/api/src/lib/report-export-recovery.ts": 2,
       "apps/api/src/lib/s3.ts": 3,

@@ -1,6 +1,7 @@
 import type {
   DesktopEditSessionRealtimeEvent,
   OrganizationRealtimeEvent,
+  UserRealtimeEvent,
   WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
@@ -19,6 +20,8 @@ import {
   parseRedisPayload,
   publishOrganizationEvent,
   publishSessionEvent,
+  publishUserAccessRevoked,
+  publishUserEvent,
   publishWorkspaceAccessRevoked,
   publishWorkspaceEvent,
   REDIS_CHANNEL,
@@ -42,14 +45,43 @@ export type WorkspaceConnectionAuthorizer = (
   lookup: WorkspaceConnectionAuthorizationLookup,
 ) => Promise<ReadonlySet<SafeId<"user">>>;
 
+/**
+ * Whether one user still holds an active membership in the organization their
+ * user-channel connection was opened for. The user channel is its own routing
+ * table, so this is the only membership question it has to ask — no workspace
+ * bucket is scanned to find a user's streams.
+ */
+export type UserConnectionAuthorizer = (lookup: {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+}) => Promise<boolean>;
+
 /** Workspace ID → connected SSE streams on THIS instance. */
 const connections = new Map<SafeId<"workspace">, Set<SSEConnection>>();
 const workspaceDeliveryTails = new Map<SafeId<"workspace">, Promise<void>>();
 let authorizeWorkspaceConnections: WorkspaceConnectionAuthorizer | null = null;
 
+/**
+ * One user-channel stream. It carries the organization it was opened for so a
+ * notification raised in one firm never invalidates a tab the same person has
+ * open on another firm, and so revocation can close exactly the streams whose
+ * membership went away.
+ */
+type UserSSEConnection = {
+  controller: ReadableStreamDefaultController;
+  organizationId: SafeId<"organization">;
+};
+
+/** User ID → that user's connected streams on THIS instance. */
+const userConnections = new Map<SafeId<"user">, Set<UserSSEConnection>>();
+const userDeliveryTails = new Map<SafeId<"user">, Promise<void>>();
+let authorizeUserConnection: UserConnectionAuthorizer | null = null;
+
 const encoder = new TextEncoder();
 
-const formatSSE = (event: WorkspaceRealtimeEvent): Uint8Array => {
+const formatSSE = (
+  event: OrganizationRealtimeEvent | UserRealtimeEvent | WorkspaceRealtimeEvent,
+): Uint8Array => {
   const payload = JSON.stringify(event);
   return encoder.encode(`data: ${payload}\n\n`);
 };
@@ -118,6 +150,90 @@ export const subscribe = ({
   });
 
   return stream;
+};
+
+type SubscribeUserOptions = {
+  organizationId: SafeId<"organization">;
+  signal: AbortSignal;
+  userId: SafeId<"user">;
+};
+
+/**
+ * Register a user-scoped SSE connection. Mirrors `subscribe`, including its
+ * already-aborted guard, but registers into the user routing table so a
+ * per-user event never has to scan workspace buckets to find its recipient.
+ */
+export const subscribeUser = ({
+  organizationId,
+  signal,
+  userId,
+}: SubscribeUserOptions): ReadableStream => {
+  const stream = new ReadableStream({
+    start(controller) {
+      // Same hazard as `subscribe`: the async auth macro awaits before this
+      // runs, so the client may already be gone and an aborted signal never
+      // fires a fresh "abort" event.
+      if (signal.aborted) {
+        try {
+          controller.close();
+        } catch {
+          // Already closed.
+        }
+        return;
+      }
+
+      const conn: UserSSEConnection = { controller, organizationId };
+
+      let set = userConnections.get(userId);
+      if (!set) {
+        set = new Set();
+        userConnections.set(userId, set);
+      }
+      set.add(conn);
+
+      const cleanup = () => {
+        set.delete(conn);
+        if (set.size === 0 && userConnections.get(userId) === set) {
+          userConnections.delete(userId);
+        }
+        try {
+          controller.close();
+        } catch {
+          // Already closed.
+        }
+      };
+
+      signal.addEventListener("abort", cleanup, { once: true });
+    },
+  });
+
+  return stream;
+};
+
+const closeLocalUserConnections = (
+  userId: SafeId<"user">,
+  organizationId: SafeId<"organization">,
+): void => {
+  const set = userConnections.get(userId);
+  if (!set) {
+    return;
+  }
+
+  for (const conn of set) {
+    if (conn.organizationId !== organizationId) {
+      continue;
+    }
+    set.delete(conn);
+    try {
+      conn.controller.close();
+    } catch {
+      // Already closed.
+    }
+  }
+
+  if (set.size === 0 && userConnections.get(userId) === set) {
+    userConnections.delete(userId);
+  }
 };
 
 const closeLocalWorkspaceUserConnections = (
@@ -222,6 +338,83 @@ const broadcastLocal = async (
   }
 };
 
+/**
+ * Reauthorize the recipient's membership before pushing to their streams, the
+ * same way `broadcastLocal` does for a workspace: a user removed from the
+ * organization between connecting and this event must have the stream closed
+ * rather than keep receiving change pings for a tenant they left.
+ */
+const broadcastLocalToUser = async (
+  userId: SafeId<"user">,
+  organizationId: SafeId<"organization">,
+  event: UserRealtimeEvent,
+): Promise<void> => {
+  const set = userConnections.get(userId);
+  if (!set) {
+    return;
+  }
+
+  const targets = [...set].filter(
+    (conn) => conn.organizationId === organizationId,
+  );
+  if (targets.length === 0) {
+    return;
+  }
+
+  const closeTargets = () => {
+    for (const conn of targets) {
+      set.delete(conn);
+      try {
+        conn.controller.close();
+      } catch {
+        // Already closed.
+      }
+    }
+    if (set.size === 0 && userConnections.get(userId) === set) {
+      userConnections.delete(userId);
+    }
+  };
+
+  const authorizer = authorizeUserConnection;
+  if (!authorizer) {
+    closeTargets();
+    logger.error("sse.user_authorizer_missing");
+    return;
+  }
+
+  let authorized: boolean;
+  try {
+    authorized = await authorizer({ organizationId, userId });
+  } catch (error: unknown) {
+    closeTargets();
+    logger.error("sse.user_reauthorization_failed", {
+      "error.type": errorTag(error),
+    });
+    return;
+  }
+
+  if (!authorized) {
+    closeTargets();
+    return;
+  }
+
+  const chunk = formatSSE(event);
+  for (const conn of targets) {
+    if (!set.has(conn)) {
+      continue;
+    }
+    try {
+      conn.controller.enqueue(chunk);
+    } catch {
+      set.delete(conn);
+    }
+  }
+
+  if (set.size === 0 && userConnections.get(userId) === set) {
+    userConnections.delete(userId);
+  }
+};
+
 type WorkspaceDeliveryOperation = () => Promise<void> | void;
 
 /** Preserve Redis and inline event order without blocking unrelated workspaces. */
@@ -250,6 +443,37 @@ const queueWorkspaceDelivery = (
     })
     .catch((error: unknown) => {
       logger.error("sse.workspace_queue_cleanup_failed", {
+        "error.type": errorTag(error),
+      });
+    });
+};
+
+/** Serialize one user's deliveries without blocking unrelated users. */
+const queueUserDelivery = (
+  userId: SafeId<"user">,
+  operation: WorkspaceDeliveryOperation,
+): void => {
+  const previous = userDeliveryTails.get(userId) ?? Promise.resolve();
+  const current = previous.then(async () => {
+    try {
+      await operation();
+    } catch (error: unknown) {
+      logger.error("sse.user_delivery_failed", {
+        "error.type": errorTag(error),
+      });
+    }
+    return undefined;
+  });
+  userDeliveryTails.set(userId, current);
+  current
+    .then(() => {
+      if (userDeliveryTails.get(userId) === current) {
+        userDeliveryTails.delete(userId);
+      }
+      return undefined;
+    })
+    .catch((error: unknown) => {
+      logger.error("sse.user_queue_cleanup_failed", {
         "error.type": errorTag(error),
       });
     });
@@ -307,6 +531,29 @@ const handleMessage = (message: string): void => {
     if (!parsed) {
       return;
     }
+    if (parsed.scope === "user-access-revoked") {
+      const userId = brandPersistedUserId(parsed.id);
+      const organizationId = brandPersistedOrganizationId(
+        parsed.organizationId,
+      );
+      queueUserDelivery(userId, () => {
+        closeLocalUserConnections(userId, organizationId);
+      });
+      return;
+    }
+    if (parsed.scope === "user") {
+      if (isOwnInlineDelivery(parsed)) {
+        return;
+      }
+      const userId = brandPersistedUserId(parsed.id);
+      const organizationId = brandPersistedOrganizationId(
+        parsed.organizationId,
+      );
+      queueUserDelivery(userId, async () =>
+        broadcastLocalToUser(userId, organizationId, parsed.event),
+      );
+      return;
+    }
     if (parsed.scope === "workspace-access-revoked") {
       const workspaceId = brandPersistedWorkspaceId(parsed.id);
       queueWorkspaceDelivery(workspaceId, () => {
@@ -361,6 +608,59 @@ export const revokeWorkspaceSseAccess = async (
     logger.error("sse.access_revocation_publish_failed", {
       "error.type": errorTag(error),
     });
+  });
+};
+
+/**
+ * Close one user's streams for an organization on every API replica. Called
+ * when the membership behind those streams goes away, so a revoked member's
+ * open tabs stop receiving change pings before the next event rather than at
+ * their next request.
+ */
+export const revokeUserSseAccess = async (
+  userId: SafeId<"user">,
+  organizationId: SafeId<"organization">,
+): Promise<void> => {
+  closeLocalUserConnections(userId, organizationId);
+  await publishUserAccessRevoked(userId, organizationId, {
+    originInstanceId: INSTANCE_ID,
+  }).catch((error: unknown) => {
+    logger.error("sse.user_access_revocation_publish_failed", {
+      "error.type": errorTag(error),
+    });
+  });
+};
+
+/**
+ * Broadcast a user-scoped event to every API instance. Same inline/loopback
+ * reasoning as `broadcast`: when this instance has no attached subscriber the
+ * published event never comes back, so it is delivered locally here and the
+ * origin metadata lets the receiver drop the duplicate loopback copy.
+ */
+export const broadcastToUser = (
+  userId: SafeId<"user">,
+  organizationId: SafeId<"organization">,
+  event: UserRealtimeEvent,
+): void => {
+  const deliveredLocally = !hasAttachedSubscriber();
+  if (deliveredLocally) {
+    queueUserDelivery(userId, async () =>
+      broadcastLocalToUser(userId, organizationId, event),
+    );
+  }
+
+  publishUserEvent(userId, organizationId, event, {
+    originInstanceId: INSTANCE_ID,
+    deliveredInline: deliveredLocally,
+  }).catch((error: unknown) => {
+    logger.warn("sse.redis_publish_failed", {
+      "error.type": errorTag(error),
+    });
+    if (!deliveredLocally) {
+      queueUserDelivery(userId, async () =>
+        broadcastLocalToUser(userId, organizationId, event),
+      );
+    }
   });
 };
 
@@ -502,6 +802,19 @@ const sendKeepAlive = () => {
       connections.delete(workspaceId);
     }
   }
+
+  for (const [userId, set] of userConnections) {
+    for (const conn of set) {
+      try {
+        conn.controller.enqueue(chunk);
+      } catch {
+        set.delete(conn);
+      }
+    }
+    if (set.size === 0 && userConnections.get(userId) === set) {
+      userConnections.delete(userId);
+    }
+  }
 };
 
 // ── Lifecycle ────────────────────────────────────────────
@@ -527,6 +840,16 @@ type SseRedisClient = Pick<
   "close" | "connected" | "onReconnect" | "subscribe"
 >;
 type CreateSseRedisClient = () => SseRedisClient;
+/**
+ * Both reauthorization seams the SSE registries need, passed as one object so
+ * adding a channel cannot silently leave its authorizer unset (which would
+ * close every connection on that channel's first event).
+ */
+export type SseConnectionAuthorizers = {
+  user: UserConnectionAuthorizer;
+  workspace: WorkspaceConnectionAuthorizer;
+};
+
 type StartSseDependencies = {
   createClient?: CreateSseRedisClient | undefined;
   publishAccessRevoked?: typeof publishWorkspaceAccessRevoked | undefined;
@@ -784,10 +1107,11 @@ const scheduleAttachAttempt = (
  * import-time `void initRedis()` had.
  */
 export const startSse = (
-  authorizer: WorkspaceConnectionAuthorizer,
+  authorizers: SseConnectionAuthorizers,
   dependencies: StartSseDependencies = {},
 ): void => {
-  authorizeWorkspaceConnections = authorizer;
+  authorizeWorkspaceConnections = authorizers.workspace;
+  authorizeUserConnection = authorizers.user;
   if (activeLifecycle) {
     return;
   }

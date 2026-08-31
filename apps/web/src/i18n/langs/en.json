@@ -2852,6 +2852,22 @@
     "toggleChat": "Toggle chat",
     "toggleSidebar": "Toggle sidebar"
   },
+  "notifications": {
+    "empty": "No notifications yet",
+    "kind": {
+      "announcement": "<bdi>{title}</bdi>",
+      "flowRunAwaitingApproval": "Workflow <bdi>{flowName}</bdi> is waiting for your approval",
+      "flowRunCompleted": "Workflow <bdi>{flowName}</bdi> finished",
+      "flowRunFailed": "Workflow <bdi>{flowName}</bdi> failed",
+      "mention": "<bdi>{actorName}</bdi> mentioned you in a comment",
+      "reportExportFailed": "Your report export failed",
+      "reportExportSucceeded": "Your report is ready"
+    },
+    "loadOlder": "Load older",
+    "markAllRead": "Mark all as read",
+    "title": "Notifications",
+    "unreadLabel": "{count, plural, one {# unread notification} other {# unread notifications}}"
+  },
   "onboarding": {
     "aiConfigFailed": "Couldn't save your AI configuration. You can finish it from settings.",
     "aiSubtitle": "Add your API key. You can choose models later in settings.",

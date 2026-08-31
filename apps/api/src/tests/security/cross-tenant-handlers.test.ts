@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 
+import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import {
   SIGNAL_KIND,
   SIGNAL_KIND_ORIGIN,
@@ -18,6 +19,7 @@ import {
   documentTranslationRuns,
   entities,
   legalLists,
+  notifications,
   savedSearches,
   signals,
   WORK_OBLIGATION_STATUS,
@@ -41,6 +43,7 @@ import {
 import readInvoiceById from "@/api/handlers/invoices/get";
 import listLegalLists from "@/api/handlers/lists/list";
 import listMemories from "@/api/handlers/memories/list";
+import listNotifications from "@/api/handlers/notifications/list";
 import readRateEntries from "@/api/handlers/rates/entries-read";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
 import listSignals from "@/api/handlers/signals/list";
@@ -136,6 +139,9 @@ const documentTranslationSourceFileB = toSafeId<"userFile">(
 );
 const workObligationEntityB = toSafeId<"entity">(
   "22222222-2222-4222-8222-222222222250",
+);
+const notificationB = toSafeId<"notification">(
+  "22222222-2222-4222-8222-222222222251",
 );
 
 const savedSearchCriteria = (
@@ -549,6 +555,35 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) =>
       expectPageContainsField(result, "entityId", workObligationEntityB),
   },
+  {
+    // A notification is addressed to one person in one organization. Reading
+    // it as workspace A (user A1, org A) must return nothing, even though the
+    // row belongs to a real account this fixture also knows.
+    name: "notifications",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listNotifications, workspaceA, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listNotifications, workspaceB, { query: {} }),
+    expectDenied: (result) =>
+      expectPageExcludesField(result, "id", notificationB),
+    expectPositive: (result) =>
+      expectPageContainsField(result, "id", notificationB),
+  },
+  {
+    // The case above changes the person AND the firm at once, so a handler
+    // that filtered on organization alone would still pass it. This one holds
+    // the firm fixed: user A1 working in organization B must not see a row
+    // addressed to user B1, which isolates the recipient predicate.
+    name: "notifications (same organization, other recipient)",
+    runAAgainstB: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listNotifications, sameUserWorkspaceB, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listNotifications, workspaceB, { query: {} }),
+    expectDenied: (result) =>
+      expectPageExcludesField(result, "id", notificationB),
+    expectPositive: (result) =>
+      expectPageContainsField(result, "id", notificationB),
+  },
 ];
 
 beforeAll(async () => {
@@ -653,6 +688,16 @@ beforeAll(async () => {
     workspaceId: ids.wsB1,
     status: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
     ownerUserId: ids.userB1,
+  });
+  await testDb.insert(notifications).values({
+    id: notificationB,
+    userId: ids.userB1,
+    organizationId: ids.orgB,
+    kind: NOTIFICATION_KIND.MENTION,
+    metadata: { actorName: "User B1" },
+    entityType: "entity",
+    entityId: ids.entityB1,
+    idempotencyKey: "cross-tenant:notification-b",
   });
 });
 

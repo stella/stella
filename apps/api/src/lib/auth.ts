@@ -120,6 +120,7 @@ import {
   evaluateNewAccountOtpPolicy,
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
+import { revokeUserSseAccess } from "@/api/lib/sse";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
 import { includes } from "@/api/lib/type-guards";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
@@ -1175,6 +1176,10 @@ const createAuth = () => {
                 userId,
               });
             });
+            // Their notification stream for this organization outlives the
+            // membership otherwise: it is authorized once at connect time and
+            // only re-checked on the next event.
+            await revokeUserSseAccess(userId, organizationId);
           },
         },
         async sendInvitationEmail(data, request) {
@@ -1596,6 +1601,21 @@ export const isActiveOrganizationMember = async ({
   });
   return authorization !== null;
 };
+
+/**
+ * Whether one user-channel SSE stream may still receive events. Reads through
+ * the owner connection for the same reason the workspace audience does: event
+ * delivery must be able to evaluate a member whose access was just removed and
+ * who can no longer open an RLS-scoped request of their own.
+ */
+export const resolveUserRealtimeAuthorization = async (
+  {
+    organizationId,
+    userId,
+  }: { organizationId: SafeId<"organization">; userId: SafeId<"user"> },
+  db: MemberAuthorizationDb = rootDb,
+): Promise<boolean> =>
+  (await resolveMemberAuthorization({ organizationId, userId }, db)) !== null;
 
 type WorkspaceRealtimeAudienceLookup = {
   userIds: readonly SafeId<"user">[];

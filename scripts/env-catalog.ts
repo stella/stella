@@ -161,6 +161,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "SKIP_MIGRATION_CHECK",
   "SMTP_HOST",
   "SMTP_PORT",
+  "STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS",
   "STELLA_API_PORT",
   "STELLA_API_URL",
   "STELLA_COLLAB_MODE",
@@ -397,6 +398,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
   STELLA_TRUSTED_PROXY_CIDRS:
     "Comma-separated CIDRs for proxies directly in front of the API. Never trust public client ranges.",
+  STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS:
+    "Comma-separated user IDs allowed to publish in-app announcements. Unset disables the endpoint for everyone.",
   REPORT_SPECS_DIR:
     "Absolute directory of extra report specs (one <key>/spec.json per subdirectory). A key here overrides the bundled spec of the same name.",
   REPORT_SPECS_S3_PREFIX:

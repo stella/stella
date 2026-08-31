@@ -2852,6 +2852,22 @@
     "toggleChat": "Chat ein-/ausblenden",
     "toggleSidebar": "Seitenleiste ein-/ausblenden"
   },
+  "notifications": {
+    "empty": "Noch keine Benachrichtigungen",
+    "kind": {
+      "announcement": "<bdi>{title}</bdi>",
+      "flowRunAwaitingApproval": "Workflow <bdi>{flowName}</bdi> wartet auf Ihre Freigabe",
+      "flowRunCompleted": "Workflow <bdi>{flowName}</bdi> abgeschlossen",
+      "flowRunFailed": "Workflow <bdi>{flowName}</bdi> fehlgeschlagen",
+      "mention": "<bdi>{actorName}</bdi> hat Sie in einem Kommentar erwähnt",
+      "reportExportFailed": "Ihr Berichtsexport ist fehlgeschlagen",
+      "reportExportSucceeded": "Ihr Bericht ist bereit"
+    },
+    "loadOlder": "Ältere laden",
+    "markAllRead": "Alle als gelesen markieren",
+    "title": "Benachrichtigungen",
+    "unreadLabel": "{count, plural, one {# ungelesene Benachrichtigung} other {# ungelesene Benachrichtigungen}}"
+  },
   "onboarding": {
     "aiConfigFailed": "Ihre KI-Konfiguration konnte nicht gespeichert werden. Sie können sie in den Einstellungen abschließen.",
     "aiSubtitle": "Fügen Sie Ihren API-Schlüssel hinzu. Modelle können Sie später in den Einstellungen auswählen.",

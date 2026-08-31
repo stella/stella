@@ -437,6 +437,38 @@ describe("policy coverage", () => {
     }
   });
 
+  // The org-only loop above proves the organization predicate; this proves the
+  // recipient predicate the loop cannot see. A notification is addressed to one
+  // person about one firm's activity, so losing either half is a leak: dropping
+  // the user predicate exposes a colleague's mentions, dropping the
+  // organization predicate leaks one firm's activity into another firm's
+  // session for somebody who belongs to both.
+  test("notifications pin both the recipient and the organization", async () => {
+    const policies = await fetchStellaPolicies(testDb);
+    const tablePolicies = policies.filter(
+      (p) => p.table_name === "notifications",
+    );
+    expect(new Set(tablePolicies.map((p) => p.command))).toEqual(
+      new Set(["r", "a", "w", "d"]),
+    );
+
+    for (const policy of tablePolicies) {
+      expect(policy.permissive).toBe(true);
+      const expr =
+        policy.command === "a" ? policy.check_expr : policy.using_expr;
+      expect(expr).toContain("user_id");
+      expect(expr).toContain(SETTING_USER_ID);
+      expect(expr).toContain("organization_id");
+      expect(expr).toContain(SETTING_ORGANIZATION_ID);
+    }
+
+    // UPDATE re-checks on write, so read-state bookkeeping cannot move a row
+    // to another recipient or firm.
+    const updatePolicy = tablePolicies.find((p) => p.command === "w");
+    expect(updatePolicy?.check_expr).toContain(SETTING_USER_ID);
+    expect(updatePolicy?.check_expr).toContain(SETTING_ORGANIZATION_ID);
+  });
+
   test("user_files policies derive full scope from the owning thread", async () => {
     const policies = await fetchStellaPolicies(testDb);
     const tablePolicies = policies.filter((p) => p.table_name === "user_files");

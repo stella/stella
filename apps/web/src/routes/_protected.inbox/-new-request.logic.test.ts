@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { getRequestWorkspacePolicy } from "@/routes/_protected.inbox/new-request.logic";
+import { getRequestWorkspacePolicy } from "@/routes/_protected.inbox/-new-request.logic";
 
 describe("manual request workspace policy", () => {
   test("allows triagers to create an unscoped request", () => {

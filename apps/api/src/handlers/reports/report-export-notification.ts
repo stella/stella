@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
+import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { resolveUiLocale } from "@stll/locales";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -12,6 +13,10 @@ import {
   isTransactionalEmailConfigured,
   sendReportExportStatusEmail,
 } from "@/api/lib/email/email";
+import {
+  createNotificationsInTransaction,
+  pingNotificationRecipients,
+} from "@/api/lib/notifications";
 
 export type ReportExportNotificationEmail = Parameters<
   typeof sendReportExportStatusEmail
@@ -25,6 +30,7 @@ type ReportExportNotificationDelivery = {
 type NotifyReportExportStatusOptions = {
   delivery?: ReportExportNotificationDelivery;
   exportId: SafeId<"reportExport">;
+  organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
@@ -58,6 +64,7 @@ const defaultDelivery: ReportExportNotificationDelivery = {
 export const notifyReportExportStatus = async ({
   delivery = defaultDelivery,
   exportId,
+  organizationId,
   scopedDb,
   userId,
   workspaceId,
@@ -86,7 +93,34 @@ export const notifyReportExportStatus = async ({
             lang: reportExports.notificationLang,
             status: reportExports.status,
           });
-        return claimedRows;
+        const claimed = claimedRows.at(0);
+        // The in-app pointer rides the same at-most-once claim as the email,
+        // in the same transaction, so it is filed exactly once per terminal
+        // export and independently of whether transactional email is
+        // configured at all. The recipient is the requester, so the caller's
+        // own RLS scope admits the row. Its stream is pinged only once this
+        // transaction commits, so the client's single re-read cannot land
+        // before the row it is meant to find.
+        const pings = claimed
+          ? await createNotificationsInTransaction(
+              [
+                {
+                  kind:
+                    claimed.status === "completed"
+                      ? NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED
+                      : NOTIFICATION_KIND.REPORT_EXPORT_FAILED,
+                  metadata: {},
+                  entityType: "report_export",
+                  entityId: exportId,
+                  organizationId,
+                  userId,
+                  idempotencyKey: `report-export:${exportId}`,
+                },
+              ],
+              tx,
+            )
+          : [];
+        return { claimedRows, pings };
       }),
   );
   if (Result.isError(claimResult)) {
@@ -98,7 +132,11 @@ export const notifyReportExportStatus = async ({
     return { status: "claim_failed" };
   }
 
-  const claim = claimResult.value.at(0);
+  // The claim transaction has committed, so the recipient's stream can be
+  // told the row is there to read.
+  pingNotificationRecipients(claimResult.value.pings);
+
+  const claim = claimResult.value.claimedRows.at(0);
   if (claim === undefined) {
     return { status: "skipped" };
   }

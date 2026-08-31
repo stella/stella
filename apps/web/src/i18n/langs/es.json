@@ -2852,6 +2852,22 @@
     "toggleChat": "Mostrar/ocultar chat",
     "toggleSidebar": "Alternar barra lateral"
   },
+  "notifications": {
+    "empty": "Aún no hay notificaciones",
+    "kind": {
+      "announcement": "<bdi>{title}</bdi>",
+      "flowRunAwaitingApproval": "El flujo de trabajo <bdi>{flowName}</bdi> espera tu aprobación",
+      "flowRunCompleted": "El flujo de trabajo <bdi>{flowName}</bdi> ha finalizado",
+      "flowRunFailed": "El flujo de trabajo <bdi>{flowName}</bdi> ha fallado",
+      "mention": "<bdi>{actorName}</bdi> te ha mencionado en un comentario",
+      "reportExportFailed": "Error al exportar tu informe",
+      "reportExportSucceeded": "Tu informe está listo"
+    },
+    "loadOlder": "Cargar anteriores",
+    "markAllRead": "Marcar todo como leído",
+    "title": "Notificaciones",
+    "unreadLabel": "{count, plural, one {# notificación sin leer} other {# notificaciones sin leer}}"
+  },
   "onboarding": {
     "aiConfigFailed": "No se pudo guardar la configuración de IA. Puede completarla en los ajustes.",
     "aiSubtitle": "Añada su clave de API. Puede elegir los modelos más tarde en los ajustes.",

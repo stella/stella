@@ -51,6 +51,7 @@ const EXPECTED_EXEMPT_ROUTE_FILES = [
   "apps/api/src/handlers/mcp/routes.ts",
   "apps/api/src/handlers/mcp-app-sandbox/routes.ts",
   "apps/api/src/handlers/mcp-connectors/oauth-client-metadata-route.ts",
+  "apps/api/src/handlers/notifications/routes.ts",
   "apps/api/src/handlers/smoke/routes.ts",
   "apps/api/src/handlers/verify/routes.ts",
   "apps/api/src/handlers/well-known/routes.ts",
@@ -90,6 +91,13 @@ const REVIEWED_UNGUARDED: Record<string, string[]> = {
   // per-IP rate limiting and content dedup inside receivePublicFeedback,
   // not identity.
   "feedback/routes.ts": ["POST /feedback"],
+  // Exempt only for the raw SSE stream route; every mutation below mounts a
+  // createSafeRootHandler endpoint whose HandlerConfig declares permissions.
+  "notifications/routes.ts": [
+    "POST /read-all",
+    "POST /announcements",
+    "PATCH /:notificationId/read",
+  ],
   // Folio collaboration room lifecycle: authorize/refresh/heartbeat use the
   // room token; snapshot transport uses a deployment service bearer.
   "folio-collab/routes.ts": [

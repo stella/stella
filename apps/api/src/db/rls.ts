@@ -569,6 +569,42 @@ export const userPolicies = () => [
   }),
 ];
 
+const userOrganizationCheck = sql`(${userCheck} AND ${organizationCheck})`;
+
+/**
+ * Rows addressed to one person about one organization's activity.
+ *
+ * The recipient is the access boundary, but the organization is pinned too:
+ * somebody who belongs to several firms reaches only the rows their current
+ * session's firm produced, so a handler that forgets the organization filter
+ * still cannot leak one firm's activity into another firm's session. The
+ * UPDATE policy re-checks on write as well, so a row cannot be moved between
+ * recipients or firms.
+ */
+export const userOrganizationPolicies = () => [
+  p.pgPolicy("user_select", {
+    for: "select",
+    to: stella,
+    using: userOrganizationCheck,
+  }),
+  p.pgPolicy("user_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: userOrganizationCheck,
+  }),
+  p.pgPolicy("user_update", {
+    for: "update",
+    to: stella,
+    using: userOrganizationCheck,
+    withCheck: userOrganizationCheck,
+  }),
+  p.pgPolicy("user_delete", {
+    for: "delete",
+    to: stella,
+    using: userOrganizationCheck,
+  }),
+];
+
 export const userFilePolicies = () => [
   p.pgPolicy("user_select", {
     for: "select",
