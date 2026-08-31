@@ -163,6 +163,29 @@ describe("API and CLI release contract", () => {
     );
   });
 
+  test("manual package recovery keeps immutable tag provenance", async () => {
+    const publishWorkflow = await Bun.file(
+      new URL("../.github/workflows/publish-npm.yml", import.meta.url),
+    ).text();
+
+    expect(publishWorkflow).toContain("source_sha:");
+    expect(publishWorkflow).toContain(
+      "source_sha recovery requires one non-CLI package.",
+    );
+    expect(publishWorkflow).toContain(
+      "source_sha must be a full lowercase commit SHA.",
+    );
+    expect(publishWorkflow).toContain(
+      "source_sha is not reachable from protected main.",
+    );
+    expect(publishWorkflow).toContain(
+      `git rev-parse "refs/tags/\${tag}^{commit}"`,
+    );
+    expect(publishWorkflow).toContain(
+      "Recovery requires an existing immutable version tag",
+    );
+  });
+
   test("release and pull-request smoke tests reject synthetic migration history", async () => {
     const workflows = await Promise.all([
       Bun.file(

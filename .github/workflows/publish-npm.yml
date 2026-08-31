@@ -68,6 +68,10 @@ on:
         description: Stable production release tag; required when manually publishing cli
         required: false
         type: string
+      source_sha:
+        description: Exact commit SHA for recovering one existing immutable package tag
+        required: false
+        type: string
 
 concurrency:
   # One group across every trigger so publishes to the same registry
@@ -152,6 +156,7 @@ jobs:
           MANUAL_PACKAGE: ${{ inputs.package || '' }}
           MANUAL_PUBLISH: ${{ inputs.publish || false }}
           MANUAL_RELEASE_REF: ${{ inputs.release_ref || '' }}
+          MANUAL_SOURCE_SHA: ${{ inputs.source_sha || '' }}
           RUN_SHA: ${{ github.sha }}
           UPSTREAM_SHA: ${{ needs.release-trigger.outputs.release_sha }}
         run: |
@@ -165,6 +170,16 @@ jobs:
               exit 1
             fi
             source_ref="$MANUAL_RELEASE_REF"
+          elif [[ "$EVENT_NAME" == "workflow_dispatch" && "$MANUAL_PUBLISH" == "true" && -n "$MANUAL_SOURCE_SHA" ]]; then
+            if [[ "$MANUAL_PACKAGE" == "all" || "$MANUAL_PACKAGE" == "cli" ]]; then
+              echo "::error::source_sha recovery requires one non-CLI package." >&2
+              exit 1
+            fi
+            if [[ ! "$MANUAL_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::source_sha must be a full lowercase commit SHA." >&2
+              exit 1
+            fi
+            source_ref="$MANUAL_SOURCE_SHA"
           fi
           echo "ref=${source_ref}" >> "$GITHUB_OUTPUT"
 
@@ -173,6 +188,45 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ steps.source.outputs.ref }}
+
+      - name: Verify manual package recovery source
+        if: >-
+          github.event_name == 'workflow_dispatch'
+          && inputs.publish
+          && inputs.source_sha != ''
+        env:
+          MANUAL_PACKAGE: ${{ inputs.package }}
+          MANUAL_SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/main
+
+          source_sha="$(git rev-parse HEAD)"
+          if [[ "$source_sha" != "$MANUAL_SOURCE_SHA" ]]; then
+            echo "::error::Checked-out source does not match source_sha." >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$source_sha" origin/main; then
+            echo "::error::source_sha is not reachable from protected main." >&2
+            exit 1
+          fi
+
+          manifest="packages/${MANUAL_PACKAGE}/package.json"
+          if [[ ! -f "$manifest" ]]; then
+            echo "::error::Unknown package '${MANUAL_PACKAGE}'." >&2
+            exit 1
+          fi
+          package_name="$(jq -er '.name | strings' "$manifest")"
+          package_version="$(jq -er '.version | strings' "$manifest")"
+          tag="${package_name}@${package_version}"
+          if ! tag_sha="$(git rev-parse "refs/tags/${tag}^{commit}")"; then
+            echo "::error::Recovery requires an existing immutable version tag: ${tag}." >&2
+            exit 1
+          fi
+          if [[ "$tag_sha" != "$source_sha" ]]; then
+            echo "::error::${tag} resolves to ${tag_sha}, not source_sha ${source_sha}." >&2
+            exit 1
+          fi
 
       # Cross-repo reference resolves regardless of which release tag this
       # job checks out, unlike a workspace-local action.
