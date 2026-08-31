@@ -313,9 +313,13 @@ describe("buildOperations applied to a bilingual document", () => {
         preserveFormatting: true,
       },
     ]);
+    const labelRow = rows.at(0);
+    if (!labelRow) {
+      throw new Error("stacked label row was not stored");
+    }
     expect(
       buildOperations(
-        [{ ...rows[0], sourceParaId: null }],
+        [{ ...labelRow, sourceParaId: null }],
         new Map([[label.rowId, "Nombre:"]]),
       ),
     ).toEqual([
