@@ -332,18 +332,25 @@ test("a route-scoped reservation claims only its desired physical index", async 
 });
 
 test("an unregistered route fails before reservation mutates state", async () => {
-  await expect(
-    db.transaction(
-      async (tx) =>
-        reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
-          family: "case_law",
-          generation: "case_law_v5",
-          scope: { type: "route", indexId: "case_law_v5_hun" },
-          limit: 10,
-          leaseMs: 60_000,
-        }),
-    ),
-  ).rejects.toThrow("Corpus index id is not a manifest route");
+  // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+  // type-aware lint; capture the rejection explicitly instead.
+  const rejection: unknown = await db
+    .transaction(async (tx) =>
+      reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        scope: { type: "route", indexId: "case_law_v5_hun" },
+        limit: 10,
+        leaseMs: 60_000,
+      }),
+    )
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  expect(rejection).toMatchObject({
+    message: "Corpus index id is not a manifest route",
+  });
   expect(await db.select().from(corpusIndexProjectionIntents)).toEqual([]);
 });
 
