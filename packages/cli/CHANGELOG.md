@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 0.7.1
+
+### Patch Changes
+
+- [#2669](https://github.com/stella/stella/pull/2669) [`faa424b`](https://github.com/stella/stella/commit/faa424b60009a5a05e431e09137a167518d20cdf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Ship the capability catalog from one canonical package path.
+
 ## 0.7.0
 
 ### Minor Changes
