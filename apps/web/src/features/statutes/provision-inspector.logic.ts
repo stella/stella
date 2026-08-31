@@ -117,7 +117,7 @@ export const submitsOnEnter = ({
 type CitingDecisionRow = {
   caseNumber: string;
   court: string;
-  sentenceText: string;
+  sentenceText: string | null;
 };
 
 const foldForFilter = (value: string): string =>
@@ -139,7 +139,7 @@ export const filterCitingDecisions = <T extends CitingDecisionRow>(
 
   return decisions.filter((decision) =>
     foldForFilter(
-      `${decision.caseNumber} ${decision.court} ${decision.sentenceText}`,
+      `${decision.caseNumber} ${decision.court} ${decision.sentenceText ?? ""}`,
     ).includes(needle),
   );
 };

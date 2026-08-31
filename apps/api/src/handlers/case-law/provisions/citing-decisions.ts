@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -43,6 +43,8 @@ export const listCitingDecisionsQuerySchema = t.Object({
    * authority signal is refreshed in place, so it cannot key a walk.
    */
   sort: t.Optional(t.Union([t.Literal("newest"), t.Literal("authority")])),
+  /** Require a readable excerpt rather than relationship metadata alone. */
+  excerpt: t.Optional(t.Literal("required")),
 });
 
 type ListCitingDecisionsQuery = Static<typeof listCitingDecisionsQuerySchema>;
@@ -136,6 +138,9 @@ export const listCitingDecisionsHandler = async (
   if (query.anchor !== undefined) {
     conditions.push(eq(caseLawProvisionCitations.anchor, query.anchor));
   }
+  if (query.excerpt === "required") {
+    conditions.push(isNull(caseLawDecisions.redactedAt));
+  }
 
   if (query.cursor) {
     const cursor = decodeCitingDecisionsCursor(query.cursor);
@@ -170,7 +175,13 @@ export const listCitingDecisionsHandler = async (
         country: caseLawDecisions.country,
         decisionDate: caseLawDecisions.decisionDate,
         citationAuthority: caseLawDecisions.citationAuthority,
-        sentenceText: caseLawProvisionCitations.sentenceText,
+        // Keep the public citation relationship when its source decision is
+        // tombstoned, but do not return a verbatim excerpt from removed text.
+        sentenceText: sql<string | null>`CASE
+          WHEN ${caseLawDecisions.redactedAt} IS NULL
+          THEN ${caseLawProvisionCitations.sentenceText}
+          ELSE NULL
+        END`.as("sentence_text"),
         spanStart: caseLawProvisionCitations.spanStart,
         spanEnd: caseLawProvisionCitations.spanEnd,
         anchor: caseLawProvisionCitations.anchor,

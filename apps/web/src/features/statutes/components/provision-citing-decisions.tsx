@@ -22,7 +22,7 @@ export type CitingDecisionRow = {
   court: string;
   decisionDate: string | null;
   decisionId: string;
-  sentenceText: string;
+  sentenceText: string | null;
   slug: string | null;
 };
 
@@ -53,9 +53,11 @@ export const CitingDecisionItem = ({
       <span className="text-muted-foreground text-[0.7rem]">
         {decided === null ? decision.court : `${decision.court} · ${decided}`}
       </span>
-      <span className="text-foreground-strong-muted line-clamp-3 text-[0.72rem] leading-snug">
-        {decision.sentenceText}
-      </span>
+      {decision.sentenceText === null ? null : (
+        <span className="text-foreground-strong-muted line-clamp-3 text-[0.72rem] leading-snug">
+          {decision.sentenceText}
+        </span>
+      )}
     </CitedDecisionLink>
   );
 };

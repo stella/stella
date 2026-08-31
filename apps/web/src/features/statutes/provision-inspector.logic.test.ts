@@ -188,4 +188,17 @@ describe("filterCitingDecisions", () => {
     ]);
     expect(filterCitingDecisions(decisions, "no such court")).toEqual([]);
   });
+
+  test("a citation without an excerpt remains searchable by its metadata", () => {
+    const rows = [
+      {
+        caseNumber: "4 As 3/2008",
+        court: "Nejvyšší správní soud",
+        sentenceText: null,
+      },
+    ];
+
+    expect(filterCitingDecisions(rows, "správní")).toEqual(rows);
+    expect(filterCitingDecisions(rows, "null")).toEqual([]);
+  });
 });

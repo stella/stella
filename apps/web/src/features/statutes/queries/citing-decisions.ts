@@ -51,6 +51,7 @@ export const topCitingDecisionsOptions = (key: CitingDecisionsKey) =>
         query: {
           anchor: key.anchor,
           eli: key.eli,
+          excerpt: "required",
           jurisdiction: key.jurisdiction,
           limit: TOP_CITING_LIMIT,
           sort: "authority",

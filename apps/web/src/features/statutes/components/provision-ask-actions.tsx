@@ -21,7 +21,7 @@ type AskPassage = {
   caseNumber: string;
   court: string;
   decisionDate: string | null;
-  sentenceText: string;
+  sentenceText: string | null;
 };
 
 type ProvisionAskActionsProps = {
@@ -61,20 +61,22 @@ export const ProvisionAskActions = ({
           statute: payload.statuteTitle,
         });
   const label = provisionTabLabel(payload);
+  const passageLines = passages.flatMap((passage) => {
+    if (passage.sentenceText === null) {
+      return [];
+    }
+    const decided = formatValidityDate(passage.decisionDate, format);
+    const source =
+      decided === null
+        ? `${passage.caseNumber} (${passage.court})`
+        : `${passage.caseNumber} (${passage.court}, ${decided})`;
+    return [`- ${source}: ${passage.sentenceText}`];
+  });
   const context =
-    passages.length === 0
+    passageLines.length === 0
       ? ""
       : t("statutes.provisionAskContextPrompt", {
-          passages: passages
-            .map((passage) => {
-              const decided = formatValidityDate(passage.decisionDate, format);
-              const source =
-                decided === null
-                  ? `${passage.caseNumber} (${passage.court})`
-                  : `${passage.caseNumber} (${passage.court}, ${decided})`;
-              return `- ${source}: ${passage.sentenceText}`;
-            })
-            .join("\n"),
+          passages: passageLines.join("\n"),
         });
 
   const summarize = () => {
