@@ -39,7 +39,7 @@ describe("parseSSEEvents", () => {
 describe("readSSEEvents", () => {
   it("holds a frame split across chunks until it is whole", async () => {
     const seen: string[] = [];
-    await readSSEEvents(
+    const outcome = await readSSEEvents(
       streamOf(["event: pos", "ition\ndata: 1\n\nevent: done\ndata: 2\n\n"]),
       (frame) => {
         seen.push(`${frame.event}:${frame.data}`);
@@ -47,11 +47,12 @@ describe("readSSEEvents", () => {
       },
     );
     expect(seen).toEqual(["position:1", "done:2"]);
+    expect(outcome).toBe("drained");
   });
 
   it("stops reading as soon as the consumer hangs up", async () => {
     const seen: string[] = [];
-    await readSSEEvents(
+    const outcome = await readSSEEvents(
       streamOf(["event: a\ndata: 1\n\nevent: b\ndata: 2\n\n"]),
       (frame) => {
         seen.push(frame.event);
@@ -59,6 +60,7 @@ describe("readSSEEvents", () => {
       },
     );
     expect(seen).toEqual(["a"]);
+    expect(outcome).toBe("stopped");
   });
 
   it("drops a trailing frame the stream never finished", async () => {

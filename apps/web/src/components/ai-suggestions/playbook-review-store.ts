@@ -463,10 +463,16 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => {
                     skipped: [...proposal.skipped, event.skipped],
                   }));
                 case REVIEW_PROPOSAL_EVENT.DONE:
-                  return applyEvent((proposal) => ({
-                    ...proposal,
-                    status: "done",
-                  }));
+                  // The counts are the server's statement of what it sent. A
+                  // frame this client could not read was dropped on arrival,
+                  // so a shortfall here means the list is not the proposal
+                  // the server made, and the reviewer must not start from it.
+                  return applyEvent((proposal) =>
+                    event.positionCount === streamed.length &&
+                    event.skippedCount === proposal.skipped.length
+                      ? { ...proposal, status: "done" }
+                      : { ...proposal, status: "failed" },
+                  );
                 case REVIEW_PROPOSAL_EVENT.ERROR:
                   // Whatever already streamed stays valid; the list is simply
                   // not complete, and the reviewer decides what to do with it.

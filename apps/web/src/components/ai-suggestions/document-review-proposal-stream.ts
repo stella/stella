@@ -305,12 +305,19 @@ export const streamReviewProposal = async ({
     return { ok: false, error: null };
   }
 
-  await readSSEEvents(response.body, (frame) => {
+  const outcome = await readSSEEvents(response.body, (frame) => {
     const event = parseReviewProposalEvent(frame.event, frame.data);
     if (event === null) {
       return true;
     }
-    return onEvent(event);
+    const keepReading = onEvent(event);
+    // `done` is the endpoint's last frame, so the read stops on it: a body
+    // that drains without one ended early (a proxy cut it, the server died),
+    // and the positions received so far are not the whole proposal.
+    return keepReading && event.type !== REVIEW_PROPOSAL_EVENT.DONE;
   });
+  if (outcome === "drained") {
+    return { ok: false, error: null };
+  }
   return { ok: true };
 };
