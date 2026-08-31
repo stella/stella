@@ -44,10 +44,8 @@ import {
   type BilingualPreparedRow,
   type BilingualRowDisposition,
 } from "@/components/bilingual-translate-queries";
-import {
-  defaultLanguagePair,
-  DocumentLanguagePicker,
-} from "@/components/document-language-picker";
+import { DocumentLanguagePicker } from "@/components/document-language-picker";
+import { defaultLanguagePair } from "@/components/document-language-picker.logic";
 import { useLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { DeepLTargetLanguageCode } from "@/lib/deepl/languages";

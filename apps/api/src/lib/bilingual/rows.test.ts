@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
+import type { BilingualRow } from "@stll/folio-core/server";
+
 import {
   checkTranslationConsistency,
   defaultDisposition,
   detectGlossaryCandidates,
+  flattenBilingualRows,
+  hasSeparateTableTarget,
   ruleDisposition,
 } from "@/api/lib/bilingual/rows";
 import type { BilingualUnit } from "@/api/lib/bilingual/rows";
@@ -13,8 +17,90 @@ const unit = (sourceText: string, inTable = false): BilingualUnit => ({
   ordinal: 1,
   kind: inTable ? "table" : "paragraph",
   inTable,
+  tableLayout: inTable ? "inline" : null,
   sourceParaId: "p",
   sourceText,
+});
+
+describe("flattenBilingualRows", () => {
+  test("targets the cloned paragraph only for stacked table rows", () => {
+    const rows = [
+      {
+        kind: "table",
+        layout: "inline",
+        rowId: "inline-source",
+        paragraphs: [{ paraId: "inline-source", sourceText: "Inline label" }],
+      },
+      {
+        kind: "table",
+        layout: "stacked",
+        rowId: "stacked-target",
+        paragraphs: [
+          {
+            sourceParaId: "stacked-source",
+            targetParaId: "stacked-target",
+            sourceText: "Stacked label",
+          },
+        ],
+      },
+    ] as const satisfies BilingualRow[];
+
+    const { dropped, units } = flattenBilingualRows(rows);
+
+    expect(dropped).toBe(0);
+    expect(units).toEqual([
+      {
+        rowId: "inline-source",
+        ordinal: 1,
+        kind: "table",
+        inTable: true,
+        tableLayout: "inline",
+        sourceParaId: "inline-source",
+        sourceText: "Inline label",
+      },
+      {
+        rowId: "stacked-target",
+        ordinal: 2,
+        kind: "table",
+        inTable: true,
+        tableLayout: "stacked",
+        sourceParaId: "stacked-source",
+        sourceText: "Stacked label",
+      },
+    ]);
+    const inline = units.at(0);
+    const stacked = units.at(1);
+    if (!inline || !stacked) {
+      throw new Error("bilingual table fixtures were not flattened");
+    }
+    expect(hasSeparateTableTarget(inline)).toBe(false);
+    expect(hasSeparateTableTarget(stacked)).toBe(true);
+  });
+
+  test("retains stacked layout when a source paragraph has no ID", () => {
+    const rows = [
+      {
+        kind: "table",
+        layout: "stacked",
+        rowId: "stacked-target",
+        paragraphs: [
+          {
+            sourceParaId: undefined,
+            targetParaId: "stacked-target",
+            sourceText: "Stacked label",
+          },
+        ],
+      },
+    ] as const satisfies BilingualRow[];
+
+    const stackedUnit = flattenBilingualRows(rows).units.at(0);
+    expect(stackedUnit?.sourceParaId).toBeNull();
+    expect(stackedUnit?.tableLayout).toBe("stacked");
+    if (!stackedUnit) {
+      throw new Error("stacked table fixture was not flattened");
+    }
+    expect(hasSeparateTableTarget(stackedUnit)).toBe(true);
+  });
 });
 
 describe("ruleDisposition", () => {

@@ -10,6 +10,7 @@ import {
   SCOPED_NATIVE_EXTRACTION_ENQUEUE,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
@@ -17,6 +18,8 @@ import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-autom
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
+import { readDocxDeclaredSourceLanguage } from "@/api/lib/document-translation/docx-language";
+import { recordEntityVersionDetectedLanguage } from "@/api/lib/document-translation/version-language";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
@@ -32,7 +35,7 @@ import {
   findExtractionFileFieldRow,
 } from "@/api/lib/search/types";
 import { withTimeout } from "@/api/lib/with-timeout";
-import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 type ExtractionSource = {
   fileId: string;
@@ -284,6 +287,55 @@ type NativeExtractionRun = Pick<
   | "workspaceId"
 >;
 
+type RecordDocxVersionLanguageOptions = {
+  buffer: ArrayBuffer;
+  extractionMimeType: string;
+  run: NativeExtractionRun;
+  text: string | null;
+};
+
+/**
+ * Stamp the DOCX-declared document language on the version this run just
+ * indexed.
+ *
+ * Every path that creates a file version enqueues a native extraction, so
+ * this one hook covers upload, desktop edit, folio publish, copy and
+ * translation output alike -- no per-call-site discipline, and no second
+ * download: the bytes are already here for extraction. Passing the extracted
+ * text lets the detector answer from `word/styles.xml` alone in the usual
+ * case. Telemetry-only on failure: a document whose language cannot be read
+ * is still a fully indexed document.
+ */
+const recordDocxVersionLanguage = async ({
+  buffer,
+  extractionMimeType,
+  run,
+  text,
+}: RecordDocxVersionLanguageOptions): Promise<void> => {
+  if (extractionMimeType !== DOCX_MIME_TYPE) {
+    return;
+  }
+  const recorded = await Result.tryPromise({
+    try: async () => {
+      const language = await readDocxDeclaredSourceLanguage(buffer, {
+        ...(text === null ? {} : { text }),
+      });
+      if (language === null) {
+        return;
+      }
+      await recordEntityVersionDetectedLanguage(rootDb, {
+        entityVersionId: run.entityVersionId,
+        workspaceId: run.workspaceId,
+        language,
+      });
+    },
+    catch: (cause) => cause,
+  });
+  if (Result.isError(recorded)) {
+    captureError(recorded.error, { source: "native-extraction-docx-language" });
+  }
+};
+
 export const executeNativeExtraction = async ({
   fileField,
   lifecycleSignal,
@@ -347,6 +399,13 @@ export const executeNativeExtraction = async ({
   if (persistenceOutcome === "source_cancelled") {
     return persistenceOutcome;
   }
+
+  await recordDocxVersionLanguage({
+    buffer,
+    extractionMimeType: source.extractionMimeType,
+    run,
+    text,
+  });
 
   if (source.extractionMimeType === PDF_MIME_TYPE) {
     await restoreManualOcr({

@@ -1,8 +1,9 @@
 /**
  * Create a two-column bilingual copy of a DOCX document.
  *
- * Loads the entity's current DOCX, lays the body out as a source | target
- * table with per-language numbering (folio's `createBilingualDocx`), and
+ * Loads the entity's current DOCX, lays prose out as source | target columns
+ * and source tables above their target copies (folio's
+ * `createBilingualDocx`), and
  * saves the result as a new entity through `createEntityFromBuffer` so it
  * gets the usual scan, indexing, audit and derivative treatment. The right
  * column starts as a copy of the source; translation fills it in later.
@@ -16,6 +17,7 @@ import { createBilingualDocx } from "@stll/folio-core/server";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { BILINGUAL_TABLE_LAYOUT } from "@/api/lib/bilingual/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { buildBilingualFileName } from "@/api/lib/document-translation/output";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
@@ -110,6 +112,7 @@ export const createBilingualEntityHandler = (
               await createBilingualDocx(loaded.buffer, {
                 targetStyleSuffix: body.targetLang,
                 borders: body.borders ?? "none",
+                tableLayout: BILINGUAL_TABLE_LAYOUT,
               }),
             {
               label: "bilingual-docx",

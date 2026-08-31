@@ -302,6 +302,7 @@ const loadRows = async (actor: RunActor): Promise<StoredRow[]> => {
         ordinal: bilingualTranslationRows.ordinal,
         kind: bilingualTranslationRows.kind,
         inTable: bilingualTranslationRows.inTable,
+        tableLayout: bilingualTranslationRows.tableLayout,
         sourceParaId: bilingualTranslationRows.sourceParaId,
         sourceText: bilingualTranslationRows.sourceText,
         disposition: bilingualTranslationRows.disposition,

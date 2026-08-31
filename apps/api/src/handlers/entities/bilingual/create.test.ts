@@ -7,6 +7,7 @@ import {
   createEmptyDocument,
   createStellaStyleDocumentPreset,
 } from "@stll/folio-core";
+import { readBilingualDocx } from "@stll/folio-core/server";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
@@ -44,6 +45,15 @@ const buildSourceDocx = async (): Promise<ArrayBuffer> => {
     clause("Definitions", "ClauseHeading1"),
     clause("Agreement means this contract.", "ClauseParagraph1"),
     clause("Term", "ClauseHeading1"),
+    {
+      type: "table",
+      rows: [
+        {
+          type: "tableRow",
+          cells: [{ type: "tableCell", content: [clause("Name:", "Normal")] }],
+        },
+      ],
+    },
   ];
   return createDocx(doc);
 };
@@ -165,7 +175,7 @@ describe("createBilingualEntity", () => {
 
     expect(result).toMatchObject({
       fileName: "Smlouva (CS-EN).docx",
-      rowCount: 3,
+      rowCount: 4,
       warnings: [],
     });
     expect(createEntityFromBufferMock).toHaveBeenCalledTimes(1);
@@ -176,6 +186,10 @@ describe("createBilingualEntity", () => {
     expect(written.mimeType).toBe(DOCX_MIME_TYPE);
     expect(written.fileName).toBe("Smlouva (CS-EN).docx");
     expect(await validateDocxBuffer(written.buffer)).toEqual({ valid: true });
+    const tableRow = (await readBilingualDocx(written.buffer)).find(
+      (row) => row.kind === "table",
+    );
+    expect(tableRow).toMatchObject({ kind: "table", layout: "stacked" });
     expect(scanFileMock.mock.calls.at(0)?.[0]).toMatchObject({
       declaredMimeType: DOCX_MIME_TYPE,
       fileName: "Smlouva (CS-EN).docx",

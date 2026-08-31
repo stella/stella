@@ -1,12 +1,20 @@
 import { describe, expect, test } from "bun:test";
 
-import { DOCUMENT_TRANSLATION_RUN_ERROR_CODES } from "@stll/api-contract/document-translation";
-
 import {
+  DOCUMENT_TRANSLATION_RUN_ERROR_CODES,
+  documentTranslationSourceForTarget,
+} from "@stll/api-contract/document-translation";
+
+import { DOCUMENT_TRANSLATION_TARGET_CODES } from "./document-language-picker.logic";
+import {
+  activeTranslationChoice,
   canStartDocumentTranslation,
   commentPolicyStateForSource,
+  DEFAULT_TRANSLATION_CHOICE,
+  defaultDocumentTranslationTarget,
   documentTranslationRunFailureKey,
   openDocumentTranslationOutput,
+  parseLastTranslationTarget,
   resolvedDocumentTranslationSource,
 } from "./translate-document-dialog.logic";
 
@@ -182,5 +190,140 @@ describe("document translation output handoff", () => {
     expect(rejection).toMatchObject({ message: "destination unavailable" });
     expect(navigated).toBeFalse();
     expect(closed).toBeFalse();
+  });
+});
+
+describe("default translation target", () => {
+  const options = {
+    lastUsedTarget: null,
+    matterLanguages: [],
+    sourceLanguage: "CS",
+    supportedTargets: DOCUMENT_TRANSLATION_TARGET_CODES,
+    uiLocale: "cs",
+  } as const;
+
+  test("proposes the language the rest of the matter is written in", () => {
+    expect(
+      defaultDocumentTranslationTarget({
+        ...options,
+        lastUsedTarget: "DE",
+        matterLanguages: [{ language: "PL" }, { language: "DE" }],
+      }),
+    ).toBe("PL");
+  });
+
+  test("skips a matter language that is the document's own language", () => {
+    expect(
+      defaultDocumentTranslationTarget({
+        ...options,
+        matterLanguages: [{ language: "CS" }, { language: "SK" }],
+      }),
+    ).toBe("SK");
+  });
+
+  test("falls back to this browser's last choice", () => {
+    expect(
+      defaultDocumentTranslationTarget({ ...options, lastUsedTarget: "PT-BR" }),
+    ).toBe("PT-BR");
+  });
+
+  test("ignores a last choice that no longer differs from the source", () => {
+    expect(
+      defaultDocumentTranslationTarget({
+        ...options,
+        lastUsedTarget: "CS",
+        uiLocale: "de",
+      }),
+    ).toBe("DE");
+  });
+
+  test("falls back to the UI locale", () => {
+    expect(
+      defaultDocumentTranslationTarget({ ...options, uiLocale: "pl" }),
+    ).toBe("PL");
+  });
+
+  test("falls back to the first offered language that differs", () => {
+    expect(defaultDocumentTranslationTarget(options)).toBe("AR");
+  });
+
+  test.each(DOCUMENT_TRANSLATION_TARGET_CODES.map((code) => [code] as const))(
+    "never proposes the source language itself (%s)",
+    (code) => {
+      const sourceLanguage = documentTranslationSourceForTarget(code);
+      const target = defaultDocumentTranslationTarget({
+        lastUsedTarget: code,
+        matterLanguages: [{ language: sourceLanguage }],
+        sourceLanguage,
+        supportedTargets: DOCUMENT_TRANSLATION_TARGET_CODES,
+        uiLocale: sourceLanguage.toLowerCase(),
+      });
+      expect(documentTranslationSourceForTarget(target)).not.toBe(
+        sourceLanguage,
+      );
+    },
+  );
+});
+
+describe("active translation choice", () => {
+  test("opens on stella AI, never on DeepL", () => {
+    expect(
+      activeTranslationChoice({
+        selected: DEFAULT_TRANSLATION_CHOICE,
+        canUseDeepL: true,
+        isDocx: true,
+      }),
+    ).toBe("translated:ai");
+  });
+
+  test("drops a DeepL selection once the key is gone", () => {
+    expect(
+      activeTranslationChoice({
+        selected: "translated:deepl",
+        canUseDeepL: false,
+        isDocx: true,
+      }),
+    ).toBe("translated:ai");
+  });
+
+  test("leaves DeepL selected while it is configured", () => {
+    expect(
+      activeTranslationChoice({
+        selected: "translated:deepl",
+        canUseDeepL: true,
+        isDocx: true,
+      }),
+    ).toBe("translated:deepl");
+  });
+
+  test("falls to DeepL for a file stella AI cannot open", () => {
+    expect(
+      activeTranslationChoice({
+        selected: "bilingual:ai",
+        canUseDeepL: true,
+        isDocx: false,
+      }),
+    ).toBe("translated:deepl");
+  });
+
+  test("keeps the AI selection when nothing else is available either", () => {
+    expect(
+      activeTranslationChoice({
+        selected: "translated:ai",
+        canUseDeepL: false,
+        isDocx: false,
+      }),
+    ).toBe("translated:ai");
+  });
+});
+
+describe("remembered translation target", () => {
+  test("keeps a code the catalog still names", () => {
+    expect(parseLastTranslationTarget("PT-BR")).toBe("PT-BR");
+  });
+
+  test("forgets an absent or retired code", () => {
+    expect(parseLastTranslationTarget(null)).toBeNull();
+    expect(parseLastTranslationTarget("KL")).toBeNull();
   });
 });

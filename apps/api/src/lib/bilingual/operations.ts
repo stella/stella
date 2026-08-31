@@ -8,6 +8,7 @@ import type {
   BilingualRowStatus,
 } from "@/api/lib/bilingual/contract";
 import type { BilingualUnit } from "@/api/lib/bilingual/rows";
+import { hasSeparateTableTarget } from "@/api/lib/bilingual/rows";
 
 const INLINE_SEPARATOR = " / ";
 
@@ -50,7 +51,8 @@ export const buildOperations = (
         type: "replaceBlock",
         blockId: row.rowId,
         text:
-          row.disposition === BILINGUAL_ROW_DISPOSITION.INLINE
+          row.disposition === BILINGUAL_ROW_DISPOSITION.INLINE &&
+          !hasSeparateTableTarget(row)
             ? `${row.sourceText}${INLINE_SEPARATOR}${text}`
             : text,
         preserveFormatting: true,

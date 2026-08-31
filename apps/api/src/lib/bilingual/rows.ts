@@ -13,6 +13,7 @@ import type {
   BilingualGlossaryEntry,
   BilingualRowDisposition,
   BilingualRowKind,
+  BilingualTableLayout,
 } from "@/api/lib/bilingual/contract";
 
 /** One translatable unit as the pipeline sees it, flattened from folio's
@@ -22,6 +23,7 @@ export type BilingualUnit = {
   ordinal: number;
   kind: BilingualRowKind;
   inTable: boolean;
+  tableLayout: BilingualTableLayout | null;
   sourceParaId: string | null;
   sourceText: string;
 };
@@ -30,6 +32,12 @@ export type DispositionedUnit = BilingualUnit & {
   disposition: BilingualRowDisposition;
   dispositionOrigin: BilingualDispositionOrigin;
 };
+
+/** Stacked table rows keep distinct source and target paragraphs. Folio's
+ * inline table layout addresses the source paragraph itself. */
+export const hasSeparateTableTarget = (
+  unit: Pick<BilingualUnit, "tableLayout">,
+): boolean => unit.tableLayout === "stacked";
 
 /** Flatten folio's manifest into units; rows without a usable handle or text
  *  beyond the limit are dropped, which the caller reports as a warning. */
@@ -49,17 +57,43 @@ export const flattenBilingualRows = (
   };
   for (const row of rows) {
     if (row.kind === "table") {
-      for (const paragraph of row.paragraphs) {
-        if (!paragraph.paraId || paragraph.sourceText.trim() === "") {
-          continue;
+      switch (row.layout) {
+        case "inline": {
+          for (const paragraph of row.paragraphs) {
+            if (!paragraph.paraId || paragraph.sourceText.trim() === "") {
+              continue;
+            }
+            push({
+              rowId: paragraph.paraId,
+              kind: "table",
+              inTable: true,
+              tableLayout: row.layout,
+              sourceParaId: paragraph.paraId,
+              sourceText: paragraph.sourceText,
+            });
+          }
+          break;
         }
-        push({
-          rowId: paragraph.paraId,
-          kind: "table",
-          inTable: true,
-          sourceParaId: paragraph.paraId,
-          sourceText: paragraph.sourceText,
-        });
+        case "stacked": {
+          for (const paragraph of row.paragraphs) {
+            if (paragraph.sourceText.trim() === "") {
+              continue;
+            }
+            push({
+              rowId: paragraph.targetParaId,
+              kind: "table",
+              inTable: true,
+              tableLayout: row.layout,
+              sourceParaId: paragraph.sourceParaId ?? null,
+              sourceText: paragraph.sourceText,
+            });
+          }
+          break;
+        }
+        default: {
+          const exhaustive: never = row;
+          return exhaustive;
+        }
       }
       continue;
     }
@@ -67,6 +101,7 @@ export const flattenBilingualRows = (
       rowId: row.rowId,
       kind: row.kind,
       inTable: false,
+      tableLayout: null,
       sourceParaId: row.sourceParaId ?? null,
       sourceText: row.sourceText,
     });

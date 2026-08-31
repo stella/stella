@@ -54,9 +54,9 @@ export type BilingualRunErrorCode = (typeof BILINGUAL_RUN_ERROR_CODES)[number];
  * not prose (signature line, identifier, amount); the cells are merged and
  * the copy removed. `inline`: a short label worth showing in both languages
  * in one cell (`Podpis: / Signature:`); the cells are merged and the text
- * becomes `source / target`. Paragraphs inside a kept table have no copy:
- * `translate` replaces their text, `inline` appends the translation, `keep`
- * leaves them alone.
+ * becomes `source / target`. An inline-layout source table has no copy, so
+ * its paragraph is edited in place. A stacked source table has a separate
+ * target paragraph; both `translate` and `inline` write only that target.
  */
 export const BILINGUAL_ROW_DISPOSITIONS = [
   "translate",
@@ -129,3 +129,11 @@ export const BILINGUAL_LIMITS = {
   /** Rows per disposition call. */
   dispositionChunk: 160,
 } as const;
+
+export const BILINGUAL_TABLE_LAYOUTS = ["inline", "stacked"] as const;
+export type BilingualTableLayout = (typeof BILINGUAL_TABLE_LAYOUTS)[number];
+
+/** Source tables stay intact; their translations use a separate full-width
+ * target table so legal forms are never squeezed into half-page columns. */
+export const BILINGUAL_TABLE_LAYOUT =
+  "stacked" as const satisfies BilingualTableLayout;

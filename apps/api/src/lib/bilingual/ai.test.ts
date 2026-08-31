@@ -70,6 +70,7 @@ const context = {
       ordinal: 99,
       kind: "paragraph",
       inTable: false,
+      tableLayout: null,
       sourceParaId: "source-paragraph",
       sourceText: "Stable source",
     },
@@ -85,6 +86,7 @@ const formattedUnit = (
   ordinal,
   kind: "paragraph",
   inTable: false,
+  tableLayout: null,
   sourceParaId: `source-${ordinal}`,
   sourceText: spans.map((span) => span.text).join(""),
   inline: spans.map((span) => ({ type: "text", ...span })),
@@ -140,6 +142,7 @@ describe("formatted bilingual AI boundary", () => {
       ordinal: index + 1,
       kind: "paragraph" as const,
       inTable: false,
+      tableLayout: null,
       sourceParaId: `large-paragraph-${index}`,
       sourceText: "x".repeat(20_000),
     }));
