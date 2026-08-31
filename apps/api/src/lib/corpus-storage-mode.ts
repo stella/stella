@@ -38,7 +38,12 @@ type CorpusStorageInvariantInput = {
    * silently.
    */
   searchProvider: "pg-fts" | "corpus-index";
-  corpusIndexingEnabled: boolean;
+  /**
+   * `embedded` is the API/runner loop controlled by
+   * `CORPUS_INDEXING_ENABLED`; `external` is another deployed projection
+   * worker. Undefined means no projection owner was asserted.
+   */
+  projectionOwner: "embedded" | "external" | undefined;
   corpusBucket: string | undefined;
   isDev: boolean;
 };
@@ -51,7 +56,7 @@ type CorpusStorageInvariantInput = {
 export const corpusStorageInvariantViolation = ({
   mode,
   searchProvider,
-  corpusIndexingEnabled,
+  projectionOwner,
   corpusBucket,
   isDev,
 }: CorpusStorageInvariantInput): string | null => {
@@ -69,13 +74,13 @@ export const corpusStorageInvariantViolation = ({
     );
   }
 
-  // The corpus index is the only projection a canonical row can appear in,
-  // and the indexer loop is what fills it. Without that loop running, a
-  // newly ingested decision reaches no search projection at all.
-  if (mode === "canonical" && !corpusIndexingEnabled) {
+  // Canonical ingestion must name the component that will project each
+  // settled object. This keeps a deliberately delegated writer distinct
+  // from an accidental pause in which new decisions become unsearchable.
+  if (mode === "canonical" && projectionOwner === undefined) {
     return (
-      "CORPUS_STORAGE_MODE=canonical requires CORPUS_INDEXING_ENABLED=true: " +
-      "nothing else indexes a canonical row, so it would never become searchable"
+      "CORPUS_STORAGE_MODE=canonical requires CORPUS_PROJECTION_OWNER: " +
+      "name either the embedded or external projection owner"
     );
   }
 

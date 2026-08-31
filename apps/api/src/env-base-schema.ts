@@ -242,6 +242,10 @@ export const envBaseServerSchema = {
     v.pipe(v.string(), v.parseBoolean()),
     "false",
   ),
+  // Canonical storage requires an explicit projection owner. `embedded`
+  // names the loop above; `external` delegates projection without coupling
+  // canonical object writes to that loop's process lifecycle.
+  CORPUS_PROJECTION_OWNER: v.optional(v.picklist(["embedded", "external"])),
   // Corpus-index throughput. The defaults reproduce the loop's historical
   // pace exactly, so leaving these unset changes nothing; raising them is a
   // deployment decision made where it is visible and revertible without a
@@ -321,6 +325,7 @@ type EnvBaseInvariantInput = {
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT?: string | undefined;
   CORPUS_INDEX_SEARCH_ENDPOINT?: string | undefined;
   CORPUS_INDEXING_ENABLED: boolean;
+  CORPUS_PROJECTION_OWNER?: "embedded" | "external" | undefined;
   CORPUS_STORAGE_ENABLED: boolean;
   CORPUS_STORAGE_MODE?: CorpusStorageMode | undefined;
   DATABASE_URL: string;
@@ -497,6 +502,7 @@ const storageAndIndexInvariantViolation = ({
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT,
   CORPUS_INDEX_SEARCH_ENDPOINT,
   CORPUS_INDEXING_ENABLED,
+  CORPUS_PROJECTION_OWNER,
   CORPUS_STORAGE_ENABLED,
   CORPUS_STORAGE_MODE,
   LEGAL_CORPUS_S3_BUCKET,
@@ -557,6 +563,12 @@ const storageAndIndexInvariantViolation = ({
   ) {
     return "Indexing case_law_v5 on q09 requires CORPUS_INDEX_Q09_ENDPOINT.";
   }
+  if (
+    CORPUS_INDEXING_ENABLED !== (CORPUS_PROJECTION_OWNER === "embedded") &&
+    CORPUS_PROJECTION_OWNER !== undefined
+  ) {
+    return "CORPUS_PROJECTION_OWNER=embedded must match CORPUS_INDEXING_ENABLED=true; use external when another worker owns projection.";
+  }
 
   return corpusStorageInvariantViolation({
     mode: resolveCorpusStorageMode({
@@ -564,7 +576,9 @@ const storageAndIndexInvariantViolation = ({
       legacyEnabled: CORPUS_STORAGE_ENABLED,
     }),
     searchProvider: LEGAL_SEARCH_PROVIDER,
-    corpusIndexingEnabled: CORPUS_INDEXING_ENABLED,
+    projectionOwner:
+      CORPUS_PROJECTION_OWNER ??
+      (CORPUS_INDEXING_ENABLED ? "embedded" : undefined),
     corpusBucket: LEGAL_CORPUS_S3_BUCKET,
     isDev,
   });

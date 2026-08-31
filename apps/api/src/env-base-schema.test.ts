@@ -19,6 +19,27 @@ const deployedCorpusEnvironment = {
 } as const;
 
 describe("corpus cluster endpoint transport", () => {
+  test("canonical storage can delegate projection when the embedded writer is paused", () => {
+    expect(
+      envBaseInvariantViolation({
+        ...deployedCorpusEnvironment,
+        CORPUS_INDEXING_ENABLED: false,
+        CORPUS_PROJECTION_OWNER: "external",
+        CORPUS_STORAGE_MODE: "canonical",
+      }),
+    ).toBeNull();
+  });
+
+  test("canonical storage rejects an unowned projection", () => {
+    expect(
+      envBaseInvariantViolation({
+        ...deployedCorpusEnvironment,
+        CORPUS_INDEXING_ENABLED: false,
+        CORPUS_STORAGE_MODE: "canonical",
+      }),
+    ).toContain("requires CORPUS_PROJECTION_OWNER");
+  });
+
   test("accepts the VPC-only q09 mutation endpoint used by deployment", () => {
     expect(
       envBaseInvariantViolation({
