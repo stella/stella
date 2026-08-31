@@ -5,8 +5,9 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "dev": "bun --bun astro dev",
-    "build": "bun --bun astro build",
+    "media:sync": "bun ../../scripts/product-media.ts sync",
+    "dev": "bun run media:sync && bun --bun astro dev",
+    "build": "bun run media:sync && bun --bun astro build",
     "preview": "bun --bun astro preview",
     "render:og-card": "bun ./scripts/render-og-card.ts",
     "typecheck": "bun --bun astro check",

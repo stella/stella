@@ -11,6 +11,7 @@ import {
 } from "../apps/landing/src/data/product-story";
 import { products } from "../apps/landing/src/data/products/registry";
 import { securityControls } from "../apps/landing/src/data/security-controls";
+import { readProductMediaManifestSync } from "./product-media";
 
 const CAPABILITY_CATALOG_PATH = "packages/cli/capability-catalog.json";
 const POLICY_EVIDENCE_PATH = "docs/policies/evidence.json";
@@ -42,6 +43,9 @@ const getCapabilityIds = (rootDir: string): Set<string> => {
 export const checkMarketingContent = (rootDir: string): string[] => {
   const errors: string[] = [];
   const capabilityIds = getCapabilityIds(rootDir);
+  const productMediaPaths = new Set(
+    readProductMediaManifestSync(rootDir).assets.map(({ path }) => `/${path}`),
+  );
 
   const cliRegistry: unknown = JSON.parse(
     readFileSync(nodePath.join(rootDir, CLI_REGISTRY_SNAPSHOT_PATH), "utf-8"),
@@ -85,7 +89,7 @@ export const checkMarketingContent = (rootDir: string): string[] => {
         "apps/landing/public",
         asset.replace(/^\//u, ""),
       );
-      if (!existsSync(assetPath)) {
+      if (!existsSync(assetPath) && !productMediaPaths.has(asset)) {
         errors.push(`${sceneId}: missing product story asset ${asset}`);
       }
     }

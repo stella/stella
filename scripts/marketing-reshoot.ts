@@ -11,6 +11,7 @@
 import nodePath from "node:path";
 
 import { computeVerdicts, type Verdict } from "./check-marketing-recordings";
+import { syncProductMedia } from "./product-media";
 
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -25,6 +26,7 @@ const API_URL = process.env["E2E_API_URL"] ?? DEFAULT_API_URL;
 const PREFLIGHT_TIMEOUT_MS = 5000;
 const MANIFEST_PATH =
   "apps/landing/public/media/products/recordings-manifest.json";
+const PRODUCT_MEDIA_MANIFEST_PATH = "apps/landing/product-media-manifest.json";
 
 class MarketingReshootError extends Error {
   constructor(message: string) {
@@ -104,9 +106,12 @@ const printFollowUpInstructions = (recordedIds: readonly string[]) => {
       "marketing-reshoot: recording succeeded. This script does not commit —",
       "land the result in two commits, matching the existing convention:",
       "",
-      "1. Commit the re-recorded footage and the manifest the recorder wrote:",
+      "1. Regenerate the immutable media manifest, publish the objects, then",
+      "   commit the two manifests. The recording binaries stay ignored:",
       "",
-      `   git add ${MANIFEST_PATH} apps/landing/public/media/products/*.mp4 apps/landing/public/media/products/*.jpg`,
+      "   bun run marketing:media:manifest",
+      '   PRODUCT_MEDIA_S3_BUCKET="$(gh variable get DOWNLOADS_BUCKET)" bun run marketing:media:publish',
+      `   git add ${MANIFEST_PATH} ${PRODUCT_MEDIA_MANIFEST_PATH}`,
       '   git commit -m "feat(landing): re-record marketing captures"',
       "",
       "2. In a separate commit, restamp recordedAtCommit to the commit that",
@@ -133,6 +138,7 @@ const printDryRun = (staleIds: readonly string[]) => {
       `  GET ${WEB_URL}/`,
       `  GET ${apiHealthUrl(API_URL)}`,
       "would run:",
+      "  bun run marketing:media:sync",
       `  ${reshootCommand(staleIds)}`,
       "",
     ].join("\n"),
@@ -187,6 +193,7 @@ const main = async () => {
     return;
   }
 
+  await syncProductMedia(ROOT_DIR);
   runRecorder(staleIds);
 
   const afterVerdicts = computeVerdicts();

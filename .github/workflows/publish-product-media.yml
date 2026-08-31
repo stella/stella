@@ -6,6 +6,12 @@ name: Publish product media
 
 on:
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "Main commit containing the bootstrap media files."
+        required: true
+        type: string
+        default: "ea54feef625ef3fa6f41873b575282416fbb2f4d"
 
 permissions:
   contents: read
@@ -40,7 +46,7 @@ jobs:
           PRIVATE_WORKFLOWS_REPO: ${{ github.repository_owner }}/private-workflows
           SOURCE_REF: ${{ github.ref }}
           SOURCE_REPOSITORY: ${{ github.repository }}
-          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
           AWS_ROLE_ARN_DEPLOY: ${{ secrets.AWS_ROLE_ARN_DEPLOY }}
           DOWNLOADS_BUCKET: ${{ vars.DOWNLOADS_BUCKET }}
         run: |

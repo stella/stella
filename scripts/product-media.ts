@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { constants as fsConstants, existsSync, readFileSync } from "node:fs";
 import {
   copyFile,
@@ -353,15 +353,22 @@ const verifyFile = async (
   }
 };
 
-const resolveCacheDir = (rootDir: string): string => {
-  const commonDir = execFileSync("git", ["rev-parse", "--git-common-dir"], {
+export const resolveProductMediaCacheDir = (rootDir: string): string => {
+  const result = spawnSync("git", ["rev-parse", "--git-common-dir"], {
     cwd: rootDir,
     encoding: "utf-8",
-  }).trim();
-  return nodePath.join(
-    nodePath.resolve(rootDir, commonDir),
-    "product-media-cache-v1",
-  );
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.status === 0 && typeof result.stdout === "string") {
+    const commonDir = result.stdout.trim();
+    if (commonDir !== "") {
+      return nodePath.join(
+        nodePath.resolve(rootDir, commonDir),
+        "product-media-cache-v1",
+      );
+    }
+  }
+  return nodePath.join(rootDir, ".cache", "product-media-v1");
 };
 
 const cloneFile = async (
@@ -409,7 +416,37 @@ const downloadToCacheOnce = async (
         `${asset.path}: download size does not match manifest`,
       );
     }
-    await Bun.write(temporary, response);
+    if (response.body === null) {
+      throw new ProductMediaError(`${asset.path}: download returned no body`);
+    }
+    const payload = new Uint8Array(asset.bytes);
+    let offset = 0;
+    const reader = response.body.getReader();
+    try {
+      const readNextChunk = async (): Promise<void> => {
+        const { done, value } = await reader.read();
+        if (done) {
+          return;
+        }
+        if (offset + value.byteLength > payload.byteLength) {
+          throw new ProductMediaError(
+            `${asset.path}: download exceeded manifest size`,
+          );
+        }
+        payload.set(value, offset);
+        offset += value.byteLength;
+        await readNextChunk();
+      };
+      await readNextChunk();
+    } finally {
+      reader.releaseLock();
+    }
+    if (offset !== payload.byteLength) {
+      throw new ProductMediaError(
+        `${asset.path}: download size does not match manifest`,
+      );
+    }
+    await writeFile(temporary, payload);
     if (!(await verifyFile(temporary, asset))) {
       throw new ProductMediaError(
         `${asset.path}: downloaded checksum does not match manifest`,
@@ -464,7 +501,7 @@ const runBounded = async <T>(
 
 export const syncProductMedia = async (rootDir = ROOT_DIR): Promise<void> => {
   const manifest = readProductMediaManifestSync(rootDir);
-  const cacheDir = resolveCacheDir(rootDir);
+  const cacheDir = resolveProductMediaCacheDir(rootDir);
   const uniqueAssets = [
     ...new Map(
       manifest.assets.map((asset) => [

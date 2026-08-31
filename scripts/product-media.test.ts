@@ -12,6 +12,7 @@ import {
   PRODUCT_MEDIA_MANIFEST_PATH,
   productMediaPutObjectArgs,
   recordingArtifactPaths,
+  resolveProductMediaCacheDir,
   syncProductMedia,
   validateProductMediaManifest,
 } from "./product-media";
@@ -186,6 +187,15 @@ describe("product media manifest", () => {
     } finally {
       await server.stop(true);
     }
+  });
+
+  test("uses a project-local cache when Git metadata is unavailable", async () => {
+    const rootDir = await mkdtemp(nodePath.join(tmpdir(), "product-media-"));
+    temporaryDirectories.push(rootDir);
+
+    expect(resolveProductMediaCacheDir(rootDir)).toBe(
+      nodePath.join(rootDir, ".cache/product-media-v1"),
+    );
   });
 
   test("pins upload checksum, cache policy, and server-side encryption", () => {
