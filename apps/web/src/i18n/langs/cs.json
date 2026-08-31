@@ -2416,6 +2416,7 @@
         "margin": "Okraj: zjištění vedle svých ustanovení",
         "review": "Hlavní: zjištění v širokém podokně"
       },
+      "passageUnavailable": "Text reference není dostupný",
       "passagesCount": "{count, plural, one {# pasáž} few {# pasáže} other {# pasáží}}",
       "pendingCount": "{count, plural, one {# čeká} few {# čekají} other {# čeká}}",
       "perspective": {

@@ -26,6 +26,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
+import {
+  readableReferencePassageIds,
+  referencePassageIds,
+} from "@/api/lib/document-review/reference-passages";
 import { resolvePlaybookPin } from "@/api/lib/document-review/resolve-playbook-pin";
 import {
   DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
@@ -105,6 +109,23 @@ const createDocumentReviewRun = createSafeHandler(
         new HandlerError({
           status: 422,
           message: "Positions must have unique sourceIds",
+        }),
+      );
+    }
+
+    // A reference-derived position pins passages by id, and the grader reads
+    // those rows with service access on this caller's behalf. So every pinned
+    // passage must be one the caller's own transaction can read now; a
+    // passage from a matter they cannot open is refused, not graded blind.
+    const pinnedPassageIds = referencePassageIds(positions);
+    const readablePassageIds = yield* Result.await(
+      safeDb((tx) => readableReferencePassageIds(tx, pinnedPassageIds)),
+    );
+    if (pinnedPassageIds.some((id) => !readablePassageIds.has(id))) {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          message: "A position quotes a reference passage you cannot read.",
         }),
       );
     }

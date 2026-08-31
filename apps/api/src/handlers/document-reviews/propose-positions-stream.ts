@@ -21,6 +21,7 @@ import { streamReferenceProposal } from "@/api/handlers/document-reviews/referen
 import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
 
 const config = {
   description:
@@ -116,12 +117,28 @@ const proposePositionsStream = createSafeHandler(
               case "parties":
                 writeEvent("parties", { parties: event.parties });
                 break;
-              case "position":
+              case "position": {
+                // The words leave through their own rows, never through the
+                // wire: the position is pinned before its frame is written
+                // and the frame carries ids. One write per position, in
+                // stream order, because each is answered as it is decided.
+                // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- SAFETY: one write per streamed position, bounded by the proposal cap; the frame must carry row ids, so it cannot be written before its pin lands
+                const pinned = await safeDb(
+                  async (tx) =>
+                    await pinProposedPositions(tx, {
+                      organizationId,
+                      positions: [event.position],
+                    }),
+                );
+                if (Result.isError(pinned)) {
+                  throw pinned.error;
+                }
                 writeEvent("position", {
                   index: event.index,
-                  position: event.position,
+                  position: pinned.value[0],
                 });
                 break;
+              }
               case "skipped":
                 writeEvent("skipped", {
                   index: event.index,

@@ -26,6 +26,7 @@ import type { PositionTermKind } from "@/api/lib/workflow/playbook-positions";
 import { VERDICT_TIERS } from "@/api/lib/workflow/verdict-tiers";
 
 const POSITION_ID = "11111111-1111-4111-8111-111111111111";
+const PASSAGE_ID = "66666666-6666-4666-8666-666666666666";
 const TARGET_BLOCK =
   "Claims must be notified within 12 (twelve) months of Completion.";
 const STANDARD_BLOCK =
@@ -47,6 +48,7 @@ const position = (
   termKind,
   passages: [
     {
+      id: PASSAGE_ID,
       workspaceId: "22222222-2222-4222-8222-222222222222",
       entityId: "33333333-3333-4333-8333-333333333333",
       fileFieldId: toSafeId<"field">("44444444-4444-4444-8444-444444444444"),
@@ -241,7 +243,7 @@ describe("normalizeReferenceGrading", () => {
     expect(grading.referenceCitations).toEqual([
       {
         fileFieldId: toSafeId<"field">("44444444-4444-4444-8444-444444444444"),
-        citations: [{ blockId: "r-9", text: STANDARD_BLOCK }],
+        passages: [{ id: PASSAGE_ID, blockId: "r-9" }],
       },
     ]);
   });

@@ -2416,6 +2416,7 @@
         "margin": "Marge : constats à côté de leurs clauses",
         "review": "Principal : constats dans le panneau large"
       },
+      "passageUnavailable": "Texte de référence indisponible",
       "passagesCount": "{count, plural, one {# passage} other {# passages}}",
       "pendingCount": "{count, plural, one {# en attente} other {# en attente}}",
       "perspective": {

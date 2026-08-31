@@ -66,6 +66,7 @@ const grade = async () =>
         termKind: "language",
         passages: [
           {
+            id: "22222222-2222-4222-8222-222222222222",
             workspaceId,
             entityId: toSafeId<"entity">("reference-entity-fixture"),
             fileFieldId: referenceFieldId,

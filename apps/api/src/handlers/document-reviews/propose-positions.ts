@@ -7,6 +7,7 @@ import { proposeReferencePositions } from "@/api/handlers/document-reviews/refer
 import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const TIMEOUT_MS = 120_000;
@@ -75,7 +76,22 @@ const proposePositions = createSafeHandler(
         }),
       );
     }
-    return Result.ok(proposal.value);
+    // The words leave through their own rows, never through this answer: the
+    // proposed positions are pinned first and answered as ids. Seeds lead the
+    // list, as the caller already holds them.
+    const pinned = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await pinProposedPositions(tx, {
+            organizationId,
+            positions: proposal.value.positions,
+          }),
+      ),
+    );
+    return Result.ok({
+      ...proposal.value,
+      positions: [...body.seededPositions, ...pinned],
+    });
   },
 );
 

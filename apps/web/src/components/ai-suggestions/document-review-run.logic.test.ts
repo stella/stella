@@ -173,12 +173,12 @@ const referencePosition =
       termKind: "language",
       passages: [
         {
+          id: "0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb5",
           workspaceId: REFERENCE_WORKSPACE_ID,
           entityId: REFERENCE_ENTITY_ID,
           fileFieldId: REFERENCE_FIELD_ID,
           entityVersionId: "0198f2c4-1e55-7c31-9a10-3b1d2f4c5eb4",
           blockId: "b12",
-          text: "Either party may terminate on ninety days' notice.",
         },
       ],
     },

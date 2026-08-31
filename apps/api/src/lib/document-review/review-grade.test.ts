@@ -100,28 +100,40 @@ const position = (index: number): Position => ({
   enabled: true,
 });
 
-const referencePosition = (index: number): Position => ({
-  mode: "graded",
-  sourceId: sourceId(index),
-  issue: `Reference position ${index}`,
-  severity: "high",
-  standard: {
-    source: "reference",
-    termKind: "language",
-    passages: [
-      {
-        workspaceId: WORKSPACE_ID,
-        entityId: toSafeId<"entity">("77777777-7777-4777-8777-777777777777"),
-        fileFieldId: FILE_FIELD_ID,
-        entityVersionId: ENTITY_VERSION_ID,
-        blockId: `ref-block-${index}`,
-        text: `Standard clause ${index}.`,
-      },
-    ],
-  },
-  ask: { mode: "auto" },
-  enabled: true,
-});
+/** The words behind every passage `referencePosition` mints, keyed by id: the
+ *  position itself carries only the id now, so `buildFindings` needs this
+ *  handed alongside it as `passageTextById`. */
+const referencePassageTextById = new Map<string, string>();
+
+const referencePassageId = (index: number): string =>
+  `ref-passage-${String(index)}`;
+
+const referencePosition = (index: number): Position => {
+  const passageId = referencePassageId(index);
+  referencePassageTextById.set(passageId, `Standard clause ${String(index)}.`);
+  return {
+    mode: "graded",
+    sourceId: sourceId(index),
+    issue: `Reference position ${index}`,
+    severity: "high",
+    standard: {
+      source: "reference",
+      termKind: "language",
+      passages: [
+        {
+          id: passageId,
+          workspaceId: WORKSPACE_ID,
+          entityId: toSafeId<"entity">("77777777-7777-4777-8777-777777777777"),
+          fileFieldId: FILE_FIELD_ID,
+          entityVersionId: ENTITY_VERSION_ID,
+          blockId: `ref-block-${index}`,
+        },
+      ],
+    },
+    ask: { mode: "auto" },
+    enabled: true,
+  };
+};
 
 const extraction = (): AskExtraction => ({
   content: { version: 1, type: "text", value: "Ten days" },
@@ -196,6 +208,7 @@ const buildArgs = (
   target,
   perspective: NEUTRAL_PERSPECTIVE,
   referenceEntityVersionIds: [],
+  passageTextById: referencePassageTextById,
   gradeTierMatches: gradeTierMatchesMock,
   gradeReferencePositions: gradeReferencePositionsMock,
 });

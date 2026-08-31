@@ -12,6 +12,10 @@ const SIDE_BY_SIDE_GRID_CLASS =
 export type ReviewAlignedPairSide = {
   label: string;
   passages: readonly DeltaCitation[];
+  /** What the side says when it quotes nothing. A standard whose passages
+   *  belong to a matter this reader cannot open says that, rather than the
+   *  "no passage" that would claim the standard quoted none. */
+  emptyLabel?: string | undefined;
 };
 
 export type ReviewAlignedPairProps = {
@@ -57,12 +61,14 @@ export const ReviewAlignedPair = ({
     <div className="@container/review-pair">
       <div className={cn("grid grid-cols-1 gap-y-3", SIDE_BY_SIDE_GRID_CLASS)}>
         <ReviewPassageSide
+          emptyLabel={target.emptyLabel}
           label={target.label}
           onActivate={onShowInDocument}
           paragraphs={pair.target}
         />
         <div className="border-border border-t pt-3 @min-[40rem]/review-pair:border-t-0 @min-[40rem]/review-pair:pt-0">
           <ReviewPassageSide
+            emptyLabel={standard.emptyLabel}
             label={standardLabel ?? standard.label}
             onActivate={onShowStandardPassage}
             paragraphs={pair.standard}

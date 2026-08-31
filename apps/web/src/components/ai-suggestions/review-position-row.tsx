@@ -29,6 +29,8 @@ import {
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { cn } from "@stll/ui/utils";
 
+import type { ReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
+import { quotedPassages } from "@/components/ai-suggestions/document-review-passage-texts";
 import {
   PASSAGE_COLLAPSE,
   ReviewStandardPassages,
@@ -153,27 +155,39 @@ export const SeverityChip = ({
 export const ReferencePassageList = ({
   passages,
   referenceNames,
+  texts,
 }: {
   passages: readonly ReferencePassage[];
   referenceNames: ReferenceNameLookup | undefined;
+  /** The words for the whole surface's passages, read once for the list. */
+  texts: ReferencePassageTexts;
 }) => {
   const t = useTranslations();
   return (
     <div className="space-y-3">
-      {groupPassagesByReference(passages).map((group) => (
-        <ReviewStandardPassages
-          collapse={PASSAGE_COLLAPSE.compact}
-          expandLabel={t("inspector.review.passagesCount", {
-            count: group.passages.length,
-          })}
-          key={group.fileFieldId}
-          label={
-            referenceNames?.get(group.fileFieldId) ??
-            t("inspector.review.referenceDocument")
-          }
-          passages={group.passages}
-        />
-      ))}
+      {groupPassagesByReference(passages).map((group) => {
+        const quoted = quotedPassages(group.passages, texts.textById);
+        // Nothing yet is not the same as nothing to show: while the words are
+        // still being read the group draws no block at all.
+        if (quoted.length === 0 && texts.pending) {
+          return null;
+        }
+        return (
+          <ReviewStandardPassages
+            collapse={PASSAGE_COLLAPSE.compact}
+            emptyLabel={t("inspector.review.passageUnavailable")}
+            expandLabel={t("inspector.review.passagesCount", {
+              count: quoted.length,
+            })}
+            key={group.fileFieldId}
+            label={
+              referenceNames?.get(group.fileFieldId) ??
+              t("inspector.review.referenceDocument")
+            }
+            passages={quoted}
+          />
+        );
+      })}
     </div>
   );
 };
@@ -234,12 +248,16 @@ export const PositionQuickRow = ({
   position,
   index,
   referenceNames,
+  passageTexts,
   onChange,
   onRemove,
 }: {
   position: Position;
   index: number;
   referenceNames: ReferenceNameLookup | undefined;
+  /** The words behind every passage on the list this row sits in, so twenty
+   *  rows cost the one read the list already made. */
+  passageTexts: ReferencePassageTexts;
   /** Omitted while the proposal is still being written: a position the model
    *  has not finished proposing is not one to edit, and an edit made against a
    *  list that is about to be handed to the run would be lost. */
@@ -335,6 +353,7 @@ export const PositionQuickRow = ({
             <ReferencePassageList
               passages={passages}
               referenceNames={referenceNames}
+              texts={passageTexts}
             />
           )}
         </div>

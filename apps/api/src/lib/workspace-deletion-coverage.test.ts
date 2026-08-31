@@ -62,7 +62,7 @@ describe("workspace deletion coverage", () => {
         .filter((edge) => edge.parent === workspaces)
         .map((edge) => getTableConfig(edge.child).name),
     );
-    expect(directChildren.size).toBe(52);
+    expect(directChildren.size).toBe(53);
     expect(directChildren.has("chat_threads")).toBe(true);
     expect(directChildren.has("desktop_edit_sessions")).toBe(true);
     expect(directChildren.has("signals")).toBe(true);

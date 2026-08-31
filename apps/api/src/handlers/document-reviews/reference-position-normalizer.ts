@@ -35,6 +35,10 @@ import type {
   ReviewSkippedTerm,
   ReviewSkipReason,
 } from "@/api/lib/document-review/contract";
+import type {
+  ProposedReferencePosition,
+  QuotedReferencePassage,
+} from "@/api/lib/document-review/reference-passages";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import {
   POSITION_PURPOSE_MAX_LENGTH,
@@ -45,7 +49,6 @@ import type {
   Position,
   PositionSeverity,
   PositionTermKind,
-  ReferencePassage,
 } from "@/api/lib/workflow/playbook-positions";
 
 /** Matches `positionStandardSchema`'s `passages` bound. A position that needs
@@ -242,9 +245,9 @@ const indexSources = (sources: readonly ReferenceSource[]): SourceIndex =>
 const verifyPassages = (
   proposed: readonly ProposedPosition["passages"][number][],
   sources: SourceIndex,
-): ReferencePassage[] => {
+): QuotedReferencePassage[] => {
   const seen = new Set<string>();
-  const passages: ReferencePassage[] = [];
+  const passages: QuotedReferencePassage[] = [];
   for (const { sourceKey, blockId } of proposed) {
     const entry = sources.get(sourceKey);
     const text = entry?.blocks.get(blockId);
@@ -283,7 +286,7 @@ const normalizeIssue = (value: string): string =>
  */
 export type ReviewProposalEvent =
   | { type: "parties"; parties: ReviewParty[] }
-  | { type: "position"; index: number; position: Position }
+  | { type: "position"; index: number; position: ProposedReferencePosition }
   | { type: "skipped"; index: number; skipped: ReviewSkippedTerm };
 
 export type ProposalNormalizer = {
@@ -452,7 +455,9 @@ export const createProposalNormalizer = ({
 /** What the proposal pass hands back: the plan to confirm, what it left
  *  uncompared, and the sides the lawyer can act for. */
 export type ReviewPositionProposal = {
-  positions: Position[];
+  /** The proposed positions only, words still attached: the handler pins
+   *  them and leads the answer with the seeds it was given. */
+  positions: ProposedReferencePosition[];
   skipped: ReviewSkippedTerm[];
   parties: ReviewParty[];
 };
@@ -460,7 +465,7 @@ export type ReviewPositionProposal = {
 /**
  * The whole response, decided in the wire order the stream decides it in, so
  * the batch path and the streaming path cannot drift apart. Seeded positions
- * lead the list: the reviewer keeps what they already had.
+ * are not repeated here: the caller already holds them and leads with them.
  */
 export const normalizeProposal = ({
   output,
@@ -468,10 +473,9 @@ export const normalizeProposal = ({
 }: ProposalNormalizerArgs & {
   output: ProposedPositions;
 }): ReviewPositionProposal => {
-  const { seededPositions } = args;
   const normalizer = createProposalNormalizer(args);
   const proposal: ReviewPositionProposal = {
-    positions: [...seededPositions],
+    positions: [],
     skipped: [],
     parties: [],
   };

@@ -24,7 +24,10 @@ import {
   ISSUES_TABLE_COLUMNS,
   renderIssuesTableDocx,
 } from "@/api/lib/document-review/issues-table";
-import { resolveReferenceScope } from "@/api/lib/document-review/reference-access";
+import {
+  readReferencePassageTexts,
+  referencePassageIds,
+} from "@/api/lib/document-review/reference-passages";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -117,16 +120,24 @@ const exportDocumentReviewRun = createSafeHandler(
       ),
     );
 
-    const scopeReference = yield* Result.await(
-      resolveReferenceScope(safeDb, run.basis),
+    // The precedent column quotes reference passages. Read through this
+    // caller's own transaction, so a passage from a matter they cannot open
+    // is absent from the export rather than copied into it.
+    const passageTextById = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await readReferencePassageTexts(
+            tx,
+            referencePassageIds(
+              run.basis.playbook.definitionSnapshot.positions.items,
+            ),
+          ),
+      ),
     );
     const rows = buildIssuesTableRows({
       basis: run.basis,
-      findings: findings.map(({ positionTitle, payload, decision }) => ({
-        positionTitle,
-        payload: scopeReference(payload),
-        decision,
-      })),
+      passageTextById,
+      findings,
     });
     const exportName = `${withoutExtension(run.targetName)}${FILE_SUFFIX}`;
     const table: ExportTableInput = {

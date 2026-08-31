@@ -41,6 +41,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { useReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -63,6 +64,7 @@ import {
   type Position,
   type PositionErrors,
   type PositionSeverity,
+  positionReferencePassages,
   positionTiers,
   validatePosition,
 } from "@/lib/knowledge/playbook-types";
@@ -367,6 +369,12 @@ const PlaybookEditorForm = ({
       position.sourceId,
       validatePosition(position),
     ]),
+  );
+
+  // One read for the whole card list: a reference position quotes passages by
+  // id, and the words come from the matters those references live in.
+  const passageTexts = useReferencePassageTexts(
+    positionReferencePassages(positions),
   );
 
   const setOpen = (sourceId: string, open: boolean) => {
@@ -943,6 +951,7 @@ const PlaybookEditorForm = ({
                     onReorder={reorderPosition}
                     open={openIds.has(position.sourceId)}
                     organizationId={organizationId}
+                    passageTexts={passageTexts}
                     position={position}
                     showErrors={attemptedSave}
                     total={positions.length}

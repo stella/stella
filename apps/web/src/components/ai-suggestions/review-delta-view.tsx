@@ -10,6 +10,8 @@ import { ReviewTermTable } from "@/components/ai-suggestions/review-term-row";
 export type ReviewDeltaSide = {
   label: string;
   passages: readonly DeltaCitation[];
+  /** What the side says when it quotes nothing; see `ReviewAlignedPairSide`. */
+  emptyLabel?: string | undefined;
 };
 
 export type ReviewDeltaViewProps = {

@@ -2416,6 +2416,7 @@
         "margin": "Margines: ustalenia obok swoich klauzul",
         "review": "Główny: ustalenia w szerokim panelu"
       },
+      "passageUnavailable": "Tekst referencyjny niedostępny",
       "passagesCount": "{count, plural, one {# fragment} few {# fragmenty} many {# fragmentów} other {# fragmentu}}",
       "pendingCount": "{count, plural, one {# oczekujące} few {# oczekujące} many {# oczekujących} other {# oczekujących}}",
       "perspective": {

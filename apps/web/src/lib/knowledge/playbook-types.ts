@@ -123,11 +123,48 @@ export const positionTiers = (
 ): PositionTiers | null =>
   position.standard.source === "tiers" ? position.standard.tiers : null;
 
-/** The passages a reference standard quotes, joined as one block of language:
- *  what "Convert to rules" seeds the acceptable tier's ideal wording with. */
+/**
+ * Every reference passage a list of positions pins, in the order they appear.
+ * What a surface hands the passage-text read, so one request covers the whole
+ * list rather than one per card.
+ */
+export const positionReferencePassages = (
+  positions: readonly Position[],
+): ReferencePassage[] => {
+  const passages: ReferencePassage[] = [];
+  for (const position of positions) {
+    if (
+      position.mode === "graded" &&
+      position.standard.source === "reference"
+    ) {
+      passages.push(...position.standard.passages);
+    }
+  }
+  return passages;
+};
+
+/**
+ * The passages a reference standard quotes, joined as one block of language:
+ * what "Convert to rules" seeds the acceptable tier's ideal wording with.
+ *
+ * A passage carries an id, not words: the text lives in the matter the
+ * reference belongs to. One whose words this reader did not receive
+ * contributes nothing, so the conversion can only write language already on
+ * screen into the playbook.
+ */
 export const referencePassagesText = (
   passages: readonly ReferencePassage[],
-): string => passages.map((passage) => passage.text.trim()).join("\n\n");
+  textById: ReadonlyMap<string, string>,
+): string => {
+  const quoted: string[] = [];
+  for (const passage of passages) {
+    const text = textById.get(passage.id)?.trim() ?? "";
+    if (text.length > 0) {
+      quoted.push(text);
+    }
+  }
+  return quoted.join("\n\n");
+};
 
 const textContent = (): PositionAskContent => ({ version: 1, type: "text" });
 

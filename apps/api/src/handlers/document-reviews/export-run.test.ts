@@ -135,7 +135,7 @@ describe("document review run export", () => {
                         referenceCitations: [
                           {
                             fileFieldId: REFERENCE_FIELD_ID,
-                            citations: [],
+                            passages: [],
                           },
                         ],
                         fix: null,
@@ -188,11 +188,10 @@ describe("document review run export", () => {
   });
 
   test("omits reference text from a matter the caller cannot read", async () => {
+    const POSITION_ID = "11111111-1111-4111-8111-1111111111aa";
+    const PASSAGE_ID = "77777777-7777-4777-8777-777777777777";
     let selectCallCount = 0;
     const { safeDb } = createScopedDbMock({
-      // The reference matter is no longer readable, so row security returns
-      // none of the matters the run pinned.
-      query: { workspaces: { findMany: async () => [] } },
       select: () => {
         selectCallCount += 1;
         if (selectCallCount === 1) {
@@ -211,7 +210,38 @@ describe("document review run export", () => {
                           provenance: "ephemeral",
                           definitionSnapshot: {
                             name: "Positions confirmed for this review",
-                            positions: { version: 3, items: [] },
+                            positions: {
+                              version: 3,
+                              items: [
+                                {
+                                  mode: "graded",
+                                  sourceId: POSITION_ID,
+                                  issue: "Liability cap",
+                                  severity: "medium",
+                                  standard: {
+                                    source: "reference",
+                                    termKind: "language",
+                                    passages: [
+                                      {
+                                        id: PASSAGE_ID,
+                                        workspaceId: REFERENCE_WORKSPACE_ID,
+                                        entityId: toSafeId<"entity">(
+                                          "44444444-4444-4444-8444-444444444444",
+                                        ),
+                                        fileFieldId: REFERENCE_FIELD_ID,
+                                        entityVersionId:
+                                          toSafeId<"entityVersion">(
+                                            "55555555-5555-4555-8555-555555555555",
+                                          ),
+                                        blockId: "reference-1",
+                                      },
+                                    ],
+                                  },
+                                  ask: { mode: "auto" },
+                                  enabled: true,
+                                },
+                              ],
+                            },
                           },
                         },
                         references: [
@@ -239,52 +269,60 @@ describe("document review run export", () => {
           };
         }
 
-        return {
-          from: () => ({
-            where: () => ({
-              orderBy: () => ({
-                limit: async () => [
-                  {
-                    positionTitle: "Liability cap",
-                    decision: "open",
-                    payload: {
-                      finding: {
-                        positionId: "11111111-1111-4111-8111-1111111111aa",
-                        issue: "Liability cap",
-                        severity: "medium",
-                        standardSource: "reference",
-                        verdict: "deviation",
-                        delta: { kind: "language" },
-                        extracted: null,
-                        consensus: "single",
-                        rationale: "Different cap.",
-                        explanation: {
-                          type: "comparison",
-                          text: "Different cap.",
-                        },
-                        recommendation: null,
-                        impact: "unknown",
-                        citations: [
-                          { blockId: "target-1", text: "Draft wording." },
-                        ],
-                        referenceCitations: [
-                          {
-                            fileFieldId: REFERENCE_FIELD_ID,
-                            citations: [
-                              {
-                                blockId: "reference-1",
-                                text: "Precedent wording.",
-                              },
-                            ],
+        if (selectCallCount === 2) {
+          return {
+            from: () => ({
+              where: () => ({
+                orderBy: () => ({
+                  limit: async () => [
+                    {
+                      positionTitle: "Liability cap",
+                      decision: "open",
+                      payload: {
+                        finding: {
+                          positionId: POSITION_ID,
+                          issue: "Liability cap",
+                          severity: "medium",
+                          standardSource: "reference",
+                          verdict: "deviation",
+                          delta: { kind: "language" },
+                          extracted: null,
+                          consensus: "single",
+                          rationale: "Different cap.",
+                          explanation: {
+                            type: "comparison",
+                            text: "Different cap.",
                           },
-                        ],
-                        fix: null,
+                          recommendation: null,
+                          impact: "unknown",
+                          citations: [
+                            { blockId: "target-1", text: "Draft wording." },
+                          ],
+                          referenceCitations: [
+                            {
+                              fileFieldId: REFERENCE_FIELD_ID,
+                              passages: [
+                                { id: PASSAGE_ID, blockId: "reference-1" },
+                              ],
+                            },
+                          ],
+                          fix: null,
+                        },
                       },
                     },
-                  },
-                ],
+                  ],
+                }),
               }),
             }),
+          };
+        }
+
+        // The passage read runs through the caller's own scoped transaction;
+        // row security answers none of the matters the run pinned, so the
+        // passage that would say "Precedent wording." is simply absent.
+        return {
+          from: () => ({
+            where: async () => [],
           }),
         };
       },

@@ -93,6 +93,10 @@ export type ReviewPassageSideProps = {
   /** What the expander reads as when there is more to show. Defaults to
    *  "Show more"; a list of positions names the quantity instead. */
   expandLabel?: string | undefined;
+  /** What the column says when it has nothing to draw. Defaults to "no
+   *  passage"; a side whose quotes exist but are not this reader's to see
+   *  says that instead, so absence and inaccessibility do not read alike. */
+  emptyLabel?: string | undefined;
   onActivate?: ((blockId: string) => void) | undefined;
 };
 
@@ -101,6 +105,7 @@ export const ReviewPassageSide = ({
   paragraphs,
   collapse = PASSAGE_COLLAPSE.full,
   expandLabel,
+  emptyLabel,
   onActivate,
 }: ReviewPassageSideProps) => {
   const t = useTranslations();
@@ -117,7 +122,7 @@ export const ReviewPassageSide = ({
       </p>
       {paragraphs.length === 0 ? (
         <p className="text-muted-foreground text-sm leading-6 italic">
-          {t("inspector.review.noPassage")}
+          {emptyLabel ?? t("inspector.review.noPassage")}
         </p>
       ) : (
         <>
@@ -161,6 +166,7 @@ export type ReviewStandardPassagesProps = {
   passages: readonly PassageInput[];
   collapse?: PassageCollapse | undefined;
   expandLabel?: string | undefined;
+  emptyLabel?: string | undefined;
   onActivate?: ((blockId: string) => void) | undefined;
 };
 
@@ -174,10 +180,12 @@ export const ReviewStandardPassages = ({
   passages,
   collapse,
   expandLabel,
+  emptyLabel,
   onActivate,
 }: ReviewStandardPassagesProps) => (
   <ReviewPassageSide
     collapse={collapse}
+    emptyLabel={emptyLabel}
     expandLabel={expandLabel}
     label={label}
     onActivate={onActivate}

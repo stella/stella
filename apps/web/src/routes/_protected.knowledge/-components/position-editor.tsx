@@ -58,6 +58,7 @@ import {
 import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
+import type { ReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
 import { REVIEW_SECTION_LABEL_CLASS } from "@/components/ai-suggestions/review-passage-side";
 import {
   POSITION_HEADER_META_CLASS,
@@ -208,6 +209,9 @@ type PositionEditorProps = {
    *  detail carries the projection. */
   decision?: PositionDecisionSummary | undefined;
   referenceNames?: ReferenceNameLookup | undefined;
+  /** The words behind every reference passage the playbook quotes, read once
+   *  for the whole position list. */
+  passageTexts: ReferencePassageTexts;
   onOpenChange: (open: boolean) => void;
   onChange: (position: Position) => void;
   onRemove: () => void;
@@ -228,6 +232,7 @@ export const PositionEditor = ({
   showErrors,
   decision,
   referenceNames,
+  passageTexts,
   onOpenChange,
   onChange,
   onRemove,
@@ -435,6 +440,7 @@ export const PositionEditor = ({
               onChange={onChange}
               onConvertMode={onConvertMode}
               organizationId={organizationId}
+              passageTexts={passageTexts}
               position={position}
               referenceNames={referenceNames}
               showErrors={showErrors}
@@ -510,6 +516,7 @@ const GradedBody = ({
   showErrors,
   decision,
   referenceNames,
+  passageTexts,
   onChange,
   onConvertMode,
 }: {
@@ -519,6 +526,7 @@ const GradedBody = ({
   showErrors: boolean;
   decision: PositionDecisionSummary | undefined;
   referenceNames: ReferenceNameLookup | undefined;
+  passageTexts: ReferencePassageTexts;
   onChange: (position: Position) => void;
   onConvertMode: () => void;
 }) => {
@@ -570,7 +578,10 @@ const GradedBody = ({
                   rules: [],
                   ideal: {
                     source: "inline",
-                    text: referencePassagesText(standard.passages),
+                    text: referencePassagesText(
+                      standard.passages,
+                      passageTexts.textById,
+                    ),
                   },
                 },
                 fallback: { entries: [] },
@@ -580,6 +591,7 @@ const GradedBody = ({
           }
           passages={standard.passages}
           referenceNames={referenceNames}
+          texts={passageTexts}
         />
       ) : (
         <TierLadder
@@ -648,10 +660,12 @@ const PositionDecisionLine = ({
 const ReferenceStandardSection = ({
   passages,
   referenceNames,
+  texts,
   onConvertToRules,
 }: {
   passages: readonly ReferencePassage[];
   referenceNames: ReferenceNameLookup | undefined;
+  texts: ReferencePassageTexts;
   onConvertToRules: () => void;
 }) => {
   const t = useTranslations();
@@ -671,6 +685,7 @@ const ReferenceStandardSection = ({
         <ReferencePassageList
           passages={passages}
           referenceNames={referenceNames}
+          texts={texts}
         />
       </div>
     </section>

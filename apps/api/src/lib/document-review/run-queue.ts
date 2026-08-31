@@ -49,6 +49,10 @@ import {
 import type { DocumentReviewFindingRow } from "@/api/lib/document-review/finding-write";
 import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
 import type { ReviewFile } from "@/api/lib/document-review/prepare-review-files";
+import {
+  readReferencePassageTexts,
+  referencePassageIds,
+} from "@/api/lib/document-review/reference-passages";
 import { extractAskContents } from "@/api/lib/document-review/review-extract";
 import type { ReviewAsk } from "@/api/lib/document-review/review-extract";
 import { buildFindings } from "@/api/lib/document-review/review-grade";
@@ -653,6 +657,12 @@ const runGradingPass = async ({
   }
 
   const positions = plan.positions.map((planned) => planned.position);
+  // The words behind every pinned passage, read with service access: the
+  // author proved they could read these rows when the run was created.
+  const passageTextById = await readReferencePassageTexts(
+    rootDb,
+    referencePassageIds(positions),
+  );
   const clauseSnapshots = await actor.scopedDb(
     async (tx) =>
       await loadClauseSnapshots(tx, actor.organizationId, positions),
@@ -717,6 +727,7 @@ const runGradingPass = async ({
 
   const graded: ReviewFinding[] = await buildFindings({
     positions,
+    passageTextById,
     contentBySourceId: extraction.value.contentBySourceId,
     tiersBySourceId,
     target,

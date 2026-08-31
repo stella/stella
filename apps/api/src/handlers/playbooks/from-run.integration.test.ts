@@ -20,6 +20,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import {
   documentReviewFindings,
+  documentReviewReferencePassages,
   documentReviewRuns,
   playbookDefinitions,
 } from "@/api/db/schema";
@@ -52,6 +53,12 @@ const seededRunIds: SafeId<"documentReviewRun">[] = [];
 const CONTENT_SHA256 = "d".repeat(64);
 const POSITION_ID = "55555555-5555-4555-8555-555555555555";
 const SNAPSHOT_NAME = "Positions confirmed for this review";
+// A real row in `document_review_reference_passages`, owned by wsA1: the
+// saved playbook's position pins this id, and `assertPositionsValid` reads it
+// back through the caller's scoped transaction before persisting.
+const REFERENCE_PASSAGE_ID = toSafeId<"documentReviewReferencePassage">(
+  "77777777-7777-4777-8777-777777777777",
+);
 
 const basisFor = (perspective: ReviewPerspective): DocumentReviewRunBasis => ({
   playbook: {
@@ -73,12 +80,12 @@ const basisFor = (perspective: ReviewPerspective): DocumentReviewRunBasis => ({
               termKind: "parameter",
               passages: [
                 {
-                  workspaceId: Bun.randomUUIDv7(),
-                  entityId: Bun.randomUUIDv7(),
-                  fileFieldId: Bun.randomUUIDv7(),
-                  entityVersionId: Bun.randomUUIDv7(),
+                  id: REFERENCE_PASSAGE_ID,
+                  workspaceId: ids.wsA1,
+                  entityId: ids.entityA1,
+                  fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
+                  entityVersionId: ids.entityVersionA1,
                   blockId: "para-9",
-                  text: "Claims must be notified within 6 months of Completion.",
                 },
               ],
             },
@@ -202,6 +209,16 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+  await testDb.insert(documentReviewReferencePassages).values({
+    id: REFERENCE_PASSAGE_ID,
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA1,
+    entityId: ids.entityA1,
+    fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
+    entityVersionId: ids.entityVersionA1,
+    blockId: "para-9",
+    text: "Claims must be notified within 6 months of Completion.",
+  });
 });
 
 afterAll(async () => {
@@ -216,6 +233,9 @@ afterAll(async () => {
         .delete(documentReviewRuns)
         .where(inArray(documentReviewRuns.id, seededRunIds));
     }
+    await testDb
+      .delete(documentReviewReferencePassages)
+      .where(eq(documentReviewReferencePassages.id, REFERENCE_PASSAGE_ID));
   } finally {
     await releaseRlsFixture();
   }

@@ -25,6 +25,8 @@ const REFERENCE_FIELD_A = toSafeId<"field">(
 const REFERENCE_FIELD_B = toSafeId<"field">(
   "33333333-3333-4333-8333-333333333333",
 );
+const REFERENCE_PASSAGE_A = "55555555-5555-4555-8555-555555555555";
+const REFERENCE_PASSAGE_B = "66666666-6666-4666-8666-666666666666";
 
 const playbookPayload = (overrides: Partial<Finding> = {}): FindingPayload => ({
   finding: {
@@ -60,7 +62,7 @@ const referencePayload = (
     referenceCitations: [
       {
         fileFieldId: REFERENCE_FIELD_A,
-        citations: [{ blockId: "para-9", text: "governed by New York law" }],
+        passages: [{ id: REFERENCE_PASSAGE_A, blockId: "para-9" }],
       },
     ],
     fix: null,
@@ -197,12 +199,29 @@ describe("findingFingerprint", () => {
       referenceCitations: [
         {
           fileFieldId: REFERENCE_FIELD_B,
-          citations: [{ blockId: "para-9", text: "governed by New York law" }],
+          passages: [{ id: REFERENCE_PASSAGE_A, blockId: "para-9" }],
         },
       ],
     });
     expect(findingFingerprint(referencePayload(), "deviation")).not.toBe(
       findingFingerprint(moved, "deviation"),
+    );
+  });
+
+  // The evidence is the pinned passage's identity, not the block id it was
+  // last cited under: a re-run quoting the same passage from a renumbered
+  // block must not reopen the decision.
+  test("changes when the standard's own passage changes", () => {
+    const other = referencePayload({
+      referenceCitations: [
+        {
+          fileFieldId: REFERENCE_FIELD_A,
+          passages: [{ id: REFERENCE_PASSAGE_B, blockId: "para-9" }],
+        },
+      ],
+    });
+    expect(findingFingerprint(referencePayload(), "deviation")).not.toBe(
+      findingFingerprint(other, "deviation"),
     );
   });
 

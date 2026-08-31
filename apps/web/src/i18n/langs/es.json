@@ -2416,6 +2416,7 @@
         "margin": "Margen: hallazgos junto a sus cláusulas",
         "review": "Principal: hallazgos en el panel ancho"
       },
+      "passageUnavailable": "Texto de referencia no disponible",
       "passagesCount": "{count, plural, one {# pasaje} other {# pasajes}}",
       "pendingCount": "{count, plural, one {# pendiente} other {# pendiente}}",
       "perspective": {

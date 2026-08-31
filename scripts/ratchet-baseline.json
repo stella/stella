@@ -253,7 +253,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 745,
+    "count": 746,
     "files": {
       "apps/api/scripts/ai-provider-canary.ts": 4,
       "apps/api/scripts/backfill-image-thumbnails.ts": 9,
@@ -316,6 +316,7 @@
       "apps/api/src/handlers/contacts/create.ts": 1,
       "apps/api/src/handlers/contacts/import-validate.ts": 1,
       "apps/api/src/handlers/contacts/update.ts": 1,
+      "apps/api/src/handlers/document-reviews/propose-positions-stream.ts": 1,
       "apps/api/src/handlers/entities/copy-utils.ts": 2,
       "apps/api/src/handlers/entities/delete-version.ts": 1,
       "apps/api/src/handlers/entities/zip-archive.ts": 1,

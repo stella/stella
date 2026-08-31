@@ -75,6 +75,11 @@ import type {
   ReviewSkippedTerm,
   ReviewStartMode,
 } from "@/components/ai-suggestions/document-review-basis.logic";
+import type { ReferencePassageTexts } from "@/components/ai-suggestions/document-review-passage-texts";
+import {
+  quotedPassages,
+  useReferencePassageTexts,
+} from "@/components/ai-suggestions/document-review-passage-texts";
 import {
   decideReviewFinding,
   documentReviewPartiesOptions,
@@ -207,6 +212,7 @@ import type {
   Position,
   PlaybookPositionsValue,
 } from "@/lib/knowledge/playbook-types";
+import { positionReferencePassages } from "@/lib/knowledge/playbook-types";
 import {
   PLAYBOOK_PICKER_LIMIT,
   playbookDetailOptions,
@@ -725,6 +731,15 @@ const referenceCitationGroups = (
   finding: ReviewFinding,
 ): NonNullable<ReviewFinding["referenceCitations"]> =>
   finding.referenceCitations ?? EMPTY_REFERENCE_CITATIONS;
+
+/** Every reference passage one finding pins, across the documents it cites. */
+const findingReferencePassages = (finding: ReviewFinding) =>
+  referenceCitationGroups(finding).flatMap((group) => group.passages);
+
+/** What a results list hands the passage-text read: every quote every card on
+ *  it will draw, so the list costs one request rather than one per finding. */
+const resultReferencePassages = (items: readonly ReviewResultItem[]) =>
+  items.flatMap((item) => findingReferencePassages(item.finding));
 
 /** The matter view a document from another matter opens in: all of it. */
 const ALL_VIEW_ID = "all";
@@ -1265,12 +1280,16 @@ const buildFindingChatDraft = ({
   references,
   impactLabel,
   labels,
+  passageTextById,
 }: {
   item: ReviewResultItem;
   references: readonly ReferenceFile[];
   /** The finding's direction in words, or `null` when it judged none. */
   impactLabel: string | null;
   labels: FindingChatDraftLabels;
+  /** The words behind the reference passages. A quote this reader never
+   *  received is left out of the draft rather than sent as an empty line. */
+  passageTextById: ReadonlyMap<string, string>;
 }): string => {
   const { finding } = item;
   const parts: string[] = [paragraph(labels.issue, item.title)];
@@ -1285,11 +1304,11 @@ const buildFindingChatDraft = ({
       references.find(
         (candidate) => candidate.fileFieldId === group.fileFieldId,
       )?.name ?? labels.reference;
-    for (const citation of group.citations.slice(
+    for (const quoted of quotedPassages(group.passages, passageTextById).slice(
       0,
       CHAT_DRAFT_PASSAGES_PER_DOCUMENT,
     )) {
-      parts.push(paragraph(`${name}:`, `"${citation.text.trim()}"`));
+      parts.push(paragraph(`${name}:`, `"${quoted.text.trim()}"`));
     }
   }
   if (finding.explanation?.type === "comparison") {
@@ -2046,6 +2065,11 @@ const PositionConfirmStep = ({
   onBack,
 }: PositionConfirmStepProps) => {
   const t = useTranslations();
+  // One read for the whole checklist: the cards quote passages by id, and
+  // twenty cards must not be twenty requests.
+  const passageTexts = useReferencePassageTexts(
+    positionReferencePassages(positions),
+  );
   const enabledCount = positions.filter((position) => position.enabled).length;
   const canConfirm =
     enabledCount > 0 &&
@@ -2096,6 +2120,7 @@ const PositionConfirmStep = ({
                 onRemove={() =>
                   onChange(positions.filter((_, at) => at !== index))
                 }
+                passageTexts={passageTexts}
                 position={position}
                 referenceNames={referenceNames}
               />
@@ -2144,6 +2169,11 @@ const ProposalStreamView = ({
   referenceNames: ReferenceNameLookup;
 }) => {
   const t = useTranslations();
+  // The list grows a position at a time, so the read grows with it: the
+  // quotes already on screen stay while the longer answer is in flight.
+  const passageTexts = useReferencePassageTexts(
+    positionReferencePassages(proposal.positions),
+  );
   const streaming = proposal.status === "streaming";
   return (
     <div className="bg-background flex h-full flex-col">
@@ -2187,6 +2217,7 @@ const ProposalStreamView = ({
             >
               <PositionQuickRow
                 index={index}
+                passageTexts={passageTexts}
                 position={position}
                 referenceNames={referenceNames}
               />
@@ -3112,6 +3143,10 @@ const ReviewResultList = ({
   onScrollToBlock,
 }: ReviewResultListProps) => {
   const t = useTranslations();
+  // Every quote on the list in one read. Asked over the whole run rather than
+  // the visible tab, so switching filters or opening a card never costs a
+  // round trip for words the list already holds.
+  const passageTexts = useReferencePassageTexts(resultReferencePassages(items));
   // Severity first, then the order the positions were confirmed in; nothing
   // about the verdict moves a row, so a position keeps its place across runs.
   const orderedItems = sortReviewResultItems(items);
@@ -3245,6 +3280,7 @@ const ReviewResultList = ({
             onToggle={() =>
               setExpandedId(visibleExpandedId === item.id ? null : item.id)
             }
+            passageTexts={passageTexts}
             perspective={perspective}
             readOnly={readOnly}
             references={references}
@@ -3384,6 +3420,8 @@ type ReviewResultCardProps = {
   onToggle: () => void;
   onOpenReferenceCitation: (referenceFieldId: string, blockId: string) => void;
   onScrollToBlock: (blockId: string, text?: string) => void;
+  /** The words behind every reference quote on the list this card sits in. */
+  passageTexts: ReferencePassageTexts;
 };
 
 /** The reference a finding's standard was quoted from, when every cited group
@@ -3422,13 +3460,20 @@ const ReviewResultCard = ({
   onRejectSuggestion,
   onScrollToBlock,
   onToggle,
+  passageTexts,
 }: ReviewResultCardProps) => {
   const t = useTranslations();
   const { findingHeaderLabel, impactLabel } = useReviewLabels();
   const detailId = `review-result-${item.id}`;
   const { finding } = item;
   const judgment = findingHeaderLabel(finding, perspective);
-  const standardPassages = standardPassagesFor(item);
+  const standardPassages = standardPassagesFor(item, passageTexts.textById);
+  // The standard quotes a document this reader cannot open: say so, rather
+  // than let the column read as a standard that quoted nothing.
+  const standardEmptyLabel =
+    findingReferencePassages(finding).length > 0 && !passageTexts.pending
+      ? t("inspector.review.passageUnavailable")
+      : undefined;
   const targetBlockId = finding.citations.at(0)?.blockId ?? null;
   const caption = findingCaption(
     finding,
@@ -3436,7 +3481,7 @@ const ReviewResultCard = ({
   );
   const referenceFieldIdByBlockId = new Map(
     referenceCitationGroups(finding).flatMap((group) =>
-      group.citations.map((citation) => [citation.blockId, group.fileFieldId]),
+      group.passages.map((passage) => [passage.blockId, group.fileFieldId]),
     ),
   );
   // The cited passage's own text, so a scroll request can highlight it
@@ -3529,6 +3574,7 @@ const ReviewResultCard = ({
                   }
             }
             standard={{
+              emptyLabel: standardEmptyLabel,
               label: t("inspector.review.standardColumn"),
               passages: standardPassages,
             }}
@@ -3576,6 +3622,7 @@ const ReviewResultCard = ({
                 fileFieldId: targetFileFieldId,
                 html: buildFindingChatDraft({
                   item,
+                  passageTextById: passageTexts.textById,
                   references,
                   impactLabel: isDirectedImpact(finding.impact)
                     ? impactLabel(finding.impact, perspective)
@@ -4218,15 +4265,16 @@ const AUTHORED_STANDARD_BLOCK_ID = "authored-standard";
  * for); failing that, the tier rule the verdict actually matched — the one
  * sentence the finding was decided by.
  */
-const standardPassagesFor = ({
-  finding,
-  position,
-}: ReviewResultItem): readonly DeltaCitation[] => {
-  const referenced = referenceCitationGroups(finding).flatMap(
-    (group) => group.citations,
-  );
-  if (referenced.length > 0) {
-    return referenced;
+const standardPassagesFor = (
+  { finding, position }: ReviewResultItem,
+  passageTextById: ReadonlyMap<string, string>,
+): readonly DeltaCitation[] => {
+  const pinned = findingReferencePassages(finding);
+  // A finding that quoted a reference is answered by that reference or by
+  // nothing: falling back to the playbook's own language would put a standard
+  // on screen the run was not measured against.
+  if (pinned.length > 0) {
+    return quotedPassages(pinned, passageTextById);
   }
   const ideal = tieredIdeal(position);
   if (ideal !== null) {

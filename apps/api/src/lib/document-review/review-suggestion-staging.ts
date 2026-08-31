@@ -26,7 +26,7 @@ import {
 import type { DocxSuggestionSeverity } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { basisReferenceWorkspaceIds } from "@/api/lib/document-review/reference-access";
+import { basisReferenceWorkspaceIds } from "@/api/lib/document-review/reference-passages";
 import {
   DOCUMENT_REVIEW_DECISION,
   DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX,

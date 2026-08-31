@@ -28,7 +28,6 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { tallyDecisions } from "@/api/lib/document-review/decision-counts";
 import { resolvePlaybookStaleness } from "@/api/lib/document-review/playbook-staleness";
-import { resolveReferenceScope } from "@/api/lib/document-review/reference-access";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
 import { PLAYBOOK_VERSION_SOURCE } from "@/api/lib/workflow/playbook-positions";
 
@@ -135,13 +134,6 @@ export const readDocumentReviewRunDetail = async function* ({
     ),
   );
 
-  // Reference passages are scoped to the matters this reader can still get
-  // to, not the ones the run's author held. Both this projection's callers
-  // (the point read and the history list's `latest`) go through it.
-  const scopeReference = yield* Result.await(
-    resolveReferenceScope(safeDb, run.basis),
-  );
-
   // Is the pinned playbook still the one an author would run today? One
   // equality between two version ids, so it is answered on read rather than
   // maintained as a flag every future approval would have to invalidate.
@@ -195,7 +187,7 @@ export const readDocumentReviewRunDetail = async function* ({
       positionId: finding.positionId,
       positionTitle: finding.positionTitle,
       outcome: finding.outcome,
-      payload: scopeReference(finding.payload),
+      payload: finding.payload,
       decision: finding.decision,
       flags: finding.flags,
       decidedBy: finding.decidedBy,

@@ -80,7 +80,7 @@ const findingEvidence = (
     standardCitations: arrayOrEmpty(finding.referenceCitations)
       .map((entry) => ({
         fileFieldId: entry.fileFieldId,
-        citations: citationExcerpts(entry.citations),
+        citations: entry.passages.map((passage) => passage.id).toSorted(),
       }))
       .toSorted((left, right) =>
         left.fileFieldId < right.fileFieldId

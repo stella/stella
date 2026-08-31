@@ -2416,6 +2416,7 @@
         "margin": "Margó: megállapítások a kikötéseik mellett",
         "review": "Fő: megállapítások a széles panelen"
       },
+      "passageUnavailable": "A referenciaszöveg nem érhető el",
       "passagesCount": "{count, plural, one {# szövegrész} other {# szövegrész}}",
       "pendingCount": "{count, plural, one {# függőben} other {# függőben}}",
       "perspective": {

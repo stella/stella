@@ -2419,6 +2419,7 @@ type Messages = {
         "margin": "Margin: findings beside their clauses";
         "review": "Main: findings in the wide pane";
       };
+      "passageUnavailable": "Reference text unavailable";
       "passagesCount": "{count, plural, one {# passage} other {# passages}}";
       "pendingCount": "{count, plural, one {# pending} other {# pending}}";
       "perspective": {

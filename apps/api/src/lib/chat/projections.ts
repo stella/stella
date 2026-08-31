@@ -892,8 +892,9 @@ const playbookTiersProjection = v.strictObject({
 
 /**
  * A graded position's standard (`positionStandardSchema`): the authored tier
- * ladder, or the passages quoted from a reference document. Passage ids are
- * stripped like every other internal identifier; the quoted text stays.
+ * ladder, or the passages quoted from a reference document. A passage is
+ * provenance only, every identifier stripped: its words live in the source
+ * matter's rows behind row security and never travel inside a playbook.
  */
 const playbookStandardProjection = v.variant("source", [
   projectionBranch(
@@ -907,12 +908,12 @@ const playbookStandardProjection = v.variant("source", [
       source: v.literal("reference"),
       passages: v.array(
         v.strictObject({
+          id: strippedField(),
           workspaceId: strippedField(),
           entityId: strippedField(),
           fileFieldId: strippedField(),
           entityVersionId: strippedField(),
           blockId: strippedField(),
-          text: v.string(),
         }),
       ),
     }),

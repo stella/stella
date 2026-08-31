@@ -403,3 +403,57 @@ export const documentReviewParties = p.pgTable(
     ...wsOrganizationPolicies("document_review_parties"),
   ],
 );
+
+/**
+ * The words a reference-derived position quotes: one row per block of a
+ * reference document version, owned by the matter that document belongs to.
+ *
+ * This is the only place reference text is persisted. Positions, run bases,
+ * findings and playbooks hold the row's id and provenance, so a run in one
+ * matter and a playbook shared across the organization never store another
+ * matter's clauses; the matter's own row security decides, per reader, whether
+ * the words come back. Rows are content-addressed by (version, block): a
+ * block quoted by ten positions is one row.
+ */
+export const documentReviewReferencePassages = p.pgTable(
+  "document_review_reference_passages",
+  {
+    id: pUuid<"documentReviewReferencePassage">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    // The matter the reference document lives in, not the matter of any run
+    // that quotes it: that is what row security scopes by.
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    entityId: safeUuid<"entity">("entity_id").notNull(),
+    fileFieldId: safeUuid<"field">("file_field_id").notNull(),
+    // Provenance, not a foreign key: a passage outlives the pruning of the
+    // version it was read from as long as the document itself exists.
+    entityVersionId: safeUuid<"entityVersion">("entity_version_id").notNull(),
+    blockId: p.varchar("block_id", { length: 128 }).notNull(),
+    text: p.text().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .uniqueIndex("document_review_reference_passages_version_block_uidx")
+      .on(table.entityVersionId, table.blockId),
+    p
+      .foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+        name: "document_review_reference_passages_entity_workspace_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "document_review_reference_passages_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
+    ...wsOrganizationPolicies("document_review_reference_passages"),
+  ],
+);

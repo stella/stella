@@ -88,17 +88,18 @@ export const tiersSchema = t.Object({
 export type Tiers = Static<typeof tiersSchema>;
 
 // ── Reference passage: one quoted block of a reference document ──
-// The text is stored on the position so a playbook saved out of a
-// reference-only run grades later without reading the source document again.
-// The identifiers are provenance: they resolve through the normal entity
-// access checks when a reader asks where the passage came from.
+// Provenance only. The words live in `document_review_reference_passages`,
+// one row per (version, block), owned by the matter the reference belongs to
+// and read under that matter's row security; `id` names that row. A position
+// therefore never carries another matter's text into the playbook or run that
+// holds it, and a reader sees the quote exactly when they can open its source.
 export const referencePassageSchema = t.Object({
+  id: t.String({ format: "uuid" }),
   workspaceId: t.String({ format: "uuid" }),
   entityId: t.String({ format: "uuid" }),
   fileFieldId: t.String({ format: "uuid" }),
   entityVersionId: t.String({ format: "uuid" }),
   blockId: t.String({ minLength: 1, maxLength: 128 }),
-  text: t.String({ minLength: 1, maxLength: 10_000 }),
 });
 export type ReferencePassage = Static<typeof referencePassageSchema>;
 

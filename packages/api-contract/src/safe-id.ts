@@ -64,6 +64,7 @@ export type SafeIdType =
   | "documentProcessingRun"
   | "documentReviewFinding"
   | "documentReviewParty"
+  | "documentReviewReferencePassage"
   | "documentReviewRun"
   | "documentTranslationRun"
   | "documentTranslationUnit"

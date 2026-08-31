@@ -2416,6 +2416,7 @@
         "margin": "Veeris: leiud oma klauslite kõrval",
         "review": "Peamine: leiud laial paneelil"
       },
+      "passageUnavailable": "Võrdlusteksti pole saadaval",
       "passagesCount": "{count, plural, one {# lõik} other {# lõiku}}",
       "pendingCount": "{count, plural, one {# ootel leid} other {# ootel leidu}}",
       "perspective": {

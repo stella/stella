@@ -21830,14 +21830,18 @@ export const generatedRouteMap: RouteNode = {
                                                 items: {
                                                   type: "object",
                                                   required: [
+                                                    "id",
                                                     "workspaceId",
                                                     "entityId",
                                                     "fileFieldId",
                                                     "entityVersionId",
                                                     "blockId",
-                                                    "text",
                                                   ],
                                                   properties: {
+                                                    id: {
+                                                      format: "uuid",
+                                                      type: "string",
+                                                    },
                                                     workspaceId: {
                                                       format: "uuid",
                                                       type: "string",
@@ -21857,11 +21861,6 @@ export const generatedRouteMap: RouteNode = {
                                                     blockId: {
                                                       minLength: 1,
                                                       maxLength: 128,
-                                                      type: "string",
-                                                    },
-                                                    text: {
-                                                      minLength: 1,
-                                                      maxLength: 10000,
                                                       type: "string",
                                                     },
                                                   },
@@ -23586,14 +23585,18 @@ export const generatedRouteMap: RouteNode = {
                                                 items: {
                                                   type: "object",
                                                   required: [
+                                                    "id",
                                                     "workspaceId",
                                                     "entityId",
                                                     "fileFieldId",
                                                     "entityVersionId",
                                                     "blockId",
-                                                    "text",
                                                   ],
                                                   properties: {
+                                                    id: {
+                                                      format: "uuid",
+                                                      type: "string",
+                                                    },
                                                     workspaceId: {
                                                       format: "uuid",
                                                       type: "string",
@@ -23613,11 +23616,6 @@ export const generatedRouteMap: RouteNode = {
                                                     blockId: {
                                                       minLength: 1,
                                                       maxLength: 128,
-                                                      type: "string",
-                                                    },
-                                                    text: {
-                                                      minLength: 1,
-                                                      maxLength: 10000,
                                                       type: "string",
                                                     },
                                                   },

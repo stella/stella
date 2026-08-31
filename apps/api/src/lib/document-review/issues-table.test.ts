@@ -31,6 +31,11 @@ const reference = (name: string, fileFieldId: string): PinnedReference => ({
 
 const PRECEDENT_FIELD = "44444444-4444-4444-8444-444444444444";
 const OTHER_FIELD = "55555555-5555-4555-8555-555555555555";
+const PRECEDENT_PASSAGE_ID = "77777777-7777-4777-8777-777777777777";
+const PRECEDENT_PASSAGE_TEXT = "Leakage is uncapped.";
+const passageTextById = new Map([
+  [PRECEDENT_PASSAGE_ID, PRECEDENT_PASSAGE_TEXT],
+]);
 
 const ephemeralPlaybook: PinnedPlaybook = {
   definitionId: null,
@@ -77,7 +82,7 @@ const referenceFinding = (
       referenceCitations: [
         {
           fileFieldId: toSafeId<"field">(PRECEDENT_FIELD),
-          citations: [{ blockId: "p-9", text: "Leakage is uncapped." }],
+          passages: [{ id: PRECEDENT_PASSAGE_ID, blockId: "p-9" }],
         },
       ],
       fix: { kind: "replaceBlock", blockId: "p-1", text: "No cap applies." },
@@ -89,6 +94,7 @@ describe("buildIssuesTableRows", () => {
   test("labels impact for the reviewed side and fills every column", () => {
     const [row] = buildIssuesTableRows({
       basis,
+      passageTextById,
       findings: [
         referenceFinding("Leakage", {
           impact: "unfavourable",
@@ -119,6 +125,7 @@ describe("buildIssuesTableRows", () => {
     });
     const [row] = buildIssuesTableRows({
       basis,
+      passageTextById,
       findings: [
         {
           ...finding,
@@ -157,6 +164,7 @@ describe("buildIssuesTableRows", () => {
   test("orders findings by verdict first, worst on top, ties stable", () => {
     const rows = buildIssuesTableRows({
       basis,
+      passageTextById,
       findings: [
         referenceFinding("Compliant", {
           impact: "favourable",
@@ -192,6 +200,7 @@ describe("buildIssuesTableRows", () => {
         ],
         perspective: { type: "neutral" },
       },
+      passageTextById,
       findings: [
         referenceFinding("Leakage", { impact: "unknown", severity: "medium" }),
       ],
@@ -219,6 +228,7 @@ describe("buildIssuesTableRows", () => {
         references: [],
         perspective: { type: "neutral" },
       },
+      passageTextById,
       findings: [
         {
           positionTitle: "Governing law",
@@ -266,6 +276,7 @@ describe("renderIssuesTableDocx", () => {
   test("writes a Word package", async () => {
     const rows = buildIssuesTableRows({
       basis,
+      passageTextById,
       findings: [
         referenceFinding("Leakage", {
           impact: "unfavourable",

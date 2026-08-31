@@ -34,6 +34,7 @@ import {
   REVIEW_PARTIES_MAX,
   REVIEW_SKIPPED_MAX,
 } from "@/api/lib/document-review/contract";
+import type { ProposedReferencePosition } from "@/api/lib/document-review/reference-passages";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 import {
   POSITION_PURPOSE_MAX_LENGTH,
@@ -105,7 +106,7 @@ const normalizePositions = (
     seededPositions = [],
     positionsMax = 10,
   }: { seededPositions?: readonly Position[]; positionsMax?: number } = {},
-): Position[] =>
+): ProposedReferencePosition[] =>
   normalizeProposal({
     output: { parties: [], positions: [...proposedPositions], skipped: [] },
     seededPositions,
@@ -240,7 +241,10 @@ describe("positions", () => {
     ).toEqual([]);
   });
 
-  test("keeps what the reviewer already had and skips repeated issues", () => {
+  // Seeded positions are the caller's, not this pass's: they count against
+  // dedup and the wire bound but are never repeated in the output — the
+  // handler leads the answer with them.
+  test("skips an issue the reviewer already has and keeps the rest", () => {
     const positions = normalizePositions(
       [
         proposed({ issue: " governing LAW " }),
@@ -251,7 +255,6 @@ describe("positions", () => {
     );
 
     expect(positions.map((position) => position.issue)).toEqual([
-      "Governing law",
       "Claims time bar",
     ]);
   });
@@ -278,11 +281,12 @@ describe("positions", () => {
       }),
     ]);
 
-    expect(
-      positions.map((position) =>
-        position.mode === "graded" ? position.severity : null,
-      ),
-    ).toEqual(["blocker", "high", "high", "high"]);
+    expect(positions.map((position) => position.severity)).toEqual([
+      "blocker",
+      "high",
+      "high",
+      "high",
+    ]);
   });
 
   test("carries the term kind onto the standard it will be graded as", () => {
@@ -292,13 +296,9 @@ describe("positions", () => {
       ),
     );
 
-    expect(
-      positions.map((position) =>
-        position.mode === "graded" && position.standard.source === "reference"
-          ? position.standard.termKind
-          : null,
-      ),
-    ).toEqual([...POSITION_TERM_KINDS]);
+    expect(positions.map((position) => position.standard.termKind)).toEqual([
+      ...POSITION_TERM_KINDS,
+    ]);
   });
 
   // The wire bound, which the seeded positions do count against: past it the
@@ -313,10 +313,7 @@ describe("positions", () => {
       { seededPositions: [seeded], positionsMax: 2 },
     );
 
-    expect(positions.map((position) => position.issue)).toEqual([
-      "Governing law",
-      "First",
-    ]);
+    expect(positions.map((position) => position.issue)).toEqual(["First"]);
   });
 
   // The cap is what a reviewer can read and confirm by hand. A model that
@@ -352,7 +349,8 @@ describe("positions", () => {
   });
 
   // A reviewer who brought a playbook is asking what the reference adds to
-  // it, and must not get a shorter answer than one who brought nothing.
+  // it, and must not get a shorter answer than one who brought nothing: the
+  // seed counts against the wire bound, never against the proposal cap.
   test("spends the whole proposal cap alongside seeded positions", () => {
     const positions = normalizePositions(
       Array.from({ length: REVIEW_PROPOSAL_CAP }, (_, index) =>
@@ -361,7 +359,7 @@ describe("positions", () => {
       { seededPositions: [seeded], positionsMax: 200 },
     );
 
-    expect(positions).toHaveLength(REVIEW_PROPOSAL_CAP + 1);
+    expect(positions).toHaveLength(REVIEW_PROPOSAL_CAP);
   });
 });
 
@@ -691,7 +689,7 @@ describe("streamed and batched proposals agree", () => {
       streamed.flatMap((event) =>
         event.type === "position" ? [event.position] : [],
       ),
-    ).toEqual(batched.positions.slice(1));
+    ).toEqual(batched.positions);
     expect(
       streamed.flatMap((event) =>
         event.type === "skipped" ? [event.skipped] : [],

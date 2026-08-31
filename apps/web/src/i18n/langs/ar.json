@@ -2416,6 +2416,7 @@
         "margin": "الهامش: النتائج إلى جانب بنودها",
         "review": "الرئيسية: النتائج في اللوحة العريضة"
       },
+      "passageUnavailable": "نص المرجع غير متاح",
       "passagesCount": "{count, plural, zero {لا مقاطع} one {مقطع واحد} two {مقطعان} few {# مقاطع} many {# مقطعًا} other {# مقطع}}",
       "pendingCount": "{count, plural, zero {لا نتائج معلّقة} one {نتيجة معلّقة واحدة} two {نتيجتان معلّقتان} few {# نتائج معلّقة} many {# نتيجةً معلَّقةً} other {# نتيجة معلّقة}}",
       "perspective": {

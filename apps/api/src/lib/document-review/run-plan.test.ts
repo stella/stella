@@ -21,12 +21,12 @@ const REFERENCE_POSITION_ID = "77777777-7777-4777-8777-777777777777";
 const textContent = { version: 1, type: "text" } as const;
 
 const passage: ReferencePassage = {
+  id: Bun.randomUUIDv7(),
   workspaceId: Bun.randomUUIDv7(),
   entityId: Bun.randomUUIDv7(),
   fileFieldId: Bun.randomUUIDv7(),
   entityVersionId: Bun.randomUUIDv7(),
   blockId: "b-1",
-  text: "Claims must be notified within 12 months of Completion.",
 };
 
 const positions: PlaybookPositions = {

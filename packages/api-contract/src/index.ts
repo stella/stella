@@ -695,6 +695,10 @@ export const MCP_APP_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app" as const;
 export const DOCUMENT_REVIEW_LIMITS = {
   referencesMax: 3,
   positionsMax: 200,
+  /** Passage texts one read may ask for: a checklist at the proposal cap,
+   *  twelve passages each, with room over. Shared so the client batches by
+   *  the same number the endpoint refuses past. */
+  passageReadMax: 400,
 } as const;
 /**
  * Where a playbook run's results land. Shared so the request body's accepted

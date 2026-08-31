@@ -20,6 +20,7 @@ import type {
   ReferenceGrading,
   ReferenceStandardPosition,
 } from "@/api/lib/document-review/reference-grade";
+import type { PinnedReferencePassage } from "@/api/lib/document-review/reference-passages";
 import { LANGUAGE_DELTA } from "@/api/lib/document-review/review-delta";
 import type { ReviewDelta } from "@/api/lib/document-review/review-delta";
 import type {
@@ -90,10 +91,12 @@ export type ReviewFinding = {
   /** One instruction for the drafter, or `null` when nothing should change. */
   recommendation?: string | null;
   citations: DocxFolioCitation[];
-  /** The standard's own passages, grouped by the document they came from. */
+  /** The standard's own passages, grouped by the document they came from.
+   *  Ids only: the words live in their source matter's rows and reach a
+   *  reader through that matter's row security, never through the finding. */
   referenceCitations?: {
     fileFieldId: SafeId<"field">;
-    citations: DocxFolioCitation[];
+    passages: { id: string; blockId: string }[];
   }[];
   fix: ReviewFix | null;
 };
@@ -133,6 +136,9 @@ export type BuildFindingsArgs = AiGradingDeps & {
   perspective: ReviewPerspective;
   /** Pinned reference versions, for the shared prompt cache scope. */
   referenceEntityVersionIds: readonly SafeId<"entityVersion">[];
+  /** The words behind every passage the positions pin, keyed by passage id.
+   *  A passage whose row is gone is graded as if it were never quoted. */
+  passageTextById: ReadonlyMap<string, string>;
   /** Progress, per completed batch. The full set still comes back from the
    *  return value; this only lets a caller commit early. */
   onGraded: OnFindingsGraded;
@@ -324,10 +330,22 @@ type ReferencePair = {
   reference: ReferenceStandardPosition;
 };
 
-/** A reference-standard position, as the reference grader reads it. */
-const referencePair = (position: Position): ReferencePair | null => {
+/** A reference-standard position, as the reference grader reads it: its
+ *  pinned passages with their words attached. A passage whose row no longer
+ *  exists is left out; a position left with none is graded as ungrounded. */
+const referencePair = (
+  position: Position,
+  passageTextById: ReadonlyMap<string, string>,
+): ReferencePair | null => {
   if (position.mode !== "graded" || position.standard.source !== "reference") {
     return null;
+  }
+  const passages: PinnedReferencePassage[] = [];
+  for (const passage of position.standard.passages) {
+    const text = passageTextById.get(passage.id);
+    if (text !== undefined) {
+      passages.push({ ...passage, text });
+    }
   }
   return {
     position,
@@ -336,7 +354,7 @@ const referencePair = (position: Position): ReferencePair | null => {
       issue: position.issue,
       termKind: position.standard.termKind,
       guidance: position.guidance,
-      passages: position.standard.passages,
+      passages,
     },
   };
 };
@@ -534,6 +552,7 @@ export const buildFindings = async ({
   target,
   perspective,
   referenceEntityVersionIds,
+  passageTextById,
   onGraded,
   ...deps
 }: BuildFindingsArgs): Promise<ReviewFinding[]> => {
@@ -549,7 +568,7 @@ export const buildFindings = async ({
   const decided = new Map<string, GradingOutcome>();
   const forModel: Position[] = [];
   for (const position of positions) {
-    const pair = referencePair(position);
+    const pair = referencePair(position, passageTextById);
     if (pair !== null) {
       referencePairs.push(pair);
       continue;
@@ -574,6 +593,7 @@ export const buildFindings = async ({
   const project = (position: Position): ReviewFinding =>
     projectFinding({
       position,
+      passageTextById,
       contentBySourceId,
       tiersBySourceId,
       decided,
@@ -609,6 +629,7 @@ export const buildFindings = async ({
 
 type ProjectFindingArgs = {
   position: Position;
+  passageTextById: ReadonlyMap<string, string>;
   contentBySourceId: ReadonlyMap<string, AskExtraction>;
   tiersBySourceId: ReadonlyMap<string, ResolvedTiers>;
   decided: ReadonlyMap<string, GradingOutcome>;
@@ -621,13 +642,14 @@ type ProjectFindingArgs = {
  *  and again for the ordered set the pass returns. */
 const projectFinding = ({
   position,
+  passageTextById,
   contentBySourceId,
   tiersBySourceId,
   decided,
   modelVerdicts,
   referenceGradings,
 }: ProjectFindingArgs): ReviewFinding => {
-  const pair = referencePair(position);
+  const pair = referencePair(position, passageTextById);
   if (pair !== null) {
     // A reference position the grader never reached keeps the flagged-for-a-
     // human answer rather than falling through to the tier path, which would

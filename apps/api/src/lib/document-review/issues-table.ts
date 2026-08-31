@@ -156,11 +156,15 @@ const precedentPosition = ({
   finding,
   playbookName,
   referenceNameByFieldId,
+  passageTextById,
   labelReferences,
 }: {
   finding: ReviewFinding;
   playbookName: string;
   referenceNameByFieldId: ReadonlyMap<string, string>;
+  /** The words behind the cited passages, as far as the exporting reader may
+   *  read them; a passage absent here is left out of the column. */
+  passageTextById: ReadonlyMap<string, string>;
   labelReferences: boolean;
 }): string => {
   switch (finding.standardSource) {
@@ -170,8 +174,11 @@ const precedentPosition = ({
         const name = referenceNameByFieldId.get(group.fileFieldId);
         const prefix =
           labelReferences && name !== undefined ? `[${name}] ` : "";
-        for (const citation of group.citations) {
-          passages.push(`${prefix}${citation.text}`);
+        for (const passage of group.passages) {
+          const text = passageTextById.get(passage.id);
+          if (text !== undefined) {
+            passages.push(`${prefix}${text}`);
+          }
         }
       }
       return passages.join(PASSAGE_SEPARATOR);
@@ -251,6 +258,7 @@ type FindingRowArgs = {
   perspective: ReviewPerspective;
   playbookName: string;
   referenceNameByFieldId: ReadonlyMap<string, string>;
+  passageTextById: ReadonlyMap<string, string>;
   labelReferences: boolean;
 };
 
@@ -261,6 +269,7 @@ const findingRow = ({
   perspective,
   playbookName,
   referenceNameByFieldId,
+  passageTextById,
   labelReferences,
 }: FindingRowArgs): RankedRow => {
   // The verdict ranks the row; a comparison's impact refines nothing the
@@ -281,6 +290,7 @@ const findingRow = ({
         finding,
         playbookName,
         referenceNameByFieldId,
+        passageTextById,
         labelReferences,
       }),
       assessment: assessmentCell(finding),
@@ -293,6 +303,7 @@ const findingRow = ({
 
 type BuildIssuesTableRowsArgs = {
   basis: DocumentReviewRunBasis;
+  passageTextById: ReadonlyMap<string, string>;
   findings: readonly IssuesTableFinding[];
 };
 
@@ -300,6 +311,7 @@ type BuildIssuesTableRowsArgs = {
  *  first, the worst of those on top; ties keep the run's own order. */
 export const buildIssuesTableRows = ({
   basis,
+  passageTextById,
   findings,
 }: BuildIssuesTableRowsArgs): IssuesTableRow[] => {
   const { references, perspective } = basis;
@@ -315,6 +327,7 @@ export const buildIssuesTableRows = ({
       perspective,
       playbookName,
       referenceNameByFieldId,
+      passageTextById,
       labelReferences: references.length > 1,
     }),
   );

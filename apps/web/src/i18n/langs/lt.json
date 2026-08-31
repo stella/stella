@@ -2416,6 +2416,7 @@
         "margin": "Paraštė: išvados šalia savo sąlygų",
         "review": "Pagrindinis: išvados plačiajame skydelyje"
       },
+      "passageUnavailable": "Referencinis tekstas nepasiekiamas",
       "passagesCount": "{count, plural, one {# ištrauka} few {# ištraukos} many {# ištraukos} other {# ištraukų}}",
       "pendingCount": "{count, plural, one {# laukianti išvada} few {# laukiančios išvados} many {# laukiančios išvados} other {# laukiančių išvadų}}",
       "perspective": {

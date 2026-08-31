@@ -2416,6 +2416,7 @@
         "margin": "Mala: secinājumi blakus savām klauzulām",
         "review": "Galvenais: secinājumi platajā panelī"
       },
+      "passageUnavailable": "Atsauces teksts nav pieejams",
       "passagesCount": "{count, plural, zero {# fragmentu} one {# fragments} other {# fragmenti}}",
       "pendingCount": "{count, plural, zero {# neizlemtu secinājumu} one {# neizlemts secinājums} other {# neizlemti secinājumi}}",
       "perspective": {

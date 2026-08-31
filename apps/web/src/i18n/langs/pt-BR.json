@@ -2416,6 +2416,7 @@
         "margin": "Margem: constatações ao lado de suas cláusulas",
         "review": "Principal: constatações no painel largo"
       },
+      "passageUnavailable": "Texto de referência indisponível",
       "passagesCount": "{count, plural, one {# trecho} other {# trechos}}",
       "pendingCount": "{count, plural, one {# pendente} other {# pendente}}",
       "perspective": {

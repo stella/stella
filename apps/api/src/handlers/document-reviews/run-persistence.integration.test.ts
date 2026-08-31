@@ -52,6 +52,7 @@ const seededRunIds: SafeId<"documentReviewRun">[] = [];
 
 const REFERENCE_POSITION_ID = "44444444-4444-4444-8444-444444444444";
 const POSITION_ID = "11111111-1111-4111-8111-111111111111";
+const REFERENCE_PASSAGE_ID = "66666666-6666-4666-8666-666666666666";
 const CONTENT_SHA256 = "a".repeat(64);
 
 /** The reviewed document a case owns. Runs pin these by value (no foreign
@@ -92,12 +93,12 @@ const referenceBasis: DocumentReviewRunBasis = {
               termKind: "parameter",
               passages: [
                 {
+                  id: REFERENCE_PASSAGE_ID,
                   workspaceId: Bun.randomUUIDv7(),
                   entityId: Bun.randomUUIDv7(),
                   fileFieldId: REFERENCE_FILE_FIELD_ID,
                   entityVersionId: Bun.randomUUIDv7(),
                   blockId: "para-9",
-                  text: "This Agreement is governed by English law.",
                 },
               ],
             },
@@ -193,7 +194,7 @@ const referencePayload = (
     referenceCitations: [
       {
         fileFieldId: REFERENCE_FILE_FIELD_ID,
-        citations: [{ blockId: "para-9", text }],
+        passages: [{ id: REFERENCE_PASSAGE_ID, blockId: "para-9" }],
       },
     ],
     fix: null,

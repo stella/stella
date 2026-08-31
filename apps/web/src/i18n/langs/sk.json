@@ -2416,6 +2416,7 @@
         "margin": "Okraj: zistenia vedľa svojich ustanovení",
         "review": "Hlavný: zistenia v širokom paneli"
       },
+      "passageUnavailable": "Text referencie nie je dostupný",
       "passagesCount": "{count, plural, one {# pasáž} few {# pasáže} other {# pasáží}}",
       "pendingCount": "{count, plural, one {# čaká} few {# čakajú} other {# čaká}}",
       "perspective": {

@@ -51,12 +51,12 @@ const LONG_TITLE_ID = "55555555-5555-4555-8555-555555555555";
 const REFERENCE_ID = "66666666-6666-4666-8666-666666666666";
 
 const passage: ReferencePassage = {
+  id: Bun.randomUUIDv7(),
   workspaceId: Bun.randomUUIDv7(),
   entityId: Bun.randomUUIDv7(),
   fileFieldId: Bun.randomUUIDv7(),
   entityVersionId: Bun.randomUUIDv7(),
   blockId: "b-1",
-  text: "Thirty days' written notice.",
 };
 
 const positions: Position[] = [

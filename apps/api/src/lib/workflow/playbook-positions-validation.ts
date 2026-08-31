@@ -4,6 +4,10 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  readableReferencePassageIds,
+  referencePassageIds,
+} from "@/api/lib/document-review/reference-passages";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
@@ -140,32 +144,53 @@ export const assertPositionsValid = async ({
   }
 
   const clauseIds = collectClauseRefIds(positions);
-  if (clauseIds.length === 0) {
-    return Result.ok(undefined);
-  }
-
-  const foundResult = await safeDb((tx) =>
-    tx
-      .select({ id: clauses.id })
-      .from(clauses)
-      .where(
-        and(
-          eq(clauses.organizationId, organizationId),
-          inArray(clauses.id, clauseIds),
+  if (clauseIds.length > 0) {
+    const foundResult = await safeDb((tx) =>
+      tx
+        .select({ id: clauses.id })
+        .from(clauses)
+        .where(
+          and(
+            eq(clauses.organizationId, organizationId),
+            inArray(clauses.id, clauseIds),
+          ),
         ),
-      ),
-  );
-  if (Result.isError(foundResult)) {
-    return Result.err(foundResult.error);
+    );
+    if (Result.isError(foundResult)) {
+      return Result.err(foundResult.error);
+    }
+
+    const foundIds = new Set(foundResult.value.map((row) => row.id));
+    const missing = clauseIds.find((id) => !foundIds.has(id));
+    if (missing !== undefined) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Referenced clause not found in this organization",
+        }),
+      );
+    }
   }
 
-  const foundIds = new Set(foundResult.value.map((row) => row.id));
-  const missing = clauseIds.find((id) => !foundIds.has(id));
-  if (missing !== undefined) {
+  // A reference-derived position pins passages by id, and a later run grades
+  // them with service access on the author's behalf. Every pinned passage
+  // must therefore be one the author's own transaction can read now; a
+  // passage from a matter they cannot open is refused rather than published.
+  // Runs regardless of whether the clause check above ran: the two guard
+  // unrelated standards, and `readableReferencePassageIds` is a no-op query
+  // when a position pins no reference passage at all.
+  const pinnedPassageIds = referencePassageIds(positions.items);
+  const readableResult = await safeDb(
+    async (tx) => await readableReferencePassageIds(tx, pinnedPassageIds),
+  );
+  if (Result.isError(readableResult)) {
+    return Result.err(readableResult.error);
+  }
+  if (pinnedPassageIds.some((id) => !readableResult.value.has(id))) {
     return Result.err(
       new HandlerError({
-        status: 400,
-        message: "Referenced clause not found in this organization",
+        status: 403,
+        message: "A position quotes a reference passage you cannot read.",
       }),
     );
   }

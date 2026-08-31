@@ -36,6 +36,7 @@ import type {
   ReferenceImpact,
   ReviewPerspective,
 } from "@/api/lib/document-review/contract";
+import type { PinnedReferencePassage } from "@/api/lib/document-review/reference-passages";
 import {
   deriveParameterImpact,
   EXPECTED_DELTA_KIND,
@@ -58,10 +59,7 @@ import type { GroundedReviewFix } from "@/api/lib/grounded-review-fix";
 import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
-import type {
-  PositionTermKind,
-  ReferencePassage,
-} from "@/api/lib/workflow/playbook-positions";
+import type { PositionTermKind } from "@/api/lib/workflow/playbook-positions";
 import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 
 const REFERENCE_GRADE_TIMEOUT_MS = 120_000;
@@ -171,7 +169,7 @@ export type ReferenceGrading = {
   citations: DocxFolioCitation[];
   referenceCitations: {
     fileFieldId: SafeId<"field">;
-    citations: DocxFolioCitation[];
+    passages: { id: string; blockId: string }[];
   }[];
   fix: GroundedReviewFix | null;
 };
@@ -184,7 +182,7 @@ export type ReferenceStandardPosition = {
    *  with. */
   termKind: PositionTermKind;
   guidance?: string | undefined;
-  passages: readonly ReferencePassage[];
+  passages: readonly PinnedReferencePassage[];
 };
 
 // ── Normalization ─────────────────────────────────────
@@ -415,24 +413,21 @@ const normalizeConsensus = (
  *  is the standard by construction, so it does not depend on what the model
  *  chose to cite back. */
 const passageCitations = (
-  passages: readonly ReferencePassage[],
+  passages: readonly PinnedReferencePassage[],
 ): ReferenceGrading["referenceCitations"] => {
-  const byFileFieldId = new Map<string, DocxFolioCitation[]>();
+  const byFileFieldId = new Map<string, { id: string; blockId: string }[]>();
   for (const passage of passages) {
-    const citations = byFileFieldId.get(passage.fileFieldId);
-    const citation: DocxFolioCitation = {
-      blockId: passage.blockId,
-      text: passage.text,
-    };
-    if (citations === undefined) {
+    const cited = byFileFieldId.get(passage.fileFieldId);
+    const citation = { id: passage.id, blockId: passage.blockId };
+    if (cited === undefined) {
       byFileFieldId.set(passage.fileFieldId, [citation]);
     } else {
-      citations.push(citation);
+      cited.push(citation);
     }
   }
-  return [...byFileFieldId].map(([fileFieldId, citations]) => ({
+  return [...byFileFieldId].map(([fileFieldId, cited]) => ({
     fileFieldId: brandPersistedFieldId(fileFieldId),
-    citations,
+    passages: cited,
   }));
 };
 
