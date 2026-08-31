@@ -381,6 +381,14 @@ test("drops a touch drag into an adjacent virtual cell", async ({ page }) => {
   await dispatchNativeTouch(nativeTouch, "touchStart", [sourceCoordinates]);
   await expect(page.locator("[data-overlay]")).toHaveText("first");
   await dispatchNativeTouch(nativeTouch, "touchMove", [targetCoordinates]);
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["draggedOver"] ?? "",
+        ),
+    )
+    .toBe("second");
   await endNativeTouch(nativeTouch);
 
   await expect
@@ -414,6 +422,14 @@ test("drops a whole-item touch drag across a virtual column", async ({
   await dispatchNativeTouch(nativeTouch, "touchStart", [sourceCoordinates]);
   await expect(page.locator("[data-overlay]")).toHaveText("whole-item");
   await dispatchNativeTouch(nativeTouch, "touchMove", [targetCoordinates]);
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["draggedOver"] ?? "",
+        ),
+    )
+    .toBe("lane-second");
   await endNativeTouch(nativeTouch);
 
   await expect
@@ -463,6 +479,14 @@ test("drops pointer and touch input into an empty virtual cell", async ({
   await dispatchNativeTouch(nativeTouch, "touchStart", [touchSource]);
   await expect(page.locator("[data-overlay]")).toHaveText("first");
   await dispatchNativeTouch(nativeTouch, "touchMove", [touchTarget]);
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["draggedOver"] ?? "",
+        ),
+    )
+    .toBe("cell-b");
   await endNativeTouch(nativeTouch);
   await expect
     .poll(

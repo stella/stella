@@ -5,7 +5,7 @@ import {
   getKanbanKeyboardTargetState,
   getKanbanKeyboardTarget,
   isKanbanCellDropData,
-  isKanbanKeyboardDropSettled,
+  isKanbanDropSettled,
 } from "./sortable-interactions.logic";
 
 const cells = [
@@ -39,6 +39,13 @@ const cells = [
   },
 ] as const;
 
+const publishedOver = (id: string) => ({
+  data: { current: undefined },
+  disabled: false,
+  id,
+  rect: { bottom: 0, height: 0, left: 0, right: 0, top: 0, width: 0 },
+});
+
 describe("Kanban keyboard navigation", () => {
   test("keeps a stable navigation holder across virtual renders", () => {
     const navigation = {
@@ -56,42 +63,27 @@ describe("Kanban keyboard navigation", () => {
     expect(getKanbanKeyboardTargetState(data)).toEqual({ type: "idle" });
   });
 
-  test("holds a keyboard drop until the navigated target is published", () => {
-    const navigated = {
-      navigation: { current: { targetId: "cell-b", type: "ready" } },
-      type: "kanban-item",
-    };
-
+  test("holds a drop until the computed collision has been published", () => {
     expect(
-      isKanbanKeyboardDropSettled({ activeData: navigated, overId: "first" }),
+      isKanbanDropSettled({
+        collisions: [{ id: "lane-second" }, { id: "cell-c" }],
+        over: publishedOver("whole-item"),
+      }),
     ).toBe(false);
     expect(
-      isKanbanKeyboardDropSettled({ activeData: navigated, overId: "cell-b" }),
+      isKanbanDropSettled({
+        collisions: [{ id: "lane-second" }, { id: "cell-c" }],
+        over: publishedOver("lane-second"),
+      }),
     ).toBe(true);
   });
 
-  test("drops immediately when no keyboard target is awaiting publication", () => {
+  test("settles a drop when nothing is under the drag", () => {
+    expect(isKanbanDropSettled({ collisions: [], over: null })).toBe(true);
+    expect(isKanbanDropSettled({ collisions: null, over: null })).toBe(true);
     expect(
-      isKanbanKeyboardDropSettled({
-        activeData: {
-          navigation: { current: { type: "idle" } },
-          type: "kanban-item",
-        },
-        overId: "first",
-      }),
-    ).toBe(true);
-    expect(
-      isKanbanKeyboardDropSettled({
-        activeData: {
-          navigation: { current: { targetId: "offscreen", type: "pending" } },
-          type: "kanban-item",
-        },
-        overId: undefined,
-      }),
-    ).toBe(true);
-    expect(
-      isKanbanKeyboardDropSettled({ activeData: undefined, overId: "first" }),
-    ).toBe(true);
+      isKanbanDropSettled({ collisions: [], over: publishedOver("first") }),
+    ).toBe(false);
   });
 
   test("rejects invalid matrix positions at the drop boundary", () => {

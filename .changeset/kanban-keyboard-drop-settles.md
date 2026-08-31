@@ -2,4 +2,4 @@
 "@stll/ui": patch
 ---
 
-Drop a Kanban keyboard drag on the cell or item the user navigated to. The board committed its keyboard target inside the coordinate getter, but dnd-kit resolves the drop from the target it has published to the sensor context, which trails by one render; an end key pressed before that publication landed the item on the previous target. The keyboard sensor now waits for the published target to match the navigated one before ending the drag.
+Drop a Kanban drag on the cell or item the pointer, touch, or keyboard actually reached. dnd-kit computes collisions while rendering but publishes the resulting drop target a render later, and resolves a drop from that published value; because a single move produces a single render, a drag that ended right after its last move landed the item on the previous target. Every board sensor now waits for the published target to match the computed collision before ending the drag.

@@ -1,9 +1,11 @@
 import {
   closestCorners,
+  getFirstCollision,
   pointerWithin,
   type CollisionDetection,
   type DroppableContainer,
   type KeyboardCoordinateGetter,
+  type SensorContext,
   type UniqueIdentifier,
 } from "@dnd-kit/core";
 
@@ -111,26 +113,18 @@ export const getKanbanKeyboardTargetState = (
 ): KanbanKeyboardTargetState | undefined =>
   isKanbanItemDropData(value) ? value.navigation.current : undefined;
 
-export type KanbanKeyboardDropOptions = {
-  activeData: unknown;
-  overId: UniqueIdentifier | undefined;
-};
-
 /**
- * dnd-kit publishes a collision target to its sensor context one render after
- * the coordinate getter commits it, and resolves a drop from that published
- * value. A keyboard drop that finalizes earlier lands on the previous target.
+ * dnd-kit computes collisions while rendering but publishes the resulting drop
+ * target to its sensor context a render later, and resolves a drop from that
+ * published value. A drag that ends before the two agree, which every input
+ * can do because a single move produces a single render, drops the item on the
+ * previously published target.
  */
-export const isKanbanKeyboardDropSettled = ({
-  activeData,
-  overId,
-}: KanbanKeyboardDropOptions): boolean => {
-  const target = getKanbanKeyboardTargetState(activeData);
-  if (target?.type !== "ready") {
-    return true;
-  }
-  return overId === target.targetId;
-};
+export const isKanbanDropSettled = ({
+  collisions,
+  over,
+}: Pick<SensorContext, "collisions" | "over">): boolean =>
+  getFirstCollision(collisions, "id") === (over?.id ?? null);
 
 export const clearKanbanKeyboardTarget = (value: unknown): void => {
   if (isKanbanItemDropData(value) && value.navigation.current.type !== "idle") {

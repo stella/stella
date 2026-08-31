@@ -25,6 +25,7 @@ import type {
   DndContextProps,
   KeyboardCoordinateGetter,
   KeyboardSensorOptions,
+  MouseSensorOptions,
   SensorInstance,
   SensorProps,
   TouchSensorOptions,
@@ -40,7 +41,7 @@ import { cn } from "../lib/utils";
 import {
   clearKanbanKeyboardTarget,
   getKanbanKeyboardTargetState,
-  isKanbanKeyboardDropSettled,
+  isKanbanDropSettled,
   KANBAN_BOARD_COLLISION_DETECTION,
   KANBAN_DROP_TARGET_TYPES,
   kanbanKeyboardCoordinates,
@@ -88,8 +89,10 @@ export type KanbanDragEndEvent = DragEndEvent;
 export type KanbanDragOverEvent = DragOverEvent;
 export type KanbanDragStartEvent = DragStartEvent;
 
+type MouseSensorConstructorOptions = SensorProps<MouseSensorOptions>;
 type TouchSensorConstructorOptions = SensorProps<TouchSensorOptions>;
 type KeyboardSensorConstructorOptions = SensorProps<KeyboardSensorOptions>;
+type KanbanSensorContext = SensorProps<never>["context"];
 
 const KANBAN_KEYBOARD_CODES = {
   cancel: ["Escape"],
@@ -98,7 +101,31 @@ const KANBAN_KEYBOARD_CODES = {
 const KANBAN_KEYBOARD_LISTENER_DELAY_MS = 0;
 const KANBAN_KEYBOARD_TARGET_RETRY_LIMIT = 60;
 /** A render commit, not a virtual scroll, so the budget stays short. */
-const KANBAN_KEYBOARD_DROP_RETRY_LIMIT = 10;
+const KANBAN_DROP_SETTLE_FRAME_LIMIT = 10;
+
+/**
+ * Defers a drop until dnd-kit has published the collision target it computed.
+ * Every sensor ends a drag from a single input event, so without this wait the
+ * drop resolves against the target published before that event.
+ */
+const endWhenDropTargetSettled = (
+  context: KanbanSensorContext,
+  end: () => void,
+) => {
+  let framesWaited = 0;
+  const attempt = () => {
+    if (
+      framesWaited >= KANBAN_DROP_SETTLE_FRAME_LIMIT ||
+      isKanbanDropSettled(context.current)
+    ) {
+      end();
+      return;
+    }
+    framesWaited += 1;
+    requestAnimationFrame(attempt);
+  };
+  attempt();
+};
 
 type TouchEventWithLists = Event & {
   changedTouches: TouchList;
@@ -158,7 +185,9 @@ class KanbanTouchSensor extends TouchSensor {
       },
       onEnd: () => {
         identityListeners.abort();
-        props.onEnd();
+        endWhenDropTargetSettled(props.context, () => {
+          props.onEnd();
+        });
       },
     });
     this.identityListeners = identityListeners;
@@ -211,6 +240,20 @@ class KanbanTouchSensor extends TouchSensor {
   private readonly detachIdentityListeners = () => {
     this.identityListeners.abort();
   };
+}
+
+/** The stock mouse sensor, holding its drop until the board target settles. */
+class KanbanMouseSensor extends MouseSensor {
+  constructor(props: MouseSensorConstructorOptions) {
+    super({
+      ...props,
+      onEnd: () => {
+        endWhenDropTargetSettled(props.context, () => {
+          props.onEnd();
+        });
+      },
+    });
+  }
 }
 
 /**
@@ -271,37 +314,17 @@ class KanbanKeyboardSensor implements SensorInstance {
       event.preventDefault();
       this.moveSequence += 1;
       this.listeners.abort();
-      this.end(0);
+      endWhenDropTargetSettled(this.props.context, () => {
+        clearKanbanKeyboardTarget(
+          this.props.context.current.active?.data.current,
+        );
+        this.props.onEnd();
+      });
       return;
     }
 
     this.moveSequence += 1;
     this.move(event, this.moveSequence, 0);
-  };
-
-  /**
-   * The board commits its navigated target inside the coordinate getter, but
-   * dnd-kit resolves the drop from the target it has published to the sensor
-   * context, which trails by one render. Ending before those agree drops the
-   * item on the previously published target.
-   */
-  private readonly end = (retryCount: number) => {
-    const currentContext = this.props.context.current;
-    const activeData = currentContext.active?.data.current;
-    if (
-      retryCount < KANBAN_KEYBOARD_DROP_RETRY_LIMIT &&
-      !isKanbanKeyboardDropSettled({
-        activeData,
-        overId: currentContext.over?.id,
-      })
-    ) {
-      requestAnimationFrame(() => {
-        this.end(retryCount + 1);
-      });
-      return;
-    }
-    clearKanbanKeyboardTarget(activeData);
-    this.props.onEnd();
   };
 
   private readonly move = (
@@ -484,7 +507,7 @@ export const useKanbanSortableSensors = (
   keyboardCoordinates: KeyboardCoordinateGetter = kanbanKeyboardCoordinates,
 ) =>
   useSensors(
-    useSensor(MouseSensor, {
+    useSensor(KanbanMouseSensor, {
       activationConstraint: { distance: KANBAN_MOUSE_ACTIVATION_DISTANCE },
     }),
     useSensor(KanbanTouchSensor, {
