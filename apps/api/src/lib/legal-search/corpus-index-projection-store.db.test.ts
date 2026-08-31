@@ -71,6 +71,13 @@ const SECOND_LEASE_TOKEN = "0198e331-e578-7000-8000-000000000207";
 const ERASE_DECISION_ID = toSafeId<"caseLawDecision">(
   "0198e331-e578-7000-8000-000000000208",
 );
+const POL_DECISION_ID = toSafeId<"caseLawDecision">(
+  "0198e331-e578-7000-8000-000000000214",
+);
+const POL_INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
+  "0198e331-e578-7000-8000-000000000215",
+);
+const POL_LEASE_TOKEN = "0198e331-e578-7000-8000-000000000216";
 const ERASE_READY_DECISION_ID = toSafeId<"caseLawDecision">(
   "0198e331-e578-7000-8000-000000000213",
 );
@@ -82,6 +89,7 @@ const ERASE_CLEANUP_TOKEN = "0198e331-e578-7000-8000-000000000211";
 const FIRST_FINGERPRINT = "a".repeat(64);
 const SECOND_FINGERPRINT = "b".repeat(64);
 const INDEX_ID = "case_law_v5_cs_sk";
+const POL_INDEX_ID = "case_law_v5_pol";
 const INITIAL_RUNNABLE_AT = new Date("2026-08-25T00:00:00.000Z");
 const DRIZZLE_DIR = new URL("../../../drizzle/", import.meta.url);
 
@@ -276,6 +284,67 @@ test("a subject-scoped reservation cannot claim another pending decision", async
       .select({ entityId: corpusIndexProjectionIntents.entityId })
       .from(corpusIndexProjectionIntents),
   ).toEqual([{ entityId: ERASE_DECISION_ID }]);
+});
+
+test("a route-scoped reservation claims only its desired physical index", async () => {
+  await db.insert(caseLawDecisions).values({
+    id: POL_DECISION_ID,
+    sourceId: SOURCE_ID,
+    caseNumber: "III SA/Wa 1/2026",
+    court: "Test court",
+    country: "POL",
+    language: "pl",
+    contentHash: "d".repeat(64),
+    projectionEpoch: 1n,
+  });
+  await db.insert(corpusIndexProjectionStates).values({
+    family: "case_law",
+    generation: "case_law_v5",
+    entityId: POL_DECISION_ID,
+    desiredAction: "upsert",
+    desiredEpoch: 1n,
+    desiredFingerprint: SECOND_FINGERPRINT,
+    desiredIndexId: POL_INDEX_ID,
+    updatedAt: INITIAL_RUNNABLE_AT,
+  });
+
+  const leases = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        scope: { type: "route", indexId: POL_INDEX_ID },
+        limit: 10,
+        leaseMs: 60_000,
+        newIntentId: () => POL_INTENT_ID,
+        newLeaseToken: () => POL_LEASE_TOKEN,
+      }),
+  );
+
+  expect(
+    leases.map(({ entityId, indexId }) => ({ entityId, indexId })),
+  ).toEqual([{ entityId: POL_DECISION_ID, indexId: POL_INDEX_ID }]);
+  expect(
+    await db
+      .select({ entityId: corpusIndexProjectionIntents.entityId })
+      .from(corpusIndexProjectionIntents),
+  ).toEqual([{ entityId: POL_DECISION_ID }]);
+});
+
+test("an unregistered route fails before reservation mutates state", async () => {
+  await expect(
+    db.transaction(
+      async (tx) =>
+        await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+          family: "case_law",
+          generation: "case_law_v5",
+          scope: { type: "route", indexId: "case_law_v5_hun" },
+          limit: 10,
+          leaseMs: 60_000,
+        }),
+    ),
+  ).rejects.toThrow("Corpus index id is not a manifest route");
+  expect(await db.select().from(corpusIndexProjectionIntents)).toEqual([]);
 });
 
 test("a subject-scoped erasure cannot apply another erased decision", async () => {
@@ -632,6 +701,69 @@ test("subject-scoped replacement cannot retire another applied revision", async 
     { id: FIRST_INTENT_ID, status: "applied" },
     { id: SECOND_INTENT_ID, status: "cleanup_pending" },
   ]);
+});
+
+test("a rerouted replacement is owned by its desired route", async () => {
+  const appliedAt = new Date("2026-08-25T00:00:00.000Z");
+  await db.execute(
+    sql`ALTER TABLE corpus_index_projection_intents DISABLE TRIGGER corpus_index_projection_intents_insert_guard`,
+  );
+  await db.insert(corpusIndexProjectionIntents).values({
+    id: FIRST_INTENT_ID,
+    family: "case_law",
+    generation: "case_law_v5",
+    entityId: DECISION_ID,
+    epoch: 1n,
+    fingerprint: FIRST_FINGERPRINT,
+    indexId: INDEX_ID,
+    status: "applied",
+    appendStartedAt: appliedAt,
+    appendCommittedAt: appliedAt,
+    expectedDocumentCount: 1,
+    appliedAt,
+  });
+  await db.execute(
+    sql`ALTER TABLE corpus_index_projection_intents ENABLE TRIGGER corpus_index_projection_intents_insert_guard`,
+  );
+  await db
+    .update(corpusIndexProjectionStates)
+    .set({
+      desiredEpoch: 2n,
+      desiredFingerprint: SECOND_FINGERPRINT,
+      desiredIndexId: POL_INDEX_ID,
+      appliedAction: "upsert",
+      appliedEpoch: 1n,
+      appliedRevision: FIRST_INTENT_ID,
+      appliedFingerprint: FIRST_FINGERPRINT,
+      appliedIndexId: INDEX_ID,
+      appliedAt,
+    })
+    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
+
+  const replacements = await db.transaction(
+    async (tx) =>
+      await prepareCorpusProjectionReplacementsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        scope: { type: "route", indexId: POL_INDEX_ID },
+        limit: 10,
+      }),
+  );
+
+  expect(replacements).toEqual([
+    {
+      intentId: FIRST_INTENT_ID,
+      family: "case_law",
+      generation: "case_law_v5",
+      entityId: DECISION_ID,
+      indexId: INDEX_ID,
+    },
+  ]);
+  expect(
+    await db
+      .select({ status: corpusIndexProjectionIntents.status })
+      .from(corpusIndexProjectionIntents),
+  ).toEqual([{ status: "cleanup_pending" }]);
 });
 
 test("retry classification defers poison work, then blocks the exhausted desired state", async () => {

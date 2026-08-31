@@ -6,6 +6,7 @@ import {
   corpusIndexConfigFromManifest,
   corpusIndexIdFromManifest,
   corpusIndexManifestDigest,
+  requireCorpusIndexIdForManifest,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 
@@ -123,6 +124,39 @@ test("manifest routing is exact and case-law additions fail closed", () => {
   expect(() =>
     corpusIndexIdFromManifest(CORPUS_INDEX_MANIFESTS.legislation_v2, "cz;drop"),
   ).toThrow("Invalid corpus jurisdiction");
+});
+
+test("physical route validation is exact for closed and open manifests", () => {
+  expect(
+    requireCorpusIndexIdForManifest(
+      CORPUS_INDEX_MANIFESTS.case_law_v5,
+      "case_law_v5_cs_sk",
+    ),
+  ).toBe("case_law_v5_cs_sk");
+  expect(() =>
+    requireCorpusIndexIdForManifest(
+      CORPUS_INDEX_MANIFESTS.case_law_v5,
+      "case_law_v5_hun",
+    ),
+  ).toThrow("Corpus index id is not a manifest route");
+  expect(
+    requireCorpusIndexIdForManifest(
+      CORPUS_INDEX_MANIFESTS.legislation_v2,
+      "legislation_v2_cze",
+    ),
+  ).toBe("legislation_v2_cze");
+  expect(() =>
+    requireCorpusIndexIdForManifest(
+      CORPUS_INDEX_MANIFESTS.legislation_v2,
+      "legislation_v2_CZE",
+    ),
+  ).toThrow("Corpus index id is not a manifest route");
+  expect(() =>
+    requireCorpusIndexIdForManifest(
+      CORPUS_INDEX_MANIFESTS.legislation_v2,
+      "case_law_v5_cze",
+    ),
+  ).toThrow("Corpus index id is not a manifest route");
 });
 
 test("v5 removes stale and repeated physical fields", () => {

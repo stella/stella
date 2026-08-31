@@ -403,6 +403,16 @@ export const corpusIndexProjectionStates = p.pgTable(
       )
       .where(corpusIndexProjectionNeedsWork(t)),
     p
+      .index("corpus_index_projection_states_pending_route_idx")
+      .on(
+        t.family,
+        t.generation,
+        t.desiredIndexId,
+        sql`coalesce(${t.retryNotBefore}, ${t.updatedAt})`,
+        t.entityId,
+      )
+      .where(corpusIndexProjectionNeedsWork(t)),
+    p
       .index("corpus_index_projection_states_blocked_idx")
       .on(t.family, t.generation, t.entityId)
       .where(corpusIndexProjectionIsBlocked(t.workStatus)),

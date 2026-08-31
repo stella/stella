@@ -403,3 +403,41 @@ export const corpusIndexIdFromManifest = (
     ? indexId
     : panic(`Corpus index id exceeds storage limit: ${indexId}`);
 };
+
+/**
+ * Assert that a physical index id is one route of this immutable manifest.
+ * Callers must not accept an arbitrary generation-prefixed string: grouped
+ * case-law routes are closed, while legislation routes are the manifest's
+ * canonical jurisdiction spelling.
+ */
+export const requireCorpusIndexIdForManifest = (
+  manifest: CorpusIndexManifest,
+  indexId: string,
+): string => {
+  switch (manifest.route.type) {
+    case "case_law_group": {
+      const matches = Object.values(manifest.route.byJurisdiction).some(
+        (suffix) => `${manifest.generation}_${suffix}` === indexId,
+      );
+      return matches
+        ? indexId
+        : panic(
+            `Corpus index id is not a manifest route: ${manifest.generation}/${indexId}`,
+          );
+    }
+    case "jurisdiction": {
+      const prefix = `${manifest.generation}_`;
+      const jurisdiction = indexId.startsWith(prefix)
+        ? indexId.slice(prefix.length)
+        : "";
+      return jurisdiction !== "" &&
+        corpusIndexIdFromManifest(manifest, jurisdiction) === indexId
+        ? indexId
+        : panic(
+            `Corpus index id is not a manifest route: ${manifest.generation}/${indexId}`,
+          );
+    }
+    default:
+      return manifest.route satisfies never;
+  }
+};
