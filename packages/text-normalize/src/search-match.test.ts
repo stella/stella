@@ -21,6 +21,12 @@ describe("foldSearchMatchText", () => {
   test("folds compatibility characters", () => {
     expect(foldSearchMatchText("ﬁling")).toBe("filing");
   });
+
+  test("folds letters without a canonical decomposition", () => {
+    expect(foldSearchMatchText("Wrocław")).toBe("wroclaw");
+    expect(foldSearchMatchText("Søren Đorđe")).toBe("soren dorde");
+    expect(foldSearchMatchText("Straße")).toBe("strasse");
+  });
 });
 
 describe("findSearchMatchRanges", () => {
@@ -69,5 +75,15 @@ describe("findSearchMatchRanges", () => {
 
   test("returns nothing for an empty query", () => {
     expect(findSearchMatchRanges("Čapek", "  ")).toEqual([]);
+  });
+
+  test("ranges cover expanding folds", () => {
+    const content = "sídlo: Wrocław, Straße 7";
+    const [wroclaw] = findSearchMatchRanges(content, "wroclaw");
+    const [strasse] = findSearchMatchRanges(content, "strasse");
+    expect(wroclaw && content.slice(wroclaw.start, wroclaw.end)).toBe(
+      "Wrocław",
+    );
+    expect(strasse && content.slice(strasse.start, strasse.end)).toBe("Straße");
   });
 });

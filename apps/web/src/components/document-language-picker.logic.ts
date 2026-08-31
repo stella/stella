@@ -66,7 +66,7 @@ export const defaultTargetLanguage = (
 /**
  * Match key for the picker's typeahead.
  *
- * `foldToAscii` rather than the highlighter's `normalizeSearchText`: mark
+ * `foldToAscii` rather than the highlighter's `foldSearchMatchText`: mark
  * stripping alone leaves Polish `ł` standing, so typing "lotewski" would miss
  * "Łotewski" in the pl catalog. Folding also keeps Greek, Cyrillic and Arabic
  * names matchable in their own script.

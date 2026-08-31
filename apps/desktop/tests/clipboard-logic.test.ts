@@ -204,6 +204,12 @@ describe("diacritic-insensitive search", () => {
     expect(filterClipboardItems([ACCENTED_ITEM], "capek hradiste")).toEqual([
       ACCENTED_ITEM,
     ]);
+    expect(
+      filterClipboardItems(
+        [{ ...ACCENTED_ITEM, plainText: "soud ve Wrocławi" }],
+        "wroclawi",
+      ),
+    ).toHaveLength(1);
     expect(filterClipboardItems([TEXT_ITEM], "půrchase")).toEqual([TEXT_ITEM]);
     expect(filterClipboardItems([TEXT_ITEM], "puerchase")).toEqual([]);
   });

@@ -6,19 +6,13 @@ import {
   findInParagraph,
 } from "@stll/folio-core/utils/findReplace";
 import type { FindMatch } from "@stll/folio-core/utils/findReplace";
+import { findSearchMatchRanges } from "@stll/text-normalize";
 
 import {
-  findNormalizedSearchTextMatches,
   getSearchTextCandidates,
   selectNonOverlappingSearchMatches,
 } from "@/lib/search-text";
 import type { SearchTextMatch, SearchTextQuery } from "@/lib/search-text";
-
-export {
-  findNormalizedSearchTextMatches,
-  getSearchTextCandidates,
-  normalizeSearchText,
-} from "@/lib/search-text";
 
 const documentSearchOptions = createDefaultFindOptions();
 
@@ -46,7 +40,7 @@ const findTextCandidateMatches = ({
   content,
   maxMatches,
 }: FindTextCandidateMatchesOptions) =>
-  findNormalizedSearchTextMatches(content, candidate, { maxMatches });
+  findSearchMatchRanges(content, candidate, { maxMatches });
 
 type FindSearchTextMatchesOptions = {
   maxMatches?: number | undefined;
@@ -162,7 +156,7 @@ const findDocumentCandidateMatches = ({
       for (const match of getNativeMatches(candidate).values()) {
         candidateMatches.set(documentMatchKey(match), match);
       }
-      const normalizedMatches = findNormalizedSearchTextMatches(
+      const normalizedMatches = findSearchMatchRanges(
         paragraphText,
         candidate,
         { maxMatches: paragraphLimit },

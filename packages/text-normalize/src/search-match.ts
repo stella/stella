@@ -2,12 +2,12 @@
  * Diacritic-insensitive substring matching with original-index mapping.
  *
  * `foldSearchMatchText` builds the client-side match key: NFKD
- * decomposition, combining-mark strip, Arabic orthographic folds, then
- * lowercase — so a `capek` query matches `Čapek` and vice versa. It is
- * deliberately distinct from `normalizeSearchText` (normalize.ts), which is
- * pinned to the SQL `arabic_normalize()` contract and must not strip Latin
- * diacritics. Letters without a canonical decomposition (`ł`, `ø`, `đ`) are
- * not folded here; that is `foldToAscii`'s contract.
+ * decomposition, the `unaccent()`-parity ASCII folds (letters with no
+ * decomposition: `ł`, `ø`, `đ`, `ß`), combining-mark strip, Arabic
+ * orthographic folds, then lowercase — so a `capek` query matches `Čapek`
+ * and `wroclaw` matches `Wrocław`, both ways. It is deliberately distinct
+ * from `arabicNormalize` (normalize.ts), which is pinned to the SQL
+ * `arabic_normalize()` contract and must not strip Latin diacritics.
  *
  * `findSearchMatchRanges` locates a folded query inside folded content and
  * reports matches as ranges into the ORIGINAL string, so highlights wrap the
@@ -17,6 +17,7 @@
  */
 
 import { applyArabicFolds } from "./arabic.js";
+import { applyAsciiFolds } from "./ascii-fold.js";
 
 const COMBINING_MARKS = /\p{M}+/gu;
 
@@ -32,7 +33,9 @@ export type FoldedSearchText = {
 };
 
 const foldSearchMatchTextBeforeCase = (value: string): string =>
-  applyArabicFolds(value.normalize("NFKD").replace(COMBINING_MARKS, ""));
+  applyArabicFolds(
+    applyAsciiFolds(value.normalize("NFKD")).replace(COMBINING_MARKS, ""),
+  );
 
 export const foldSearchMatchText = (value: string): string =>
   foldSearchMatchTextBeforeCase(value).toLowerCase();

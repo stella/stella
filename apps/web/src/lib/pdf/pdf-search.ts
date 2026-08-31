@@ -1,9 +1,10 @@
 import type { PDF, PDFPage } from "@libpdf/core";
 
+import { findSearchMatchRanges } from "@stll/text-normalize";
+
 import type { PageViewport } from "@/lib/pdf/pdfjs-loader";
 import { MAX_SEARCH_PREVIEW_MATCHES } from "@/lib/search-match-navigation";
 import {
-  findNormalizedSearchTextMatches,
   getSearchTextCandidates,
   selectNonOverlappingSearchMatches,
 } from "@/lib/search-text";
@@ -187,7 +188,7 @@ const findNormalizedPageMatches = ({
   pageIndex,
   pageSearchText,
 }: FindNormalizedPageMatchesOptions): PDFSearchMatch[] =>
-  findNormalizedSearchTextMatches(pageSearchText.text, candidate, {
+  findSearchMatchRanges(pageSearchText.text, candidate, {
     maxMatches,
   })
     .map(({ end, start }) =>

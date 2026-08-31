@@ -9,7 +9,7 @@ the original text.
 
 ## Arabic
 
-`normalizeSearchText` folds the orthographic variants that make Arabic
+`arabicNormalize` folds the orthographic variants that make Arabic
 search miss otherwise-identical words:
 
 - alef variants and alef-wasla (`أ إ آ ٱ`) to bare alef `ا`
@@ -28,9 +28,9 @@ and cross-checked against CAMeL Tools (MIT), extended for the classes
 Lucene omits.
 
 ```ts
-import { normalizeSearchText } from "@stll/text-normalize";
+import { arabicNormalize } from "@stll/text-normalize";
 
-normalizeSearchText("أحمد") === normalizeSearchText("احمد"); // true
+arabicNormalize("أحمد") === arabicNormalize("احمد"); // true
 ```
 
 The same fold must be reproduced by the PostgreSQL `arabic_normalize()`
@@ -58,6 +58,17 @@ compatibility characters (ligatures, full-width forms, superscripts) fold
 to their base before a `[a-z0-9]` slug filter runs. Slugs are persisted,
 public URL segments; this variant pins the exact form existing slugs were
 generated with.
+
+## Substring matching with highlight offsets
+
+`foldSearchMatchText` is the client-side match key for interactive
+filtering: NFKD, the `unaccent()`-parity ASCII folds, mark strip, Arabic
+folds, lowercase — `capek` matches `Čapek` and `wroclaw` matches
+`Wrocław`, both ways. `findSearchMatchRanges` finds a folded query in
+folded content and returns ranges into the **original** string, so
+highlights wrap the text the user sees even where folding changes string
+length; it accepts content pre-folded with `foldSearchMatchTextWithOffsets`
+so repeated queries against the same text fold it once.
 
 ## Spaced letters
 

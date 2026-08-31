@@ -1,15 +1,10 @@
 import type { SearchMatchRange as FoldedMatchRange } from "@stll/text-normalize";
 
-// The folding core with original-index mapping lives in @stll/text-normalize
-// (search-match.ts) so the desktop clipboard search shares one behavior with
-// the web previews; the legacy names below cover this module's consumers.
-export {
-  findSearchMatchRanges as findNormalizedSearchTextMatches,
-  foldSearchMatchText as normalizeSearchText,
-} from "@stll/text-normalize";
-
 const SINGLE_SEARCH_TERM = /^[\p{L}\p{N}]$/u;
 
+// The folding core with original-index mapping lives in @stll/text-normalize
+// (search-match.ts) so the desktop clipboard search shares one behavior with
+// the web previews.
 export type SearchTextMatch = FoldedMatchRange;
 
 type SearchMatchRange = SearchTextMatch & { group: number };

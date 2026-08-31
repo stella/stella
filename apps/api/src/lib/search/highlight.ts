@@ -2,7 +2,7 @@ import {
   applyArabicFolds,
   applyArabicFoldsWithOffsets,
   foldToAscii,
-  normalizeSearchText,
+  arabicNormalize,
 } from "@stll/text-normalize";
 
 // Non-HTML delimiters injected by ts_headline / pdb.snippet(). Keep these
@@ -68,7 +68,7 @@ type NormalizedSource = {
 // so the local scaffold has to fold the same way; a plain mark strip leaves
 // `ł` standing where the stored text holds `l`.
 const normalizePreviewUnit = (text: string, useUnaccent: boolean): string => {
-  const normalized = normalizeSearchText(text);
+  const normalized = arabicNormalize(text);
   return useUnaccent ? foldToAscii(normalized) : normalized;
 };
 

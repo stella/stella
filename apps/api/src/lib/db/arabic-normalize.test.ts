@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import { normalizeSearchText } from "@stll/text-normalize";
+import { arabicNormalize } from "@stll/text-normalize";
 
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -21,7 +21,7 @@ const ARABIC_NORMALIZE_MIGRATION_PATHS = [
 ];
 
 // The shared search-key contract: the SQL arabic_normalize() must produce
-// the same match key as the TS normalizeSearchText for every input. The
+// the same match key as the TS arabicNormalize for every input. The
 // presentation-form inputs also empirically confirm that Postgres
 // normalize(NFKC) folds them the same way String.normalize("NFKC") does.
 const VECTORS: readonly string[] = [
@@ -73,13 +73,13 @@ afterAll(async () => {
 });
 
 describe("arabic_normalize SQL function", () => {
-  test("matches normalizeSearchText for every vector", async () => {
+  test("matches arabicNormalize for every vector", async () => {
     for (const input of VECTORS) {
       // oxlint-disable-next-line no-await-in-loop -- sequential queries on one PGlite connection
       const result = await testDb.execute<{ out: string | null }>(
         sql`SELECT arabic_normalize(${input}) AS out`,
       );
-      expect(result.rows.at(0)?.out).toBe(normalizeSearchText(input));
+      expect(result.rows.at(0)?.out).toBe(arabicNormalize(input));
     }
   });
 });

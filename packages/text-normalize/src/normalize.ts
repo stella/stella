@@ -17,11 +17,13 @@ const foldSearchCase = (text: string): string =>
   });
 
 /**
- * Canonical search match-key normalizer. Folds Arabic orthographic
- * variants so a query matches regardless of how the text was typed
- * (alef/hamza/teh-marbuta/yeh variants, tashkeel, tatweel, Arabic-Indic
- * digits), then applies locale-stable ASCII case folding for mixed-script
- * names.
+ * TypeScript mirror of the SQL `arabic_normalize()` function. Folds Arabic
+ * orthographic variants so a query matches regardless of how the text was
+ * typed (alef/hamza/teh-marbuta/yeh variants, tashkeel, tatweel,
+ * Arabic-Indic digits), then applies locale-stable ASCII case folding for
+ * mixed-script names. It must NOT strip Latin diacritics — the stored match
+ * keys don't; client-side diacritic-insensitive matching is
+ * `foldSearchMatchText` (search-match.ts).
  *
  * NFKC runs first so presentation forms (U+FB50–FDFF, U+FE70–FEFF) fold
  * to their canonical letters before the explicit folds apply.
@@ -29,7 +31,7 @@ const foldSearchCase = (text: string): string =>
  * This MUST stay consistent with the SQL `arabic_normalize()` function;
  * the golden vectors in normalize.test.ts pin the contract for both.
  */
-export const normalizeSearchText = (text: string): string =>
+export const arabicNormalize = (text: string): string =>
   foldSearchCase(applyArabicFolds(text.normalize("NFKC")))
     .replace(SEARCH_WHITESPACE_RE, " ")
     .trim();

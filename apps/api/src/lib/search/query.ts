@@ -4,7 +4,7 @@ import type { SQL } from "drizzle-orm";
 import {
   applyArabicFolds,
   foldToAscii,
-  normalizeSearchText,
+  arabicNormalize,
 } from "@stll/text-normalize";
 
 const PREFIX_QUERY_TOKEN_LIMIT = 8;
@@ -659,7 +659,7 @@ const buildPlainSearchTsQueryParts = (
   }: PlainSearchTsQueryOptions,
 ) => {
   const legacyVariants = expandArabicFoldTargetVariants(query);
-  const normalized = normalizeSearchText(query);
+  const normalized = arabicNormalize(query);
   const plainQueries = legacyVariants.map(
     (variant) =>
       sql`plainto_tsquery(${regconfig}, ${plainSearchText(variant, useUnaccent)})`,
