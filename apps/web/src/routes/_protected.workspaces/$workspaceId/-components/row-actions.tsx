@@ -171,6 +171,13 @@ type TranslationDialogState =
   | { type: "closed" }
   | { target: TranslationTarget; type: "open" };
 
+/** What a confirmed deletion removes, captured when it was requested. */
+type DeleteRequest = {
+  ids: string[];
+  isBulk: boolean;
+  name: string;
+};
+
 const getTranslationTarget = ({
   cellMetadataTarget,
   entity,
@@ -262,7 +269,9 @@ export const RowActions = ({
   const retryCell = useRetryCell(toSafeId<"workspace">(workspaceId));
   const canCreateEntity = usePermissions({ entity: ["create"] });
   const [copyToMatterOpen, setCopyToMatterOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteRequest, setDeleteRequest] = useState<DeleteRequest | null>(
+    null,
+  );
   const [copyToMatterEntities, setCopyToMatterEntities] = useState<
     CopyToMatterEntity[]
   >([]);
@@ -748,18 +757,24 @@ export const RowActions = ({
     }
   };
 
-  const handleDelete = () => {
-    const ids = isBulk
-      ? selectedEntities.map((e) => e.entityId)
-      : [entity.entityId];
+  // The menu clears the bulk selection as it closes, so the targets are
+  // captured when deletion is requested, not when it is confirmed.
+  const requestDelete = () => {
+    setDeleteRequest({
+      ids: bulkTargets.map((target) => target.entityId),
+      isBulk,
+      name,
+    });
+  };
+  const handleDelete = ({ ids, isBulk: bulk, name: label }: DeleteRequest) => {
     deleteEntities.mutate(
       { workspaceId, entityIds: ids },
       {
         onSuccess: () => {
           stellaToast.add({
-            title: isBulk
+            title: bulk
               ? t("common.deletedCount", { count: ids.length })
-              : t("workspaces.deletedItem", { name }),
+              : t("workspaces.deletedItem", { name: label }),
             type: "success",
           });
         },
@@ -942,7 +957,7 @@ export const RowActions = ({
           hasPdfConversion={hasPdfConversion}
           isCellContext={isCellContext}
           onCopyToMatter={openCopyToMatterDialog}
-          onDelete={() => setDeleteOpen(true)}
+          onDelete={requestDelete}
           onDownload={handleDownload}
           onDuplicate={handleDuplicate}
           onOcrExport={handleOcrExport}
@@ -955,14 +970,20 @@ export const RowActions = ({
         open={copyToMatterOpen}
         sourceWorkspaceId={workspaceId}
       />
-      <RowDeleteDialog
-        isBulk={isBulk}
-        name={name}
-        onConfirm={handleDelete}
-        onOpenChange={setDeleteOpen}
-        open={deleteOpen}
-        selectedCount={bulkTargets.length}
-      />
+      {deleteRequest !== null && (
+        <RowDeleteDialog
+          isBulk={deleteRequest.isBulk}
+          name={deleteRequest.name}
+          onConfirm={() => handleDelete(deleteRequest)}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) {
+              setDeleteRequest(null);
+            }
+          }}
+          open
+          selectedCount={deleteRequest.ids.length}
+        />
+      )}
       <RowTranslationDialog
         canCreateEntity={canCreateEntity}
         entity={entity}
