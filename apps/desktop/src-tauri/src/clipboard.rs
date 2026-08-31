@@ -586,13 +586,22 @@ impl ClipboardManager {
         if let Some(state) = state {
           self.capture_status = state.capture_status;
           self.groups = state.groups;
-          self.items = state.items;
           self.retention = state.retention;
+          // Retention pruning during load can leave the persisted visuals
+          // stale; only those still backing an item may occupy the capped
+          // map, or they would block icons for new source apps.
+          let referenced_keys: HashSet<&str> = state
+            .items
+            .iter()
+            .filter_map(ClipboardItem::source_visual_key)
+            .collect();
           self.source_app_visuals = state
             .source_app_visuals
             .into_iter()
+            .filter(|visual| referenced_keys.contains(visual.key.as_str()))
             .map(|visual| (visual.key.clone(), visual))
             .collect();
+          self.items = state.items;
         }
         ClipboardPersistence::Encrypted(store)
       }
@@ -933,30 +942,31 @@ impl ClipboardManager {
     Ok(())
   }
 
-  fn persist(&self) -> Result<(), String> {
-    let store = match &self.persistence {
-      // Rejecting the write makes `persist_or_restore` roll the mutation
-      // back, so `install` can never overwrite a change made before the
-      // persisted history arrived.
-      ClipboardPersistence::Initializing => {
-        return Err(HISTORY_LOADING_ERROR.to_string());
-      }
-      ClipboardPersistence::Encrypted(store) => store,
-      ClipboardPersistence::MemoryOnly | ClipboardPersistence::DeletionOnly(_) => {
-        return Ok(());
-      }
-    };
+  fn persist(&mut self) -> Result<(), String> {
+    // Rejecting the write makes `persist_or_restore` roll the mutation
+    // back, so `install` can never overwrite a change made before the
+    // persisted history arrived.
+    if matches!(self.persistence, ClipboardPersistence::Initializing) {
+      return Err(HISTORY_LOADING_ERROR.to_string());
+    }
+    // Visuals whose source app no longer backs any item leave the capped map
+    // on every persisted mutation; stale entries would otherwise block icons
+    // for new source apps once the cap fills. A failed store write restores
+    // them through the caller's checkpoint.
     let referenced_keys: HashSet<&str> = self
       .items
       .iter()
       .filter_map(ClipboardItem::source_visual_key)
       .collect();
-    let mut source_app_visuals: Vec<ClipboardSourceAppVisual> = self
+    self
       .source_app_visuals
-      .values()
-      .filter(|visual| referenced_keys.contains(visual.key.as_str()))
-      .cloned()
-      .collect();
+      .retain(|key, _| referenced_keys.contains(key.as_str()));
+    let ClipboardPersistence::Encrypted(store) = &self.persistence else {
+      // MemoryOnly and DeletionOnly keep nothing on disk.
+      return Ok(());
+    };
+    let mut source_app_visuals: Vec<ClipboardSourceAppVisual> =
+      self.source_app_visuals.values().cloned().collect();
     source_app_visuals.sort_by(|left, right| left.key.cmp(&right.key));
     let state = PersistedClipboardState {
       capture_status: self.capture_status,
@@ -2187,6 +2197,9 @@ mod tests {
     let id = manager.items[0].id().to_string();
     assert!(manager.delete_item(&id).unwrap());
 
+    // The in-memory map is capped, so the stale entry must leave it too or it
+    // would eventually block icons for new source apps.
+    assert!(manager.source_app_visuals.is_empty());
     let persisted = ClipboardStore::new([9; 32], store_path.clone())
       .load()
       .unwrap()
@@ -2194,6 +2207,27 @@ mod tests {
     assert!(persisted.source_app_visuals.is_empty());
 
     std::fs::remove_file(store_path).unwrap();
+  }
+
+  #[test]
+  fn install_drops_source_app_visuals_without_a_backing_item() {
+    let mut manager = ClipboardManager::new();
+    manager.install(ClipboardLoad::Encrypted {
+      store: ClipboardStore::new([9; 32], unique_store_path()),
+      state: Some(PersistedClipboardState {
+        capture_status: ClipboardCaptureStatus::Active,
+        groups: Vec::new(),
+        items: Vec::new(),
+        retention: ClipboardRetention::Month,
+        source_app_visuals: vec![ClipboardSourceAppVisual {
+          color: None,
+          icon_data_url: Some("data:image/png;base64,QUJD".to_string()),
+          key: "com.example.expired".to_string(),
+        }],
+      }),
+    });
+
+    assert!(manager.source_app_visuals.is_empty());
   }
 
   #[test]
