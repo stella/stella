@@ -23,7 +23,6 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import {
@@ -33,7 +32,7 @@ import {
 } from "@stll/ui/color-picker";
 import { KanbanColumnHeader } from "@stll/ui/kanban";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
-import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { Popover, PopoverPopup } from "@stll/ui/popover";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 import type {
@@ -445,6 +444,9 @@ export const KanbanColumnActions = ({
   title,
 }: KanbanColumnActionsProps) => {
   const t = useTranslations();
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
   const hasActions = onChangeColor ?? onHideColumn ?? onDeleteAll;
   if (!hasActions) {
     return null;
@@ -456,78 +458,88 @@ export const KanbanColumnActions = ({
   };
 
   return (
-    <Menu>
-      <MenuTrigger
-        aria-label={t("common.actions")}
-        render={<Button size="icon-xs" variant="ghost" />}
-      >
-        <EllipsisVerticalIcon />
-      </MenuTrigger>
-      <MenuPopup>
-        {onChangeColor && (
-          <Popover modal>
-            <PopoverTrigger render={<MenuItem closeOnClick={false} />}>
+    <>
+      <Menu>
+        <MenuTrigger
+          aria-label={t("common.actions")}
+          render={
+            <Button ref={menuTriggerRef} size="icon-xs" variant="ghost" />
+          }
+        >
+          <EllipsisVerticalIcon />
+        </MenuTrigger>
+        <MenuPopup>
+          {onChangeColor && (
+            <MenuItem onClick={() => setColorPickerOpen(true)}>
               <PaletteIcon />
               {t("common.changeColor")}
-            </PopoverTrigger>
-            <PopoverPopup
-              className="*:data-[slot=popover-viewport]:p-1!"
-              side="right"
-            >
-              <ColorPickerContent
-                columns={9}
-                defaultExpanded={false}
-                moreLabel={t("common.showMore")}
-                onSelect={handleColorSelect}
-                presets={DEFAULT_PRESETS}
-                value={optionColor}
-              />
-            </PopoverPopup>
-          </Popover>
-        )}
-        {onHideColumn && (
-          <MenuItem onClick={onHideColumn}>
-            <EyeOffIcon />
-            {t("workspaces.kanban.hideColumn")}
-          </MenuItem>
-        )}
-        {onDeleteAll && entityCount > 0 && (
-          <AlertDialog>
-            <AlertDialogTrigger
-              render={<MenuItem closeOnClick={false} variant="destructive" />}
+            </MenuItem>
+          )}
+          {onHideColumn && (
+            <MenuItem onClick={onHideColumn}>
+              <EyeOffIcon />
+              {t("workspaces.kanban.hideColumn")}
+            </MenuItem>
+          )}
+          {onDeleteAll && entityCount > 0 && (
+            <MenuItem
+              onClick={() => setDeleteAllOpen(true)}
+              variant="destructive"
             >
               <Trash2Icon />
               {t("workspaces.kanban.deleteAll")}
-            </AlertDialogTrigger>
-            <AlertDialogPopup>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  {t("workspaces.kanban.deleteAll")}
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  {t("workspaces.kanban.deleteAllConfirm", {
-                    count: String(entityCount),
-                    column: title,
-                  })}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogClose render={<Button variant="ghost" />}>
-                  {t("common.cancel")}
-                </AlertDialogClose>
-                <AlertDialogClose
-                  render={
-                    <Button onClick={onDeleteAll} variant="destructive" />
-                  }
-                >
-                  {t("workspaces.kanban.deleteAll")}
-                </AlertDialogClose>
-              </AlertDialogFooter>
-            </AlertDialogPopup>
-          </AlertDialog>
-        )}
-      </MenuPopup>
-    </Menu>
+            </MenuItem>
+          )}
+        </MenuPopup>
+      </Menu>
+      {/* Outside the menu so the menu can close under the picker. */}
+      {onChangeColor && (
+        <Popover modal onOpenChange={setColorPickerOpen} open={colorPickerOpen}>
+          <PopoverPopup
+            anchor={menuTriggerRef}
+            className="*:data-[slot=popover-viewport]:p-1!"
+            side="right"
+          >
+            <ColorPickerContent
+              columns={9}
+              defaultExpanded={false}
+              moreLabel={t("common.showMore")}
+              onSelect={handleColorSelect}
+              presets={DEFAULT_PRESETS}
+              value={optionColor}
+            />
+          </PopoverPopup>
+        </Popover>
+      )}
+      {/* Outside the menu so the menu can close under the confirmation. */}
+      {onDeleteAll && entityCount > 0 && (
+        <AlertDialog onOpenChange={setDeleteAllOpen} open={deleteAllOpen}>
+          <AlertDialogPopup>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {t("workspaces.kanban.deleteAll")}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {t("workspaces.kanban.deleteAllConfirm", {
+                  count: String(entityCount),
+                  column: title,
+                })}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogClose render={<Button variant="ghost" />}>
+                {t("common.cancel")}
+              </AlertDialogClose>
+              <AlertDialogClose
+                render={<Button onClick={onDeleteAll} variant="destructive" />}
+              >
+                {t("workspaces.kanban.deleteAll")}
+              </AlertDialogClose>
+            </AlertDialogFooter>
+          </AlertDialogPopup>
+        </AlertDialog>
+      )}
+    </>
   );
 };
 

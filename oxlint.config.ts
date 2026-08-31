@@ -185,6 +185,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-adhoc-loader.fixture.tsx", [
     "no-adhoc-loader/no-adhoc-loader",
   ]),
+  fixtureRuleOverride("no-dialog-trigger-menu-item.fixture.tsx", [
+    "no-dialog-trigger-menu-item/no-dialog-trigger-menu-item",
+  ]),
   fixtureRuleOverride("no-secret-in-log-sink.fixture.ts", [
     "no-secret-in-log-sink/no-secret-in-log-sink",
   ]),
@@ -821,6 +824,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
+    "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-document-cookie.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
     "./.oxlint-plugins/require-safe-outbound-target.ts",
@@ -1645,6 +1649,20 @@ export default defineConfig({
       ],
       rules: {
         "no-disabled-tooltip-trigger/no-disabled-tooltip-trigger": "error",
+      },
+    },
+    {
+      // A dialog trigger mounted inside a menu item needs
+      // `closeOnClick={false}` to survive the click, which means the menu
+      // cannot close under the dialog it opens. Lift the dialog beside the
+      // menu with its own `open` state instead.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-dialog-trigger-menu-item.fixture.tsx",
+      ],
+      rules: {
+        "no-dialog-trigger-menu-item/no-dialog-trigger-menu-item": "error",
       },
     },
     {
