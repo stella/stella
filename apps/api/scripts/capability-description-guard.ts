@@ -1,8 +1,8 @@
 // Capability description guard (exact-id ledger).
 //
 // A capability's `description` is executable interface documentation, not a
-// comment: the exporter carries it from the handler config into both committed
-// catalog mirrors, and from there it becomes the generated CLI command's
+// comment: the exporter carries it from the handler config into the committed
+// catalog, and from there it becomes the generated CLI command's
 // `--help` brief and the prose an MCP client reads before deciding whether to
 // call the tool. A capability without one is briefed to an agent as "Invoke the
 // <id> capability", which is no basis for that decision.
@@ -21,15 +21,12 @@
 //   3. a ledger entry naming a capability that no longer exists fails as stale,
 //      so a renamed or removed handler cannot leave a phantom entry that would
 //      later admit a real gap under the same id;
-//   4. the two catalog mirrors must report the identical missing set, so mirror
-//      drift surfaces here as well as in the exporter's byte comparison.
-//
 // The ledger is the debt list, not a waiver list: there is no "reviewed
 // exception" tier. It ends empty, at which point `description` becomes a
 // required field on HandlerConfig and this guard retires.
 //
-// Reads the committed catalog mirrors rather than importing the handler graph:
-// no env, no module loading, and the mirrors are already pinned to the live
+// Reads the committed catalog rather than importing the handler graph: no env,
+// no module loading, and the artifact is already pinned to the live
 // handlers by the capability-catalog drift guard
 // (`export-capability-catalog.ts --check`), which runs beside this one. A stale
 // artifact therefore cannot hide debt from this guard without failing that one.
@@ -53,15 +50,7 @@ const LEDGER_PATH = path.resolve(
   "apps/api/capability-description-ledger.json",
 );
 
-/**
- * Both committed mirrors of the catalog. The exporter owns both and byte-
- * compares each, so they cannot drift silently; checking both here means a
- * mirror that somehow lost prose is reported as drift rather than averaged away.
- */
-const CATALOG_PATHS = [
-  "apps/api/src/mcp/generated/capability-catalog.json",
-  "packages/cli/src/generated/capability-catalog.json",
-] as const;
+const CATALOG_PATH = "packages/cli/capability-catalog.json";
 
 type CatalogEntry = { id: string; description?: string };
 
@@ -129,35 +118,6 @@ export const computeLedgerDiff = ({
   return { unledgered, described, unknown, malformed };
 };
 
-export type MirrorDrift = { path: string; onlyHere: string[] };
-
-/**
- * Per-mirror difference against the first mirror's undescribed set. Non-empty
- * means one committed catalog carries prose the other does not.
- */
-export const findMirrorDrift = (
-  mirrors: readonly { path: string; undescribed: readonly string[] }[],
-): MirrorDrift[] => {
-  const reference = mirrors.at(0);
-  if (reference === undefined) {
-    return [];
-  }
-  const referenceSet = new Set(reference.undescribed);
-  const drift: MirrorDrift[] = [];
-  for (const mirror of mirrors.slice(1)) {
-    const mirrorSet = new Set(mirror.undescribed);
-    const onlyHere = mirror.undescribed.filter((id) => !referenceSet.has(id));
-    const onlyThere = reference.undescribed.filter((id) => !mirrorSet.has(id));
-    if (onlyHere.length > 0) {
-      drift.push({ path: mirror.path, onlyHere: onlyHere.sort() });
-    }
-    if (onlyThere.length > 0) {
-      drift.push({ path: reference.path, onlyHere: onlyThere.sort() });
-    }
-  }
-  return drift;
-};
-
 const readCatalog = async (relativePath: string): Promise<CatalogEntry[]> => {
   const absolute = path.resolve(REPO_ROOT, relativePath);
   const raw: unknown = await Bun.file(absolute).json();
@@ -203,36 +163,18 @@ const writeLedger = async (ids: readonly string[]): Promise<void> => {
 type Loaded = {
   catalogIds: string[];
   undescribed: string[];
-  mirrors: { path: string; undescribed: string[] }[];
 };
 
-const loadMirrors = async (): Promise<Loaded> => {
-  const mirrors = await Promise.all(
-    CATALOG_PATHS.map(async (relativePath) => {
-      const entries = await readCatalog(relativePath);
-      return {
-        path: relativePath,
-        undescribed: findUndescribedIds(entries),
-        ids: entries.map(({ id }) => id).sort(),
-      };
-    }),
-  );
-  const reference = mirrors.at(0);
-  if (reference === undefined) {
-    return panic("capability-description-guard: no catalog mirrors declared.");
-  }
+const loadCatalog = async (): Promise<Loaded> => {
+  const entries = await readCatalog(CATALOG_PATH);
   return {
-    catalogIds: reference.ids,
-    undescribed: reference.undescribed,
-    mirrors: mirrors.map(({ path: mirrorPath, undescribed }) => ({
-      path: mirrorPath,
-      undescribed,
-    })),
+    catalogIds: entries.map(({ id }) => id).sort(),
+    undescribed: findUndescribedIds(entries),
   };
 };
 
 const runCheck = async (): Promise<number> => {
-  const { catalogIds, undescribed, mirrors } = await loadMirrors();
+  const { catalogIds, undescribed } = await loadCatalog();
 
   if (catalogIds.length === 0) {
     console.error(
@@ -242,20 +184,6 @@ const runCheck = async (): Promise<number> => {
   }
 
   let failed = false;
-
-  const drift = findMirrorDrift(mirrors);
-  if (drift.length > 0) {
-    failed = true;
-    console.error(
-      "\ncapability-description-guard: the committed catalog mirrors disagree about which capabilities have a description. Regenerate both: `bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts`:",
-    );
-    for (const { path: mirrorPath, onlyHere } of drift) {
-      console.error(`  ${mirrorPath} reports these as undescribed on its own:`);
-      for (const id of onlyHere) {
-        console.error(`    ${id}`);
-      }
-    }
-  }
 
   const ledger = await readLedger();
   const { unledgered, described, unknown, malformed } = computeLedgerDiff({
@@ -312,7 +240,7 @@ const runCheck = async (): Promise<number> => {
 };
 
 const runWriteLedger = async (): Promise<number> => {
-  const { undescribed } = await loadMirrors();
+  const { undescribed } = await loadCatalog();
   await writeLedger(undescribed);
   console.log(
     `capability-description-guard --write-ledger: wrote ${undescribed.length} capability ids to apps/api/capability-description-ledger.json`,
@@ -398,24 +326,6 @@ const runSelfTest = (): number => {
     clean.malformed.length > 0
   ) {
     failures.push("computeLedgerDiff flagged an exactly-matching ledger");
-  }
-
-  const drift = findMirrorDrift([
-    { path: "api", undescribed: ["a.get"] },
-    { path: "cli", undescribed: ["a.get", "b.get"] },
-  ]);
-  if (drift.length !== 1 || drift[0]?.path !== "cli") {
-    failures.push(
-      "findMirrorDrift did not flag a mirror carrying an extra undescribed capability",
-    );
-  }
-
-  const noDrift = findMirrorDrift([
-    { path: "api", undescribed: ["a.get"] },
-    { path: "cli", undescribed: ["a.get"] },
-  ]);
-  if (noDrift.length !== 0) {
-    failures.push("findMirrorDrift flagged mirrors that agree");
   }
 
   if (failures.length > 0) {

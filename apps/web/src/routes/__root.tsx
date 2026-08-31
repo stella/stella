@@ -43,10 +43,7 @@ export const Route = createRootRouteWithContext<{
       { name: "viewport", content: "width=device-width, initial-scale=1.0" },
       { title: "stella" },
     ],
-    links: [
-      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
-      { rel: "alternate icon", href: "/favicon.ico" },
-    ],
+    links: [{ rel: "icon", href: "/favicon.svg", type: "image/svg+xml" }],
   }),
   pendingComponent: () => <DefaultPendingComponent className="h-dvh" />,
   errorComponent: (props) => (

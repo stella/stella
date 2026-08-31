@@ -925,9 +925,8 @@ const countCrossSliceImports =
 // failed to say so. The exporter no longer has that escape hatch — it hoists
 // repeated subschemas into `$defs` and errors on anything still over the byte
 // cap — so this counter now guards the absence of the pathway rather than
-// burning it down. Counting the committed artifacts (rather than re-running the
-// exporter) keeps the scan cheap and deterministic; both mirrors are included
-// so drift between them also shows up.
+// burning it down. Counting the committed artifact (rather than re-running the
+// exporter) keeps the scan cheap and deterministic.
 const countTruncatedCapabilitySchemas = (content: string): number => {
   const parsed: unknown = JSON.parse(content);
   if (!Array.isArray(parsed)) {
@@ -959,8 +958,7 @@ const countTruncatedCapabilitySchemas = (content: string): number => {
 // JSON modes stay invokable (the file field is withheld), which is the shape of
 // a real burn-down rather than a relabelling. The unit is a suppressed
 // capability, so an entry blocked on both legs counts once. Counting the
-// committed artifacts keeps the scan cheap and deterministic; both mirrors are
-// included so drift between them also shows up.
+// committed artifact keeps the scan cheap and deterministic.
 const countFileTransportSuppressed = (content: string): number => {
   const parsed: unknown = JSON.parse(content);
   if (!Array.isArray(parsed)) {
@@ -1001,7 +999,7 @@ const countFileTransportSuppressed = (content: string): number => {
 // read-only credential
 // (`stella:read` / `stella:admin_read`): the exporter's read-scope guard
 // prevents it, and this ratchet freezes the count at 0 over the committed
-// mirrors so a regression fails CI even if the exporter guard were bypassed
+// catalog so a regression fails CI even if the exporter guard were bypassed
 // (e.g. a hand-edited JSON). The scope classification is shared with the
 // exporter, so the guard cannot omit a newly classified write-only scope.
 const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set(
@@ -1468,11 +1466,8 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     id: "capability-schemas-truncated",
     description:
-      "capabilities carrying `inputSchemaTruncated`, the flag that used to mark a schema dropped for size (counted across both committed catalog mirrors). The exporter now $defs-compacts schemas and FAILS on one still over the byte cap, so this can only be reached by reintroducing the truncation pathway: it stays at 0",
-    include: [
-      "packages/cli/src/generated/capability-catalog.json",
-      "apps/api/src/mcp/generated/capability-catalog.json",
-    ],
+      "capabilities carrying `inputSchemaTruncated`, the flag that used to mark a schema dropped for size. The exporter now $defs-compacts schemas and FAILS on one still over the byte cap, so this can only be reached by reintroducing the truncation pathway: it stays at 0",
+    include: ["packages/cli/capability-catalog.json"],
     // Generated artifacts are the subject here, so the shared source
     // exclusions (which skip `.gen.`/generated paths) must not apply.
     exclude: () => false,
@@ -1481,11 +1476,8 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     id: "capability-file-transport-suppressed",
     description:
-      "capabilities whose transport disposition suppresses them from the generic transport (a file response, or a REQUIRED file input): dropped from the CLI tree and refused by invoke_capability, so no agent surface can reach them. An OPTIONAL file input is not counted — its JSON modes stay invokable (counted across both committed catalog mirrors)",
-    include: [
-      "packages/cli/src/generated/capability-catalog.json",
-      "apps/api/src/mcp/generated/capability-catalog.json",
-    ],
+      "capabilities whose transport disposition suppresses them from the generic transport (a file response, or a REQUIRED file input): dropped from the CLI tree and refused by invoke_capability, so no agent surface can reach them. An OPTIONAL file input is not counted — its JSON modes stay invokable",
+    include: ["packages/cli/capability-catalog.json"],
     // Generated artifacts are the subject here, so the shared source
     // exclusions (which skip `.gen.`/generated paths) must not apply.
     exclude: () => false,
@@ -1494,11 +1486,8 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     id: "read-capabilities-with-write-scope",
     description:
-      "read capabilities whose required scope is a write-only grant (admin/billing/documents/knowledge/matters _write), unreachable by a read-only credential; the exporter's access-keyed scope resolver keeps this at 0 (counted across both committed catalog mirrors)",
-    include: [
-      "packages/cli/src/generated/capability-catalog.json",
-      "apps/api/src/mcp/generated/capability-catalog.json",
-    ],
+      "read capabilities whose required scope is a write-only grant (admin/billing/documents/knowledge/matters _write), unreachable by a read-only credential; the exporter's access-keyed scope resolver keeps this at 0",
+    include: ["packages/cli/capability-catalog.json"],
     // Generated artifacts are the subject here, so the shared source
     // exclusions (which skip `.gen.`/generated paths) must not apply.
     exclude: () => false,
@@ -2510,16 +2499,16 @@ const SELF_TEST_CAPABILITY_CATALOG = `${JSON.stringify([
   { id: "nu.get", access: "read", scope: "stella:read" },
   { id: "xi.create", access: "write", scope: "stella:matters_write" },
 ])}\n`;
-// Two truncated entries in each of the two mirror fixtures.
-const EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS = 4;
+// Two truncated entries in the catalog fixture.
+const EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS = 2;
 // Three suppressed entries (required file input, file response, and the
-// both-legs entry counted ONCE) in each of the two mirror fixtures; the plain
-// JSON entry and the OPTIONAL-file-input entry are excluded.
-const EXPECTED_FILE_TRANSPORT_SUPPRESSED = 6;
-// Two read-on-write-scope entries (`lambda.list`, `mu.get`) in each of the two
-// mirror fixtures; the read-on-read-scope and write-on-write-scope entries, and
-// every earlier fixture entry lacking access/scope, are excluded.
-const EXPECTED_READ_CAPABILITIES_WITH_WRITE_SCOPE = 4;
+// both-legs entry counted ONCE) in the catalog fixture; the plain JSON entry
+// and the OPTIONAL-file-input entry are excluded.
+const EXPECTED_FILE_TRANSPORT_SUPPRESSED = 3;
+// Two read-on-write-scope entries (`lambda.list`, `mu.get`) in the catalog
+// fixture; the read-on-read-scope and write-on-write-scope entries, and every
+// earlier fixture entry lacking access/scope, are excluded.
+const EXPECTED_READ_CAPABILITIES_WITH_WRITE_SCOPE = 2;
 
 const runSelfTest = (): number => {
   const failures: string[] = [];
@@ -2718,16 +2707,9 @@ const runSelfTest = (): number => {
       "apps/api/src/db/schema/workspace-only-rls.ts",
       SELF_TEST_WORKSPACE_ONLY_RLS,
     );
-    // Both mirrors, so each `include` glob is exercised rather than only the
-    // first: the metric's whole point is that the two artifacts stay in step.
     writeFixture(
       root,
-      "packages/cli/src/generated/capability-catalog.json",
-      SELF_TEST_CAPABILITY_CATALOG,
-    );
-    writeFixture(
-      root,
-      "apps/api/src/mcp/generated/capability-catalog.json",
+      "packages/cli/capability-catalog.json",
       SELF_TEST_CAPABILITY_CATALOG,
     );
     // Both handler globs the subject-gate metric covers, plus the gate module

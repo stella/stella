@@ -3,7 +3,7 @@
     "name": "stella",
     "category": "AI/ML",
     "description": "Self-host stella with web, API, Postgres, Redis, and object storage.",
-    "image": "https://raw.githubusercontent.com/stella/stella/main/apps/desktop/icon.iconset/icon_512x512.png",
+    "image": "https://raw.githubusercontent.com/stella/stella/main/apps/desktop/assets/icon-512.png",
     "readmeFile": "railway/template-readme.md"
   },
   "source": {

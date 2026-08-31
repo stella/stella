@@ -90,9 +90,8 @@ const loadOrgSettingsMock = mock(async () => ({
   promptCachingEnabled: false,
 }));
 const { handleMcpToolCall } = await import("@/api/mcp/tools");
-const capabilityCatalog = (
-  await import("@/api/mcp/generated/capability-catalog.json")
-).default;
+const capabilityCatalog = (await import("@stll/cli/capability-catalog.json"))
+  .default;
 
 type ToolResult = Awaited<ReturnType<typeof handleMcpToolCall>>;
 

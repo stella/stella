@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import cliCatalog from "../../../packages/cli/src/generated/capability-catalog.json" with { type: "json" };
+import capabilityCatalog from "../../../packages/cli/capability-catalog.json" with { type: "json" };
 import ledger from "../capability-description-ledger.json" with { type: "json" };
-import apiCatalog from "../src/mcp/generated/capability-catalog.json" with { type: "json" };
 import {
   computeLedgerDiff,
-  findMirrorDrift,
   findUndescribedIds,
 } from "./capability-description-guard";
 import { isRecord } from "./lib/enumerate-safe-handlers";
@@ -25,8 +23,7 @@ const readEntries = (
     return typeof description === "string" ? { id, description } : { id };
   });
 
-const apiEntries = readEntries(apiCatalog);
-const cliEntries = readEntries(cliCatalog);
+const entries = readEntries(capabilityCatalog);
 const ledgerIds: string[] = Array.isArray(ledger) ? ledger : [];
 
 /** Every subset of `items`, so a property can be driven over the whole
@@ -46,15 +43,15 @@ describe("committed ledger", () => {
   // directions here is the same invariant the CI guard enforces, pinned against
   // the real committed artifacts rather than a fixture.
   test("is exactly the set of capabilities without a description", () => {
-    const undescribed = findUndescribedIds(apiEntries);
+    const undescribed = findUndescribedIds(entries);
     expect([...ledgerIds].sort()).toEqual(undescribed);
   });
 
   test("is sorted, duplicate-free, and free of unknown or paid entries", () => {
     const diff = computeLedgerDiff({
-      undescribed: findUndescribedIds(apiEntries),
+      undescribed: findUndescribedIds(entries),
       ledger: ledgerIds,
-      catalogIds: apiEntries.map(({ id }) => id),
+      catalogIds: entries.map(({ id }) => id),
     });
     expect(diff).toEqual({
       unledgered: [],
@@ -62,15 +59,6 @@ describe("committed ledger", () => {
       unknown: [],
       malformed: [],
     });
-  });
-
-  test("both catalog mirrors agree on which capabilities lack prose", () => {
-    expect(
-      findMirrorDrift([
-        { path: "api", undescribed: findUndescribedIds(apiEntries) },
-        { path: "cli", undescribed: findUndescribedIds(cliEntries) },
-      ]),
-    ).toEqual([]);
   });
 });
 

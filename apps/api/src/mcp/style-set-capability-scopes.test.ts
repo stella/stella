@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
+import capabilityCatalog from "@stll/cli/capability-catalog.json";
 
 import { MCP_DOCUMENTS_RESOURCE_SCOPES } from "@/api/mcp/constants";
-import capabilityCatalog from "@/api/mcp/generated/capability-catalog.json";
 
 describe("style set document capability scopes", () => {
   test("keeps compound custom Style Set consent out of the catalog", () => {

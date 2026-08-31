@@ -114,7 +114,7 @@ let background: string | undefined;
 const cardBackground = (): string => {
   background ??= new Resvg(
     String.raw`<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg"><image href="data:image/png;base64,${readFileSync(
-      resolveLandingPath("public", "images", "gradient-hero.png"),
+      resolveLandingPath("public", "brand", "stella-gradient-1.png"),
     ).toString(
       "base64",
     )}" x="0" y="0" width="${WIDTH}" height="${HEIGHT}" preserveAspectRatio="xMidYMid slice" /></svg>`,
