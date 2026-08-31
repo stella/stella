@@ -642,8 +642,9 @@ mod rpc_codegen_tests {
   use std::path::Path;
   use ts_rs::{Config, TS, TypeVisitor};
 
-  const GENERATED_PATH: &str = "../src/shared/rpc.gen.ts";
-  const COMMITTED_BINDINGS: &str = include_str!("../../src/shared/rpc.gen.ts");
+  const GENERATED_PATH: &str = "../../../packages/api-contract/src/desktop-rpc.gen.ts";
+  const COMMITTED_BINDINGS: &str =
+    include_str!("../../../../packages/api-contract/src/desktop-rpc.gen.ts");
   const GENERATED_HEADER: &str = "// Generated from apps/desktop/src-tauri/src/types.rs.\n// Regenerate from the repository root with `bun --filter @stll/desktop rpc:generate`.\n// Do not edit by hand.\n\n";
 
   type DesktopRpcContract = (
@@ -762,7 +763,7 @@ mod rpc_codegen_tests {
 
 /// Golden-fixture compatibility checks for the generated bridge types.
 ///
-/// Rust serde DTOs are the source for `src/shared/rpc.gen.ts`. The JSON files
+/// Rust serde DTOs are the source for `packages/api-contract/src/desktop-rpc.gen.ts`. The JSON files
 /// under `apps/desktop/fixtures/rpc/` independently pin representative wire
 /// payloads, and `tests/rpc.golden.test.ts` validates those same fixtures
 /// against the generated declarations.

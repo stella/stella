@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 
-use crate::session_manager::SessionManager;
+use crate::session_manager::{LinkedAccountOriginUpdate, SessionManager};
 use crate::types::{
   BRIDGE_CAPABILITIES, BRIDGE_VERSION, LinkAccountRequest, OpenFileRequest,
   is_safe_session_id, is_valid_linked_account,
@@ -208,26 +208,26 @@ async fn open_file_request(
   let is_static_origin = state
     .static_allowed_origins
     .contains(origin_ref.unwrap_or_default());
-  if !is_static_origin {
-    let trusted_connection = {
-      let manager = state.manager.lock().await;
-      manager.is_trusted_self_host_connection(
-        origin_ref.unwrap_or_default(),
-        &request.api_base_url,
-      )
-    };
-    if !trusted_connection {
-      return json_response(
-        StatusCode::FORBIDDEN,
-        serde_json::json!({
-            "message": "Desktop bridge only accepts requests from allowed stella origins."
-        }),
-        origin_ref,
-        false,
-      )
-      .into_response();
-    }
+  let trusted_self_host_connection = {
+    let manager = state.manager.lock().await;
+    manager.is_trusted_self_host_connection(
+      origin_ref.unwrap_or_default(),
+      &request.api_base_url,
+    )
+  };
+  if !is_static_origin && !trusted_self_host_connection {
+    return json_response(
+      StatusCode::FORBIDDEN,
+      serde_json::json!({
+          "message": "Desktop bridge only accepts requests from allowed stella origins."
+      }),
+      origin_ref,
+      false,
+    )
+    .into_response();
   }
+  let linked_account_web_origin =
+    trusted_self_host_connection.then(|| origin_ref.unwrap_or_default().to_string());
 
   // Clone the HTTP client while briefly holding the lock, then download
   // outside the lock to avoid blocking health checks during network I/O.
@@ -258,7 +258,13 @@ async fn open_file_request(
 
   let result = {
     let mut manager = state.manager.lock().await;
-    manager.open_file(request, prefetched_buffer).await
+    manager
+      .open_file(
+        request,
+        prefetched_buffer,
+        LinkedAccountOriginUpdate::Replace(linked_account_web_origin),
+      )
+      .await
   };
 
   match result {
@@ -326,29 +332,27 @@ async fn link_account(
   let is_static_origin = state
     .static_allowed_origins
     .contains(origin_ref.unwrap_or_default());
-  if !is_static_origin {
-    let trusted_connection = {
-      let manager = state.manager.lock().await;
-      manager.is_trusted_self_host_connection(
-        origin_ref.unwrap_or_default(),
-        &request.api_base_url,
-      )
-    };
-    if !trusted_connection {
-      return json_response(
-        StatusCode::FORBIDDEN,
-        serde_json::json!({
-          "message": "Desktop bridge only accepts requests from allowed stella origins."
-        }),
-        origin_ref,
-        false,
-      )
-      .into_response();
-    }
+  let trusted_self_host_connection = {
+    let manager = state.manager.lock().await;
+    manager.is_trusted_self_host_connection(
+      origin_ref.unwrap_or_default(),
+      &request.api_base_url,
+    )
+  };
+  if !is_static_origin && !trusted_self_host_connection {
+    return json_response(
+      StatusCode::FORBIDDEN,
+      serde_json::json!({
+        "message": "Desktop bridge only accepts requests from allowed stella origins."
+      }),
+      origin_ref,
+      false,
+    )
+    .into_response();
   }
 
   let linked_account_web_origin =
-    (!is_static_origin).then(|| origin_ref.unwrap_or_default().to_string());
+    trusted_self_host_connection.then(|| origin_ref.unwrap_or_default().to_string());
   let link_result = {
     let mut manager = state.manager.lock().await;
     manager
@@ -735,7 +739,10 @@ mod tests {
 
   #[tokio::test]
   async fn link_account_records_its_trusted_self_host_origin() {
-    let state = test_state();
+    let mut state = test_state();
+    state
+      .static_allowed_origins
+      .insert("https://stella.example".to_string());
     let manager = Arc::clone(&state.manager);
     let store_path = std::env::temp_dir().join(format!(
       "stella-desktop-self-host-link-account-{}.json",

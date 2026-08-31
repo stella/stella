@@ -1,3 +1,4 @@
+import type { LinkAccountRequest } from "@stll/api-contract/desktop-rpc";
 import { FetchBoundaryError } from "@stll/errors";
 
 import { env } from "@/env";
@@ -382,13 +383,7 @@ export const connectSelfHostedDesktop = async ({
   throw new DesktopBridgeUnavailableError();
 };
 
-export const linkDesktopAccount = async ({
-  apiBaseUrl,
-  linkedAccount,
-}: {
-  apiBaseUrl: string;
-  linkedAccount: LinkedAccountSnapshot;
-}) => {
+export const linkDesktopAccount = async (request: LinkAccountRequest) => {
   const health =
     (await readBridgeHealth(500)) ?? (await wakeDesktopAndReadBridgeHealth());
   if (!health) {
@@ -402,7 +397,7 @@ export const linkDesktopAccount = async ({
   let response: Response;
   try {
     response = await fetchWithTimeout(`${DESKTOP_BRIDGE_URL}/v1/link-account`, {
-      body: JSON.stringify({ apiBaseUrl, linkedAccount }),
+      body: JSON.stringify(request),
       headers: {
         "Content-Type": "application/json",
       },

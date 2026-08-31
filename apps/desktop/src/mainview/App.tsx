@@ -298,7 +298,9 @@ const GeneralPane = ({
       <PanelGroup>
         <div className="flex items-center justify-between gap-4 px-4 py-3">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">{t("language")}</p>
+            <Label className="text-sm font-medium" htmlFor="desktop-language">
+              {t("language")}
+            </Label>
             <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
               {t("languageDescription")}
             </p>
@@ -311,7 +313,7 @@ const GeneralPane = ({
             }}
             value={language}
           >
-            <SelectTrigger className="w-40">
+            <SelectTrigger className="w-40" id="desktop-language">
               <SelectValue />
             </SelectTrigger>
             <SelectPopup align="end">

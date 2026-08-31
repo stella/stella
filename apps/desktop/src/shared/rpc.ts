@@ -2,8 +2,7 @@ import {
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
   isDesktopEditFileType,
 } from "@stll/api-contract";
-
-import type { AppSnapshot } from "./rpc.gen";
+import type { AppSnapshot } from "@stll/api-contract/desktop-rpc";
 
 export const DEFAULT_STELLA_DESKTOP_BRIDGE_PORT = 45_901;
 export const DOCX_MIME_TYPE = DESKTOP_EDIT_FILE_TYPE_CONFIG.docx.mimeType;
@@ -24,7 +23,7 @@ export type {
   SessionSnapshot,
   SessionStatus,
   TrustedSelfHostConnection,
-} from "./rpc.gen";
+} from "@stll/api-contract/desktop-rpc";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

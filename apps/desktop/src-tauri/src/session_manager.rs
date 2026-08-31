@@ -196,6 +196,11 @@ pub struct SessionManager {
   app_handle: Option<AppHandle>,
 }
 
+pub(crate) enum LinkedAccountOriginUpdate {
+  Preserve,
+  Replace(Option<String>),
+}
+
 fn session_key(workspace_id: &str, entity_id: &str, property_id: &str) -> String {
   format!("{workspace_id}:{entity_id}:{property_id}")
 }
@@ -730,28 +735,23 @@ impl SessionManager {
     &mut self,
     request: OpenFileRequest,
     prefetched_buffer: Option<Vec<u8>>,
+    linked_account_origin_update: LinkedAccountOriginUpdate,
   ) -> Result<OpenFileResponse, String> {
     let key = session_key(
       &request.workspace_id,
       &request.entity_id,
       &request.property_id,
     );
+    self
+      .sync_linked_account(
+        request.linked_account.as_ref(),
+        linked_account_origin_update,
+      )
+      .await?;
+
     let remote = &request.remote_session;
     let file_type = remote.file_type;
     let managed_file_name = sanitize_file_name(&remote.file_name, file_type);
-
-    // Sync linked account
-    if let Some(ref account) = request.linked_account {
-      let changed = self.linked_account.as_ref().is_none_or(|la| {
-        la.email != account.email
-          || la.name != account.name
-          || la.verified_at != account.verified_at
-      });
-      if changed {
-        self.linked_account = Some(account.clone());
-        self.persist_sessions().await;
-      }
-    }
 
     // Check for reusable existing session
     let existing_id = self.session_ids_by_key.get(&key).cloned();
@@ -1031,6 +1031,32 @@ impl SessionManager {
     }
     self.emit_state_change();
     Ok(())
+  }
+
+  async fn sync_linked_account(
+    &mut self,
+    linked_account: Option<&LinkedAccountSnapshot>,
+    origin_update: LinkedAccountOriginUpdate,
+  ) -> Result<(), String> {
+    let Some(linked_account) = linked_account else {
+      return Ok(());
+    };
+    let next_web_origin = match origin_update {
+      LinkedAccountOriginUpdate::Preserve => self.linked_account_web_origin.clone(),
+      LinkedAccountOriginUpdate::Replace(web_origin) => web_origin,
+    };
+    let changed = self.linked_account.as_ref().is_none_or(|current| {
+      current.email != linked_account.email
+        || current.name != linked_account.name
+        || current.verified_at != linked_account.verified_at
+    }) || self.linked_account_web_origin != next_web_origin;
+    if !changed {
+      return Ok(());
+    }
+
+    self
+      .link_account(linked_account.clone(), next_web_origin)
+      .await
   }
 
   pub fn linked_self_host_origin(&self) -> Option<&str> {
@@ -2796,6 +2822,66 @@ mod tests {
     assert_eq!(
       loaded.linked_account_web_origin.as_deref(),
       Some("https://selfhost.example")
+    );
+
+    tokio::fs::remove_file(path).await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn document_relink_replaces_or_preserves_the_account_origin_explicitly() {
+    let path = std::env::temp_dir().join(format!(
+      "stella-desktop-account-origin-{}.json",
+      uuid::Uuid::new_v4()
+    ));
+    let mut manager = SessionManager::new();
+    manager.store_path = path.clone();
+    manager.trust_self_host_connection_for_test(
+      "https://first.example".to_string(),
+      "https://api.first.example".to_string(),
+    );
+    manager.trust_self_host_connection_for_test(
+      "https://second.example".to_string(),
+      "https://api.second.example".to_string(),
+    );
+    let account = LinkedAccountSnapshot {
+      email: "user@example.com".to_string(),
+      name: Some("Test User".to_string()),
+      verified_at: "2026-08-31T10:00:00Z".to_string(),
+    };
+    manager
+      .link_account(account.clone(), Some("https://first.example".to_string()))
+      .await
+      .unwrap();
+
+    manager
+      .sync_linked_account(
+        Some(&account),
+        LinkedAccountOriginUpdate::Replace(Some("https://second.example".to_string())),
+      )
+      .await
+      .unwrap();
+    assert_eq!(
+      manager.linked_self_host_origin(),
+      Some("https://second.example")
+    );
+
+    manager
+      .sync_linked_account(Some(&account), LinkedAccountOriginUpdate::Replace(None))
+      .await
+      .unwrap();
+    assert!(manager.linked_self_host_origin().is_none());
+
+    manager
+      .link_account(account.clone(), Some("https://first.example".to_string()))
+      .await
+      .unwrap();
+    manager
+      .sync_linked_account(Some(&account), LinkedAccountOriginUpdate::Preserve)
+      .await
+      .unwrap();
+    assert_eq!(
+      manager.linked_self_host_origin(),
+      Some("https://first.example")
     );
 
     tokio::fs::remove_file(path).await.unwrap();
