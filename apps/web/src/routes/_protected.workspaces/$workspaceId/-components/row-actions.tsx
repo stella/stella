@@ -36,7 +36,6 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -263,6 +262,7 @@ export const RowActions = ({
   const retryCell = useRetryCell(toSafeId<"workspace">(workspaceId));
   const canCreateEntity = usePermissions({ entity: ["create"] });
   const [copyToMatterOpen, setCopyToMatterOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [copyToMatterEntities, setCopyToMatterEntities] = useState<
     CopyToMatterEntity[]
   >([]);
@@ -940,16 +940,13 @@ export const RowActions = ({
           hasAnyFolder={hasAnyFolder}
           hasDownloadVariants={hasDownloadVariants}
           hasPdfConversion={hasPdfConversion}
-          isBulk={isBulk}
           isCellContext={isCellContext}
-          name={name}
           onCopyToMatter={openCopyToMatterDialog}
-          onDelete={handleDelete}
+          onDelete={() => setDeleteOpen(true)}
           onDownload={handleDownload}
           onDuplicate={handleDuplicate}
           onOcrExport={handleOcrExport}
           onZipDownload={handleZipDownload}
-          selectedCount={bulkTargets.length}
         />
       </MenuPopup>
       <CopyToMatterDialog
@@ -957,6 +954,14 @@ export const RowActions = ({
         onOpenChange={handleCopyToMatterOpenChange}
         open={copyToMatterOpen}
         sourceWorkspaceId={workspaceId}
+      />
+      <RowDeleteDialog
+        isBulk={isBulk}
+        name={name}
+        onConfirm={handleDelete}
+        onOpenChange={setDeleteOpen}
+        open={deleteOpen}
+        selectedCount={bulkTargets.length}
       />
       <RowTranslationDialog
         canCreateEntity={canCreateEntity}
@@ -1312,16 +1317,13 @@ type RowFileOperationsMenuProps = {
   hasAnyFolder: boolean;
   hasDownloadVariants: boolean;
   hasPdfConversion: boolean;
-  isBulk: boolean;
   isCellContext: boolean;
-  name: string;
   onCopyToMatter: () => void;
   onDelete: () => void;
   onDownload: (variant?: DownloadVariant) => Promise<void>;
   onDuplicate: () => Promise<void>;
   onOcrExport: (source: OcrSource, format: OcrExportFormat) => Promise<void>;
   onZipDownload: () => Promise<void>;
-  selectedCount: number;
 };
 
 const RowFileOperationsMenu = ({
@@ -1331,16 +1333,13 @@ const RowFileOperationsMenu = ({
   hasAnyFolder,
   hasDownloadVariants,
   hasPdfConversion,
-  isBulk,
   isCellContext,
-  name,
   onCopyToMatter,
   onDelete,
   onDownload,
   onDuplicate,
   onOcrExport,
   onZipDownload,
-  selectedCount,
 }: RowFileOperationsMenuProps) => {
   const t = useTranslations();
   if (isCellContext) {
@@ -1456,41 +1455,63 @@ const RowFileOperationsMenu = ({
         {t("workspaces.copyToMatter.menuItem")}
       </MenuItem>
       <MenuSeparator />
-      <AlertDialog>
-        <AlertDialogTrigger
-          render={<MenuItem closeOnClick={false} variant="destructive" />}
-        >
-          <Trash2Icon />
-          {t("common.delete")}
-        </AlertDialogTrigger>
-        <AlertDialogPopup>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {isBulk
-                ? t("workspaces.deleteItems", { count: selectedCount })
-                : t("workspaces.deleteItem")}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {isBulk
-                ? t("workspaces.deleteItemsDescription", {
-                    count: selectedCount,
-                  })
-                : t("common.deleteConfirmDescription", { name })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="ghost" />}>
-              {t("common.cancel")}
-            </AlertDialogClose>
-            <AlertDialogClose
-              render={<Button onClick={onDelete} variant="destructive" />}
-            >
-              {t("common.delete")}
-            </AlertDialogClose>
-          </AlertDialogFooter>
-        </AlertDialogPopup>
-      </AlertDialog>
+      {/* Only requests the deletion: the confirmation lives outside the menu
+          so the menu can close under it like every other dialog here. */}
+      <MenuItem onClick={onDelete} variant="destructive">
+        <Trash2Icon />
+        {t("common.delete")}
+      </MenuItem>
     </>
+  );
+};
+
+type RowDeleteDialogProps = {
+  isBulk: boolean;
+  name: string;
+  onConfirm: () => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  selectedCount: number;
+};
+
+const RowDeleteDialog = ({
+  isBulk,
+  name,
+  onConfirm,
+  onOpenChange,
+  open,
+  selectedCount,
+}: RowDeleteDialogProps) => {
+  const t = useTranslations();
+  return (
+    <AlertDialog onOpenChange={onOpenChange} open={open}>
+      <AlertDialogPopup>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {isBulk
+              ? t("workspaces.deleteItems", { count: selectedCount })
+              : t("workspaces.deleteItem")}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {isBulk
+              ? t("workspaces.deleteItemsDescription", {
+                  count: selectedCount,
+                })
+              : t("common.deleteConfirmDescription", { name })}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogClose render={<Button variant="ghost" />}>
+            {t("common.cancel")}
+          </AlertDialogClose>
+          <AlertDialogClose
+            render={<Button onClick={onConfirm} variant="destructive" />}
+          >
+            {t("common.delete")}
+          </AlertDialogClose>
+        </AlertDialogFooter>
+      </AlertDialogPopup>
+    </AlertDialog>
   );
 };
 
