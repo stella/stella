@@ -133,6 +133,13 @@ describe("API deployment health receipt", () => {
     expect(action).toContain(
       "Release source predates the public web build contract",
     );
+    expect(action).toContain(
+      "A valid PostHog project key is required for official stella web builds",
+    );
+    expect(action).toMatch(/POSTHOG_KEY: \$\{\{ inputs\.posthog-key \}\}/u);
+    expect(action).toContain(
+      'if [[ ! "$POSTHOG_KEY" =~ ^phc_[A-Za-z0-9_-]{20,}$ ]]; then',
+    );
     expect(action).toContain("type=registry,ref=ghcr.io/");
     expect(action).not.toContain("type=gha");
     expect(action).not.toContain("toJSON(vars)");

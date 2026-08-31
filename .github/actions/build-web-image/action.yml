@@ -12,9 +12,8 @@ inputs:
     description: Public browser configuration to compile (production or staging).
     required: true
   posthog-key:
-    description: Browser-visible PostHog project key; passed separately so it is never committed.
-    required: false
-    default: ""
+    description: Browser-visible PostHog project key required for official Stella builds; passed separately so it is never committed.
+    required: true
   source-path:
     description: Checkout containing the exact source commit to build.
     required: false
@@ -37,10 +36,15 @@ runs:
       env:
         RELEASE_REF: ${{ inputs.release-ref }}
         RELEASE_SHA: ${{ inputs.release-sha }}
+        POSTHOG_KEY: ${{ inputs.posthog-key }}
         SOURCE_PATH: ${{ inputs.source-path }}
         TARGET_ENV: ${{ inputs.target-environment }}
       run: |
         set -euo pipefail
+        if [[ ! "$POSTHOG_KEY" =~ ^phc_[A-Za-z0-9_-]{20,}$ ]]; then
+          echo "::error::A valid PostHog project key is required for official stella web builds."
+          exit 1
+        fi
         if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
           echo "::error::release-sha must be a full lowercase commit SHA."
           exit 1
