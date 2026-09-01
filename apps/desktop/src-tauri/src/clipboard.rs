@@ -244,6 +244,12 @@ impl ClipboardItem {
     }
   }
 
+  /// Deliberately kept by the user: named or filed into a group. Such
+  /// items are exempt from retention and count pruning.
+  fn is_organised(&self) -> bool {
+    self.group_id().is_some() || self.name().is_some()
+  }
+
   fn source_app(&self) -> Option<&ClipboardSourceApp> {
     match self {
       Self::Text { source_app, .. } | Self::FormattedText { source_app, .. } => {
@@ -510,7 +516,17 @@ pub fn load_persisted() -> (ClipboardLoad, ClipboardInitTimings) {
     .join(APP_DATA_DIR_NAME)
     .join("clipboard-history.json.enc");
   let keychain_started = Instant::now();
-  let key = keychain::get_or_create_clipboard_key();
+  let key = keychain::get_clipboard_key().and_then(|lookup| match lookup {
+    keychain::ClipboardKeyLookup::Found(key) => Ok(key),
+    // A history file whose key is missing must never be re-keyed: the miss
+    // may be transient (locked or migrating keychain) and minting a new key
+    // would make the file undecryptable for good. Deletion-only lets the
+    // user reset it, after which the next launch creates a key.
+    keychain::ClipboardKeyLookup::Missing if store_path.is_file() => Err(
+      "clipboard history exists but its key is missing from the keychain".to_string(),
+    ),
+    keychain::ClipboardKeyLookup::Missing => keychain::create_clipboard_key(),
+  });
   timings.keychain_read = Some(keychain_started.elapsed());
   let key = match key {
     Ok(key) => key,
@@ -744,6 +760,8 @@ impl ClipboardManager {
         item.set_group_id(None);
       }
     }
+    // Clips that just lost their organiser fall under the history rules.
+    prune_items(&mut self.items, self.retention, Utc::now());
     self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
@@ -795,6 +813,8 @@ impl ClipboardManager {
       return Ok(false);
     };
     item.set_group_id(group_id);
+    // Ungrouping puts the clip back under the history rules.
+    prune_items(&mut self.items, self.retention, Utc::now());
     self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
@@ -998,24 +1018,33 @@ fn prune_items_preserving(
 ) -> bool {
   let original_len = items.len();
   let oldest = now - Duration::days(retention.days());
-  items.retain(|item| Some(item.id()) == preserved_id || item.copied_at() >= oldest);
+  items.retain(|item| {
+    Some(item.id()) == preserved_id || item.is_organised() || item.copied_at() >= oldest
+  });
 
-  while items.len() > MAX_HISTORY_ITEMS {
-    let Some(index) = items
-      .iter()
-      .rposition(|item| Some(item.id()) != preserved_id)
-    else {
+  // Items are newest first, so `rposition` picks the oldest candidate.
+  let is_plain =
+    |item: &ClipboardItem| Some(item.id()) != preserved_id && !item.is_organised();
+
+  // The count cap bounds plain history; organised items sit outside it.
+  let mut plain_count = items.iter().filter(|item| is_plain(item)).count();
+  while plain_count > MAX_HISTORY_ITEMS {
+    let Some(index) = items.iter().rposition(is_plain) else {
       break;
     };
     items.remove(index);
+    plain_count -= 1;
   }
 
+  // The byte cap is the one hard limit: it removes plain history first and
+  // touches organised items only once none is left.
   let mut total_bytes = items.iter().map(ClipboardItem::byte_len).sum::<usize>();
   while total_bytes > MAX_HISTORY_BYTES {
-    let Some(index) = items
-      .iter()
-      .rposition(|item| Some(item.id()) != preserved_id)
-    else {
+    let Some(index) = items.iter().rposition(is_plain).or_else(|| {
+      items
+        .iter()
+        .rposition(|item| Some(item.id()) != preserved_id)
+    }) else {
       break;
     };
     total_bytes -= items.remove(index).byte_len();
@@ -2024,6 +2053,86 @@ mod tests {
     assert!(
       items.iter().map(ClipboardItem::byte_len).sum::<usize>() <= MAX_HISTORY_BYTES
     );
+  }
+
+  #[test]
+  fn organised_items_outlive_retention_and_count_limits() {
+    let now = Utc::now();
+    let mut grouped = text_item(now - Duration::days(400), "grouped");
+    grouped.set_group_id(Some("templates".to_string()));
+    let mut named = text_item(now - Duration::days(400), "named");
+    named.set_name(Some("Key clause".to_string()));
+    let mut items = vec![text_item(now - Duration::days(31), "expired")];
+    items.extend(
+      (0..=MAX_HISTORY_ITEMS).map(|index| text_item(now, &format!("item-{index}"))),
+    );
+    items.push(grouped);
+    items.push(named);
+
+    prune_items(&mut items, ClipboardRetention::Month, now);
+
+    let kept: Vec<&str> = items.iter().map(ClipboardItem::plain_text).collect();
+    assert!(kept.contains(&"grouped"));
+    assert!(kept.contains(&"named"));
+    assert!(!kept.contains(&"expired"));
+    assert_eq!(
+      items.iter().filter(|item| !item.is_organised()).count(),
+      MAX_HISTORY_ITEMS
+    );
+  }
+
+  #[test]
+  fn byte_limit_removes_plain_items_before_organised_ones() {
+    let now = Utc::now();
+    let large_text = "x".repeat(MAX_ITEM_TEXT_BYTES);
+    let mut items = vec![text_item(now, "plain")];
+    for _ in 0..(MAX_HISTORY_BYTES / MAX_ITEM_TEXT_BYTES + 1) {
+      let mut item = text_item(now - Duration::days(1), &large_text);
+      item.set_group_id(Some("templates".to_string()));
+      items.push(item);
+    }
+
+    prune_items(&mut items, ClipboardRetention::Month, now);
+
+    assert!(items.iter().all(|item| item.plain_text() != "plain"));
+    assert!(items.iter().all(ClipboardItem::is_organised));
+    assert!(!items.is_empty());
+    assert!(
+      items.iter().map(ClipboardItem::byte_len).sum::<usize>() <= MAX_HISTORY_BYTES
+    );
+  }
+
+  #[test]
+  fn losing_the_last_organiser_reapplies_retention() {
+    let now = Utc::now();
+    let mut manager = ready_manager();
+    let group_id = manager
+      .create_group("Templates", ClipboardGroupColor::Gray)
+      .unwrap();
+    let mut ungrouped = text_item(now - Duration::days(400), "ungrouped");
+    ungrouped.set_group_id(Some(group_id.clone()));
+    let ungrouped_id = ungrouped.id().to_string();
+    let mut orphaned = text_item(now - Duration::days(400), "orphaned");
+    orphaned.set_group_id(Some(group_id.clone()));
+    manager.items.push(ungrouped);
+    manager.items.push(orphaned);
+
+    assert!(manager.set_item_group(&ungrouped_id, None).unwrap());
+    assert!(
+      manager
+        .items
+        .iter()
+        .all(|item| item.plain_text() != "ungrouped")
+    );
+    assert!(
+      manager
+        .items
+        .iter()
+        .any(|item| item.plain_text() == "orphaned")
+    );
+
+    assert!(manager.delete_group(&group_id).unwrap());
+    assert!(manager.items.is_empty());
   }
 
   #[test]

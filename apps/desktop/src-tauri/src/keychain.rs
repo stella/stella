@@ -167,24 +167,33 @@ pub fn delete_token(session_id: &str) {
   }
 }
 
-/// Load the clipboard history encryption key, creating it on first use.
-/// Clipboard contents never leave encrypted storage when persistence is
-/// available; callers fall back to memory-only history if this fails.
-pub fn get_or_create_clipboard_key() -> Result<[u8; 32], String> {
+pub enum ClipboardKeyLookup {
+  Found([u8; 32]),
+  Missing,
+}
+
+/// Look up the clipboard history encryption key. The caller decides
+/// whether a missing key may be created: it must not be while an
+/// encrypted history file still depends on the old one.
+pub fn get_clipboard_key() -> Result<ClipboardKeyLookup, String> {
   let key_entry = named_entry(CLIPBOARD_HISTORY_KEY)?;
   match key_entry.get_secret() {
     Ok(secret) => secret
       .try_into()
+      .map(ClipboardKeyLookup::Found)
       .map_err(|_| "clipboard key has an invalid length".to_string()),
-    Err(Error::NoEntry) => {
-      use aes_gcm::{Aes256Gcm, Key, aead::Generate};
-
-      let key = Key::<Aes256Gcm>::generate();
-      key_entry
-        .set_secret(&key)
-        .map_err(|e| format!("keychain store error: {e}"))?;
-      Ok(key.into())
-    }
+    Err(Error::NoEntry) => Ok(ClipboardKeyLookup::Missing),
     Err(e) => Err(format!("keychain read error: {e}")),
   }
+}
+
+/// Mint and store a fresh clipboard history key.
+pub fn create_clipboard_key() -> Result<[u8; 32], String> {
+  use aes_gcm::{Aes256Gcm, Key, aead::Generate};
+
+  let key = Key::<Aes256Gcm>::generate();
+  named_entry(CLIPBOARD_HISTORY_KEY)?
+    .set_secret(&key)
+    .map_err(|e| format!("keychain store error: {e}"))?;
+  Ok(key.into())
 }
