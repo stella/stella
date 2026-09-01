@@ -33,6 +33,19 @@ type PublicDecisionLanguageAlternateRow = PublicDecisionLanguageAlternate & {
 };
 
 /**
+ * The versions of a page of decisions, by language group. A decision with one
+ * language, or none in the corpus, offers nothing to choose from: that is the
+ * domain's empty state, not a missing invariant.
+ */
+export type PublicDecisionLanguageAlternatesByGroup = {
+  alternatesFor: (
+    languageGroupKey: string | null,
+  ) => readonly PublicDecisionLanguageAlternate[];
+};
+
+const NO_ALTERNATES: readonly PublicDecisionLanguageAlternate[] = [];
+
+/**
  * Every redistributable language version in the given groups, ordered so that
  * grouping below is deterministic. Bounded per requested group: a
  * malformed or over-merged key cannot make this public read unbounded.
@@ -77,19 +90,20 @@ export const readPublicDecisionLanguageAlternatesQuery =
         ),
   );
 
+type LanguageGroup = {
+  languages: Set<string>;
+  alternates: PublicDecisionLanguageAlternate[];
+};
+
 /**
  * Group rows by language group, one version per normalized language, capped
  * per group. A group with a single language is not a multilingual decision
- * and is left out, so callers can read "present" as "there is a choice".
+ * and offers no alternates.
  */
 export const groupPublicDecisionLanguageAlternates = (
   rows: readonly PublicDecisionLanguageAlternateRow[],
-): Map<string, PublicDecisionLanguageAlternate[]> => {
-  const seenLanguagesByGroup = new Map<string, Set<string>>();
-  const alternatesByGroup = new Map<
-    string,
-    PublicDecisionLanguageAlternate[]
-  >();
+): PublicDecisionLanguageAlternatesByGroup => {
+  const groups = new Map<string, LanguageGroup>();
 
   for (const { languageGroupKey, ...alternate } of rows) {
     if (languageGroupKey === null) {
@@ -99,28 +113,32 @@ export const groupPublicDecisionLanguageAlternates = (
     if (language === null) {
       continue;
     }
-    const seenLanguages =
-      seenLanguagesByGroup.get(languageGroupKey) ?? new Set<string>();
+    let group = groups.get(languageGroupKey);
+    if (group === undefined) {
+      group = { languages: new Set(), alternates: [] };
+      groups.set(languageGroupKey, group);
+    }
     if (
-      seenLanguages.has(language) ||
-      seenLanguages.size >= LIMITS.caseLawLanguageAlternatesPerGroupMax
+      group.languages.has(language) ||
+      group.languages.size >= LIMITS.caseLawLanguageAlternatesPerGroupMax
     ) {
       continue;
     }
-    seenLanguages.add(language);
-    seenLanguagesByGroup.set(languageGroupKey, seenLanguages);
-    const alternates = alternatesByGroup.get(languageGroupKey) ?? [];
-    alternates.push(alternate);
-    alternatesByGroup.set(languageGroupKey, alternates);
+    group.languages.add(language);
+    group.alternates.push(alternate);
   }
 
-  for (const [languageGroupKey, alternates] of alternatesByGroup) {
-    if (alternates.length < 2) {
-      alternatesByGroup.delete(languageGroupKey);
-    }
-  }
-
-  return alternatesByGroup;
+  return {
+    alternatesFor: (languageGroupKey) => {
+      if (languageGroupKey === null) {
+        return NO_ALTERNATES;
+      }
+      const group = groups.get(languageGroupKey);
+      return group === undefined || group.alternates.length < 2
+        ? NO_ALTERNATES
+        : group.alternates;
+    },
+  };
 };
 
 type ReadPublicDecisionLanguageAlternatesOptions = {
@@ -132,11 +150,9 @@ type ReadPublicDecisionLanguageAlternatesOptions = {
 export const readPublicDecisionLanguageAlternatesByGroup = async ({
   caseLawDb,
   languageGroupKeys,
-}: ReadPublicDecisionLanguageAlternatesOptions): Promise<
-  Map<string, PublicDecisionLanguageAlternate[]>
-> => {
+}: ReadPublicDecisionLanguageAlternatesOptions): Promise<PublicDecisionLanguageAlternatesByGroup> => {
   if (languageGroupKeys.length === 0) {
-    return new Map();
+    return groupPublicDecisionLanguageAlternates([]);
   }
   const rows = await caseLawDb(
     async (tx) =>
@@ -152,14 +168,14 @@ export const listPublicDecisionLanguageAlternates = async ({
 }: {
   tx: CaseLawPublicReadTransaction;
   languageGroupKey: string | null;
-}): Promise<PublicDecisionLanguageAlternate[]> => {
+}): Promise<readonly PublicDecisionLanguageAlternate[]> => {
   if (languageGroupKey === null) {
-    return [];
+    return NO_ALTERNATES;
   }
   const rows = await readPublicDecisionLanguageAlternatesQuery(tx, [
     languageGroupKey,
   ]);
-  return (
-    groupPublicDecisionLanguageAlternates(rows).get(languageGroupKey) ?? []
+  return groupPublicDecisionLanguageAlternates(rows).alternatesFor(
+    languageGroupKey,
   );
 };

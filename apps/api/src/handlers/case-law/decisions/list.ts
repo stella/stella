@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, lt, notExists, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
@@ -49,14 +50,15 @@ const caseLawCreatedAtCursor = createTimestampIdCursorCodec({
 const sibling = alias(caseLawDecisions, "sibling");
 const siblingSource = alias(caseLawSources, "sibling_source");
 
-type DecisionFilterColumns = Pick<
-  typeof caseLawDecisions,
+/** The table or its alias: the alias carries its own table name in the types. */
+type DecisionFilterColumns = Record<
   | "country"
   | "court"
   | "decisionDate"
   | "decisionType"
   | "language"
-  | "sourceId"
+  | "sourceId",
+  AnyPgColumn
 >;
 
 /**
@@ -232,10 +234,9 @@ export const listDecisionsHandler = async (
       court: decision.court,
       country: decision.country,
       language: decision.language,
-      languageAlternates:
-        decision.languageGroupKey === null
-          ? []
-          : (alternatesByGroupKey.get(decision.languageGroupKey) ?? []),
+      languageAlternates: alternatesByGroupKey.alternatesFor(
+        decision.languageGroupKey,
+      ),
       decisionDate: decision.decisionDate,
       decisionType: decision.decisionType,
       sourceUrl: decision.sourceUrl,

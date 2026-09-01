@@ -414,10 +414,7 @@ const searchPostgresDecisions = async (
       court: String(row["court"]),
       country: String(row["country"]),
       language: String(row["language"]),
-      languageAlternates:
-        languageGroupKey === null
-          ? []
-          : (alternatesByGroupKey.get(languageGroupKey) ?? []),
+      languageAlternates: alternatesByGroupKey.alternatesFor(languageGroupKey),
       decisionDate: toNullableString(row["decision_date"]),
       decisionType: toNullableString(row["decision_type"]),
       sourceUrl: toNullableString(row["source_url"]),
@@ -736,10 +733,9 @@ const searchCorpusIndexDecisions = async (
         court: row.court,
         country: row.country,
         language: row.language,
-        languageAlternates:
-          row.languageGroupKey === null
-            ? []
-            : (alternatesByGroupKey.get(row.languageGroupKey) ?? []),
+        languageAlternates: alternatesByGroupKey.alternatesFor(
+          row.languageGroupKey,
+        ),
         decisionDate: row.decisionDate,
         decisionType: row.decisionType,
         sourceUrl: row.sourceUrl,

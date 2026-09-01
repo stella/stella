@@ -57,7 +57,7 @@ describe("collapsing candidates by language group", () => {
           const firstOfGroup = candidates.find(
             (candidate) => groups.get(candidate.id) === group,
           );
-          expect(representative.id).toBe(firstOfGroup?.id);
+          expect(firstOfGroup?.id).toBe(representative.id);
         }
         const inputGroups = new Set(
           candidates

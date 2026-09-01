@@ -254,7 +254,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 745,
+    "count": 742,
     "files": {
       "apps/api/scripts/ai-provider-canary.ts": 4,
       "apps/api/scripts/backfill-image-thumbnails.ts": 9,
@@ -281,6 +281,7 @@
       "apps/api/src/handlers/audit-logs/query.ts": 3,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/case-law/corpus-index.ts": 1,
+      "apps/api/src/handlers/case-law/decisions/list.ts": 1,
       "apps/api/src/handlers/case-law/decisions/search.ts": 1,
       "apps/api/src/handlers/case-law/decisions/sitemap.ts": 1,
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 1,
@@ -295,7 +296,7 @@
       "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/update-fixtures.ts": 2,
-      "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 10,
+      "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 8,
       "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 10,
       "apps/api/src/handlers/case-law/polarity/classifier.ts": 2,
       "apps/api/src/handlers/case-law/polarity/rule-engine.ts": 1,
@@ -323,7 +324,7 @@
       "apps/api/src/handlers/external-preview/preview.ts": 2,
       "apps/api/src/handlers/fields/mark-column-flag.ts": 1,
       "apps/api/src/handlers/legislation/corpus-index.ts": 1,
-      "apps/api/src/handlers/legislation/ingestion.ts": 4,
+      "apps/api/src/handlers/legislation/ingestion.ts": 2,
       "apps/api/src/handlers/legislation/search-index.ts": 2,
       "apps/api/src/handlers/legislation/search.ts": 1,
       "apps/api/src/handlers/mcp-connectors/connect.ts": 3,
