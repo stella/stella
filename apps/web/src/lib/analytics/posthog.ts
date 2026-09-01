@@ -133,7 +133,7 @@ const hasOnlyDecimalDigits = (
   return true;
 };
 
-const stripStackFrameQuery = (frame: string): string => {
+const stripStackFrameUrlMetadata = (frame: string): string => {
   const frameEnd = frame.endsWith(")") ? frame.length - 1 : frame.length;
   const columnSeparator = frame.lastIndexOf(":", frameEnd - 1);
   const lineSeparator = frame.lastIndexOf(":", columnSeparator - 1);
@@ -156,11 +156,17 @@ const stripStackFrameQuery = (frame: string): string => {
         ? v8Prefix
         : locationSeparator + 2;
   }
-  const query = frame.indexOf("?", urlStart);
-  if (query === -1 || query > lineSeparator) {
+  let urlEnd = lineSeparator;
+  for (const terminator of ["?", "#"] as const) {
+    const index = frame.indexOf(terminator, urlStart);
+    if (index !== -1 && index < urlEnd) {
+      urlEnd = index;
+    }
+  }
+  if (urlEnd === lineSeparator) {
     return frame;
   }
-  return `${frame.slice(0, query)}${frame.slice(lineSeparator)}`;
+  return `${frame.slice(0, urlEnd)}${frame.slice(lineSeparator)}`;
 };
 
 const serializedErrorHeader = (error: Error): string => {
@@ -199,7 +205,7 @@ const redactedStack = (error: Error): string | undefined => {
     : V8_STACK_FRAME_SYNTAX;
   const frames = lines
     .filter((line) => frameSyntax.test(line))
-    .map(stripStackFrameQuery);
+    .map(stripStackFrameUrlMetadata);
   if (frames.length === 0) {
     return undefined;
   }
@@ -236,9 +242,9 @@ type SanitizedFrame = {
 // beyond identifier punctuation is treated as untrusted and dropped.
 const FRAME_SYMBOL = /^[\w$.<>[\]#~]{1,120}$/u;
 
-const stripQuery = (url: string): string => {
-  const queryIndex = url.indexOf("?");
-  return queryIndex === -1 ? url : url.slice(0, queryIndex);
+const stripUrlMetadata = (url: string): string => {
+  const terminator = url.search(/[?#]/u);
+  return terminator === -1 ? url : url.slice(0, terminator);
 };
 
 const sanitizeFrame = (frame: unknown): SanitizedFrame => {
@@ -253,8 +259,10 @@ const sanitizeFrame = (frame: unknown): SanitizedFrame => {
   const colno = frame["colno"];
   return {
     ...(typeof platform === "string" ? { platform } : {}),
-    // Query strings on asset URLs can carry tokens; keep only the path.
-    ...(typeof filename === "string" ? { filename: stripQuery(filename) } : {}),
+    // URL metadata on asset URLs can carry tokens; keep only the path.
+    ...(typeof filename === "string"
+      ? { filename: stripUrlMetadata(filename) }
+      : {}),
     ...(typeof functionName === "string" && FRAME_SYMBOL.test(functionName)
       ? { function: functionName }
       : {}),

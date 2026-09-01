@@ -344,7 +344,7 @@ describe("PostHog browser analytics adapter", () => {
                 {
                   platform: "web:javascript",
                   filename:
-                    "https://my.stll.app/assets/app.js?token=private-token",
+                    "https://my.stll.app/assets/app.js#access_token=private-token",
                   function: "renderMatter",
                   in_app: true,
                   lineno: 42,
@@ -448,15 +448,26 @@ describe("PostHog browser analytics adapter", () => {
     },
   );
 
-  const QUERY_STRING_FRAMES = {
-    callsite: {
+  const URL_METADATA_FRAMES = {
+    callsiteQuery: {
       frame:
         "renderMatter@https://stella.test/assets/index.js?token=private:10:15",
       safeFrame: "renderMatter@https://stella.test/assets/index.js:10:15",
     },
-    indented: {
+    callsiteFragment: {
+      frame:
+        "renderMatter@https://stella.test/assets/index.js#access_token=private:10:15",
+      safeFrame: "renderMatter@https://stella.test/assets/index.js:10:15",
+    },
+    indentedQuery: {
       frame:
         "    at renderMatter (https://stella.test/assets/index.js?token=private:10:15)",
+      safeFrame:
+        "    at renderMatter (https://stella.test/assets/index.js:10:15)",
+    },
+    indentedFragment: {
+      frame:
+        "    at renderMatter (https://stella.test/assets/index.js#access_token=private:10:15)",
       safeFrame:
         "    at renderMatter (https://stella.test/assets/index.js:10:15)",
     },
@@ -468,8 +479,8 @@ describe("PostHog browser analytics adapter", () => {
     },
   } as const;
 
-  test.each(Object.entries(QUERY_STRING_FRAMES))(
-    "captureError removes query strings from %s frames",
+  test.each(Object.entries(URL_METADATA_FRAMES))(
+    "captureError removes URL metadata from %s frames",
     (_syntax, { frame, safeFrame }) => {
       const { analytics } = createPostHogAnalytics({
         host: "https://posthog.test",
