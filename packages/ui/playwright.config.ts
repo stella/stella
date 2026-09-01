@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
-  testDir: "./src/kanban",
+  testDir: "./src",
   testMatch: "**/*.playwright.spec.ts",
   fullyParallel: true,
   // One worker, like every other Playwright profile in the repo: the drag and
