@@ -12,6 +12,7 @@ import { t } from "elysia";
 import * as v from "valibot";
 
 import type {
+  AnalysisGenerating,
   AnalysisHeading,
   DecisionAnalysis,
   PersistedDecisionAnalysis,
@@ -91,12 +92,19 @@ type AnalysisSave = {
   contentHash: string | null;
 };
 
+type AnalysisRelease = {
+  decisionId: SafeId<"caseLawDecision">;
+  /** The sentinel `claim` returned to this run. */
+  sentinel: AnalysisGenerating;
+};
+
 type AnalysisStore = {
   /**
    * Takes the row for a run over `fingerprint`, provided it still holds
-   * `observed`. False when another request got there first.
+   * `observed`. Returns the sentinel it wrote, which is the run's
+   * identity from here on; null when another request got there first.
    */
-  claim: (claim: AnalysisClaim) => Promise<boolean>;
+  claim: (claim: AnalysisClaim) => Promise<AnalysisGenerating | null>;
   /**
    * Stores the result, only where the row still carries this run's
    * fingerprint and the document it was claimed under. A re-parse during
@@ -104,8 +112,12 @@ type AnalysisStore = {
    * the next read anyway, so it is not worth the write.
    */
   save: (save: AnalysisSave) => Promise<void>;
-  /** Releases this run's sentinel, and only this run's. */
-  clear: (key: AnalysisStoreKey) => Promise<void>;
+  /**
+   * Releases this run's sentinel, and only this run's: the exact value
+   * `claim` wrote. A replacement run that took over this one's stale
+   * sentinel holds a different value and is left alone.
+   */
+  clear: (release: AnalysisRelease) => Promise<void>;
   /** What the store holds beside the row; null where the row is the store. */
   peek: (decisionId: SafeId<"caseLawDecision">) => unknown;
 };
@@ -113,12 +125,13 @@ type AnalysisStore = {
 const dbAnalysisStore: AnalysisStore = {
   claim: async ({ decisionId, fingerprint, observed }) => {
     // audit: skip — background AI analysis sentinel; no user-facing state change
+    const sentinel = analysisSentinel(fingerprint, new Date());
     const [updated] = await rootDb
       .update(caseLawDecisions)
-      .set({ analysis: analysisSentinel(fingerprint, new Date()) })
+      .set({ analysis: sentinel })
       .where(claimableAnalysisRow({ decisionId, observed }))
       .returning({ id: caseLawDecisions.id });
-    return updated !== undefined;
+    return updated === undefined ? null : sentinel;
   },
   // Use rootDb (not scopedDb) because case-law analysis is global,
   // not workspace-scoped.
@@ -135,7 +148,7 @@ const dbAnalysisStore: AnalysisStore = {
         ),
       );
   },
-  clear: async ({ decisionId, fingerprint }) => {
+  clear: async ({ decisionId, sentinel }) => {
     // audit: skip — background AI analysis sentinel cleanup; no user-facing state change
     await rootDb
       .update(caseLawDecisions)
@@ -143,8 +156,8 @@ const dbAnalysisStore: AnalysisStore = {
       .where(
         and(
           eq(caseLawDecisions.id, decisionId),
-          sql`${caseLawDecisions.analysis}->>'status' = 'generating'`,
-          sql`${storedAnalysisFingerprint} = ${fingerprint}`,
+          // `::text::jsonb`, never a bare `::jsonb` (see `claimableAnalysisRow`).
+          sql`${caseLawDecisions.analysis} = ${JSON.stringify(sentinel)}::text::jsonb`,
         ),
       );
   },
@@ -161,10 +174,11 @@ const memoryAnalysisStore: AnalysisStore = {
     // request read the read-only row, which this store never writes.
     const held = memoryAnalyses.get(decisionId);
     if (held !== undefined && held !== observed) {
-      return await Promise.resolve(false);
+      return await Promise.resolve(null);
     }
-    memoryAnalyses.set(decisionId, analysisSentinel(fingerprint, new Date()));
-    return await Promise.resolve(true);
+    const sentinel = analysisSentinel(fingerprint, new Date());
+    memoryAnalyses.set(decisionId, sentinel);
+    return await Promise.resolve(sentinel);
   },
   // The document behind a memory entry is a read-only row this process
   // never re-parses, so the fingerprint alone identifies the run here.
@@ -175,13 +189,8 @@ const memoryAnalysisStore: AnalysisStore = {
     }
     await Promise.resolve();
   },
-  clear: async ({ decisionId, fingerprint }) => {
-    const held = parsePersistedDecisionAnalysis(memoryAnalyses.get(decisionId));
-    if (
-      held !== null &&
-      "status" in held &&
-      held.inputFingerprint === fingerprint
-    ) {
+  clear: async ({ decisionId, sentinel }) => {
+    if (memoryAnalyses.get(decisionId) === sentinel) {
       memoryAnalyses.delete(decisionId);
     }
     await Promise.resolve();
@@ -243,6 +252,8 @@ type RunGenerationOptions = {
   country: string;
   /** The row's `contentHash` at claim time; the save is fenced on it. */
   contentHash: string | null;
+  /** The sentinel the claim wrote; cleanup releases exactly this one. */
+  sentinel: AnalysisGenerating;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
@@ -256,6 +267,7 @@ const runGeneration = async ({
   orgAIConfig,
   organizationId,
   promptCachingEnabled,
+  sentinel,
 }: RunGenerationOptions) => {
   // audit: skip — background AI analysis output
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
@@ -320,7 +332,7 @@ const runGeneration = async ({
     });
     aiAnalytics.captureError(error);
     await analysisStore()
-      .clear({ decisionId, fingerprint: input.fingerprint })
+      .clear({ decisionId, sentinel })
       .catch((cleanupError: unknown) => {
         // Best-effort sentinel cleanup. Capture rather than swallow: a
         // failure here leaves the decision pinned in the generating state,
@@ -448,12 +460,12 @@ export const generateAnalysis = async (
   }
 
   // Another request won the race: return generating.
-  const claimed = await analysisStore().claim({
+  const sentinel = await analysisStore().claim({
     decisionId,
     fingerprint: input.fingerprint,
     observed,
   });
-  if (!claimed) {
+  if (sentinel === null) {
     return Result.ok({ status: "generating" });
   }
 
@@ -467,6 +479,7 @@ export const generateAnalysis = async (
       orgAIConfig,
       organizationId,
       promptCachingEnabled,
+      sentinel,
     }),
     "analysis-generate.run-generation",
   );

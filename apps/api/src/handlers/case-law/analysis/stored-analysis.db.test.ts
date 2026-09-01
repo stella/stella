@@ -38,6 +38,7 @@ if (!databaseUrl || !runPostgresTests) {
     const PREVIOUS = "p".repeat(64);
 
     let sourceId: SafeId<"caseLawSource">;
+    let createdSourceId: SafeId<"caseLawSource"> | null = null;
     const created: SafeId<"caseLawDecision">[] = [];
     const suffix = Bun.randomUUIDv7().slice(0, 8);
 
@@ -110,6 +111,7 @@ if (!databaseUrl || !runPostgresTests) {
         throw new Error("expected source row");
       }
       sourceId = source.id;
+      createdSourceId = source.id;
     });
 
     afterAll(async () => {
@@ -117,6 +119,11 @@ if (!databaseUrl || !runPostgresTests) {
         await db
           .delete(caseLawDecisions)
           .where(inArray(caseLawDecisions.id, created));
+      }
+      if (createdSourceId !== null) {
+        await db
+          .delete(caseLawSources)
+          .where(eq(caseLawSources.id, createdSourceId));
       }
     });
 

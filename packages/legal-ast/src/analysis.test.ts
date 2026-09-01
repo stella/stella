@@ -5,6 +5,7 @@ import {
   isDecisionAnalysis,
   parsePersistedDecisionAnalysis,
 } from "./analysis";
+import type { AnalysisHeading, DecisionAnalysis } from "./analysis";
 
 const FINGERPRINT = "a".repeat(64);
 
@@ -16,7 +17,7 @@ const heading = {
   endAnchorId: "a2",
   annotations: [],
   children: [],
-};
+} satisfies AnalysisHeading;
 
 const analysis = {
   version: 2,
@@ -24,7 +25,7 @@ const analysis = {
   model: "test-model",
   inputFingerprint: FINGERPRINT,
   tree: [heading],
-} as const;
+} satisfies DecisionAnalysis;
 
 describe("parsePersistedDecisionAnalysis", () => {
   test("keeps a fingerprinted generating sentinel", () => {
