@@ -718,11 +718,20 @@ describe("public law sitemap", () => {
   });
 
   test("case-law list keeps date-only legal dates in UTC", async () => {
-    const source = await readSource(
-      "apps/web/src/features/case-law/components/decision-table.tsx",
-    );
+    // The shared decision cells own the date rendering; every decision table
+    // (public results, research tables) draws dates through them.
+    const [cellsSource, tableSource] = await Promise.all([
+      readSource(
+        "apps/web/src/features/case-law/components/decision-cells.tsx",
+      ),
+      readSource(
+        "apps/web/src/features/case-law/components/decision-table.tsx",
+      ),
+    ]);
 
-    expect(source).toContain('timeZone: "UTC"');
+    expect(cellsSource).toContain('timeZone: "UTC"');
+    expect(tableSource).toContain("formatDecisionDate(");
+    expect(tableSource).not.toContain("format.dateTime(");
   });
 
   test("case-law AI mode requires an explicit authenticated availability gate", async () => {
