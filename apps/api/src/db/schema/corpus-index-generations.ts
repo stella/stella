@@ -91,12 +91,10 @@ export const corpusIndexProjectionRevisions = p.pgTable(
     generation: p
       .varchar({ length: CORPUS_INDEX_GENERATION_MAX_LENGTH })
       .notNull(),
-    revision: p
-      .bigint({ mode: "number" })
-      .generatedAlwaysAsIdentity({
-        name: "corpus_index_projection_revisions_revision_seq",
-        cache: 1,
-      }),
+    revision: p.bigint({ mode: "number" }).generatedAlwaysAsIdentity({
+      name: "corpus_index_projection_revisions_revision_seq",
+      cache: 1,
+    }),
     transactionId: p.bigint("transaction_id", { mode: "number" }).notNull(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },

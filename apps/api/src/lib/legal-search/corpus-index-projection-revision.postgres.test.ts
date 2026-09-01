@@ -393,7 +393,7 @@ if (!databaseUrl || !runPostgresTests) {
           const [row] = await tx.execute(sql<{ transactionId: string }>`
             SELECT pg_current_xact_id()::text AS "transactionId"
           `);
-          const transactionId = Number(row?.transactionId);
+          const transactionId = Number(row?.["transactionId"]);
           expect(Number.isSafeInteger(transactionId)).toBe(true);
           olderIdAssigned.resolve(transactionId);
           await allowOlderMutation.promise;
@@ -419,7 +419,7 @@ if (!databaseUrl || !runPostgresTests) {
             desiredAction: "erase",
             desiredEpoch: 1n,
           });
-          return Number(row?.transactionId);
+          return Number(row?.["transactionId"]);
         });
         expect(newerTransactionId).toBeGreaterThan(olderTransactionId);
 
