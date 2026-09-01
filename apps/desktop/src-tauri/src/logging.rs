@@ -30,12 +30,12 @@ pub fn init() {
 
   match log_dir().and_then(|dir| RollingLog::open(&dir, MAX_LOG_BYTES)) {
     Ok(log) => {
-      let path = log.path.clone();
       registry
         .with(fmt::layer().with_ansi(false).with_writer(Mutex::new(log)))
         .init();
+      // The file is meant to be shared, so its own path (which carries the
+      // account name) stays out of it.
       tracing::info!(
-        path = %path.display(),
         version = env!("CARGO_PKG_VERSION"),
         "desktop log file opened"
       );
@@ -95,9 +95,17 @@ impl Write for RollingLog {
     if self.written > 0 && self.written + buf.len() as u64 > self.max_bytes {
       self.rotate()?;
     }
-    let written = self.file.write(buf)?;
+    // A single line larger than the cap is cut: the disk bound wins over
+    // the completeness of one event.
+    let allowed =
+      usize::try_from(self.max_bytes).map_or(buf.len(), |max| buf.len().min(max));
+    let written = self.file.write(&buf[..allowed])?;
     self.written += written as u64;
-    Ok(written)
+    Ok(if written == allowed {
+      buf.len()
+    } else {
+      written
+    })
   }
 
   fn flush(&mut self) -> io::Result<()> {
@@ -176,6 +184,23 @@ mod tests {
       [b'x'; 40]
     );
     assert_eq!(fs::read(dir.join(LOG_FILE_NAME)).unwrap(), [b'y'; 40]);
+
+    fs::remove_dir_all(dir).unwrap();
+  }
+
+  #[test]
+  fn a_single_oversized_line_is_cut_at_the_cap() {
+    let dir = unique_dir();
+    let mut log = RollingLog::open(&dir, 64).unwrap();
+    let file_len = |name: &str| fs::metadata(dir.join(name)).unwrap().len();
+
+    log.write_all(&[b'x'; 100]).unwrap();
+    assert_eq!(file_len(LOG_FILE_NAME), 64);
+    assert!(!dir.join(ROTATED_LOG_FILE_NAME).exists());
+
+    log.write_all(&[b'y'; 100]).unwrap();
+    assert_eq!(file_len(ROTATED_LOG_FILE_NAME), 64);
+    assert_eq!(file_len(LOG_FILE_NAME), 64);
 
     fs::remove_dir_all(dir).unwrap();
   }
