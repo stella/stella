@@ -90,10 +90,12 @@ article .reader-signature + .reader-signature {
   margin-top: 0;
 }
 
-/* Highlight flash when clicking an annotation to scroll. */
+/* Highlight flash when jumping to a block (annotation, footnote, note
+   back-reference). A held wash, strong enough to find in a wall of text. */
 @keyframes reader-highlight {
-  0% {
-    background-color: var(--color-primary / 0.08);
+  0%,
+  40% {
+    background-color: color-mix(in srgb, var(--color-primary) 22%, transparent);
   }
   100% {
     background-color: transparent;
@@ -102,6 +104,7 @@ article .reader-signature + .reader-signature {
 
 article [data-highlight] {
   animation: reader-highlight 1.5s ease-out;
+  border-radius: 0.25rem;
 }
 
 /* Always show scrollbar in the decision reader scroll container.
@@ -126,4 +129,116 @@ article [data-highlight] {
 
 .reader-scroll::-webkit-scrollbar-thumb:hover {
   background: var(--color-muted-foreground);
+}
+
+/* Footnote apparatus. One rule separates the body from the first footnote
+   of a run — consecutive footnotes continue under it without repeating the
+   line, including across the group wrappers the decision reader emits. */
+p[data-note="footnote"] {
+  margin-top: 1.5em;
+  border-top: 1px solid var(--color-border);
+  padding-top: 1em;
+}
+
+p[data-note="footnote"] + p[data-note="footnote"],
+div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 0;
+}
+
+/* The reader's own footnote number, shown only when the source text does
+   not already open with it. A button: clicking it returns to the sentence
+   that cites the footnote. */
+.reader-note-label {
+  margin-inline-end: 0.45em;
+  border: 0;
+  padding: 0;
+  background: none;
+  font-family: var(--font-sans, sans-serif);
+  font-size: 0.78em;
+  font-weight: 600;
+  vertical-align: super;
+  color: var(--color-primary);
+  user-select: none;
+  cursor: pointer;
+}
+
+.reader-note-label:hover {
+  text-decoration: underline;
+}
+
+/* In-text note reference: superscript mark, no underline; the anchor jump
+   plus the :target flash is the interaction. */
+.reader-note-ref {
+  font-family: var(--font-sans, sans-serif);
+  font-size: 0.72em;
+  vertical-align: super;
+  text-decoration: none;
+  color: var(--color-primary);
+}
+
+.reader-note-ref:hover {
+  text-decoration: underline;
+}
+
+/* Reporter page boundary, hanging in the start margin at its own line the
+   way the published volume prints it. Absolutely positioned with `top`
+   unset, so it keeps the static (line) position of the inline it replaces;
+   the paragraph is the positioning context. Clicking opens the official
+   reporter scan. */
+.reader-page-marker {
+  position: absolute;
+  inset-inline-end: 100%;
+  margin-inline-end: 1.1rem;
+  padding-top: 0.15em;
+  border-top: 1px solid var(--color-border);
+  font-family: var(--font-sans, sans-serif);
+  font-size: 0.68rem;
+  line-height: 1.2;
+  color: var(--color-muted-foreground);
+  text-decoration: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.reader-page-marker:hover {
+  color: var(--color-primary);
+  border-top-color: var(--color-primary);
+}
+
+/* The exact break point inside the running text: a hair-thin tick, never
+   selectable, so a copy of the sentence contains no trace of it. */
+.reader-page-tick {
+  display: inline-block;
+  width: 1px;
+  height: 0.85em;
+  margin-inline: 1px;
+  vertical-align: text-bottom;
+  background-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+  user-select: none;
+}
+
+/* The paragraph a hovered margin note belongs to. */
+[data-note-hover] {
+  background-color: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  border-radius: 0.25rem;
+  transition: background-color 120ms ease-out;
+}
+
+/* The footnote's return arrow: back to the sentence that cites it. */
+.reader-note-back {
+  margin-inline-start: 0.4em;
+  border: 0;
+  padding: 0;
+  background: none;
+  font-family: var(--font-sans, sans-serif);
+  font-size: 0.9em;
+  color: var(--color-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.reader-note-back:hover {
+  text-decoration: underline;
 }

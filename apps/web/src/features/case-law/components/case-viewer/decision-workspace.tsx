@@ -1,15 +1,24 @@
 import { useCallback, useRef, useState } from "react";
 
-import { Loader2Icon, SparklesIcon } from "lucide-react";
+import {
+  EyeOffIcon,
+  Loader2Icon,
+  SparklesIcon,
+  UserRoundIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { OutlineRail } from "@stll/ui/outline-rail";
 import type { OutlineItem } from "@stll/ui/outline-rail";
+import { cn } from "@stll/ui/utils";
 
+import { MatterIcon } from "@/components/matter-icon";
+import Tooltip from "@/components/tooltip";
 import type { SelectionAnchor } from "@/features/case-law/annotations/selection-anchor";
 import { isPendingAnnotationId } from "@/features/case-law/annotations/use-decision-annotations";
 import { CurrentSection } from "@/features/case-law/components/case-viewer/analysis/current-section";
@@ -42,9 +51,12 @@ import { forceReflow } from "@/lib/utils";
 type DecisionWorkspaceDecision = {
   analysis?: unknown;
   caseNumber: string;
+  country: string;
   court: string;
   decisionDate: Date | string | null;
+  decisionType?: string | null;
   documentAst: unknown;
+  ecli?: string | null;
   fulltext: string | null;
   language: string;
   metadata?: Record<string, unknown> | null;
@@ -85,12 +97,22 @@ const getHeadingDisplayAnchorId = ({
   startAnchorId: string;
 }) => annotations.at(0)?.startAnchorId ?? startAnchorId;
 
+/** The notes filter's "all sources" glyph, through the shared matter icon
+ * so the layers glyph keeps one owner. */
+const NotesFilterAllIcon = ({ className }: { className?: string }) => (
+  <MatterIcon className={className} variant="all" />
+);
+
+/** Which margin notes the reader wants beside the text. */
+type NotesFilter = "all" | "ai" | "human" | "none";
+
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const { annotations, decision, decisionId, initialSearchQuery } = props;
   const t = useTranslations();
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(
     null,
   );
+  const [notesFilter, setNotesFilter] = useState<NotesFilter>("all");
   // The comment being written: its paragraphs, so the margin can sit the
   // composer beside the first and the saved comment covers them all.
   const [composing, setComposing] = useState<SelectionAnchor[] | null>(null);
@@ -207,6 +229,20 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const ensureAIAvailable =
     props.aiMode === "enabled" ? props.ensureAIAvailable : null;
   const ast = parseDocumentAst(decision.documentAst);
+  // The case's citable name and year, for the legal copy modes. The title
+  // heading carries "Name, Cite"; the cite suffix is stripped when present.
+  const decisionTitle =
+    ast?.blocks.find(
+      (block) => block.type === "heading" && block.role === "decision-title",
+    )?.plainText ?? null;
+  // Only a title of the "Name, Cite" shape yields a citable name; a
+  // generic heading ("JUDGMENT OF THE COURT (Grand Chamber)", a bare case
+  // number) must not masquerade as one.
+  const citeSuffix = `, ${decision.caseNumber}`;
+  const caseName =
+    (decisionTitle?.endsWith(citeSuffix) ?? false)
+      ? (decisionTitle ?? "").slice(0, -citeSuffix.length)
+      : null;
 
   const mainRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(220);
@@ -324,6 +360,14 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     return items;
   });
 
+  // The composer is never filtered away: the reader is mid-sentence in it.
+  const showAiNotes = notesFilter === "all" || notesFilter === "ai";
+  const visibleMarginItems = [
+    ...(hasAnalysis && showAiNotes ? marginItems : []),
+    ...(notesFilter === "all" || notesFilter === "human" ? commentItems : []),
+    ...composerItem,
+  ];
+
   useExternalSyncEffect(() => {
     if (aiEnabled && ast && analysisState.status === "idle") {
       detached(generate(), "decision-workspace.generate");
@@ -339,12 +383,55 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     }
   }, [decisionId, initialSearchQuery, openSearch, reset, setSearchQuery]);
 
+  const notesFilterOptions = [
+    { icon: NotesFilterAllIcon, label: t("common.all"), value: "all" },
+    { icon: SparklesIcon, label: t("caseLaw.notesFilter.ai"), value: "ai" },
+    {
+      icon: UserRoundIcon,
+      label: t("caseLaw.notesFilter.human"),
+      value: "human",
+    },
+    { icon: EyeOffIcon, label: t("common.none"), value: "none" },
+  ] as const satisfies readonly {
+    icon: React.ComponentType<{ className?: string }>;
+    label: string;
+    value: NotesFilter;
+  }[];
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
       <div className="relative min-h-0 flex-1">
+        {((hasAnalysis && marginItems.length > 0) ||
+          commentItems.length > 0) && (
+          <div className="bg-sidebar absolute start-3 bottom-3 z-20 flex items-center overflow-hidden rounded-md border shadow-sm max-lg:hidden">
+            {notesFilterOptions.map((option) => {
+              const Icon = option.icon;
+              const isActive = notesFilter === option.value;
+              return (
+                <Tooltip
+                  content={option.label}
+                  key={option.value}
+                  render={
+                    <InspectorRailIconButton
+                      aria-label={option.label}
+                      aria-pressed={isActive}
+                      className={cn(
+                        "rounded-none",
+                        isActive && "bg-muted text-foreground",
+                      )}
+                      onClick={() => setNotesFilter(option.value)}
+                    />
+                  }
+                >
+                  <Icon className="size-4" />
+                </Tooltip>
+              );
+            })}
+          </div>
+        )}
         {hasAnalysis && analysisTree.length > 0 && (
           <OutlineRail
             items={analysisOutline.items}
@@ -400,22 +487,18 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             style={{ gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)` }}
           >
             <aside className="relative max-lg:hidden">
-              {hasAnalysis && flatAnalysisHeadings.length > 0 && (
-                <CurrentSection
-                  anchorById={analysisOutline.anchorById}
-                  headings={flatAnalysisHeadings}
-                  scrollContainerRef={mainRef}
-                />
-              )}
-              {((hasAnalysis && marginItems.length > 0) ||
-                commentItems.length > 0 ||
-                composerItem.length > 0) && (
+              {hasAnalysis &&
+                showAiNotes &&
+                flatAnalysisHeadings.length > 0 && (
+                  <CurrentSection
+                    anchorById={analysisOutline.anchorById}
+                    headings={flatAnalysisHeadings}
+                    scrollContainerRef={mainRef}
+                  />
+                )}
+              {visibleMarginItems.length > 0 && (
                 <MarginNotes
-                  items={[
-                    ...(hasAnalysis ? marginItems : []),
-                    ...commentItems,
-                    ...composerItem,
-                  ]}
+                  items={visibleMarginItems}
                   scrollContainerRef={mainRef}
                 />
               )}
@@ -491,7 +574,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                 onMatchCountChange={setMatchCount}
                 provisionAnchors={provisionAnchors}
                 searchQuery={searchOpen ? searchQuery : ""}
-                sectionMap={sectionMap}
+                sectionMap={showAiNotes ? sectionMap : undefined}
               />
             </main>
           </div>
@@ -503,8 +586,13 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
             controller={annotations.controller}
             decision={{
               caseNumber: decision.caseNumber,
+              country: decision.country,
               court: decision.court,
+              decisionDate: decision.decisionDate,
+              decisionType: decision.decisionType ?? null,
+              ecli: decision.ecli ?? null,
               id: decisionId,
+              name: caseName,
             }}
             onActivateAnnotation={setActiveAnnotationId}
             onClearActive={() => setActiveAnnotationId(null)}

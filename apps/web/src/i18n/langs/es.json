@@ -437,6 +437,13 @@
     "columns": {
       "caseNumber": "Número de expediente"
     },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Cita en bloque con referencia",
+      "citationOnly": "Solo referencia",
+      "citationWithQuote": "Referencia con cita",
+      "quoteWithCitation": "Cita textual con referencia",
+      "textOnly": "Solo texto"
+    },
     "decisionNotFound": "Resolución no encontrada",
     "emptyState": "No se encontraron resoluciones. Configure una fuente y ejecute una sincronización para importar jurisprudencia.",
     "filters": {
@@ -447,6 +454,10 @@
       "matchedIn": "Coincidencia en {language}"
     },
     "loadingMore": "Cargando más...",
+    "notesFilter": {
+      "ai": "IA",
+      "human": "Humanas"
+    },
     "provision": {
       "article": "art. {value}",
       "letter": "letra {value})",

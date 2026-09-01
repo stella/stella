@@ -440,6 +440,13 @@ type Messages = {
     "columns": {
       "caseNumber": "Case number";
     };
+    "copyMenu": {
+      "blockQuoteWithCitation": "Block quote with citation";
+      "citationOnly": "Citation only";
+      "citationWithQuote": "Citation with quote";
+      "quoteWithCitation": "Quote with citation";
+      "textOnly": "Text only";
+    };
     "decisionNotFound": "Decision not found";
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.";
     "filters": {
@@ -450,6 +457,10 @@ type Messages = {
       "matchedIn": "Matched in {language}";
     };
     "loadingMore": "Loading more...";
+    "notesFilter": {
+      "ai": "AI";
+      "human": "Human";
+    };
     "provision": {
       "article": "Art. {value}";
       "letter": "lit. {value})";

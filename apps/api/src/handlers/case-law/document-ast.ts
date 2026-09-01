@@ -23,6 +23,7 @@ export type {
 
 export {
   getDocumentAstMetadata,
+  hasInlineChildren,
   hasUsableAst,
   isDocumentAst,
   omitDerivablePlainText,

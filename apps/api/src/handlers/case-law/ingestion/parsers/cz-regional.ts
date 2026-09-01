@@ -22,6 +22,7 @@ import type {
   DocumentAst,
   Inline,
 } from "@/api/handlers/case-law/document-ast";
+import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
 import {
   buildValidationHtml,
   validateAndLog,
@@ -314,8 +315,7 @@ const inlinePlainLength = (nodes: readonly Inline[]): number => {
   for (const n of nodes) {
     if (n.type === "text") {
       len += n.text.length;
-    } else if (n.type !== "line-break") {
-      // bold | italic | link — all carry children
+    } else if (hasInlineChildren(n)) {
       len += inlinePlainLength(n.children);
     }
   }

@@ -327,11 +327,14 @@ const normalizeNssInlines = (
         children: normalizeNssInlines(node.children, spacedEmphasis),
       };
     }
-    return {
-      type: "link",
-      href: node.href,
-      children: normalizeNssInlines(node.children, spacedEmphasis),
-    };
+    if (node.type === "link") {
+      return {
+        type: "link",
+        href: node.href,
+        children: normalizeNssInlines(node.children, spacedEmphasis),
+      };
+    }
+    return node;
   });
 };
 

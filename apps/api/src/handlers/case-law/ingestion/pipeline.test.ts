@@ -46,6 +46,9 @@ const concatInlineText = (inlines: Inline[]): string => {
       case "line-break":
         out += "\n";
         break;
+      case "page-anchor":
+        // Zero characters on the text axis.
+        break;
       default:
         break;
     }

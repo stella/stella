@@ -437,6 +437,13 @@
     "columns": {
       "caseNumber": "Lietas numurs"
     },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Bloka citāts ar atsauci",
+      "citationOnly": "Tikai atsauce",
+      "citationWithQuote": "Atsauce ar citātu",
+      "quoteWithCitation": "Citāts ar atsauci",
+      "textOnly": "Tikai teksts"
+    },
     "decisionNotFound": "Lēmums nav atrasts",
     "emptyState": "Lēmumi nav atrasti. Konfigurējiet avotu un palaidiet sinhronizāciju, lai importētu tiesu praksi.",
     "filters": {
@@ -447,6 +454,10 @@
       "matchedIn": "Atbilstība valodā: {language}"
     },
     "loadingMore": "Ielādē vairāk...",
+    "notesFilter": {
+      "ai": "MI",
+      "human": "Cilvēku"
+    },
     "provision": {
       "article": "{value}. pants",
       "letter": "{value}. apakšpunkts",

@@ -437,6 +437,13 @@
     "columns": {
       "caseNumber": "Kohtuasja number"
     },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Plokktsitaat viitega",
+      "citationOnly": "Ainult viide",
+      "citationWithQuote": "Viide tsitaadiga",
+      "quoteWithCitation": "Tsitaat viitega",
+      "textOnly": "Ainult tekst"
+    },
     "decisionNotFound": "Otsust ei leitud",
     "emptyState": "Otsuseid ei leitud. Seadistage allikas ja käivitage sünkroonimine kohtupraktika importimiseks.",
     "filters": {
@@ -447,6 +454,10 @@
       "matchedIn": "Vaste keeles: {language}"
     },
     "loadingMore": "Laadib rohkem...",
+    "notesFilter": {
+      "ai": "AI",
+      "human": "Inimeste"
+    },
     "provision": {
       "article": "art {value}",
       "letter": "p {value})",

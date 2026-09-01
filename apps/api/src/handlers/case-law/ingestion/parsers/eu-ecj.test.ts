@@ -22,6 +22,7 @@
 import { Glob } from "bun";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
+import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
 import type { Block, Inline } from "@/api/handlers/case-law/document-ast";
 import {
   ecjDocumentHtml,
@@ -80,7 +81,7 @@ const flattenLinks = (inlines: readonly Inline[]): Inline[] =>
     if (node.type === "link") {
       return flattenLinks(node.children);
     }
-    if (node.type === "text" || node.type === "line-break") {
+    if (!hasInlineChildren(node)) {
       return [node];
     }
     return [{ ...node, children: flattenLinks(node.children) }];
@@ -106,9 +107,9 @@ const mergeAdjacentText = (inlines: readonly Inline[]): Inline[] => {
       continue;
     }
     merged.push(
-      node.type === "text" || node.type === "line-break"
-        ? node
-        : { ...node, children: mergeAdjacentText(node.children) },
+      hasInlineChildren(node)
+        ? { ...node, children: mergeAdjacentText(node.children) }
+        : node,
     );
   }
   return merged;
@@ -140,7 +141,9 @@ const countLinks = (inlines: readonly Inline[]): number => {
     if (node.type === "link") {
       total += 1;
     }
-    total += countLinks(node.children);
+    if (hasInlineChildren(node)) {
+      total += countLinks(node.children);
+    }
   }
   return total;
 };

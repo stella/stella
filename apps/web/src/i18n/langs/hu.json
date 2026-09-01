@@ -437,6 +437,13 @@
     "columns": {
       "caseNumber": "Ügyszám"
     },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Blokkidézet hivatkozással",
+      "citationOnly": "Csak hivatkozás",
+      "citationWithQuote": "Hivatkozás idézettel",
+      "quoteWithCitation": "Idézet hivatkozással",
+      "textOnly": "Csak szöveg"
+    },
     "decisionNotFound": "A határozat nem található",
     "emptyState": "Nem található határozat. Adjon meg egy forrást, és futtasson szinkronizálást az ítélkezési gyakorlat importálásához.",
     "filters": {
@@ -447,6 +454,10 @@
       "matchedIn": "Találat {language} nyelven"
     },
     "loadingMore": "Betöltés folyamatban...",
+    "notesFilter": {
+      "ai": "MI",
+      "human": "Emberi"
+    },
     "provision": {
       "article": "{value}. cikk",
       "letter": "{value}) pont",

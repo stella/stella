@@ -15,6 +15,7 @@ import type * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
 import type { Inline } from "@/api/handlers/case-law/document-ast";
+import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
 
 /**
  * Append text to an inline list, dropping empty strings and coalescing
@@ -251,8 +252,7 @@ export const inlinesToPlainText = (inlines: readonly Inline[]): string => {
       text += node.text;
     } else if (node.type === "line-break") {
       text += "\n";
-    } else {
-      // bold | italic | link — all carry children
+    } else if (hasInlineChildren(node)) {
       text += inlinesToPlainText(node.children);
     }
   }
@@ -294,7 +294,12 @@ export const stripInlinePrefix = (
       continue;
     }
 
-    // Remaining variants (bold | italic | link) all carry children.
+    if (!hasInlineChildren(node)) {
+      // Zero characters on the text axis; passes through untouched.
+      result.push(node);
+      continue;
+    }
+
     const nodeTextLen = inlinesToPlainText(node.children).length;
     if (nodeTextLen <= remaining) {
       // Entire node consumed by prefix
