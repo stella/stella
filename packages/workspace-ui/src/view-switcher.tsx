@@ -299,7 +299,7 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
   ]);
 
   return (
-    <div className="relative" ref={setTabContainer}>
+    <div className="relative flex items-center" ref={setTabContainer}>
       {dropPosition !== null && (
         <span
           aria-hidden="true"
