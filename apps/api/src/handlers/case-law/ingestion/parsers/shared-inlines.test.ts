@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 
 import type { Inline } from "@/api/handlers/case-law/document-ast";
 import {
+  ASPOSE_SPACER_GAP,
   inlinesToPlainText,
   stripInlinePrefix,
   walkInlines,
@@ -69,15 +70,19 @@ describe("walkInlines", () => {
     expect(walk("<img alt='Header'>")).toEqual([]);
   });
 
-  test("parseSpanStyle reads emphasis and skips empty spacer spans", () => {
+  test("parseSpanStyle reads emphasis and turns spacer spans into a gap", () => {
     expect(
       walk("<span style='font-weight:bold'>x</span>", { parseSpanStyle: true }),
     ).toEqual([{ type: "bold", children: [{ type: "text", text: "x" }] }]);
-    expect(
-      walk("<span style='-aw-import:spaces'>   </span>", {
-        parseSpanStyle: true,
-      }),
-    ).toEqual([]);
+    for (const spacer of [
+      "<span style='-aw-import:spaces'>&nbsp;&nbsp;&nbsp;</span>",
+      "<span style='-aw-import:ignore'>   </span>",
+      "<span style='display:inline-block; width:36pt'></span>",
+    ]) {
+      expect(walk(spacer, { parseSpanStyle: true })).toEqual([
+        { type: "text", text: ASPOSE_SPACER_GAP },
+      ]);
+    }
   });
 
   test("anonymization spans mark text and coalesce", () => {
