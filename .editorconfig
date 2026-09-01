@@ -17,10 +17,10 @@ trim_trailing_whitespace = false
 # hides behind a green suite — and breaks the sha256 in the fixture's
 # .provenance.json sidecar. Sidecars themselves are ordinary generated
 # JSON and keep the defaults.
-[**/__fixtures__/**]
+[apps/api/src/handlers/case-law/**/__fixtures__/**]
 trim_trailing_whitespace = false
 insert_final_newline = false
 
-[**/__fixtures__/**.provenance.json]
+[apps/api/src/handlers/case-law/**/__fixtures__/**.provenance.json]
 trim_trailing_whitespace = true
 insert_final_newline = true

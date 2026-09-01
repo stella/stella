@@ -362,7 +362,7 @@ const recordParserFixtures = async (): Promise<void> => {
       } else {
         staged.push({
           name: `${stem}.fmx.xml.gz`,
-          bytes: Bun.gzipSync(formex.bytes),
+          bytes: Bun.gzipSync(new Uint8Array(formex.bytes)),
           sourceUrl: formex.sourceUrl,
         });
       }

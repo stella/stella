@@ -44,7 +44,9 @@ const log = (message: string): void => {
   process.stdout.write(`${message}\n`);
 };
 
-const fail = (message: string): never => {
+// The declaration-level annotation is what lets TypeScript narrow after a
+// call: an inferred never on the initializer alone does not.
+const fail: (message: string) => never = (message) => {
   process.stderr.write(`${message}\n`);
   process.exit(1);
 };
