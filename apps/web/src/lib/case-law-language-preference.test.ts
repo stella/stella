@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-preference";
 
 const variant = (language: string) => ({ language, id: `id-${language}` });
@@ -102,6 +104,7 @@ describe("picking the language version to open", () => {
           }
         },
       ),
+      propertyConfig(),
     );
   });
 });

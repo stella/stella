@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 
 type Candidate = { id: string; score: number };
@@ -66,6 +68,7 @@ describe("collapsing candidates by language group", () => {
         );
         expect(seenGroups).toEqual(inputGroups);
       }),
+      propertyConfig(),
     );
   });
 
@@ -89,6 +92,7 @@ describe("collapsing candidates by language group", () => {
           }
         }
       }),
+      propertyConfig(),
     );
   });
 
@@ -112,6 +116,7 @@ describe("collapsing candidates by language group", () => {
           ).toBe(true);
         }
       }),
+      propertyConfig(),
     );
   });
 
