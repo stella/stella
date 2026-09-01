@@ -286,8 +286,8 @@ const ROLE_GRANT_STATEMENTS = [
     TO stella_ingestion
   `,
   `
-    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public
-    TO stella_ingestion
+    GRANT USAGE, SELECT ON SEQUENCE
+      "corpus_index_projection_revisions_revision_seq" TO stella_ingestion
   `,
   // Preserve the v0.7.22 reader contract until its rollback window closes.
   `
