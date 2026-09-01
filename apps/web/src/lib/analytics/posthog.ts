@@ -112,10 +112,9 @@ const deepestCause = (error: Error): Error => {
 // bare `<symbol>@<url>:<line>:<column>` lines and no header at all. Known JSC
 // engine labels contain spaces; other callsite labels stay symbol-shaped so
 // free-form text cannot ride along as a frame.
-const STACK_FRAME_SYNTAX = [
-  /^\s+at /u,
-  /^(?:[Aa]sync\*)?(?:[\w$.<>[\]#~/]{0,120}|(?:global|module|eval) code)@\S+:\d+:\d+$/u,
-] as const;
+const V8_STACK_FRAME_SYNTAX = /^\s+at /u;
+const CALLSITE_STACK_FRAME_SYNTAX =
+  /^(?:[Aa]sync\*)?(?:[\w$.<>[\]#~/]{0,120}|(?:global|module|eval) code)@\S+:\d+:\d+$/u;
 
 const hasOnlyDecimalDigits = (
   value: string,
@@ -188,9 +187,18 @@ const redactedStack = (error: Error): string | undefined => {
   if (typeof stack !== "string") {
     return undefined;
   }
-  const frames = stackWithoutHeader(source, stack)
+  const lines = stackWithoutHeader(source, stack)
     .split("\n")
-    .filter((line) => STACK_FRAME_SYNTAX.some((syntax) => syntax.test(line)))
+    .filter((line) => line.length > 0);
+  // Callsite engines serialize only frames. Any other line means this is a
+  // V8-style stack whose header may no longer match mutable Error fields.
+  const frameSyntax = lines.every((line) =>
+    CALLSITE_STACK_FRAME_SYNTAX.test(line),
+  )
+    ? CALLSITE_STACK_FRAME_SYNTAX
+    : V8_STACK_FRAME_SYNTAX;
+  const frames = lines
+    .filter((line) => frameSyntax.test(line))
     .map(stripStackFrameQuery);
   if (frames.length === 0) {
     return undefined;
