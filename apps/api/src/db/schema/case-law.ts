@@ -1,7 +1,16 @@
 import { eq } from "drizzle-orm";
 
-import { CASE_LAW_RESEARCH_DISPOSITIONS } from "@stll/api-contract";
-import type { CaseLawResearchSavedQuery } from "@stll/api-contract";
+import {
+  CASE_LAW_RESEARCH_ANSWER_STATES,
+  CASE_LAW_RESEARCH_ANSWER_TYPES,
+  CASE_LAW_RESEARCH_DISPOSITIONS,
+} from "@stll/api-contract";
+import type {
+  CaseLawResearchAnswerRun,
+  CaseLawResearchAnswerValue,
+  CaseLawResearchColumnTool,
+  CaseLawResearchSavedQuery,
+} from "@stll/api-contract";
 import {
   DECISION_IDENTIFIER_MAX_LENGTH,
   DECISION_IDENTIFIER_TYPES,
@@ -1617,6 +1626,111 @@ export const caseLawResearchTableDecisions = p.pgTable(
     p.check(
       "case_law_research_table_decisions_disposition_check",
       sql`${t.disposition} IN (${sql.join(CASE_LAW_RESEARCH_DISPOSITION_SQL_VALUES, sql`, `)})`,
+    ),
+    ...orgPolicies(),
+  ],
+);
+
+const CASE_LAW_RESEARCH_ANSWER_TYPE_SQL_VALUES =
+  CASE_LAW_RESEARCH_ANSWER_TYPES.map((type) => sql.raw(`'${type}'`));
+
+const CASE_LAW_RESEARCH_ANSWER_STATE_SQL_VALUES =
+  CASE_LAW_RESEARCH_ANSWER_STATES.map((state) => sql.raw(`'${state}'`));
+
+/**
+ * One question asked of every row of a research table. The answer type fixes
+ * what a cell may hold; `tool` is the model configuration the answers were
+ * produced with, so a later change can be told apart from a re-run.
+ */
+export const caseLawResearchColumns = p.pgTable(
+  "case_law_research_columns",
+  {
+    id: pUuid<"caseLawResearchColumn">().primaryKey(),
+    tableId: safeUuid<"caseLawResearchTable">("table_id").notNull(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    position: p.integer().notNull(),
+    question: p.varchar({ length: 512 }).notNull(),
+    answerType: p
+      .text("answer_type", { enum: CASE_LAW_RESEARCH_ANSWER_TYPES })
+      .notNull(),
+    tool: jsonb().$type<CaseLawResearchColumnTool>().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        name: "clrc_table_org_fk",
+        columns: [t.tableId, t.organizationId],
+        foreignColumns: [
+          caseLawResearchTables.id,
+          caseLawResearchTables.organizationId,
+        ],
+      })
+      .onDelete("cascade"),
+    // Composite tenant key for the answers table.
+    p.unique("case_law_research_columns_id_org_unq").on(t.id, t.organizationId),
+    p.index("clrc_table_position_idx").on(t.tableId, t.position),
+    p.check(
+      "case_law_research_columns_answer_type_check",
+      sql`${t.answerType} IN (${sql.join(CASE_LAW_RESEARCH_ANSWER_TYPE_SQL_VALUES, sql`, `)})`,
+    ),
+    ...orgPolicies(),
+  ],
+);
+
+/**
+ * One cell: a column's answer for one decision. Cached per (column, decision)
+ * and recomputed only on an explicit re-run or when the question changes. The
+ * state names why a cell has no answer; `decisionId` carries no foreign key
+ * for the same reason the dispositions table does not.
+ */
+export const caseLawResearchAnswers = p.pgTable(
+  "case_law_research_answers",
+  {
+    columnId: safeUuid<"caseLawResearchColumn">("column_id").notNull(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    state: p.text({ enum: CASE_LAW_RESEARCH_ANSWER_STATES }).notNull(),
+    answer: jsonb().$type<CaseLawResearchAnswerValue>(),
+    confidence: p.doublePrecision(),
+    run: jsonb().$type<CaseLawResearchAnswerRun>(),
+    /** A short reason class for `failed`; never the provider's message. */
+    failureReason: p.varchar("failure_reason", { length: 64 }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.columnId, t.decisionId],
+      name: "case_law_research_answers_pk",
+    }),
+    p
+      .foreignKey({
+        name: "clra_column_org_fk",
+        columns: [t.columnId, t.organizationId],
+        foreignColumns: [
+          caseLawResearchColumns.id,
+          caseLawResearchColumns.organizationId,
+        ],
+      })
+      .onDelete("cascade"),
+    p.index("clra_column_state_idx").on(t.columnId, t.state),
+    p.check(
+      "case_law_research_answers_state_check",
+      sql`${t.state} IN (${sql.join(CASE_LAW_RESEARCH_ANSWER_STATE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_research_answers_confidence_check",
+      sql`${t.confidence} IS NULL OR (${t.confidence} >= 0 AND ${t.confidence} <= 1)`,
+    ),
+    // An answered cell carries its answer; every other state carries none.
+    p.check(
+      "case_law_research_answers_answer_state_check",
+      sql`(${t.state} = 'answered') = (${t.answer} IS NOT NULL)`,
     ),
     ...orgPolicies(),
   ],

@@ -29,6 +29,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
+import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
 import readResearchTable from "@/api/handlers/case-law/research/get";
 import listResearchTables from "@/api/handlers/case-law/research/list";
 import readContactById from "@/api/handlers/contacts/get";
@@ -510,6 +511,25 @@ const isolationCases: IsolationCase[] = [
     expectDenied: expectStatus(404),
     expectPositive: (result) => {
       expect(result).toMatchObject({ table: { id: researchTableB } });
+    },
+  },
+  {
+    // Answers hang off the table: naming another organization's table is a
+    // 404 before any cell is read.
+    name: "case-law research answers lookup",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(lookupResearchAnswers, workspaceA, {
+        params: { tableId: researchTableB },
+        body: { decisionIds: [testIds.caseLawDecisionB] },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(lookupResearchAnswers, workspaceB, {
+        params: { tableId: researchTableB },
+        body: { decisionIds: [testIds.caseLawDecisionB] },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => {
+      expect(result).toMatchObject({ items: [] });
     },
   },
   {

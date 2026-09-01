@@ -4,6 +4,8 @@ import { eq } from "drizzle-orm";
 import type { CaseLawResearchSavedQuery } from "@stll/api-contract";
 
 import {
+  caseLawResearchAnswers,
+  caseLawResearchColumns,
   caseLawResearchTableDecisions,
   caseLawResearchTables,
 } from "@/api/db/schema";
@@ -20,6 +22,8 @@ let testDb: TestDatabase;
 let ids: TestIds;
 const orgATableId = createSafeId<"caseLawResearchTable">();
 const orgBTableId = createSafeId<"caseLawResearchTable">();
+const orgAColumnId = createSafeId<"caseLawResearchColumn">();
+const orgBColumnId = createSafeId<"caseLawResearchColumn">();
 
 const savedQuery = {
   version: 1,
@@ -64,6 +68,50 @@ beforeAll(
         disposition: "excluded",
         position: 0,
         addedBy: ids.userB1,
+      },
+    ]);
+    await testDb.insert(caseLawResearchColumns).values([
+      {
+        id: orgAColumnId,
+        tableId: orgATableId,
+        organizationId: ids.orgA,
+        position: 1,
+        question: "Did the court uphold the lease?",
+        answerType: "yes_no",
+        tool: { version: 1, role: "fast" },
+      },
+      {
+        id: orgBColumnId,
+        tableId: orgBTableId,
+        organizationId: ids.orgB,
+        position: 1,
+        question: "Outcome?",
+        answerType: "text",
+        tool: { version: 1, role: "fast" },
+      },
+    ]);
+    await testDb.insert(caseLawResearchAnswers).values([
+      {
+        columnId: orgAColumnId,
+        organizationId: ids.orgA,
+        decisionId: ids.caseLawDecisionA,
+        state: "answered",
+        answer: { type: "yes_no", value: "yes" },
+        confidence: 0.8,
+        run: {
+          version: 1,
+          model: "test-model",
+          completedAt: "2026-09-01T00:00:00.000Z",
+          retrieved: false,
+          rationale: "The court dismissed the appeal.",
+          passages: [],
+        },
+      },
+      {
+        columnId: orgBColumnId,
+        organizationId: ids.orgB,
+        decisionId: ids.caseLawDecisionB,
+        state: "pending",
       },
     ]);
   },
@@ -121,5 +169,90 @@ describe("case-law research tables RLS", () => {
       (error: unknown) => error,
     );
     expect(pinned).toBeInstanceOf(Error);
+  });
+
+  test("question columns and answers stay inside their organization", async () => {
+    const scopedA = createScopedDb(testDb, [], ids.orgA, ids.userA2);
+    const columns = await scopedA((tx) =>
+      tx.select({ id: caseLawResearchColumns.id }).from(caseLawResearchColumns),
+    );
+    expect(columns).toEqual([{ id: orgAColumnId }]);
+    const answers = await scopedA((tx) =>
+      tx
+        .select({ columnId: caseLawResearchAnswers.columnId })
+        .from(caseLawResearchAnswers),
+    );
+    expect(answers).toEqual([{ columnId: orgAColumnId }]);
+
+    // Org B cannot reword org A's question nor write into its cells.
+    const scopedB = createScopedDb(testDb, [], ids.orgB, ids.userB1);
+    const reworded = await scopedB((tx) =>
+      tx
+        .update(caseLawResearchColumns)
+        .set({ question: "attempted cross-organization edit" })
+        .where(eq(caseLawResearchColumns.id, orgAColumnId))
+        .returning({ id: caseLawResearchColumns.id }),
+    );
+    expect(reworded).toEqual([]);
+    const answered: unknown = await scopedB((tx) =>
+      tx
+        .insert(caseLawResearchAnswers)
+        .values({
+          columnId: orgAColumnId,
+          organizationId: ids.orgB,
+          decisionId: ids.caseLawDecisionB,
+          state: "pending",
+        })
+        .returning({ columnId: caseLawResearchAnswers.columnId }),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(answered).toBeInstanceOf(Error);
+  });
+
+  test("a cell holds an answer exactly when it is answered", async () => {
+    const scopedA = createScopedDb(testDb, [], ids.orgA, ids.userA1);
+    const emptyAnswered: unknown = await scopedA((tx) =>
+      tx.insert(caseLawResearchAnswers).values({
+        columnId: orgAColumnId,
+        organizationId: ids.orgA,
+        decisionId: ids.caseLawDecisionB,
+        state: "answered",
+      }),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(emptyAnswered).toBeInstanceOf(Error);
+
+    const pendingWithAnswer: unknown = await scopedA((tx) =>
+      tx.insert(caseLawResearchAnswers).values({
+        columnId: orgAColumnId,
+        organizationId: ids.orgA,
+        decisionId: ids.caseLawDecisionB,
+        state: "pending",
+        answer: { type: "yes_no", value: "no" },
+      }),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(pendingWithAnswer).toBeInstanceOf(Error);
+
+    // One cell per (column, decision): a second queue attempt is a conflict,
+    // which the run handler resolves with an upsert rather than a duplicate.
+    const duplicate: unknown = await scopedA((tx) =>
+      tx.insert(caseLawResearchAnswers).values({
+        columnId: orgAColumnId,
+        organizationId: ids.orgA,
+        decisionId: ids.caseLawDecisionA,
+        state: "pending",
+      }),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(duplicate).toBeInstanceOf(Error);
   });
 });

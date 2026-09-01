@@ -391,6 +391,23 @@ export const LIMITS = {
   caseLawResearchTablesPageSizeMax: 100,
   /** Pinned plus excluded decisions per research table. */
   caseLawResearchTableDecisionsMax: 500,
+  /** Question columns per research table. */
+  caseLawResearchColumnsPerTable: 20,
+  /** Decisions one run request may queue; the client batches beyond it. */
+  caseLawResearchRunDecisionsMax: 100,
+  /** Decisions answered concurrently inside one run. */
+  caseLawResearchRunConcurrency: 3,
+  /** Decisions one answers lookup may name; the client asks for what it shows. */
+  caseLawResearchAnswersLookupDecisionsMax: 500,
+  /** A pending cell older than this is a run that died and may be re-queued. */
+  caseLawResearchPendingStaleMs: 10 * 60 * 1000,
+  /** Decision text sent whole to the model; longer texts are retrieved by passage. */
+  caseLawResearchAnswerTextBudgetChars: 60_000,
+  /** Passages retrieved for one over-budget decision, and the cap on each. */
+  caseLawResearchAnswerPassagesMax: 12,
+  caseLawResearchAnswerPassageChars: 1500,
+  /** Rationale kept beside an answer. */
+  caseLawResearchAnswerRationaleChars: 600,
   caseLawDecisionCitationPageSize: 50,
   caseLawAnnotationsPageSizeDefault: 100,
   caseLawAnnotationsPageSizeMax: 100,

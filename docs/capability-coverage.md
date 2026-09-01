@@ -546,10 +546,10 @@ mechanics, and similar), not gaps in coverage.
 | public_indexing        | 3     |
 | reader_annotations     | 4     |
 | realtime_stream        | 3     |
-| search_ui              | 12    |
+| search_ui              | 18    |
 | session_token_exchange | 13    |
 | ui_navigation_state    | 9     |
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 164
+Total: 170
