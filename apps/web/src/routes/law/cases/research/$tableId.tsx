@@ -196,6 +196,10 @@ function ResearchTablePage() {
     onError: reportError,
   });
 
+  const renameTable = async (name: string): Promise<void> => {
+    await rename.mutateAsync(name);
+  };
+
   const setDisposition = useMutation({
     mutationFn: async ({
       decision,
@@ -247,12 +251,7 @@ function ResearchTablePage() {
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <TableNameField
-            name={detail.table.name}
-            onRename={async (name) => {
-              await rename.mutateAsync(name);
-            }}
-          />
+          <TableNameField name={detail.table.name} onRename={renameTable} />
           <SavedQuerySummary table={detail.table} />
         </div>
         <Button
