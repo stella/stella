@@ -1,7 +1,6 @@
 import { startTransition, useEffect, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
@@ -28,6 +27,7 @@ import {
   SUPPORTED_LANGUAGES,
 } from "../i18n";
 import type { SupportedLanguage } from "../i18n";
+import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { isAppSnapshot } from "../shared/rpc";
 import type {
   AppSnapshot,
@@ -35,6 +35,12 @@ import type {
   DesktopUpdateSnapshot,
   LinkedAccountSnapshot,
 } from "../shared/rpc";
+import {
+  DESKTOP_TELEMETRY_ERROR_CODES,
+  DESKTOP_TELEMETRY_OPERATIONS,
+  DESKTOP_TELEMETRY_WINDOWS,
+  reportDesktopError,
+} from "../telemetry/desktop-telemetry";
 import stellaFavicon from "./stella-favicon.svg";
 
 const DEFAULT_NOTIFICATION_PREFERENCES = {
@@ -78,6 +84,14 @@ const isMacDesktop = navigator.userAgent.includes("Mac");
 
 const isPreferencesTab = (value: string | null): value is PreferencesTab =>
   value !== null && (PREFERENCES_TABS as readonly string[]).includes(value);
+
+const reportSubscriptionFailure = () => {
+  reportDesktopError({
+    code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
+    operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+    window: DESKTOP_TELEMETRY_WINDOWS.main,
+  });
+};
 
 const getInitialTab = (): PreferencesTab => {
   const tab = window.location.hash.replace(/^#/u, "");
@@ -455,46 +469,45 @@ const App = () => {
   }, [activeTab]);
 
   // Listen for tab activation from Rust backend
-  useEffect(() => {
-    let cleanup: (() => void) | undefined;
-
-    void listen<{ tab: string }>("activate-tab", (event) => {
-      const nextTab = event.payload.tab;
-      if (isPreferencesTab(nextTab)) {
-        setActiveTab(nextTab);
-      }
-    }).then((unlisten) => {
-      cleanup = unlisten;
-      return;
-    });
-
-    return () => {
-      cleanup?.();
-    };
-  }, []);
+  useEffect(
+    () =>
+      subscribeDesktopEvent<{ tab: string }>({
+        event: "activate-tab",
+        handler: (event) => {
+          const nextTab = event.payload.tab;
+          if (isPreferencesTab(nextTab)) {
+            setActiveTab(nextTab);
+          }
+        },
+        onError: reportSubscriptionFailure,
+      }),
+    [],
+  );
 
   // Listen for state changes from Rust backend + initial fetch
   useEffect(() => {
     let disposed = false;
-    let cleanup: (() => void) | undefined;
 
-    void listen<AppSnapshot>("state-changed", (event) => {
-      if (disposed) {
-        return;
-      }
+    const stopListening = subscribeDesktopEvent<AppSnapshot>({
+      event: "state-changed",
+      handler: (event) => {
+        // Unsubscribing is itself an IPC round trip, so an event can still
+        // arrive after the effect was cleaned up.
+        if (disposed) {
+          return;
+        }
 
-      const detail = event.payload;
-      if (!isAppSnapshot(detail)) {
-        return;
-      }
+        const detail = event.payload;
+        if (!isAppSnapshot(detail)) {
+          return;
+        }
 
-      startTransition(() => {
-        setError(null);
-        setState(detail);
-      });
-    }).then((unlisten) => {
-      cleanup = unlisten;
-      return;
+        startTransition(() => {
+          setError(null);
+          setState(detail);
+        });
+      },
+      onError: reportSubscriptionFailure,
     });
 
     const syncState = async () => {
@@ -525,7 +538,7 @@ const App = () => {
 
     return () => {
       disposed = true;
-      cleanup?.();
+      stopListening();
     };
   }, [t]);
 
