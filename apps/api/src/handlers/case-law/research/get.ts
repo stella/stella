@@ -79,12 +79,15 @@ const readResearchTable = createSafeRootHandler(
     }
 
     const pinnedDecisions = yield* Result.await(
-      readPublicDecisionSummaries({
-        caseLawDb: caseLawPublicReadDb,
-        decisionIds: loaded.decisions
-          .filter((decision) => decision.disposition === "pinned")
-          .map((decision) => decision.decisionId),
-      }),
+      Result.tryPromise(
+        async () =>
+          await readPublicDecisionSummaries({
+            caseLawDb: caseLawPublicReadDb,
+            decisionIds: loaded.decisions
+              .filter((decision) => decision.disposition === "pinned")
+              .map((decision) => decision.decisionId),
+          }),
+      ),
     );
 
     return Result.ok({

@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { caseLawResearchTableDecisions } from "@/api/db/schema";
+import {
+  caseLawResearchTableDecisions,
+  caseLawResearchTables,
+} from "@/api/db/schema";
 import { researchTableDecisionParamsSchema } from "@/api/handlers/case-law/research/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -41,6 +44,18 @@ const deleteResearchTableDecision = createSafeRootHandler(
           )
           .returning({ decisionId: caseLawResearchTableDecisions.decisionId });
         if (rows.length > 0) {
+          await tx
+            .update(caseLawResearchTables)
+            .set({ updatedAt: new Date() })
+            .where(
+              and(
+                eq(caseLawResearchTables.id, tableId),
+                eq(
+                  caseLawResearchTables.organizationId,
+                  session.activeOrganizationId,
+                ),
+              ),
+            );
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.UPDATE,
             resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_RESEARCH_TABLE,

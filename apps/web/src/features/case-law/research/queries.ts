@@ -99,5 +99,7 @@ export const decisionFiltersToSavedQuery = (
     decisionType: filters.decisionType,
   }),
   ...(filters.language !== undefined && { language: filters.language }),
-  ...(filters.sourceId !== undefined && { sourceId: filters.sourceId }),
+  ...(filters.sourceId !== undefined && {
+    sourceId: toSafeId<"caseLawSource">(filters.sourceId),
+  }),
 });

@@ -63,9 +63,6 @@ ALTER TABLE "case_law_research_table_decisions" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "case_law_research_table_decisions" ADD CONSTRAINT "clrtd_table_org_fk"
   FOREIGN KEY ("table_id", "organization_id") REFERENCES "case_law_research_tables"("id", "organization_id") ON DELETE CASCADE ON UPDATE NO ACTION;
 --> statement-breakpoint
-ALTER TABLE "case_law_research_table_decisions" ADD CONSTRAINT "clrtd_decision_fk"
-  FOREIGN KEY ("decision_id") REFERENCES "case_law_decisions"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
---> statement-breakpoint
 ALTER TABLE "case_law_research_table_decisions" ADD CONSTRAINT "clrtd_added_by_fk"
   FOREIGN KEY ("added_by") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE NO ACTION;
 --> statement-breakpoint

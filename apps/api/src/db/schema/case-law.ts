@@ -1553,10 +1553,18 @@ export const caseLawResearchTables = p.pgTable(
   ],
 );
 
+const CASE_LAW_RESEARCH_DISPOSITION_SQL_VALUES =
+  CASE_LAW_RESEARCH_DISPOSITIONS.map((disposition) =>
+    sql.raw(`'${disposition}'`),
+  );
+
 /**
  * One decision the table treats differently from its saved query: pinned
  * into the rows whether or not the query still returns it, or excluded from
- * them. Cascades from the decision, so a redacted decision leaves the table.
+ * them. `decisionId` carries no foreign key, like the annotations: the corpus
+ * may live in a separate public-law database, so the id is validated through
+ * the public read gate on write and a decision that has since gone simply
+ * yields no row facts.
  */
 export const caseLawResearchTableDecisions = p.pgTable(
   "case_law_research_table_decisions",
@@ -1587,13 +1595,6 @@ export const caseLawResearchTableDecisions = p.pgTable(
       .onDelete("cascade"),
     p
       .foreignKey({
-        name: "clrtd_decision_fk",
-        columns: [t.decisionId],
-        foreignColumns: [caseLawDecisions.id],
-      })
-      .onDelete("cascade"),
-    p
-      .foreignKey({
         name: "clrtd_added_by_fk",
         columns: [t.addedBy],
         foreignColumns: [user.id],
@@ -1604,7 +1605,7 @@ export const caseLawResearchTableDecisions = p.pgTable(
       .on(t.tableId, t.disposition, t.position),
     p.check(
       "case_law_research_table_decisions_disposition_check",
-      sql`${t.disposition} IN ('pinned', 'excluded')`,
+      sql`${t.disposition} IN (${sql.join(CASE_LAW_RESEARCH_DISPOSITION_SQL_VALUES, sql`, `)})`,
     ),
     ...orgPolicies(),
   ],

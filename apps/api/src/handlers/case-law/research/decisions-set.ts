@@ -42,10 +42,13 @@ const setResearchTableDecision = createSafeRootHandler(
     // The corpus is read through the same gate the public routes use, so a
     // decision that may not be redistributed cannot be pinned by id.
     const summaries = yield* Result.await(
-      readPublicDecisionSummaries({
-        caseLawDb: caseLawPublicReadDb,
-        decisionIds: [decisionId],
-      }),
+      Result.tryPromise(
+        async () =>
+          await readPublicDecisionSummaries({
+            caseLawDb: caseLawPublicReadDb,
+            decisionIds: [decisionId],
+          }),
+      ),
     );
     if (summaries.length === 0) {
       return Result.err(

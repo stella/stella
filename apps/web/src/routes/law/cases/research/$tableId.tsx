@@ -52,10 +52,12 @@ import {
 import type { ResearchTableDetail } from "@/features/case-law/research/queries";
 import { ResearchTableView } from "@/features/case-law/research/research-table-view";
 import { mergeResearchRows } from "@/features/case-law/research/row-model";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { unwrapEden } from "@/lib/errors/api";
 import { pageTitleLiteral } from "@/lib/page-title";
 import {
@@ -124,6 +126,12 @@ const isDecisionGroupBy = (value: string): value is DecisionGroupBy =>
 const isDecisionColumnId = (value: string): value is DecisionColumnId =>
   DECISION_COLUMN_IDS.some((id) => id === value);
 
+/** The columns a reader may toggle, narrowed once so closures keep the id type. */
+const hideableColumnIds: DecisionColumnId[] = decisionTableSchema.columns
+  .filter((column) => column.capabilities.hide)
+  .map((column) => column.id)
+  .filter(isDecisionColumnId);
+
 function ResearchTablePending() {
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
@@ -165,10 +173,10 @@ function ResearchTablePage() {
   const [showExcluded, setShowExcluded] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
+  // Row edits bump the table's `updatedAt`, so the list's order and "last
+  // edited" move too.
   const invalidateTable = async () =>
-    await queryClient.invalidateQueries({
-      queryKey: researchTableKeys.detail({ activeOrganizationId, tableId }),
-    });
+    await queryClient.invalidateQueries({ queryKey: researchTableKeys.all });
   const reportError = (error: unknown) => {
     analytics.captureError(error);
     stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
@@ -286,30 +294,26 @@ function ResearchTablePage() {
             {t("common.columns")}
           </MenuTrigger>
           <MenuPopup>
-            {decisionTableSchema.columns
-              .filter((column) => column.capabilities.hide)
-              .map((column) =>
-                isDecisionColumnId(column.id) ? (
-                  <MenuCheckboxItem
-                    checked={visibleColumns.has(column.id)}
-                    closeOnClick={false}
-                    key={column.id}
-                    onCheckedChange={(checked) => {
-                      setVisibleColumns((current) => {
-                        const next = new Set(current);
-                        if (checked) {
-                          next.add(column.id);
-                        } else {
-                          next.delete(column.id);
-                        }
-                        return next;
-                      });
-                    }}
-                  >
-                    {t(DECISION_COLUMN_LABEL_KEYS[column.id])}
-                  </MenuCheckboxItem>
-                ) : null,
-              )}
+            {hideableColumnIds.map((columnId) => (
+              <MenuCheckboxItem
+                checked={visibleColumns.has(columnId)}
+                closeOnClick={false}
+                key={columnId}
+                onCheckedChange={(checked) => {
+                  setVisibleColumns((current) => {
+                    const next = new Set(current);
+                    if (checked) {
+                      next.add(columnId);
+                    } else {
+                      next.delete(columnId);
+                    }
+                    return next;
+                  });
+                }}
+              >
+                {t(DECISION_COLUMN_LABEL_KEYS[columnId])}
+              </MenuCheckboxItem>
+            ))}
           </MenuPopup>
         </Menu>
 
@@ -457,7 +461,14 @@ function TableNameField({
 /** The saved search as quiet chips: the words, then each filter that narrows it. */
 function SavedQuerySummary({ table }: { table: ResearchTableDetail["table"] }) {
   const t = useTranslations();
+  const format = useFormatter();
   const { savedQuery } = table;
+  const formatBoundary = (value: string | undefined): string => {
+    const date = value === undefined ? null : parseDeterministicDate(value);
+    return date === null
+      ? "…"
+      : format.dateTime(date, { dateStyle: "medium", timeZone: "UTC" });
+  };
   const chips: string[] = [];
   if (savedQuery.country !== undefined) {
     chips.push(savedQuery.country);
@@ -472,7 +483,9 @@ function SavedQuerySummary({ table }: { table: ResearchTableDetail["table"] }) {
     chips.push(savedQuery.language.toUpperCase());
   }
   if (savedQuery.dateFrom !== undefined || savedQuery.dateTo !== undefined) {
-    chips.push(`${savedQuery.dateFrom ?? "…"} – ${savedQuery.dateTo ?? "…"}`);
+    chips.push(
+      `${formatBoundary(savedQuery.dateFrom)} – ${formatBoundary(savedQuery.dateTo)}`,
+    );
   }
 
   return (

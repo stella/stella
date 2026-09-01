@@ -1,3 +1,5 @@
+import type { SafeId } from "./safe-id";
+
 /**
  * A research table is a saved case-law search a lawyer keeps working on: the
  * query it was made from, the decisions pinned into or excluded from its rows,
@@ -13,8 +15,8 @@ export type CaseLawResearchDisposition =
   (typeof CASE_LAW_RESEARCH_DISPOSITIONS)[number];
 
 /**
- * The search a table re-runs for its rows. Field names are those of the
- * public decision search body, so the client can pass it straight through.
+ * The search a table re-runs for its rows. Field names and types are those of
+ * the public decision search body, so the client passes it straight through.
  */
 export type CaseLawResearchSavedQuery = {
   version: typeof CASE_LAW_RESEARCH_QUERY_VERSION;
@@ -25,5 +27,5 @@ export type CaseLawResearchSavedQuery = {
   dateTo?: string;
   decisionType?: string;
   language?: string;
-  sourceId?: string;
+  sourceId?: SafeId<"caseLawSource">;
 };
