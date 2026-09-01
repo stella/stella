@@ -1,5 +1,15 @@
 # @stll/ui
 
+## 0.15.0
+
+### Minor Changes
+
+- [#2750](https://github.com/stella/stella/pull/2750) [`0751826`](https://github.com/stella/stella/commit/0751826516062111ad9491b95aaad9ee86878a36) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a numeric input with separate editable and canonical values, and keep portal-backed select surfaces readable under dark color schemes.
+
+### Patch Changes
+
+- [#2754](https://github.com/stella/stella/pull/2754) [`23c39cf`](https://github.com/stella/stella/commit/23c39cf74812da26020e97b7c9a9ce12259ea707) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Render Kanban boards without a subgroup as a single row of typed cells.
+
 ## 0.14.0
 
 ### Minor Changes

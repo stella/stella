@@ -1,5 +1,13 @@
 # @stll/workspace-ui
 
+## 0.6.1
+
+### Patch Changes
+
+- [#2753](https://github.com/stella/stella/pull/2753) [`b709089`](https://github.com/stella/stella/commit/b7090892e514550b1599b344823f63ca0854bb06) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Render one responsive inspector presentation at a time in the complete workspace frame.
+- Updated dependencies [[`23c39cf`](https://github.com/stella/stella/commit/23c39cf74812da26020e97b7c9a9ce12259ea707), [`0751826`](https://github.com/stella/stella/commit/0751826516062111ad9491b95aaad9ee86878a36)]:
+  - @stll/ui@0.15.0
+
 ## 0.6.0
 
 ### Minor Changes
