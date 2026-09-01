@@ -110,7 +110,7 @@ const MenuCheckboxItem = ({
       "text-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground grid min-h-8 cursor-pointer items-center gap-2 rounded-sm py-1 ps-2 text-base outline-none in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] data-disabled:pointer-events-none data-disabled:opacity-64 sm:min-h-7 sm:text-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
       variant === "switch"
         ? "grid-cols-[1fr_auto] gap-4 pe-1.5"
-        : "grid-cols-[1rem_1fr] pe-4",
+        : "grid-cols-[1rem_minmax(0,1fr)] pe-4",
       className,
     )}
     data-slot="menu-checkbox-item"
@@ -144,7 +144,7 @@ const MenuCheckboxItem = ({
             <path d="M5.252 12.7 10.2 18.63 18.748 5.37" />
           </svg>
         </MenuPrimitive.CheckboxItemIndicator>
-        <span className="col-start-2">{children}</span>
+        <span className="col-start-2 min-w-0">{children}</span>
       </>
     )}
   </MenuPrimitive.CheckboxItem>
@@ -166,7 +166,7 @@ const MenuRadioItem = ({
     className={cn(
       "text-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground min-h-8 cursor-pointer items-center gap-2 rounded-sm py-1 text-base outline-none in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] data-disabled:pointer-events-none data-disabled:opacity-64 sm:min-h-7 sm:text-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
       indicator === "check"
-        ? "grid grid-cols-[1rem_1fr] ps-2 pe-4"
+        ? "grid grid-cols-[1rem_minmax(0,1fr)] ps-2 pe-4"
         : "flex px-2",
       className,
     )}
@@ -191,7 +191,7 @@ const MenuRadioItem = ({
             <path d="M5.252 12.7 10.2 18.63 18.748 5.37" />
           </svg>
         </MenuPrimitive.RadioItemIndicator>
-        <span className="col-start-2">{children}</span>
+        <span className="col-start-2 min-w-0">{children}</span>
       </>
     ) : (
       children

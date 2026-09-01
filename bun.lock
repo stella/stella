@@ -868,6 +868,7 @@
         "@dnd-kit/sortable": "^10.0.0",
         "@playwright/test": "^1.62.0",
         "@stll/typescript-config": "workspace:*",
+        "@tailwindcss/vite": "catalog:",
         "@tanstack/react-virtual": "^3.14.10",
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
