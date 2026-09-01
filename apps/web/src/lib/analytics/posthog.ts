@@ -133,16 +133,6 @@ const hasOnlyDecimalDigits = (
   return true;
 };
 
-const hasCallsiteStackSyntax = (line: string): boolean => {
-  const columnSeparator = line.lastIndexOf(":");
-  const lineSeparator = line.lastIndexOf(":", columnSeparator - 1);
-  return (
-    line.lastIndexOf("@", lineSeparator - 1) !== -1 &&
-    hasOnlyDecimalDigits(line, lineSeparator + 1, columnSeparator) &&
-    hasOnlyDecimalDigits(line, columnSeparator + 1, line.length)
-  );
-};
-
 const stripStackFrameUrlMetadata = (frame: string): string => {
   const frameEnd = frame.endsWith(")") ? frame.length - 1 : frame.length;
   const columnSeparator = frame.lastIndexOf(":", frameEnd - 1);
@@ -188,7 +178,7 @@ const redactedStack = (error: Error): string | undefined => {
   const lines = stack.split("\n").filter((line) => line.length > 0);
   // Callsite engines start with a bare frame; V8 starts with its serialized
   // error header. Classify from that immutable text, not mutable Error fields.
-  const frameSyntax = hasCallsiteStackSyntax(lines.at(0) ?? "")
+  const frameSyntax = CALLSITE_STACK_FRAME_SYNTAX.test(lines.at(0) ?? "")
     ? CALLSITE_STACK_FRAME_SYNTAX
     : V8_STACK_FRAME_SYNTAX;
   const frames = lines

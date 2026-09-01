@@ -569,6 +569,29 @@ describe("PostHog browser analytics adapter", () => {
     expect(captured.stack).toBeUndefined();
   });
 
+  test("captureError cannot infer callsite syntax from a V8 header", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    const injectedFrame =
+      "clientName@https://stella.test/assets/private.js:20:5";
+    const actualFrame =
+      "    at renderMatter (https://stella.test/assets/index.js:10:15)";
+    const error = new Error(
+      `renderMatter@https://stella.test/assets/a.js:1:2\n${injectedFrame}`,
+    );
+    error.stack = [`Error: ${error.message}`, actualFrame].join("\n");
+
+    analytics.captureError(error);
+
+    const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+    if (!(captured instanceof Error)) {
+      throw new TypeError("Expected a redacted Error");
+    }
+    expect(captured.stack).toBe(["Error:", actualFrame].join("\n"));
+  });
+
   test("captureError survives a cyclic cause chain", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",
