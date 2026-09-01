@@ -136,6 +136,15 @@ if (!databaseUrl || !runPostgresTests) {
       } finally {
         releaseSecondSnapshot.resolve(undefined);
         await firstDb
+          .update(corpusIndexGenerations)
+          .set({ status: "retired" })
+          .where(
+            and(
+              eq(corpusIndexGenerations.family, target.family),
+              eq(corpusIndexGenerations.generation, target.generation),
+            ),
+          );
+        await firstDb
           .delete(corpusIndexProjectionIntents)
           .where(
             and(
@@ -151,15 +160,6 @@ if (!databaseUrl || !runPostgresTests) {
               eq(corpusIndexProjectionStates.family, target.family),
               eq(corpusIndexProjectionStates.generation, target.generation),
               eq(corpusIndexProjectionStates.entityId, entityId),
-            ),
-          );
-        await firstDb
-          .update(corpusIndexGenerations)
-          .set({ status: "retired" })
-          .where(
-            and(
-              eq(corpusIndexGenerations.family, target.family),
-              eq(corpusIndexGenerations.generation, target.generation),
             ),
           );
         await firstDb
