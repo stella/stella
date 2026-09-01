@@ -24,7 +24,16 @@ export type DecisionListFilters = {
 
 export const caseLawDecisionKeys = {
   all: ["case-law-decisions"],
-  facets: () => [...caseLawDecisionKeys.all, "facets"],
+  facets: (country: string | undefined) => [
+    ...caseLawDecisionKeys.all,
+    "facets",
+    { country },
+  ],
+  latest: (country: string) => [
+    ...caseLawDecisionKeys.all,
+    "latest",
+    { country },
+  ],
   list: (key: DecisionListFilters) => [
     ...caseLawDecisionKeys.all,
     "list",
@@ -66,16 +75,36 @@ export type CaseLawBrowseFacets = {
   year: FacetBucket[];
 };
 
-export const decisionFacetsOptions = () =>
+/** Facets of the whole corpus, or of one jurisdiction when `country` is given. */
+export const decisionFacetsOptions = (country?: string) =>
   queryOptions({
-    queryKey: caseLawDecisionKeys.facets(),
+    queryKey: caseLawDecisionKeys.facets(country),
     queryFn: async ({ signal }): Promise<CaseLawBrowseFacets> => {
       const response = await api.case.decisions.facets.get({
+        query: country === undefined ? {} : { country },
         fetch: { signal },
       });
 
       const data = unwrapEden(response);
       assertPublicLawApiData(data, "listPublicCaseLawFacets");
+
+      return data;
+    },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+/** The newest decisions of a jurisdiction's largest courts: the browse page's shelf. */
+export const latestDecisionsOptions = (country: string) =>
+  queryOptions({
+    queryKey: caseLawDecisionKeys.latest(country),
+    queryFn: async ({ signal }) => {
+      const response = await api.case.decisions.latest.get({
+        query: { country },
+        fetch: { signal },
+      });
+
+      const data = unwrapEden(response);
+      assertPublicLawApiData(data, "listLatestPublicCaseLawDecisions");
 
       return data;
     },
@@ -129,6 +158,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
             caseNumber: h.caseNumber,
             slug: h.slug,
             ecli: h.ecli,
+            identifiers: h.identifiers,
             court: h.court,
             country: h.country,
             language: h.language,
@@ -136,7 +166,9 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
             decisionDate: h.decisionDate,
             decisionType: h.decisionType,
             sourceUrl: h.sourceUrl,
+            headnote: h.headnote,
             headline: h.headline,
+            citationCount: h.citationCount,
             createdAt:
               parseDeterministicDate(h.createdAt) ??
               panic("Public case-law API returned an invalid createdAt"),

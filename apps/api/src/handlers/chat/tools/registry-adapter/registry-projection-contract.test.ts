@@ -1177,6 +1177,7 @@ const CONTRACT_CORPUS = {
               ],
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
+              headnote: null,
               languageAlternates: [],
               slug: "ns-22-cdo-1000-2020",
               sourceUrl: "https://example.test/decision",

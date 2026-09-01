@@ -29,11 +29,18 @@ export type Decision = {
   language: string;
   /** Every language version of the decision; empty for a monolingual one. */
   languageAlternates: readonly PublicDecisionLanguageAlternate[];
+  /** Every identifier the publisher supplied; search hits carry them, list rows do not. */
+  identifiers?: readonly { type: string; value: string }[] | undefined;
   decisionDate: Date | string | null;
   decisionType: string | null;
-  sourceUrl: string | null;
+  sourceUrl?: string | null | undefined;
+  /** The search snippet, highlighted, when the row came from a search. */
   headline?: string | null;
-  createdAt: Date | string;
+  /** The publisher's one-line summary, when the source carries one. */
+  headnote: string | null;
+  /** Decisions in the corpus that cite this one. */
+  citationCount: number;
+  createdAt?: Date | string | undefined;
 };
 
 type IntlFormatter = ReturnType<typeof useFormatter>;
@@ -245,6 +252,31 @@ export const decisionYear = (
 export const DecisionDateCell = ({ decision }: { decision: Decision }) => {
   const format = useFormatter();
   return formatDecisionDate(decision.decisionDate, format);
+};
+
+/**
+ * The publisher's own summary of the decision (legal sentence, abstract,
+ * keyword chain or area of law), so a row is recognisable before it is
+ * opened. Empty when the source supplies none.
+ */
+export const HeadnoteCell = ({ decision }: { decision: Decision }) => {
+  if (decision.headnote === null) {
+    return "—";
+  }
+  return (
+    <p className="text-muted-foreground line-clamp-2 text-xs">
+      {decision.headnote}
+    </p>
+  );
+};
+
+export const CitedByCell = ({ decision }: { decision: Decision }) => {
+  const format = useFormatter();
+  return (
+    <span className="tabular-nums">
+      {decision.citationCount > 0 ? format.number(decision.citationCount) : "—"}
+    </span>
+  );
 };
 
 export const DecisionLanguageCell = ({ decision }: { decision: Decision }) => {

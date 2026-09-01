@@ -6,7 +6,7 @@ import {
 } from "@/lib/chat-draft-store";
 import { createChatThreadId, getChatThreadKey } from "@/lib/chat-thread-ref";
 
-type OpenProvisionChatOptions = {
+type OpenPublicLawChatOptions = {
   label: string;
   prompt: string;
 };
@@ -16,10 +16,10 @@ type OpenProvisionChatOptions = {
  * reader sends it, so the question can be edited before it costs a request.
  * The chat is global: the public reader has no matter to scope it to.
  */
-export const openProvisionChat = ({
+export const openPublicLawChat = ({
   label,
   prompt,
-}: OpenProvisionChatOptions): void => {
+}: OpenPublicLawChatOptions): void => {
   const threadId = createChatThreadId();
   useChatDraftStore
     .getState()

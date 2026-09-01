@@ -435,7 +435,9 @@
       "yearTitle": "{year}: {count, plural, one {# citácia} few {# citácie} other {# citácií}}"
     },
     "columns": {
-      "caseNumber": "Spisová značka"
+      "caseNumber": "Spisová značka",
+      "citedBy": "Citované",
+      "headnote": "Právna veta"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokový citát s citáciou",
@@ -446,14 +448,12 @@
     },
     "decisionNotFound": "Rozhodnutie sa nenašlo",
     "emptyState": "Žiadne rozhodnutia. Nakonfigurujte zdroj a spustite synchronizáciu na import judikatúry.",
-    "filters": {
-      "searchPlaceholder": "Hľadať podľa spisovej značky..."
-    },
     "languages": {
       "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazykov}}",
       "matchedIn": "Zhoda v jazyku {language}"
     },
     "loadingMore": "Načítavajú sa ďalšie...",
+    "newestDecisions": "Najnovšie rozhodnutia",
     "notesFilter": {
       "ai": "AI",
       "human": "Ľudské"
@@ -491,6 +491,11 @@
       "ungrouped": "Bez hodnoty",
       "updated": "Naposledy upravené {date}"
     },
+    "sameCaseNumber": "{count, plural, one {# rozhodnutie nesie} few {# rozhodnutia nesú} other {# rozhodnutí nesie}} túto spisovú značku. Vyberte súd.",
+    "searchAskPrompt": "{query} (judikatúra, {country})",
+    "searchAskPromptAll": "{query} (judikatúra)",
+    "searchLabel": "Hľadať v judikatúre",
+    "searchPlaceholder": "Spisová značka, ECLI alebo slová, napr. 1Cdo/12/2020",
     "seo": {
       "browse": "Prehliadať judikatúru",
       "countries": "Krajiny",

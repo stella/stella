@@ -6,7 +6,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { Textarea } from "@stll/ui/textarea";
 
-import { openProvisionChat } from "@/features/statutes/provision-ask";
+import { openPublicLawChat } from "@/components/public-law-ask";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 import {
   provisionTabLabel,
@@ -80,7 +80,7 @@ export const ProvisionAskActions = ({
         });
 
   const summarize = () => {
-    openProvisionChat({
+    openPublicLawChat({
       label,
       prompt: `${t("statutes.provisionAskSummarizePrompt", { subject })}${context}`,
     });
@@ -91,7 +91,7 @@ export const ProvisionAskActions = ({
     if (trimmed === "") {
       return;
     }
-    openProvisionChat({
+    openPublicLawChat({
       label,
       prompt: `${t("statutes.provisionAskQuestionPrompt", {
         question: trimmed,

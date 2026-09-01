@@ -506,6 +506,17 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_corpus_generation_date_cursor_idx")
       .on(sql`coalesce(${t.decisionDate}, '-infinity'::date)`, t.id),
+    // The public browse walk scoped to one court reads the same sort key
+    // newest first; led by country and court so a small court's walk is its
+    // own index range instead of a skip through the corpus-wide date index.
+    p
+      .index("case_law_decisions_country_court_date_idx")
+      .on(
+        t.country,
+        t.court,
+        sql`coalesce(${t.decisionDate}, '-infinity'::date)`,
+        t.id,
+      ),
     p
       .index("case_law_decisions_source_generation_cursor_idx")
       .on(t.sourceId, t.createdAt, t.id),

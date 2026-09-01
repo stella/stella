@@ -42,6 +42,17 @@ export const listDecisionFacetsHandler = async ({
     return status(400, { message: "Invalid country" });
   }
 
+  return await readBrowseFacets(country);
+};
+
+/**
+ * Cached facets for a validated jurisdiction (or the whole corpus). Degrades
+ * to an empty set on any failure: facets are navigation chrome, and the
+ * callers (the facets route, the newest-decisions shelf) render without them.
+ */
+export const readBrowseFacets = async (
+  country: string | undefined,
+): Promise<LegalBrowseFacets> => {
   // Read ahead of the cache, not inside it: source policy is an input to the
   // answer, so a revocation has to change the cache key. Reading it behind the
   // cache would keep a revoked source's buckets public for a whole window.

@@ -407,6 +407,11 @@ export const LIMITS = {
   /** Max child sitemap entries in one sitemap index by protocol. */
   caseLawSitemapIndexEntryLimit: 50_000,
   caseLawFacetLimit: 20,
+  /** One-row budget for the headnote a list row shows under the case number. */
+  caseLawHeadnoteMaxChars: 240,
+  /** Courts on the browse page's "newest decisions" shelf, by corpus size. */
+  caseLawLatestCourts: 4,
+  caseLawLatestPerCourt: 5,
   legislationListPageSizeDefault: 20,
   legislationListPageSizeMax: 100,
   /** Consolidated versions of one work returned per page. */

@@ -59,6 +59,8 @@ export const ResearchTableView = ({
       country: t(DECISION_COLUMN_LABEL_KEYS.country),
       date: t(DECISION_COLUMN_LABEL_KEYS.date),
       type: t(DECISION_COLUMN_LABEL_KEYS.type),
+      headnote: t(DECISION_COLUMN_LABEL_KEYS.headnote),
+      citedBy: t(DECISION_COLUMN_LABEL_KEYS.citedBy),
       language: t(DECISION_COLUMN_LABEL_KEYS.language),
     },
     renderActions: (row) => (

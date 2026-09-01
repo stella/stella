@@ -435,7 +435,9 @@
       "yearTitle": "{year}: {count, plural, one {# powołanie} few {# powołania} many {# powołań} other {# powołania}}"
     },
     "columns": {
-      "caseNumber": "Sygnatura akt"
+      "caseNumber": "Sygnatura akt",
+      "citedBy": "Cytowane przez",
+      "headnote": "Teza"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Cytat blokowy z odesłaniem",
@@ -446,14 +448,12 @@
     },
     "decisionNotFound": "Nie znaleziono orzeczenia",
     "emptyState": "Brak orzeczeń. Skonfiguruj źródło i uruchom synchronizację, aby zaimportować orzecznictwo.",
-    "filters": {
-      "searchPlaceholder": "Szukaj po sygnaturze akt..."
-    },
     "languages": {
       "count": "{count, plural, one {# język} few {# języki} many {# języków} other {# języka}}",
       "matchedIn": "Dopasowanie w języku {language}"
     },
     "loadingMore": "Ładowanie kolejnych...",
+    "newestDecisions": "Najnowsze orzeczenia",
     "notesFilter": {
       "ai": "AI",
       "human": "Ludzkie"
@@ -491,6 +491,11 @@
       "ungrouped": "Bez wartości",
       "updated": "Ostatnia edycja {date}"
     },
+    "sameCaseNumber": "{count, plural, one {# orzeczenie ma} few {# orzeczenia mają} many {# orzeczeń ma} other {# orzeczenia ma}} tę sygnaturę. Wybierz sąd.",
+    "searchAskPrompt": "{query} (orzecznictwo, {country})",
+    "searchAskPromptAll": "{query} (orzecznictwo)",
+    "searchLabel": "Szukaj w orzecznictwie",
+    "searchPlaceholder": "Sygnatura, ECLI lub słowa, np. II CSK 123/19",
     "seo": {
       "browse": "Przeglądaj orzecznictwo",
       "countries": "Kraje",

@@ -435,7 +435,9 @@
       "yearTitle": "{year}: {count, plural, one {# Zitat} other {# Zitate}}"
     },
     "columns": {
-      "caseNumber": "Aktenzeichen"
+      "caseNumber": "Aktenzeichen",
+      "citedBy": "Zitiert von",
+      "headnote": "Leitsatz"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blockzitat mit Fundstelle",
@@ -446,14 +448,12 @@
     },
     "decisionNotFound": "Entscheidung nicht gefunden",
     "emptyState": "Keine Entscheidungen gefunden. Konfigurieren Sie eine Quelle und führen Sie eine Synchronisierung durch, um Rechtsprechung zu importieren.",
-    "filters": {
-      "searchPlaceholder": "Nach Aktenzeichen suchen..."
-    },
     "languages": {
       "count": "{count, plural, one {# Sprache} other {# Sprachen}}",
       "matchedIn": "Treffer auf {language}"
     },
     "loadingMore": "Weitere werden geladen…",
+    "newestDecisions": "Neueste Entscheidungen",
     "notesFilter": {
       "ai": "KI",
       "human": "Mensch"
@@ -491,6 +491,11 @@
       "ungrouped": "Ohne Wert",
       "updated": "Zuletzt bearbeitet {date}"
     },
+    "sameCaseNumber": "{count, plural, one {# Entscheidung trägt} other {# Entscheidungen tragen}} dieses Aktenzeichen. Wählen Sie das Gericht.",
+    "searchAskPrompt": "{query} (Rechtsprechung, {country})",
+    "searchAskPromptAll": "{query} (Rechtsprechung)",
+    "searchLabel": "Rechtsprechung durchsuchen",
+    "searchPlaceholder": "Aktenzeichen, ECLI oder Stichwörter, z. B. 22 Cdo 2653/2012",
     "seo": {
       "browse": "Rechtsprechung durchsuchen",
       "countries": "Länder",

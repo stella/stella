@@ -435,7 +435,9 @@
       "yearTitle": "{year}: {count, plural, one {# citace} few {# citace} other {# citací}}"
     },
     "columns": {
-      "caseNumber": "Spisová značka"
+      "caseNumber": "Spisová značka",
+      "citedBy": "Citováno",
+      "headnote": "Právní věta"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokový citát s citací",
@@ -446,14 +448,12 @@
     },
     "decisionNotFound": "Rozhodnutí nenalezeno",
     "emptyState": "Žádná rozhodnutí nenalezena. Nastavte zdroj a spusťte synchronizaci pro import judikatury.",
-    "filters": {
-      "searchPlaceholder": "Hledat podle spisové značky..."
-    },
     "languages": {
       "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazyků}}",
       "matchedIn": "Shoda v jazyce {language}"
     },
     "loadingMore": "Načítání dalších...",
+    "newestDecisions": "Nejnovější rozhodnutí",
     "notesFilter": {
       "ai": "AI",
       "human": "Lidské"
@@ -491,6 +491,11 @@
       "ungrouped": "Bez hodnoty",
       "updated": "Naposledy upraveno {date}"
     },
+    "sameCaseNumber": "{count, plural, one {# rozhodnutí nese} few {# rozhodnutí nesou} other {# rozhodnutí nese}} tuto spisovou značku. Vyberte soud.",
+    "searchAskPrompt": "{query} (judikatura, {country})",
+    "searchAskPromptAll": "{query} (judikatura)",
+    "searchLabel": "Hledat v judikatuře",
+    "searchPlaceholder": "Spisová značka, ECLI nebo slova, např. 22 Cdo 2653/2012",
     "seo": {
       "browse": "Procházet judikaturu",
       "countries": "Země",

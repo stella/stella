@@ -730,7 +730,9 @@ describe("public law sitemap", () => {
     ]);
 
     expect(cellsSource).toContain('timeZone: "UTC"');
-    expect(tableSource).toContain("formatDecisionDate(");
+    // The public table draws every cell, dates included, through the shared
+    // column model rather than formatting on its own.
+    expect(tableSource).toContain("decisionTableSchema");
     expect(tableSource).not.toContain("format.dateTime(");
   });
 

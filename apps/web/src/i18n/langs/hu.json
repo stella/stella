@@ -435,7 +435,9 @@
       "yearTitle": "{year}: {count, plural, one {# hivatkozás} other {# hivatkozás}}"
     },
     "columns": {
-      "caseNumber": "Ügyszám"
+      "caseNumber": "Ügyszám",
+      "citedBy": "Hivatkozások",
+      "headnote": "Jogi tétel"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokkidézet hivatkozással",
@@ -446,14 +448,12 @@
     },
     "decisionNotFound": "A határozat nem található",
     "emptyState": "Nem található határozat. Adjon meg egy forrást, és futtasson szinkronizálást az ítélkezési gyakorlat importálásához.",
-    "filters": {
-      "searchPlaceholder": "Keresés ügyszám alapján..."
-    },
     "languages": {
       "count": "{count, plural, one {# nyelv} other {# nyelv}}",
       "matchedIn": "Találat {language} nyelven"
     },
     "loadingMore": "Betöltés folyamatban...",
+    "newestDecisions": "Legújabb határozatok",
     "notesFilter": {
       "ai": "MI",
       "human": "Emberi"
@@ -491,6 +491,11 @@
       "ungrouped": "Érték nélkül",
       "updated": "Utoljára szerkesztve: {date}"
     },
+    "sameCaseNumber": "{count, plural, one {# határozat viseli} other {# határozat viseli}} ezt az ügyszámot. Válasszon bíróságot.",
+    "searchAskPrompt": "{query} (joggyakorlat, {country})",
+    "searchAskPromptAll": "{query} (joggyakorlat)",
+    "searchLabel": "Keresés a joggyakorlatban",
+    "searchPlaceholder": "Ügyszám, ECLI vagy szavak, pl. 22 Cdo 2653/2012",
     "seo": {
       "browse": "Ítélkezési gyakorlat böngészése",
       "countries": "Országok",
