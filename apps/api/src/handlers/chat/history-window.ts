@@ -166,17 +166,21 @@ export const loadWindowedThreadMessages = async ({
  * (retained prefix, forked history); the exclusive form selects only the tail
  * a replay discards.
  *
- * The subselect resolves the boundary row by id alone, so callers must first
- * prove the target belongs to the thread they are reading.
+ * The subselect binds the boundary row to the thread being read: a target
+ * that belongs to another thread, or that was deleted since the caller last
+ * saw it, resolves to a NULL boundary that matches no row, never to another
+ * thread's timestamp.
  */
 const chatMessagePrefixBoundary = ({
   inclusive,
   targetMessageId,
+  threadId,
 }: {
   inclusive: boolean;
   targetMessageId: SafeId<"chatMessage">;
+  threadId: SafeId<"chatThread">;
 }): SQL =>
-  sql`(${chatMessages.createdAt}, ${chatMessages.id}) ${sql.raw(inclusive ? "<=" : ">")} (select b.created_at, b.id from chat_messages b where b.id = ${targetMessageId})`;
+  sql`(${chatMessages.createdAt}, ${chatMessages.id}) ${sql.raw(inclusive ? "<=" : ">")} (select b.created_at, b.id from chat_messages b where b.id = ${targetMessageId} and b.thread_id = ${threadId})`;
 
 type LoadChatMessagePrefixOnTxArgs = {
   targetMessageId: SafeId<"chatMessage">;
@@ -196,29 +200,20 @@ export type ChatMessagePrefixRow = {
 /**
  * Every row of a thread at or before one of its messages, oldest-first, with
  * the columns a copy of that history needs. Returns null when the target is
- * not a message of this thread, which is also what keeps the id-only boundary
- * subselect above from reading another thread's timestamp.
+ * not a message of this thread.
+ *
+ * One statement, not an existence check followed by the read: under READ
+ * COMMITTED a target deleted between two statements would turn into an
+ * empty prefix that reads as success. An inclusive prefix always contains
+ * its own boundary row, so an empty read can only mean the boundary has no
+ * row in this thread.
  */
 export const loadChatMessagePrefixOnTx = async ({
   targetMessageId,
   threadId,
   tx,
 }: LoadChatMessagePrefixOnTxArgs): Promise<ChatMessagePrefixRow[] | null> => {
-  const target = await tx
-    .select({ id: chatMessages.id })
-    .from(chatMessages)
-    .where(
-      and(
-        eq(chatMessages.threadId, threadId),
-        eq(chatMessages.id, targetMessageId),
-      ),
-    )
-    .limit(1);
-  if (!target.at(0)) {
-    return null;
-  }
-
-  return await tx
+  const prefix = await tx
     .select({
       content: chatMessages.content,
       createdAt: chatMessages.createdAt,
@@ -231,13 +226,18 @@ export const loadChatMessagePrefixOnTx = async ({
     .where(
       and(
         eq(chatMessages.threadId, threadId),
-        chatMessagePrefixBoundary({ inclusive: true, targetMessageId }),
+        chatMessagePrefixBoundary({
+          inclusive: true,
+          targetMessageId,
+          threadId,
+        }),
       ),
     )
-    // SAFETY: bounded by the prefix [start..target]; the target is a real row
-    // in this thread (resolved above) and a fork copies history up to it.
+    // SAFETY: bounded by the prefix [start..target] of one thread; a fork
+    // copies history up to it, so every row is needed.
     // eslint-disable-next-line require-query-limit/require-query-limit -- bounded by the copied prefix up to the target row; see SAFETY above
     .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
+  return prefix.length === 0 ? null : prefix;
 };
 
 type ResolveTruncationTargetArgs = {
@@ -287,7 +287,11 @@ export const resolveTruncationTarget = async ({
       .where(
         and(
           eq(chatMessages.threadId, threadId),
-          chatMessagePrefixBoundary({ inclusive: false, targetMessageId }),
+          chatMessagePrefixBoundary({
+            inclusive: false,
+            targetMessageId,
+            threadId,
+          }),
         ),
       )
       // SAFETY: bounded by the to-be-deleted tail (target..now]; the rows a

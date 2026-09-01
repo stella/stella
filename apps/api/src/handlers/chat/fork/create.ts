@@ -15,23 +15,25 @@ import {
   chatMessageFromPersisted,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
-import {
-  assertChatThreadScopeMatches,
-  resolveChatScope,
-} from "@/api/handlers/chat/chat-scope";
+import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import type { ChatMessagePrefixRow } from "@/api/handlers/chat/history-window";
 import { loadChatMessagePrefixOnTx } from "@/api/handlers/chat/history-window";
-import type { ChatPart } from "@/api/handlers/chat/types";
+import type {
+  ChatPart,
+  PersistableChatMessage,
+} from "@/api/handlers/chat/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { chunked } from "@/api/lib/chunked";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
+import { isMissingS3ObjectError } from "@/api/lib/s3";
 import { copyObject } from "@/api/lib/s3-presign";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { parseUserFileId, toUserFileUrl } from "@/api/lib/user-files/types";
@@ -71,6 +73,13 @@ const FORKED_THREAD_COLUMNS = {
   workspaceId: chatThreads.workspaceId,
 } as const;
 
+/**
+ * Rows per INSERT for the copied history and attachments. A prefix has no
+ * upper bound (nothing caps a thread's length), and one statement cannot
+ * carry more than 65,535 bind parameters.
+ */
+const FORK_INSERT_BATCH_SIZE = 200;
+
 /** The columns a fork's copy of one attachment is rebuilt from. */
 type SourceUserFileRow = {
   extractedText: string | null;
@@ -92,17 +101,23 @@ type UserFileCopy = {
   source: SourceUserFileRow;
 };
 
+/** A prefix row beside its decoded message, so each row is decoded once. */
+type PrefixMessage = {
+  message: PersistableChatMessage;
+  row: ChatMessagePrefixRow;
+};
+
 /**
  * Every `stella://file::<id>` a copied prefix points at, in insertion order.
  * A message may repeat an attachment and several messages may share one, so
  * the set is what drives the copy, not the parts.
  */
 const collectPrefixUserFileIds = (
-  rows: readonly ChatMessagePrefixRow[],
+  prefix: readonly PrefixMessage[],
 ): SafeId<"userFile">[] => {
   const fileIds = new Set<SafeId<"userFile">>();
-  for (const row of rows) {
-    for (const part of chatMessageFromPersisted(row).parts) {
+  for (const { message } of prefix) {
+    for (const part of message.parts) {
       if (!isChatAttachmentPart(part)) {
         continue;
       }
@@ -118,11 +133,11 @@ const collectPrefixUserFileIds = (
 /**
  * Point one attachment part at the fork's own copy of its file.
  *
- * A part whose file id resolved to no `user_files` row is left untouched: the
- * source's own URL already dangles, so the fork inherits a dead reference
- * rather than a shared object. That miss is reported as telemetry by the
- * caller, because the other way to reach it — a row that escaped this thread's
- * ownership — would be a real defect.
+ * A part whose file was not copied is left untouched: either its id resolved
+ * to no `user_files` row, so the source's own URL already dangles, or the row
+ * exists but its storage object is gone, so there are no bytes to share. In
+ * both cases the fork inherits a dead reference rather than a live shared
+ * object. Each miss is reported as telemetry by the caller.
  */
 const remapChatAttachmentPart = (
   part: ChatPart,
@@ -148,6 +163,17 @@ const remapChatAttachmentPart = (
 };
 
 /**
+ * What copying one attachment's storage produced. A source object the store
+ * confirms is gone is not a failure of the fork: the source thread already
+ * lacks those bytes, so the fork skips the file (or, for a thumbnail alone,
+ * copies the file without one) and the caller reports the gap. Every other
+ * storage error is fatal, because it says nothing about the object.
+ */
+type UserFileCopyOutcome =
+  | { kind: "copied"; copy: UserFileCopy; missingThumbnail: boolean }
+  | { kind: "source-object-missing"; fileId: SafeId<"userFile"> };
+
+/**
  * Copy one attachment's storage objects to keys minted for a fresh file id.
  * Destination keys are pushed onto `copiedS3Keys` before the copy starts: a
  * request that times out may still have completed in S3, so rollback must be
@@ -161,65 +187,84 @@ const copyUserFileObjects = async ({
   copiedS3Keys: string[];
   file: SourceUserFileRow;
   userId: SafeId<"user">;
-}): Promise<Result<UserFileCopy, HandlerError<500>>> =>
-  await Result.gen(async function* () {
-    const newFileId = createSafeId<"userFile">();
-    const copiedS3Key = createUserFileKey({
-      fileId: newFileId,
-      mimeType: file.mimeType,
-      userId,
-    });
-    copiedS3Keys.push(copiedS3Key);
-    yield* Result.mapError(
-      await copyObject(file.s3Key, copiedS3Key),
-      (cause) =>
-        new HandlerError({
-          status: 500,
-          message: "Failed to copy chat attachment storage object",
-          cause,
-        }),
+}): Promise<Result<UserFileCopyOutcome, HandlerError<500>>> => {
+  const newFileId = createSafeId<"userFile">();
+  const copiedS3Key = createUserFileKey({
+    fileId: newFileId,
+    mimeType: file.mimeType,
+    userId,
+  });
+  copiedS3Keys.push(copiedS3Key);
+  const copied = await copyObject(file.s3Key, copiedS3Key);
+  if (Result.isError(copied)) {
+    if (isMissingS3ObjectError(copied.error.cause)) {
+      return Result.ok({ kind: "source-object-missing", fileId: file.id });
+    }
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: "Failed to copy chat attachment storage object",
+        cause: copied.error,
+      }),
     );
+  }
 
-    if (file.thumbnailFileId === null) {
-      return Result.ok({
+  if (file.thumbnailFileId === null) {
+    return Result.ok({
+      kind: "copied",
+      copy: {
         copiedS3Key,
         copiedThumbnailFileId: null,
         newFileId,
         source: file,
-      });
-    }
+      },
+      missingThumbnail: false,
+    });
+  }
 
-    const copiedThumbnailFileId = Bun.randomUUIDv7();
-    const copiedThumbnailKey = createUserFileKey({
-      fileId: copiedThumbnailFileId,
+  const copiedThumbnailFileId = Bun.randomUUIDv7();
+  const copiedThumbnailKey = createUserFileKey({
+    fileId: copiedThumbnailFileId,
+    mimeType: THUMBNAIL_MIME_TYPE,
+    userId,
+  });
+  copiedS3Keys.push(copiedThumbnailKey);
+  const thumbnailCopied = await copyObject(
+    createUserFileKey({
+      fileId: file.thumbnailFileId,
       mimeType: THUMBNAIL_MIME_TYPE,
       userId,
-    });
-    copiedS3Keys.push(copiedThumbnailKey);
-    yield* Result.mapError(
-      await copyObject(
-        createUserFileKey({
-          fileId: file.thumbnailFileId,
-          mimeType: THUMBNAIL_MIME_TYPE,
-          userId,
-        }),
-        copiedThumbnailKey,
-      ),
-      (cause) =>
-        new HandlerError({
-          status: 500,
-          message: "Failed to copy chat attachment thumbnail",
-          cause,
-        }),
+    }),
+    copiedThumbnailKey,
+  );
+  if (Result.isError(thumbnailCopied)) {
+    if (isMissingS3ObjectError(thumbnailCopied.error.cause)) {
+      return Result.ok({
+        kind: "copied",
+        copy: {
+          copiedS3Key,
+          copiedThumbnailFileId: null,
+          newFileId,
+          source: file,
+        },
+        missingThumbnail: true,
+      });
+    }
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: "Failed to copy chat attachment thumbnail",
+        cause: thumbnailCopied.error,
+      }),
     );
+  }
 
-    return Result.ok({
-      copiedS3Key,
-      copiedThumbnailFileId,
-      newFileId,
-      source: file,
-    });
+  return Result.ok({
+    kind: "copied",
+    copy: { copiedS3Key, copiedThumbnailFileId, newFileId, source: file },
+    missingThumbnail: false,
   });
+};
 
 /**
  * A copied message references a `stella://file::<id>` with no `user_files` row.
@@ -230,6 +275,16 @@ const copyUserFileObjects = async ({
  */
 class ChatForkAttachmentRowMissingError extends TaggedError(
   "ChatForkAttachmentRowMissingError",
+)<{ message: string }> {}
+
+/**
+ * A `user_files` row of the copied prefix points at a storage object (or a
+ * thumbnail) the store no longer holds. Not fatal for the same reason as a
+ * missing row, but reported: a live row without its object means a delete
+ * removed the bytes and never reached the row.
+ */
+class ChatForkAttachmentObjectMissingError extends TaggedError(
+  "ChatForkAttachmentObjectMissingError",
 )<{ message: string }> {}
 
 /**
@@ -334,44 +389,42 @@ export const createForkThread = ({
             return { kind: "existing" as const, existingFork };
           }
 
-          const [source] = await tx
-            .select(FORKED_THREAD_COLUMNS)
-            .from(chatThreads)
-            .where(
-              and(
-                eq(chatThreads.id, params.threadId),
-                eq(chatThreads.organizationId, session.activeOrganizationId),
-                eq(chatThreads.userId, user.id),
-                scope.scope === "workspace"
-                  ? eq(chatThreads.workspaceId, scope.workspaceId)
-                  : isNull(chatThreads.workspaceId),
-              ),
-            )
-            .limit(1);
+          // The request's scope is part of the lookup, so a thread that exists
+          // in another scope reads as absent rather than as a scope mismatch,
+          // the same way rename, update and delete resolve their thread.
+          const source = (
+            await tx
+              .select(FORKED_THREAD_COLUMNS)
+              .from(chatThreads)
+              .where(
+                and(
+                  eq(chatThreads.id, params.threadId),
+                  eq(chatThreads.organizationId, session.activeOrganizationId),
+                  eq(chatThreads.userId, user.id),
+                  scope.scope === "workspace"
+                    ? eq(chatThreads.workspaceId, scope.workspaceId)
+                    : isNull(chatThreads.workspaceId),
+                ),
+              )
+              .limit(1)
+          ).at(0);
 
           if (!source) {
             return { kind: "source-missing" as const };
           }
 
-          if (
-            Result.isError(
-              assertChatThreadScopeMatches({
-                persistedWorkspaceId: source.workspaceId,
-                scope,
-              }),
-            )
-          ) {
-            return { kind: "scope-mismatch" as const };
-          }
-
-          const prefix = await loadChatMessagePrefixOnTx({
+          const prefixRows = await loadChatMessagePrefixOnTx({
             targetMessageId: upToMessageId,
             threadId: params.threadId,
             tx,
           });
-          if (prefix === null) {
+          if (prefixRows === null) {
             return { kind: "boundary-missing" as const };
           }
+          const prefix: PrefixMessage[] = prefixRows.map((row) => ({
+            message: chatMessageFromPersisted(row),
+            row,
+          }));
 
           const sourceFileIds = collectPrefixUserFileIds(prefix);
           const sourceFiles =
@@ -430,15 +483,6 @@ export const createForkThread = ({
         );
       }
 
-      if (reads.kind === "scope-mismatch") {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Chat thread scope does not match request",
-          }),
-        );
-      }
-
       if (reads.kind === "existing") {
         const { existingFork } = reads;
         if (!matchesForkIdentity(existingFork)) {
@@ -477,19 +521,52 @@ export const createForkThread = ({
         ),
       );
       const copies: UserFileCopy[] = [];
+      const missingObjectFileIds: SafeId<"userFile">[] = [];
+      const missingThumbnailFileIds: SafeId<"userFile">[] = [];
       let copyError: HandlerError<500> | undefined;
       for (const copied of copyResults) {
         if (Result.isError(copied)) {
           copyError ??= copied.error;
           continue;
         }
-        copies.push(copied.value);
+        switch (copied.value.kind) {
+          case "copied": {
+            copies.push(copied.value.copy);
+            if (copied.value.missingThumbnail) {
+              missingThumbnailFileIds.push(copied.value.copy.source.id);
+            }
+            break;
+          }
+          case "source-object-missing": {
+            missingObjectFileIds.push(copied.value.fileId);
+            break;
+          }
+          default: {
+            copied.value satisfies never;
+          }
+        }
       }
       if (copyError !== undefined) {
         // Nothing has been written yet, so unwinding storage is the whole
         // rollback: no partial fork is reachable from here.
         await rollbackCopiedS3Keys(copiedS3Keys);
         return Result.err(copyError);
+      }
+      if (
+        missingObjectFileIds.length > 0 ||
+        missingThumbnailFileIds.length > 0
+      ) {
+        captureError(
+          new ChatForkAttachmentObjectMissingError({
+            message:
+              "Chat fork prefix references attachments whose storage objects are gone",
+          }),
+          {
+            fileIds: missingObjectFileIds.join(","),
+            threadId: params.threadId,
+            thumbnailFileIds: missingThumbnailFileIds.join(","),
+          },
+        );
       }
       const copiedFileIds = new Map(
         copies.map((copy) => [copy.source.id, copy.newFileId]),
@@ -513,11 +590,12 @@ export const createForkThread = ({
           workspaceId: forkWorkspaceId,
         });
 
-        if (copies.length > 0) {
+        for (const batch of chunked(copies, FORK_INSERT_BATCH_SIZE)) {
           // audit: skip — the attachment copies belong to the CHAT_THREAD create
           // event recorded below, which names the fork they were made for.
+          // oxlint-disable-next-line no-await-in-loop, no-db-await-in-loop/no-db-await-in-loop -- one statement per batch is the point: the row set has no upper bound and a single INSERT cannot exceed the bind-parameter cap; the batches share this transaction, so nothing is gained by overlapping them
           await tx.insert(userFiles).values(
-            copies.map((copy) => ({
+            batch.map((copy) => ({
               extractedText: copy.source.extractedText,
               fileName: copy.source.fileName,
               id: copy.newFileId,
@@ -534,33 +612,31 @@ export const createForkThread = ({
           );
         }
 
-        if (prefix.length > 0) {
+        for (const batch of chunked(prefix, FORK_INSERT_BATCH_SIZE)) {
           // audit: skip — copied history belongs to the CHAT_THREAD create event
           // recorded below.
+          // oxlint-disable-next-line no-await-in-loop, no-db-await-in-loop/no-db-await-in-loop -- one statement per batch keeps an unbounded prefix under the bind-parameter cap; see the attachment loop above
           await tx.insert(chatMessages).values(
-            prefix.map((row) => {
-              const message = chatMessageFromPersisted(row);
-              return {
-                // Timestamps are preserved: keyset ordering, recap and
-                // compaction all read (createdAt, id), so a re-stamped copy
-                // would reorder the fork against its own history.
-                createdAt: row.createdAt,
-                content: toPersistedChatMessageContentV3({
-                  data: message.parts.map((part) =>
-                    remapChatAttachmentPart(part, copiedFileIds),
-                  ),
-                  ...(message.metadata === undefined
-                    ? {}
-                    : { metadata: message.metadata }),
-                }),
-                id: createSafeId<"chatMessage">(),
-                memoryExtractionEligible: row.memoryExtractionEligible,
-                role: row.role,
-                threadId: newThreadId,
-                userId: user.id,
-                workspaceId: row.workspaceId,
-              };
-            }),
+            batch.map(({ message, row }) => ({
+              // Timestamps are preserved: keyset ordering, recap and
+              // compaction all read (createdAt, id), so a re-stamped copy
+              // would reorder the fork against its own history.
+              createdAt: row.createdAt,
+              content: toPersistedChatMessageContentV3({
+                data: message.parts.map((part) =>
+                  remapChatAttachmentPart(part, copiedFileIds),
+                ),
+                ...(message.metadata === undefined
+                  ? {}
+                  : { metadata: message.metadata }),
+              }),
+              id: createSafeId<"chatMessage">(),
+              memoryExtractionEligible: row.memoryExtractionEligible,
+              role: row.role,
+              threadId: newThreadId,
+              userId: user.id,
+              workspaceId: row.workspaceId,
+            })),
           );
         }
 

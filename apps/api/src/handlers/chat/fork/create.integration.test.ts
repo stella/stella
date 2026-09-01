@@ -783,3 +783,103 @@ test("a thread that was never forked reports no provenance", async () => {
 
   expect(response).toMatchObject({ forkProvenance: { type: "none" } });
 });
+
+test("a source attachment whose storage object is gone is skipped, not fatal", async () => {
+  const source = await seedThread({
+    texts: ["See the exhibit", "Reviewed"],
+    withAttachment: true,
+  });
+  const attachment = source.attachment;
+  if (attachment === null) {
+    throw new TypeError("expected a seeded attachment");
+  }
+  // A live row whose bytes are gone: the shape a crash between an object
+  // delete and its row delete leaves behind.
+  fakeS3.objects.delete(`${BUCKET}/${attachment.s3Key}`);
+  const newThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+  seededThreadIds.push(newThreadId);
+
+  await expectForked(
+    forkThread.handler(
+      forkContext({
+        newThreadId,
+        threadId: source.threadId,
+        upToMessageId: messageAt(source, 1),
+      }),
+    ),
+  );
+
+  const copiedFiles = await testDb
+    .select({ id: userFiles.id })
+    .from(userFiles)
+    .where(eq(userFiles.threadId, newThreadId))
+    .limit(1);
+  expect(copiedFiles).toHaveLength(0);
+  // Nothing to share, so the reference is inherited as-is rather than pointed
+  // at a copy that would have no bytes either.
+  const copiedMessages = await readMessages(newThreadId);
+  expect(copiedMessages).toHaveLength(2);
+  expect(JSON.stringify(copiedMessages.at(0)?.content)).toContain(
+    toUserFileUrl(attachment.fileId),
+  );
+});
+
+test("a missing thumbnail copies the attachment without one", async () => {
+  const source = await seedThread({
+    texts: ["See the exhibit", "Reviewed"],
+    withAttachment: true,
+  });
+  const attachment = source.attachment;
+  if (attachment === null) {
+    throw new TypeError("expected a seeded attachment");
+  }
+  fakeS3.objects.delete(`${BUCKET}/${attachment.thumbnailKey}`);
+  const newThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+  seededThreadIds.push(newThreadId);
+
+  await expectForked(
+    forkThread.handler(
+      forkContext({
+        newThreadId,
+        threadId: source.threadId,
+        upToMessageId: messageAt(source, 0),
+      }),
+    ),
+  );
+
+  const copiedFile = (
+    await testDb
+      .select({
+        s3Key: userFiles.s3Key,
+        thumbnailFileId: userFiles.thumbnailFileId,
+      })
+      .from(userFiles)
+      .where(eq(userFiles.threadId, newThreadId))
+      .limit(1)
+  ).at(0);
+  if (!copiedFile) {
+    throw new TypeError("expected the fork to own a duplicated file row");
+  }
+  expect(copiedFile.thumbnailFileId).toBeNull();
+  expect(fakeS3.objects.has(`${BUCKET}/${copiedFile.s3Key}`)).toBe(true);
+});
+
+test("copies a prefix longer than one insert batch", async () => {
+  const texts = Array.from({ length: 450 }, (_, index) => `Turn ${index}`);
+  const source = await seedThread({ texts });
+  const newThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+  seededThreadIds.push(newThreadId);
+
+  await expectForked(
+    forkThread.handler(
+      forkContext({
+        newThreadId,
+        threadId: source.threadId,
+        upToMessageId: messageAt(source, texts.length - 1),
+      }),
+    ),
+  );
+
+  const copied = await readMessages(newThreadId);
+  expect(messageTexts(copied)).toEqual(texts);
+});
