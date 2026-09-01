@@ -217,4 +217,8 @@ SELECT
   generation."generation",
   pg_catalog.pg_current_xact_id()::text::bigint
 FROM "corpus_index_generations" generation
-ON CONFLICT DO NOTHING;
+ON CONFLICT DO NOTHING;--> statement-breakpoint
+
+-- stella-migration-safety: reviewed drop-column - pre-revision projection binaries are quiesced for this clean cutover; retaining the stale scalar permits unsafe proofs
+ALTER TABLE "corpus_index_generations"
+  DROP COLUMN "projection_revision";
