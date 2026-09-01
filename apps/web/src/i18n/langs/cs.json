@@ -437,12 +437,23 @@
     "columns": {
       "caseNumber": "Spisová značka"
     },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Blokový citát s citací",
+      "citationOnly": "Pouze citace",
+      "citationWithQuote": "Citace s citátem",
+      "quoteWithCitation": "Citát s citací",
+      "textOnly": "Pouze text"
+    },
     "decisionNotFound": "Rozhodnutí nenalezeno",
     "emptyState": "Žádná rozhodnutí nenalezena. Nastavte zdroj a spusťte synchronizaci pro import judikatury.",
     "filters": {
       "searchPlaceholder": "Hledat podle spisové značky..."
     },
     "loadingMore": "Načítání dalších...",
+    "notesFilter": {
+      "ai": "AI",
+      "human": "Lidské"
+    },
     "provision": {
       "article": "čl. {value}",
       "letter": "písm. {value})",

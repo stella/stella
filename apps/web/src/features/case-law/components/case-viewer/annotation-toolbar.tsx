@@ -2,8 +2,11 @@ import { useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 
+import { Result } from "better-result";
 import {
   Building2Icon,
+  ChevronDownIcon,
+  CopyIcon,
   HighlighterIcon,
   LockIcon,
   MessageSquarePlusIcon,
@@ -16,6 +19,8 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
+import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { writeDecisionPassage } from "@/components/chat-decision-passage";
@@ -34,8 +39,10 @@ import type {
   CreateAnnotationInput,
   UpdateAnnotationInput,
 } from "@/features/case-law/annotations/use-decision-annotations";
+import { formatDecisionCitation } from "@/features/case-law/citation-format";
 import type { DecisionAnnotation } from "@/features/case-law/queries/annotations";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { detached } from "@/lib/detached";
 
 /** Room above the words for the bar, so it never covers what was selected. */
@@ -43,8 +50,15 @@ const BAR_OFFSET_PX = 44;
 
 export type AnnotationToolbarDecision = {
   caseNumber: string;
+  country: string;
   court: string;
+  decisionDate: Date | string | null;
+  decisionType: string | null;
+  ecli: string | null;
   id: string;
+  /** Citable case name ("Brown v. Board of Education"); null when the
+   * document does not state one. */
+  name: string | null;
 };
 
 export type AnnotationToolbarController = {
@@ -73,6 +87,91 @@ type Selected = {
   /** One per paragraph the selection touches; empty outside the words. */
   spans: SelectionAnchor[];
   text: string;
+  /** The words alone: reader chrome, note marks and page markers removed —
+   * what a quotation of the passage should contain. */
+  cleanText: string;
+  /** Reporter page the selection starts on, from the last page marker
+   * before it; null before the first marker or in unpaginated documents. */
+  pincite: string | null;
+};
+
+/** Chrome that must never leak into a quotation. */
+const QUOTE_CHROME_SELECTOR = "[data-reader-chrome], .reader-note-ref";
+
+const cleanSelectionText = (range: Range): string => {
+  const holder =
+    range.startContainer.ownerDocument?.createElement("div") ?? null;
+  if (holder === null) {
+    return "";
+  }
+  holder.append(range.cloneContents());
+  for (const el of holder.querySelectorAll(QUOTE_CHROME_SELECTOR)) {
+    el.remove();
+  }
+  return holder.textContent.replaceAll(/\s+/gu, " ").trim();
+};
+
+const pinciteOf = (root: HTMLElement, range: Range): string | null => {
+  let last: string | null = null;
+  for (const marker of root.querySelectorAll(".reader-page-marker")) {
+    // -1: the marker sits before the selection's start.
+    if (range.comparePoint(marker, 0) !== -1) {
+      continue;
+    }
+    const digits = /\d+/u.exec(marker.textContent)?.[0];
+    if (digits !== undefined) {
+      last = digits;
+    }
+  }
+  return last;
+};
+
+const COPY_MODES = [
+  "quoteWithCitation",
+  "citationWithQuote",
+  "blockQuoteWithCitation",
+  "textOnly",
+  "citationOnly",
+] as const;
+type CopyMode = (typeof COPY_MODES)[number];
+
+const copyTextFor = (
+  mode: CopyMode,
+  selected: Pick<Selected, "cleanText" | "pincite">,
+  decision: AnnotationToolbarDecision,
+): string => {
+  const quote = selected.cleanText;
+  const citation = formatDecisionCitation({
+    caseNumber: decision.caseNumber,
+    country: decision.country,
+    court: decision.court,
+    decisionDate: decision.decisionDate,
+    decisionType: decision.decisionType,
+    ecli: decision.ecli,
+    name: decision.name,
+    pincite: selected.pincite,
+  });
+  switch (mode) {
+    case "quoteWithCitation": {
+      return `“${quote}” ${citation}.`;
+    }
+    case "citationWithQuote": {
+      return `${citation} (“${quote}”).`;
+    }
+    case "blockQuoteWithCitation": {
+      return `${quote}\n\n${citation}.`;
+    }
+    case "textOnly": {
+      return quote;
+    }
+    case "citationOnly": {
+      return `${citation}.`;
+    }
+    default: {
+      const unreachable: never = mode;
+      return unreachable;
+    }
+  }
 };
 
 const STYLE_ICONS = {
@@ -109,6 +208,12 @@ export const AnnotationToolbar = ({
   // bar holds, so nothing here reads a ref while rendering.
   const [doc, setDoc] = useState<Document | null>(null);
   const [style, setStyle] = useState<AnnotationStyle>("highlight");
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [copyPreviewMode, setCopyPreviewMode] = useState<CopyMode | null>(null);
+  // The dropdown is hand-rolled (a portal menu would collapse the text
+  // selection), so it does its own collision handling: open upward when
+  // the space below the trigger cannot fit the menu.
+  const [copyOpensUp, setCopyOpensUp] = useState(false);
   // A new highlight is private; sharing is a deliberate second step on the mark.
   const visibility: AnnotationVisibility = "private";
 
@@ -139,8 +244,14 @@ export const AnnotationToolbar = ({
           setSelected(null);
           return;
         }
+        // A fresh selection must not inherit the previous one's open menu.
+        setCopyOpen(false);
+        const range = selection.getRangeAt(0);
+        const cleanText = cleanSelectionText(range);
         setSelected({
-          rect: selection.getRangeAt(0).getBoundingClientRect(),
+          cleanText: cleanText === "" ? text : cleanText,
+          pincite: pinciteOf(root, range),
+          rect: range.getBoundingClientRect(),
           spans: selectionAnchorsFrom(selection, root),
           text,
         });
@@ -431,6 +542,94 @@ export const AnnotationToolbar = ({
     const spans = selected.spans;
     content = (
       <div className="flex items-center gap-1">
+        <div className="relative">
+          <Button
+            onClick={(event) => {
+              const MENU_ESTIMATED_HEIGHT_PX = 200;
+              const triggerRect = event.currentTarget.getBoundingClientRect();
+              const viewportHeight =
+                event.currentTarget.ownerDocument.defaultView?.innerHeight ?? 0;
+              setCopyOpensUp(
+                triggerRect.bottom + MENU_ESTIMATED_HEIGHT_PX > viewportHeight,
+              );
+              setCopyPreviewMode(null);
+              setCopyOpen((open) => !open);
+            }}
+            onMouseDown={(event) => event.preventDefault()}
+            size="sm"
+            variant="ghost"
+          >
+            <CopyIcon className="size-3.5" />
+            {t("common.copy")}
+            <ChevronDownIcon className="size-3" />
+          </Button>
+          {copyOpen && (
+            <div
+              className={cn(
+                "bg-popover text-popover-foreground absolute start-0 z-10 rounded-md border p-1 shadow-md",
+                copyOpensUp ? "bottom-full mb-1" : "top-full mt-1",
+              )}
+            >
+              <MenuPreviewLayout
+                preview={
+                  <PreviewPane className="w-72">
+                    {copyPreviewMode !== null && (
+                      <p className="text-foreground text-[0.7rem] leading-snug whitespace-pre-wrap">
+                        {copyTextFor(
+                          copyPreviewMode,
+                          {
+                            cleanText:
+                              selected.cleanText.length > 220
+                                ? `${selected.cleanText.slice(0, 220)}…`
+                                : selected.cleanText,
+                            pincite: selected.pincite,
+                          },
+                          decision,
+                        )}
+                      </p>
+                    )}
+                  </PreviewPane>
+                }
+              >
+                {COPY_MODES.map((mode) => (
+                  <button
+                    className="hover:bg-accent block w-full rounded-sm px-2 py-1.5 text-start text-xs whitespace-nowrap"
+                    key={mode}
+                    onClick={() => {
+                      const text = copyTextFor(mode, selected, decision);
+                      detached(
+                        (async () => {
+                          const copied = await copyToClipboard(text);
+                          if (Result.isError(copied)) {
+                            stellaToast.add({
+                              title: t("errors.actionFailed"),
+                              type: "error",
+                            });
+                            return;
+                          }
+                          stellaToast.add({
+                            title: t("common.copied"),
+                            type: "success",
+                          });
+                        })(),
+                        "case-law.selection-copy",
+                      );
+                      setCopyOpen(false);
+                      clearSelection();
+                    }}
+                    onFocus={() => setCopyPreviewMode(mode)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseEnter={() => setCopyPreviewMode(mode)}
+                    type="button"
+                  >
+                    {t(`caseLaw.copyMenu.${mode}`)}
+                  </button>
+                ))}
+              </MenuPreviewLayout>
+            </div>
+          )}
+        </div>
+        <span className="bg-border mx-1 h-4 w-px" />
         <Button
           onClick={() => {
             askAboutSelection({

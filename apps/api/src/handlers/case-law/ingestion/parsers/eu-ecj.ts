@@ -51,6 +51,7 @@ import type {
   ParagraphBlock,
   ParagraphRole,
 } from "@/api/handlers/case-law/document-ast";
+import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
@@ -401,7 +402,7 @@ const collapseWhitespace = (inlines: readonly Inline[]): Inline[] => {
     if (node.type === "text") {
       return { ...node, text: node.text.replace(/\s+/gu, " ") };
     }
-    if (node.type === "line-break") {
+    if (!hasInlineChildren(node)) {
       return node;
     }
     return { ...node, children: collapseWhitespace(node.children) };
@@ -416,7 +417,7 @@ const collapseWhitespace = (inlines: readonly Inline[]): Inline[] => {
 const trimEdge = (inlines: Inline[], edge: "start" | "end"): void => {
   const index = edge === "start" ? 0 : inlines.length - 1;
   const node = inlines[index];
-  if (node === undefined || node.type === "line-break") {
+  if (node === undefined) {
     return;
   }
   if (node.type === "text") {
@@ -426,7 +427,9 @@ const trimEdge = (inlines: Inline[], edge: "start" | "end"): void => {
     };
     return;
   }
-  trimEdge(node.children, edge);
+  if (hasInlineChildren(node)) {
+    trimEdge(node.children, edge);
+  }
 };
 
 const textOf = (el: cheerio.Cheerio<AnyNode>): string =>

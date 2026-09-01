@@ -437,12 +437,23 @@
     "columns": {
       "caseNumber": "Número do processo"
     },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Citação em bloco com referência",
+      "citationOnly": "Somente referência",
+      "citationWithQuote": "Referência com citação",
+      "quoteWithCitation": "Citação com referência",
+      "textOnly": "Somente texto"
+    },
     "decisionNotFound": "Decisão não encontrada",
     "emptyState": "Nenhuma decisão encontrada. Configure uma fonte e execute uma sincronização para importar jurisprudência.",
     "filters": {
       "searchPlaceholder": "Pesquisar por número do processo..."
     },
     "loadingMore": "Carregando mais...",
+    "notesFilter": {
+      "ai": "IA",
+      "human": "Humanas"
+    },
     "provision": {
       "article": "art. {value}",
       "letter": "alínea {value})",

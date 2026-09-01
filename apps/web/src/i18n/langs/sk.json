@@ -437,12 +437,23 @@
     "columns": {
       "caseNumber": "Spisová značka"
     },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Blokový citát s citáciou",
+      "citationOnly": "Iba citácia",
+      "citationWithQuote": "Citácia s citátom",
+      "quoteWithCitation": "Citát s citáciou",
+      "textOnly": "Iba text"
+    },
     "decisionNotFound": "Rozhodnutie sa nenašlo",
     "emptyState": "Žiadne rozhodnutia. Nakonfigurujte zdroj a spustite synchronizáciu na import judikatúry.",
     "filters": {
       "searchPlaceholder": "Hľadať podľa spisovej značky..."
     },
     "loadingMore": "Načítavajú sa ďalšie...",
+    "notesFilter": {
+      "ai": "AI",
+      "human": "Ľudské"
+    },
     "provision": {
       "article": "čl. {value}",
       "letter": "písm. {value})",

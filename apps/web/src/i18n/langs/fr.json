@@ -437,12 +437,23 @@
     "columns": {
       "caseNumber": "Numéro d'affaire"
     },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Citation en bloc avec référence",
+      "citationOnly": "Référence seule",
+      "citationWithQuote": "Référence avec citation",
+      "quoteWithCitation": "Citation avec référence",
+      "textOnly": "Texte seul"
+    },
     "decisionNotFound": "Décision introuvable",
     "emptyState": "Aucune décision trouvée. Configurez une source et lancez une synchronisation pour importer la jurisprudence.",
     "filters": {
       "searchPlaceholder": "Rechercher par numéro d'affaire..."
     },
     "loadingMore": "Chargement en cours…",
+    "notesFilter": {
+      "ai": "IA",
+      "human": "Humaines"
+    },
     "provision": {
       "article": "art. {value}",
       "letter": "let. {value})",

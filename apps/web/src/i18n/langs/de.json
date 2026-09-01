@@ -437,12 +437,23 @@
     "columns": {
       "caseNumber": "Aktenzeichen"
     },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Blockzitat mit Fundstelle",
+      "citationOnly": "Nur Fundstelle",
+      "citationWithQuote": "Fundstelle mit Zitat",
+      "quoteWithCitation": "Zitat mit Fundstelle",
+      "textOnly": "Nur Text"
+    },
     "decisionNotFound": "Entscheidung nicht gefunden",
     "emptyState": "Keine Entscheidungen gefunden. Konfigurieren Sie eine Quelle und führen Sie eine Synchronisierung durch, um Rechtsprechung zu importieren.",
     "filters": {
       "searchPlaceholder": "Nach Aktenzeichen suchen..."
     },
     "loadingMore": "Weitere werden geladen…",
+    "notesFilter": {
+      "ai": "KI",
+      "human": "Mensch"
+    },
     "provision": {
       "article": "Artikel {value}",
       "letter": "Buchst. {value})",

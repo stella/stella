@@ -169,6 +169,8 @@ const inlineText = (inlines: readonly Inline[]): string => {
       text += node.text;
     } else if (node.type === "line-break") {
       text += " ";
+    } else if (node.type === "page-anchor") {
+      // Typography, not content — no characters.
     } else {
       // bold | italic | link — all carry children
       text += inlineText(node.children);

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
 import type { Block, Inline } from "@/api/handlers/case-law/document-ast";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 
@@ -35,7 +36,9 @@ const flattenInlineText = (inlines: Inline[]): string =>
         return "\n";
       }
 
-      return flattenInlineText(inline.children);
+      return hasInlineChildren(inline)
+        ? flattenInlineText(inline.children)
+        : "";
     })
     .join("");
 

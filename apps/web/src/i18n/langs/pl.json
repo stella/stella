@@ -437,12 +437,23 @@
     "columns": {
       "caseNumber": "Sygnatura akt"
     },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Cytat blokowy z odesłaniem",
+      "citationOnly": "Tylko odesłanie",
+      "citationWithQuote": "Odesłanie z cytatem",
+      "quoteWithCitation": "Cytat z odesłaniem",
+      "textOnly": "Tylko tekst"
+    },
     "decisionNotFound": "Nie znaleziono orzeczenia",
     "emptyState": "Brak orzeczeń. Skonfiguruj źródło i uruchom synchronizację, aby zaimportować orzecznictwo.",
     "filters": {
       "searchPlaceholder": "Szukaj po sygnaturze akt..."
     },
     "loadingMore": "Ładowanie kolejnych...",
+    "notesFilter": {
+      "ai": "AI",
+      "human": "Ludzkie"
+    },
     "provision": {
       "article": "art. {value}",
       "letter": "litera {value})",

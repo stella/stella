@@ -15,8 +15,11 @@ export type {
   InlineItalic,
   InlineLineBreak,
   InlineLink,
+  InlinePageAnchor,
   InlineText,
+  InlineWithChildren,
 } from "./inline.js";
+export { hasInlineChildren } from "./inline.js";
 
 /**
  * Heading depth, one to six.
@@ -44,6 +47,13 @@ export type ParagraphRole =
   | "holding"
   | "closing"
   | "signature"
+  /** A passage the decision reproduces from another text (block quotation). */
+  | "quote"
+  /** The centered party block a published reporter opens with. */
+  | "parties"
+  /** Other centered reporter front matter: docket line, argument and
+   * decision dates. */
+  | "front-matter"
   | "unknown";
 
 export type ParagraphNote = {
@@ -129,6 +139,9 @@ export const plainTextOf = (inlines: readonly Inline[]): string => {
       out += node.text;
     } else if (node.type === "line-break") {
       out += "\n";
+    } else if (node.type === "page-anchor") {
+      // Zero characters: a page break is typography, and it may fall
+      // mid-word — the word must stay whole on this axis.
     } else {
       out += plainTextOf(node.children);
     }
@@ -341,6 +354,9 @@ const paragraphEntries = {
       "holding",
       "closing",
       "signature",
+      "quote",
+      "parties",
+      "front-matter",
       "unknown",
     ]),
   ),

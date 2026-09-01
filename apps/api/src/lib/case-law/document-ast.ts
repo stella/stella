@@ -21,6 +21,7 @@ export type {
   WireTableCell,
 } from "@stll/legal-ast/document-ast";
 
+export { hasInlineChildren } from "@stll/legal-ast/document-ast";
 export {
   getDocumentAstMetadata,
   hasUsableAst,

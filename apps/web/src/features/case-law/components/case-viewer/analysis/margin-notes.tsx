@@ -68,7 +68,12 @@ type MarginNotesProps = {
   scrollContainerRef: RefObject<HTMLElement | null>;
 };
 
-type PositionedItem = MarginItem & { top: number };
+type PositionedItem = MarginItem & {
+  top: number;
+  /** Where the note's paragraph actually is; `top` may sit lower when
+   * earlier notes pushed it down. The gap is bridged by a leader line. */
+  anchorTop: number;
+};
 
 export const MarginNotes = ({
   items,
@@ -112,7 +117,7 @@ export const MarginNotes = ({
     for (const { item, anchorTop } of anchored) {
       const h = heights.get(item.id) ?? 48;
       const top = Math.max(anchorTop, lastBottom + 8);
-      result.push({ ...item, top });
+      result.push({ ...item, anchorTop, top });
       lastBottom = top + h;
     }
 
@@ -130,16 +135,35 @@ export const MarginNotes = ({
     }
   };
 
+  // Hovering annotated TEXT lights its notes and slightly dims the rest of
+  // the margin, mirroring the note→text hover. One listener pair on the
+  // scroll container (not one per paragraph); the hovered block is read
+  // from the event target.
+  const [textHoverAnchor, setTextHoverAnchor] = useState<string | null>(null);
+
   useExternalSyncEffect(() => {
     const sc = scrollContainerRef.current;
     if (!sc) {
       return undefined;
     }
     recalc();
+    const onPointerOver = (event: Event) => {
+      const target = event.target;
+      const block =
+        target instanceof Element ? target.closest("[data-anchor]") : null;
+      setTextHoverAnchor(
+        block instanceof HTMLElement ? (block.dataset["anchor"] ?? null) : null,
+      );
+    };
+    const onPointerLeave = () => setTextHoverAnchor(null);
     sc.addEventListener("scroll", recalc, { passive: true });
+    sc.addEventListener("pointerover", onPointerOver, { passive: true });
+    sc.addEventListener("pointerleave", onPointerLeave, { passive: true });
     globalThis.addEventListener("resize", recalc);
     return () => {
       sc.removeEventListener("scroll", recalc);
+      sc.removeEventListener("pointerover", onPointerOver);
+      sc.removeEventListener("pointerleave", onPointerLeave);
       globalThis.removeEventListener("resize", recalc);
     };
   }, [scrollContainerRef, recalc]);
@@ -163,8 +187,67 @@ export const MarginNotes = ({
     el.dataset["highlight"] = "";
   };
 
+  // Hovering (or focusing) a note tints the paragraph it belongs to and
+  // lights the note's leader line, so the reader sees what a note is about
+  // without jumping to it.
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const noteHover = (item: MarginItem, on: boolean) => {
+    setHoveredId(on ? item.id : null);
+    const el = scrollContainerRef.current?.querySelector<HTMLElement>(
+      `#${CSS.escape(item.startAnchorId)}`,
+    );
+    if (!el) {
+      return;
+    }
+    if (on) {
+      el.dataset["noteHover"] = "";
+    } else {
+      delete el.dataset["noteHover"];
+    }
+  };
+
+  const notePresence = (item: MarginItem): NotePresence => {
+    if (textHoverAnchor === null || item.kind === "composer") {
+      return "normal";
+    }
+    return item.startAnchorId === textHoverAnchor ? "highlighted" : "dimmed";
+  };
+
   return (
     <div className="absolute inset-0" ref={containerRef}>
+      {positioned.map((item) => {
+        // A note pushed away from its paragraph gets a bracket bridging the
+        // gap while the note is hovered: along the gutter from the
+        // paragraph's edge down to the note's own top. Invisible otherwise —
+        // a resting line in empty space reads as a stray glyph, not a link.
+        const drift = item.top - item.anchorTop;
+        if (drift < 16 || item.kind === "composer") {
+          return null;
+        }
+        if (hoveredId !== item.id) {
+          return null;
+        }
+        const color =
+          item.kind === "comment"
+            ? "var(--option-sky)"
+            : `var(${getCategoryVar(item.category)})`;
+        return (
+          <div
+            className="pointer-events-none absolute end-0 opacity-90"
+            key={`leader-${item.id}`}
+            style={{ top: item.anchorTop + 8 }}
+          >
+            <div
+              className="absolute end-0 top-0 h-0.5 w-3 rounded-full"
+              style={{ backgroundColor: color }}
+            />
+            <div
+              className="absolute end-2.5 top-0 w-px"
+              style={{ backgroundColor: color, height: drift + 6 }}
+            />
+          </div>
+        );
+      })}
       {positioned.map((item) => {
         switch (item.kind) {
           case "comment": {
@@ -173,7 +256,9 @@ export const MarginNotes = ({
                 item={item}
                 key={item.id}
                 measureRef={measureRef}
+                onHover={(on) => noteHover(item, on)}
                 onJump={() => scrollTo(item.startAnchorId)}
+                presence={notePresence(item)}
               />
             );
           }
@@ -189,7 +274,9 @@ export const MarginNotes = ({
                 item={item}
                 key={item.id}
                 measureRef={measureRef}
+                onHover={(on) => noteHover(item, on)}
                 onJump={() => scrollTo(item.startAnchorId)}
+                presence={notePresence(item)}
               />
             );
           }
@@ -203,32 +290,57 @@ export const MarginNotes = ({
   );
 };
 
+type NotePresence = "normal" | "highlighted" | "dimmed";
+
 type NoteProps<T extends MarginItem> = {
   item: T & { top: number };
   measureRef: (el: HTMLElement | null, id: string) => void;
+  onHover: (on: boolean) => void;
   onJump: () => void;
+  /** Reverse hover: the reader's pointer is on annotated text — its own
+   * notes light up, every other note steps back. */
+  presence: NotePresence;
 };
 
 const AnalysisNote = ({
   item,
   measureRef,
+  onHover,
   onJump,
+  presence,
 }: NoteProps<AnalysisMarginItem>) => {
   const cssVar = getCategoryVar(item.category);
+  // Reverse hover speaks through the colour stripe alone — the words stay
+  // readable in every state. Dimmed washes the stripe out; highlighted goes
+  // full colour, doubled by an inset glow.
+  const stripe = (() => {
+    if (presence === "dimmed") {
+      return `color-mix(in srgb, var(${cssVar}) 22%, transparent)`;
+    }
+    if (presence === "highlighted" || item.kind === "card") {
+      return `var(${cssVar})`;
+    }
+    return `color-mix(in srgb, var(${cssVar}) 60%, transparent)`;
+  })();
 
   return (
     <button
-      className="text-foreground-muted hover:text-foreground-strong-muted absolute start-0 end-0 border-s-[3px] py-1 ps-2.5 text-start transition-colors"
+      className="text-foreground-muted hover:text-foreground-strong-muted absolute start-0 end-0 border-s-[3px] py-1 ps-2.5 text-start transition-[color,border-color,box-shadow]"
+      onBlur={() => onHover(false)}
       // oxlint-disable-next-line require-contained-handler/require-contained-handler -- measure callback ref, no portal-bearing descendants
       onClick={onJump}
+      // oxlint-disable-next-line require-contained-handler/require-contained-handler -- measure callback ref, no portal-bearing descendants
+      onFocus={() => onHover(true)}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
       ref={(el) => measureRef(el, item.id)}
       style={{
         top: `${item.top}px`,
         paddingInlineStart: `${0.625 + item.depth * 0.5}rem`,
-        borderInlineStartColor:
-          item.kind === "card"
-            ? `var(${cssVar})`
-            : `color-mix(in srgb, var(${cssVar}) 60%, transparent)`,
+        borderInlineStartColor: stripe,
+        ...(presence === "highlighted" && {
+          boxShadow: `inset 2px 0 0 var(${cssVar})`,
+        }),
       }}
       type="button"
     >
@@ -353,18 +465,30 @@ const ComposerNote = ({
 const CommentNote = ({
   item,
   measureRef,
+  onHover,
   onJump,
+  presence,
 }: NoteProps<CommentMarginItem>) => {
   const t = useTranslations();
   const shared = item.visibility === "shared";
 
+  const stripe =
+    presence === "dimmed"
+      ? "color-mix(in srgb, var(--option-sky) 22%, transparent)"
+      : "var(--option-sky)";
+
   return (
     <div
-      className="group/comment absolute start-0 end-0 border-s-[3px] py-1 ps-2.5"
+      className="group/comment absolute start-0 end-0 border-s-[3px] py-1 ps-2.5 transition-[border-color,box-shadow]"
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
       ref={(el) => measureRef(el, item.id)}
       style={{
         top: `${item.top}px`,
-        borderInlineStartColor: "var(--option-sky)",
+        borderInlineStartColor: stripe,
+        ...(presence === "highlighted" && {
+          boxShadow: "inset 2px 0 0 var(--option-sky)",
+        }),
       }}
     >
       <div className="flex items-center gap-1.5">

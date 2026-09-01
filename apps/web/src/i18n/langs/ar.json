@@ -437,12 +437,23 @@
     "columns": {
       "caseNumber": "رقم القضية"
     },
+    "copyMenu": {
+      "blockQuoteWithCitation": "اقتباس كتلي مع الإحالة",
+      "citationOnly": "الإحالة فقط",
+      "citationWithQuote": "إحالة مع اقتباس",
+      "quoteWithCitation": "اقتباس مع الإحالة",
+      "textOnly": "النص فقط"
+    },
     "decisionNotFound": "لم يُعثر على القرار",
     "emptyState": "لم يُعثر على أي قرارات. اضبط مصدرًا وشغّل مزامنة لاستيراد الاجتهاد القضائي.",
     "filters": {
       "searchPlaceholder": "البحث برقم القضية..."
     },
     "loadingMore": "جارٍ تحميل المزيد...",
+    "notesFilter": {
+      "ai": "ذكاء اصطناعي",
+      "human": "بشرية"
+    },
     "provision": {
       "article": "المادة {value}",
       "letter": "البند {value}",

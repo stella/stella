@@ -437,12 +437,23 @@
     "columns": {
       "caseNumber": "Bylos numeris"
     },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Blokinė citata su nuoroda",
+      "citationOnly": "Tik nuoroda",
+      "citationWithQuote": "Nuoroda su citata",
+      "quoteWithCitation": "Citata su nuoroda",
+      "textOnly": "Tik tekstas"
+    },
     "decisionNotFound": "Sprendimas nerastas",
     "emptyState": "Sprendimų nerasta. Sukonfigūruokite šaltinį ir paleiskite sinchronizavimą, kad importuotumėte teismų praktiką.",
     "filters": {
       "searchPlaceholder": "Ieškoti pagal bylos numerį..."
     },
     "loadingMore": "Kraunama daugiau...",
+    "notesFilter": {
+      "ai": "DI",
+      "human": "Žmonių"
+    },
     "provision": {
       "article": "{value} str.",
       "letter": "{value} papunktis",

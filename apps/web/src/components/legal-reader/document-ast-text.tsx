@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import type { ReactNode } from "react";
 
 import { Result } from "better-result";
@@ -13,11 +13,13 @@ import type {
   SearchMatchRange,
   SearchPiece,
 } from "@/components/legal-reader/reader-search";
+import Tooltip from "@/components/tooltip";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
+import { forceReflow } from "@/lib/utils";
 
 import "./reader.css";
 
@@ -293,6 +295,33 @@ const renderInline = ({
     );
   }
 
+  // A page boundary: zero characters on the text axis (no offset advance),
+  // shown as a hanging margin marker plus a hair-thin tick at the exact
+  // break point. Neither is selectable, so copies stay clean.
+  if (node.type === "page-anchor") {
+    const scanHref = node.href ?? "";
+    return (
+      <Fragment key={key}>
+        {sanitizeHref(scanHref) === "" ? (
+          <span className="reader-page-marker" data-reader-chrome="">
+            {node.label}
+          </span>
+        ) : (
+          <a
+            className="reader-page-marker"
+            data-reader-chrome=""
+            href={sanitizeHref(scanHref)}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            {node.label}
+          </a>
+        )}
+        <span aria-hidden className="reader-page-tick" data-reader-chrome="" />
+      </Fragment>
+    );
+  }
+
   const safeHref = sanitizeHref(node.href);
   if (!safeHref) {
     return (
@@ -310,6 +339,36 @@ const renderInline = ({
     offset,
   });
 
+  // An in-document link (footnote reference, back-reference) navigates the
+  // reader itself; a new tab would strand it. Note references render as
+  // superscript marks, the way the published decision prints them, and
+  // preview the note's text on hover.
+  if (safeHref.startsWith("#")) {
+    return (
+      <NoteRefLink href={safeHref} key={key}>
+        {children}
+      </NoteRefLink>
+    );
+  }
+
+  // A reporter page boundary hangs in the margin at its own line, the way
+  // the published volume prints it; the link still opens the official scan.
+  // Absolute positioning keeps the marker at the line the inline occupies.
+  if (safeHref.includes("tile.loc.gov")) {
+    return (
+      <a
+        className="reader-page-marker"
+        data-reader-chrome=""
+        href={sanitizeHref(node.href)}
+        key={key}
+        rel="noopener noreferrer"
+        target="_blank"
+      >
+        {children}
+      </a>
+    );
+  }
+
   return (
     <a
       className="decoration-border underline underline-offset-2 hover:decoration-current"
@@ -320,6 +379,83 @@ const renderInline = ({
     >
       {children}
     </a>
+  );
+};
+
+const NOTE_PREVIEW_MAX_CHARS = 600;
+
+/** The note's own words, read from its rendered block: chrome stripped,
+ * whitespace collapsed, capped for the popup. */
+const notePreviewOf = (targetId: string): string | null => {
+  const el = document.querySelector(`#${targetId}`);
+  if (!el) {
+    return null;
+  }
+  const clone = el.cloneNode(true);
+  if (!(clone instanceof Element)) {
+    return null;
+  }
+  for (const chrome of clone.querySelectorAll("[data-reader-chrome]")) {
+    chrome.remove();
+  }
+  const text = clone.textContent.replaceAll(/\s+/gu, " ").trim();
+  if (text === "") {
+    return null;
+  }
+  return text.length > NOTE_PREVIEW_MAX_CHARS
+    ? `${text.slice(0, NOTE_PREVIEW_MAX_CHARS)}…`
+    : text;
+};
+
+/**
+ * In-document note reference. The preview is read from the live DOM on
+ * hover rather than threaded through props: the note's block renders from
+ * the same AST, so the DOM is the cheapest correct source.
+ */
+const NoteRefLink = ({
+  children,
+  href,
+}: {
+  children: ReactNode;
+  href: string;
+}) => {
+  const [preview, setPreview] = useState<string | null>(null);
+  return (
+    <Tooltip
+      content={
+        <span className="block max-w-xs text-start leading-snug">
+          {preview}
+        </span>
+      }
+      render={
+        // The note reference's visible text is injected as the Tooltip
+        // trigger's children by the composition below.
+        // oxlint-disable-next-line jsx-a11y/anchor-has-content -- children injected by Tooltip trigger composition
+        <a
+          className="reader-note-ref"
+          href={sanitizeHref(href)}
+          onClick={(event) => {
+            // Scripted jump instead of native hash navigation: centers the
+            // note, and the flash re-fires on every click — `:target` only
+            // animates when the hash actually changes.
+            event.preventDefault();
+            const el = document.querySelector<HTMLElement>(
+              `#${CSS.escape(href.slice(1))}`,
+            );
+            if (!el) {
+              return;
+            }
+            el.scrollIntoView({ behavior: "instant", block: "center" });
+            delete el.dataset["highlight"];
+            forceReflow(el);
+            el.dataset["highlight"] = "";
+          }}
+          onMouseEnter={() => setPreview(notePreviewOf(href.slice(1)))}
+        />
+      }
+    >
+      {children}
+    </Tooltip>
   );
 };
 
@@ -478,6 +614,43 @@ const BlockPermalink = ({ anchorId }: { anchorId: string }) => {
   );
 };
 
+const REGEXP_SPECIALS_RE = /[.*+?^${}()|[\]\\]/gu;
+
+/**
+ * Whether a footnote's text already opens with its own label ("[3] …",
+ * "3) …"). Sources differ: Word-derived corpora keep the mark inside the
+ * footnote body, structured corpora strip it — the reader shows its own
+ * label only when the text does not.
+ */
+/**
+ * From a footnote back to the sentence that cites it: scroll the first
+ * in-text reference into view and flash its paragraph.
+ */
+const jumpToNoteReference = (anchorId: string) => {
+  // :not([data-reader-chrome]) keeps the block's own permalink — which
+  // shares the href — from matching instead of the in-text reference.
+  const ref = document.querySelector<HTMLElement>(
+    `a[href="#${CSS.escape(anchorId)}"]:not([data-reader-chrome])`,
+  );
+  if (!ref) {
+    return;
+  }
+  ref.scrollIntoView({ behavior: "instant", block: "center" });
+  const blockEl = ref.closest<HTMLElement>("[data-anchor]");
+  if (!blockEl) {
+    return;
+  }
+  delete blockEl.dataset["highlight"];
+  forceReflow(blockEl);
+  blockEl.dataset["highlight"] = "";
+};
+
+const footnoteTextCarriesLabel = (label: string, plainText: string): boolean =>
+  new RegExp(
+    `^\\s*[\\[(]?${label.replace(REGEXP_SPECIALS_RE, (match) => `\\${match}`)}[\\]).:]?`,
+    "u",
+  ).test(plainText);
+
 export const BlockRenderer = ({
   activeMatchIndex,
   anchorsByPieceId,
@@ -524,18 +697,38 @@ export const BlockRenderer = ({
     // need their own alignment; every other paragraph — including
     // intro, argumentation and unroled body text — defaults to
     // justified reading layout.
-    const nonJustifiedRoles = new Set(["case-number", "closing", "signature"]);
+    const nonJustifiedRoles = new Set([
+      "case-number",
+      "closing",
+      "signature",
+      "parties",
+      "front-matter",
+    ]);
     const shouldJustify =
       !isRomanNumeralDivider &&
       (block.role === undefined || !nonJustifiedRoles.has(block.role));
+    const noteLabel = block.note?.type === "footnote" ? block.note.label : null;
+    const showNoteLabel =
+      noteLabel !== null &&
+      noteLabel !== "" &&
+      !footnoteTextCarriesLabel(noteLabel, block.plainText);
     return (
       <p
         className={cn(
           "group relative mb-[var(--reader-paragraph-gap)] scroll-mt-[var(--reader-anchor-offset)] last:mb-0",
           shouldJustify && "reader-justify",
           block.role === "holding" && "font-[520]",
+          // Indented, slightly condensed; never italicized or reflowed —
+          // a reproduced passage must not be visually altered.
+          block.role === "quote" &&
+            "border-border my-4 border-s-2 ps-5 text-[0.95em]",
+          // Reporter front matter keeps its published, centered shape.
+          block.role === "parties" &&
+            "my-4 text-center text-[1.05em] leading-relaxed tracking-wide",
+          block.role === "front-matter" &&
+            "text-muted-foreground my-1 text-center text-[0.95em]",
           block.note?.type === "footnote" &&
-            "text-muted-foreground border-border mb-2 border-s-2 ps-4 text-[0.86em] leading-relaxed",
+            "text-muted-foreground mb-2 text-[0.86em] leading-relaxed",
           isRomanNumeralDivider &&
             "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm font-semibold",
           block.role === "case-number" &&
@@ -549,9 +742,20 @@ export const BlockRenderer = ({
           block.number !== undefined && "ps-8",
         )}
         data-anchor={block.anchorId}
+        data-note={block.note?.type}
         id={block.anchorId}
       >
         <BlockPermalink anchorId={block.anchorId} />
+        {showNoteLabel && (
+          <button
+            className="reader-note-label"
+            data-reader-chrome=""
+            onClick={() => jumpToNoteReference(block.anchorId)}
+            type="button"
+          >
+            {noteLabel}
+          </button>
+        )}
         {block.number !== undefined && (
           <HighlightedText
             activeMatchIndex={activeMatchIndex}
