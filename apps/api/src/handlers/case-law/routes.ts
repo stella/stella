@@ -10,6 +10,7 @@ import createMatterLink from "@/api/handlers/case-law/matter-links/create";
 import deleteMatterLink from "@/api/handlers/case-law/matter-links/delete";
 import listMatterLinks from "@/api/handlers/case-law/matter-links/list";
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
+import { caseLawResearchRoute } from "@/api/handlers/case-law/research/routes";
 import {
   authMacro,
   permissionMacro,
@@ -90,5 +91,6 @@ const caseLawAdminRoute = new Elysia({
 export const caseLawRoute = new Elysia()
   .use(publicCaseLawRoute)
   .use(authenticatedCaseLawRoute)
+  .use(caseLawResearchRoute)
   .use(caseLawMatterLinksRoute)
   .use(caseLawAdminRoute);

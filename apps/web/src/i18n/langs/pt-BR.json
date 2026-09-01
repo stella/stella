@@ -469,6 +469,28 @@
     "reader": {
       "headMatter": "Cabeçalho"
     },
+    "research": {
+      "deleteConfirm": "A tabela será removida com suas fixações e exclusões. As decisões permanecem na base.",
+      "deleteTitle": "Excluir tabela de pesquisa",
+      "empty": "Ainda não há tabelas de pesquisa. Faça uma busca e salve-a para começar.",
+      "exclude": "Excluir da tabela",
+      "excluded": "Excluída",
+      "excludedCount": "{count, plural, one {# decisão excluída} other {# decisões excluídas}}",
+      "groupBy": "Agrupar por",
+      "hideExcluded": "Ocultar excluídas",
+      "namePlaceholder": "Nome da tabela",
+      "notFound": "Tabela de pesquisa não encontrada",
+      "pin": "Fixar na tabela",
+      "restore": "Devolver à tabela",
+      "rows": "{count, plural, one {# decisão} other {# decisões}}",
+      "save": "Salvar como tabela de pesquisa",
+      "saved": "Tabela de pesquisa criada",
+      "savedQuery": "Busca salva",
+      "showExcluded": "Mostrar excluídas",
+      "title": "Tabelas de pesquisa",
+      "ungrouped": "Sem valor",
+      "updated": "Última edição em {date}"
+    },
     "seo": {
       "browse": "Explorar jurisprudência",
       "countries": "Países",

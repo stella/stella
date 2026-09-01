@@ -469,6 +469,28 @@
     "reader": {
       "headMatter": "Päis"
     },
+    "research": {
+      "deleteConfirm": "Tabel eemaldatakse koos kinnituste ja välistustega. Lahendid jäävad andmebaasi.",
+      "deleteTitle": "Kustuta uurimistabel",
+      "empty": "Uurimistabeleid veel pole. Tehke otsing ja salvestage see.",
+      "exclude": "Välista tabelist",
+      "excluded": "Välistatud",
+      "excludedCount": "{count, plural, one {# välistatud lahend} other {# välistatud lahendit}}",
+      "groupBy": "Rühmita",
+      "hideExcluded": "Peida välistatud",
+      "namePlaceholder": "Tabeli nimi",
+      "notFound": "Uurimistabelit ei leitud",
+      "pin": "Kinnita tabelisse",
+      "restore": "Taasta tabelisse",
+      "rows": "{count, plural, one {# lahend} other {# lahendit}}",
+      "save": "Salvesta uurimistabelina",
+      "saved": "Uurimistabel loodud",
+      "savedQuery": "Salvestatud otsing",
+      "showExcluded": "Näita välistatuid",
+      "title": "Uurimistabelid",
+      "ungrouped": "Väärtuseta",
+      "updated": "Viimati muudetud {date}"
+    },
     "seo": {
       "browse": "Sirvi kohtupraktikat",
       "countries": "Riigid",

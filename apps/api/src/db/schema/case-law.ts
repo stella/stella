@@ -1,5 +1,7 @@
 import { eq } from "drizzle-orm";
 
+import { CASE_LAW_RESEARCH_DISPOSITIONS } from "@stll/api-contract";
+import type { CaseLawResearchSavedQuery } from "@stll/api-contract";
 import {
   DECISION_IDENTIFIER_MAX_LENGTH,
   DECISION_IDENTIFIER_TYPES,
@@ -48,6 +50,7 @@ import {
   isNull,
   jsonb,
   organization,
+  orgPolicies,
   p,
   pUuid,
   publicCaseLawReaderPolicies,
@@ -1492,6 +1495,119 @@ export const caseLawMatterLinks = p.pgTable(
       .on(t.decisionId, t.workspaceId),
     p.index("case_law_matter_links_workspace_idx").on(t.workspaceId),
     ...wsPolicies(),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Case Law — Research tables (organization-scoped)
+// ---------------------------------------------------------------------------
+
+/**
+ * A saved case-law search a member keeps working on. Rows are the public
+ * corpus, re-run from `savedQuery` and adjusted by the dispositions below;
+ * the table itself stores no decision content. Visible to the whole
+ * organization; the owner is recorded for attribution and caps.
+ */
+export const caseLawResearchTables = p.pgTable(
+  "case_law_research_tables",
+  {
+    id: pUuid<"caseLawResearchTable">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    ownerUserId: p.text("owner_user_id").notNull(),
+    name: p.varchar({ length: 256 }).notNull(),
+    savedQuery: jsonb("saved_query")
+      .$type<CaseLawResearchSavedQuery>()
+      .notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        name: "case_law_research_tables_organization_id_organization_id_fk",
+        columns: [t.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "case_law_research_tables_owner_user_id_user_id_fk",
+        columns: [t.ownerUserId],
+        foreignColumns: [user.id],
+      })
+      .onDelete("cascade"),
+    // Composite tenant key for the dispositions table, so a child row can
+    // never name a table from another organization even on root write paths.
+    p.unique("case_law_research_tables_id_org_unq").on(t.id, t.organizationId),
+    p
+      .index("case_law_research_tables_org_updated_id_idx")
+      .on(t.organizationId, t.updatedAt, t.id),
+    p.check(
+      "case_law_research_tables_saved_query_version_check",
+      sql`(jsonb_typeof(${t.savedQuery}) = 'object' AND ${t.savedQuery}->'version' = '1'::jsonb) IS TRUE`,
+    ),
+    ...orgPolicies(),
+  ],
+);
+
+const CASE_LAW_RESEARCH_DISPOSITION_SQL_VALUES =
+  CASE_LAW_RESEARCH_DISPOSITIONS.map((disposition) =>
+    sql.raw(`'${disposition}'`),
+  );
+
+/**
+ * One decision the table treats differently from its saved query: pinned
+ * into the rows whether or not the query still returns it, or excluded from
+ * them. `decisionId` carries no foreign key, like the annotations: the corpus
+ * may live in a separate public-law database, so the id is validated through
+ * the public read gate on write and a decision that has since gone simply
+ * yields no row facts.
+ */
+export const caseLawResearchTableDecisions = p.pgTable(
+  "case_law_research_table_decisions",
+  {
+    tableId: safeUuid<"caseLawResearchTable">("table_id").notNull(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    disposition: p.text({ enum: CASE_LAW_RESEARCH_DISPOSITIONS }).notNull(),
+    /** Order among pinned rows; excluded rows carry 0. */
+    position: p.integer().notNull().default(0),
+    addedBy: p.text("added_by"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.tableId, t.decisionId],
+      name: "case_law_research_table_decisions_pk",
+    }),
+    p
+      .foreignKey({
+        name: "clrtd_table_org_fk",
+        columns: [t.tableId, t.organizationId],
+        foreignColumns: [
+          caseLawResearchTables.id,
+          caseLawResearchTables.organizationId,
+        ],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "clrtd_added_by_fk",
+        columns: [t.addedBy],
+        foreignColumns: [user.id],
+      })
+      .onDelete("set null"),
+    p
+      .index("clrtd_table_disposition_position_idx")
+      .on(t.tableId, t.disposition, t.position),
+    p.check(
+      "case_law_research_table_decisions_disposition_check",
+      sql`${t.disposition} IN (${sql.join(CASE_LAW_RESEARCH_DISPOSITION_SQL_VALUES, sql`, `)})`,
+    ),
+    ...orgPolicies(),
   ],
 );
 

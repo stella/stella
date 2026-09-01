@@ -241,6 +241,11 @@ export const brandPersistedSavedSearchId = (
   savedSearchId: string,
 ): SafeId<"savedSearch"> => toSafeId<"savedSearch">(savedSearchId);
 
+export const brandPersistedCaseLawResearchTableId = (
+  researchTableId: string,
+): SafeId<"caseLawResearchTable"> =>
+  toSafeId<"caseLawResearchTable">(researchTableId);
+
 export const brandPersistedTimeEntryId = (
   timeEntryId: string,
 ): SafeId<"timeEntry"> => toSafeId<"timeEntry">(timeEntryId);

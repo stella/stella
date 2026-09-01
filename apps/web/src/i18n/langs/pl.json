@@ -469,6 +469,28 @@
     "reader": {
       "headMatter": "Część wstępna"
     },
+    "research": {
+      "deleteConfirm": "Tabela zostanie usunięta wraz z przypięciami i wykluczeniami. Orzeczenia pozostają w bazie.",
+      "deleteTitle": "Usuń tabelę badawczą",
+      "empty": "Nie ma jeszcze tabel badawczych. Wykonaj wyszukiwanie i zapisz je.",
+      "exclude": "Wyklucz z tabeli",
+      "excluded": "Wykluczone",
+      "excludedCount": "{count, plural, one {# wykluczone orzeczenie} few {# wykluczone orzeczenia} many {# wykluczonych orzeczeń} other {# wykluczonego orzeczenia}}",
+      "groupBy": "Grupuj według",
+      "hideExcluded": "Ukryj wykluczone",
+      "namePlaceholder": "Nazwa tabeli",
+      "notFound": "Nie znaleziono tabeli badawczej",
+      "pin": "Przypnij do tabeli",
+      "restore": "Przywróć do tabeli",
+      "rows": "{count, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",
+      "save": "Zapisz jako tabelę badawczą",
+      "saved": "Utworzono tabelę badawczą",
+      "savedQuery": "Zapisane wyszukiwanie",
+      "showExcluded": "Pokaż wykluczone",
+      "title": "Tabele badawcze",
+      "ungrouped": "Bez wartości",
+      "updated": "Ostatnia edycja {date}"
+    },
     "seo": {
       "browse": "Przeglądaj orzecznictwo",
       "countries": "Kraje",

@@ -472,6 +472,28 @@ type Messages = {
     "reader": {
       "headMatter": "Head matter";
     };
+    "research": {
+      "deleteConfirm": "This removes the table with its pins and exclusions. The decisions stay in the database.";
+      "deleteTitle": "Delete research table";
+      "empty": "No research tables yet. Run a search and save it to start one.";
+      "exclude": "Exclude from table";
+      "excluded": "Excluded";
+      "excludedCount": "{count, plural, one {# excluded decision} other {# excluded decisions}}";
+      "groupBy": "Group by";
+      "hideExcluded": "Hide excluded";
+      "namePlaceholder": "Table name";
+      "notFound": "Research table not found";
+      "pin": "Pin to table";
+      "restore": "Restore to table";
+      "rows": "{count, plural, one {# decision} other {# decisions}}";
+      "save": "Save as research table";
+      "saved": "Research table created";
+      "savedQuery": "Saved search";
+      "showExcluded": "Show excluded";
+      "title": "Research tables";
+      "ungrouped": "Without value";
+      "updated": "Last edited {date}";
+    };
     "seo": {
       "browse": "Browse case law";
       "countries": "Countries";
