@@ -469,6 +469,28 @@
     "reader": {
       "headMatter": "En-tête"
     },
+    "research": {
+      "deleteConfirm": "Le tableau sera supprimé avec ses épinglages et exclusions. Les décisions restent dans la base.",
+      "deleteTitle": "Supprimer le tableau de recherche",
+      "empty": "Aucun tableau de recherche pour l’instant. Lancez une recherche et enregistrez-la.",
+      "exclude": "Exclure du tableau",
+      "excluded": "Exclue",
+      "excludedCount": "{count, plural, one {# décision exclue} other {# décisions exclues}}",
+      "groupBy": "Grouper par",
+      "hideExcluded": "Masquer les exclues",
+      "namePlaceholder": "Nom du tableau",
+      "notFound": "Tableau de recherche introuvable",
+      "pin": "Épingler dans le tableau",
+      "restore": "Rétablir dans le tableau",
+      "rows": "{count, plural, one {# décision} other {# décisions}}",
+      "save": "Enregistrer comme tableau de recherche",
+      "saved": "Tableau de recherche créé",
+      "savedQuery": "Recherche enregistrée",
+      "showExcluded": "Afficher les exclues",
+      "title": "Tableaux de recherche",
+      "ungrouped": "Sans valeur",
+      "updated": "Dernière modification le {date}"
+    },
     "seo": {
       "browse": "Parcourir la jurisprudence",
       "countries": "Pays",

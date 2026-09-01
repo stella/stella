@@ -469,6 +469,28 @@
     "reader": {
       "headMatter": "Ievaddaļa"
     },
+    "research": {
+      "deleteConfirm": "Tabula tiks dzēsta kopā ar piespraudumiem un izslēgumiem. Nolēmumi datubāzē saglabājas.",
+      "deleteTitle": "Dzēst pētījumu tabulu",
+      "empty": "Pētījumu tabulu vēl nav. Veiciet meklēšanu un saglabājiet to.",
+      "exclude": "Izslēgt no tabulas",
+      "excluded": "Izslēgts",
+      "excludedCount": "{count, plural, zero {# izslēgtu nolēmumu} one {# izslēgts nolēmums} other {# izslēgti nolēmumi}}",
+      "groupBy": "Grupēt pēc",
+      "hideExcluded": "Paslēpt izslēgtos",
+      "namePlaceholder": "Tabulas nosaukums",
+      "notFound": "Pētījumu tabula nav atrasta",
+      "pin": "Piespraust tabulā",
+      "restore": "Atgriezt tabulā",
+      "rows": "{count, plural, zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}}",
+      "save": "Saglabāt kā pētījumu tabulu",
+      "saved": "Pētījumu tabula izveidota",
+      "savedQuery": "Saglabātā meklēšana",
+      "showExcluded": "Rādīt izslēgtos",
+      "title": "Pētījumu tabulas",
+      "ungrouped": "Bez vērtības",
+      "updated": "Pēdējo reizi labota {date}"
+    },
     "seo": {
       "browse": "Pārlūkot judikatūru",
       "countries": "Valstis",

@@ -469,6 +469,28 @@
     "reader": {
       "headMatter": "Úvodní část"
     },
+    "research": {
+      "deleteConfirm": "Tabulka bude odstraněna včetně připnutí a vyloučení. Rozhodnutí v databázi zůstávají.",
+      "deleteTitle": "Smazat rešeršní tabulku",
+      "empty": "Zatím žádné rešeršní tabulky. Vyhledejte a uložte hledání.",
+      "exclude": "Vyloučit z tabulky",
+      "excluded": "Vyloučeno",
+      "excludedCount": "{count, plural, one {# vyloučené rozhodnutí} few {# vyloučená rozhodnutí} many {# vyloučeného rozhodnutí} other {# vyloučených rozhodnutí}}",
+      "groupBy": "Seskupit podle",
+      "hideExcluded": "Skrýt vyloučená",
+      "namePlaceholder": "Název tabulky",
+      "notFound": "Rešeršní tabulka nenalezena",
+      "pin": "Připnout do tabulky",
+      "restore": "Vrátit do tabulky",
+      "rows": "{count, plural, one {# rozhodnutí} few {# rozhodnutí} many {# rozhodnutí} other {# rozhodnutí}}",
+      "save": "Uložit jako rešeršní tabulku",
+      "saved": "Rešeršní tabulka vytvořena",
+      "savedQuery": "Uložené hledání",
+      "showExcluded": "Zobrazit vyloučená",
+      "title": "Rešeršní tabulky",
+      "ungrouped": "Bez hodnoty",
+      "updated": "Naposledy upraveno {date}"
+    },
     "seo": {
       "browse": "Procházet judikaturu",
       "countries": "Země",

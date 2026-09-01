@@ -469,6 +469,28 @@
     "reader": {
       "headMatter": "Encabezamiento"
     },
+    "research": {
+      "deleteConfirm": "Se eliminará la tabla con sus fijaciones y exclusiones. Las resoluciones permanecen en la base de datos.",
+      "deleteTitle": "Eliminar tabla de investigación",
+      "empty": "Aún no hay tablas de investigación. Realice una búsqueda y guárdela para empezar.",
+      "exclude": "Excluir de la tabla",
+      "excluded": "Excluida",
+      "excludedCount": "{count, plural, one {# resolución excluida} other {# resoluciones excluidas}}",
+      "groupBy": "Agrupar por",
+      "hideExcluded": "Ocultar excluidas",
+      "namePlaceholder": "Nombre de la tabla",
+      "notFound": "Tabla de investigación no encontrada",
+      "pin": "Fijar en la tabla",
+      "restore": "Devolver a la tabla",
+      "rows": "{count, plural, one {# resolución} other {# resoluciones}}",
+      "save": "Guardar como tabla de investigación",
+      "saved": "Tabla de investigación creada",
+      "savedQuery": "Búsqueda guardada",
+      "showExcluded": "Mostrar excluidas",
+      "title": "Tablas de investigación",
+      "ungrouped": "Sin valor",
+      "updated": "Última edición {date}"
+    },
     "seo": {
       "browse": "Explorar jurisprudencia",
       "countries": "Países",

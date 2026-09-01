@@ -25,6 +25,7 @@ import type {
   DecisionListFilters,
   SearchFacets,
 } from "@/features/case-law/queries/decisions";
+import { ResearchTableActions } from "@/features/case-law/research/research-actions";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import {
@@ -257,8 +258,9 @@ function PublicCaseLawIndex() {
 
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">{t("common.caseLaw")}</h1>
+        <ResearchTableActions filters={filters} />
       </div>
 
       <DecisionFilters

@@ -278,6 +278,14 @@ export {
 } from "./realtime-events";
 export { encodeRfc3986Component } from "./rfc3986";
 export {
+  CASE_LAW_RESEARCH_DISPOSITIONS,
+  CASE_LAW_RESEARCH_QUERY_VERSION,
+} from "./case-law-research";
+export type {
+  CaseLawResearchDisposition,
+  CaseLawResearchSavedQuery,
+} from "./case-law-research";
+export {
   SAVED_SEARCH_CRITERIA_VERSION,
   SAVED_SEARCH_SORTS,
 } from "./saved-search";

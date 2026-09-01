@@ -84,6 +84,8 @@ import { Route as ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport } from './
 import { Route as ProtectedWorkspacesWorkspaceIdWorkflowsRouteImport } from './routes/_protected.workspaces/$workspaceId/workflows'
 import { Route as LawCountryStatutesIndexRouteImport } from './routes/law/$country/statutes/index'
 import { Route as LawCountryStatutesDocumentIdRouteImport } from './routes/law/$country/statutes/$documentId'
+import { Route as LawCasesResearchIndexRouteImport } from './routes/law/cases/research/index'
+import { Route as LawCasesResearchTableIdRouteImport } from './routes/law/cases/research/$tableId'
 import { Route as ProtectedChatWorkspacesWorkspaceIdThreadIdRouteImport } from './routes/_protected.chat/workspaces/$workspaceId/$threadId'
 import { Route as ProtectedChatWorkspacesWorkspaceIdNewRouteImport } from './routes/_protected.chat/workspaces/$workspaceId/new'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.index'
@@ -505,6 +507,16 @@ const LawCountryStatutesDocumentIdRoute =
     path: '/$country/statutes/$documentId',
     getParentRoute: () => LawRouteRoute,
   } as any)
+const LawCasesResearchIndexRoute = LawCasesResearchIndexRouteImport.update({
+  id: '/cases/research/',
+  path: '/cases/research/',
+  getParentRoute: () => LawRouteRoute,
+} as any)
+const LawCasesResearchTableIdRoute = LawCasesResearchTableIdRouteImport.update({
+  id: '/cases/research/$tableId',
+  path: '/cases/research/$tableId',
+  getParentRoute: () => LawRouteRoute,
+} as any)
 const ProtectedChatWorkspacesWorkspaceIdThreadIdRoute =
   ProtectedChatWorkspacesWorkspaceIdThreadIdRouteImport.update({
     id: '/workspaces/$workspaceId/$threadId',
@@ -638,9 +650,11 @@ export interface FileRoutesByFullPath {
   '/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   '/workspaces/$workspaceId/workflows': typeof ProtectedWorkspacesWorkspaceIdWorkflowsRoute
   '/law/$country/statutes/$documentId': typeof LawCountryStatutesDocumentIdRoute
+  '/law/cases/research/$tableId': typeof LawCasesResearchTableIdRoute
   '/settings/organization/': typeof ProtectedSettingsOrganizationIndexRoute
   '/workspaces/$workspaceId/': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
   '/law/$country/statutes/': typeof LawCountryStatutesIndexRoute
+  '/law/cases/research/': typeof LawCasesResearchIndexRoute
   '/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
   '/chat/workspaces/$workspaceId/new': typeof ProtectedChatWorkspacesWorkspaceIdNewRoute
   '/workspaces/$workspaceId/$viewId/document': typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute
@@ -715,9 +729,11 @@ export interface FileRoutesByTo {
   '/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   '/workspaces/$workspaceId/workflows': typeof ProtectedWorkspacesWorkspaceIdWorkflowsRoute
   '/law/$country/statutes/$documentId': typeof LawCountryStatutesDocumentIdRoute
+  '/law/cases/research/$tableId': typeof LawCasesResearchTableIdRoute
   '/settings/organization': typeof ProtectedSettingsOrganizationIndexRoute
   '/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
   '/law/$country/statutes': typeof LawCountryStatutesIndexRoute
+  '/law/cases/research': typeof LawCasesResearchIndexRoute
   '/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
   '/chat/workspaces/$workspaceId/new': typeof ProtectedChatWorkspacesWorkspaceIdNewRoute
   '/workspaces/$workspaceId/$viewId/document': typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute
@@ -803,9 +819,11 @@ export interface FileRoutesById {
   '/_protected/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   '/_protected/workspaces/$workspaceId/workflows': typeof ProtectedWorkspacesWorkspaceIdWorkflowsRoute
   '/law/$country/statutes/$documentId': typeof LawCountryStatutesDocumentIdRoute
+  '/law/cases/research/$tableId': typeof LawCasesResearchTableIdRoute
   '/_protected/settings/organization/': typeof ProtectedSettingsOrganizationIndexRoute
   '/_protected/workspaces/$workspaceId/': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
   '/law/$country/statutes/': typeof LawCountryStatutesIndexRoute
+  '/law/cases/research/': typeof LawCasesResearchIndexRoute
   '/_protected/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
   '/_protected/chat/workspaces/$workspaceId/new': typeof ProtectedChatWorkspacesWorkspaceIdNewRoute
   '/_protected/workspaces/$workspaceId/$viewId/document': typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute
@@ -891,9 +909,11 @@ export interface FileRouteTypes {
     | '/workspaces/$workspaceId/timesheets'
     | '/workspaces/$workspaceId/workflows'
     | '/law/$country/statutes/$documentId'
+    | '/law/cases/research/$tableId'
     | '/settings/organization/'
     | '/workspaces/$workspaceId/'
     | '/law/$country/statutes/'
+    | '/law/cases/research/'
     | '/chat/workspaces/$workspaceId/$threadId'
     | '/chat/workspaces/$workspaceId/new'
     | '/workspaces/$workspaceId/$viewId/document'
@@ -968,9 +988,11 @@ export interface FileRouteTypes {
     | '/workspaces/$workspaceId/timesheets'
     | '/workspaces/$workspaceId/workflows'
     | '/law/$country/statutes/$documentId'
+    | '/law/cases/research/$tableId'
     | '/settings/organization'
     | '/workspaces/$workspaceId'
     | '/law/$country/statutes'
+    | '/law/cases/research'
     | '/chat/workspaces/$workspaceId/$threadId'
     | '/chat/workspaces/$workspaceId/new'
     | '/workspaces/$workspaceId/$viewId/document'
@@ -1055,9 +1077,11 @@ export interface FileRouteTypes {
     | '/_protected/workspaces/$workspaceId/timesheets'
     | '/_protected/workspaces/$workspaceId/workflows'
     | '/law/$country/statutes/$documentId'
+    | '/law/cases/research/$tableId'
     | '/_protected/settings/organization/'
     | '/_protected/workspaces/$workspaceId/'
     | '/law/$country/statutes/'
+    | '/law/cases/research/'
     | '/_protected/chat/workspaces/$workspaceId/$threadId'
     | '/_protected/chat/workspaces/$workspaceId/new'
     | '/_protected/workspaces/$workspaceId/$viewId/document'
@@ -1616,6 +1640,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LawCountryStatutesDocumentIdRouteImport
       parentRoute: typeof LawRouteRoute
     }
+    '/law/cases/research/': {
+      id: '/law/cases/research/'
+      path: '/cases/research'
+      fullPath: '/law/cases/research/'
+      preLoaderRoute: typeof LawCasesResearchIndexRouteImport
+      parentRoute: typeof LawRouteRoute
+    }
+    '/law/cases/research/$tableId': {
+      id: '/law/cases/research/$tableId'
+      path: '/cases/research/$tableId'
+      fullPath: '/law/cases/research/$tableId'
+      preLoaderRoute: typeof LawCasesResearchTableIdRouteImport
+      parentRoute: typeof LawRouteRoute
+    }
     '/_protected/chat/workspaces/$workspaceId/$threadId': {
       id: '/_protected/chat/workspaces/$workspaceId/$threadId'
       path: '/workspaces/$workspaceId/$threadId'
@@ -1715,7 +1753,9 @@ interface LawRouteRouteChildren {
   LawIndexRoute: typeof LawIndexRoute
   LawCasesIndexRoute: typeof LawCasesIndexRoute
   LawCountryStatutesDocumentIdRoute: typeof LawCountryStatutesDocumentIdRoute
+  LawCasesResearchTableIdRoute: typeof LawCasesResearchTableIdRoute
   LawCountryStatutesIndexRoute: typeof LawCountryStatutesIndexRoute
+  LawCasesResearchIndexRoute: typeof LawCasesResearchIndexRoute
   LawCountryCasesCourtSlugRoute: typeof LawCountryCasesCourtSlugRoute
   LawCountryCasesCourtLanguageSlugRoute: typeof LawCountryCasesCourtLanguageSlugRoute
 }
@@ -1724,7 +1764,9 @@ const LawRouteRouteChildren: LawRouteRouteChildren = {
   LawIndexRoute: LawIndexRoute,
   LawCasesIndexRoute: LawCasesIndexRoute,
   LawCountryStatutesDocumentIdRoute: LawCountryStatutesDocumentIdRoute,
+  LawCasesResearchTableIdRoute: LawCasesResearchTableIdRoute,
   LawCountryStatutesIndexRoute: LawCountryStatutesIndexRoute,
+  LawCasesResearchIndexRoute: LawCasesResearchIndexRoute,
   LawCountryCasesCourtSlugRoute: LawCountryCasesCourtSlugRoute,
   LawCountryCasesCourtLanguageSlugRoute: LawCountryCasesCourtLanguageSlugRoute,
 }

@@ -469,6 +469,28 @@
     "reader": {
       "headMatter": "Rubrum"
     },
+    "research": {
+      "deleteConfirm": "Die Tabelle wird mit ihren Anheftungen und Ausschlüssen entfernt. Die Entscheidungen bleiben in der Datenbank.",
+      "deleteTitle": "Recherchetabelle löschen",
+      "empty": "Noch keine Recherchetabellen. Führen Sie eine Suche aus und speichern Sie sie.",
+      "exclude": "Aus Tabelle ausschließen",
+      "excluded": "Ausgeschlossen",
+      "excludedCount": "{count, plural, one {# ausgeschlossene Entscheidung} other {# ausgeschlossene Entscheidungen}}",
+      "groupBy": "Gruppieren nach",
+      "hideExcluded": "Ausgeschlossene ausblenden",
+      "namePlaceholder": "Name der Tabelle",
+      "notFound": "Recherchetabelle nicht gefunden",
+      "pin": "In Tabelle anheften",
+      "restore": "In Tabelle zurücknehmen",
+      "rows": "{count, plural, one {# Entscheidung} other {# Entscheidungen}}",
+      "save": "Als Recherchetabelle speichern",
+      "saved": "Recherchetabelle erstellt",
+      "savedQuery": "Gespeicherte Suche",
+      "showExcluded": "Ausgeschlossene anzeigen",
+      "title": "Recherchetabellen",
+      "ungrouped": "Ohne Wert",
+      "updated": "Zuletzt bearbeitet {date}"
+    },
     "seo": {
       "browse": "Rechtsprechung durchsuchen",
       "countries": "Länder",

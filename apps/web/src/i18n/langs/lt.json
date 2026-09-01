@@ -469,6 +469,28 @@
     "reader": {
       "headMatter": "Antraštinė dalis"
     },
+    "research": {
+      "deleteConfirm": "Lentelė bus pašalinta kartu su prisegimais ir išimtimis. Sprendimai lieka duomenų bazėje.",
+      "deleteTitle": "Ištrinti tyrimo lentelę",
+      "empty": "Tyrimo lentelių dar nėra. Atlikite paiešką ir ją išsaugokite.",
+      "exclude": "Pašalinti iš lentelės",
+      "excluded": "Pašalinta",
+      "excludedCount": "{count, plural, one {# pašalintas sprendimas} few {# pašalinti sprendimai} many {# pašalinto sprendimo} other {# pašalintų sprendimų}}",
+      "groupBy": "Grupuoti pagal",
+      "hideExcluded": "Slėpti pašalintus",
+      "namePlaceholder": "Lentelės pavadinimas",
+      "notFound": "Tyrimo lentelė nerasta",
+      "pin": "Prisegti lentelėje",
+      "restore": "Grąžinti į lentelę",
+      "rows": "{count, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}",
+      "save": "Išsaugoti kaip tyrimo lentelę",
+      "saved": "Tyrimo lentelė sukurta",
+      "savedQuery": "Išsaugota paieška",
+      "showExcluded": "Rodyti pašalintus",
+      "title": "Tyrimo lentelės",
+      "ungrouped": "Be vertės",
+      "updated": "Paskutinį kartą redaguota {date}"
+    },
     "seo": {
       "browse": "Naršyti teismų praktiką",
       "countries": "Šalys",

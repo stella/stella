@@ -469,6 +469,28 @@
     "reader": {
       "headMatter": "Fejrész"
     },
+    "research": {
+      "deleteConfirm": "A tábla a rögzítésekkel és kizárásokkal együtt törlődik. A határozatok az adatbázisban maradnak.",
+      "deleteTitle": "Kutatási tábla törlése",
+      "empty": "Még nincs kutatási tábla. Futtasson egy keresést, és mentse el.",
+      "exclude": "Kizárás a táblából",
+      "excluded": "Kizárva",
+      "excludedCount": "{count, plural, one {# kizárt határozat} other {# kizárt határozat}}",
+      "groupBy": "Csoportosítás",
+      "hideExcluded": "Kizártak elrejtése",
+      "namePlaceholder": "Tábla neve",
+      "notFound": "A kutatási tábla nem található",
+      "pin": "Rögzítés a táblában",
+      "restore": "Visszahelyezés a táblába",
+      "rows": "{count, plural, one {# határozat} other {# határozat}}",
+      "save": "Mentés kutatási táblaként",
+      "saved": "Kutatási tábla létrehozva",
+      "savedQuery": "Mentett keresés",
+      "showExcluded": "Kizártak megjelenítése",
+      "title": "Kutatási táblák",
+      "ungrouped": "Érték nélkül",
+      "updated": "Utoljára szerkesztve: {date}"
+    },
     "seo": {
       "browse": "Ítélkezési gyakorlat böngészése",
       "countries": "Országok",

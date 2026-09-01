@@ -385,6 +385,12 @@ export const LIMITS = {
   clauseImportBatchLimit: 200,
   templateFillsRetentionDays: 365,
   caseLawMatterLinksPerWorkspace: 1000,
+  /** Research tables one member may own; a bound, not a plan limit. */
+  caseLawResearchTablesPerUser: 200,
+  caseLawResearchTablesPageSizeDefault: 50,
+  caseLawResearchTablesPageSizeMax: 100,
+  /** Pinned plus excluded decisions per research table. */
+  caseLawResearchTableDecisionsMax: 500,
   caseLawDecisionCitationPageSize: 50,
   caseLawAnnotationsPageSizeDefault: 100,
   caseLawAnnotationsPageSizeMax: 100,

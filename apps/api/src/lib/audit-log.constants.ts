@@ -21,6 +21,7 @@ export const AUDIT_RESOURCE_TYPE = {
   BILLING_CODE: "billing_code",
   CASE_LAW_MATTER_LINK: "case_law_matter_link",
   CASE_LAW_DECISION_ANNOTATION: "case_law_decision_annotation",
+  CASE_LAW_RESEARCH_TABLE: "case_law_research_table",
   CHAT_FILE: "chat_file",
   CHAT_MESSAGE: "chat_message",
   CHAT_THREAD: "chat_thread",
