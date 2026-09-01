@@ -331,8 +331,9 @@ const toRoman = (n: number): string => {
 
 /**
  * Extract content chunks from the HTML body.
- * Handles both <p> elements and <ol type="I"><li> elements
- * (ruling items use ordered lists in Aspose output).
+ * Handles <p> elements, <ol type="I"><li> ruling items, and
+ * <ul><li> bullet lists (Aspose renders enumerations in the
+ * reasoning, such as case-file inventories, as unordered lists).
  */
 const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
   const chunks: PChunk[] = [];
@@ -342,19 +343,26 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
   body.find("div[style*='-aw-headerfooter-type']").remove();
 
   // Walk top-level children in document order to
-  // preserve the correct sequence of <p>, <ol>, <div>,
-  // and <table>. Some decisions use <div> for content
-  // blocks (e.g., cost breakdowns, footnotes).
-  body.find("p, ol, table, div").each((_, el) => {
+  // preserve the correct sequence of <p>, <ol>, <ul>,
+  // <div>, and <table>. Some decisions use <div> for
+  // content blocks (e.g., cost breakdowns, footnotes).
+  body.find("p, ol, ul, table, div").each((_, el) => {
     const $el = $(el);
     const tag = el.tagName.toLowerCase();
+
+    // A list nested inside a list item is already emitted by
+    // its ancestor's inline walk, which recurses through every
+    // descendant. Processing it again would duplicate its text.
+    if ((tag === "ol" || tag === "ul") && $el.parents("li").length > 0) {
+      return;
+    }
 
     // Skip <div> elements that contain child block
     // elements — those children are matched separately
     // by the selector, so processing the <div> would
     // double-count. Only process leaf-level <div>s.
     if (tag === "div") {
-      if ($el.find("p, ol, table, div").length > 0) {
+      if ($el.find("p, ol, ul, table, div").length > 0) {
         return;
       }
 
@@ -434,8 +442,11 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
       return;
     }
 
-    if (tag === "ol") {
-      // Ruling items: <ol type="I"><li>...
+    if (tag === "ol" || tag === "ul") {
+      // Ruling items: <ol type="I"><li>... Bulleted <ul> items
+      // carry no number, so they stay unnumbered chunks rather
+      // than acquiring a Roman prefix the document never had.
+      const ordered = tag === "ol";
       const startAttr = $el.attr("start");
       let listStart = startAttr ? Number.parseInt(startAttr, 10) : 1;
 
@@ -456,7 +467,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           bold: false,
           letterSpacing: false,
           fontSize: 12,
-          listItemIndex: listStart,
+          listItemIndex: ordered ? listStart : null,
           footnote: footnoteOf($li),
         });
         listStart++;

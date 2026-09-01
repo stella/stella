@@ -311,6 +311,88 @@ describe("parseNssDecisionHtml", () => {
     });
   });
 
+  describe("unordered list content", () => {
+    /**
+     * Aspose renders enumerations in the reasoning (case-file
+     * inventories, evidence lists) as <ul type="disc">. The chunk
+     * walk matched <ol> but not <ul>, so every bullet was dropped
+     * from the AST while remaining in the source.
+     */
+    const bulletHtml = `<html><body>
+      <p style="text-align:center">20 A 12/2016</p>
+      <p style="text-align:center">
+        <span style="font-weight:bold">ROZSUDEK</span>
+      </p>
+      <p style="text-align:center">
+        <span style="font-weight:bold;letter-spacing:3pt">
+          t a k t o :
+        </span>
+      </p>
+      <ol type="I">
+        <li>Žaloba se zamítá.</li>
+      </ol>
+      <p style="text-align:center">
+        <span style="font-weight:bold">Odůvodnění:</span>
+      </p>
+      <p>[1] Součástí správního spisu je následující:</p>
+      <ul type="disc">
+        <li><span style="font-family:Arial">tiskopis „Oznámení
+        přestupku"</span></li>
+        <li><span style="font-family:Arial">úřední záznam
+        vypracovaný policistou</span></li>
+      </ul>
+      <p>[2] Krajský soud žalobu zamítl.</p>
+    </body></html>`;
+
+    test("keeps <ul> bullet text in the AST", () => {
+      const { documentAst, fulltext } = parseNssDecisionHtml(
+        baseInput(bulletHtml),
+      );
+
+      const text = documentAst.blocks
+        .map((block) => block.plainText)
+        .join("\n");
+
+      expect(text).toContain("tiskopis");
+      expect(text).toContain("Oznámení");
+      expect(text).toContain("úřední záznam vypracovaný policistou");
+      expect(fulltext).toContain("tiskopis");
+    });
+
+    test("does not give <ul> items a Roman numeral prefix", () => {
+      const { documentAst } = parseNssDecisionHtml(baseInput(bulletHtml));
+
+      const bullet = documentAst.blocks.find((block) =>
+        block.plainText.includes("tiskopis"),
+      );
+
+      expect(bullet).toBeDefined();
+      expect(bullet?.plainText).not.toMatch(/^[IVX]+\.\s/u);
+    });
+
+    test("emits each bullet exactly once when a list is nested", () => {
+      const nestedHtml = bulletHtml.replace(
+        "<p>[2] Krajský soud žalobu zamítl.</p>",
+        `<ul type="disc">
+          <li>vnější položka
+            <ul type="circle">
+              <li>vnitřní položka</li>
+            </ul>
+          </li>
+        </ul>
+        <p>[2] Krajský soud žalobu zamítl.</p>`,
+      );
+
+      const { documentAst } = parseNssDecisionHtml(baseInput(nestedHtml));
+
+      const occurrences = documentAst.blocks.filter((block) =>
+        block.plainText.includes("vnitřní položka"),
+      ).length;
+
+      expect(occurrences).toBe(1);
+    });
+  });
+
   describe("section headings in Odůvodnění", () => {
     test("detects Roman numeral section headings", () => {
       const html = `<html><body>
