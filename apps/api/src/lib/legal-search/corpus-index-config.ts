@@ -78,11 +78,26 @@ type CorpusIndexFieldMapping = {
 
 type CorpusIndexMergePolicy = {
   type: "stable_log";
-  maturation_period: string;
+  maturation_period: CorpusIndexMaturationPeriod;
   merge_factor: number;
   max_merge_factor: number;
   min_level_num_docs: number;
 };
+
+const QUICKWIT_CANONICAL_MATURATION_PERIOD = {
+  "4h": "4h",
+  "4hours": "4h",
+  "7d": "7d",
+  "7days": "7d",
+} as const;
+
+type CorpusIndexMaturationPeriod =
+  keyof typeof QUICKWIT_CANONICAL_MATURATION_PERIOD;
+
+/** Render the manifest value exactly as Quickwit's metadata API does. */
+export const canonicalCorpusIndexMaturationPeriod = (
+  value: CorpusIndexMaturationPeriod,
+) => QUICKWIT_CANONICAL_MATURATION_PERIOD[value];
 
 /** Merge policy retained by the legacy generation helpers. */
 export const CORPUS_INDEX_MERGE_POLICY = {

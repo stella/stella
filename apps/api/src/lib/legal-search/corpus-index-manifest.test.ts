@@ -89,10 +89,24 @@ test("physical index ids are deployment state, not manifest identity", () => {
   expect(csSkConfig).toEqual({
     ...manifest.engine.indexConfig,
     index_id: "case_law_v5_cs_sk",
+    indexing_settings: {
+      ...manifest.engine.indexConfig.indexing_settings,
+      merge_policy: {
+        ...manifest.engine.indexConfig.indexing_settings.merge_policy,
+        maturation_period: "4h",
+      },
+    },
   });
   expect(corpusIndexConfigFromManifest(manifest, "case_law_v5_pol")).toEqual({
     ...manifest.engine.indexConfig,
     index_id: "case_law_v5_pol",
+    indexing_settings: {
+      ...manifest.engine.indexConfig.indexing_settings,
+      merge_policy: {
+        ...manifest.engine.indexConfig.indexing_settings.merge_policy,
+        maturation_period: "4h",
+      },
+    },
   });
   expect(corpusIndexManifestDigest(manifest)).toBe(
     EXPECTED_DIGESTS.case_law_v5,
