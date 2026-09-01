@@ -673,6 +673,11 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     }
 
     if (chunk.footnote !== null) {
+      // A footnote the publisher set over several paragraphs arrives as
+      // several chunks of one container. Every part keeps the container's
+      // id as its `noteId` and repeats the label, so the reader groups
+      // them; only the first part owns the container's own anchor, which
+      // is what the in-text reference links to.
       const occurrence =
         (footnoteOccurrences.get(chunk.footnote.anchorId) ?? 0) + 1;
       footnoteOccurrences.set(chunk.footnote.anchorId, occurrence);
@@ -684,7 +689,11 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
             ? chunk.footnote.anchorId
             : `${chunk.footnote.anchorId}-${occurrence}`,
         type: "paragraph",
-        note: { type: "footnote", label: chunk.footnote.label },
+        note: {
+          type: "footnote",
+          label: chunk.footnote.label,
+          noteId: chunk.footnote.anchorId,
+        },
         inlines,
         plainText,
       });
