@@ -5,6 +5,8 @@ import type { Transaction } from "@/api/db/root";
 import {
   caseLawSources,
   corpusIndexGenerations,
+  corpusIndexProjectionIntents,
+  corpusIndexProjectionStates,
   legislationSources,
 } from "@/api/db/schema";
 import {
@@ -17,6 +19,7 @@ import {
   requireCorpusIndexManifest,
   type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { isRecord } from "@/api/lib/type-guards";
 
 type GenerationTargetFor<TManifest extends CorpusIndexManifest> =
   TManifest extends CorpusIndexManifest
@@ -317,4 +320,156 @@ export const setServingCorpusIndexGenerationTx = async (
     );
   }
   return requireServingCorpusIndexGeneration(promotedRow, target.family);
+};
+
+const CORPUS_INDEX_GENERATION_REBUILD_MAX_BATCH_SIZE = 10_000;
+
+const rebuildRowsOf = (result: unknown): unknown[] => {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  return isRecord(result) && Array.isArray(result["rows"])
+    ? result["rows"]
+    : [];
+};
+
+const validateRebuildBatchSize = (limit: number): number => {
+  if (
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > CORPUS_INDEX_GENERATION_REBUILD_MAX_BATCH_SIZE
+  ) {
+    return panic(
+      `Corpus generation rebuild limit must be 1..${CORPUS_INDEX_GENERATION_REBUILD_MAX_BATCH_SIZE}`,
+    );
+  }
+  return limit;
+};
+
+const requireRebuildTarget = async (
+  tx: Transaction,
+  target: CorpusIndexGenerationTarget,
+  status: "building" | "retiring",
+) => {
+  const row = (
+    await tx
+      .select()
+      .from(corpusIndexGenerations)
+      .where(
+        and(
+          eq(corpusIndexGenerations.family, target.family),
+          eq(corpusIndexGenerations.generation, target.generation),
+        ),
+      )
+      .limit(1)
+      .for("update")
+  ).at(0);
+  if (row?.status !== status || row.cluster !== "q09") {
+    return panic(
+      `Corpus generation rebuild requires q09 ${status}: ${target.family}/${target.generation}`,
+    );
+  }
+  return row;
+};
+
+/** Remove one non-serving generation from the active projection set. */
+export const beginCorpusIndexGenerationRebuildTx = async (
+  tx: Transaction,
+  target: CorpusIndexGenerationTarget,
+): Promise<void> => {
+  const row = await requireRebuildTarget(tx, target, "building");
+  requireRegisteredCorpusIndexManifest(row);
+  const retired = await tx
+    .update(corpusIndexGenerations)
+    .set({ status: "retiring", updatedAt: sql`clock_timestamp()` })
+    .where(
+      and(
+        eq(corpusIndexGenerations.family, target.family),
+        eq(corpusIndexGenerations.generation, target.generation),
+        eq(corpusIndexGenerations.status, "building"),
+      ),
+    )
+    .returning({ generation: corpusIndexGenerations.generation });
+  if (retired.length !== 1) {
+    return panic(
+      `Corpus generation rebuild lost its target: ${target.family}/${target.generation}`,
+    );
+  }
+};
+
+type CorpusIndexGenerationRebuildStep =
+  | { status: "deleted_history"; stateCount: number; intentCount: number }
+  | { status: "empty"; count: 0 };
+
+/** Delete one bounded projection-history page from a retiring generation. */
+export const deleteCorpusIndexGenerationProjectionBatchTx = async (
+  tx: Transaction,
+  target: CorpusIndexGenerationTarget,
+  requestedLimit: number,
+): Promise<CorpusIndexGenerationRebuildStep> => {
+  const limit = validateRebuildBatchSize(requestedLimit);
+  await requireRebuildTarget(tx, target, "retiring");
+  const purged = await tx.execute(sql`
+    SELECT deleted_state_count, deleted_intent_count
+      FROM public.purge_rebuilding_corpus_index_projection_history(
+        ${target.family}, ${target.generation}, ${limit}
+      )
+  `);
+  const row = rebuildRowsOf(purged).at(0);
+  if (
+    !isRecord(row) ||
+    typeof row["deleted_state_count"] !== "number" ||
+    typeof row["deleted_intent_count"] !== "number"
+  ) {
+    return panic("Corpus generation rebuild purge result is malformed");
+  }
+  const stateCount = row["deleted_state_count"];
+  const intentCount = row["deleted_intent_count"];
+  return stateCount > 0 || intentCount > 0
+    ? { status: "deleted_history", stateCount, intentCount }
+    : { status: "empty", count: 0 };
+};
+
+/** Replace one empty, non-serving registration with its current manifest. */
+export const completeCorpusIndexGenerationRebuildTx = async (
+  tx: Transaction,
+  target: CorpusIndexGenerationTarget,
+): Promise<void> => {
+  await lockCorpusIndexGenerationActivationTx(tx, target.family);
+  await requireRebuildTarget(tx, target, "retiring");
+  const remaining = await tx.execute(sql`
+    SELECT EXISTS (
+      SELECT 1
+        FROM ${corpusIndexProjectionStates}
+       WHERE family = ${target.family}
+         AND generation = ${target.generation}
+    ) OR EXISTS (
+      SELECT 1
+        FROM ${corpusIndexProjectionIntents}
+       WHERE family = ${target.family}
+         AND generation = ${target.generation}
+    ) AS present
+  `);
+  const remainingRow = rebuildRowsOf(remaining).at(0);
+  if (!isRecord(remainingRow) || remainingRow["present"] !== false) {
+    return panic(
+      `Corpus generation rebuild state is not empty: ${target.family}/${target.generation}`,
+    );
+  }
+  const removed = await tx
+    .delete(corpusIndexGenerations)
+    .where(
+      and(
+        eq(corpusIndexGenerations.family, target.family),
+        eq(corpusIndexGenerations.generation, target.generation),
+        eq(corpusIndexGenerations.status, "retiring"),
+      ),
+    )
+    .returning({ generation: corpusIndexGenerations.generation });
+  if (removed.length !== 1) {
+    return panic(
+      `Corpus generation rebuild lost its registration: ${target.family}/${target.generation}`,
+    );
+  }
+  await registerCorpusIndexGenerationTx(tx, target);
 };
