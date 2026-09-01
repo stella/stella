@@ -10,8 +10,9 @@ import {
   ApplicationRailHeader,
   ApplicationRailMenu,
 } from "@stll/ui/application-rail";
-import { InspectorDock } from "@stll/ui/inspector";
+import { InspectorDock, TOOLBAR_ROW_HEIGHT } from "@stll/ui/inspector";
 import { Sheet, SheetPopup, SheetTitle } from "@stll/ui/sheet";
+import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail, WorkspaceShell } from "@stll/ui/workspace-shell";
 
 export type WorkspaceFrameNavigationItem = {
@@ -135,7 +136,12 @@ export const WorkspaceFrame = ({
         mode: "shell-managed",
       }}
       topBar={({ compactNavigationTrigger }) => (
-        <div className="flex h-12 min-w-0 items-center gap-2 overflow-hidden border-b px-4">
+        <div
+          className={cn(
+            "flex min-w-0 items-center gap-2 overflow-hidden border-b px-4",
+            TOOLBAR_ROW_HEIGHT,
+          )}
+        >
           {compactNavigationTrigger}
           <div className="min-w-0 flex-1">{topBar.leading}</div>
           <div className="min-w-0">{topBar.center}</div>
