@@ -46,6 +46,24 @@ export const LEGISLATION_TITLE_SORT_KEY_CHARS = 52;
 export const legislationTitleSortKey = (title: SQLWrapper) =>
   sql<string>`left(${title}, ${sql.raw(String(LEGISLATION_TITLE_SORT_KEY_CHARS))})`;
 
+/**
+ * The title as a lawyer types it: lower-case, diacritics folded. Migration
+ * `20260901130000_legislation_title_fold` owns the function; the query side
+ * folds its input (a bound string) through the same function so both sides
+ * cannot drift.
+ */
+export const legislationTitleFold = (value: SQLWrapper | string) =>
+  sql<string>`legislation_title_fold(${value})`;
+
+/**
+ * The name part of an official title. Czech titles open with the number and
+ * collection (`89/2012 Sb., občanský zákoník`); Slovak titles carry the name
+ * alone. Matching a typed name against this rather than the full title is
+ * what lets the code itself outrank the acts amending it.
+ */
+export const legislationTitleName = (title: SQLWrapper) =>
+  sql<string>`regexp_replace(${title}, '^[0-9]+/[0-9]{4} [^,]*, ', '')`;
+
 export const legislationSources = p.pgTable(
   "legislation_sources",
   {
@@ -164,6 +182,20 @@ export const legislationDocuments = p.pgTable(
     p
       .index("legislation_documents_eli_trgm_idx")
       .using("gin", sql`${t.eli} gin_trgm_ops`),
+    // Diacritics-insensitive title matching, on the fold the handler queries
+    // through (see `legislationTitleFold`).
+    p
+      .index("legislation_documents_title_fold_trgm_idx")
+      .using("gin", sql`legislation_title_fold(${t.title}) gin_trgm_ops`),
+    // The default listing walks a country newest consolidation first; the
+    // expression is the handler's sort key, so the walk is an index range.
+    p
+      .index("legislation_documents_country_valid_from_id_idx")
+      .on(
+        t.country,
+        sql`coalesce(${t.versionValidFrom}, DATE '0001-01-01')`,
+        t.id,
+      ),
     p.index("legislation_documents_status_idx").on(t.status),
     p.index("legislation_documents_effective_date_idx").on(t.effectiveDate),
     p.index("legislation_documents_created_at_idx").on(t.createdAt),

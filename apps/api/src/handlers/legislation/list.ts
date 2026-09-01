@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, ilike, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -7,6 +7,8 @@ import {
   LEGISLATION_TITLE_SORT_KEY_CHARS,
   legislationDocuments,
   legislationSources,
+  legislationTitleFold,
+  legislationTitleName,
   legislationTitleSortKey,
 } from "@/api/db/schema";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
@@ -23,13 +25,23 @@ import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
+  isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 
+/** `<number>/<year>` as a collection prints it: `89/2012`. */
+export const ACT_NUMBER_PATTERN = /^([0-9]{1,5})\/([0-9]{4})$/u;
+/** A publisher collection segment of an ELI: `sb`, `ul1`, `zz`. */
+const COLLECTION_PATTERN = /^[a-z0-9]{1,8}$/u;
+
 export const listStatutesQuerySchema = t.Object({
   country: t.String({ minLength: 2, maxLength: 3 }),
   query: t.Optional(t.String({ maxLength: 256 })),
+  /** An act's own number, `<number>/<year>`; the request asks for that work. */
+  number: t.Optional(t.String({ pattern: ACT_NUMBER_PATTERN.source })),
+  /** The collection the number was published in, when the caller knows it. */
+  collection: t.Optional(t.String({ pattern: COLLECTION_PATTERN.source })),
   language: t.Optional(t.String({ maxLength: 8 })),
   limit: t.Optional(tPaginationLimit(LIMITS.legislationListPageSizeMax)),
   cursor: t.Optional(tPaginationCursor()),
@@ -37,23 +49,59 @@ export const listStatutesQuerySchema = t.Object({
 
 type ListStatutesQuery = Static<typeof listStatutesQuerySchema>;
 
-export const LEGISLATION_TITLE_CURSOR_KIND = "title-prefix-v1";
+/**
+ * The two orderings the list serves, each with its own cursor protocol. A
+ * cursor from one cannot continue the other: the sort keys differ.
+ */
+export const LEGISLATION_LIST_CURSOR_KIND = {
+  /** No text: newest consolidation first. */
+  recent: "recent-v1",
+  /** A typed name: works named by it first, then works mentioning it. */
+  search: "search-v1",
+} as const;
 
-type TitlePrefixIdCursor = {
-  type: typeof LEGISLATION_TITLE_CURSOR_KIND;
-  titleSortKey: string;
-  id: SafeId<"legislationDocument">;
-};
+type ListCursor =
+  | {
+      type: typeof LEGISLATION_LIST_CURSOR_KIND.recent;
+      validFrom: string;
+      id: SafeId<"legislationDocument">;
+    }
+  | {
+      type: typeof LEGISLATION_LIST_CURSOR_KIND.search;
+      rank: "0" | "1";
+      titleSortKey: string;
+      id: SafeId<"legislationDocument">;
+    };
 
 const titleSortKey = legislationTitleSortKey(legislationDocuments.title);
+const validFromKey = versionSortKey(legislationDocuments.versionValidFrom);
 
-const decodeTitleCursor = (cursor: string): TitlePrefixIdCursor | null => {
+const decodeListCursor = (cursor: string): ListCursor | null => {
   const parts = decodePaginationCursor(cursor);
+  if (parts === null) {
+    return null;
+  }
+  const [kind, ...rest] = parts;
 
-  if (parts?.length === 3) {
-    const [kind, key, id] = parts;
+  if (kind === LEGISLATION_LIST_CURSOR_KIND.recent && rest.length === 2) {
+    const [validFrom, id] = rest;
     if (
-      kind !== LEGISLATION_TITLE_CURSOR_KIND ||
+      !isDateOnlyPaginationCursorPart(validFrom) ||
+      !isUuidPaginationCursorPart(id)
+    ) {
+      return null;
+    }
+    return {
+      type: LEGISLATION_LIST_CURSOR_KIND.recent,
+      validFrom,
+      id: brandPersistedLegislationDocumentId(id),
+    };
+  }
+
+  if (kind === LEGISLATION_LIST_CURSOR_KIND.search && rest.length === 3) {
+    const [rank, key, id] = rest;
+    if (
+      (rank !== "0" && rank !== "1") ||
       typeof key !== "string" ||
       Array.from(key).length > LEGISLATION_TITLE_SORT_KEY_CHARS ||
       !isUuidPaginationCursorPart(id)
@@ -61,7 +109,8 @@ const decodeTitleCursor = (cursor: string): TitlePrefixIdCursor | null => {
       return null;
     }
     return {
-      type: LEGISLATION_TITLE_CURSOR_KIND,
+      type: LEGISLATION_LIST_CURSOR_KIND.search,
+      rank,
       titleSortKey: key,
       id: brandPersistedLegislationDocumentId(id),
     };
@@ -93,13 +142,54 @@ const isCurrentVersionOfWork = sql`NOT EXISTS (
     )
 )`;
 
+/**
+ * The work an act number names. ELIs end in `/<collection>/<year>/<number>`
+ * (`/eli/cz/sb/2012/89`), so the number is matched on that tail: a suffix
+ * match the trigram index serves, made exact by the anchored pattern so
+ * `/2012/89` cannot answer for `/2012/189`. Without a collection every
+ * collection of the jurisdiction qualifies; the caller shows the candidates
+ * rather than picking one.
+ */
+const actNumberCondition = (
+  number: string,
+  collection: string | undefined,
+): SQL | null => {
+  const match = ACT_NUMBER_PATTERN.exec(number);
+  const ordinal = match?.[1];
+  const year = match?.[2];
+  if (ordinal === undefined || year === undefined) {
+    return null;
+  }
+  const tail = `${year}/${ordinal}`;
+  const anchored =
+    collection === undefined ? `(^|/)${tail}$` : `/${collection}/${tail}$`;
+  return sql`(
+    ${legislationDocuments.eli} LIKE ${`%${tail}`}
+    AND ${legislationDocuments.eli} ~ ${anchored}
+  )`;
+};
+
+/**
+ * 0 for a work whose name starts with the typed text, 1 for one that merely
+ * mentions it: `občanský zákoník` must rank the code above the acts amending
+ * it (`kterým se mění zákon č. 89/2012 Sb., občanský zákoník`). Both sides
+ * fold through `legislation_title_fold`, so a query typed without diacritics
+ * ranks the same as one typed with them.
+ */
+const titleRank = (trimmedQuery: string): SQL<number> => sql<number>`(CASE
+  WHEN ${legislationTitleFold(legislationTitleName(legislationDocuments.title))}
+    LIKE ${legislationTitleFold(escapeLike(trimmedQuery))} || '%'
+  THEN 0
+  ELSE 1
+END)`;
+
 export const listStatutesHandler = async (
   query: ListStatutesQuery,
   legislationDb: LegislationReadDb,
 ) => {
   const limit = query.limit ?? LIMITS.legislationListPageSizeDefault;
   const cursor =
-    query.cursor === undefined ? null : decodeTitleCursor(query.cursor);
+    query.cursor === undefined ? null : decodeListCursor(query.cursor);
   if (query.cursor !== undefined && cursor === null) {
     return status(400, { message: "Invalid cursor" });
   }
@@ -117,32 +207,51 @@ export const listStatutesHandler = async (
     conditions.push(eq(legislationDocuments.language, query.language));
   }
 
-  const trimmedQuery = query.query?.trim();
+  if (query.number !== undefined) {
+    const byNumber = actNumberCondition(query.number, query.collection);
+    if (byNumber === null) {
+      return status(400, { message: "Invalid act number" });
+    }
+    conditions.push(byNumber);
+  }
 
-  if (trimmedQuery) {
-    const pattern = `%${escapeLike(trimmedQuery)}%`;
+  const trimmedQuery = query.query?.trim() || null;
+
+  if (trimmedQuery !== null) {
     const titleOrEli = or(
-      ilike(legislationDocuments.title, pattern),
-      ilike(legislationDocuments.eli, pattern),
+      sql`${legislationTitleFold(legislationDocuments.title)} LIKE '%' || ${legislationTitleFold(escapeLike(trimmedQuery))} || '%'`,
+      ilike(legislationDocuments.eli, `%${escapeLike(trimmedQuery)}%`),
     );
-
     if (titleOrEli) {
       conditions.push(titleOrEli);
     }
   }
 
-  if (cursor !== null) {
-    const keyset = or(
-      gt(titleSortKey, cursor.titleSortKey),
-      and(
-        eq(titleSortKey, cursor.titleSortKey),
-        gt(legislationDocuments.id, cursor.id),
-      ),
-    );
+  const ordering =
+    trimmedQuery === null
+      ? {
+          type: LEGISLATION_LIST_CURSOR_KIND.recent,
+          orderBy: [desc(validFromKey), desc(legislationDocuments.id)],
+        }
+      : {
+          type: LEGISLATION_LIST_CURSOR_KIND.search,
+          rank: titleRank(trimmedQuery),
+          orderBy: [
+            asc(titleRank(trimmedQuery)),
+            asc(titleSortKey),
+            asc(legislationDocuments.id),
+          ],
+        };
 
-    if (keyset) {
-      conditions.push(keyset);
+  if (cursor !== null) {
+    if (cursor.type !== ordering.type) {
+      return status(400, { message: "Invalid cursor" });
     }
+    conditions.push(
+      cursor.type === LEGISLATION_LIST_CURSOR_KIND.recent
+        ? sql`(${validFromKey}, ${legislationDocuments.id}) < (${cursor.validFrom}::date, ${cursor.id}::uuid)`
+        : sql`(${titleRank(trimmedQuery ?? "")}, ${titleSortKey}, ${legislationDocuments.id}) > (${cursor.rank}::int, ${cursor.titleSortKey}, ${cursor.id}::uuid)`,
+    );
   }
 
   const rows = await legislationDb(
@@ -153,6 +262,11 @@ export const listStatutesHandler = async (
           eli: legislationDocuments.eli,
           title: legislationDocuments.title,
           titleSortKey,
+          validFromKey: sql<string>`${validFromKey}::text`.as("valid_from_key"),
+          rank:
+            ordering.type === LEGISLATION_LIST_CURSOR_KIND.search
+              ? sql<number>`${ordering.rank}`.as("title_rank")
+              : sql<number>`0`.as("title_rank"),
           country: legislationDocuments.country,
           language: legislationDocuments.language,
           documentType: legislationDocuments.documentType,
@@ -169,7 +283,7 @@ export const listStatutesHandler = async (
           eq(legislationSources.id, legislationDocuments.sourceId),
         )
         .where(and(...conditions))
-        .orderBy(asc(titleSortKey), asc(legislationDocuments.id))
+        .orderBy(...ordering.orderBy)
         .limit(limit + 1),
   );
 
@@ -177,15 +291,29 @@ export const listStatutesHandler = async (
     rows,
     limit,
     cursorForItem: (item) =>
-      encodePaginationCursor([
-        LEGISLATION_TITLE_CURSOR_KIND,
-        item.titleSortKey,
-        item.id,
-      ]),
+      ordering.type === LEGISLATION_LIST_CURSOR_KIND.recent
+        ? encodePaginationCursor([
+            LEGISLATION_LIST_CURSOR_KIND.recent,
+            item.validFromKey,
+            item.id,
+          ])
+        : encodePaginationCursor([
+            LEGISLATION_LIST_CURSOR_KIND.search,
+            String(item.rank),
+            item.titleSortKey,
+            item.id,
+          ]),
   });
 
   return {
     ...page,
-    items: page.items.map(({ titleSortKey: _titleSortKey, ...item }) => item),
+    items: page.items.map(
+      ({
+        rank: _rank,
+        titleSortKey: _titleSortKey,
+        validFromKey: _validFromKey,
+        ...item
+      }) => item,
+    ),
   };
 };
