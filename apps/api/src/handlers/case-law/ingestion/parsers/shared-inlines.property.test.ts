@@ -10,7 +10,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { propertyConfig, propertySeed } from "@stll/property-testing";
 
 import type { Inline } from "@/api/handlers/case-law/document-ast";
 import {
@@ -18,11 +18,12 @@ import {
   stripInlinePrefix,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
-// Fixed seed: a failing counterexample has to be reproducible from the
-// CI log alone. The nightly sweep widens coverage through numRuns.
-const SEED = 20_260_901;
+// Seeded in PR CI so a counterexample is reproducible from the log, and
+// unseeded under the nightly sweep so it explores new inputs. See
+// propertySeed in @stll/property-testing.
 
-const config = (numRuns: number) => propertyConfig({ numRuns, seed: SEED });
+const config = (numRuns: number) =>
+  propertyConfig({ numRuns, seed: propertySeed() });
 
 /**
  * Text fragments mixing letters with every whitespace encoding a court
@@ -154,33 +155,11 @@ describe("stripInlinePrefix (properties)", () => {
   });
 
   /**
-   * DEFECT, left failing on purpose (the fix belongs in its own PR).
-   *
-   * `stripInlinePrefix` trims the whitespace exposed by the cut only
-   * when the remainder happens to begin with a top-level text node:
-   *
-   *   const tree = [
-   *     { type: "text", text: "[1]" },
-   *     { type: "bold", children: [{ type: "text", text: " Text" }] },
-   *   ];
-   *   inlinesToPlainText(stripInlinePrefix(tree, 3)); // " Text", not "Text"
-   *
-   * With the same document written as one text node ("[1] Text") the
-   * leading space is trimmed. So whether a paragraph's plain text starts
-   * with a space depends on where the publisher happened to open a
-   * `<b>` — the same class of markup-shape-dependent whitespace bug that
-   * produced `Žalob as ez amítá`.
-   *
-   * This property also fails when the remainder starts with a
-   * `line-break`, where the answer is less obvious: a break is content,
-   * not stray whitespace, so leaving it may well be right. The fix PR
-   * should decide that case deliberately rather than inherit it.
-   *
-   * The fix (descend to the first text leaf, as eu-ecj's `trimEdge`
-   * does) changes the stored `plainText` of already-ingested decisions,
-   * so it needs its own review and a reindex decision.
+   * Regression for the defect this file was written to catch: the trim
+   * reached only a top-level text node, so a paragraph's plain text
+   * depended on where the publisher opened an emphasis tag.
    */
-  test.skip("trims exposed leading whitespace regardless of nesting", () => {
+  test("trims exposed leading whitespace regardless of nesting", () => {
     fc.assert(
       fc.property(treeAndPrefix, ([tree, k]) => {
         expect(inlinesToPlainText(stripInlinePrefix(tree, k))).toBe(
@@ -189,5 +168,64 @@ describe("stripInlinePrefix (properties)", () => {
       }),
       config(500),
     );
+  });
+
+  /**
+   * The same document written two ways must strip to the same text. This
+   * is the invariant the property above generalizes, spelled out on the
+   * shape that actually occurs: a paragraph marker followed by a bold
+   * opening.
+   */
+  test("strips a marker identically however the emphasis is nested", () => {
+    const flat: Inline[] = [{ type: "text", text: "[1] Text" }];
+    const behindBold: Inline[] = [
+      { type: "text", text: "[1]" },
+      { type: "bold", children: [{ type: "text", text: " Text" }] },
+    ];
+    const behindNestedLink: Inline[] = [
+      { type: "text", text: "[1]" },
+      {
+        type: "link",
+        href: "https://court.test/d",
+        children: [
+          { type: "bold", children: [{ type: "text", text: "  Text" }] },
+        ],
+      },
+    ];
+
+    for (const tree of [flat, behindBold, behindNestedLink]) {
+      expect(inlinesToPlainText(stripInlinePrefix(tree, 3))).toBe("Text");
+    }
+  });
+
+  /**
+   * A wrapper holding nothing but the exposed whitespace is dropped
+   * rather than left as an empty emphasis span.
+   */
+  test("drops a wrapper emptied by the trim", () => {
+    const tree: Inline[] = [
+      { type: "text", text: "[1]" },
+      { type: "italic", children: [{ type: "text", text: "   " }] },
+      { type: "text", text: "Text" },
+    ];
+
+    expect(inlinesToPlainText(stripInlinePrefix(tree, 3))).toBe("Text");
+  });
+
+  /**
+   * Decision: a line-break exposed by the cut is dropped like any other
+   * leading whitespace. It separated the marker from the body, and a
+   * paragraph cannot open with an empty line. Keeping it would also
+   * reintroduce the markup-shape dependence, since the same break
+   * written as "\n" inside a text node is trimmed.
+   */
+  test("drops a line-break exposed at the new start", () => {
+    const tree: Inline[] = [
+      { type: "text", text: "ab" },
+      { type: "line-break" },
+      { type: "text", text: "cd" },
+    ];
+
+    expect(inlinesToPlainText(stripInlinePrefix(tree, 2))).toBe("cd");
   });
 });

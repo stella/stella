@@ -13,7 +13,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { propertyConfig, propertySeed } from "@stll/property-testing";
 
 import { applyArabicFolds, applyArabicFoldsWithOffsets } from "./arabic.js";
 import { foldToAscii } from "./ascii-fold.js";
@@ -25,10 +25,12 @@ import {
   foldSearchMatchTextWithOffsets,
 } from "./search-match.js";
 
-// Fixed seed: a counterexample must be reproducible from the CI log.
-const SEED = 20_260_901;
+// Seeded in PR CI so a counterexample is reproducible from the log, and
+// unseeded under the nightly sweep so it explores new inputs. See
+// propertySeed in @stll/property-testing.
 
-const config = (numRuns: number) => propertyConfig({ numRuns, seed: SEED });
+const config = (numRuns: number) =>
+  propertyConfig({ numRuns, seed: propertySeed() });
 
 /**
  * Characters from every script and shape these folds claim to handle:
@@ -90,40 +92,49 @@ describe("fold family (properties)", () => {
 
 describe("offset-carrying folds (properties)", () => {
   /**
-   * FINDING, left failing on purpose (adjudicate in its own PR).
+   * The contract that actually holds, and the one the callers rely on:
+   * the two variants agree once the input is NFKC-normalized.
    *
-   * The offset-carrying variant does not agree with the plain one:
-   *
-   *   applyArabicFolds("ﬁ")            === "ﬁ"  (unchanged)
-   *   applyArabicFoldsWithOffsets("ﬁ") === "fi"
-   *
-   * `applyArabicFoldsWithOffsets` normalizes NFKC per character
-   * (`applyArabicFolds(char.normalize("NFKC"))`); `applyArabicFolds`
-   * never normalizes, leaving NFKC to its caller — `arabicNormalize`
-   * applies it to the whole string first.
-   *
-   * Two consequences. The variants diverge on any compatibility
-   * character, and per-character NFKC cannot compose across characters,
-   * so the offset variant's text is not whole-string NFKC either.
-   *
-   * `apps/api/src/lib/search/highlight.ts` folds the two sides of one
-   * comparison through different pipelines here: the source through
-   * `applyArabicFoldsWithOffsets`, each candidate through plain
-   * `applyArabicFolds`. Whether that misplaces a preview window depends
-   * on whether the callers pre-normalize, which is why this is filed as
-   * a finding to settle rather than a confirmed defect — the fix is
-   * either to normalize in both or in neither, and that is a decision
-   * about the fold's contract.
+   * They sit on opposite sides of one comparison in the API's search
+   * highlighter — the source through the offset variant to keep its
+   * positions, each candidate through the plain one — and both arrive
+   * already NFKC-normalized, the source via
+   * `normalizeSourceWithMappings` and the candidate via
+   * `arabicNormalize`. A disagreement in that state would paint a
+   * highlight over the wrong word.
    */
-  test.skip("applyArabicFoldsWithOffsets agrees with applyArabicFolds", () => {
+  test("the variants agree on NFKC-normalized input", () => {
     fc.assert(
       fc.property(text, (value) => {
-        expect(applyArabicFoldsWithOffsets(value).text).toBe(
-          applyArabicFolds(value),
+        const normalized = value.normalize("NFKC");
+
+        expect(applyArabicFoldsWithOffsets(normalized).text).toBe(
+          applyArabicFolds(normalized),
         );
       }),
       config(400),
     );
+  });
+
+  /**
+   * The asymmetry on raw input is deliberate, not a defect, and is
+   * pinned here so it is not "fixed" into agreement later.
+   *
+   * The offset variant normalizes NFKC per character because it is fed
+   * raw document text: Arabic PDFs carry presentation forms and
+   * ligatures that have to expand to canonical letters to be searchable,
+   * and per-character expansion is what keeps each output unit pointing
+   * at the one source character it came from. The plain variant folds
+   * only, leaving normalization to `arabicNormalize`.
+   *
+   * Aligning them by dropping that normalization breaks the offset
+   * variant's whole purpose — see the presentation-form and ligature
+   * cases in arabic.test.ts.
+   */
+  test("only the offset variant normalizes raw compatibility characters", () => {
+    expect(applyArabicFolds("ﬁ")).toBe("ﬁ");
+    expect(applyArabicFoldsWithOffsets("ﬁ").text).toBe("fi");
+    expect(arabicNormalize("ﬁ")).toBe("fi");
   });
 
   test("foldSearchMatchTextWithOffsets agrees with foldSearchMatchText", () => {

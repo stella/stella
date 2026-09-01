@@ -259,6 +259,69 @@ export const inlinesToPlainText = (inlines: readonly Inline[]): string => {
   return text;
 };
 
+/**
+ * Drop the whitespace a prefix cut exposed at the start of an inline
+ * list, descending through emphasis wrappers to reach it.
+ *
+ * Trimming only a top-level text node made a paragraph's plain text
+ * depend on where the publisher happened to open a `<b>`: `[1] Text`
+ * written flat lost the space after the marker, and the same sentence
+ * written as `[1]` plus a bold ` Text` kept it.
+ *
+ * A leading `line-break` is dropped too. The break was a separator
+ * between the marker and the body; once the marker is gone it would open
+ * the paragraph with an empty line, and no court paragraph begins with
+ * one. The alternative — keeping it as content — would leave the same
+ * markup-shape dependence this function exists to remove, since the same
+ * document with the break written as `\n` inside a text node loses it.
+ */
+const trimLeadingWhitespace = (nodes: Inline[]): Inline[] => {
+  const result = [...nodes];
+  // Page anchors passed on the way in: zero-width on the text axis, so
+  // neither whitespace to drop nor content that ends the trim.
+  const kept: Inline[] = [];
+
+  while (result.length > 0) {
+    const first = result[0];
+    if (first === undefined) {
+      break;
+    }
+
+    if (first.type === "line-break") {
+      result.shift();
+      continue;
+    }
+
+    if (first.type === "page-anchor") {
+      kept.push(first);
+      result.shift();
+      continue;
+    }
+
+    if (first.type === "text") {
+      const trimmed = first.text.trimStart();
+      if (trimmed.length > 0) {
+        result[0] = { ...first, text: trimmed };
+        break;
+      }
+      result.shift();
+      continue;
+    }
+
+    // bold | italic | link — trim inside, and drop the wrapper entirely
+    // when nothing but whitespace was in it.
+    const children = trimLeadingWhitespace(first.children);
+    if (children.length > 0) {
+      result[0] = { ...first, children };
+      break;
+    }
+    result.shift();
+  }
+
+  kept.push(...result);
+  return kept;
+};
+
 export const stripInlinePrefix = (
   inlines: readonly Inline[],
   charCount: number,
@@ -314,16 +377,5 @@ export const stripInlinePrefix = (
     }
   }
 
-  // Trim leading whitespace from the first text node
-  const first = result[0];
-  if (result.length > 0 && first?.type === "text") {
-    const trimmed = first.text.trimStart();
-    if (trimmed) {
-      result[0] = { ...first, text: trimmed };
-    } else {
-      result.shift();
-    }
-  }
-
-  return result;
+  return trimLeadingWhitespace(result);
 };

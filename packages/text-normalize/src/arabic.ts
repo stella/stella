@@ -78,6 +78,12 @@ const FOLD_MAP: ReadonlyMap<string, string> = new Map<string, string>([
 /**
  * Apply the Arabic letter, digit, and removal folds codepoint by
  * codepoint. Non-Arabic characters pass through unchanged.
+ *
+ * Deliberately does not normalize. Unicode normalization is whole-string
+ * work — NFKC composes across codepoint boundaries — so it belongs to
+ * the caller, before the fold: `arabicNormalize` applies NFKC to the
+ * whole string and then calls this. Folding is a per-codepoint table
+ * lookup and stays that way.
  */
 export const applyArabicFolds = (text: string): string => {
   // Fast path for the single-code-unit calls made character-by-character
@@ -113,9 +119,34 @@ type ApplyArabicFoldsWithOffsetsOptions = {
 };
 
 /**
- * Like applyArabicFolds, but also returns an offset map so callers that
- * match against the folded text (e.g. find-in-page) can slice the original
- * text at the right positions.
+ * Fold Arabic variants and return an offset map, so a caller matching
+ * against the folded text (find-in-page, search previews) can slice the
+ * original at the right positions.
+ *
+ * Not simply `applyArabicFolds` plus offsets. This variant additionally
+ * normalizes NFKC one character at a time, because it is meant for raw
+ * document text: Arabic PDFs carry presentation forms (`ﺍﺣﻤﺪ`) and
+ * ligatures (`ﷲ`, `ﷺ`) that must expand to canonical letters to be
+ * searchable at all. Per character, not whole string, is what keeps
+ * every unit of an expansion pointing back at the one source character
+ * it came from — whole-string NFKC composes across boundaries and would
+ * describe positions the map no longer has. The `maxFoldedUnits` budget
+ * exists for the same reason: one ligature can expand to eighteen
+ * characters.
+ *
+ * The consequence is a deliberate asymmetry with `applyArabicFolds`,
+ * which never normalizes. On a compatibility character the two disagree:
+ *
+ *     applyArabicFolds("ﬁ")            === "ﬁ"
+ *     applyArabicFoldsWithOffsets("ﬁ") === "fi"
+ *
+ * They agree on NFKC-normalized input, and that is the state both sides
+ * of a comparison are in wherever the two are used together: the API's
+ * search highlighter folds its source through `normalizeSourceWithMappings`
+ * and each candidate through `arabicNormalize`, and both apply
+ * whole-string NFKC before either fold runs. Feeding raw text to one side
+ * and normalized text to the other is what would misplace a highlight, so
+ * normalize both or neither.
  */
 export const applyArabicFoldsWithOffsets = (
   input: string,

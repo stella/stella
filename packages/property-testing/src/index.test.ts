@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
+  PROPERTY_TEST_SEED_ENV,
   PROPERTY_TEST_TIMEOUT_BASE_MS_ENV,
   propertyConfig,
+  propertySeed,
   propertyTestDefaultTimeout,
   propertyTestTimeout,
 } from "./index";
@@ -38,6 +40,7 @@ const withEnv = (
 
 afterEach(() => {
   Reflect.deleteProperty(process.env, FACTOR_ENV);
+  Reflect.deleteProperty(process.env, PROPERTY_TEST_SEED_ENV);
 });
 
 describe("propertyConfig", () => {
@@ -142,6 +145,57 @@ describe("propertyTestTimeout", () => {
     for (const raw of ["0", "-1", "1.5", "not-a-number"]) {
       withEnv({ [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: raw }, () => {
         expect(propertyTestDefaultTimeout).toThrow(TypeError);
+      });
+    }
+  });
+});
+
+describe("propertySeed", () => {
+  test("is a stable seed in PR CI, where the factor is unset", () => {
+    withEnv(
+      { [FACTOR_ENV]: undefined, [PROPERTY_TEST_SEED_ENV]: undefined },
+      () => {
+        const seed = propertySeed();
+
+        expect(seed).toBeDefined();
+        expect(seed).toBe(propertySeed());
+      },
+    );
+  });
+
+  /**
+   * The nightly sweep already runs every property ten times longer. Reusing
+   * one seed there would re-walk the same inputs every night, so it draws a
+   * fresh one instead.
+   */
+  test("is absent during the nightly sweep, so fast-check explores", () => {
+    withEnv({ [FACTOR_ENV]: "10", [PROPERTY_TEST_SEED_ENV]: undefined }, () => {
+      expect(propertySeed()).toBeUndefined();
+    });
+  });
+
+  test("keeps the fixed seed at the neutral factor", () => {
+    withEnv({ [FACTOR_ENV]: "1", [PROPERTY_TEST_SEED_ENV]: undefined }, () => {
+      expect(propertySeed()).toBeDefined();
+    });
+  });
+
+  /** How a nightly failure is replayed without editing the test. */
+  test("honors an explicitly pinned seed, sweep or not", () => {
+    for (const factor of [undefined, "10"]) {
+      withEnv(
+        { [FACTOR_ENV]: factor, [PROPERTY_TEST_SEED_ENV]: "1234" },
+        () => {
+          expect(propertySeed()).toBe(1234);
+        },
+      );
+    }
+  });
+
+  test("rejects a pinned seed that is not an integer", () => {
+    for (const raw of ["1.5", "not-a-number"]) {
+      withEnv({ [PROPERTY_TEST_SEED_ENV]: raw }, () => {
+        expect(propertySeed).toThrow(TypeError);
       });
     }
   });

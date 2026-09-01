@@ -2,10 +2,15 @@
   "$schema": "https://turborepo.com/schema.json",
   // Turbo runs tasks in strict env mode, which strips undeclared variables from
   // the task environment. propertyConfig reads these at run time: the nightly
-  // factor that scales property numRuns, and CI to enable fast-check verbose
-  // reporting. Without passing them through, the nightly sweep would silently
-  // run at factor 1.
-  "globalPassThroughEnv": ["CI", "PROPERTY_TEST_NUM_RUNS_FACTOR"],
+  // factor that scales property numRuns, the pinned seed a replay command
+  // sets, and CI to enable fast-check verbose reporting. Without passing them
+  // through, the nightly sweep would silently run at factor 1 and a replay
+  // would silently run the default seed.
+  "globalPassThroughEnv": [
+    "CI",
+    "PROPERTY_TEST_NUM_RUNS_FACTOR",
+    "PROPERTY_TEST_SEED"
+  ],
   "tasks": {
     "transit": {
       "dependsOn": ["^transit"]
