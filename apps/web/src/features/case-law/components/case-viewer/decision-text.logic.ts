@@ -64,22 +64,29 @@ const continuesFootnote = (
  */
 export type FootnoteParts = {
   headIds: ReadonlySet<string>;
-  lastIds: ReadonlySet<string>;
+  /**
+   * The footnote's head anchor, keyed by the id of its last block: the
+   * return arrow sits on the last part but jumps back from the head, which
+   * is the anchor the in-text reference points at.
+   */
+  backJumpAnchorByLastId: ReadonlyMap<string, string>;
 };
 
 export const footnoteParts = (blocks: readonly Block[]): FootnoteParts => {
   const headIds = new Set<string>();
-  const lastIds = new Set<string>();
+  const backJumpAnchorByLastId = new Map<string, string>();
+  let headAnchor: string | null = null;
   for (const [index, block] of blocks.entries()) {
     if (footnoteParagraph(block) === null) {
       continue;
     }
     if (!continuesFootnote(blocks[index - 1], block)) {
       headIds.add(block.id);
+      headAnchor = block.anchorId;
     }
     if (!continuesFootnote(block, blocks[index + 1])) {
-      lastIds.add(block.id);
+      backJumpAnchorByLastId.set(block.id, headAnchor ?? block.anchorId);
     }
   }
-  return { headIds, lastIds };
+  return { headIds, backJumpAnchorByLastId };
 };

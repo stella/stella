@@ -457,7 +457,7 @@ const renderBlocksWithHoldingZone = ({
 
   // A footnote printed over several paragraphs shows its mark on the first
   // and its return arrow on the last.
-  const { headIds: footnoteHeadIds, lastIds: footnoteLastIds } =
+  const { headIds: footnoteHeadIds, backJumpAnchorByLastId } =
     footnoteParts(blocks);
 
   // Group consecutive blocks by heading ID for continuous lines.
@@ -523,7 +523,7 @@ const renderBlocksWithHoldingZone = ({
                 anchorsByPieceId={anchorsByPieceId}
                 block={block}
                 key={block.id}
-                noteBackJump={footnoteLastIds.has(block.id)}
+                noteBackJumpTo={backJumpAnchorByLastId.get(block.id)}
                 noteHead={footnoteHeadIds.has(block.id)}
                 rangesByPieceId={rangesByPieceId}
                 variant="case-law"

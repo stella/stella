@@ -580,13 +580,16 @@ describe("table cell spans and header cells", () => {
 });
 
 describe("multi-paragraph footnotes", () => {
-  const noteAst = (notes: readonly ParagraphNote[]): DocumentAst => ({
+  /** `undefined` stands for a body paragraph between notes. */
+  const noteAst = (
+    notes: readonly (ParagraphNote | undefined)[],
+  ): DocumentAst => ({
     ...documentAst,
     blocks: notes.map((note, index) => ({
       id: `fn${String(index)}`,
       anchorId: `_ftn${String(index)}`,
       type: "paragraph",
-      note,
+      ...(note === undefined ? {} : { note }),
       inlines: [{ type: "text", text: "Note" }],
       plainText: "Note",
     })),
@@ -605,6 +608,24 @@ describe("multi-paragraph footnotes", () => {
     const stored = noteAst([{ type: "footnote", label: "1" }]);
     expect(isDocumentAst(stored)).toBe(true);
     expect(parseDocumentAst(JSON.stringify(stored))).toEqual(stored);
+  });
+
+  test("a writer cannot put two labels under one adjacent noteId; a reader still serves it", () => {
+    const stored = noteAst([
+      { type: "footnote", label: "1", noteId: "n1" },
+      { type: "footnote", label: "2", noteId: "n1" },
+    ]);
+    expect(isDocumentAst(stored)).toBe(false);
+    expect(parseDocumentAst(JSON.stringify(stored))).toEqual(stored);
+  });
+
+  test("the same noteId in two separate runs is two notes, each free to be labelled", () => {
+    const stored = noteAst([
+      { type: "footnote", label: "1", noteId: "n1" },
+      undefined,
+      { type: "footnote", label: "2", noteId: "n1" },
+    ]);
+    expect(isDocumentAst(stored)).toBe(true);
   });
 });
 

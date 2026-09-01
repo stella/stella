@@ -683,23 +683,20 @@ const jumpToNoteReference = (anchorId: string) => {
   blockEl.dataset["highlight"] = "";
 };
 
-/** A continuation paragraph's anchor carries the head anchor plus a part
- * suffix; the back jump always returns from the footnote's head. */
-const noteHeadAnchorOf = (anchorId: string): string =>
-  anchorId.replace(/-p\d+$/u, "");
-
 /**
  * The return arrow at the end of a footnote: jumps back to the sentence
- * that cites it, mirroring the clickable footnote number.
+ * that cites it, mirroring the clickable footnote number. `headAnchorId`
+ * is the footnote's first part, the anchor the in-text reference names;
+ * the caller that groups a footnote's parts supplies it.
  */
-const NoteBackJump = ({ anchorId }: { anchorId: string }) => {
+const NoteBackJump = ({ headAnchorId }: { headAnchorId: string }) => {
   const t = useTranslations();
   return (
     <button
       aria-label={t("common.back")}
       className="reader-note-back"
       data-reader-chrome=""
-      onClick={() => jumpToNoteReference(noteHeadAnchorOf(anchorId))}
+      onClick={() => jumpToNoteReference(headAnchorId)}
       title={t("common.back")}
       type="button"
     >
@@ -731,7 +728,7 @@ export const BlockRenderer = ({
   activeMatchIndex,
   anchorsByPieceId,
   block,
-  noteBackJump = false,
+  noteBackJumpTo,
   noteHead = true,
   rangesByPieceId,
   variant,
@@ -739,8 +736,11 @@ export const BlockRenderer = ({
   activeMatchIndex: number;
   anchorsByPieceId?: Record<string, TextAnchor[]> | undefined;
   block: Block;
-  /** Render the return arrow: this is the last paragraph of a footnote. */
-  noteBackJump?: boolean | undefined;
+  /**
+   * Render the return arrow: this is the last paragraph of a footnote, and
+   * the value is the anchor of its first paragraph, where the jump lands.
+   */
+  noteBackJumpTo?: string | undefined;
   /**
    * Render the note's label: this is the first paragraph of a footnote.
    * A reader that does not group a footnote's parts leaves this alone,
@@ -862,8 +862,8 @@ export const BlockRenderer = ({
           pieceId={block.id}
           ranges={rangesForPiece(rangesByPieceId, block.id)}
         />
-        {noteBackJump && block.note?.type === "footnote" && (
-          <NoteBackJump anchorId={block.anchorId} />
+        {noteBackJumpTo !== undefined && block.note?.type === "footnote" && (
+          <NoteBackJump headAnchorId={noteBackJumpTo} />
         )}
       </p>
     );

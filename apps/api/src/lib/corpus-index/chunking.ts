@@ -257,16 +257,31 @@ const isChunkableBlock = (block: unknown): boolean => {
   if (!("type" in block)) {
     return false;
   }
-  if (block.type === "paragraph" || block.type === "table") {
-    return true;
+  if (typeof block.type !== "string" || !isChunkableBlockType(block.type)) {
+    return false;
   }
   // A heading additionally drives the ancestry stack, which reads `level`.
   return (
-    block.type === "heading" &&
-    "level" in block &&
-    typeof block.level === "number"
+    block.type !== "heading" ||
+    ("level" in block && typeof block.level === "number")
   );
 };
+
+/**
+ * Every block kind is chunkable: each carries `plainText` and `anchorId`,
+ * and a blank text (an image with no alt) is skipped by the walk. Total
+ * over `Block["type"]`, so a new kind cannot silently send the whole
+ * document to the unanchored plain-text fallback.
+ */
+const CHUNKABLE_BLOCK_TYPES = {
+  heading: true,
+  paragraph: true,
+  table: true,
+  image: true,
+} as const satisfies Record<Block["type"], true>;
+
+const isChunkableBlockType = (type: string): type is Block["type"] =>
+  Object.hasOwn(CHUNKABLE_BLOCK_TYPES, type);
 
 const chunkBlocks = (blocks: readonly Block[]): CorpusChunk[] => {
   if (blocks.length > MAX_CHUNK_BLOCKS) {

@@ -802,12 +802,50 @@ const documentAstMetadataSchema: v.GenericSchema<DocumentAstMetadata> =
     statutes: v.array(v.string()),
   });
 
-export const documentAstSchema: v.GenericSchema<DocumentAst> = v.object({
-  version: v.literal(1),
-  source: documentAstSourceSchema,
-  metadata: documentAstMetadataSchema,
-  blocks: v.array(blockSchema),
-});
+const footnoteOf = (block: Block): ParagraphNote | null =>
+  block.type === "paragraph" && block.note?.type === "footnote"
+    ? block.note
+    : null;
+
+/**
+ * Whether every run of adjacent footnote paragraphs sharing a `noteId`
+ * repeats one label. The parts of one footnote are grouped by `noteId`
+ * alone on read, so two notes written under one id with different labels
+ * would render as one note with the second label lost; a writer must not
+ * persist that.
+ */
+export const footnoteGroupsShareLabels = (
+  blocks: readonly Block[],
+): boolean => {
+  let previous: ParagraphNote | null = null;
+  for (const block of blocks) {
+    const note = footnoteOf(block);
+    if (
+      note !== null &&
+      previous !== null &&
+      note.noteId !== undefined &&
+      note.noteId === previous.noteId &&
+      note.label !== previous.label
+    ) {
+      return false;
+    }
+    previous = note;
+  }
+  return true;
+};
+
+export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
+  v.object({
+    version: v.literal(1),
+    source: documentAstSourceSchema,
+    metadata: documentAstMetadataSchema,
+    blocks: v.array(blockSchema),
+  }),
+  v.check(
+    ({ blocks }) => footnoteGroupsShareLabels(blocks),
+    "Adjacent footnote paragraphs sharing a noteId must repeat one label",
+  ),
+);
 
 const emptyDocumentAstSource = () =>
   ({

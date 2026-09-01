@@ -81,20 +81,20 @@ const noteBlocks = (notes: readonly (ParagraphNote | undefined)[]): Block[] =>
   }));
 
 describe("footnote parts", () => {
-  test("a note printed over several paragraphs opens and closes once", () => {
+  test("a note printed over several paragraphs opens once and jumps back from its head", () => {
     const blocks = noteBlocks([
       { type: "footnote", label: "1", noteId: "n1" },
       { type: "footnote", label: "1", noteId: "n1" },
       { type: "footnote", label: "1", noteId: "n1" },
     ]);
-    const { headIds, lastIds } = footnoteParts(blocks);
+    const { headIds, backJumpAnchorByLastId } = footnoteParts(blocks);
 
     expect([...headIds]).toEqual(["b0"]);
-    expect([...lastIds]).toEqual(["b2"]);
+    expect([...backJumpAnchorByLastId]).toEqual([["b2", "b-0"]]);
   });
 
   test("notes with no shared identity are each complete by themselves", () => {
-    const { headIds, lastIds } = footnoteParts(
+    const { headIds, backJumpAnchorByLastId } = footnoteParts(
       noteBlocks([
         { type: "footnote", label: "1" },
         { type: "footnote", label: "2" },
@@ -102,11 +102,14 @@ describe("footnote parts", () => {
     );
 
     expect([...headIds]).toEqual(["b0", "b1"]);
-    expect([...lastIds]).toEqual(["b0", "b1"]);
+    expect([...backJumpAnchorByLastId]).toEqual([
+      ["b0", "b-0"],
+      ["b1", "b-1"],
+    ]);
   });
 
   test("adjacent notes with different identities do not merge", () => {
-    const { headIds, lastIds } = footnoteParts(
+    const { headIds, backJumpAnchorByLastId } = footnoteParts(
       noteBlocks([
         { type: "footnote", label: "1", noteId: "n1" },
         { type: "footnote", label: "2", noteId: "n2" },
@@ -114,11 +117,14 @@ describe("footnote parts", () => {
     );
 
     expect([...headIds]).toEqual(["b0", "b1"]);
-    expect([...lastIds]).toEqual(["b0", "b1"]);
+    expect([...backJumpAnchorByLastId]).toEqual([
+      ["b0", "b-0"],
+      ["b1", "b-1"],
+    ]);
   });
 
   test("a body paragraph between two parts breaks the run", () => {
-    const { headIds, lastIds } = footnoteParts(
+    const { headIds, backJumpAnchorByLastId } = footnoteParts(
       noteBlocks([
         { type: "footnote", label: "1", noteId: "n1" },
         undefined,
@@ -127,14 +133,19 @@ describe("footnote parts", () => {
     );
 
     expect([...headIds]).toEqual(["b0", "b2"]);
-    expect([...lastIds]).toEqual(["b0", "b2"]);
+    expect([...backJumpAnchorByLastId]).toEqual([
+      ["b0", "b-0"],
+      ["b2", "b-2"],
+    ]);
   });
 
   test("a body paragraph is neither a head nor a last part", () => {
-    const { headIds, lastIds } = footnoteParts(noteBlocks([undefined]));
+    const { headIds, backJumpAnchorByLastId } = footnoteParts(
+      noteBlocks([undefined]),
+    );
 
     expect([...headIds]).toEqual([]);
-    expect([...lastIds]).toEqual([]);
+    expect(backJumpAnchorByLastId.size).toBe(0);
   });
 });
 
