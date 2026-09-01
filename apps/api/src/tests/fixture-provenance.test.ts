@@ -29,18 +29,44 @@ type CapturedFixture = {
   provenance: FixtureProvenance | undefined;
 };
 
+/**
+ * Patterns a root's `.gitignore` declares are runtime scratch.
+ *
+ * Adapter tests write temporary fixtures beside the committed captures
+ * (`pagination-test.json`); git never sees them, so provenance must not
+ * either — test files interleave in CI, and a scratch file present
+ * mid-run would be flagged as a capture missing its sidecar.
+ */
+const scratchPatterns = async (rootDir: string): Promise<Bun.Glob[]> => {
+  const file = Bun.file(path.join(rootDir, ".gitignore"));
+  if (!(await file.exists())) {
+    return [];
+  }
+  return (await file.text())
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"))
+    .map((line) => new Bun.Glob(line.includes("/") ? line : `**/${line}`));
+};
+
 /** Repo-relative paths of everything under the declared roots. */
 const scanRoots = async (): Promise<string[]> => {
   const perRoot = await Promise.all(
     CAPTURED_FIXTURE_ROOTS.map(async (root) => {
-      const entries = await Array.fromAsync(
-        new Bun.Glob("**/*").scan({
-          cwd: path.resolve(API_ROOT, root),
-          onlyFiles: true,
-          dot: true,
-        }),
-      );
-      return entries.map((entry) => `${root}/${entry}`);
+      const rootDir = path.resolve(API_ROOT, root);
+      const [entries, scratch] = await Promise.all([
+        Array.fromAsync(
+          new Bun.Glob("**/*").scan({
+            cwd: rootDir,
+            onlyFiles: true,
+            dot: true,
+          }),
+        ),
+        scratchPatterns(rootDir),
+      ]);
+      return entries
+        .filter((entry) => !scratch.some((pattern) => pattern.match(entry)))
+        .map((entry) => `${root}/${entry}`);
     }),
   );
   // Plain code-unit ordering: these are file paths, not display text.
