@@ -12,8 +12,11 @@ import {
 } from "@stll/ui/application-rail";
 import { InspectorDock, TOOLBAR_ROW_HEIGHT } from "@stll/ui/inspector";
 import { Sheet, SheetPopup, SheetTitle } from "@stll/ui/sheet";
+import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail, WorkspaceShell } from "@stll/ui/workspace-shell";
+
+import { resolveWorkspaceInspectorPresentation } from "./workspace-frame.logic";
 
 export type WorkspaceFrameNavigationItem = {
   id: string;
@@ -85,6 +88,11 @@ export type WorkspaceFrameTopBar = {
   actions?: ReactNode;
 };
 
+type DescribedWorkspaceFrameProps = Extract<
+  WorkspaceFrameProps,
+  { composition: "described" }
+>;
+
 /**
  * Stella's complete workspace frame. Hosts provide route descriptors and
  * actions; this component owns the shell, application rail, end rail, and
@@ -103,7 +111,21 @@ export const WorkspaceFrame = (props: WorkspaceFrameProps) => {
     );
   }
 
-  const { children, endRail, inspector, navigation, topBar } = props;
+  return <DescribedWorkspaceFrame {...props} />;
+};
+
+const DescribedWorkspaceFrame = ({
+  children,
+  endRail,
+  inspector,
+  navigation,
+  topBar,
+}: DescribedWorkspaceFrameProps) => {
+  const isCompact = useIsMobile();
+  const inspectorPresentation = resolveWorkspaceInspectorPresentation({
+    hasMobilePresentation: inspector?.mobile !== undefined,
+    isCompact,
+  });
   const desktopNavigation = (
     <ApplicationRail aria-label={navigation.label}>
       <ApplicationRailHeader>{navigation.header}</ApplicationRailHeader>
@@ -129,20 +151,21 @@ export const WorkspaceFrame = (props: WorkspaceFrameProps) => {
     </ApplicationRail>
   );
 
-  const endDock = inspector ? (
-    <InspectorDock
-      rail={<WorkspaceEndRail {...endRail} />}
-      resizeHandleLabel={inspector.resizeHandleLabel}
-      resizeHandleProps={inspector.resizeHandleProps}
-      showPaneContent={inspector.showPaneContent}
-      width={inspector.width}
-      onResetWidth={inspector.onResetWidth}
-    >
-      {inspector.pane}
-    </InspectorDock>
-  ) : (
-    <WorkspaceEndRail {...endRail} />
-  );
+  const endDock =
+    inspector && inspectorPresentation === "desktop" ? (
+      <InspectorDock
+        rail={<WorkspaceEndRail {...endRail} />}
+        resizeHandleLabel={inspector.resizeHandleLabel}
+        resizeHandleProps={inspector.resizeHandleProps}
+        showPaneContent={inspector.showPaneContent}
+        width={inspector.width}
+        onResetWidth={inspector.onResetWidth}
+      >
+        {inspector.pane}
+      </InspectorDock>
+    ) : (
+      <WorkspaceEndRail {...endRail} />
+    );
 
   const frame = (
     <WorkspaceShell
@@ -178,18 +201,24 @@ export const WorkspaceFrame = (props: WorkspaceFrameProps) => {
 
   return (
     <Sheet
-      open={inspector.mobile.open}
-      onOpenChange={inspector.mobile.onOpenChange}
+      open={inspectorPresentation === "mobile" && inspector.mobile.open}
+      onOpenChange={(open) => {
+        if (inspectorPresentation === "mobile") {
+          inspector.mobile?.onOpenChange(open);
+        }
+      }}
     >
       {frame}
-      <SheetPopup
-        className="h-dvh w-full max-w-none border-0 p-0 md:hidden"
-        showCloseButton={false}
-        side="inline-end"
-      >
-        <SheetTitle className="sr-only">{inspector.mobile.label}</SheetTitle>
-        {inspector.mobile.content}
-      </SheetPopup>
+      {inspectorPresentation === "mobile" ? (
+        <SheetPopup
+          className="h-dvh w-full max-w-none border-0 p-0"
+          showCloseButton={false}
+          side="inline-end"
+        >
+          <SheetTitle className="sr-only">{inspector.mobile.label}</SheetTitle>
+          {inspector.mobile.content}
+        </SheetPopup>
+      ) : null}
     </Sheet>
   );
 };
