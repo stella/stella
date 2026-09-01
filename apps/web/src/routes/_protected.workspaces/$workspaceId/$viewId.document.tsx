@@ -80,6 +80,7 @@ import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { documentPropertiesOptions, fileOptions } from "@/lib/files/queries";
+import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import {
   PDFProvider,
   usePDFStore,
@@ -157,6 +158,20 @@ export const Route = createFileRoute(
     if (!deps.entity || !deps.field) {
       return;
     }
+
+    // The file chat overlay suspends on its file-thread binding before the
+    // chat session mounts and reads the MCP catalogue. Start that catalogue
+    // here so it cannot become a second round after file-thread resolves.
+    detached(
+      prefetchRouteQuery(
+        context.queryClient,
+        mcpConnectorsOptions(context.user.activeOrganizationId),
+        (error: unknown) => {
+          getAnalytics().captureError(error);
+        },
+      ),
+      "document.prefetch",
+    );
 
     // Versions power the inspector and field switching. Start the request at
     // navigation time alongside the entity read so direct document links do
