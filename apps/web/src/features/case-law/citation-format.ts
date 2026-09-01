@@ -141,7 +141,7 @@ const POLISH_GENITIVE_MONTHS = [
  * the preposition falls outside the known patterns, the nominative passes
  * through unchanged rather than half-inflected.
  */
-const POLISH_PREPOSITIONS = new Set(["w", "we", "dla"]);
+const POLISH_PREPOSITION_RE = /^(?:w|we|dla)$/u;
 
 const polishGenitiveWord = (word: string): string | null => {
   if (word === "Sąd") {
@@ -163,7 +163,7 @@ const polishGenitiveCourt = (court: string): string => {
   const words = court.split(" ");
   const inflected: string[] = [];
   for (const [index, word] of words.entries()) {
-    if (POLISH_PREPOSITIONS.has(word)) {
+    if (POLISH_PREPOSITION_RE.test(word)) {
       inflected.push(...words.slice(index));
       return inflected.join(" ");
     }

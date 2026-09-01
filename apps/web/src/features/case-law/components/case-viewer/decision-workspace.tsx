@@ -240,8 +240,8 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // number) must not masquerade as one.
   const citeSuffix = `, ${decision.caseNumber}`;
   const caseName =
-    decisionTitle !== null && decisionTitle.endsWith(citeSuffix)
-      ? decisionTitle.slice(0, -citeSuffix.length)
+    (decisionTitle?.endsWith(citeSuffix) ?? false)
+      ? (decisionTitle ?? "").slice(0, -citeSuffix.length)
       : null;
 
   const mainRef = useRef<HTMLDivElement>(null);
