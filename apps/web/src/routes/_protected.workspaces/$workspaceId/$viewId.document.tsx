@@ -80,7 +80,6 @@ import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { documentPropertiesOptions, fileOptions } from "@/lib/files/queries";
-import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import {
   PDFProvider,
   usePDFStore,
@@ -100,6 +99,8 @@ import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 import "@/components/pdf/peek/peek-docx.css";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
+
+import { loadDocumentEntityWithChatPrefetch } from "./-document-loader";
 
 const ReadOnlyDocxViewer = lazy(async () => {
   const m = await import("@/components/docx/app-docx-editor");
@@ -158,20 +159,20 @@ export const Route = createFileRoute(
     if (!deps.entity || !deps.field) {
       return;
     }
+    const entityId = deps.entity;
 
-    // The file chat overlay suspends on its file-thread binding before the
-    // chat session mounts and reads the MCP catalogue. Start that catalogue
-    // here so it cannot become a second round after file-thread resolves.
-    detached(
-      prefetchRouteQuery(
-        context.queryClient,
-        mcpConnectorsOptions(context.user.activeOrganizationId),
-        (error: unknown) => {
-          getAnalytics().captureError(error);
-        },
-      ),
-      "document.prefetch",
-    );
+    const entityPromise = loadDocumentEntityWithChatPrefetch({
+      activeOrganizationId: context.user.activeOrganizationId,
+      captureError: (error: unknown) => {
+        getAnalytics().captureError(error);
+      },
+      loadEntity: async () =>
+        await ensureRouteQueryData(
+          context.queryClient,
+          entityOptions(params.workspaceId, entityId),
+        ),
+      queryClient: context.queryClient,
+    });
 
     // Versions power the inspector and field switching. Start the request at
     // navigation time alongside the entity read so direct document links do
@@ -191,10 +192,7 @@ export const Route = createFileRoute(
       "document.prefetch",
     );
 
-    const entity = await ensureRouteQueryData(
-      context.queryClient,
-      entityOptions(params.workspaceId, deps.entity),
-    );
+    const entity = await entityPromise;
 
     // useSyncJustifications mounts with entityIds=[deps.entity] as soon as the
     // component renders; warm the same query so it's a cache hit. The hook
