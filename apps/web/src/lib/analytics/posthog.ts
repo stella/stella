@@ -109,24 +109,43 @@ const deepestCause = (error: Error): Error => {
 
 // Engines disagree on frame syntax: V8 indents frames with `at ` under a
 // `<name>: <message>` header, while SpiderMonkey and JavaScriptCore write
-// bare `<symbol>@<url>:<line>:<column>` lines and no header at all. Matching
-// both shapes keeps the frames, which name bundled assets and minified
-// symbols, and drops everything else, including the header whose message can
-// carry PII. A callsite line carries no message: its symbol runs up to the
-// `@`, so a header (`<name>: <message>`, always spaced) cannot match it.
-const STACK_FRAME_SYNTAX: readonly RegExp[] = [
+// bare `<symbol>@<url>:<line>:<column>` lines and no header at all. Known JSC
+// engine labels contain spaces; other callsite labels stay symbol-shaped so
+// free-form text cannot ride along as a frame.
+const STACK_FRAME_SYNTAX = [
   /^\s+at /u,
-  /^[^\s@]*@\S+:\d+:\d+$/u,
-];
+  /^(?:[\w$.<>[\]#~/]{0,120}|(?:global|module|eval) code)@\S+:\d+:\d+$/u,
+] as const;
+const STACK_FRAME_QUERY = /\?[^\s)]*(?=:\d+:\d+\)?$)/u;
+
+const serializedErrorHeader = (error: Error): string => {
+  const name = typeof error.name === "string" ? error.name : "Error";
+  const message = typeof error.message === "string" ? error.message : "";
+  if (name.length === 0) {
+    return message;
+  }
+  return message.length === 0 ? name : `${name}: ${message}`;
+};
+
+const stackWithoutHeader = (error: Error, stack: string): string => {
+  const header = serializedErrorHeader(error);
+  if (stack === header) {
+    return "";
+  }
+  const prefix = `${header}\n`;
+  return stack.startsWith(prefix) ? stack.slice(prefix.length) : stack;
+};
 
 const redactedStack = (error: Error): string | undefined => {
-  const { stack } = deepestCause(error);
+  const source = deepestCause(error);
+  const { stack } = source;
   if (typeof stack !== "string") {
     return undefined;
   }
-  const frames = stack
+  const frames = stackWithoutHeader(source, stack)
     .split("\n")
-    .filter((line) => STACK_FRAME_SYNTAX.some((syntax) => syntax.test(line)));
+    .filter((line) => STACK_FRAME_SYNTAX.some((syntax) => syntax.test(line)))
+    .map((line) => line.replace(STACK_FRAME_QUERY, ""));
   if (frames.length === 0) {
     return undefined;
   }

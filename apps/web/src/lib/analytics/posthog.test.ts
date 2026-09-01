@@ -416,6 +416,7 @@ describe("PostHog browser analytics adapter", () => {
     callsite: [
       "renderMatter@https://stella.test/assets/index.js:10:15",
       "handleClick/<@https://stella.test/assets/index.js:22:3",
+      "global code@https://stella.test/assets/index.js:30:7",
     ],
     indented: [
       "    at renderMatter (https://stella.test/assets/index.js:10:15)",
@@ -444,6 +445,61 @@ describe("PostHog browser analytics adapter", () => {
       expect(captured.stack).toBe(["RangeError:", ...frames].join("\n"));
     },
   );
+
+  const QUERY_STRING_FRAMES = {
+    callsite: {
+      frame:
+        "renderMatter@https://stella.test/assets/index.js?token=private:10:15",
+      safeFrame: "renderMatter@https://stella.test/assets/index.js:10:15",
+    },
+    indented: {
+      frame:
+        "    at renderMatter (https://stella.test/assets/index.js?token=private:10:15)",
+      safeFrame:
+        "    at renderMatter (https://stella.test/assets/index.js:10:15)",
+    },
+  } as const;
+
+  test.each(Object.entries(QUERY_STRING_FRAMES))(
+    "captureError removes query strings from %s frames",
+    (_syntax, { frame, safeFrame }) => {
+      const { analytics } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+      const error = new Error("Privileged document name");
+      error.stack = [`Error: ${error.message}`, frame].join("\n");
+
+      analytics.captureError(error);
+
+      const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+      if (!(captured instanceof Error)) {
+        throw new TypeError("Expected a redacted Error");
+      }
+      expect(captured.stack).toBe(["Error:", safeFrame].join("\n"));
+    },
+  );
+
+  test("captureError cannot treat a multiline message as a stack frame", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    const injectedFrame =
+      "clientName@https://stella.test/assets/private.js:20:5";
+    const actualFrame =
+      "renderMatter@https://stella.test/assets/index.js:10:15";
+    const error = new Error(`Privileged document name\n${injectedFrame}`);
+    error.stack = [`Error: ${error.message}`, actualFrame].join("\n");
+
+    analytics.captureError(error);
+
+    const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+    if (!(captured instanceof Error)) {
+      throw new TypeError("Expected a redacted Error");
+    }
+    expect(captured.stack).toBe(["Error:", actualFrame].join("\n"));
+  });
 
   test("captureError survives a cyclic cause chain", () => {
     const { analytics } = createPostHogAnalytics({
