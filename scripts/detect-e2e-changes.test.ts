@@ -555,16 +555,37 @@ describe("detect-e2e-changes", () => {
   });
 
   test("builds the production web artifact once per workflow run", () => {
+    const plan = workflowJob("ci-plan");
+    expect(plan).toContain(
+      [
+        'if [[ "$e2e_core_required" == "true" ]]; then',
+        "            web_build_required=true",
+        "          fi",
+      ].join("\n"),
+    );
+
     const webBuild = workflowJob("web-build");
     expect(webBuild).toContain("needs: ci-plan");
     expect(webBuild).toContain("Upload production E2E web build");
     expect(webBuild).toContain("VITE_FEATURE_TIME_BILLING");
 
     const production = workflowJob("e2e-production-shard");
+    const productionHeader = production.slice(
+      0,
+      production.indexOf("\n    runs-on:"),
+    );
+    expect(productionHeader).toContain(
+      [
+        "    needs: [ci-plan, web-build]",
+        "    if: >-",
+        "      always()",
+        "      && (needs.ci-plan.outputs.trusted == 'true'",
+        "          || github.event_name == 'workflow_dispatch')",
+        "      && needs.ci-plan.outputs.e2e_core_required == 'true'",
+        "      && needs.web-build.result == 'success'",
+      ].join("\n"),
+    );
     expect(production).not.toContain("Build web for route checks");
-    expect(production).toContain("needs: [ci-plan, web-build]");
-    expect(production).toContain("always()");
-    expect(production).toContain("needs.web-build.result == 'success'");
     expect(production).not.toContain("Wait for production web build");
     expect(production).toContain("Download production web build");
     expect(production).toContain("Validate production web build");

@@ -1519,7 +1519,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
-      actions: read
       contents: read
     strategy:
       fail-fast: false
