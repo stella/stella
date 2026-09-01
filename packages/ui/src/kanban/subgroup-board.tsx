@@ -74,28 +74,32 @@ export const KanbanSubgroupBoard = <TRow,>({
   const [expandedEmptyLaneValues, setExpandedEmptyLaneValues] = useState(
     () => new Set<string | null>(),
   );
-  const { cellsByLaneValue, countByColumnValue } = useMemo(() => {
-    const laneCells = new Map<string | null, KanbanBoardCell<TRow>[]>();
-    const columnCounts = new Map<string, number>();
-    for (const cell of matrix.cells) {
-      const key = columnKey(cell.coordinate.column);
-      columnCounts.set(key, (columnCounts.get(key) ?? 0) + cell.rows.length);
-      if (cell.coordinate.lane.type === "none") {
-        continue;
+  const { cellsByLaneValue, countByColumnValue, ungroupedCells } =
+    useMemo(() => {
+      const laneCells = new Map<string | null, KanbanBoardCell<TRow>[]>();
+      const columnCounts = new Map<string, number>();
+      const cellsWithoutLane: KanbanBoardCell<TRow>[] = [];
+      for (const cell of matrix.cells) {
+        const key = columnKey(cell.coordinate.column);
+        columnCounts.set(key, (columnCounts.get(key) ?? 0) + cell.rows.length);
+        if (cell.coordinate.lane.type === "none") {
+          cellsWithoutLane.push(cell);
+          continue;
+        }
+        const laneValue = cell.coordinate.lane.group.value;
+        const currentLaneCells = laneCells.get(laneValue);
+        if (currentLaneCells) {
+          currentLaneCells.push(cell);
+        } else {
+          laneCells.set(laneValue, [cell]);
+        }
       }
-      const laneValue = cell.coordinate.lane.group.value;
-      const currentLaneCells = laneCells.get(laneValue);
-      if (currentLaneCells) {
-        currentLaneCells.push(cell);
-      } else {
-        laneCells.set(laneValue, [cell]);
-      }
-    }
-    return {
-      cellsByLaneValue: laneCells,
-      countByColumnValue: columnCounts,
-    };
-  }, [matrix.cells]);
+      return {
+        cellsByLaneValue: laneCells,
+        countByColumnValue: columnCounts,
+        ungroupedCells: cellsWithoutLane,
+      };
+    }, [matrix.cells]);
 
   const setLaneCollapsed = (
     group: KanbanGroup,
@@ -143,6 +147,23 @@ export const KanbanSubgroupBoard = <TRow,>({
             </div>
           ))}
         </div>
+
+        {ungroupedCells.length === 0 ? null : (
+          <div className="flex gap-3 pb-1">
+            {ungroupedCells.map((cell) => (
+              <div
+                className="w-[300px] shrink-0"
+                key={columnKey(cell.coordinate.column)}
+              >
+                {renderCell({
+                  cell,
+                  count: cell.rows.length,
+                  laneValue: null,
+                })}
+              </div>
+            ))}
+          </div>
+        )}
 
         {matrix.lanes.map((lane) => {
           if (lane.type === "none") {

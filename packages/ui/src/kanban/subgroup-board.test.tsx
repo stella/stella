@@ -33,6 +33,7 @@ const schema: KanbanSchema<Row, Property> = {
 
 const group = resolveKanbanGrouping({ groupBy: "_status", schema });
 const subgroup = resolveKanbanGrouping({ groupBy: "owner", schema });
+const noSubgroup = resolveKanbanGrouping({ groupBy: null, schema });
 const testLabel = (...values: readonly unknown[]) => values.join(":");
 const matrix = buildKanbanBoardMatrix({
   group,
@@ -43,7 +44,7 @@ const matrix = buildKanbanBoardMatrix({
     grouping.type === "built-in" ? row.status : row.owner,
 });
 
-const renderBoard = (expandEmptyLanes = false) =>
+const renderBoard = (boardMatrix = matrix, expandEmptyLanes = false) =>
   renderToStaticMarkup(
     <KanbanSubgroupBoard
       {...(expandEmptyLanes
@@ -52,7 +53,7 @@ const renderBoard = (expandEmptyLanes = false) =>
             onLaneCollapsedChange: () => undefined,
           }
         : {})}
-      matrix={matrix}
+      matrix={boardMatrix}
       renderCell={({ cell, count, laneValue }) => (
         <span>
           {testLabel(
@@ -95,7 +96,7 @@ describe("KanbanSubgroupBoard", () => {
 
   test("collapses empty lanes by default and supports controlled expansion", () => {
     const collapsed = renderBoard();
-    const expanded = renderBoard(true);
+    const expanded = renderBoard(matrix, true);
 
     expect(collapsed).toContain("lane:lin:0");
     expect(collapsed).toContain('data-kanban-lane-column-count="1"');
@@ -105,5 +106,21 @@ describe("KanbanSubgroupBoard", () => {
     expect(expanded).toContain("cell:lin:open:0");
     expect(expanded).toContain("cell:lin:done:0");
     expect(expanded).toContain('data-kanban-lane-column-count="0"');
+  });
+
+  test("renders one board row when subgrouping is absent", () => {
+    const singleLaneMatrix = buildKanbanBoardMatrix({
+      group,
+      subgroup: noSubgroup,
+      rows: [{ id: "one", owner: "ada", status: "open" }],
+      uncategorizedLabel: "No value",
+      resolveGroupValue: ({ grouping, row }) =>
+        grouping.type === "built-in" ? row.status : row.owner,
+    });
+    const markup = renderBoard(singleLaneMatrix);
+
+    expect(markup).toContain("column:open:1");
+    expect(markup).toContain("cell::open:1");
+    expect(markup).not.toContain("lane:");
   });
 });
