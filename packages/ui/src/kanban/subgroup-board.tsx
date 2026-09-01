@@ -6,13 +6,21 @@ import { ChevronDownIcon } from "lucide-react";
 import { DirectionalIcon } from "../components/directional-icon";
 import { cn } from "../lib/utils";
 import type { KanbanGroup } from "./grouping";
-import type { KanbanBoardCell, KanbanBoardMatrix } from "./matrix";
+import type {
+  KanbanBoardCell,
+  KanbanBoardColumn,
+  KanbanBoardMatrix,
+} from "./matrix";
 
 const groupValueKey = (value: string | null): string =>
   value === null ? "null" : `value:${value.length}:${value}`;
+const columnKey = (column: KanbanBoardColumn): string =>
+  column.type === "group"
+    ? `group:${groupValueKey(column.group.value)}`
+    : `destination:${column.destination.id}`;
 
 export type KanbanSubgroupColumnHeaderContext = {
-  column: KanbanGroup;
+  column: KanbanBoardColumn;
   count: number;
 };
 
@@ -68,13 +76,10 @@ export const KanbanSubgroupBoard = <TRow,>({
   );
   const { cellsByLaneValue, countByColumnValue } = useMemo(() => {
     const laneCells = new Map<string | null, KanbanBoardCell<TRow>[]>();
-    const columnCounts = new Map<string | null, number>();
+    const columnCounts = new Map<string, number>();
     for (const cell of matrix.cells) {
-      columnCounts.set(
-        cell.coordinate.column.value,
-        (columnCounts.get(cell.coordinate.column.value) ?? 0) +
-          cell.rows.length,
-      );
+      const key = columnKey(cell.coordinate.column);
+      columnCounts.set(key, (columnCounts.get(key) ?? 0) + cell.rows.length);
       if (cell.coordinate.lane.type === "none") {
         continue;
       }
@@ -130,13 +135,10 @@ export const KanbanSubgroupBoard = <TRow,>({
       <div className="min-w-max">
         <div className="bg-background sticky top-0 z-20 flex gap-3 pt-4 pb-3">
           {matrix.columns.map((column) => (
-            <div
-              className="w-[300px] shrink-0"
-              key={groupValueKey(column.value)}
-            >
+            <div className="w-[300px] shrink-0" key={columnKey(column)}>
               {renderColumnHeader({
                 column,
-                count: countByColumnValue.get(column.value) ?? 0,
+                count: countByColumnValue.get(columnKey(column)) ?? 0,
               })}
             </div>
           ))}
@@ -184,12 +186,26 @@ export const KanbanSubgroupBoard = <TRow,>({
                 </button>
               </div>
 
+              <div className="flex gap-3" aria-label="Lane column counts">
+                {cells.map((cell) => (
+                  <div
+                    className="w-[300px] shrink-0 px-3"
+                    data-kanban-lane-column-count={cell.rows.length}
+                    key={columnKey(cell.coordinate.column)}
+                  >
+                    <span className="text-muted-foreground text-xs tabular-nums">
+                      {formatCount(cell.rows.length)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
               {!collapsed && (
                 <div className="flex gap-3 pb-1">
                   {cells.map((cell) => (
                     <div
                       className="w-[300px] shrink-0"
-                      key={groupValueKey(cell.coordinate.column.value)}
+                      key={columnKey(cell.coordinate.column)}
                     >
                       {renderCell({
                         cell,

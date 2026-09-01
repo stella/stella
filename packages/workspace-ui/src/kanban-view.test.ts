@@ -109,9 +109,11 @@ describe("workspace kanban view adapter", () => {
     const presentation = presentKanbanBoard({ matrix, state });
 
     expect(groupBy).toBe("_status");
-    expect(presentation.columns.map((column) => column.value)).toEqual([
-      "open",
-    ]);
+    expect(
+      presentation.columns
+        .filter((column) => column.type === "group")
+        .map((column) => column.group.value),
+    ).toEqual(["open"]);
     expect(
       presentation.lanes.map((lane) => ({
         collapsed: lane.collapsed,

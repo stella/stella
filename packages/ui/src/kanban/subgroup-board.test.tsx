@@ -55,11 +55,26 @@ const renderBoard = (expandEmptyLanes = false) =>
       matrix={matrix}
       renderCell={({ cell, count, laneValue }) => (
         <span>
-          {testLabel("cell", laneValue, cell.coordinate.column.value, count)}
+          {testLabel(
+            "cell",
+            laneValue,
+            cell.coordinate.column.type === "group"
+              ? cell.coordinate.column.group.value
+              : cell.coordinate.column.destination.id,
+            count,
+          )}
         </span>
       )}
       renderColumnHeader={({ column, count }) => (
-        <span>{testLabel("column", column.value, count)}</span>
+        <span>
+          {testLabel(
+            "column",
+            column.type === "group"
+              ? column.group.value
+              : column.destination.id,
+            count,
+          )}
+        </span>
       )}
       renderLaneIdentity={({ group: lane, count }) => (
         <span>{testLabel("lane", lane.value, count)}</span>
@@ -83,9 +98,12 @@ describe("KanbanSubgroupBoard", () => {
     const expanded = renderBoard(true);
 
     expect(collapsed).toContain("lane:lin:0");
+    expect(collapsed).toContain('data-kanban-lane-column-count="1"');
+    expect(collapsed).toContain('data-kanban-lane-column-count="0"');
     expect(collapsed).not.toContain("cell:lin:open:0");
     expect(collapsed).toContain('aria-expanded="false"');
     expect(expanded).toContain("cell:lin:open:0");
     expect(expanded).toContain("cell:lin:done:0");
+    expect(expanded).toContain('data-kanban-lane-column-count="0"');
   });
 });

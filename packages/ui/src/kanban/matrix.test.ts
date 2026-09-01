@@ -7,11 +7,16 @@ import {
   createKanbanDropIntent,
   orderKanbanCellsByColumns,
 } from "./matrix";
-import type { ResolveKanbanGroupValueParams } from "./matrix";
+import type {
+  KanbanBoardColumn,
+  ResolveKanbanGroupValueParams,
+} from "./matrix";
 
 type Row = { id: string; owner: string | null; status: string | null };
 type Property = { id: "owner" };
 type GroupId = "_empty" | "_status" | "owner";
+const columnValue = (column: KanbanBoardColumn) =>
+  column.type === "group" ? column.group.value : column.destination.id;
 
 const schema: KanbanSchema<Row, Property, GroupId> = {
   builtInGroups: [
@@ -87,7 +92,7 @@ describe("kanban board matrix", () => {
       matrix.cells
         .filter((cell) => cell.rows.length > 0)
         .map((cell) => [
-          cell.coordinate.column.value,
+          columnValue(cell.coordinate.column),
           cell.rows.map((row) => row.id),
         ]),
     ).toEqual([
@@ -117,7 +122,7 @@ describe("kanban board matrix", () => {
       orderKanbanCellsByColumns({
         cells: adaCells,
         columns: matrix.columns.toReversed(),
-      }).map((cell) => cell.coordinate.column.value),
+      }).map((cell) => columnValue(cell.coordinate.column)),
     ).toEqual([null, "done", "open"]);
   });
 
@@ -135,11 +140,7 @@ describe("kanban board matrix", () => {
       uncategorizedLabel: "No value",
     });
 
-    expect(matrix.columns.map((column) => column.value)).toEqual([
-      "open",
-      "done",
-      null,
-    ]);
+    expect(matrix.columns.map(columnValue)).toEqual(["open", "done", null]);
     expect(matrix.lanes).toHaveLength(3);
     expect(
       matrix.cells.flatMap((cell) => cell.rows).map((row) => row.id),
@@ -157,13 +158,13 @@ describe("kanban board matrix", () => {
     });
     const source = matrix.cells.find(
       (cell) =>
-        cell.coordinate.column.value === "open" &&
+        columnValue(cell.coordinate.column) === "open" &&
         cell.coordinate.lane.type === "group" &&
         cell.coordinate.lane.group.value === "ada",
     );
     const target = matrix.cells.find(
       (cell) =>
-        cell.coordinate.column.value === "done" &&
+        columnValue(cell.coordinate.column) === "done" &&
         cell.coordinate.lane.type === "group" &&
         cell.coordinate.lane.group.value === "lin",
     );
@@ -178,7 +179,10 @@ describe("kanban board matrix", () => {
       subgroup,
       target: target.coordinate,
     });
-    const firstChange = intent?.changes.at(0);
+    if (intent?.type !== "move") {
+      throw new Error("Expected a move intent");
+    }
+    const firstChange = intent.changes.at(0);
     const axis: GroupId | undefined = firstChange?.groupBy;
 
     expect(axis).toBe("_status");
@@ -188,7 +192,6 @@ describe("kanban board matrix", () => {
         { groupBy: "_status", value: "done" },
         { groupBy: "owner", value: "lin" },
       ],
-      destination: null,
       type: "move",
     });
   });
@@ -206,14 +209,18 @@ describe("kanban board matrix", () => {
     if (destination === undefined) {
       throw new Error("Expected a terminal destination column");
     }
-    expect(destination.label).toBe("Archive");
+    expect(destination.type).toBe("destination");
+    if (destination.type !== "destination") {
+      throw new Error("Expected a destination column");
+    }
     expect(destination.destination).toEqual({
       id: "archive",
       label: "Archive",
     });
     expect(
       matrix.cells.filter(
-        (cell) => cell.coordinate.column.value === destination.value,
+        (cell) =>
+          columnValue(cell.coordinate.column) === columnValue(destination),
       ),
     ).toHaveLength(3);
     const sourceCell = matrix.cells.at(0);
@@ -231,7 +238,10 @@ describe("kanban board matrix", () => {
         lane: sourceLane,
       },
     });
-    expect(intent?.destination).toEqual({ id: "archive", label: "Archive" });
-    expect(intent?.changes).toEqual([]);
+    expect(intent).toEqual({
+      cardId: "one",
+      destination: { id: "archive", label: "Archive" },
+      type: "destination",
+    });
   });
 });

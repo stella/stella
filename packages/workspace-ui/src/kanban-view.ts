@@ -4,6 +4,7 @@ import {
   orderKanbanCellsByColumns,
   resolveKanbanGrouping,
   type KanbanBoardCell,
+  type KanbanBoardColumn,
   type KanbanBoardLane,
   type KanbanBoardMatrix,
   type KanbanBuiltInGroup,
@@ -248,12 +249,19 @@ const orderGroups = (
 };
 
 const isGroupEmpty = <TRow>(
-  group: KanbanGroup,
+  group: KanbanBoardColumn,
   matrix: KanbanBoardMatrix<TRow>,
 ): boolean =>
   matrix.cells.every(
     (cell) =>
-      cell.coordinate.column.value !== group.value || cell.rows.length === 0,
+      cell.coordinate.column.type !== group.type ||
+      (group.type === "group" &&
+        cell.coordinate.column.type === "group" &&
+        cell.coordinate.column.group.value !== group.group.value) ||
+      (group.type === "destination" &&
+        cell.coordinate.column.type === "destination" &&
+        cell.coordinate.column.destination.id !== group.destination.id) ||
+      cell.rows.length === 0,
   );
 
 const isLaneEmpty = <TRow>(
@@ -276,7 +284,7 @@ export type KanbanPresentedLane<TRow> = {
 };
 
 export type KanbanBoardPresentation<TRow> = {
-  columns: KanbanGroup[];
+  columns: KanbanBoardColumn[];
   lanes: KanbanPresentedLane<TRow>[];
   matrix: KanbanBoardMatrix<TRow>;
 };
@@ -293,11 +301,24 @@ export const presentKanbanBoard = <TRow>({
   matrix: KanbanBoardMatrix<TRow>;
   state: KanbanSavedViewState;
 }): KanbanBoardPresentation<TRow> => {
-  const columns = orderGroups(matrix.columns, state.group.orderedGroups).filter(
-    (group) =>
-      !refersToGroup(state.group.hiddenGroups, group) &&
-      (state.group.emptyGroups === "show" || !isGroupEmpty(group, matrix)),
-  );
+  const columns: KanbanBoardColumn[] = [
+    ...orderGroups(
+      matrix.columns
+        .filter(
+          (column): column is { group: KanbanGroup; type: "group" } =>
+            column.type === "group",
+        )
+        .map((column) => column.group),
+      state.group.orderedGroups,
+    )
+      .map((group) => ({ group, type: "group" as const }))
+      .filter(
+        (column) =>
+          !refersToGroup(state.group.hiddenGroups, column.group) &&
+          (state.group.emptyGroups === "show" || !isGroupEmpty(column, matrix)),
+      ),
+    ...matrix.columns.filter((column) => column.type === "destination"),
+  ];
   const subgroupState = state.subgroup;
   const orderedLanes =
     subgroupState === null || matrix.lanes.some((lane) => lane.type === "none")

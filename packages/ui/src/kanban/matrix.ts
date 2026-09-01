@@ -24,7 +24,7 @@ export type KanbanBoardLane =
   | { group: KanbanGroup; type: "group" };
 
 export type KanbanBoardCoordinate = {
-  column: KanbanGroup;
+  column: KanbanBoardColumn;
   lane: KanbanBoardLane;
 };
 
@@ -39,6 +39,10 @@ export type KanbanBoardDestination = {
   label: string;
 };
 
+export type KanbanBoardColumn =
+  | { group: KanbanGroup; type: "group" }
+  | { destination: KanbanBoardDestination; type: "destination" };
+
 /**
  * The full, ordered cartesian board. Presentation may hide or collapse parts
  * of it, but it must not derive cards independently: every board row is in
@@ -46,7 +50,7 @@ export type KanbanBoardDestination = {
  */
 export type KanbanBoardMatrix<TRow> = {
   cells: KanbanBoardCell<TRow>[];
-  columns: KanbanGroup[];
+  columns: KanbanBoardColumn[];
   lanes: KanbanBoardLane[];
   rows: TRow[];
 };
@@ -80,12 +84,15 @@ export type BuildKanbanBoardMatrixParams<
 
 const optionValueKey = (value: string | null): string =>
   value === null ? "null" : `string:${value.length}:${value}`;
-const destinationValuePrefix = "@destination:";
-
 export type OrderKanbanCellsByColumnsParams<TRow> = {
   cells: readonly KanbanBoardCell<TRow>[];
-  columns: readonly KanbanGroup[];
+  columns: readonly KanbanBoardColumn[];
 };
+
+const columnIdentity = (column: KanbanBoardColumn): string =>
+  column.type === "group"
+    ? `group:${optionValueKey(column.group.value)}`
+    : `destination:${column.destination.id}`;
 
 /** Apply the visible header order to any lane's cells. */
 export const orderKanbanCellsByColumns = <TRow>({
@@ -93,23 +100,19 @@ export const orderKanbanCellsByColumns = <TRow>({
   columns,
 }: OrderKanbanCellsByColumnsParams<TRow>): KanbanBoardCell<TRow>[] => {
   const orderByValue = new Map(
-    columns.map((column, index) => [optionValueKey(column.value), index]),
+    columns.map((column, index) => [columnIdentity(column), index]),
   );
   const getColumnOrder = (cell: KanbanBoardCell<TRow>) => {
-    const order = orderByValue.get(
-      optionValueKey(cell.coordinate.column.value),
-    );
+    const order = orderByValue.get(columnIdentity(cell.coordinate.column));
     return order ?? panic("Visible Kanban cell has no column order");
   };
   return cells
-    .filter((cell) =>
-      orderByValue.has(optionValueKey(cell.coordinate.column.value)),
-    )
+    .filter((cell) => orderByValue.has(columnIdentity(cell.coordinate.column)))
     .toSorted((left, right) => getColumnOrder(left) - getColumnOrder(right));
 };
 
 const cellKey = ({ column, lane }: KanbanBoardCoordinate): string =>
-  `${optionValueKey(column.value)}|${lane.type === "none" ? "none" : optionValueKey(lane.group.value)}`;
+  `${columnIdentity(column)}|${lane.type === "none" ? "none" : optionValueKey(lane.group.value)}`;
 
 const groupContainsValue = (
   groups: readonly KanbanGroup[],
@@ -172,12 +175,14 @@ export const buildKanbanBoardMatrix = <
   if (!isKanbanGroupingRenderable(group)) {
     return { cells: [], columns: [], lanes: [], rows: [] };
   }
-  const columns = getRenderableGroups(group, uncategorizedLabel);
+  const columns: KanbanBoardColumn[] = getRenderableGroups(
+    group,
+    uncategorizedLabel,
+  ).map((column) => ({ group: column, type: "group" }));
   for (const destination of destinations) {
     columns.push({
       destination,
-      value: `${destinationValuePrefix}${destination.id}`,
-      label: destination.label,
+      type: "destination",
     });
   }
   const scopedRows = selectKanbanRows(rows, group);
@@ -199,7 +204,12 @@ export const buildKanbanBoardMatrix = <
 
   for (const row of scopedRows) {
     const columnValue = normalizeGroupValue(
-      columns,
+      columns
+        .filter(
+          (column): column is { group: KanbanGroup; type: "group" } =>
+            column.type === "group",
+        )
+        .map((column) => column.group),
       resolveGroupValue({ grouping: group, row }),
     );
     const lane = !hasRenderableSubgroup
@@ -221,7 +231,10 @@ export const buildKanbanBoardMatrix = <
           },
           type: "group" as const,
         };
-    const column = columns.find((candidate) => candidate.value === columnValue);
+    const column = columns.find(
+      (candidate) =>
+        candidate.type === "group" && candidate.group.value === columnValue,
+    );
     const resolvedLane =
       lane.type === "none"
         ? lane
@@ -251,12 +264,20 @@ export type KanbanDropAxisChange<TGroupId extends string = string> = {
 };
 
 /** A complete, atomic move request for a domain mutation adapter. */
-export type KanbanDropIntent<TCardId, TGroupId extends string = string> = {
-  cardId: TCardId;
-  changes: readonly KanbanDropAxisChange<TGroupId>[];
-  destination: KanbanBoardDestination | null;
-  type: "move";
-};
+export type KanbanDropIntent<TCardId, TGroupId extends string = string> =
+  | {
+      cardId: TCardId;
+      changes: readonly [
+        KanbanDropAxisChange<TGroupId>,
+        ...KanbanDropAxisChange<TGroupId>[],
+      ];
+      type: "move";
+    }
+  | {
+      cardId: TCardId;
+      destination: KanbanBoardDestination;
+      type: "destination";
+    };
 
 export type CreateKanbanDropIntentParams<
   TRow,
@@ -299,10 +320,19 @@ export const createKanbanDropIntent = <
     return null;
   }
 
+  if (target.column.type === "destination") {
+    return {
+      cardId,
+      destination: target.column.destination,
+      type: "destination",
+    };
+  }
   const changes: KanbanDropAxisChange<TGroupId>[] = [];
-  const destination = target.column.destination ?? null;
-  if (destination === null && source.column.value !== target.column.value) {
-    changes.push({ groupBy, value: target.column.value });
+  if (
+    source.column.type !== "group" ||
+    source.column.group.value !== target.column.group.value
+  ) {
+    changes.push({ groupBy, value: target.column.group.value });
   }
   if (
     subgroupBy !== null &&
@@ -313,8 +343,16 @@ export const createKanbanDropIntent = <
     changes.push({ groupBy: subgroupBy, value: target.lane.group.value });
   }
 
-  if (changes.length === 0 && destination === null) {
+  if (changes.length === 0) {
     return null;
   }
-  return { cardId, changes, destination, type: "move" };
+  const firstChange = changes.at(0);
+  if (firstChange === undefined) {
+    return null;
+  }
+  return {
+    cardId,
+    changes: [firstChange, ...changes.slice(1)],
+    type: "move",
+  };
 };
