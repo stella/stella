@@ -129,6 +129,16 @@ if (!databaseUrl || !runPostgresTests) {
       );
     });
 
+    test("a JSON null in the column reads as null and is taken the same way", async () => {
+      const decisionId = await insertDecision(null);
+      await db
+        .update(caseLawDecisions)
+        .set({ analysis: sql`'null'::jsonb` })
+        .where(eq(caseLawDecisions.id, decisionId));
+      expect(await readBack(decisionId)).toBeNull();
+      expect(await claim(decisionId, null)).toBe(true);
+    });
+
     test("the value as the driver returned it matches, whatever its key order", async () => {
       const stale = analysisSentinel(PREVIOUS, NOW);
       const decisionId = await insertDecision(stale);

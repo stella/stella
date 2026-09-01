@@ -5,7 +5,7 @@
  * `generate.ts` applies these against Postgres or memory.
  */
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 
 import type {
   AnalysisGenerating,
@@ -99,7 +99,12 @@ export const claimableAnalysisRow = ({
   and(
     eq(caseLawDecisions.id, decisionId),
     observed === null || observed === undefined
-      ? isNull(caseLawDecisions.analysis)
+      ? // The driver reads a JSON `null` in the column as JavaScript
+        // `null` too, and SQL `IS NULL` does not see that one.
+        or(
+          isNull(caseLawDecisions.analysis),
+          sql`jsonb_typeof(${caseLawDecisions.analysis}) = 'null'`,
+        )
       : // `::text::jsonb`, never a bare `::jsonb`: the driver would encode
         // the already-serialised string once more and the comparison would
         // never match.

@@ -234,8 +234,6 @@ const runGeneration = async (
   promptCachingEnabled: boolean,
 ) => {
   // audit: skip — background AI analysis output
-  const systemPrompt = getSystemPrompt(input.language);
-
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     feature: "case-law.analysis",
     modelRole: "fast",
@@ -268,7 +266,7 @@ const runGeneration = async (
         role: "fast",
         scopeKey: decisionId,
       }),
-      system: systemPrompt,
+      system: input.systemPrompt,
       prompt: input.userMessage,
       outputSchema: analysisOutputSchema,
       abortSignal: AbortSignal.timeout(120_000),
@@ -362,7 +360,11 @@ export const generateAnalysis = async (
       error: "Decision has no parseable AST",
     });
   }
-  const input = analysisInputOf(ast.blocks, decision);
+  const input = analysisInputOf({
+    blocks: ast.blocks,
+    decision,
+    systemPrompt: getSystemPrompt(decision.language),
+  });
 
   const observed = analysisStore().peek(decisionId) ?? decision.analysis;
   const stored = storedAnalysisState({

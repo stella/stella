@@ -8,6 +8,8 @@ import {
   type AnalysisPromptDecision,
 } from "./analysis-prompt";
 
+type PromptBlock = { anchorId: string; plainText: string; type: string };
+
 const block = fc.record({
   anchorId: fc.stringMatching(/^[a-z][a-z0-9-]{0,11}$/u),
   plainText: fc
@@ -27,19 +29,24 @@ const decision = fc.record({
   language: fc.constantFrom("cs", "sk", "pl", "de", "en"),
 });
 
+const systemPrompt = fc.string({ minLength: 1, maxLength: 60 });
+
 const fingerprintOf = (
-  input: { anchorId: string; plainText: string; type: string }[],
+  input: PromptBlock[],
   meta: AnalysisPromptDecision,
-) => analysisInputOf(input, meta).fingerprint;
+  system = "system prompt",
+) =>
+  analysisInputOf({ blocks: input, decision: meta, systemPrompt: system })
+    .fingerprint;
 
 describe("analysisInputOf", () => {
   test("the fingerprint is a function of the model input alone", () => {
     fc.assert(
-      fc.property(blocks, decision, (input, meta) => {
-        expect(fingerprintOf(input, meta)).toBe(
-          fingerprintOf(structuredClone(input), structuredClone(meta)),
+      fc.property(blocks, decision, systemPrompt, (input, meta, system) => {
+        expect(fingerprintOf(input, meta, system)).toBe(
+          fingerprintOf(structuredClone(input), structuredClone(meta), system),
         );
-        expect(fingerprintOf(input, meta)).toMatch(/^[0-9a-f]{64}$/u);
+        expect(fingerprintOf(input, meta, system)).toMatch(/^[0-9a-f]{64}$/u);
       }),
       propertyConfig(),
     );
@@ -84,13 +91,10 @@ describe("analysisInputOf", () => {
     );
   });
 
-  test("changes when the language, court or type the prompt is built from changes", () => {
+  test("changes when the court or type the header is built from changes", () => {
     fc.assert(
       fc.property(blocks, decision, (input, meta) => {
         const base = fingerprintOf(input, meta);
-        expect(
-          fingerprintOf(input, { ...meta, language: `${meta.language}-x` }),
-        ).not.toBe(base);
         expect(
           fingerprintOf(input, { ...meta, court: `${meta.court} II` }),
         ).not.toBe(base);
@@ -105,17 +109,33 @@ describe("analysisInputOf", () => {
     );
   });
 
-  test("the user message carries the header and the anchored text", () => {
-    const { userMessage } = analysisInputOf(
-      [{ anchorId: "p-1", plainText: "Soud rozhodl.", type: "paragraph" }],
-      {
+  test("changes when the system prompt changes", () => {
+    fc.assert(
+      fc.property(blocks, decision, systemPrompt, (input, meta, system) => {
+        expect(fingerprintOf(input, meta, system)).not.toBe(
+          fingerprintOf(input, meta, `${system} (revised)`),
+        );
+      }),
+      propertyConfig(),
+    );
+  });
+
+  test("carries the resolved system prompt and the user message it digested", () => {
+    const input = analysisInputOf({
+      blocks: [
+        { anchorId: "p-1", plainText: "Soud rozhodl.", type: "paragraph" },
+      ],
+      decision: {
         court: "Nejvyšší soud",
         country: "CZE",
         decisionType: null,
         language: "cs",
       },
-    );
-    expect(userMessage).toBe(
+      systemPrompt: "Analyse the decision.",
+    });
+    expect(input.systemPrompt).toBe("Analyse the decision.");
+    expect(input.language).toBe("cs");
+    expect(input.userMessage).toBe(
       "Court: Nejvyšší soud\nCountry: CZE\nType: unknown\n\n[p-1] Soud rozhodl.",
     );
   });
