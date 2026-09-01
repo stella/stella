@@ -110,7 +110,8 @@ export const KanbanSubgroupBoard = ({
       renderCell={({ cell, laneValue }) => (
         <WorkspaceKanbanSubgroupCell
           canCreateTask={
-            cell.coordinate.column.value !== null &&
+            cell.coordinate.column.type === "group" &&
+            cell.coordinate.column.group.value !== null &&
             canCreateTaskInLane(laneValue)
           }
           canMoveCards={canMoveCards}
@@ -129,16 +130,20 @@ export const KanbanSubgroupBoard = ({
           workspaceId={workspaceId}
         />
       )}
-      renderColumnHeader={({ column, count }) => (
-        <WorkspaceKanbanColumnHeading
-          column={column}
-          count={count}
-          onChangeColor={onChangeColumnColor}
-          onHide={onHideColumn}
-          onRename={onRenameColumn}
-          onReorder={onReorderColumn}
-        />
-      )}
+      renderColumnHeader={({ column, count }) =>
+        column.type === "group" ? (
+          <WorkspaceKanbanColumnHeading
+            column={column.group}
+            count={count}
+            onChangeColor={onChangeColumnColor}
+            onHide={onHideColumn}
+            onRename={onRenameColumn}
+            onReorder={onReorderColumn}
+          />
+        ) : (
+          <KanbanColumnHeader title={column.destination.label} meta={count} />
+        )
+      }
       renderLaneIdentity={({ group }) => <SubgroupIdentity group={group} />}
     />
   );
@@ -184,11 +189,14 @@ const WorkspaceKanbanSubgroupCell = ({
   workspaceId,
 }: WorkspaceKanbanSubgroupCellProps) => {
   const cellRef = useRef<HTMLDivElement>(null);
-  const columnValue = cell.coordinate.column.value;
+  const columnValue =
+    cell.coordinate.column.type === "group"
+      ? cell.coordinate.column.group.value
+      : null;
   const isDragOver = useKanbanEntityDropTarget({
     elementRef: cellRef,
     enabled: canMoveCards,
-    name: `${cell.coordinate.column.label}, ${cell.coordinate.lane.type === "group" ? cell.coordinate.lane.group.label : ""}`,
+    name: `${cell.coordinate.column.type === "group" ? cell.coordinate.column.group.label : cell.coordinate.column.destination.label}, ${cell.coordinate.lane.type === "group" ? cell.coordinate.lane.group.label : ""}`,
     onDrop: (entityId) => {
       if (columnValue !== null) {
         onDropCard(entityId, columnValue, laneValue);
@@ -200,8 +208,9 @@ const WorkspaceKanbanSubgroupCell = ({
     <KanbanVirtualCell
       active={isDragOver}
       backgroundColor={
-        cell.coordinate.column.colorBg
-          ? `color-mix(in srgb, ${cell.coordinate.column.colorBg} 26%, transparent)`
+        cell.coordinate.column.type === "group" &&
+        cell.coordinate.column.group.colorBg
+          ? `color-mix(in srgb, ${cell.coordinate.column.group.colorBg} 26%, transparent)`
           : undefined
       }
       containerRef={cellRef}

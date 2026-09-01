@@ -881,10 +881,16 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       ? null
       : {
           ...subgroupMatrix,
-          columns: visibleGroups,
+          columns: visibleGroups.map((group) => ({
+            group,
+            type: "group" as const,
+          })),
           cells: orderKanbanCellsByColumns({
             cells: subgroupMatrix.cells,
-            columns: visibleGroups,
+            columns: visibleGroups.map((group) => ({
+              group,
+              type: "group" as const,
+            })),
           }),
         };
 

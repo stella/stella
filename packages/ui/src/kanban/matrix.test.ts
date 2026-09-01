@@ -244,4 +244,20 @@ describe("kanban board matrix", () => {
       type: "destination",
     });
   });
+
+  test("rejects duplicate terminal destination identities", () => {
+    expect(() =>
+      buildKanbanBoardMatrix({
+        destinations: [
+          { id: "archive", label: "Archive" },
+          { id: "archive", label: "Archive again" },
+        ],
+        group,
+        resolveGroupValue: valueFor,
+        rows: [],
+        subgroup,
+        uncategorizedLabel: "No value",
+      }),
+    ).toThrow("Duplicate Kanban board column identity");
+  });
 });

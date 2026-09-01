@@ -94,6 +94,19 @@ const columnIdentity = (column: KanbanBoardColumn): string =>
     ? `group:${optionValueKey(column.group.value)}`
     : `destination:${column.destination.id}`;
 
+const assertUniqueColumnIdentities = (
+  columns: readonly KanbanBoardColumn[],
+): void => {
+  const identities = new Set<string>();
+  for (const column of columns) {
+    const identity = columnIdentity(column);
+    if (identities.has(identity)) {
+      throw new Error(`Duplicate Kanban board column identity: ${identity}`);
+    }
+    identities.add(identity);
+  }
+};
+
 /** Apply the visible header order to any lane's cells. */
 export const orderKanbanCellsByColumns = <TRow>({
   cells,
@@ -185,6 +198,7 @@ export const buildKanbanBoardMatrix = <
       type: "destination",
     });
   }
+  assertUniqueColumnIdentities(columns);
   const scopedRows = selectKanbanRows(rows, group);
   const hasRenderableSubgroup = isKanbanGroupingRenderable(subgroup);
   const lanes = hasRenderableSubgroup
