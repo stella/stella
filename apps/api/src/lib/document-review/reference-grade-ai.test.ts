@@ -25,6 +25,7 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type CapturedGenerateOptions = {
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
@@ -62,11 +63,8 @@ const generateObjectMock = mock(async (options: CapturedGenerateOptions) => {
   capturedGenerateOptions.push(options);
   return await Promise.resolve(queuedAnswers.shift() ?? { findings: [] });
 });
-// SAFETY: This suite only dispatches the reference-grading schema and
-// configures outputs matching that schema; Bun's mock type cannot express that
-// generic tie.
 const generateObjectForTest =
-  generateObjectMock as typeof generateTanStackObjectForRole;
+  asTestRaw<typeof generateTanStackObjectForRole>(generateObjectMock);
 
 const organizationId = toSafeId<"organization">("organization-fixture");
 const workspaceId = toSafeId<"workspace">("workspace-fixture");
