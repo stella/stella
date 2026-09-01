@@ -24,9 +24,24 @@ export type CitationInput = {
   pincite: string | null;
 };
 
+const DATE_ONLY_RE = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})/u;
+
 const dateOf = (value: Date | string | null): Date | null => {
   if (value === null) {
     return null;
+  }
+  if (typeof value === "string") {
+    // A date-only string parsed by `new Date` lands on midnight UTC, which
+    // is the previous day in west-of-UTC zones; build it in local time so
+    // the printed day, month and year match the document.
+    const parts = DATE_ONLY_RE.exec(value)?.groups;
+    if (parts?.["year"] !== undefined) {
+      return new Date(
+        Number(parts["year"]),
+        Number(parts["month"]) - 1,
+        Number(parts["day"]),
+      );
+    }
   }
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
@@ -119,6 +134,48 @@ const POLISH_GENITIVE_MONTHS = [
   "grudnia",
 ] as const;
 
+/**
+ * Polish genitive of a court name: the head noun and its adjectives inflect
+ * ("Sąd Apelacyjny w Łodzi" → "Sądu Apelacyjnego w Łodzi"), while the
+ * locality after a preposition stays. All-or-nothing: if any word before
+ * the preposition falls outside the known patterns, the nominative passes
+ * through unchanged rather than half-inflected.
+ */
+const POLISH_PREPOSITIONS = new Set(["w", "we", "dla"]);
+
+const polishGenitiveWord = (word: string): string | null => {
+  if (word === "Sąd") {
+    return "Sądu";
+  }
+  if (word === "Trybunał") {
+    return "Trybunału";
+  }
+  if (word.endsWith("ni") || word.endsWith("ki")) {
+    return `${word.slice(0, -1)}iego`;
+  }
+  if (word.endsWith("y")) {
+    return `${word.slice(0, -1)}ego`;
+  }
+  return null;
+};
+
+const polishGenitiveCourt = (court: string): string => {
+  const words = court.split(" ");
+  const inflected: string[] = [];
+  for (const [index, word] of words.entries()) {
+    if (POLISH_PREPOSITIONS.has(word)) {
+      inflected.push(...words.slice(index));
+      return inflected.join(" ");
+    }
+    const genitive = polishGenitiveWord(word);
+    if (genitive === null) {
+      return court;
+    }
+    inflected.push(genitive);
+  }
+  return inflected.join(" ");
+};
+
 const polishCitation = (input: CitationInput): string => {
   const type = input.decisionType ?? "orzeczenie";
   const date = dateOf(input.decisionDate);
@@ -127,7 +184,7 @@ const polishCitation = (input: CitationInput): string => {
     date === null || month === undefined || month === null
       ? ""
       : ` z dnia ${String(date.getDate())} ${month} ${String(date.getFullYear())} r.`;
-  return `${type} ${input.court}${dated}, sygn. akt ${input.caseNumber}`;
+  return `${type} ${polishGenitiveCourt(input.court)}${dated}, sygn. akt ${input.caseNumber}`;
 };
 
 const austrianCitation = (input: CitationInput): string => {

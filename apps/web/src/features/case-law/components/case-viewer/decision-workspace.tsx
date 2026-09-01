@@ -235,15 +235,14 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     ast?.blocks.find(
       (block) => block.type === "heading" && block.role === "decision-title",
     )?.plainText ?? null;
+  // Only a title of the "Name, Cite" shape yields a citable name; a
+  // generic heading ("JUDGMENT OF THE COURT (Grand Chamber)", a bare case
+  // number) must not masquerade as one.
   const citeSuffix = `, ${decision.caseNumber}`;
-  const caseName = (() => {
-    if (decisionTitle === null) {
-      return null;
-    }
-    return decisionTitle.endsWith(citeSuffix)
+  const caseName =
+    decisionTitle !== null && decisionTitle.endsWith(citeSuffix)
       ? decisionTitle.slice(0, -citeSuffix.length)
-      : decisionTitle;
-  })();
+      : null;
 
   const mainRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(220);

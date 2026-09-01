@@ -627,11 +627,19 @@ const jumpToNoteReference = (anchorId: string) => {
   blockEl.dataset["highlight"] = "";
 };
 
-const footnoteTextCarriesLabel = (label: string, plainText: string): boolean =>
-  new RegExp(
-    `^\\s*[\\[(]?${label.replace(REGEXP_SPECIALS_RE, (match) => `\\${match}`)}[\\]).:]?`,
+const footnoteTextCarriesLabel = (
+  label: string,
+  plainText: string,
+): boolean => {
+  const escaped = label.replace(REGEXP_SPECIALS_RE, (match) => `\\${match}`);
+  // The label must end at a boundary: closing punctuation, or anything that
+  // is not a letter or digit. Without it, label "1" would swallow a note
+  // that merely begins with "1954".
+  return new RegExp(
+    `^\\s*[\\[(]?${escaped}(?:[\\]).:]|(?![\\p{L}\\p{N}]))`,
     "u",
   ).test(plainText);
+};
 
 export const BlockRenderer = ({
   activeMatchIndex,

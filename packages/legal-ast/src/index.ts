@@ -36,14 +36,21 @@ export type {
   TableBlock,
   TableCell,
 } from "./document-ast.js";
-export { flattenInlineText, isInline, isInlineArray } from "./inline.js";
+export {
+  flattenInlineText,
+  hasInlineChildren,
+  isInline,
+  isInlineArray,
+} from "./inline.js";
 export type {
   Inline,
   InlineBold,
   InlineItalic,
   InlineLineBreak,
   InlineLink,
+  InlinePageAnchor,
   InlineText,
+  InlineWithChildren,
 } from "./inline.js";
 export {
   isProvisionKind,

@@ -98,6 +98,8 @@ type Selected = {
 /** Chrome that must never leak into a quotation. */
 const QUOTE_CHROME_SELECTOR = "[data-reader-chrome], .reader-note-ref";
 
+const BLOCK_BOUNDARY_SELECTOR = "p, h1, h2, h3, h4, h5, h6, li, blockquote";
+
 const cleanSelectionText = (range: Range): string => {
   const holder =
     range.startContainer.ownerDocument?.createElement("div") ?? null;
@@ -107,6 +109,12 @@ const cleanSelectionText = (range: Range): string => {
   holder.append(range.cloneContents());
   for (const el of holder.querySelectorAll(QUOTE_CHROME_SELECTOR)) {
     el.remove();
+  }
+  // textContent concatenates block elements without any separator, gluing
+  // the last word of one paragraph to the first of the next; give each
+  // block an explicit boundary before flattening.
+  for (const block of holder.querySelectorAll(BLOCK_BOUNDARY_SELECTOR)) {
+    block.append("\n");
   }
   return holder.textContent.replaceAll(/\s+/gu, " ").trim();
 };
