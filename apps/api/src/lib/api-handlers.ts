@@ -1325,7 +1325,16 @@ const logAndCaptureSafeError = ({
     attributes["enduser.organization_id"] = reqCtx.organizationId;
   }
 
-  logger.error("request.failed", attributes);
+  // Severity follows the status class, as it does at the request-level
+  // `onError` sink that emits this same `request.failed` event. A 5xx is a
+  // server fault; a 4xx is an answered client outcome, and an access denial
+  // graded ERROR would sit in the same class as a panic. The capture below
+  // is unconditional either way, so the detail is kept regardless of grade.
+  if (statusCode >= 500) {
+    logger.error("request.failed", attributes);
+  } else {
+    logger.warn("request.failed", attributes);
+  }
 
   captureRequestError(error, {
     request,
