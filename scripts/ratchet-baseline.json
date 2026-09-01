@@ -181,11 +181,12 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 45,
+    "count": 47,
     "files": {
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/status.ts": 8,
+      "apps/api/src/handlers/case-law/research/columns-reorder.ts": 1,
       "apps/api/src/handlers/chat/delete-thread.ts": 2,
       "apps/api/src/handlers/document-reviews/propose-positions-stream.ts": 1,
       "apps/api/src/handlers/entities/copy-to-workspace.ts": 1,
@@ -200,6 +201,7 @@
       "apps/api/src/handlers/views/table-export.ts": 1,
       "apps/api/src/handlers/workspaces/duplicate.ts": 4,
       "apps/api/src/lib/account-deletion-steps.ts": 2,
+      "apps/api/src/lib/case-law/research-answer-runner.ts": 1,
       "apps/api/src/lib/entity-cap-lock.ts": 1,
       "apps/api/src/lib/legal-search/case-law-search-index.ts": 1,
       "apps/api/src/lib/template-clause-links.ts": 1,
@@ -254,7 +256,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 742,
+    "count": 745,
     "files": {
       "apps/api/scripts/ai-provider-canary.ts": 4,
       "apps/api/scripts/backfill-image-thumbnails.ts": 9,
@@ -361,6 +363,7 @@
       "apps/api/src/lib/agent-skills/skills.ts": 2,
       "apps/api/src/lib/analytics/posthog.ts": 1,
       "apps/api/src/lib/auth.ts": 3,
+      "apps/api/src/lib/case-law/research-answer-runner.ts": 2,
       "apps/api/src/lib/cell-lock.ts": 1,
       "apps/api/src/lib/corpus-index/backfill-pacing.ts": 1,
       "apps/api/src/lib/corpus-index/core.ts": 10,
@@ -493,6 +496,7 @@
       "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx": 1,
       "apps/web/src/features/case-law/components/case-viewer/analysis/types.ts": 1,
       "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 1,
+      "apps/web/src/features/case-law/research/queries.ts": 1,
       "apps/web/src/features/chat/hooks/use-chat-session.ts": 4,
       "apps/web/src/features/chat/queries.ts": 1,
       "apps/web/src/features/guides/use-guide-runner.ts": 7,
