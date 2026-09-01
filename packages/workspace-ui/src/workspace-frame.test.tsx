@@ -30,6 +30,7 @@ const resizeHandleProps = {
 test("renders one stella-owned frame from typed navigation and rail descriptors", () => {
   const rendered = renderToStaticMarkup(
     <WorkspaceFrame
+      composition="described"
       endRail={{
         chatAction: {
           label: "Chat",
@@ -105,6 +106,7 @@ test("renders one stella-owned frame from typed navigation and rail descriptors"
 test("renders the same stella rail primitive when the inspector pane is absent", () => {
   const rendered = renderToStaticMarkup(
     <WorkspaceFrame
+      composition="described"
       endRail={{
         chatAction: {
           label: "Chat",
@@ -135,4 +137,26 @@ test("renders the same stella rail primitive when the inspector pane is absent",
   expect(rendered).toContain('data-slot="inspector-rail"');
   expect(rendered).not.toContain('data-slot="inspector-dock"');
   expect(rendered).toContain("w-12");
+});
+
+test("uses the same frame for Stella-owned responsive chrome", () => {
+  const rendered = renderToStaticMarkup(
+    <WorkspaceFrame
+      composition="host-responsive"
+      endDock={<div data-testid="host-dock" />}
+      navigation={{
+        content: <nav data-testid="host-navigation" />,
+        mode: "responsive",
+      }}
+      topBar={() => <header data-testid="host-top-bar" />}
+    >
+      <div data-testid="host-content" />
+    </WorkspaceFrame>,
+  );
+
+  expect(rendered).toContain('data-slot="workspace-shell"');
+  expect(rendered).toContain('data-testid="host-navigation"');
+  expect(rendered).toContain('data-testid="host-top-bar"');
+  expect(rendered).toContain('data-testid="host-dock"');
+  expect(rendered).toContain('data-testid="host-content"');
 });

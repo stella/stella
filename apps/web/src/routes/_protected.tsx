@@ -29,7 +29,8 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/toast";
 import { useViewportWidth } from "@stll/ui/use-viewport-width";
 import { cn } from "@stll/ui/utils";
-import { WorkspaceEndRail, WorkspaceShell } from "@stll/ui/workspace-shell";
+import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
+import { WorkspaceFrame } from "@stll/workspace-ui/workspace-frame";
 
 import { ApiVersionMismatchBanner } from "@/components/api-version-mismatch-banner";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -381,13 +382,14 @@ function ProtectedComponent() {
             <ChatEditorProvider>
               <GlobalChatMentionRegistration />
               <DragAndDropLiveRegion />
-              <WorkspaceShell
+              <WorkspaceFrame
+                composition="host-responsive"
                 endDock={<WorkspaceInspectorSidePanel />}
                 navigation={{ content: <AppSidebar />, mode: "responsive" }}
                 topBar={() => <ProtectedContent />}
               >
                 <Outlet />
-              </WorkspaceShell>
+              </WorkspaceFrame>
               <CreateMatterDialog />
               <ShortcutEchoHud />
               <KeyboardShortcutsDialog />

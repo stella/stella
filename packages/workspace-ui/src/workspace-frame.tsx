@@ -63,11 +63,21 @@ export type WorkspaceFrameEndRail = {
 
 export type WorkspaceFrameProps = {
   children: ReactNode;
-  navigation: WorkspaceFrameNavigation;
-  topBar: WorkspaceFrameTopBar;
-  endRail: WorkspaceFrameEndRail;
-  inspector?: WorkspaceFrameInspector;
-};
+} & (
+  | {
+      composition: "described";
+      navigation: WorkspaceFrameNavigation;
+      topBar: WorkspaceFrameTopBar;
+      endRail: WorkspaceFrameEndRail;
+      inspector?: WorkspaceFrameInspector;
+    }
+  | {
+      composition: "host-responsive";
+      navigation: ComponentProps<typeof WorkspaceShell>["navigation"];
+      topBar: ComponentProps<typeof WorkspaceShell>["topBar"];
+      endDock: ReactElement;
+    }
+);
 
 export type WorkspaceFrameTopBar = {
   leading?: ReactNode;
@@ -80,13 +90,20 @@ export type WorkspaceFrameTopBar = {
  * actions; this component owns the shell, application rail, end rail, and
  * desktop inspector footprint.
  */
-export const WorkspaceFrame = ({
-  children,
-  endRail,
-  inspector,
-  navigation,
-  topBar,
-}: WorkspaceFrameProps) => {
+export const WorkspaceFrame = (props: WorkspaceFrameProps) => {
+  if (props.composition === "host-responsive") {
+    return (
+      <WorkspaceShell
+        endDock={props.endDock}
+        navigation={props.navigation}
+        topBar={props.topBar}
+      >
+        {props.children}
+      </WorkspaceShell>
+    );
+  }
+
+  const { children, endRail, inspector, navigation, topBar } = props;
   const desktopNavigation = (
     <ApplicationRail aria-label={navigation.label}>
       <ApplicationRailHeader>{navigation.header}</ApplicationRailHeader>
