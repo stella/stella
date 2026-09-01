@@ -176,11 +176,13 @@ const redactedStack = (error: Error): string | undefined => {
     return undefined;
   }
   const lines = stack.split("\n").filter((line) => line.length > 0);
-  // Callsite engines start with a bare frame; V8 starts with its serialized
-  // error header. Classify from that immutable text, not mutable Error fields.
-  const frameSyntax = CALLSITE_STACK_FRAME_SYNTAX.test(lines.at(0) ?? "")
-    ? CALLSITE_STACK_FRAME_SYNTAX
-    : V8_STACK_FRAME_SYNTAX;
+  // Callsite engines start with a bare frame and never mix in V8 frames. V8
+  // can serialize an empty name, making its message look like a callsite.
+  const hasV8Frames = lines.some((line) => V8_STACK_FRAME_SYNTAX.test(line));
+  const frameSyntax =
+    !hasV8Frames && CALLSITE_STACK_FRAME_SYNTAX.test(lines.at(0) ?? "")
+      ? CALLSITE_STACK_FRAME_SYNTAX
+      : V8_STACK_FRAME_SYNTAX;
   const frames = lines
     .filter((line) => frameSyntax.test(line))
     .map(stripStackFrameUrlMetadata);
