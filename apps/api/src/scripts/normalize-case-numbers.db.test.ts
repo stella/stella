@@ -31,6 +31,7 @@ let db: ReturnType<typeof drizzle>;
 
 const sourceId = createSafeId<"caseLawSource">();
 const withSheet = createSafeId<"caseLawDecision">();
+const withSpacedSheet = createSafeId<"caseLawDecision">();
 const withoutIdentity = createSafeId<"caseLawDecision">();
 const citing = createSafeId<"caseLawDecision">();
 const edge = createSafeId<"caseLawCitation">();
@@ -62,6 +63,19 @@ beforeAll(
         decisionDate: "2025-03-01",
         slug: "with-sheet",
         languageGroupKey: "with-sheet",
+      },
+      {
+        // The same suffix as the court sets it in the document itself. Stored
+        // before the ingest read that form, so the backfill is the only thing
+        // that can reach it.
+        ...base,
+        id: withSpacedSheet,
+        caseNumber: "10 A 46/2015 - 66",
+        citationKey: "10a/46/2015 - 66",
+        sourceDocumentId: "doc-3",
+        decisionDate: "2025-03-03",
+        slug: "with-spaced-sheet",
+        languageGroupKey: "with-spaced-sheet",
       },
       {
         // No publisher id, so it is still identified by its case number and
@@ -137,13 +151,13 @@ const firstRow = (result: unknown): Record<string, unknown> => {
 
 test("the survey counts what can and cannot be split", async () => {
   const row = firstRow(await db.execute(sheetNumberSurveyStatement()));
-  expect(row["ready"]).toBe(1);
+  expect(row["ready"]).toBe(2);
   expect(row["blocked"]).toBe(1);
 });
 
 test("the normalization splits the docket and retracts its edges", async () => {
   const row = firstRow(await db.execute(normalizeSheetNumbersStatement(100)));
-  expect(row["normalized"]).toBe(1);
+  expect(row["normalized"]).toBe(2);
   // Clearing the key retracts the edge drawn to it: what the citation matched
   // was a docket carrying a sheet number, which was never the docket.
   expect(row["reopened"]).toBe(2);
@@ -161,6 +175,17 @@ test("the normalization splits the docket and retracts its edges", async () => {
     sheetNumber: "28",
     citationKey: null,
   });
+
+  const [spaced] = await db
+    .select({
+      caseNumber: caseLawDecisions.caseNumber,
+      sheetNumber: caseLawDecisions.sheetNumber,
+    })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.id, withSpacedSheet));
+  // The spacing belongs to the suffix, not the docket: a docket left holding
+  // a trailing space matches no citation and is a second key for one case.
+  expect(spaced).toEqual({ caseNumber: "10 A 46/2015", sheetNumber: "66" });
 
   const [reopened] = await db
     .select({

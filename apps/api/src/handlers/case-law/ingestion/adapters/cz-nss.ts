@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
+import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -413,7 +414,17 @@ const todayIso = (): string => {
  * anything a row carries has to survive a round trip through JSONB.
  */
 export type ParsedRow = {
+  /** The docket alone, which is what a citation names and what rows key on. */
   caseNumber: string;
+  /**
+   * The reference exactly as the portal's citation states it, sheet number
+   * included, so the split back into docket and sheet stays reversible from
+   * what gets stored.
+   *
+   * Absent on rows a version of this parser before the sheet was kept parked
+   * as JSONB; those replay with no sheet, as they did when they were listed.
+   */
+  publishedCaseNumber: string | undefined;
   decisionDate: string | undefined;
   decisionType: string | undefined;
   outcome: string | undefined;
@@ -467,22 +478,26 @@ export const parseResultRows = (html: string): ParsedRow[] => {
 
     // č may appear as literal or HTML entity (&#x10D; &#x10d; &#269;)
     // Stop at comma to exclude publication reference (e.g. ", č. 421/2004 Sb. NSS")
+    // The sheet number the citation appends is taken by the capture and split
+    // off below, not discarded here: dropped at the regex, the sheet is gone
+    // from the row and nothing downstream can state where the document sits.
     const citMatch =
-      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*(?<caseNumber>[^",\s][^",]*?)(?:-\d+)?[",]/iu.exec(
+      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*(?<reference>[^",\s][^",]*?)[",]/iu.exec(
         block,
       );
-    const caseNumber = citMatch?.groups?.["caseNumber"]?.trim();
-    if (!caseNumber || caseNumber.length > 100) {
+    const publishedCaseNumber = citMatch?.groups?.["reference"]?.trim();
+    if (!publishedCaseNumber || publishedCaseNumber.length > 100) {
       // Skip malformed or overly long case numbers
-      if (caseNumber) {
+      if (publishedCaseNumber) {
         logger.warn("case_law.ingestion.malformed_case_number_skipped", {
           adapterKey: ADAPTER_KEYS.CZ_NSS,
-          caseNumberLength: caseNumber.length,
-          caseNumberSample: caseNumber.slice(0, 50),
+          caseNumberLength: publishedCaseNumber.length,
+          caseNumberSample: publishedCaseNumber.slice(0, 50),
         });
       }
       continue;
     }
+    const { caseNumber } = splitCaseReference(publishedCaseNumber);
 
     const detailMatch =
       /href="\/DokumentDetail\/Index\/(?<documentId>\d+)"/u.exec(block);
@@ -517,6 +532,7 @@ export const parseResultRows = (html: string): ParsedRow[] => {
 
     rows.push({
       caseNumber,
+      publishedCaseNumber,
       decisionDate,
       decisionType,
       outcome: undefined,
@@ -541,17 +557,40 @@ const nonEmptyString = (value: unknown): string | undefined =>
 
 type CzNssSourceHashOptions = {
   caseNumber: string;
+  sheetNumber: string | undefined;
   decisionDate: string | undefined;
   decisionType: string | undefined;
 };
 
-/** Stable source-side fields shared by a crawl and a stored-raw replay. */
+/**
+ * Stable source-side fields shared by a crawl and a stored-raw replay.
+ *
+ * The sheet is one of them, and has to be: the refresh check skips a row whose
+ * source hash did not move, so a row stored before the sheet was read would
+ * see its listing state one and still be skipped, and the sheet would never
+ * land. A row gains a sheet exactly when this hash moves.
+ *
+ * Both halves are normalized to the tight form before hashing, so the same
+ * decision hashes the same however it reached us: through a listing that
+ * prints `10 A 46/2015-66`, through a legacy row whose case number still
+ * carries ` - 66`, or through a court that re-spaces its own citations.
+ * Spacing is typography, not a document changing, and a hash that tracked it
+ * would rewrite rows for it and would leave crawl and replay disagreeing.
+ */
 const czNssSourceHash = ({
   caseNumber,
+  sheetNumber,
   decisionDate,
   decisionType,
-}: CzNssSourceHashOptions): string =>
-  hashContent(`${caseNumber}|${decisionDate ?? ""}|${decisionType ?? ""}`);
+}: CzNssSourceHashOptions): string => {
+  const { caseNumber: docket, sheetNumber: carried } =
+    splitCaseReference(caseNumber);
+  const sheet = sheetNumber ?? carried;
+  const reference = sheet === undefined ? docket : `${docket}-${sheet}`;
+  return hashContent(
+    `${reference}|${decisionDate ?? ""}|${decisionType ?? ""}`,
+  );
+};
 
 /**
  * Fetch rich HTML from /DokumentOriginal/Html/{id} and parse
@@ -795,9 +834,13 @@ const rowToResult = (
     return undefined;
   })();
   const decisionType = (detail.decisionType ?? row.decisionType)?.toLowerCase();
+  // This source publishes the docket with the sheet number appended.
+  const publishedCaseNumber = row.publishedCaseNumber ?? row.caseNumber;
+  const { sheetNumber } = splitCaseReference(publishedCaseNumber);
 
   return {
     caseNumber: row.caseNumber,
+    sheetNumber,
     ...(detail.citation === undefined
       ? {}
       : {
@@ -833,6 +876,10 @@ const rowToResult = (
     documentUrl: row.documentUrl,
     metadata: {
       caseNumber: row.caseNumber,
+      sheetNumber,
+      // The reference exactly as the court publishes it, docket and sheet
+      // together, so the split stays reversible from what we stored.
+      publishedCaseNumber,
       court,
       ecli: detail.ecli,
       judge: detail.judge,
@@ -851,6 +898,7 @@ const rowToResult = (
     // crawl and replay converge on the same source hash after parser changes.
     rawHash: czNssSourceHash({
       caseNumber: row.caseNumber,
+      sheetNumber,
       decisionDate,
       decisionType,
     }),
@@ -859,6 +907,48 @@ const rowToResult = (
     sourceRaw: content.sourceRaw,
     sourceRawContentType: "text/html",
   };
+};
+
+/**
+ * The reference as published for a stored row, read back from the row itself.
+ *
+ * Three shapes reach this, and only the first states the reference outright:
+ *
+ * - Rows written since the sheet was kept carry `publishedCaseNumber`.
+ * - Rows written before it carry the reference in `metadata.caseNumber`,
+ *   which held whatever the row's case number held at the time. Once the
+ *   backfill moves the sheet out of `case_number`, that metadata field is the
+ *   only place the published form survives, so a replay that read the column
+ *   alone would rebuild the row without it for good.
+ * - Rows the backfill has not reached yet still carry the sheet on
+ *   `case_number` itself, which splits like any other reference.
+ *
+ * A candidate is adopted only where it names this row's docket. Metadata is
+ * the publisher's, not ours, and a field naming some other case must not
+ * become this row's reference. Nothing here reconstructs a reference from the
+ * docket and the sheet: the spacing between them is the court's, and inventing
+ * one would store a reference no court ever published.
+ */
+const storedPublishedCaseNumber = ({
+  caseNumber,
+  metadata,
+}: Pick<StoredRawReparseInput, "caseNumber" | "metadata">): string => {
+  const docket = splitCaseReference(caseNumber).caseNumber;
+  const candidates = [
+    nonEmptyString(metadata["publishedCaseNumber"]),
+    nonEmptyString(metadata["caseNumber"]),
+  ];
+
+  for (const candidate of candidates) {
+    if (
+      candidate !== undefined &&
+      splitCaseReference(candidate).caseNumber === docket
+    ) {
+      return candidate;
+    }
+  }
+
+  return caseNumber;
 };
 
 /** Rebuild one NSS decision from the exact HTML the crawl stored. */
@@ -902,11 +992,14 @@ const reparseStoredRaw = (
 
   const citation = nonEmptyString(stored.metadata["citation"]);
   const sourceDocumentId = stored.sourceDocumentId ?? undefined;
+  const publishedCaseNumber = storedPublishedCaseNumber(stored);
+  const { sheetNumber } = splitCaseReference(publishedCaseNumber);
 
   return {
     type: "parsed",
     result: {
       caseNumber: stored.caseNumber,
+      sheetNumber,
       ...(citation === undefined
         ? {}
         : {
@@ -930,9 +1023,14 @@ const reparseStoredRaw = (
       fulltext: parsed.fulltext,
       sourceUrl,
       documentUrl: stored.documentUrl ?? undefined,
-      metadata: stored.metadata,
+      // Written back rather than passed through: a legacy row states the
+      // reference only in `metadata.caseNumber`, and a replay that left the
+      // metadata as it found it would leave the split unreversible for good.
+      // For a row stored since, these are the values already there.
+      metadata: { ...stored.metadata, sheetNumber, publishedCaseNumber },
       rawHash: czNssSourceHash({
         caseNumber: stored.caseNumber,
+        sheetNumber,
         decisionDate,
         decisionType,
       }),
@@ -1448,6 +1546,7 @@ const isOptionalString = (value: unknown): value is string | undefined =>
 const isCzNssListingRow = (value: unknown): value is ParsedRow =>
   isRecord(value) &&
   typeof value["caseNumber"] === "string" &&
+  isOptionalString(value["publishedCaseNumber"]) &&
   isOptionalString(value["decisionDate"]) &&
   isOptionalString(value["decisionType"]) &&
   isOptionalString(value["outcome"]) &&
