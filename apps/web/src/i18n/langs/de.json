@@ -487,6 +487,9 @@
         "publishedOnWeb": "Im Web veröffentlicht"
       },
       "statutes": "Anwendbare Vorschriften"
+    },
+    "reader": {
+      "headMatter": "Rubrum"
     }
   },
   "catalogue": {

@@ -487,6 +487,9 @@
         "publishedOnWeb": "Veebis avaldatud"
       },
       "statutes": "Kohaldatavad õigusaktid"
+    },
+    "reader": {
+      "headMatter": "Päis"
     }
   },
   "catalogue": {

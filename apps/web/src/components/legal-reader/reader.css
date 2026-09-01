@@ -242,3 +242,25 @@ div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
 .reader-note-back:hover {
   text-decoration: underline;
 }
+
+/* Reporter apparatus disclosure: quiet, one line, out of the reading flow
+   until asked for. */
+.reader-apparatus {
+  margin-block: 0.75em;
+}
+
+.reader-apparatus-summary {
+  cursor: pointer;
+  font-family: var(--font-sans, sans-serif);
+  font-size: 0.78rem;
+  color: var(--color-muted-foreground);
+  user-select: none;
+}
+
+.reader-apparatus-summary:hover {
+  color: var(--color-foreground);
+}
+
+.reader-apparatus[open] > .reader-apparatus-summary {
+  margin-bottom: 0.5em;
+}

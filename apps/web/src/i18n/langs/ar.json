@@ -487,6 +487,9 @@
         "publishedOnWeb": "منشور على الويب"
       },
       "statutes": "النصوص التشريعية المطبَّقة"
+    },
+    "reader": {
+      "headMatter": "الديباجة"
     }
   },
   "catalogue": {

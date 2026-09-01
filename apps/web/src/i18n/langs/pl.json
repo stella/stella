@@ -487,6 +487,9 @@
         "publishedOnWeb": "Opublikowano w sieci"
       },
       "statutes": "Powołane przepisy"
+    },
+    "reader": {
+      "headMatter": "Część wstępna"
     }
   },
   "catalogue": {

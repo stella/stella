@@ -487,6 +487,9 @@
         "publishedOnWeb": "Publicado en la web"
       },
       "statutes": "Normas aplicables"
+    },
+    "reader": {
+      "headMatter": "Encabezamiento"
     }
   },
   "catalogue": {

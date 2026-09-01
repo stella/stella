@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { Fragment, useRef } from "react";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -74,6 +74,49 @@ type DecisionTextProps = {
 const SUPPLEMENT_LEGAL_SENTENCE_ID = "supplement-legal-sentence";
 const SUPPLEMENT_ABSTRACT_ID = "supplement-abstract";
 const DECISION_REFERENCE_ID = "decision-reference";
+
+/**
+ * Wrap runs of apparatus blocks in one collapsed disclosure while leaving
+ * every other block inline. The callback renders a single block exactly as
+ * the caller always did.
+ */
+const groupApparatusWrap = (
+  blocks: readonly Block[],
+  apparatusIds: ReadonlySet<string>,
+  apparatusLabel: string,
+  renderBlock: (block: Block) => ReactNode,
+): ReactNode[] => {
+  const out: ReactNode[] = [];
+  let run: Block[] = [];
+  const flush = () => {
+    if (run.length === 0) {
+      return;
+    }
+    const runBlocks = run;
+    run = [];
+    out.push(
+      <details
+        className="reader-apparatus"
+        key={`apparatus-${runBlocks[0]?.id ?? String(out.length)}`}
+      >
+        <summary className="reader-apparatus-summary">{apparatusLabel}</summary>
+        {runBlocks.map((block) => (
+          <Fragment key={block.id}>{renderBlock(block)}</Fragment>
+        ))}
+      </details>,
+    );
+  };
+  for (const block of blocks) {
+    if (apparatusIds.has(block.id)) {
+      run.push(block);
+      continue;
+    }
+    flush();
+    out.push(<Fragment key={block.id}>{renderBlock(block)}</Fragment>);
+  }
+  flush();
+  return out;
+};
 
 const isHoldingBlock = (block: Block): boolean =>
   block.type === "paragraph" && block.role === "holding";
@@ -388,17 +431,30 @@ const buildAnchorsByPieceId = ({
 const renderBlocksWithHoldingZone = ({
   activeMatchIndex,
   anchorsByPieceId,
+  apparatusLabel,
   blocks,
   rangesByPieceId,
   sectionMap,
 }: {
   activeMatchIndex: number;
   anchorsByPieceId: Record<string, TextAnchor[]>;
+  /** Translated label for the folded reporter-apparatus disclosure. */
+  apparatusLabel: string;
   blocks: Block[];
   rangesByPieceId: Record<string, SearchMatchRange[]>;
   sectionMap?: Map<string, { cssVar: string; headingId: string }> | undefined;
 }): ReactNode[] => {
   const result: ReactNode[] = [];
+
+  // Reporter apparatus (counsel appearances, syllabus, headnotes) folds
+  // behind a disclosure, the way dedicated reporter apps treat CAP head
+  // matter: not the court's words, one click away rather than gone.
+  const apparatusIds = new Set<string>();
+  for (const block of blocks) {
+    if (block.type === "paragraph" && block.role === "apparatus") {
+      apparatusIds.add(block.id);
+    }
+  }
 
   // The last paragraph of each footnote carries the return arrow. A block
   // ends its footnote when the one after it is not a continuation (a
@@ -460,28 +516,32 @@ const renderBlocksWithHoldingZone = ({
         key={`section-${group.blocks.at(0)?.id}`}
         style={borderStyle}
       >
-        {group.blocks.map((block) =>
-          isHoldingBlock(block) ? (
-            <div className="font-[520]" key={block.id}>
+        {groupApparatusWrap(
+          group.blocks,
+          apparatusIds,
+          apparatusLabel,
+          (block) =>
+            isHoldingBlock(block) ? (
+              <div className="font-[520]" key={block.id}>
+                <BlockRenderer
+                  activeMatchIndex={activeMatchIndex}
+                  anchorsByPieceId={anchorsByPieceId}
+                  block={block}
+                  rangesByPieceId={rangesByPieceId}
+                  variant="case-law"
+                />
+              </div>
+            ) : (
               <BlockRenderer
                 activeMatchIndex={activeMatchIndex}
                 anchorsByPieceId={anchorsByPieceId}
                 block={block}
+                key={block.id}
+                noteBackJump={footnoteLastIds.has(block.id)}
                 rangesByPieceId={rangesByPieceId}
                 variant="case-law"
               />
-            </div>
-          ) : (
-            <BlockRenderer
-              activeMatchIndex={activeMatchIndex}
-              anchorsByPieceId={anchorsByPieceId}
-              block={block}
-              key={block.id}
-              noteBackJump={footnoteLastIds.has(block.id)}
-              rangesByPieceId={rangesByPieceId}
-              variant="case-law"
-            />
-          ),
+            ),
         )}
       </div>,
     );
@@ -644,6 +704,7 @@ export const DecisionText = ({
         )}
         {renderBlocksWithHoldingZone({
           activeMatchIndex,
+          apparatusLabel: t("caseLaw.reader.headMatter"),
           anchorsByPieceId: buildAnchorsByPieceId({
             annotations: hydrated ? annotationAnchors : NO_ANNOTATION_ANCHORS,
             blocks: visibleBlocks,

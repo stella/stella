@@ -487,6 +487,9 @@
         "publishedOnWeb": "Paskelbta internete"
       },
       "statutes": "Taikomi teisės aktai"
+    },
+    "reader": {
+      "headMatter": "Antraštinė dalis"
     }
   },
   "catalogue": {

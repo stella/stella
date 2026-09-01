@@ -487,6 +487,9 @@
         "publishedOnWeb": "Published on web"
       },
       "statutes": "Applicable statutes"
+    },
+    "reader": {
+      "headMatter": "Head matter"
     }
   },
   "catalogue": {

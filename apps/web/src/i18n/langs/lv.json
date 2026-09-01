@@ -487,6 +487,9 @@
         "publishedOnWeb": "Publicēts tīmeklī"
       },
       "statutes": "Piemērojamie tiesību akti"
+    },
+    "reader": {
+      "headMatter": "Ievaddaļa"
     }
   },
   "catalogue": {

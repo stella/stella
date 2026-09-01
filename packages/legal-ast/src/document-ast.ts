@@ -54,6 +54,10 @@ export type ParagraphRole =
   /** Other centered reporter front matter: docket line, argument and
    * decision dates. */
   | "front-matter"
+  /** Reporter-authored apparatus around the decision: counsel appearances,
+   * syllabus, headnotes, the panel line. Not the court's own words —
+   * readers may fold it away. */
+  | "apparatus"
   | "unknown";
 
 export type ParagraphNote = {
@@ -357,6 +361,7 @@ const paragraphEntries = {
       "quote",
       "parties",
       "front-matter",
+      "apparatus",
       "unknown",
     ]),
   ),

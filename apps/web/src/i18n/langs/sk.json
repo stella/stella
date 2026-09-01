@@ -487,6 +487,9 @@
         "publishedOnWeb": "Zverejnené na webe"
       },
       "statutes": "Aplikované predpisy"
+    },
+    "reader": {
+      "headMatter": "Úvodná časť"
     }
   },
   "catalogue": {

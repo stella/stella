@@ -487,6 +487,9 @@
         "publishedOnWeb": "Weben közzétéve"
       },
       "statutes": "Alkalmazandó jogszabályok"
+    },
+    "reader": {
+      "headMatter": "Fejrész"
     }
   },
   "catalogue": {

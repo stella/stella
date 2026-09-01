@@ -487,6 +487,9 @@
         "publishedOnWeb": "Zveřejněno na webu"
       },
       "statutes": "Dotčené předpisy"
+    },
+    "reader": {
+      "headMatter": "Úvodní část"
     }
   },
   "catalogue": {

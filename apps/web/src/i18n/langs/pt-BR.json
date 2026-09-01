@@ -487,6 +487,9 @@
         "publishedOnWeb": "Publicado na web"
       },
       "statutes": "Normas aplicáveis"
+    },
+    "reader": {
+      "headMatter": "Cabeçalho"
     }
   },
   "catalogue": {
