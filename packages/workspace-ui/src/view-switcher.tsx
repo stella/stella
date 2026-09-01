@@ -320,7 +320,11 @@ const WorkspaceViewTab = <View extends WorkspaceViewSwitcherItem>({
         {renderIcon(view)}
         <span className="max-w-36 truncate">{view.name}</span>
       </TabsTab>
-      {actions}
+      {actions === null || actions === undefined ? null : (
+        <div className="absolute inset-e-0 top-1/2 -translate-y-1/2">
+          {actions}
+        </div>
+      )}
     </div>
   );
 };

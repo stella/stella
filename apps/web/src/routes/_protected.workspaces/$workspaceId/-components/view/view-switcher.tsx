@@ -628,7 +628,6 @@ const useViewActionsMenu = ({
           aria-label={t("common.actions")}
           render={
             <Button
-              className="absolute inset-e-0 top-1/2 -translate-y-1/2"
               // The surrounding tab is a draggable; this button is not a drag
               // affordance. Only covers presses on the button itself, which is
               // why the tab separately refuses to drag while the menu is open.

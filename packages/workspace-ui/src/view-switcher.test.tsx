@@ -34,6 +34,9 @@ describe("WorkspaceViewSwitcher", () => {
     expect(markup).toContain("Add view");
     expect(markup).toContain("Actions");
     expect(markup).toContain('class="relative flex items-center"');
+    expect(markup).toContain(
+      'class="absolute inset-e-0 top-1/2 -translate-y-1/2"',
+    );
   });
 
   test("applies the drop direction to the rendered switcher", () => {

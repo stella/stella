@@ -65,7 +65,7 @@ test("renders one stella-owned frame from typed navigation and rail descriptors"
         ],
         label: "Navigation",
       }}
-      topBar={() => <header data-testid="top-bar" />}
+      topBar={{ leading: <span data-testid="top-bar" /> }}
     >
       <div data-testid="content" />
     </WorkspaceFrame>,
@@ -125,7 +125,7 @@ test("renders the same stella rail primitive when the inspector pane is absent",
         items: [],
         label: "Navigation",
       }}
-      topBar={() => <header />}
+      topBar={{}}
     >
       <div />
     </WorkspaceFrame>,

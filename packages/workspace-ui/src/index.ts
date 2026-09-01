@@ -134,4 +134,5 @@ export type {
   WorkspaceFrameNavigation,
   WorkspaceFrameNavigationItem,
   WorkspaceFrameProps,
+  WorkspaceFrameTopBar,
 } from "./workspace-frame";

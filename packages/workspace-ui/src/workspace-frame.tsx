@@ -11,6 +11,7 @@ import {
   ApplicationRailMenu,
 } from "@stll/ui/application-rail";
 import { InspectorDock } from "@stll/ui/inspector";
+import { Sheet, SheetPopup, SheetTitle } from "@stll/ui/sheet";
 import { WorkspaceEndRail, WorkspaceShell } from "@stll/ui/workspace-shell";
 
 export type WorkspaceFrameNavigationItem = {
@@ -43,7 +44,12 @@ export type WorkspaceFrameInspector = {
   resizeHandleLabel: string;
   resizeHandleProps: ComponentProps<typeof InspectorDock>["resizeHandleProps"];
   onResetWidth?: (() => void) | undefined;
-  mobile?: ReactElement | undefined;
+  mobile?: {
+    content: ReactElement;
+    label: string;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+  };
 };
 
 export type WorkspaceFrameEndRail = {
@@ -57,9 +63,15 @@ export type WorkspaceFrameEndRail = {
 export type WorkspaceFrameProps = {
   children: ReactNode;
   navigation: WorkspaceFrameNavigation;
-  topBar: ComponentProps<typeof WorkspaceShell>["topBar"];
+  topBar: WorkspaceFrameTopBar;
   endRail: WorkspaceFrameEndRail;
   inspector?: WorkspaceFrameInspector;
+};
+
+export type WorkspaceFrameTopBar = {
+  leading?: ReactNode;
+  center?: ReactNode;
+  actions?: ReactNode;
 };
 
 /**
@@ -114,7 +126,7 @@ export const WorkspaceFrame = ({
     <WorkspaceEndRail {...endRail} />
   );
 
-  return (
+  const frame = (
     <WorkspaceShell
       endDock={endDock}
       navigation={{
@@ -122,10 +134,39 @@ export const WorkspaceFrame = ({
         desktop: desktopNavigation,
         mode: "shell-managed",
       }}
-      topBar={topBar}
+      topBar={({ compactNavigationTrigger }) => (
+        <div className="flex h-12 min-w-0 items-center gap-2 overflow-hidden border-b px-4">
+          {compactNavigationTrigger}
+          <div className="min-w-0 flex-1">{topBar.leading}</div>
+          <div className="min-w-0">{topBar.center}</div>
+          <div className="ms-auto flex shrink-0 items-center gap-0.5">
+            {topBar.actions}
+          </div>
+        </div>
+      )}
     >
       {children}
-      {inspector?.mobile}
     </WorkspaceShell>
+  );
+
+  if (inspector?.mobile === undefined) {
+    return frame;
+  }
+
+  return (
+    <Sheet
+      open={inspector.mobile.open}
+      onOpenChange={inspector.mobile.onOpenChange}
+    >
+      {frame}
+      <SheetPopup
+        className="h-dvh w-full max-w-none border-0 p-0 md:hidden"
+        showCloseButton={false}
+        side="inline-end"
+      >
+        <SheetTitle className="sr-only">{inspector.mobile.label}</SheetTitle>
+        {inspector.mobile.content}
+      </SheetPopup>
+    </Sheet>
   );
 };
