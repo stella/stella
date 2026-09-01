@@ -17,21 +17,29 @@ export type {
   PersistedDecisionAnalysis,
 } from "./analysis.js";
 export {
+  APPARATUS_ROLES,
   getDocumentAstMetadata,
+  hasBlockInlines,
   hasUsableAst,
+  isApparatusRole,
   isDocumentAst,
   parseDocumentAst,
+  persistedAstDegradations,
 } from "./document-ast.js";
 export type {
+  ApparatusRole,
   Block,
   DocumentAst,
   DocumentAstMetadata,
   DocumentAstSource,
   HeadingBlock,
   HeadingLevel,
+  ImageBlock,
+  InlineBlock,
   ParagraphBlock,
   ParagraphNote,
   ParagraphRole,
+  PersistedAstDegradation,
   TableBlock,
   TableCell,
 } from "./document-ast.js";
@@ -44,11 +52,15 @@ export {
 export type {
   Inline,
   InlineBold,
+  InlineCitation,
   InlineItalic,
   InlineLineBreak,
   InlineLink,
   InlinePageAnchor,
+  InlineSubscript,
+  InlineSuperscript,
   InlineText,
+  InlineUnderline,
   InlineWithChildren,
 } from "./inline.js";
 export {

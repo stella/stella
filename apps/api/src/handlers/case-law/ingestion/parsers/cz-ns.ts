@@ -17,6 +17,7 @@ import type {
   DocumentAst,
   DocumentAstMetadata,
   Inline,
+  ParagraphBlock,
   TableCell,
 } from "@/api/handlers/case-law/document-ast";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
@@ -513,9 +514,7 @@ const isSectionHeading = (plainText: string): boolean => {
 
 // ── Merge pass ────────────────────────────────────────────
 
-type InlineBlock = Exclude<Block, { type: "table" }>;
-
-const shouldMerge = (prev: Block, next: Block): prev is InlineBlock => {
+const shouldMerge = (prev: Block, next: Block): prev is ParagraphBlock => {
   if (prev.type !== "paragraph") {
     return false;
   }

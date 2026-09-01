@@ -1,18 +1,29 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  APPARATUS_ROLES,
   getDocumentAstMetadata,
   hasUsableAst,
   HEADING_ROLES,
+  isApparatusRole,
   isDocumentAst,
   omitDerivablePlainText,
   PARAGRAPH_ROLES,
   parseDocumentAst,
   parseUsableDocumentAst,
-  unrecognisedBlockRoles,
+  persistedAstDegradations,
   withProjectedPlainText,
 } from "./document-ast";
-import type { DocumentAst } from "./document-ast";
+import type {
+  Block,
+  DocumentAst,
+  ParagraphNote,
+  ParagraphRole,
+} from "./document-ast";
+
+/** The role of a block that carries one, for assertions over mixed lists. */
+const roleOf = (block: Block | undefined): string | undefined =>
+  block === undefined || block.type === "image" ? undefined : block.role;
 
 const documentAst = {
   version: 1,
@@ -376,47 +387,370 @@ describe("persisted roles outside the declared sets", () => {
   test("the persisted reader keeps the document and degrades the role", () => {
     const parsed = parseDocumentAst(withRoles("not-a-role", "not-a-role"));
     expect(parsed).not.toBeNull();
-    expect(parsed?.blocks.map((block) => block.role)).toEqual([
-      undefined,
-      "unknown",
-    ]);
+    expect(parsed?.blocks.map(roleOf)).toEqual([undefined, "unknown"]);
   });
 
   test("the persisted reader leaves declared roles untouched", () => {
     const parsed = parseDocumentAst(withRoles("section-heading", "holding"));
-    expect(parsed?.blocks.map((block) => block.role)).toEqual([
-      "section-heading",
-      "holding",
-    ]);
+    expect(parsed?.blocks.map(roleOf)).toEqual(["section-heading", "holding"]);
   });
 
   test("reports what it degraded, by block", () => {
     expect(
-      unrecognisedBlockRoles(withRoles("section-heading", "verdict")),
-    ).toEqual([{ blockId: "p1", type: "paragraph", role: "verdict" }]);
-    expect(unrecognisedBlockRoles(withRoles("title", "intro"))).toEqual([
-      { blockId: "h1", type: "heading", role: "title" },
+      persistedAstDegradations(withRoles("section-heading", "verdict")),
+    ).toEqual([
+      { kind: "block-role", blockId: "p1", type: "paragraph", role: "verdict" },
+    ]);
+    expect(persistedAstDegradations(withRoles("title", "intro"))).toEqual([
+      { kind: "block-role", blockId: "h1", type: "heading", role: "title" },
     ]);
     expect(
-      unrecognisedBlockRoles(withRoles("decision-title", undefined)),
+      persistedAstDegradations(withRoles("decision-title", undefined)),
     ).toEqual([]);
   });
 
   test("reports nothing for a value that is not an AST", () => {
-    expect(unrecognisedBlockRoles(null)).toEqual([]);
-    expect(unrecognisedBlockRoles({ blocks: "none" })).toEqual([]);
+    expect(persistedAstDegradations(null)).toEqual([]);
+    expect(persistedAstDegradations({ blocks: "none" })).toEqual([]);
   });
 
   test("invariant: every declared role survives the persisted reader unchanged", () => {
     for (const role of PARAGRAPH_ROLES) {
       const stored = withRoles(undefined, role);
-      expect(parseDocumentAst(stored)?.blocks[1]?.role).toBe(role);
-      expect(unrecognisedBlockRoles(stored)).toEqual([]);
+      expect(roleOf(parseDocumentAst(stored)?.blocks[1])).toBe(role);
+      expect(persistedAstDegradations(stored)).toEqual([]);
     }
     for (const role of HEADING_ROLES) {
       const stored = withRoles(role, undefined);
-      expect(parseDocumentAst(stored)?.blocks[0]?.role).toBe(role);
-      expect(unrecognisedBlockRoles(stored)).toEqual([]);
+      expect(roleOf(parseDocumentAst(stored)?.blocks[0])).toBe(role);
+      expect(persistedAstDegradations(stored)).toEqual([]);
     }
+  });
+});
+
+describe("apparatus roles", () => {
+  /**
+   * The fold is a decision about publisher-authored matter, so the set is
+   * declared once and every reader asks this guard. A role added to
+   * `APPARATUS_ROLES` must be a declared paragraph role, which the
+   * `satisfies` on the array already forces; this pins the runtime half.
+   */
+  test("names exactly the declared publisher-authored roles", () => {
+    for (const role of APPARATUS_ROLES) {
+      expect(PARAGRAPH_ROLES).toContain(role);
+      expect(isApparatusRole(role)).toBe(true);
+    }
+  });
+
+  test("the bench and the court's own words are not folded away", () => {
+    const notFolded = [
+      "panel",
+      "intro",
+      "holding",
+      "quote",
+      "unknown",
+    ] as const satisfies readonly ParagraphRole[];
+    for (const role of notFolded) {
+      expect(isApparatusRole(role)).toBe(false);
+    }
+    expect(isApparatusRole(undefined)).toBe(false);
+    expect(isApparatusRole("not-a-role")).toBe(false);
+  });
+});
+
+describe("image blocks", () => {
+  const imageAst = (image: Record<string, unknown>) => ({
+    ...documentAst,
+    blocks: [{ id: "i1", anchorId: "i-1", type: "image", ...image }],
+  });
+
+  const seal = {
+    src: "https://assets.test/seal.png",
+    alt: "Court seal",
+    width: 120,
+    height: 120,
+    plainText: "Court seal",
+  };
+
+  test("accepts an addressed, sized figure", () => {
+    expect(isDocumentAst(imageAst(seal))).toBe(true);
+  });
+
+  test("rejects bytes carried inline instead of an address", () => {
+    expect(
+      isDocumentAst(
+        imageAst({ ...seal, src: "data:image/png;base64,iVBORw0KGgo=" }),
+      ),
+    ).toBe(false);
+    expect(
+      isDocumentAst(imageAst({ ...seal, src: "http://assets.test/s.png" })),
+    ).toBe(false);
+    expect(isDocumentAst(imageAst({ ...seal, src: "seal.png" }))).toBe(false);
+  });
+
+  test("rejects a non-integer or non-positive size", () => {
+    expect(isDocumentAst(imageAst({ ...seal, width: 0 }))).toBe(false);
+    expect(isDocumentAst(imageAst({ ...seal, height: 1.5 }))).toBe(false);
+    expect(isDocumentAst(imageAst({ ...seal, width: -4 }))).toBe(false);
+  });
+
+  test("derives plainText from the alt text, and rebuilds it on the wire", () => {
+    const parsed = parseDocumentAst(imageAst(seal));
+    if (parsed === null) {
+      throw new Error("expected a parsed AST");
+    }
+    const projected = withProjectedPlainText(parsed);
+    expect(projected.blocks.at(0)?.plainText).toBe("Court seal");
+
+    const wire = omitDerivablePlainText(projected);
+    expect(wire.blocks.at(0)).not.toHaveProperty("plainText");
+    expect(parseDocumentAst(JSON.stringify(wire))).toEqual(projected);
+  });
+
+  test("a figure with no alt text carries no text at all", () => {
+    const { alt: _alt, ...unlabelled } = seal;
+    const parsed = parseDocumentAst(
+      imageAst({ ...unlabelled, plainText: "stale" }),
+    );
+    if (parsed === null) {
+      throw new Error("expected a parsed AST");
+    }
+    expect(withProjectedPlainText(parsed).blocks.at(0)?.plainText).toBe("");
+  });
+});
+
+describe("table cell spans and header cells", () => {
+  const cellAst = (cell: Record<string, unknown>) => ({
+    ...documentAst,
+    blocks: [
+      {
+        id: "t1",
+        anchorId: "t-1",
+        type: "table",
+        rows: [[{ inlines: [{ type: "text", text: "Rok" }], ...cell }]],
+        plainText: "Rok",
+      },
+    ],
+  });
+
+  test("accepts a spanning header cell", () => {
+    expect(
+      isDocumentAst(
+        cellAst({ plainText: "Rok", colSpan: 2, rowSpan: 3, header: true }),
+      ),
+    ).toBe(true);
+  });
+
+  test("rejects a span of one: the default is written by omitting it", () => {
+    expect(isDocumentAst(cellAst({ plainText: "Rok", colSpan: 1 }))).toBe(
+      false,
+    );
+    expect(isDocumentAst(cellAst({ plainText: "Rok", rowSpan: 1 }))).toBe(
+      false,
+    );
+    expect(isDocumentAst(cellAst({ plainText: "Rok", colSpan: 2.5 }))).toBe(
+      false,
+    );
+  });
+
+  test("keeps spans and header flags across the wire round trip", () => {
+    const parsed = parseDocumentAst(
+      cellAst({ colSpan: 2, rowSpan: 2, header: true }),
+    );
+    if (parsed === null) {
+      throw new Error("expected a parsed AST");
+    }
+    const projected = withProjectedPlainText(parsed);
+    expect(
+      parseDocumentAst(JSON.stringify(omitDerivablePlainText(projected))),
+    ).toEqual(projected);
+
+    const [block] = projected.blocks;
+    if (block?.type !== "table") {
+      throw new Error("expected a table block");
+    }
+    expect(block.rows[0]?.[0]).toEqual({
+      inlines: [{ type: "text", text: "Rok" }],
+      plainText: "Rok",
+      colSpan: 2,
+      rowSpan: 2,
+      header: true,
+    });
+  });
+});
+
+describe("multi-paragraph footnotes", () => {
+  /** `undefined` stands for a body paragraph between notes. */
+  const noteAst = (
+    notes: readonly (ParagraphNote | undefined)[],
+  ): DocumentAst => ({
+    ...documentAst,
+    blocks: notes.map((note, index) => ({
+      id: `fn${String(index)}`,
+      anchorId: `_ftn${String(index)}`,
+      type: "paragraph",
+      ...(note === undefined ? {} : { note }),
+      inlines: [{ type: "text", text: "Note" }],
+      plainText: "Note",
+    })),
+  });
+
+  test("parts of one note share a noteId and repeat the label", () => {
+    const stored = noteAst([
+      { type: "footnote", label: "1", noteId: "n1" },
+      { type: "footnote", label: "1", noteId: "n1" },
+    ]);
+    expect(isDocumentAst(stored)).toBe(true);
+    expect(parseDocumentAst(JSON.stringify(stored))).toEqual(stored);
+  });
+
+  test("a note complete by itself carries no noteId", () => {
+    const stored = noteAst([{ type: "footnote", label: "1" }]);
+    expect(isDocumentAst(stored)).toBe(true);
+    expect(parseDocumentAst(JSON.stringify(stored))).toEqual(stored);
+  });
+
+  test("a writer cannot put two labels under one adjacent noteId; a reader still serves it", () => {
+    const stored = noteAst([
+      { type: "footnote", label: "1", noteId: "n1" },
+      { type: "footnote", label: "2", noteId: "n1" },
+    ]);
+    expect(isDocumentAst(stored)).toBe(false);
+    expect(parseDocumentAst(JSON.stringify(stored))).toEqual(stored);
+  });
+
+  test("the same noteId in two separate runs is two notes, each free to be labelled", () => {
+    const stored = noteAst([
+      { type: "footnote", label: "1", noteId: "n1" },
+      undefined,
+      { type: "footnote", label: "2", noteId: "n1" },
+    ]);
+    expect(isDocumentAst(stored)).toBe(true);
+  });
+});
+
+describe("persisted kinds outside the declared sets", () => {
+  const astWith = (blocks: readonly unknown[]) => ({
+    ...documentAst,
+    blocks,
+  });
+
+  /** No `plainText`, so each assertion below reads the text the persisted
+   * reader rebuilt from the inlines it managed to keep. */
+  const paragraphWith = (inlines: readonly unknown[]) => ({
+    id: "p1",
+    anchorId: "p-1",
+    type: "paragraph",
+    inlines,
+  });
+
+  test("an unknown inline container keeps the text its children carried", () => {
+    const parsed = parseDocumentAst(
+      astWith([
+        paragraphWith([
+          { type: "text", text: "before " },
+          {
+            type: "small-caps",
+            children: [
+              { type: "text", text: "THE " },
+              { type: "bold", children: [{ type: "text", text: "COURT" }] },
+            ],
+          },
+          { type: "text", text: " after" },
+        ]),
+      ]),
+    );
+    expect(parsed?.blocks.at(0)?.plainText).toBe("before THE COURT after");
+  });
+
+  test("an unknown inline leaf keeps its own text", () => {
+    const parsed = parseDocumentAst(
+      astWith([paragraphWith([{ type: "marginal-note", text: "note" }])]),
+    );
+    expect(parsed?.blocks.at(0)?.plainText).toBe("note");
+  });
+
+  test("an unknown inline carrying nothing is dropped", () => {
+    const parsed = parseDocumentAst(
+      astWith([
+        paragraphWith([
+          { type: "text", text: "kept" },
+          { type: "ornament", weight: 3 },
+        ]),
+      ]),
+    );
+    expect(parsed?.blocks.at(0)?.plainText).toBe("kept");
+  });
+
+  test("an unknown inline nested inside a declared one still degrades", () => {
+    const parsed = parseDocumentAst(
+      astWith([
+        paragraphWith([
+          { type: "bold", children: [{ type: "small-caps", text: "COURT" }] },
+        ]),
+      ]),
+    );
+    expect(parsed?.blocks.at(0)?.plainText).toBe("COURT");
+  });
+
+  test("a malformed declared inline is still a parse failure", () => {
+    expect(parseDocumentAst(astWith([paragraphWith([{ type: "bold" }])]))).toBe(
+      null,
+    );
+  });
+
+  test("an unknown block is dropped, the rest of the document served", () => {
+    const parsed = parseDocumentAst(
+      astWith([
+        { id: "x1", anchorId: "x-1", type: "sidebar", body: "aside" },
+        documentAst.blocks[1],
+      ]),
+    );
+    expect(parsed?.blocks.map((block) => block.id)).toEqual(["p1"]);
+  });
+
+  test("the canonical guard rejects both, so a writer cannot persist them", () => {
+    expect(
+      isDocumentAst(
+        astWith([
+          {
+            ...paragraphWith([{ type: "small-caps", children: [] }]),
+            plainText: "",
+          },
+        ]),
+      ),
+    ).toBe(false);
+    expect(
+      isDocumentAst(
+        astWith([
+          { id: "x1", anchorId: "x-1", type: "sidebar", plainText: "" },
+        ]),
+      ),
+    ).toBe(false);
+  });
+
+  test("reports each degradation by kind", () => {
+    expect(
+      persistedAstDegradations(
+        astWith([
+          { id: "x1", type: "sidebar" },
+          paragraphWith([
+            { type: "small-caps", children: [] },
+            { type: "small-caps", children: [] },
+            { type: "ornament" },
+          ]),
+          {
+            id: "t1",
+            type: "table",
+            rows: [[{ inlines: [{ type: "ruby", text: "r" }] }]],
+          },
+        ]),
+      ),
+    ).toEqual([
+      { kind: "block-type", blockId: "x1", type: "sidebar" },
+      { kind: "inline-type", blockId: "p1", type: "small-caps" },
+      { kind: "inline-type", blockId: "p1", type: "ornament" },
+      { kind: "inline-type", blockId: "t1", type: "ruby" },
+    ]);
   });
 });

@@ -337,6 +337,52 @@ describe("chunkDocument never emits a body-less passage", () => {
   }, 2000);
 });
 
+describe("chunkDocument with an image block", () => {
+  test("keeps every text block anchored and skips the image's empty text", () => {
+    const chunks = chunkDocument({
+      ast: astOf([
+        heading(0, 1, "Title"),
+        {
+          id: "img0",
+          anchorId: "img0-anchor",
+          type: "image",
+          src: "https://example.test/seal.png",
+          plainText: "",
+        },
+        paragraph(0, "body"),
+      ]),
+      fallbackText: "unused",
+    });
+
+    expect(chunks.map((chunk) => chunk.anchorId)).toEqual(["h0-anchor"]);
+    expect(chunks.map((chunk) => chunk.headingPath)).toEqual([["Title"]]);
+    expect(chunks.map((chunk) => chunk.text)).toEqual([
+      `Title${SEPARATOR}body`,
+    ]);
+  });
+
+  test("an image with alt text is a passage of its own words", () => {
+    const chunks = chunkDocument({
+      ast: astOf([
+        {
+          id: "img0",
+          anchorId: "img0-anchor",
+          type: "image",
+          src: "https://example.test/map.png",
+          alt: "Map of the disputed parcel",
+          plainText: "Map of the disputed parcel",
+        },
+      ]),
+      fallbackText: "unused",
+    });
+
+    expect(chunks.map((chunk) => chunk.anchorId)).toEqual(["img0-anchor"]);
+    expect(chunks.map((chunk) => chunk.text)).toEqual([
+      "Map of the disputed parcel",
+    ]);
+  });
+});
+
 describe("chunkDocument fallbacks", () => {
   test("no AST splits the plain text on blank lines, unanchored", () => {
     const first = "alfa ".repeat(400).trim();

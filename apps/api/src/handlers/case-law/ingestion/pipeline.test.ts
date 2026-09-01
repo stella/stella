@@ -7,7 +7,8 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import type { DocumentAst, Inline } from "@/api/handlers/case-law/document-ast";
+import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
+import { plainTextOf } from "@/api/handlers/case-law/document-ast";
 import {
   EMPTY_AST,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
@@ -30,31 +31,6 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
-
-const concatInlineText = (inlines: Inline[]): string => {
-  let out = "";
-  for (const node of inlines) {
-    switch (node.type) {
-      case "text":
-        out += node.text;
-        break;
-      case "bold":
-      case "italic":
-      case "link":
-        out += concatInlineText(node.children);
-        break;
-      case "line-break":
-        out += "\n";
-        break;
-      case "page-anchor":
-        // Zero characters on the text axis.
-        break;
-      default:
-        break;
-    }
-  }
-  return out;
-};
 
 const baseResult = (
   documentAst: IngestionResult["documentAst"],
@@ -364,13 +340,11 @@ describe("sanitizeResult — documentAst text fields", () => {
 
     // Inline text is NEVER mutated — the reader must render the
     // court's exact formatting.
-    expect(concatInlineText(holding.inlines)).toBe("r o z h o d o l :");
-    expect(concatInlineText(holdingPara.inlines)).toBe(
+    expect(plainTextOf(holding.inlines)).toBe("r o z h o d o l :");
+    expect(plainTextOf(holdingPara.inlines)).toBe(
       "Podľa § 193 ods.1 z a m i e t a obžalobu.",
     );
-    expect(concatInlineText(plainPara.inlines)).toBe(
-      "Normálny text bez medzier.",
-    );
+    expect(plainTextOf(plainPara.inlines)).toBe("Normálny text bez medzier.");
   });
 
   test("table cell plainText is collapsed, inline text stays verbatim", () => {
@@ -422,8 +396,8 @@ describe("sanitizeResult — documentAst text fields", () => {
     expect(spacedCell.plainText).toBe("zamieta");
     expect(plainCell.plainText).toBe("plain cell");
 
-    expect(concatInlineText(spacedCell.inlines)).toBe("z a m i e t a");
-    expect(concatInlineText(plainCell.inlines)).toBe("plain cell");
+    expect(plainTextOf(spacedCell.inlines)).toBe("z a m i e t a");
+    expect(plainTextOf(plainCell.inlines)).toBe("plain cell");
   });
 
   test("keeps short runs of Czech/Slovak single-letter words intact", () => {

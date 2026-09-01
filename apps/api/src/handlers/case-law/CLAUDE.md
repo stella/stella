@@ -507,7 +507,7 @@ the one time-valid holder whose court matches. Three things to hold to:
 ## DocumentAst Conventions
 
 ```typescript
-type Block = HeadingBlock | ParagraphBlock | TableBlock;
+type Block = HeadingBlock | ParagraphBlock | TableBlock | ImageBlock;
 ```
 
 - `heading` with `level: 1|2|3` for section titles
@@ -516,20 +516,34 @@ type Block = HeadingBlock | ParagraphBlock | TableBlock;
   - `"holding"` — ruling/verdict paragraphs (bold in reader)
   - `"closing"` — closing formula
   - `"signature"` — judge signatures
+  - `"syllabus"`, `"headnotes"`, `"summary"`, `"counsel"`,
+    `"apparatus"` — publisher-authored matter around the decision
+    (`APPARATUS_ROLES`); the reader folds these behind one disclosure
+  - `"panel"` — the judges sitting; not folded
   - (no role) — regular body text
 - `table` with optional `role`:
   - `"related-proceedings"` — hidden in reader
+  - cells may carry `colSpan`/`rowSpan` (≥ 2) and `header: true`
+- `image` — a figure the publisher printed. `src` must be an `https`
+  URL into an asset store; a `data:` URI is rejected, because the AST is
+  read, indexed and prompted with as a whole and would carry the bytes
+  down every one of those paths. Its `plainText` is the alt text.
 
 Every block has: `id` (nanoid), `anchorId` (stable for deep
-links), `plainText` (for search/AI), and typed inlines.
+links) and `plainText` (for search/AI); `heading` and `paragraph` also
+carry typed inlines.
+
+A footnote printed over several paragraphs is several adjacent footnote
+paragraphs sharing one `note.noteId` and repeating the same
+`note.label`; one without a `noteId` is complete by itself.
 
 The role sets live in `packages/legal-ast/src/document-ast.ts`
 (`HEADING_ROLES`, `PARAGRAPH_ROLES`, `TABLE_ROLES`); add a role there
 and nowhere else. Writers validate against the strict schema; the
-persisted reader degrades a role it does not declare (a newer writer
-during a rolling deploy, or a row written past ingestion) instead of
-failing the document, and reports it through
-`StoredBlockRolesDegradedError`.
+persisted reader degrades vocabulary it does not declare instead of
+failing the document — a role becomes the declared fallback, an unknown
+inline kind collapses to the text its children carried, an unknown block
+kind is dropped — and reports each one through `StoredAstDegradedError`.
 
 ## Decision analysis
 

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { hasBlockInlines } from "@/api/handlers/case-law/document-ast";
 import type { Block } from "@/api/handlers/case-law/document-ast";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import type { ParseNssDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
@@ -521,7 +522,7 @@ describe("parseNssDecisionHtml", () => {
       // Check that bold inlines exist somewhere
       const hasBold = holdings.some(
         (h) =>
-          h.type !== "table" &&
+          hasBlockInlines(h) &&
           h.inlines.some(
             (i) =>
               i.type === "bold" ||

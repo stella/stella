@@ -5,15 +5,22 @@ export type {
   DocumentAstSource,
   HeadingBlock,
   HeadingLevel,
+  ImageBlock,
   Inline,
+  InlineBlock,
   InlineBold,
+  InlineCitation,
   InlineItalic,
   InlineLineBreak,
   InlineLink,
+  InlineSubscript,
+  InlineSuperscript,
   InlineText,
+  InlineUnderline,
   ParagraphBlock,
   ParagraphNote,
   ParagraphRole,
+  PersistedAstDegradation,
   TableBlock,
   TableCell,
   WireBlock,
@@ -21,7 +28,10 @@ export type {
   WireTableCell,
 } from "@stll/legal-ast/document-ast";
 
-export { hasInlineChildren } from "@stll/legal-ast/document-ast";
+export {
+  hasBlockInlines,
+  hasInlineChildren,
+} from "@stll/legal-ast/document-ast";
 export {
   getDocumentAstMetadata,
   hasUsableAst,

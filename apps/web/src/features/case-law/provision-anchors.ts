@@ -1,3 +1,4 @@
+import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { inlinesToPlainText } from "@/components/legal-reader/document-ast-text";
@@ -101,7 +102,7 @@ export const locateProvisionAnchors = <T>({
 
   const texts: { block: Block; text: string }[] = [];
   for (const block of blocks) {
-    if (block.type === "table") {
+    if (!hasBlockInlines(block)) {
       continue;
     }
     texts.push({ block, text: inlinesToPlainText(block.inlines) });

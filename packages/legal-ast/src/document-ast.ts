@@ -1,22 +1,41 @@
 /**
  * Canonical legal-document AST shared by legal corpus readers and parsers.
+ *
+ * Some structure deliberately does not live here. A quotation running over
+ * several paragraphs is several adjacent `quote` paragraphs: adjacency is
+ * the grouping, and no wrapper block exists for it. Scan provenance (a
+ * page image, bounding boxes per block) is not part of the AST either; if
+ * it is ever needed it belongs in a sidecar keyed by block id, so the text
+ * axis stays independent of how a document was captured. And `number` is
+ * the court's own citable paragraph number and nothing else — editorial
+ * numbering and list counters stay inside the text, which is why there is
+ * no list block.
  */
 
 import * as v from "valibot";
 
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
-import { inlineSchema } from "./inline.js";
+import {
+  inlineSchema,
+  isKnownInlineType,
+  persistedInlineArraySchema,
+  rawInlineTypes,
+} from "./inline.js";
 import type { Inline } from "./inline.js";
 
 export type {
   Inline,
   InlineBold,
+  InlineCitation,
   InlineItalic,
   InlineLineBreak,
   InlineLink,
   InlinePageAnchor,
+  InlineSubscript,
+  InlineSuperscript,
   InlineText,
+  InlineUnderline,
   InlineWithChildren,
 } from "./inline.js";
 export { hasInlineChildren } from "./inline.js";
@@ -64,10 +83,21 @@ export const PARAGRAPH_ROLES = [
   /** Other centered reporter front matter: docket line, argument and
    * decision dates. */
   "front-matter",
-  /** Reporter-authored apparatus around the decision: counsel appearances,
-   * syllabus, headnotes, the panel line. Not the court's own words —
+  /** Publisher-authored apparatus around the decision, of a kind the
+   * finer roles below do not name. Not the court's own words —
    * readers may fold it away. */
   "apparatus",
+  /** The publisher's official summary of the decision, printed with it
+   * but not part of it. */
+  "syllabus",
+  /** Publisher-written points of law drawn from the decision. */
+  "headnotes",
+  /** Any other publisher abstract of the decision. */
+  "summary",
+  /** Appearances of counsel and agents. */
+  "counsel",
+  /** The judges sitting, as a list. */
+  "panel",
   /**
    * No role known. Also what a persisted reader assigns to a paragraph
    * whose stored role it does not recognise (see `tolerantRole`).
@@ -77,9 +107,37 @@ export const PARAGRAPH_ROLES = [
 
 export type ParagraphRole = (typeof PARAGRAPH_ROLES)[number];
 
+/**
+ * The publisher-authored roles a reader may fold away: everything around
+ * the decision that the court did not write.
+ *
+ * `panel` is not one of them. The bench is a fact about the decision that
+ * a reader looks for, not apparatus wrapped around it.
+ */
+export const APPARATUS_ROLES = [
+  "apparatus",
+  "syllabus",
+  "headnotes",
+  "summary",
+  "counsel",
+] as const satisfies readonly ParagraphRole[];
+
+export type ApparatusRole = (typeof APPARATUS_ROLES)[number];
+
 export type ParagraphNote = {
   type: "footnote";
+  /** The note's mark as printed ("3", "[3]", "*"). */
   label: string;
+  /**
+   * Identity of the note this paragraph is part of.
+   *
+   * A footnote that runs over several paragraphs is several ADJACENT
+   * footnote paragraphs sharing one `noteId` and repeating the SAME
+   * `label`; a reader shows the label once, on the first, and the return
+   * arrow once, on the last. A footnote paragraph with no `noteId` is
+   * complete by itself.
+   */
+  noteId?: string | undefined;
 };
 
 export type ParagraphBlock = {
@@ -106,6 +164,12 @@ export type ParagraphBlock = {
 export type TableCell = {
   inlines: Inline[];
   plainText: string;
+  /** Columns this cell spans. Absent when it spans one. */
+  colSpan?: number | undefined;
+  /** Rows this cell spans. Absent when it spans one. */
+  rowSpan?: number | undefined;
+  /** A header cell. Absent for a data cell. */
+  header?: true | undefined;
 };
 
 export const TABLE_ROLES = ["related-proceedings", "metadata-table"] as const;
@@ -121,14 +185,59 @@ export type TableBlock = {
   plainText: string;
 };
 
-export type Block = HeadingBlock | ParagraphBlock | TableBlock;
+/**
+ * A figure the publisher printed with the document: a seal, a signature
+ * scan, a diagram in the reasoning.
+ *
+ * `src` addresses the image in an asset store and is never the bytes
+ * themselves — see `imageSrcSchema`. `plainText` is the alt text, so the
+ * one field every text walker reads keeps working over an image without
+ * knowing what an image is.
+ */
+export type ImageBlock = {
+  id: string;
+  anchorId: string;
+  type: "image";
+  src: string;
+  alt?: string | undefined;
+  width?: number | undefined;
+  height?: number | undefined;
+  plainText: string;
+};
+
+export type Block = HeadingBlock | ParagraphBlock | TableBlock | ImageBlock;
+
+/** The blocks whose text is one inline run. */
+export type InlineBlock = Extract<Block, { inlines: Inline[] }>;
+
+/**
+ * Whether a block kind carries one inline run, per kind. Total over
+ * `Block["type"]`, so a kind added without an entry is a type error
+ * rather than a block a text walker silently skips.
+ */
+const BLOCK_CARRIES_INLINES = {
+  heading: true,
+  paragraph: true,
+  table: false,
+  image: false,
+} as const satisfies Record<Block["type"], boolean>;
+
+export const hasBlockInlines = (block: Block): block is InlineBlock =>
+  BLOCK_CARRIES_INLINES[block.type];
 
 /** The roles each block type may carry; total over `Block["type"]`. */
 export const BLOCK_ROLES = {
   heading: HEADING_ROLES,
   paragraph: PARAGRAPH_ROLES,
   table: TABLE_ROLES,
+  /** A figure is addressed and sized, never positioned by role. */
+  image: [],
 } as const satisfies Record<Block["type"], readonly string[]>;
+
+export const isApparatusRole = (
+  role: string | undefined,
+): role is ApparatusRole =>
+  role !== undefined && isMemberOf(APPARATUS_ROLES, role);
 
 export type DocumentAstSource = {
   system: string;
@@ -156,7 +265,7 @@ export type DocumentAst = {
 
 /**
  * Flatten `inlines` into the character sequence a renderer walks: text
- * nodes verbatim, a line break as a single "\n", bold/italic/link
+ * nodes verbatim, a line break as a single "\n", every container's
  * children recursed into.
  *
  * This is the *raw* axis. Search highlight ranges, citation anchors and
@@ -175,6 +284,9 @@ export const plainTextOf = (inlines: readonly Inline[]): string => {
       // Zero characters: a page break is typography, and it may fall
       // mid-word — the word must stay whole on this axis.
     } else {
+      // A citation's `cite` is zero characters here for the same reason:
+      // the printed reference is the children, `cite` is metadata beside
+      // them.
       out += plainTextOf(node.children);
     }
   }
@@ -214,27 +326,30 @@ export const projectPlainText = (inlines: readonly Inline[]): string =>
 /**
  * A table cell on the wire, with the rebuildable `plainText` absent.
  */
-export type WireTableCell = {
-  inlines: Inline[];
+export type WireTableCell = Omit<TableCell, "plainText"> & {
   plainText?: string | undefined;
 };
 
 /**
  * A block on the wire.
  *
- * Heading and paragraph text, and a table cell's text, are rebuildable
- * from the `inlines` beside them, so they do not travel. A table's own
- * `plainText` spans the whole grid and no single inline run produces it,
- * so that one does.
+ * Heading and paragraph text, a table cell's text, and an image's alt
+ * text are rebuildable from the fields beside them, so they do not
+ * travel. A table's own `plainText` spans the whole grid and no single
+ * inline run produces it, so that one does.
  */
 export type WireBlock =
   | (Omit<HeadingBlock, "plainText"> & { plainText?: string | undefined })
   | (Omit<ParagraphBlock, "plainText"> & { plainText?: string | undefined })
+  | (Omit<ImageBlock, "plainText"> & { plainText?: string | undefined })
   | (Omit<TableBlock, "rows"> & { rows: WireTableCell[][] });
 
 export type WireDocumentAst = Omit<DocumentAst, "blocks"> & {
   blocks: WireBlock[];
 };
+
+/** An image's text axis: its alt text, or nothing when it has none. */
+const imagePlainText = (alt: string | undefined): string => alt ?? "";
 
 const fillBlockPlainText = (block: WireBlock): Block => {
   switch (block.type) {
@@ -250,13 +365,19 @@ const fillBlockPlainText = (block: WireBlock): Block => {
         plainText: block.plainText ?? projectPlainText(block.inlines),
       };
     }
+    case "image": {
+      return {
+        ...block,
+        plainText: block.plainText ?? imagePlainText(block.alt),
+      };
+    }
     case "table": {
       return {
         ...block,
         rows: block.rows.map((row) =>
-          row.map(({ inlines, plainText }) => ({
-            inlines,
-            plainText: plainText ?? projectPlainText(inlines),
+          row.map((cell) => ({
+            ...cell,
+            plainText: cell.plainText ?? projectPlainText(cell.inlines),
           })),
         ),
       };
@@ -280,7 +401,7 @@ const TABLE_CELL_SEPARATOR = "\t";
 const TABLE_ROW_SEPARATOR = "\n";
 
 /**
- * Every `plainText` recomputed from the `inlines` beside it.
+ * Every `plainText` recomputed from the fields beside it.
  *
  * Applied once at the ingestion boundary, after text sanitization, which
  * is what makes dropping the rebuildable ones from a response lossless: a
@@ -300,34 +421,47 @@ const TABLE_ROW_SEPARATOR = "\n";
 export const withProjectedPlainText = (ast: DocumentAst): DocumentAst => ({
   ...ast,
   blocks: ast.blocks.map((block): Block => {
-    if (block.type === "table") {
-      const rows = block.rows.map((row) =>
-        row.map(({ inlines }) => ({
-          inlines,
-          plainText: projectPlainText(inlines),
-        })),
-      );
-      return {
-        ...block,
-        rows,
-        plainText: rows
-          .map((row) =>
-            row.map((cell) => cell.plainText).join(TABLE_CELL_SEPARATOR),
-          )
-          .join(TABLE_ROW_SEPARATOR),
-      };
+    switch (block.type) {
+      case "table": {
+        const rows = block.rows.map((row) =>
+          row.map((cell) => ({
+            ...cell,
+            plainText: projectPlainText(cell.inlines),
+          })),
+        );
+        return {
+          ...block,
+          rows,
+          plainText: rows
+            .map((row) =>
+              row.map((cell) => cell.plainText).join(TABLE_CELL_SEPARATOR),
+            )
+            .join(TABLE_ROW_SEPARATOR),
+        };
+      }
+      case "image": {
+        return { ...block, plainText: imagePlainText(block.alt) };
+      }
+      case "heading":
+      case "paragraph": {
+        return { ...block, plainText: projectPlainText(block.inlines) };
+      }
+      default: {
+        const exhaustive: never = block;
+        return exhaustive;
+      }
     }
-    return { ...block, plainText: projectPlainText(block.inlines) };
   }),
 });
 
 /**
  * The same AST with every rebuildable `plainText` dropped.
  *
- * Sound only because `projectPlainText` is the single producer of those
- * fields: a reader rebuilds exactly what a parser wrote. `parseDocumentAst`
- * is the other half and refills them, so the parsed `DocumentAst` keeps
- * `plainText` required and no consumer of a parsed AST sees the omission.
+ * Sound only because `projectPlainText` and the alt text are the single
+ * producers of those fields: a reader rebuilds exactly what a parser
+ * wrote. `parseDocumentAst` is the other half and refills them, so the
+ * parsed `DocumentAst` keeps `plainText` required and no consumer of a
+ * parsed AST sees the omission.
  */
 export const omitDerivablePlainText = (ast: DocumentAst): WireDocumentAst => ({
   ...ast,
@@ -335,24 +469,61 @@ export const omitDerivablePlainText = (ast: DocumentAst): WireDocumentAst => ({
     // Every branch drops `plainText` and keeps the rest of the block by
     // spreading it. Listing the fields to keep instead would silently
     // drop each one added later.
-    if (block.type === "heading") {
-      const { plainText: _derived, ...rest } = block;
-      return rest;
+    switch (block.type) {
+      case "heading":
+      case "paragraph":
+      case "image": {
+        const { plainText: _derived, ...rest } = block;
+        return rest;
+      }
+      case "table": {
+        return {
+          ...block,
+          rows: block.rows.map((row) =>
+            row.map(({ plainText: _cellDerived, ...cell }) => cell),
+          ),
+        };
+      }
+      default: {
+        const exhaustive: never = block;
+        return exhaustive;
+      }
     }
-    if (block.type === "paragraph") {
-      const { plainText: _derived, ...rest } = block;
-      return rest;
-    }
-    return {
-      ...block,
-      rows: block.rows.map((row) =>
-        row.map(({ plainText: _cellDerived, ...cell }) => cell),
-      ),
-    };
   }),
 });
 
 const inlineArraySchema = v.array(v.lazy(() => inlineSchema));
+
+const HTTPS_PROTOCOL = "https:";
+
+/**
+ * An image address, and never image bytes.
+ *
+ * A `data:` URI inlines the payload: one scanned page is routinely
+ * megabytes, and the AST is read, indexed, compressed and put in front of
+ * a model as a whole, so those bytes would be paid for on every one of
+ * those paths. Images belong in an asset store that the AST points at.
+ * The same check rejects every other scheme, so an address is always one
+ * a reader can fetch over TLS.
+ */
+const isHttpsUrl = (src: string): boolean =>
+  URL.canParse(src) && new URL(src).protocol === HTTPS_PROTOCOL;
+
+const imageSrcSchema = v.pipe(
+  v.string(),
+  v.url(),
+  v.check(isHttpsUrl, "Image src must be an https URL"),
+);
+
+/** A span of more than one cell. A span of one is the default, so it is
+ * absent rather than written as 1. */
+const cellSpanSchema = v.optional(
+  v.pipe(v.number(), v.integer(), v.minValue(2)),
+);
+
+const imagePixelsSchema = v.optional(
+  v.pipe(v.number(), v.integer(), v.minValue(1)),
+);
 
 /**
  * Every field of a block except `plainText`, declared once.
@@ -383,6 +554,7 @@ const paragraphEntries = {
       v.object({
         type: v.literal("footnote"),
         label: v.string(),
+        noteId: v.optional(v.string()),
       }),
     ]),
   ),
@@ -390,7 +562,22 @@ const paragraphEntries = {
   inlines: inlineArraySchema,
 };
 
-const tableCellEntries = { inlines: inlineArraySchema };
+const imageEntries = {
+  id: v.string(),
+  anchorId: v.string(),
+  type: v.literal("image"),
+  src: imageSrcSchema,
+  alt: v.optional(v.string()),
+  width: imagePixelsSchema,
+  height: imagePixelsSchema,
+};
+
+const tableCellEntries = {
+  inlines: inlineArraySchema,
+  colSpan: cellSpanSchema,
+  rowSpan: cellSpanSchema,
+  header: v.optional(v.literal(true)),
+};
 
 /** Table fields except `rows`, whose cells differ between the two readers. */
 const tableEntries = {
@@ -409,13 +596,9 @@ const tableCellSchema: v.GenericSchema<TableCell> = v.object({
 const blockSchema: v.GenericSchema<Block> = v.variant("type", [
   v.object({ ...headingEntries, plainText: v.string() }),
   v.object({ ...paragraphEntries, plainText: v.string() }),
+  v.object({ ...imageEntries, plainText: v.string() }),
   v.object({ ...tableEntries, rows: v.array(v.array(tableCellSchema)) }),
 ]);
-
-const wireTableCellSchema: v.GenericSchema<WireTableCell> = v.object({
-  ...tableCellEntries,
-  plainText: v.optional(v.string()),
-});
 
 const isMemberOf = <const TRoles extends readonly string[]>(
   roles: TRoles,
@@ -434,7 +617,7 @@ const isMemberOf = <const TRoles extends readonly string[]>(
  * role instead — to `fallback`, which for a paragraph is the declared
  * `unknown` and for the other block types is no role — while the
  * canonical `documentAstSchema` stays strict, so a writer still cannot
- * persist a role it does not declare. `unrecognisedBlockRoles` reports
+ * persist a role it does not declare. `persistedAstDegradations` reports
  * what was degraded so a stored row that needs repair is visible.
  */
 const tolerantRole = <
@@ -453,21 +636,31 @@ const tolerantRole = <
     ),
   );
 
+const wireTableCellSchema: v.GenericSchema<unknown, WireTableCell> = v.object({
+  ...tableCellEntries,
+  inlines: persistedInlineArraySchema,
+  plainText: v.optional(v.string()),
+});
+
 /**
- * `blockSchema` with the rebuildable `plainText` fields made optional and
- * the roles read tolerantly (see `tolerantRole`).
+ * `blockSchema` with the rebuildable `plainText` fields made optional,
+ * the roles read tolerantly (see `tolerantRole`) and the inline runs read
+ * tolerantly (see `persistedInlineArraySchema`).
  */
 const wireBlockSchema: v.GenericSchema<unknown, WireBlock> = v.variant("type", [
   v.object({
     ...headingEntries,
+    inlines: persistedInlineArraySchema,
     role: tolerantRole(HEADING_ROLES, undefined),
     plainText: v.optional(v.string()),
   }),
   v.object({
     ...paragraphEntries,
+    inlines: persistedInlineArraySchema,
     role: tolerantRole(PARAGRAPH_ROLES, "unknown"),
     plainText: v.optional(v.string()),
   }),
+  v.object({ ...imageEntries, plainText: v.optional(v.string()) }),
   v.object({
     ...tableEntries,
     role: tolerantRole(TABLE_ROLES, undefined),
@@ -475,49 +668,120 @@ const wireBlockSchema: v.GenericSchema<unknown, WireBlock> = v.variant("type", [
   }),
 ]);
 
-export type UnrecognisedBlockRole = {
-  blockId: string | null;
-  type: Block["type"];
-  role: string;
-};
+/**
+ * A block read from storage, or `null` for a block kind this reader does
+ * not declare.
+ *
+ * Unlike a role or an inline kind, an unknown block has no neutral shape
+ * to degrade to: nothing here knows where its text lives or how it should
+ * read. It is dropped, and reported, rather than guessed at.
+ */
+const persistedBlockSchema: v.GenericSchema<unknown, WireBlock | null> =
+  v.union([
+    wireBlockSchema,
+    v.pipe(
+      v.object({
+        type: v.pipe(
+          v.string(),
+          v.check((type) => !Object.hasOwn(BLOCK_ROLES, type)),
+        ),
+      }),
+      v.transform((): null => null),
+    ),
+  ]);
+
+/** What the persisted reader could not read as written, per occurrence. */
+export type PersistedAstDegradation =
+  | {
+      kind: "block-role";
+      blockId: string | null;
+      type: Block["type"];
+      role: string;
+    }
+  | { kind: "block-type"; blockId: string | null; type: string }
+  | { kind: "inline-type"; blockId: string | null; type: string };
 
 const storedBlockShape = v.object({
   id: v.optional(v.string()),
-  type: v.picklist(["heading", "paragraph", "table"]),
+  type: v.string(),
   role: v.optional(v.string()),
+  inlines: v.optional(v.unknown()),
+  rows: v.optional(v.unknown()),
 });
+
+const storedRowsShape = v.array(v.array(v.object({ inlines: v.unknown() })));
 
 const storedBlocksShape = v.object({
   blocks: v.array(v.unknown()),
 });
 
+const isBlockType = (type: string): type is Block["type"] =>
+  Object.hasOwn(BLOCK_ROLES, type);
+
+/** Every raw inline `type` a block carries, in its inline run and, for a
+ * table, in each cell's run. */
+const blockInlineTypes = (block: {
+  inlines?: unknown;
+  rows?: unknown;
+}): string[] => {
+  const types = rawInlineTypes(block.inlines);
+  const rows = v.safeParse(storedRowsShape, block.rows);
+  if (!rows.success) {
+    return types;
+  }
+  for (const row of rows.output) {
+    for (const cell of row) {
+      types.push(...rawInlineTypes(cell.inlines));
+    }
+  }
+  return types;
+};
+
 /**
- * The roles in a stored AST that the persisted reader degrades.
+ * What a stored AST carries that the persisted reader degrades: a block
+ * role it does not declare, a block kind it drops, an inline kind it
+ * collapses to text.
  *
  * Reads the raw value, not the parsed AST, because parsing is where the
  * information is lost. A value that is not an AST at all reports nothing:
  * that failure is the parser's to raise.
+ *
+ * An unknown inline kind is reported once per block that carries it, not
+ * once per occurrence: a stored row repeats a kind on every run, and the
+ * report exists to name the row and the kind, not to count them.
  */
-export const unrecognisedBlockRoles = (
+export const persistedAstDegradations = (
   raw: unknown,
-): readonly UnrecognisedBlockRole[] => {
+): readonly PersistedAstDegradation[] => {
   const stored = v.safeParse(storedBlocksShape, raw);
   if (!stored.success) {
     return [];
   }
-  const unrecognised: UnrecognisedBlockRole[] = [];
+  const degradations: PersistedAstDegradation[] = [];
   for (const candidate of stored.output.blocks) {
-    const block = v.safeParse(storedBlockShape, candidate);
-    if (!block.success || block.output.role === undefined) {
+    const parsed = v.safeParse(storedBlockShape, candidate);
+    if (!parsed.success) {
       continue;
     }
-    const { id, role, type } = block.output;
-    if (isMemberOf(BLOCK_ROLES[type], role)) {
+    const { id, role, type } = parsed.output;
+    const blockId = id ?? null;
+    if (!isBlockType(type)) {
+      degradations.push({ kind: "block-type", blockId, type });
       continue;
     }
-    unrecognised.push({ blockId: id ?? null, type, role });
+    if (role !== undefined && !isMemberOf(BLOCK_ROLES[type], role)) {
+      degradations.push({ kind: "block-role", blockId, type, role });
+    }
+    const seen = new Set<string>();
+    for (const inlineType of blockInlineTypes(parsed.output)) {
+      if (isKnownInlineType(inlineType) || seen.has(inlineType)) {
+        continue;
+      }
+      seen.add(inlineType);
+      degradations.push({ kind: "inline-type", blockId, type: inlineType });
+    }
   }
-  return unrecognised;
+  return degradations;
 };
 
 const documentAstSourceSchema: v.GenericSchema<DocumentAstSource> = v.object({
@@ -538,12 +802,50 @@ const documentAstMetadataSchema: v.GenericSchema<DocumentAstMetadata> =
     statutes: v.array(v.string()),
   });
 
-export const documentAstSchema: v.GenericSchema<DocumentAst> = v.object({
-  version: v.literal(1),
-  source: documentAstSourceSchema,
-  metadata: documentAstMetadataSchema,
-  blocks: v.array(blockSchema),
-});
+const footnoteOf = (block: Block): ParagraphNote | null =>
+  block.type === "paragraph" && block.note?.type === "footnote"
+    ? block.note
+    : null;
+
+/**
+ * Whether every run of adjacent footnote paragraphs sharing a `noteId`
+ * repeats one label. The parts of one footnote are grouped by `noteId`
+ * alone on read, so two notes written under one id with different labels
+ * would render as one note with the second label lost; a writer must not
+ * persist that.
+ */
+export const footnoteGroupsShareLabels = (
+  blocks: readonly Block[],
+): boolean => {
+  let previous: ParagraphNote | null = null;
+  for (const block of blocks) {
+    const note = footnoteOf(block);
+    if (
+      note !== null &&
+      previous !== null &&
+      note.noteId !== undefined &&
+      note.noteId === previous.noteId &&
+      note.label !== previous.label
+    ) {
+      return false;
+    }
+    previous = note;
+  }
+  return true;
+};
+
+export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
+  v.object({
+    version: v.literal(1),
+    source: documentAstSourceSchema,
+    metadata: documentAstMetadataSchema,
+    blocks: v.array(blockSchema),
+  }),
+  v.check(
+    ({ blocks }) => footnoteGroupsShareLabels(blocks),
+    "Adjacent footnote paragraphs sharing a noteId must repeat one label",
+  ),
+);
 
 const emptyDocumentAstSource = () =>
   ({
@@ -568,7 +870,7 @@ const persistedDocumentAstWireSchema = v.object({
   version: v.literal(1),
   source: v.optional(documentAstSourceSchema),
   metadata: v.optional(documentAstMetadataSchema),
-  blocks: v.array(wireBlockSchema),
+  blocks: v.array(persistedBlockSchema),
 });
 
 /**
@@ -577,7 +879,7 @@ const persistedDocumentAstWireSchema = v.object({
  * keeping the canonical runtime guard sound.
  *
  * A block whose rebuildable `plainText` the sender dropped is refilled
- * here from its `inlines`, so the parsed `DocumentAst` keeps
+ * here from the fields beside it, so the parsed `DocumentAst` keeps
  * `plainText` required and no consumer of a parsed AST can observe the
  * omission.
  */
@@ -588,7 +890,9 @@ export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
       version: 1,
       source: source ?? emptyDocumentAstSource(),
       metadata: metadata ?? emptyDocumentAstMetadata(),
-      blocks: blocks.map(fillBlockPlainText),
+      blocks: blocks.flatMap((block) =>
+        block === null ? [] : [fillBlockPlainText(block)],
+      ),
     })),
   );
 

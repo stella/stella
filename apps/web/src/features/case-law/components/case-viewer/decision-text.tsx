@@ -28,7 +28,11 @@ import {
   locateCitationAnchors,
 } from "@/features/case-law/citation-anchors";
 import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
-import { visibleDecisionBlocks } from "@/features/case-law/components/case-viewer/decision-text.logic";
+import {
+  apparatusBlockIds,
+  footnoteParts,
+  visibleDecisionBlocks,
+} from "@/features/case-law/components/case-viewer/decision-text.logic";
 import type { DecisionProvisionAnchor } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { locateProvisionAnchors } from "@/features/case-law/provision-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -446,33 +450,15 @@ const renderBlocksWithHoldingZone = ({
 }): ReactNode[] => {
   const result: ReactNode[] = [];
 
-  // Reporter apparatus (counsel appearances, syllabus, headnotes) folds
-  // behind a disclosure, the way dedicated reporter apps treat CAP head
-  // matter: not the court's words, one click away rather than gone.
-  const apparatusIds = new Set<string>();
-  for (const block of blocks) {
-    if (block.type === "paragraph" && block.role === "apparatus") {
-      apparatusIds.add(block.id);
-    }
-  }
+  // Publisher head matter (counsel appearances, syllabus, headnotes) folds
+  // behind a disclosure: not the court's words, one click away rather than
+  // gone.
+  const apparatusIds = apparatusBlockIds(blocks);
 
-  // The last paragraph of each footnote carries the return arrow. A block
-  // ends its footnote when the one after it is not a continuation (a
-  // continuation is a footnote paragraph with an empty label).
-  const footnoteLastIds = new Set<string>();
-  for (const [index, block] of blocks.entries()) {
-    if (block.type !== "paragraph" || block.note?.type !== "footnote") {
-      continue;
-    }
-    const next = blocks[index + 1];
-    const nextContinues =
-      next?.type === "paragraph" &&
-      next.note?.type === "footnote" &&
-      next.note.label === "";
-    if (!nextContinues) {
-      footnoteLastIds.add(block.id);
-    }
-  }
+  // A footnote printed over several paragraphs shows its mark on the first
+  // and its return arrow on the last.
+  const { headIds: footnoteHeadIds, backJumpAnchorByLastId } =
+    footnoteParts(blocks);
 
   // Group consecutive blocks by heading ID for continuous lines.
   // Same category but different heading = separate groups.
@@ -520,28 +506,29 @@ const renderBlocksWithHoldingZone = ({
           group.blocks,
           apparatusIds,
           apparatusLabel,
-          (block) =>
-            isHoldingBlock(block) ? (
-              <div className="font-[520]" key={block.id}>
-                <BlockRenderer
-                  activeMatchIndex={activeMatchIndex}
-                  anchorsByPieceId={anchorsByPieceId}
-                  block={block}
-                  rangesByPieceId={rangesByPieceId}
-                  variant="case-law"
-                />
-              </div>
-            ) : (
+          (block) => {
+            // One renderer for every block: a footnote can carry any role,
+            // holding included, so its grouping travels with it either way.
+            const rendered = (
               <BlockRenderer
                 activeMatchIndex={activeMatchIndex}
                 anchorsByPieceId={anchorsByPieceId}
                 block={block}
                 key={block.id}
-                noteBackJump={footnoteLastIds.has(block.id)}
+                noteBackJumpTo={backJumpAnchorByLastId.get(block.id)}
+                noteHead={footnoteHeadIds.has(block.id)}
                 rangesByPieceId={rangesByPieceId}
                 variant="case-law"
               />
-            ),
+            );
+            return isHoldingBlock(block) ? (
+              <div className="font-[520]" key={block.id}>
+                {rendered}
+              </div>
+            ) : (
+              rendered
+            );
+          },
         )}
       </div>,
     );

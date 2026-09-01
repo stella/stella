@@ -295,8 +295,31 @@ describe("persisted corpus JSON validation", () => {
         },
       ],
     });
+    const block = parsed?.blocks.at(0);
+    expect(block?.type).toBe("paragraph");
+    expect(block?.type === "paragraph" ? block.role : null).toBe("unknown");
+  });
+
+  test("serves a stored AST around a block kind this reader cannot render", () => {
+    const parsed = parsePersistedCorpusAst({
+      version: 1,
+      blocks: [
+        { id: "s1", anchorId: "s-1", type: "sidebar", body: "aside" },
+        {
+          id: "p1",
+          anchorId: "p-1",
+          type: "paragraph",
+          inlines: [
+            { type: "small-caps", children: [{ type: "text", text: "NS" }] },
+          ],
+        },
+      ],
+    });
     expect(parsed).not.toBeNull();
-    expect(parsed?.blocks.at(0)?.role).toBe("unknown");
+    // The unrenderable block is gone; the paragraph beside it keeps every
+    // character the unknown inline carried.
+    expect(parsed?.blocks.map((block) => block.id)).toEqual(["p1"]);
+    expect(parsed?.blocks.at(0)?.plainText).toBe("NS");
   });
 });
 

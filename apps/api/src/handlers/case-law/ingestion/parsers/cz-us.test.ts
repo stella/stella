@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { hasBlockInlines } from "@/api/handlers/case-law/document-ast";
 import type { Block } from "@/api/handlers/case-law/document-ast";
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import type { ParseUsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
@@ -134,7 +135,7 @@ describe("parseUsDecisionHtml", () => {
       // (the RTF starts with \b ... \b0)
       const hasBoldBlock = documentAst.blocks.some(
         (b) =>
-          b.type !== "table" &&
+          hasBlockInlines(b) &&
           b.inlines.some(
             (i) =>
               i.type === "bold" ||

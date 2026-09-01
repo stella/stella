@@ -22,7 +22,10 @@
 import { Glob } from "bun";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
-import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
+import {
+  hasBlockInlines,
+  hasInlineChildren,
+} from "@/api/handlers/case-law/document-ast";
 import type { Block, Inline } from "@/api/handlers/case-law/document-ast";
 import {
   ecjDocumentHtml,
@@ -127,9 +130,9 @@ const mergeAdjacentText = (inlines: readonly Inline[]): Inline[] => {
  */
 const withoutLinkTargets = (blocks: readonly Block[]): Block[] =>
   blocks.map((block) =>
-    block.type === "table"
-      ? block
-      : { ...block, inlines: mergeAdjacentText(flattenLinks(block.inlines)) },
+    hasBlockInlines(block)
+      ? { ...block, inlines: mergeAdjacentText(flattenLinks(block.inlines)) }
+      : block,
   );
 
 const countLinks = (inlines: readonly Inline[]): number => {
@@ -151,7 +154,7 @@ const countLinks = (inlines: readonly Inline[]): number => {
 const countBlockLinks = (blocks: readonly Block[]): number => {
   let total = 0;
   for (const block of blocks) {
-    if (block.type !== "table") {
+    if (hasBlockInlines(block)) {
       total += countLinks(block.inlines);
     }
   }
