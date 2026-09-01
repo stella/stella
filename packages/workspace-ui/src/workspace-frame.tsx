@@ -12,8 +12,11 @@ import {
 } from "@stll/ui/application-rail";
 import { InspectorDock, TOOLBAR_ROW_HEIGHT } from "@stll/ui/inspector";
 import { Sheet, SheetPopup, SheetTitle } from "@stll/ui/sheet";
+import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail, WorkspaceShell } from "@stll/ui/workspace-shell";
+
+import { resolveWorkspaceInspectorPresentation } from "./workspace-frame.logic";
 
 export type WorkspaceFrameNavigationItem = {
   id: string;
@@ -91,6 +94,8 @@ export type WorkspaceFrameTopBar = {
  * desktop inspector footprint.
  */
 export const WorkspaceFrame = (props: WorkspaceFrameProps) => {
+  const isCompact = useIsMobile();
+
   if (props.composition === "host-responsive") {
     return (
       <WorkspaceShell
@@ -104,6 +109,10 @@ export const WorkspaceFrame = (props: WorkspaceFrameProps) => {
   }
 
   const { children, endRail, inspector, navigation, topBar } = props;
+  const inspectorPresentation = resolveWorkspaceInspectorPresentation({
+    hasMobilePresentation: inspector?.mobile !== undefined,
+    isCompact,
+  });
   const desktopNavigation = (
     <ApplicationRail aria-label={navigation.label}>
       <ApplicationRailHeader>{navigation.header}</ApplicationRailHeader>
@@ -129,20 +138,21 @@ export const WorkspaceFrame = (props: WorkspaceFrameProps) => {
     </ApplicationRail>
   );
 
-  const endDock = inspector ? (
-    <InspectorDock
-      rail={<WorkspaceEndRail {...endRail} />}
-      resizeHandleLabel={inspector.resizeHandleLabel}
-      resizeHandleProps={inspector.resizeHandleProps}
-      showPaneContent={inspector.showPaneContent}
-      width={inspector.width}
-      onResetWidth={inspector.onResetWidth}
-    >
-      {inspector.pane}
-    </InspectorDock>
-  ) : (
-    <WorkspaceEndRail {...endRail} />
-  );
+  const endDock =
+    inspector && inspectorPresentation === "desktop" ? (
+      <InspectorDock
+        rail={<WorkspaceEndRail {...endRail} />}
+        resizeHandleLabel={inspector.resizeHandleLabel}
+        resizeHandleProps={inspector.resizeHandleProps}
+        showPaneContent={inspector.showPaneContent}
+        width={inspector.width}
+        onResetWidth={inspector.onResetWidth}
+      >
+        {inspector.pane}
+      </InspectorDock>
+    ) : (
+      <WorkspaceEndRail {...endRail} />
+    );
 
   const frame = (
     <WorkspaceShell
@@ -172,7 +182,7 @@ export const WorkspaceFrame = (props: WorkspaceFrameProps) => {
     </WorkspaceShell>
   );
 
-  if (inspector?.mobile === undefined) {
+  if (inspector?.mobile === undefined || inspectorPresentation === "desktop") {
     return frame;
   }
 
