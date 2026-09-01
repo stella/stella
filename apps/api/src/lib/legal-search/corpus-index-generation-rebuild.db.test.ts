@@ -57,6 +57,16 @@ const runInTransaction = async <Value>(
     async (tx) => await operation(asTestRaw<Transaction>(tx)),
   );
 
+const errorMessageChain = (error: unknown): string => {
+  const messages: string[] = [];
+  let current = error;
+  while (current instanceof Error) {
+    messages.push(current.message);
+    current = current.cause;
+  }
+  return messages.join(" | ");
+};
+
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
@@ -130,11 +140,9 @@ test("replaces only an empty non-serving generation", async () => {
       () => null,
       (error: unknown) => error,
     );
-  expect(unfencedDelete).toMatchObject({
-    message: expect.stringContaining(
-      "retiring corpus index projection history requires the rebuild fence",
-    ),
-  });
+  expect(errorMessageChain(unfencedDelete)).toContain(
+    "retiring corpus index projection history requires the rebuild fence",
+  );
   expect(
     await runInTransaction(
       async (tx) =>
