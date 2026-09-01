@@ -16,6 +16,7 @@
  * (`deriveParameterImpact`).
  */
 
+import type { ModelMessage } from "@tanstack/ai";
 import { Result } from "better-result";
 import * as v from "valibot";
 
@@ -36,6 +37,11 @@ import type {
   ReferenceImpact,
   ReviewPerspective,
 } from "@/api/lib/document-review/contract";
+import {
+  buildRepairMessage,
+  findGradingViolations,
+  mergeRepairedFindings,
+} from "@/api/lib/document-review/reference-grade-repair";
 import type { PinnedReferencePassage } from "@/api/lib/document-review/reference-passages";
 import {
   deriveParameterImpact,
@@ -53,6 +59,8 @@ import {
   reviewDocumentsScopeKey,
 } from "@/api/lib/document-review/review-document-messages";
 import type { DocxFolioCitation } from "@/api/lib/document-review/review-extract";
+import { languageDisplayName } from "@/api/lib/document-review/target-language";
+import type { ReviewTargetLanguage } from "@/api/lib/document-review/target-language";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { buildGroundedReviewFix } from "@/api/lib/grounded-review-fix";
 import type { GroundedReviewFix } from "@/api/lib/grounded-review-fix";
@@ -341,12 +349,14 @@ const referenceFix = ({
   verdict,
   raw,
   citations,
+  targetLanguage,
 }: {
   delta: ReviewDelta;
   termKind: PositionTermKind;
   verdict: VerdictTier;
   raw: RawFinding;
   citations: readonly DocxFolioCitation[];
+  targetLanguage: ReviewTargetLanguage;
 }): GroundedReviewFix | null => {
   if (!VERDICT_IS_ACTIONABLE[verdict]) {
     return null;
@@ -359,6 +369,7 @@ const referenceFix = ({
     proposedText: raw.proposedText,
     supportingEvidenceVerified: true,
     targetAnchors: citations,
+    targetLanguage,
   });
 };
 
@@ -476,6 +487,7 @@ type NormalizeArgs = {
   position: ReferenceStandardPosition;
   targetBlocks: BlockLookup;
   perspective: ReviewPerspective;
+  targetLanguage: ReviewTargetLanguage;
 };
 
 export const normalizeReferenceGrading = ({
@@ -483,6 +495,7 @@ export const normalizeReferenceGrading = ({
   position,
   targetBlocks,
   perspective,
+  targetLanguage,
 }: NormalizeArgs): ReferenceGrading => {
   const citations = verifiedTargetCitations(raw.targetCitations, targetBlocks);
   const grounded = isGrounded(raw.assessment, citations.length > 0);
@@ -521,6 +534,7 @@ export const normalizeReferenceGrading = ({
       verdict,
       raw,
       citations,
+      targetLanguage,
     }),
   };
 };
@@ -545,7 +559,7 @@ direction applies to a parameter only: whether a HIGHER or a LOWER value of that
 
 impact applies to the other kinds: unfavourable when the target leaves the drafter's side worse off than the standard does, favourable when better off, neutral when it makes no difference, unknown when no side was named.
 
-proposedText is wording taken from or grounded in the standard's passages, and only when they directly support a concrete edit; otherwise null. It is ignored for a parameter, where the term itself is replaced, and it must be null when the clauses are not comparable.`;
+proposedText is wording taken from or grounded in the standard's passages, and only when they directly support a concrete edit; otherwise null. It is written in the language of the target document: a standard in another language is carried over in meaning, never quoted. It is ignored for a parameter, where the term itself is replaced, and it must be null when the clauses are not comparable.`;
 
 const NEUTRAL_PERSPECTIVE_LINE = "No side is named; report impact as unknown.";
 
@@ -560,12 +574,22 @@ const perspectiveLine = (perspective: ReviewPerspective): string => {
   }
 };
 
+const targetLanguageLine = (targetLanguage: ReviewTargetLanguage): string =>
+  targetLanguage === null
+    ? "Write proposedText in the language the target document is written in."
+    : `The target document is written in ${languageDisplayName(targetLanguage)}; write proposedText in ${languageDisplayName(targetLanguage)}.`;
+
 /** The positions region: what changes between calls, so it is placed after the
  *  cached target document rather than before it. */
-const buildPositionsPart = (
-  positions: readonly ReferenceStandardPosition[],
-  perspective: ReviewPerspective,
-): string => {
+const buildPositionsPart = ({
+  positions,
+  perspective,
+  targetLanguage,
+}: {
+  positions: readonly ReferenceStandardPosition[];
+  perspective: ReviewPerspective;
+  targetLanguage: ReviewTargetLanguage;
+}): string => {
   const guide = positions
     .map((position) => {
       const passages = position.passages
@@ -581,12 +605,13 @@ const buildPositionsPart = (
       return `- positionId=${position.sourceId}\n  termKind=${position.termKind}\n  issue=${position.issue}${guidance}\n  standard passages:\n${passages}`;
     })
     .join("\n");
-  return `${perspectiveLine(perspective)}\n\nPositions:\n${guide}`;
+  return `${perspectiveLine(perspective)}\n${targetLanguageLine(targetLanguage)}\n\nPositions:\n${guide}`;
 };
 
 export type GradeReferencePositionsArgs = {
   positions: readonly ReferenceStandardPosition[];
   target: PreparedDocxFile;
+  targetLanguage: ReviewTargetLanguage;
   perspective: ReviewPerspective;
   targetEntityVersionId: SafeId<"entityVersion">;
   referenceEntityVersionIds: readonly SafeId<"entityVersion">[];
@@ -607,6 +632,7 @@ export type GradeReferencePositionsArgs = {
 export const gradeReferencePositions = async ({
   positions,
   target,
+  targetLanguage,
   perspective,
   targetEntityVersionId,
   referenceEntityVersionIds,
@@ -642,44 +668,71 @@ export const gradeReferencePositions = async ({
     usageMetering,
   });
 
+  const request: ModelMessage = {
+    role: "user",
+    content: [
+      ...buildReviewDocumentParts({ target, references: [], caching }),
+      {
+        type: "text",
+        content: buildPositionsPart({ positions, perspective, targetLanguage }),
+      },
+    ],
+  };
+  const generate = async (messages: ModelMessage[]) =>
+    await generateObjectForRole({
+      role: REFERENCE_GRADE_ROLE,
+      orgAIConfig,
+      organizationId,
+      analytics: aiAnalytics,
+      caching,
+      serviceTier,
+      tenantWorkspaceIds: [workspaceId],
+      system: SYSTEM_PROMPT,
+      messages,
+      abortSignal: AbortSignal.any([
+        abortSignal,
+        AbortSignal.timeout(REFERENCE_GRADE_TIMEOUT_MS),
+      ]),
+      outputSchema: referenceGradeSchema,
+    });
+
   return await Result.tryPromise({
     try: async () => {
-      const output = await generateObjectForRole({
-        role: REFERENCE_GRADE_ROLE,
-        orgAIConfig,
-        organizationId,
-        analytics: aiAnalytics,
-        caching,
-        serviceTier,
-        tenantWorkspaceIds: [workspaceId],
-        system: SYSTEM_PROMPT,
-        messages: [
-          {
-            role: "user",
-            content: [
-              ...buildReviewDocumentParts({ target, references: [], caching }),
-              {
-                type: "text",
-                content: buildPositionsPart(positions, perspective),
-              },
-            ],
-          },
-        ],
-        abortSignal: AbortSignal.any([
-          abortSignal,
-          AbortSignal.timeout(REFERENCE_GRADE_TIMEOUT_MS),
-        ]),
-        outputSchema: referenceGradeSchema,
-      });
-
       const targetBlocks = new Map(
         target.blocks.map((block) => [block.id, block.text]),
       );
+      const output = await generate([request]);
+
+      // One repair round for the answers the documents contradict: the batch
+      // is shown back with those answers named, and only they are re-asked.
+      // The documents region is byte-identical, so the second call reads it
+      // from the prompt cache.
+      const violations = findGradingViolations({
+        positions,
+        findings: output.findings,
+        targetBlocks,
+        targetLanguage,
+      });
+      const findings =
+        violations.length === 0
+          ? output.findings
+          : mergeRepairedFindings({
+              findings: output.findings,
+              repaired: (
+                await generate([
+                  request,
+                  { role: "assistant", content: JSON.stringify(output) },
+                  { role: "user", content: buildRepairMessage(violations) },
+                ])
+              ).findings,
+              violations,
+            });
+
       const positionById = new Map(
         positions.map((position) => [position.sourceId, position]),
       );
       const graded = new Map<string, ReferenceGrading>();
-      for (const raw of output.findings) {
+      for (const raw of findings) {
         const position = positionById.get(raw.positionId);
         if (position === undefined || graded.has(raw.positionId)) {
           continue;
@@ -691,6 +744,7 @@ export const gradeReferencePositions = async ({
             position,
             targetBlocks,
             perspective,
+            targetLanguage,
           }),
         );
       }

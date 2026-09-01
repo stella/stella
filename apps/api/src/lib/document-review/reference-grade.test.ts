@@ -225,6 +225,7 @@ describe("normalizeReferenceGrading", () => {
       }),
       position: position("parameter"),
       targetBlocks,
+      targetLanguage: "EN-GB",
       perspective: buyer,
     });
 
@@ -284,6 +285,7 @@ describe("normalizeReferenceGrading", () => {
         raw: raw({ delta: answerForEveryKind }),
         position: position(termKind),
         targetBlocks,
+        targetLanguage: "EN-GB",
         perspective: buyer,
       });
 
@@ -316,6 +318,7 @@ describe("normalizeReferenceGrading", () => {
       }),
       position: position("parameter"),
       targetBlocks,
+      targetLanguage: "EN-GB",
       perspective: buyer,
     });
 
@@ -336,6 +339,7 @@ describe("normalizeReferenceGrading", () => {
         }),
         position: position(termKind),
         targetBlocks,
+        targetLanguage: "EN-GB",
         perspective: buyer,
       });
 
@@ -377,6 +381,7 @@ describe("normalizeReferenceGrading", () => {
       }),
       position: position("parameter"),
       targetBlocks,
+      targetLanguage: "EN-GB",
       perspective: buyer,
     });
 
@@ -394,6 +399,7 @@ describe("normalizeReferenceGrading", () => {
         }),
         position: position("language"),
         targetBlocks,
+        targetLanguage: "EN-GB",
         perspective: buyer,
       });
 
@@ -410,6 +416,7 @@ describe("normalizeReferenceGrading", () => {
       }),
       position: position("language"),
       targetBlocks,
+      targetLanguage: "EN-GB",
       perspective: buyer,
     });
 
@@ -422,6 +429,7 @@ describe("normalizeReferenceGrading", () => {
       raw: raw({ targetCitations: [{ blockId: "unknown-block" }] }),
       position: position(),
       targetBlocks,
+      targetLanguage: "EN-GB",
       perspective: buyer,
     });
 
@@ -437,6 +445,7 @@ describe("normalizeReferenceGrading", () => {
       raw: raw({ assessment: "missing-from-target", targetCitations: [] }),
       position: position(),
       targetBlocks,
+      targetLanguage: "EN-GB",
       perspective: buyer,
     });
 
@@ -449,6 +458,7 @@ describe("normalizeReferenceGrading", () => {
       raw: raw({ impact: "unfavourable" }),
       position: position("language"),
       targetBlocks,
+      targetLanguage: "EN-GB",
       perspective: { type: "neutral" },
     });
 
