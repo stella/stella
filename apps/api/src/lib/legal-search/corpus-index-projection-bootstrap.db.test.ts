@@ -281,3 +281,59 @@ test("bootstrap locks source policy before canonical rows for every family", asy
   assertSourceBeforeDocument("case_law_sources", "case_law_decisions");
   assertSourceBeforeDocument("legislation_sources", "legislation_documents");
 });
+
+test("cursor pages seek both canonical and projection primary keys", async () => {
+  const statements: string[] = [];
+  const loggedDb = drizzle({
+    client,
+    logger: {
+      logQuery(query) {
+        statements.push(query);
+      },
+    },
+  });
+  await loggedDb.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "case_law",
+          generation: "case_law_v5",
+          limit: 1,
+          afterEntityId: CASE_LAW_DECISION_ID,
+        },
+      ),
+  );
+  await loggedDb.transaction(
+    async (tx) =>
+      await bootstrapCorpusProjectionDesiredStateBatchTx(
+        asTestRaw<Transaction>(tx),
+        {
+          family: "legislation",
+          generation: "legislation_v2",
+          limit: 1,
+          afterEntityId: LEGISLATION_DOCUMENT_ID,
+        },
+      ),
+  );
+
+  const assertCursorBound = (
+    canonicalTable: string,
+    canonicalId: string,
+  ): void => {
+    const queries = statements.filter(
+      (query) =>
+        query.includes(`from "${canonicalTable}"`) &&
+        query.includes('left join "corpus_index_projection_states"'),
+    );
+    expect(queries).toHaveLength(2);
+    for (const query of queries) {
+      expect(query).toContain(`"${canonicalTable}"."${canonicalId}" > $`);
+      expect(query).toContain(
+        '"corpus_index_projection_states"."entity_id" > $',
+      );
+    }
+  };
+  assertCursorBound("case_law_decisions", "id");
+  assertCursorBound("legislation_documents", "id");
+});
