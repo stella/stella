@@ -171,7 +171,9 @@ const installProjectionMigrationDdl = async (): Promise<void> => {
     ...new Bun.Glob("*corpus*projection*/migration.sql").scanSync(
       Bun.fileURLToPath(DRIZZLE_DIR),
     ),
-  ].sort();
+  ]
+    .filter((migration) => !migration.includes("projection_revision"))
+    .sort();
   const migrations = await Promise.all(
     projectionMigrations.map(
       async (migration) =>

@@ -6,6 +6,7 @@ import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
+  corpusIndexProjectionRevisions,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -38,19 +39,16 @@ const LEGISLATION_TARGET = {
   family: "legislation",
   generation: "legislation_v2",
 } as const;
-const MIGRATION_URL = new URL(
-  "../../../drizzle/20260826004100_corpus_projection_revision_fence/migration.sql",
-  import.meta.url,
-);
-
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 
 const revision = async (): Promise<number> => {
   const rows = await db
-    .select({ value: corpusIndexGenerations.projectionRevision })
-    .from(corpusIndexGenerations)
-    .where(eq(corpusIndexGenerations.generation, TARGET.generation));
+    .select({ value: corpusIndexProjectionRevisions.revision })
+    .from(corpusIndexProjectionRevisions)
+    .where(eq(corpusIndexProjectionRevisions.generation, TARGET.generation))
+    .orderBy(sql`${corpusIndexProjectionRevisions.revision} DESC`)
+    .limit(1);
   return rows.at(0)?.value ?? 0;
 };
 
@@ -58,19 +56,6 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client });
-    const migration = await Bun.file(MIGRATION_URL).text();
-    for (const statement of migration.split("--> statement-breakpoint")) {
-      const ddl = statement.trim();
-      if (
-        !/(?:^|\n)\s*CREATE FUNCTION\b/u.test(ddl) &&
-        !/(?:^|\n)\s*REVOKE ALL ON FUNCTION\b/u.test(ddl) &&
-        !/(?:^|\n)\s*CREATE TRIGGER\b/u.test(ddl)
-      ) {
-        continue;
-      }
-      // oxlint-disable-next-line no-await-in-loop -- each trigger depends on its preceding production function and privilege statement
-      await db.execute(sql.raw(ddl));
-    }
     await db.insert(corpusIndexGenerations).values({
       ...TARGET,
       cluster: "q09",
@@ -85,8 +70,9 @@ afterAll(async () => {
   await client.close();
 });
 
-test("projection mutations advance one durable revision per statement", async () => {
-  expect(await revision()).toBe(1);
+test("projection mutations advance one durable revision per transaction", async () => {
+  const initialRevision = await revision();
+  expect(initialRevision).toBeGreaterThan(0);
 
   await db.insert(corpusIndexProjectionStates).values([
     {
@@ -102,7 +88,8 @@ test("projection mutations advance one durable revision per statement", async ()
       desiredEpoch: 1n,
     },
   ]);
-  expect(await revision()).toBe(2);
+  const stateRevision = await revision();
+  expect(stateRevision).toBeGreaterThan(initialRevision);
 
   await db.insert(corpusIndexProjectionIntents).values({
     id: INTENT_ID,
@@ -114,18 +101,21 @@ test("projection mutations advance one durable revision per statement", async ()
     status: "cancelled",
     cancelledAt: new Date("2026-08-26T00:00:00.000Z"),
   });
-  expect(await revision()).toBe(3);
+  const intentRevision = await revision();
+  expect(intentRevision).toBeGreaterThan(stateRevision);
 
   await db
     .update(corpusIndexProjectionStates)
     .set({ updatedAt: new Date("2026-08-26T00:00:01.000Z") })
     .where(eq(corpusIndexProjectionStates.family, TARGET.family));
-  expect(await revision()).toBe(4);
+  const updateRevision = await revision();
+  expect(updateRevision).toBeGreaterThan(intentRevision);
 
   await db
     .delete(corpusIndexProjectionIntents)
     .where(eq(corpusIndexProjectionIntents.id, INTENT_ID));
-  expect(await revision()).toBe(5);
+  const deleteRevision = await revision();
+  expect(deleteRevision).toBeGreaterThan(updateRevision);
 
   await db
     .update(corpusIndexProjectionStates)
@@ -136,7 +126,28 @@ test("projection mutations advance one durable revision per statement", async ()
         "0198e331-e578-7000-8000-000000000599",
       ),
     );
-  expect(await revision()).toBe(5);
+  expect(await revision()).toBe(deleteRevision);
+});
+
+test("multiple statements in one transaction share one revision", async () => {
+  const before = await revision();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(corpusIndexProjectionStates)
+      .set({ updatedAt: new Date("2026-08-26T00:00:03.000Z") })
+      .where(eq(corpusIndexProjectionStates.entityId, ENTITY_IDS[0]));
+    await tx
+      .update(corpusIndexProjectionStates)
+      .set({ updatedAt: new Date("2026-08-26T00:00:04.000Z") })
+      .where(eq(corpusIndexProjectionStates.entityId, ENTITY_IDS[1]));
+  });
+  const after = await revision();
+  expect(after).toBeGreaterThan(before);
+  const rows = await db
+    .select({ revision: corpusIndexProjectionRevisions.revision })
+    .from(corpusIndexProjectionRevisions)
+    .where(eq(corpusIndexProjectionRevisions.generation, TARGET.generation));
+  expect(rows.filter(({ revision: value }) => value === after)).toHaveLength(1);
 });
 
 test("the revision shares the projection mutation transaction", async () => {
@@ -147,7 +158,7 @@ test("the revision shares the projection mutation transaction", async () => {
     .transaction(async (tx) => {
       await tx
         .update(corpusIndexProjectionStates)
-        .set({ updatedAt: new Date("2026-08-26T00:00:03.000Z") })
+        .set({ updatedAt: new Date("2026-08-26T00:00:05.000Z") })
         .where(eq(corpusIndexProjectionStates.entityId, ENTITY_IDS[0]));
       throw new Error("roll back revision fixture");
     })
@@ -159,6 +170,18 @@ test("the revision shares the projection mutation transaction", async () => {
   expect(rejection).toBeInstanceOf(Error);
   expect(rejection).toMatchObject({ message: "roll back revision fixture" });
   expect(await revision()).toBe(beforeRollback);
+});
+
+test("the ingestion role records revisions through the trigger boundary", async () => {
+  const before = await revision();
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+    await tx
+      .update(corpusIndexProjectionStates)
+      .set({ updatedAt: new Date("2026-08-26T00:00:06.000Z") })
+      .where(eq(corpusIndexProjectionStates.entityId, ENTITY_IDS[0]));
+  });
+  expect(await revision()).toBeGreaterThan(before);
 });
 
 test("the typed read and proof boundaries return the current revision", async () => {
@@ -173,9 +196,15 @@ test("the typed read and proof boundaries return the current revision", async ()
   expect(read).toBe(await revision());
   expect(locked).toBe(read);
   expect(promotion).toBe(read);
+  expect(
+    await db
+      .select({ revision: corpusIndexProjectionRevisions.revision })
+      .from(corpusIndexProjectionRevisions)
+      .where(eq(corpusIndexProjectionRevisions.generation, TARGET.generation)),
+  ).toHaveLength(1);
 });
 
-test("mutation fences lock registered generations in a stable order", async () => {
+test("mutation fences validate registered targets in any caller order", async () => {
   await db.insert(corpusIndexGenerations).values({
     ...LEGISLATION_TARGET,
     cluster: "q09",
@@ -190,7 +219,7 @@ test("mutation fences lock registered generations in a stable order", async () =
     fingerprint: "d".repeat(64),
     indexId: "case_law_v5_cs_sk",
     status: "cancelled",
-    cancelledAt: new Date("2026-08-26T00:00:04.000Z"),
+    cancelledAt: new Date("2026-08-26T00:00:07.000Z"),
   });
 
   await db.transaction(async (tx) => {
