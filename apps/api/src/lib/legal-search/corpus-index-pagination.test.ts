@@ -256,8 +256,8 @@ describe("ranker-folded candidates stay folded across pages", () => {
     parsedCursor: { score: number; id: string } | null,
   ) =>
     await readCorpusIndexSearchPage({
-      cluster: "q09",
-      indexId: "case_law_v5_eu",
+      cluster: "q08",
+      indexId: "case_law_v4_eu",
       query: "text:google",
       limit,
       parsedCursor,

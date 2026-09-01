@@ -101,11 +101,11 @@ const DecisionLanguageSelectFor = ({
   );
 };
 
-/** The language's name in the UI locale, or its tag when Intl has none. */
+/** The language's name in the UI locale (Intl falls back to the tag itself). */
 export const languageLabel = (
   format: ReturnType<typeof useFormatter>,
   language: string,
-): string => {
-  const tag = normalizeCaseLawLanguageSegment(language) ?? language;
-  return format.displayName(tag, { type: "language" }) ?? tag.toUpperCase();
-};
+): string =>
+  format.displayName(normalizeCaseLawLanguageSegment(language) ?? language, {
+    type: "language",
+  });

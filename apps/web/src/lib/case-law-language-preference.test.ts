@@ -89,6 +89,10 @@ describe("picking the language version to open", () => {
             uiLocale,
           });
 
+          expect(picked).not.toBeNull();
+          if (picked === null) {
+            return;
+          }
           expect(alternates).toContainEqual(picked);
           const exact = alternates.find(
             (alternate) => alternate.language === uiLocale,
