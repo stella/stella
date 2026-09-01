@@ -1505,14 +1505,17 @@ jobs:
         run: bun --filter @stll/landing build
 
   # Browser checks use isolated parallel runners: broad production shards,
-  # a small Vite dependency canary, and the built landing-page suite.
+  # a small Vite dependency canary, and the built landing-page suite. The
+  # production shards start only after their production build is published.
   # Marketing screenshots remain in the nightly test workflow.
   e2e-production-shard:
-    needs: ci-plan
+    needs: [ci-plan, web-build]
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
-       || github.event_name == 'workflow_dispatch')
+      always()
+      && (needs.ci-plan.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_core_required == 'true'
+      && needs.web-build.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -1557,44 +1560,6 @@ jobs:
       - name: Install Playwright browsers
         if: steps.e2e-stack.outputs.status == 'ready'
         uses: ./.github/actions/setup-playwright
-
-      - name: Wait for production web build
-        if: steps.e2e-stack.outputs.status == 'ready'
-        env:
-          ARTIFACT_NAME: e2e-web-build
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # Build/upload can legitimately finish just after the previous
-          # three-minute window on busy runners. Keep polling bounded, but let
-          # it use six minutes within the job's existing 25-minute timeout.
-          # Every fifth poll also checks the web-build job itself: once that
-          # job has ended without publishing, the artifact can never appear,
-          # so waiting out the full window would only delay the failure.
-          for attempt in {1..180}; do
-            count=$(gh api --method GET \
-              "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
-              -f name="$ARTIFACT_NAME" \
-              --jq '[.artifacts[] | select(.expired == false)] | length')
-            if [[ "$count" -gt 0 ]]; then
-              echo "Production web build ready after $((attempt * 2))s"
-              exit 0
-            fi
-            if (( attempt % 5 == 0 )); then
-              conclusion=$(gh api --paginate \
-                "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" \
-                --jq '.jobs[] | select(.name == "web-build") | .conclusion // "in_progress"' \
-                | head -n 1)
-              case "$conclusion" in
-                failure|cancelled|skipped|timed_out)
-                  echo "::error::web-build ended with status '$conclusion' without publishing the $ARTIFACT_NAME artifact"
-                  exit 1
-                  ;;
-              esac
-            fi
-            sleep 2
-          done
-          echo "::error::Production web build artifact was not published"
-          exit 1
 
       - name: Download production web build
         if: steps.e2e-stack.outputs.status == 'ready'
