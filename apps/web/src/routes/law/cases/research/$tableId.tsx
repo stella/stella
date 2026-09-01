@@ -3,6 +3,7 @@ import { useState } from "react";
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
@@ -10,7 +11,10 @@ import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH } from "@stll/api-contract";
-import type { CaseLawResearchDisposition } from "@stll/api-contract";
+import type {
+  CaseLawResearchDisposition,
+  CaseLawResearchYesNoValue,
+} from "@stll/api-contract";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -33,6 +37,8 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
+import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
+import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import {
   DECISION_COLUMN_IDS,
@@ -46,15 +52,34 @@ import type {
 } from "@/features/case-law/decision-columns";
 import { decisionsInfiniteOptions } from "@/features/case-law/queries/decisions";
 import {
+  createResearchColumn,
+  deleteResearchColumn,
   deleteResearchTable,
   renameResearchTable,
+  researchAnswersOptions,
   researchTableKeys,
   researchTableOptions,
+  runResearchAnswers,
   savedQueryToDecisionFilters,
   setResearchTableDecision,
+  updateResearchColumn,
 } from "@/features/case-law/research/queries";
-import type { ResearchTableDetail } from "@/features/case-law/research/queries";
-import { ResearchTableView } from "@/features/case-law/research/research-table-view";
+import type {
+  ResearchColumn,
+  ResearchTableDetail,
+  RunResearchAnswersScope,
+} from "@/features/case-law/research/queries";
+import { ResearchQuestionDialog } from "@/features/case-law/research/research-question-dialog";
+import type { ResearchQuestionDraft } from "@/features/case-law/research/research-question-dialog";
+import {
+  answerGroupBy,
+  answerKey,
+  ResearchTableView,
+} from "@/features/case-law/research/research-table-view";
+import type {
+  ResearchColumnAction,
+  ResearchGroupBy,
+} from "@/features/case-law/research/research-table-view";
 import { mergeResearchRows } from "@/features/case-law/research/row-model";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -111,6 +136,9 @@ export const Route = createFileRoute("/law/cases/research/$tableId")({
   pendingComponent: ResearchTablePending,
 });
 
+/** Decisions one run request queues; the server bounds it the same way. */
+const RUN_BATCH_SIZE = 100;
+
 /** Every column but the language: the case-number cell already names it. */
 const defaultVisibleColumns = (): ReadonlySet<DecisionColumnId> =>
   new Set(DECISION_COLUMN_IDS.filter((id) => id !== "language"));
@@ -126,6 +154,19 @@ const GROUP_BY_LABEL_KEYS = {
 
 const isDecisionGroupBy = (value: string): value is DecisionGroupBy =>
   DECISION_GROUP_BY_OPTIONS.some((option) => option === value);
+
+const isResearchGroupBy = (
+  value: string,
+  columns: readonly ResearchColumn[],
+): value is ResearchGroupBy =>
+  isDecisionGroupBy(value) ||
+  columns.some((column) => answerGroupBy(column.id) === value);
+
+/** Which question column a dialog edits, or that it adds one. */
+type QuestionDialogState =
+  | { mode: "closed" }
+  | { mode: "add" }
+  | { mode: "edit"; column: ResearchColumn };
 
 const isDecisionColumnId = (value: string): value is DecisionColumnId =>
   DECISION_COLUMN_IDS.some((id) => id === value);
@@ -169,13 +210,38 @@ function ResearchTablePage() {
       savedQueryToDecisionFilters(detail.table.savedQuery),
     ),
   );
+  // Cells are fetched separately from the table: they change while a run
+  // works, and the poll must not refetch the rows with them.
+  const answersQuery = useQuery(
+    researchAnswersOptions({ activeOrganizationId, tableId }),
+  );
+  const inspector = useInspectorView();
 
-  const [groupBy, setGroupBy] = useState<DecisionGroupBy>("none");
+  const [groupBy, setGroupBy] = useState<ResearchGroupBy>("none");
   const [visibleColumns, setVisibleColumns] = useState<
     ReadonlySet<DecisionColumnId>
   >(defaultVisibleColumns);
   const [showExcluded, setShowExcluded] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [questionDialog, setQuestionDialog] = useState<QuestionDialogState>({
+    mode: "closed",
+  });
+  const [yesNoFilters, setYesNoFilters] = useState<
+    ReadonlyMap<string, CaseLawResearchYesNoValue>
+  >(new Map());
+  const [columnToDelete, setColumnToDelete] = useState<ResearchColumn | null>(
+    null,
+  );
+
+  // A grouping or filter on a column that no longer exists falls back
+  // silently; the column set is server state and can change under us.
+  const answerColumns = detail.columns;
+  const effectiveGroupBy: ResearchGroupBy = isResearchGroupBy(
+    groupBy,
+    answerColumns,
+  )
+    ? groupBy
+    : "none";
 
   // Row edits bump the table's `updatedAt`, so the list's order and "last
   // edited" move too.
@@ -225,17 +291,134 @@ function ResearchTablePage() {
     onError: reportError,
   });
 
+  const invalidateAnswers = async () =>
+    await queryClient.invalidateQueries({
+      queryKey: researchTableKeys.answers({ activeOrganizationId, tableId }),
+    });
+
+  const saveQuestion = useMutation({
+    mutationFn: async ({
+      column,
+      draft,
+    }: {
+      column: ResearchColumn | null;
+      draft: ResearchQuestionDraft;
+    }) =>
+      column === null
+        ? await createResearchColumn({ tableId, ...draft })
+        : await updateResearchColumn({
+            tableId,
+            columnId: column.id,
+            ...draft,
+          }),
+    onSuccess: async () => {
+      setQuestionDialog({ mode: "closed" });
+      await Promise.all([invalidateTable(), invalidateAnswers()]);
+    },
+    onError: reportError,
+  });
+
+  const removeColumn = useMutation({
+    mutationFn: async (column: ResearchColumn) =>
+      await deleteResearchColumn({ tableId, columnId: column.id }),
+    onSuccess: async () => {
+      setColumnToDelete(null);
+      await Promise.all([invalidateTable(), invalidateAnswers()]);
+    },
+    onError: reportError,
+  });
+
   const queryRows: Decision[] = decisionsQuery.data
     ? decisionsQuery.data.pages.flatMap((page) => page.decisions)
     : [];
-  const rows = mergeResearchRows({
+  const mergedRows = mergeResearchRows({
     dispositions: detail.decisions,
     pinnedDecisions: detail.pinnedDecisions,
     queryRows,
     showExcluded,
   });
+  const answersByKey = new Map(
+    (answersQuery.data ?? []).map((answer) => [
+      answerKey(answer.columnId, answer.decisionId),
+      answer,
+    ]),
+  );
+  // A yes/no filter keeps the rows whose cell holds that value; cells that
+  // were never answered are not "no", so they drop out too.
+  const rows = mergedRows.filter((row) =>
+    [...yesNoFilters].every(([columnId, wanted]) => {
+      const answer = answersByKey.get(answerKey(columnId, row.decision.id));
+      return (
+        answer?.state === "answered" &&
+        answer.answer?.type === "yes_no" &&
+        answer.answer.value === wanted
+      );
+    }),
+  );
   const excludedCount = detail.decisions.filter(
     (entry) => entry.disposition === "excluded",
+  ).length;
+
+  const run = useMutation({
+    mutationFn: async (scope: RunResearchAnswersScope) =>
+      await runResearchAnswers({
+        ...scope,
+        tableId,
+        decisionIds: mergedRows
+          .filter((row) => row.disposition !== "excluded")
+          .map((row) => row.decision.id)
+          .slice(0, RUN_BATCH_SIZE),
+      }),
+    onSuccess: async ({ queued }) => {
+      if (queued === 0) {
+        stellaToast.add({
+          title: t("caseLaw.research.nothingToRun"),
+          type: "info",
+        });
+      }
+      await invalidateAnswers();
+    },
+    onError: reportError,
+  });
+
+  const onColumnAction = (
+    column: ResearchColumn,
+    action: ResearchColumnAction,
+  ) => {
+    switch (action) {
+      case "run":
+        run.mutate({ scope: "column", columnId: column.id });
+        return;
+      case "edit":
+        setQuestionDialog({ mode: "edit", column });
+        return;
+      case "delete":
+        setColumnToDelete(column);
+        return;
+      default: {
+        const exhaustive: never = action;
+        return exhaustive;
+      }
+    }
+  };
+
+  const showSource = (decision: Decision, anchorId: string) => {
+    inspector.open(
+      createCaseDecisionViewTab({
+        anchorId,
+        caseNumber: decision.caseNumber,
+        country: decision.country,
+        court: decision.court,
+        decisionId: decision.id,
+        language: decision.language,
+        languageAlternates: decision.languageAlternates,
+        slug: decision.slug,
+      }),
+    );
+  };
+
+  const pendingCount = (answersQuery.data ?? []).filter(
+    (answer) => answer.state === "pending",
   ).length;
 
   return (
@@ -257,15 +440,15 @@ function ResearchTablePage() {
       <div className="flex flex-wrap items-center gap-2">
         <Select
           onValueChange={(value: string | null) => {
-            if (value !== null && isDecisionGroupBy(value)) {
+            if (value !== null && isResearchGroupBy(value, answerColumns)) {
               setGroupBy(value);
             }
           }}
-          value={groupBy}
+          value={effectiveGroupBy}
         >
           <SelectTrigger
             aria-label={t("caseLaw.research.groupBy")}
-            className="h-8 w-44 text-xs"
+            className="h-8 w-56 text-xs"
           >
             <SelectValue placeholder={t("caseLaw.research.groupBy")} />
           </SelectTrigger>
@@ -277,8 +460,35 @@ function ResearchTablePage() {
                   : t(GROUP_BY_LABEL_KEYS[option])}
               </SelectItem>
             ))}
+            {answerColumns.map((column) => (
+              <SelectItem key={column.id} value={answerGroupBy(column.id)}>
+                {t("caseLaw.research.groupByAnswer", {
+                  question: column.question,
+                })}
+              </SelectItem>
+            ))}
           </SelectPopup>
         </Select>
+
+        <Button
+          onClick={() => setQuestionDialog({ mode: "add" })}
+          size="sm"
+          variant="outline"
+        >
+          {t("caseLaw.research.addQuestion")}
+        </Button>
+        {answerColumns.length > 0 && (
+          <Button
+            disabled={run.isPending || rows.length === 0}
+            onClick={() => run.mutate({ scope: "table" })}
+            size="sm"
+            variant="outline"
+          >
+            {pendingCount > 0
+              ? t("caseLaw.research.answering", { count: pendingCount })
+              : t("caseLaw.research.runAll")}
+          </Button>
+        )}
 
         <Menu>
           <MenuTrigger render={<Button size="sm" variant="outline" />}>
@@ -337,17 +547,99 @@ function ResearchTablePage() {
       </div>
 
       <ResearchTableView
-        groupBy={groupBy}
+        answerColumns={answerColumns}
+        answersByKey={answersByKey}
+        groupBy={effectiveGroupBy}
         isLoading={decisionsQuery.isLoading}
+        onColumnAction={onColumnAction}
         onSetDisposition={(decision, disposition) => {
           detached(
             setDisposition.mutateAsync({ decision, disposition }),
             "research-table.set-disposition",
           );
         }}
+        onSetYesNoFilter={(column, value) => {
+          setYesNoFilters((current) => {
+            const next = new Map(current);
+            if (value === null) {
+              next.delete(column.id);
+            } else {
+              next.set(column.id, value);
+            }
+            return next;
+          });
+        }}
+        onShowSource={showSource}
         rows={rows}
         visibleColumns={visibleColumns}
+        yesNoFilters={yesNoFilters}
       />
+
+      {questionDialog.mode !== "closed" && (
+        <ResearchQuestionDialog
+          initial={
+            questionDialog.mode === "edit"
+              ? {
+                  question: questionDialog.column.question,
+                  answerType: questionDialog.column.answerType,
+                }
+              : undefined
+          }
+          isPending={saveQuestion.isPending}
+          key={
+            questionDialog.mode === "edit" ? questionDialog.column.id : "add"
+          }
+          onOpenChange={(open) => {
+            if (!open) {
+              setQuestionDialog({ mode: "closed" });
+            }
+          }}
+          onSubmit={(draft) => {
+            saveQuestion.mutate({
+              column:
+                questionDialog.mode === "edit" ? questionDialog.column : null,
+              draft,
+            });
+          }}
+          open
+        />
+      )}
+
+      <AlertDialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setColumnToDelete(null);
+          }
+        }}
+        open={columnToDelete !== null}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("caseLaw.research.deleteColumn")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("caseLaw.research.deleteColumnConfirm")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <Button
+              disabled={removeColumn.isPending}
+              onClick={() => {
+                if (columnToDelete !== null) {
+                  removeColumn.mutate(columnToDelete);
+                }
+              }}
+              variant="destructive"
+            >
+              {t("common.delete")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
 
       {decisionsQuery.hasNextPage && (
         <div className="flex justify-center py-4">

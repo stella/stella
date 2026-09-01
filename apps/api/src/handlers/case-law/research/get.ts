@@ -2,11 +2,13 @@ import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
 import {
+  caseLawResearchColumns,
   caseLawResearchTableDecisions,
   caseLawResearchTables,
 } from "@/api/db/schema";
 import {
   researchTableParamsSchema,
+  toResearchColumnResponse,
   toResearchTableResponse,
 } from "@/api/handlers/case-law/research/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -18,9 +20,9 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   description:
-    "Read one research table: its saved query, every pinned or excluded " +
-    "decision, and the row facts of the pinned ones so they can be merged " +
-    "with the query's own results.",
+    "Read one research table: its saved query, its question columns, every " +
+    "pinned or excluded decision, and the row facts of the pinned ones so " +
+    "they can be merged with the query's own results.",
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "internal", reason: "search_ui" },
@@ -69,7 +71,24 @@ const readResearchTable = createSafeRootHandler(
             asc(caseLawResearchTableDecisions.decisionId),
           )
           .limit(LIMITS.caseLawResearchTableDecisionsMax);
-        return { table, decisions };
+        const columns = await tx
+          .select()
+          .from(caseLawResearchColumns)
+          .where(
+            and(
+              eq(caseLawResearchColumns.tableId, tableId),
+              eq(
+                caseLawResearchColumns.organizationId,
+                session.activeOrganizationId,
+              ),
+            ),
+          )
+          .orderBy(
+            asc(caseLawResearchColumns.position),
+            asc(caseLawResearchColumns.id),
+          )
+          .limit(LIMITS.caseLawResearchColumnsPerTable);
+        return { table, decisions, columns };
       }),
     );
     if (loaded === null) {
@@ -92,6 +111,7 @@ const readResearchTable = createSafeRootHandler(
 
     return Result.ok({
       table: toResearchTableResponse(loaded.table),
+      columns: loaded.columns.map(toResearchColumnResponse),
       decisions: loaded.decisions,
       pinnedDecisions,
     });

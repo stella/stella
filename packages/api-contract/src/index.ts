@@ -278,13 +278,24 @@ export {
 } from "./realtime-events";
 export { encodeRfc3986Component } from "./rfc3986";
 export {
+  CASE_LAW_RESEARCH_ANSWER_STATES,
+  CASE_LAW_RESEARCH_ANSWER_TYPES,
   CASE_LAW_RESEARCH_DISPOSITIONS,
   CASE_LAW_RESEARCH_QUERY_VERSION,
+  CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH,
   CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH,
+  CASE_LAW_RESEARCH_YES_NO_VALUES,
 } from "./case-law-research";
 export type {
+  CaseLawResearchAnswerPassage,
+  CaseLawResearchAnswerRun,
+  CaseLawResearchAnswerState,
+  CaseLawResearchAnswerType,
+  CaseLawResearchAnswerValue,
+  CaseLawResearchColumnTool,
   CaseLawResearchDisposition,
   CaseLawResearchSavedQuery,
+  CaseLawResearchYesNoValue,
 } from "./case-law-research";
 export {
   SAVED_SEARCH_CRITERIA_VERSION,

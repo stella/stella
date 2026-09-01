@@ -46,6 +46,10 @@
   ],
   "duplicateValues": [
     "account.sessions.currentSession",
+    "caseLaw.research.answers.no",
+    "caseLaw.research.answers.yes",
+    "inspector.review.presence.absent",
+    "inspector.review.presence.present",
     "agentClaim.approve",
     "agentClaim.error",
     "app.versionMismatch.dismiss",
@@ -293,6 +297,9 @@
     "workspaces.views.layouts.calendar"
   ],
   "identicalToSource": {
+    "caseLaw.research.answers.no": [
+      "es"
+    ],
     "agentClaim.codePlaceholder": [
       "ar",
       "cs",

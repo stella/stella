@@ -1,12 +1,18 @@
 import { t } from "elysia";
 
 import {
+  CASE_LAW_RESEARCH_ANSWER_TYPES,
   CASE_LAW_RESEARCH_DISPOSITIONS,
   CASE_LAW_RESEARCH_QUERY_VERSION,
+  CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH,
   CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH,
 } from "@stll/api-contract";
 
-import type { caseLawResearchTables } from "@/api/db/schema";
+import type {
+  caseLawResearchAnswers,
+  caseLawResearchColumns,
+  caseLawResearchTables,
+} from "@/api/db/schema";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -73,6 +79,100 @@ export const setResearchTableDecisionBodySchema = t.Object(
   },
   { additionalProperties: false },
 );
+
+export const researchColumnParamsSchema = t.Object({
+  tableId: tSafeId("caseLawResearchTable"),
+  columnId: tSafeId("caseLawResearchColumn"),
+});
+
+const researchQuestionSchema = t.String({
+  minLength: 1,
+  maxLength: CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH,
+});
+
+export const createResearchColumnBodySchema = t.Object(
+  {
+    question: researchQuestionSchema,
+    answerType: t.UnionEnum(CASE_LAW_RESEARCH_ANSWER_TYPES),
+  },
+  { additionalProperties: false },
+);
+
+export const updateResearchColumnBodySchema = t.Object(
+  {
+    question: t.Optional(researchQuestionSchema),
+    // Not `t.UnionEnum`: an absent optional UnionEnum coerces to its first
+    // member, which would silently retype every column on a rename.
+    answerType: t.Optional(
+      t.Union(CASE_LAW_RESEARCH_ANSWER_TYPES.map((type) => t.Literal(type))),
+    ),
+  },
+  { additionalProperties: false },
+);
+
+export const reorderResearchColumnsBodySchema = t.Object(
+  {
+    columnIds: t.Array(tSafeId("caseLawResearchColumn"), {
+      minItems: 1,
+      maxItems: LIMITS.caseLawResearchColumnsPerTable,
+    }),
+  },
+  { additionalProperties: false },
+);
+
+export const runResearchAnswersBodySchema = t.Object(
+  {
+    /** Absent: every column of the table. */
+    columnIds: t.Optional(
+      t.Array(tSafeId("caseLawResearchColumn"), {
+        minItems: 1,
+        maxItems: LIMITS.caseLawResearchColumnsPerTable,
+      }),
+    ),
+    decisionIds: t.Array(tSafeId("caseLawDecision"), {
+      minItems: 1,
+      maxItems: LIMITS.caseLawResearchRunDecisionsMax,
+    }),
+    /** Re-answer cells that already hold an answer. */
+    force: t.Optional(t.Boolean()),
+  },
+  { additionalProperties: false },
+);
+
+export const researchAnswersListQuerySchema = t.Object({
+  cursor: t.Optional(t.String({ maxLength: 512 })),
+  limit: t.Optional(
+    t.Integer({
+      minimum: 1,
+      maximum: LIMITS.caseLawResearchAnswersPageSizeMax,
+    }),
+  ),
+});
+
+export const toResearchColumnResponse = (
+  row: typeof caseLawResearchColumns.$inferSelect,
+) => ({
+  id: row.id,
+  tableId: row.tableId,
+  position: row.position,
+  question: row.question,
+  answerType: row.answerType,
+  createdAt: row.createdAt.toISOString(),
+  updatedAt: row.updatedAt.toISOString(),
+});
+
+export const toResearchAnswerResponse = (
+  row: typeof caseLawResearchAnswers.$inferSelect,
+) => ({
+  columnId: row.columnId,
+  decisionId: row.decisionId,
+  state: row.state,
+  answer: row.answer,
+  confidence: row.confidence,
+  run: row.run,
+  failureReason: row.failureReason,
+  updatedAt: row.updatedAt.toISOString(),
+});
 
 export const toResearchTableResponse = (
   row: typeof caseLawResearchTables.$inferSelect,

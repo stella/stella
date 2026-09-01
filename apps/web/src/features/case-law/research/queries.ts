@@ -1,6 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import type {
+  CaseLawResearchAnswerType,
   CaseLawResearchDisposition,
   CaseLawResearchSavedQuery,
 } from "@stll/api-contract";
@@ -30,7 +31,15 @@ export const researchTableKeys = {
     "detail",
     { activeOrganizationId, tableId },
   ],
+  answers: ({ activeOrganizationId, tableId }: ResearchTableKey) => [
+    ...researchTableKeys.all,
+    "answers",
+    { activeOrganizationId, tableId },
+  ],
 };
+
+/** How often the cells are re-read while any of them is still pending. */
+const ANSWERS_POLL_INTERVAL_MS = 2500;
 
 export const researchTablesInfiniteOptions = (key: ResearchTablesListKey) =>
   infiniteQueryOptions({
@@ -65,6 +74,122 @@ export const researchTableOptions = (key: ResearchTableKey) =>
 const researchTableApi = (tableId: string) =>
   api.case.research({ tableId: toSafeId<"caseLawResearchTable">(tableId) });
 
+/**
+ * Every cell of the table, read page by page until the server has no more.
+ * Polls while any cell is pending, so a run's progress shows as it lands.
+ */
+export const researchAnswersOptions = (key: ResearchTableKey) =>
+  queryOptions({
+    queryKey: researchTableKeys.answers(key),
+    queryFn: async ({ signal }) => {
+      const items: ResearchAnswer[] = [];
+      let cursor: string | null = null;
+      do {
+        // oxlint-disable-next-line no-await-in-loop -- keyset pages: each request needs the previous page's cursor
+        const page = await readResearchAnswersPage(key.tableId, cursor, signal);
+        items.push(...page.items);
+        cursor = page.nextCursor;
+      } while (cursor !== null);
+      return items;
+    },
+    refetchInterval: (query) =>
+      query.state.data?.some((answer) => answer.state === "pending")
+        ? ANSWERS_POLL_INTERVAL_MS
+        : false,
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+const ANSWERS_PAGE_SIZE = 2000;
+
+const readResearchAnswersPage = async (
+  tableId: string,
+  cursor: string | null,
+  signal: AbortSignal,
+) =>
+  unwrapEden(
+    await researchTableApi(tableId).answers.get({
+      query: {
+        limit: ANSWERS_PAGE_SIZE,
+        ...(cursor !== null && { cursor }),
+      },
+      fetch: { signal },
+    }),
+  );
+
+export type ResearchAnswer = Awaited<
+  ReturnType<typeof readResearchAnswersPage>
+>["items"][number];
+
+type ResearchColumnInput = {
+  tableId: string;
+  question: string;
+  answerType: CaseLawResearchAnswerType;
+};
+
+export const createResearchColumn = async ({
+  answerType,
+  question,
+  tableId,
+}: ResearchColumnInput) =>
+  unwrapEden(
+    await researchTableApi(tableId).columns.post({ answerType, question }),
+  );
+
+export const updateResearchColumn = async ({
+  answerType,
+  columnId,
+  question,
+  tableId,
+}: ResearchColumnInput & { columnId: string }) =>
+  unwrapEden(
+    await researchTableApi(tableId)
+      .columns({ columnId: toSafeId<"caseLawResearchColumn">(columnId) })
+      .patch({ answerType, question }),
+  );
+
+export const deleteResearchColumn = async ({
+  columnId,
+  tableId,
+}: {
+  columnId: string;
+  tableId: string;
+}) =>
+  unwrapEden(
+    await researchTableApi(tableId)
+      .columns({ columnId: toSafeId<"caseLawResearchColumn">(columnId) })
+      .delete(),
+  );
+
+/**
+ * What a run covers: every column, filling only the cells that have no
+ * answer yet, or one column, answered again from scratch.
+ */
+export type RunResearchAnswersScope =
+  | { scope: "table" }
+  | { scope: "column"; columnId: string };
+
+type RunResearchAnswersInput = RunResearchAnswersScope & {
+  tableId: string;
+  decisionIds: readonly string[];
+};
+
+export const runResearchAnswers = async (input: RunResearchAnswersInput) => {
+  const decisionIds = input.decisionIds.map((decisionId) =>
+    toSafeId<"caseLawDecision">(decisionId),
+  );
+  const body =
+    input.scope === "table"
+      ? { decisionIds }
+      : {
+          decisionIds,
+          columnIds: [toSafeId<"caseLawResearchColumn">(input.columnId)],
+          force: true,
+        };
+  return unwrapEden(
+    await researchTableApi(input.tableId).answers.run.post(body),
+  );
+};
+
 export const renameResearchTable = async (tableId: string, name: string) =>
   unwrapEden(await researchTableApi(tableId).patch({ name }));
 
@@ -93,6 +218,8 @@ export const setResearchTableDecision = async ({
 export type ResearchTableDetail = Awaited<
   ReturnType<NonNullable<ReturnType<typeof researchTableOptions>["queryFn"]>>
 >;
+
+export type ResearchColumn = ResearchTableDetail["columns"][number];
 
 export type ResearchTableSummary = Awaited<
   ReturnType<

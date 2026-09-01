@@ -80,6 +80,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   caseLawReconciliationItem: { type: "non_resource", reason: "workflow" },
   // A member's working set over the corpus; addressable by chat and MCP only
   // once it becomes a resource type in a later change.
+  caseLawResearchColumn: { type: "non_resource", reason: "workflow" },
   caseLawResearchTable: { type: "non_resource", reason: "workflow" },
   caseLawSource: {
     type: "resource",
