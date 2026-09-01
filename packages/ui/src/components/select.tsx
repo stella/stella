@@ -192,7 +192,7 @@ const SelectPopup = ({
       sideOffset={sideOffset}
     >
       <SelectPrimitive.Popup
-        className="text-foreground origin-(--transform-origin)"
+        className="bg-popover text-popover-foreground origin-(--transform-origin) rounded-lg"
         data-slot="select-popup"
         {...props}
       >
@@ -202,7 +202,7 @@ const SelectPopup = ({
         >
           <ChevronUpIcon className="relative size-4.5 sm:size-4" />
         </SelectPrimitive.ScrollUpArrow>
-        <div className="bg-popover relative h-full min-w-(--anchor-width) rounded-lg border shadow-lg/5 not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]">
+        <div className="bg-popover text-popover-foreground relative h-full min-w-(--anchor-width) rounded-lg border shadow-lg/5 not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]">
           <SelectPrimitive.List
             className={cn(
               "max-h-(--available-height) overflow-y-auto p-1",
@@ -232,7 +232,7 @@ const SelectItem = ({
 }: SelectItemProps) => (
   <SelectPrimitive.Item
     className={cn(
-      "data-highlighted:bg-accent data-highlighted:text-accent-foreground grid min-h-8 cursor-pointer grid-cols-[1rem_1fr] items-center gap-2 rounded-sm py-1 ps-2 pe-4 text-base outline-none in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] data-disabled:pointer-events-none data-disabled:opacity-64 sm:min-h-7 sm:text-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
+      "text-popover-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground grid min-h-8 cursor-pointer grid-cols-[1rem_1fr] items-center gap-2 rounded-sm py-1 ps-2 pe-4 text-base outline-none in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] data-disabled:pointer-events-none data-disabled:opacity-64 sm:min-h-7 sm:text-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
       className,
     )}
     data-slot="select-item"
