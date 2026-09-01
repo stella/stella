@@ -466,6 +466,9 @@
       "sentence": "zdanie {value}",
       "subsection": "ust. {value}"
     },
+    "reader": {
+      "headMatter": "Część wstępna"
+    },
     "seo": {
       "browse": "Przeglądaj orzecznictwo",
       "countries": "Kraje",
@@ -487,9 +490,6 @@
         "publishedOnWeb": "Opublikowano w sieci"
       },
       "statutes": "Powołane przepisy"
-    },
-    "reader": {
-      "headMatter": "Część wstępna"
     }
   },
   "catalogue": {

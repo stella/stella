@@ -466,6 +466,9 @@
       "sentence": "frase {value}",
       "subsection": "apdo. {value}"
     },
+    "reader": {
+      "headMatter": "Encabezamiento"
+    },
     "seo": {
       "browse": "Explorar jurisprudencia",
       "countries": "Países",
@@ -487,9 +490,6 @@
         "publishedOnWeb": "Publicado en la web"
       },
       "statutes": "Normas aplicables"
-    },
-    "reader": {
-      "headMatter": "Encabezamiento"
     }
   },
   "catalogue": {

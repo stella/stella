@@ -466,6 +466,9 @@
       "sentence": "lause {value}",
       "subsection": "lg {value}"
     },
+    "reader": {
+      "headMatter": "Päis"
+    },
     "seo": {
       "browse": "Sirvi kohtupraktikat",
       "countries": "Riigid",
@@ -487,9 +490,6 @@
         "publishedOnWeb": "Veebis avaldatud"
       },
       "statutes": "Kohaldatavad õigusaktid"
-    },
-    "reader": {
-      "headMatter": "Päis"
     }
   },
   "catalogue": {

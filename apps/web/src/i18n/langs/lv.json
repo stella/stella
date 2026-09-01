@@ -466,6 +466,9 @@
       "sentence": "{value}. teikums",
       "subsection": "{value}. daļa"
     },
+    "reader": {
+      "headMatter": "Ievaddaļa"
+    },
     "seo": {
       "browse": "Pārlūkot judikatūru",
       "countries": "Valstis",
@@ -487,9 +490,6 @@
         "publishedOnWeb": "Publicēts tīmeklī"
       },
       "statutes": "Piemērojamie tiesību akti"
-    },
-    "reader": {
-      "headMatter": "Ievaddaļa"
     }
   },
   "catalogue": {

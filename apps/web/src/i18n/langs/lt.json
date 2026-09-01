@@ -466,6 +466,9 @@
       "sentence": "{value} sakinys",
       "subsection": "{value} d."
     },
+    "reader": {
+      "headMatter": "Antraštinė dalis"
+    },
     "seo": {
       "browse": "Naršyti teismų praktiką",
       "countries": "Šalys",
@@ -487,9 +490,6 @@
         "publishedOnWeb": "Paskelbta internete"
       },
       "statutes": "Taikomi teisės aktai"
-    },
-    "reader": {
-      "headMatter": "Antraštinė dalis"
     }
   },
   "catalogue": {

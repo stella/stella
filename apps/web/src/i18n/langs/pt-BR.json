@@ -466,6 +466,9 @@
       "sentence": "frase {value}",
       "subsection": "par. {value}"
     },
+    "reader": {
+      "headMatter": "Cabeçalho"
+    },
     "seo": {
       "browse": "Explorar jurisprudência",
       "countries": "Países",
@@ -487,9 +490,6 @@
         "publishedOnWeb": "Publicado na web"
       },
       "statutes": "Normas aplicáveis"
-    },
-    "reader": {
-      "headMatter": "Cabeçalho"
     }
   },
   "catalogue": {

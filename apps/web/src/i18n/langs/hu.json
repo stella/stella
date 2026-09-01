@@ -466,6 +466,9 @@
       "sentence": "{value}. mondat",
       "subsection": "({value}) bekezdés"
     },
+    "reader": {
+      "headMatter": "Fejrész"
+    },
     "seo": {
       "browse": "Ítélkezési gyakorlat böngészése",
       "countries": "Országok",
@@ -487,9 +490,6 @@
         "publishedOnWeb": "Weben közzétéve"
       },
       "statutes": "Alkalmazandó jogszabályok"
-    },
-    "reader": {
-      "headMatter": "Fejrész"
     }
   },
   "catalogue": {

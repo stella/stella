@@ -466,6 +466,9 @@
       "sentence": "sentence {value}",
       "subsection": "para. {value}"
     },
+    "reader": {
+      "headMatter": "Head matter"
+    },
     "seo": {
       "browse": "Browse case law",
       "countries": "Countries",
@@ -487,9 +490,6 @@
         "publishedOnWeb": "Published on web"
       },
       "statutes": "Applicable statutes"
-    },
-    "reader": {
-      "headMatter": "Head matter"
     }
   },
   "catalogue": {

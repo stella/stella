@@ -466,6 +466,9 @@
       "sentence": "Satz {value}",
       "subsection": "Abs. {value}"
     },
+    "reader": {
+      "headMatter": "Rubrum"
+    },
     "seo": {
       "browse": "Rechtsprechung durchsuchen",
       "countries": "Länder",
@@ -487,9 +490,6 @@
         "publishedOnWeb": "Im Web veröffentlicht"
       },
       "statutes": "Anwendbare Vorschriften"
-    },
-    "reader": {
-      "headMatter": "Rubrum"
     }
   },
   "catalogue": {
