@@ -89,6 +89,7 @@ import {
 } from "@/api/lib/machine-api-key-config";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
+import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
 import {
   enrichRequestContext,
   getRequestContext,
@@ -762,6 +763,30 @@ const socialSignInTwoFactorRedirectPlugin = {
   },
 } satisfies BetterAuthPlugin;
 
+/**
+ * Keeps signed OAuth interaction state, including native-client loopback URIs,
+ * out of CDN-visible URLs. It must run after the OAuth provider so it can
+ * rewrite both its navigation response and its fetch-mode redirect object.
+ */
+const oauthUiFragmentBridgePlugin = {
+  id: "stella-oauth-ui-fragment-bridge",
+  hooks: {
+    after: [
+      {
+        matcher: (ctx: HookEndpointContext) =>
+          ctx.path?.startsWith("/oauth2/") ?? false,
+        handler: createAuthMiddleware(async (ctx) => {
+          bridgeOauthUiInteraction(ctx.context, {
+            authOrigin: env.BETTER_AUTH_URL,
+            frontendUrl: env.FRONTEND_URL,
+          });
+          await Promise.resolve();
+        }),
+      },
+    ],
+  },
+} satisfies BetterAuthPlugin;
+
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
@@ -1267,6 +1292,7 @@ const createAuth = () => {
           org_id: referenceId,
         }),
       }),
+      oauthUiFragmentBridgePlugin,
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
