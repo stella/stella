@@ -8,6 +8,7 @@ import {
   caseLawDecisions,
   caseLawSources,
   corpusIndexGenerations,
+  corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   legislationDocuments,
   legislationSources,
@@ -236,6 +237,9 @@ if (!databaseUrl || !runPostgresTests) {
         generation: `case_law_v${Date.now()}`,
       } as const;
       const entityId = toSafeId<"caseLawDecision">(Bun.randomUUIDv7());
+      const intentId = toSafeId<"corpusIndexProjectionIntent">(
+        Bun.randomUUIDv7(),
+      );
       const writerLocked = Promise.withResolvers<undefined>();
       const releaseWriter = Promise.withResolvers<undefined>();
       const promotionAttempted = Promise.withResolvers<undefined>();
@@ -250,11 +254,15 @@ if (!databaseUrl || !runPostgresTests) {
         });
         const writer = writerDb.transaction(async (tx) => {
           await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
-          await tx.insert(corpusIndexProjectionStates).values({
+          await tx.insert(corpusIndexProjectionIntents).values({
             ...target,
+            id: intentId,
             entityId,
-            desiredAction: "erase",
-            desiredEpoch: 1n,
+            epoch: 1n,
+            fingerprint: "a".repeat(64),
+            indexId: "case_law_v5_cs_sk",
+            status: "cancelled",
+            cancelledAt: new Date("2026-09-01T00:00:00.000Z"),
           });
           writerLocked.resolve(undefined);
           await releaseWriter.promise;
@@ -280,8 +288,8 @@ if (!databaseUrl || !runPostgresTests) {
       } finally {
         releaseWriter.resolve(undefined);
         await writerDb
-          .delete(corpusIndexProjectionStates)
-          .where(eq(corpusIndexProjectionStates.entityId, entityId));
+          .delete(corpusIndexProjectionIntents)
+          .where(eq(corpusIndexProjectionIntents.id, intentId));
         await writerDb
           .delete(corpusIndexGenerations)
           .where(
