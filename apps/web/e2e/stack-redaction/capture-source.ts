@@ -10,14 +10,7 @@ type CapturedStack = {
   redactedStack: string | undefined;
 };
 
-export const captureBrowserError = (): CapturedStack => {
-  const error = new TypeError(PRIVATE_ERROR_MESSAGE);
-  if (typeof error.stack === "string") {
-    error.stack = error.stack.replace(
-      /(?=:\d+:\d+(?:\n|$))/u,
-      "?matter=private#client",
-    );
-  }
+const capture = (error: Error): CapturedStack => {
   let redacted: Error | undefined;
   captureRedactedException(error, (captured) => {
     redacted = captured;
@@ -30,4 +23,23 @@ export const captureBrowserError = (): CapturedStack => {
     originalStack: error.stack,
     redactedStack: redacted?.stack,
   };
+};
+
+export const captureBrowserError = (): CapturedStack => {
+  const error = new TypeError(PRIVATE_ERROR_MESSAGE);
+  if (typeof error.stack === "string") {
+    error.stack = error.stack.replace(
+      /(?=:\d+:\d+(?:\n|$))/u,
+      "?matter=private#client",
+    );
+  }
+  return capture(error);
+};
+
+// The engine never writes a header, so a stack that opens with message text
+// was assembled by hand; every frame under it must be dropped.
+export const captureHeaderInjectedError = (): CapturedStack => {
+  const error = new TypeError(PRIVATE_ERROR_MESSAGE);
+  error.stack = [PRIVATE_ERROR_MESSAGE, error.stack ?? ""].join("\n");
+  return capture(error);
 };

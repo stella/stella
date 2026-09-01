@@ -680,18 +680,35 @@ describe("detect-e2e-changes", () => {
     const result = workflowJob("ci-result");
 
     expect(plan).toContain("stack_redaction_browsers_required:");
-    for (const owningPath of [
-      "apps/web/src/lib/analytics/stack-redaction.ts",
-      "apps/web/e2e/stack-redaction/*",
-      "apps/web/e2e/playwright.stack-redaction.config.ts",
-      "apps/web/e2e/tsconfig.json",
-      "apps/web/tsconfig.json",
-      "scripts/bun-ci-retry.sh",
-      "bunfig.toml",
-      ".npmrc",
-    ]) {
-      expect(plan).toContain(owningPath);
+    // The selector is the complete owner set of the Firefox/WebKit guard:
+    // production redaction, the harness, and everything that shapes how the
+    // harness is built or installed. Set equality in both directions, so a
+    // dropped owner fails here instead of silently skipping the job.
+    const selector =
+      /\n *([^\n)]+)\)\n *stack_redaction_browsers_required=true\n/u.exec(
+        plan,
+      )?.[1];
+    if (selector === undefined) {
+      throw new Error("ci-plan has no stack-redaction path selector");
     }
+    expect(new Set(selector.split("|"))).toEqual(
+      new Set([
+        "apps/web/src/lib/analytics/posthog.ts",
+        "apps/web/src/lib/analytics/stack-redaction.ts",
+        "apps/web/src/lib/analytics/error-diagnostics.ts",
+        "apps/web/e2e/stack-redaction/*",
+        "apps/web/e2e/playwright.stack-redaction.config.ts",
+        "apps/web/e2e/tsconfig.json",
+        "apps/web/tsconfig.json",
+        "apps/web/package.json",
+        "scripts/bun-ci-retry.sh",
+        "bunfig.toml",
+        "package.json",
+        "bun.lock",
+        ".npmrc",
+        ".github/workflows/ci.yml",
+      ]),
+    );
     expect(stackRedaction).toContain(
       "needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'",
     );
