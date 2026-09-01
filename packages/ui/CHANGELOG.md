@@ -1,5 +1,17 @@
 # @stll/ui
 
+## 0.14.0
+
+### Minor Changes
+
+- [#2733](https://github.com/stella/stella/pull/2733) [`e1f2d5c`](https://github.com/stella/stella/commit/e1f2d5c72d266783f757bc0f99c17719f9798dd0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a descriptor-driven workspace frame that owns application navigation and inspector chrome.
+
+### Patch Changes
+
+- [#2732](https://github.com/stella/stella/pull/2732) [`81da3b3`](https://github.com/stella/stella/commit/81da3b39ec8044e9398ee4c01f7bbbdd9a36de36) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose each Kanban swimlane cell's row count to the typed render-cell
+  primitive, including explicit zero counts for empty intersections. Add typed
+  terminal destination columns to the matrix and drop intent contract.
+
 ## 0.13.0
 
 ### Minor Changes
