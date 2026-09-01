@@ -83,6 +83,8 @@ export {
 export type {
   BuildKanbanBoardMatrixParams,
   CreateKanbanDropIntentParams,
+  KanbanBoardDestination,
+  KanbanBoardColumn,
   KanbanBoardAxis,
   KanbanBoardCell,
   KanbanBoardCoordinate,

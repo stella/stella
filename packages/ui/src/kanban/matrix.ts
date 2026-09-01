@@ -24,7 +24,7 @@ export type KanbanBoardLane =
   | { group: KanbanGroup; type: "group" };
 
 export type KanbanBoardCoordinate = {
-  column: KanbanGroup;
+  column: KanbanBoardColumn;
   lane: KanbanBoardLane;
 };
 
@@ -33,6 +33,16 @@ export type KanbanBoardCell<TRow> = {
   rows: TRow[];
 };
 
+/** A non-grouping destination rendered as a terminal board column. */
+export type KanbanBoardDestination = {
+  id: string;
+  label: string;
+};
+
+export type KanbanBoardColumn =
+  | { group: KanbanGroup; type: "group" }
+  | { destination: KanbanBoardDestination; type: "destination" };
+
 /**
  * The full, ordered cartesian board. Presentation may hide or collapse parts
  * of it, but it must not derive cards independently: every board row is in
@@ -40,7 +50,7 @@ export type KanbanBoardCell<TRow> = {
  */
 export type KanbanBoardMatrix<TRow> = {
   cells: KanbanBoardCell<TRow>[];
-  columns: KanbanGroup[];
+  columns: KanbanBoardColumn[];
   lanes: KanbanBoardLane[];
   rows: TRow[];
 };
@@ -63,6 +73,8 @@ export type BuildKanbanBoardMatrixParams<
   group: KanbanGrouping<TRow, TProperty, TGroupId>;
   /** Optional horizontal swimlanes. `none` makes this a one-lane board. */
   subgroup: KanbanGrouping<TRow, TProperty, TGroupId>;
+  /** Terminal columns, rendered after grouping columns and empty by default. */
+  destinations?: readonly KanbanBoardDestination[];
   rows: readonly TRow[];
   uncategorizedLabel: string;
   resolveGroupValue: (
@@ -72,10 +84,36 @@ export type BuildKanbanBoardMatrixParams<
 
 const optionValueKey = (value: string | null): string =>
   value === null ? "null" : `string:${value.length}:${value}`;
-
 export type OrderKanbanCellsByColumnsParams<TRow> = {
   cells: readonly KanbanBoardCell<TRow>[];
-  columns: readonly KanbanGroup[];
+  columns: readonly KanbanBoardColumn[];
+};
+
+/** Stable identity for a visible board column; group and destination domains stay distinct. */
+export const getKanbanBoardColumnIdentity = (
+  column: KanbanBoardColumn,
+): string =>
+  column.type === "group"
+    ? `group:${optionValueKey(column.group.value)}`
+    : `destination:${column.destination.id}`;
+
+/** Stable identity for a swimlane; it can never alias a visible column. */
+export const getKanbanBoardLaneIdentity = (lane: KanbanBoardLane): string =>
+  lane.type === "none"
+    ? "lane:none"
+    : `lane:${optionValueKey(lane.group.value)}`;
+
+const assertUniqueColumnIdentities = (
+  columns: readonly KanbanBoardColumn[],
+): void => {
+  const identities = new Set<string>();
+  for (const column of columns) {
+    const identity = getKanbanBoardColumnIdentity(column);
+    if (identities.has(identity)) {
+      return panic(`Duplicate Kanban board column identity: ${identity}`);
+    }
+    identities.add(identity);
+  }
 };
 
 /** Apply the visible header order to any lane's cells. */
@@ -84,23 +122,26 @@ export const orderKanbanCellsByColumns = <TRow>({
   columns,
 }: OrderKanbanCellsByColumnsParams<TRow>): KanbanBoardCell<TRow>[] => {
   const orderByValue = new Map(
-    columns.map((column, index) => [optionValueKey(column.value), index]),
+    columns.map((column, index) => [
+      getKanbanBoardColumnIdentity(column),
+      index,
+    ]),
   );
   const getColumnOrder = (cell: KanbanBoardCell<TRow>) => {
     const order = orderByValue.get(
-      optionValueKey(cell.coordinate.column.value),
+      getKanbanBoardColumnIdentity(cell.coordinate.column),
     );
     return order ?? panic("Visible Kanban cell has no column order");
   };
   return cells
     .filter((cell) =>
-      orderByValue.has(optionValueKey(cell.coordinate.column.value)),
+      orderByValue.has(getKanbanBoardColumnIdentity(cell.coordinate.column)),
     )
     .toSorted((left, right) => getColumnOrder(left) - getColumnOrder(right));
 };
 
 const cellKey = ({ column, lane }: KanbanBoardCoordinate): string =>
-  `${optionValueKey(column.value)}|${lane.type === "none" ? "none" : optionValueKey(lane.group.value)}`;
+  `${getKanbanBoardColumnIdentity(column)}|${getKanbanBoardLaneIdentity(lane)}`;
 
 const groupContainsValue = (
   groups: readonly KanbanGroup[],
@@ -151,6 +192,7 @@ export const buildKanbanBoardMatrix = <
 >({
   group,
   subgroup,
+  destinations = [],
   rows,
   uncategorizedLabel,
   resolveGroupValue,
@@ -162,7 +204,17 @@ export const buildKanbanBoardMatrix = <
   if (!isKanbanGroupingRenderable(group)) {
     return { cells: [], columns: [], lanes: [], rows: [] };
   }
-  const columns = getRenderableGroups(group, uncategorizedLabel);
+  const columns: KanbanBoardColumn[] = getRenderableGroups(
+    group,
+    uncategorizedLabel,
+  ).map((column) => ({ group: column, type: "group" }));
+  for (const destination of destinations) {
+    columns.push({
+      destination,
+      type: "destination",
+    });
+  }
+  assertUniqueColumnIdentities(columns);
   const scopedRows = selectKanbanRows(rows, group);
   const hasRenderableSubgroup = isKanbanGroupingRenderable(subgroup);
   const lanes = hasRenderableSubgroup
@@ -182,7 +234,12 @@ export const buildKanbanBoardMatrix = <
 
   for (const row of scopedRows) {
     const columnValue = normalizeGroupValue(
-      columns,
+      columns
+        .filter(
+          (column): column is { group: KanbanGroup; type: "group" } =>
+            column.type === "group",
+        )
+        .map((column) => column.group),
       resolveGroupValue({ grouping: group, row }),
     );
     const lane = !hasRenderableSubgroup
@@ -204,7 +261,10 @@ export const buildKanbanBoardMatrix = <
           },
           type: "group" as const,
         };
-    const column = columns.find((candidate) => candidate.value === columnValue);
+    const column = columns.find(
+      (candidate) =>
+        candidate.type === "group" && candidate.group.value === columnValue,
+    );
     const resolvedLane =
       lane.type === "none"
         ? lane
@@ -234,11 +294,20 @@ export type KanbanDropAxisChange<TGroupId extends string = string> = {
 };
 
 /** A complete, atomic move request for a domain mutation adapter. */
-export type KanbanDropIntent<TCardId, TGroupId extends string = string> = {
-  cardId: TCardId;
-  changes: readonly KanbanDropAxisChange<TGroupId>[];
-  type: "move";
-};
+export type KanbanDropIntent<TCardId, TGroupId extends string = string> =
+  | {
+      cardId: TCardId;
+      changes: readonly [
+        KanbanDropAxisChange<TGroupId>,
+        ...KanbanDropAxisChange<TGroupId>[],
+      ];
+      type: "move";
+    }
+  | {
+      cardId: TCardId;
+      destination: KanbanBoardDestination;
+      type: "destination";
+    };
 
 export type CreateKanbanDropIntentParams<
   TRow,
@@ -281,9 +350,19 @@ export const createKanbanDropIntent = <
     return null;
   }
 
+  if (target.column.type === "destination") {
+    return {
+      cardId,
+      destination: target.column.destination,
+      type: "destination",
+    };
+  }
   const changes: KanbanDropAxisChange<TGroupId>[] = [];
-  if (source.column.value !== target.column.value) {
-    changes.push({ groupBy, value: target.column.value });
+  if (
+    source.column.type !== "group" ||
+    source.column.group.value !== target.column.group.value
+  ) {
+    changes.push({ groupBy, value: target.column.group.value });
   }
   if (
     subgroupBy !== null &&
@@ -297,5 +376,13 @@ export const createKanbanDropIntent = <
   if (changes.length === 0) {
     return null;
   }
-  return { cardId, changes, type: "move" };
+  const firstChange = changes.at(0);
+  if (firstChange === undefined) {
+    return null;
+  }
+  return {
+    cardId,
+    changes: [firstChange, ...changes.slice(1)],
+    type: "move",
+  };
 };

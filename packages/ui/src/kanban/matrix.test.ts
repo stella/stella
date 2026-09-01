@@ -5,13 +5,20 @@ import { resolveKanbanGrouping } from "./grouping";
 import {
   buildKanbanBoardMatrix,
   createKanbanDropIntent,
+  getKanbanBoardColumnIdentity,
+  getKanbanBoardLaneIdentity,
   orderKanbanCellsByColumns,
 } from "./matrix";
-import type { ResolveKanbanGroupValueParams } from "./matrix";
+import type {
+  KanbanBoardColumn,
+  ResolveKanbanGroupValueParams,
+} from "./matrix";
 
 type Row = { id: string; owner: string | null; status: string | null };
 type Property = { id: "owner" };
 type GroupId = "_empty" | "_status" | "owner";
+const columnValue = (column: KanbanBoardColumn) =>
+  column.type === "group" ? column.group.value : column.destination.id;
 
 const schema: KanbanSchema<Row, Property, GroupId> = {
   builtInGroups: [
@@ -87,7 +94,7 @@ describe("kanban board matrix", () => {
       matrix.cells
         .filter((cell) => cell.rows.length > 0)
         .map((cell) => [
-          cell.coordinate.column.value,
+          columnValue(cell.coordinate.column),
           cell.rows.map((row) => row.id),
         ]),
     ).toEqual([
@@ -117,7 +124,7 @@ describe("kanban board matrix", () => {
       orderKanbanCellsByColumns({
         cells: adaCells,
         columns: matrix.columns.toReversed(),
-      }).map((cell) => cell.coordinate.column.value),
+      }).map((cell) => columnValue(cell.coordinate.column)),
     ).toEqual([null, "done", "open"]);
   });
 
@@ -135,16 +142,42 @@ describe("kanban board matrix", () => {
       uncategorizedLabel: "No value",
     });
 
-    expect(matrix.columns.map((column) => column.value)).toEqual([
-      "open",
-      "done",
-      null,
-    ]);
+    expect(matrix.columns.map(columnValue)).toEqual(["open", "done", null]);
     expect(matrix.lanes).toHaveLength(3);
     expect(
       matrix.cells.flatMap((cell) => cell.rows).map((row) => row.id),
     ).toEqual(["one", "three", "two"]);
     expect(matrix.cells.at(0)?.rows.map((row) => row.id)).toEqual(["one"]);
+  });
+
+  test("keeps subgroup fallback values out of the group-column domain", () => {
+    const matrix = buildKanbanBoardMatrix({
+      group: {
+        type: "built-in",
+        propertyId: "_status",
+        group: {
+          id: "_status",
+          options: [{ label: "Unassigned", value: "unassigned" }],
+        },
+      },
+      resolveGroupValue: valueFor,
+      rows: [{ id: "one", owner: "unassigned", status: "unassigned" }],
+      subgroup,
+      uncategorizedLabel: "No value",
+    });
+
+    expect(matrix.columns.map(columnValue)).toEqual(["unassigned", null]);
+    expect(
+      matrix.lanes.map((lane) =>
+        lane.type === "group" ? lane.group.value : null,
+      ),
+    ).toEqual(["ada", "lin", null]);
+    const columnKeys = new Set(
+      matrix.columns.map(getKanbanBoardColumnIdentity),
+    );
+    const laneKeys = new Set(matrix.lanes.map(getKanbanBoardLaneIdentity));
+    expect([...columnKeys].filter((key) => laneKeys.has(key))).toEqual([]);
+    expect(matrix.cells.filter((cell) => cell.rows.length > 0)).toHaveLength(1);
   });
 
   test("a diagonal move carries both changed axes in one intent", () => {
@@ -157,13 +190,13 @@ describe("kanban board matrix", () => {
     });
     const source = matrix.cells.find(
       (cell) =>
-        cell.coordinate.column.value === "open" &&
+        columnValue(cell.coordinate.column) === "open" &&
         cell.coordinate.lane.type === "group" &&
         cell.coordinate.lane.group.value === "ada",
     );
     const target = matrix.cells.find(
       (cell) =>
-        cell.coordinate.column.value === "done" &&
+        columnValue(cell.coordinate.column) === "done" &&
         cell.coordinate.lane.type === "group" &&
         cell.coordinate.lane.group.value === "lin",
     );
@@ -178,7 +211,10 @@ describe("kanban board matrix", () => {
       subgroup,
       target: target.coordinate,
     });
-    const firstChange = intent?.changes.at(0);
+    if (intent?.type !== "move") {
+      throw new Error("Expected a move intent");
+    }
+    const firstChange = intent.changes.at(0);
     const axis: GroupId | undefined = firstChange?.groupBy;
 
     expect(axis).toBe("_status");
@@ -190,5 +226,70 @@ describe("kanban board matrix", () => {
       ],
       type: "move",
     });
+  });
+
+  test("keeps terminal destinations as real matrix columns and drop targets", () => {
+    const matrix = buildKanbanBoardMatrix({
+      destinations: [{ id: "archive", label: "Archive" }],
+      group,
+      resolveGroupValue: valueFor,
+      rows: [{ id: "one", owner: "ada", status: "open" }],
+      subgroup,
+      uncategorizedLabel: "No value",
+    });
+    const destination = matrix.columns.at(-1);
+    if (destination === undefined) {
+      throw new Error("Expected a terminal destination column");
+    }
+    expect(destination.type).toBe("destination");
+    if (destination.type !== "destination") {
+      throw new Error("Expected a destination column");
+    }
+    expect(destination.destination).toEqual({
+      id: "archive",
+      label: "Archive",
+    });
+    expect(
+      matrix.cells.filter(
+        (cell) =>
+          columnValue(cell.coordinate.column) === columnValue(destination),
+      ),
+    ).toHaveLength(3);
+    const sourceCell = matrix.cells.at(0);
+    const sourceLane = matrix.lanes.at(0);
+    if (sourceCell === undefined || sourceLane === undefined) {
+      throw new Error("Expected a source matrix cell and lane");
+    }
+    const intent = createKanbanDropIntent({
+      cardId: "one",
+      group,
+      source: sourceCell.coordinate,
+      subgroup,
+      target: {
+        column: destination,
+        lane: sourceLane,
+      },
+    });
+    expect(intent).toEqual({
+      cardId: "one",
+      destination: { id: "archive", label: "Archive" },
+      type: "destination",
+    });
+  });
+
+  test("rejects duplicate terminal destination identities", () => {
+    expect(() =>
+      buildKanbanBoardMatrix({
+        destinations: [
+          { id: "archive", label: "Archive" },
+          { id: "archive", label: "Archive again" },
+        ],
+        group,
+        resolveGroupValue: valueFor,
+        rows: [],
+        subgroup,
+        uncategorizedLabel: "No value",
+      }),
+    ).toThrow("Duplicate Kanban board column identity");
   });
 });
