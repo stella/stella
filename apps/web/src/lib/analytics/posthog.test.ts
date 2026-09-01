@@ -84,6 +84,7 @@ void mock.module("posthog-js", () => ({
 }));
 
 const { createPostHogAnalytics } = await import("./posthog");
+const { redactTelemetryStack } = await import("./stack-redaction");
 const { sanitizeRouteErrorLifecycleEvent } =
   await import("./posthog-route-error");
 
@@ -344,7 +345,7 @@ describe("PostHog browser analytics adapter", () => {
                 {
                   platform: "web:javascript",
                   filename:
-                    "https://my.stll.app/assets/app.js?token=private-token",
+                    "https://my.stll.app/assets/app.js#access_token=private-token",
                   function: "renderMatter",
                   in_app: true,
                   lineno: 42,
@@ -395,9 +396,12 @@ describe("PostHog browser analytics adapter", () => {
       host: "https://posthog.test",
       key: "phc_test",
     });
-    analytics.captureError(
-      new TypeError("Privileged document name and server payload"),
-    );
+    const error = new TypeError("Privileged document name and server payload");
+    error.stack = [
+      `TypeError: ${error.message}`,
+      "    at renderMatter (https://stella.test/assets/index.js:10:15)",
+    ].join("\n");
+    analytics.captureError(error);
 
     const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
     expect(captured).toBeInstanceOf(Error);
@@ -407,7 +411,241 @@ describe("PostHog browser analytics adapter", () => {
     }
     expect(captured.stack).toStartWith("TypeError:\n");
     expect(captured.stack).not.toContain("Privileged document name");
-    expect(captured.stack).toContain("    at ");
+    expect(captured.stack).toContain("    at renderMatter");
+  });
+
+  // Frame syntax is engine-specific, so the redaction has to hold for each
+  // one: every frame survives, and the header carrying the message does not.
+  const ENGINE_FRAMES = {
+    callsite: [
+      "renderMatter@https://stella.test/assets/index.js:10:15",
+      "handleClick/<@https://stella.test/assets/index.js:22:3",
+      "async*renderMatter@https://stella.test/assets/index.js:26:5",
+      "Async*@https://stella.test/assets/index.js:28:6",
+      "calculÉchéance@https://stella.test/assets/index.js:29:6",
+      "global code@https://stella.test/assets/index.js:30:7",
+    ],
+    indented: [
+      "    at renderMatter (https://stella.test/assets/index.js:10:15)",
+      "    at handleClick (https://stella.test/assets/index.js:22:3)",
+    ],
+  } as const satisfies Record<string, readonly string[]>;
+
+  test.each(Object.entries(ENGINE_FRAMES))(
+    "stack redaction keeps %s frames and drops the message",
+    (_syntax, frames) => {
+      const stack =
+        _syntax === "callsite"
+          ? frames.join("\n")
+          : ["RangeError: Privileged document name", ...frames].join("\n");
+
+      expect(
+        redactTelemetryStack({
+          errorType: "RangeError",
+          stack,
+          syntax: _syntax === "callsite" ? "callsite" : "v8",
+        }),
+      ).toBe(["RangeError:", ...frames].join("\n"));
+    },
+  );
+
+  const URL_METADATA_FRAMES = {
+    callsiteQuery: {
+      frame:
+        "renderMatter@https://stella.test/assets/index.js?token=private:10:15",
+      safeFrame: "renderMatter@https://stella.test/assets/index.js:10:15",
+    },
+    callsiteFragment: {
+      frame:
+        "renderMatter@https://stella.test/assets/index.js#access_token=private:10:15",
+      safeFrame: "renderMatter@https://stella.test/assets/index.js:10:15",
+    },
+    indentedQuery: {
+      frame:
+        "    at renderMatter (https://stella.test/assets/index.js?token=private:10:15)",
+      safeFrame:
+        "    at renderMatter (https://stella.test/assets/index.js:10:15)",
+    },
+    indentedFragment: {
+      frame:
+        "    at renderMatter (https://stella.test/assets/index.js#access_token=private:10:15)",
+      safeFrame:
+        "    at renderMatter (https://stella.test/assets/index.js:10:15)",
+    },
+    indentedWithQueryParentheses: {
+      frame:
+        "    at renderMatter (https://stella.test/assets/index.js?token=private(value):10:15)",
+      safeFrame:
+        "    at renderMatter (https://stella.test/assets/index.js:10:15)",
+    },
+  } as const;
+
+  test.each(Object.entries(URL_METADATA_FRAMES))(
+    "stack redaction removes URL metadata from %s frames",
+    (_syntax, { frame, safeFrame }) => {
+      expect(
+        redactTelemetryStack({
+          errorType: "Error",
+          stack: frame,
+          syntax: frame.startsWith("    at ") ? "v8" : "callsite",
+        }),
+      ).toBe(["Error:", safeFrame].join("\n"));
+    },
+  );
+
+  const UNSAFE_SOURCE_FRAMES = {
+    callsiteData:
+      "renderMatter@data:text/javascript,throw%20new%20Error(%22PrivilegedMatterName%22):1:1",
+    indentedData:
+      "    at renderMatter (data:text/javascript,throw%20new%20Error(%22PrivilegedMatterName%22):1:1)",
+    callsiteBlob: "renderMatter@blob:https://stella.test/private-token:1:1",
+    indentedCredentials:
+      "    at renderMatter (https://client:secret@stella.test/index.js:1:1)",
+  } as const;
+
+  test.each(Object.entries(UNSAFE_SOURCE_FRAMES))(
+    "stack redaction drops unsafe %s locations",
+    (_kind, frame) => {
+      expect(
+        redactTelemetryStack({
+          errorType: "Error",
+          stack: frame,
+          syntax: frame.startsWith("    at ") ? "v8" : "callsite",
+        }),
+      ).toBeUndefined();
+    },
+  );
+
+  test("captureError cannot treat a multiline message as a stack frame", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    const injectedFrame =
+      "clientName@https://stella.test/assets/private.js:20:5";
+    const actualFrame =
+      "    at renderMatter (https://stella.test/assets/index.js:10:15)";
+    const error = new Error(`Privileged document name\n${injectedFrame}`);
+    error.stack = [`Error: ${error.message}`, actualFrame].join("\n");
+
+    analytics.captureError(error);
+
+    const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+    if (!(captured instanceof Error)) {
+      throw new TypeError("Expected a redacted Error");
+    }
+    expect(captured.stack).toBe(["Error:", actualFrame].join("\n"));
+  });
+
+  test("captureError ignores a serialized header after error fields change", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    const injectedFrame =
+      "clientName@https://stella.test/assets/private.js:20:5";
+    const actualFrame =
+      "    at renderMatter (https://stella.test/assets/index.js:10:15)";
+    const error = new Error(`Privileged document name\n${injectedFrame}`);
+    error.stack = [`Error: ${error.message}`, actualFrame].join("\n");
+    error.name = "ClientTelemetryError";
+    error.message = "Changed after stack serialization";
+
+    analytics.captureError(error);
+
+    const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+    if (!(captured instanceof Error)) {
+      throw new TypeError("Expected a redacted Error");
+    }
+    expect(captured.stack).toBe(
+      ["ClientTelemetryError:", actualFrame].join("\n"),
+    );
+  });
+
+  test("captureError cannot partially remove a stale serialized header", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    const injectedFrame =
+      "clientName@https://stella.test/assets/private.js:20:5";
+    const error = new Error(`Public summary\n${injectedFrame}`);
+    error.stack = `Error: ${error.message}`;
+    error.message = "Public summary";
+
+    analytics.captureError(error);
+
+    const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+    if (!(captured instanceof Error)) {
+      throw new TypeError("Expected a redacted Error");
+    }
+    expect(captured.stack).toBeUndefined();
+  });
+
+  test("captureError cannot infer callsite syntax from a V8 header", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    const injectedFrame =
+      "clientName@https://stella.test/assets/private.js:20:5";
+    const actualFrame =
+      "    at renderMatter (https://stella.test/assets/index.js:10:15)";
+    const error = new Error(
+      `renderMatter@https://stella.test/assets/a.js:1:2\n${injectedFrame}`,
+    );
+    error.stack = [`Error: ${error.message}`, actualFrame].join("\n");
+
+    analytics.captureError(error);
+
+    const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+    if (!(captured instanceof Error)) {
+      throw new TypeError("Expected a redacted Error");
+    }
+    expect(captured.stack).toBe(["Error:", actualFrame].join("\n"));
+  });
+
+  test("captureError cannot treat an empty-name V8 header as a callsite", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    const injectedFrame =
+      "clientName@https://stella.test/assets/private.js:20:5";
+    const actualFrame =
+      "    at renderMatter (https://stella.test/assets/index.js:10:15)";
+    const error = new Error(injectedFrame);
+    error.name = "";
+    error.stack = [error.message, actualFrame].join("\n");
+
+    analytics.captureError(error);
+
+    const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+    if (!(captured instanceof Error)) {
+      throw new TypeError("Expected a redacted Error");
+    }
+    expect(captured.stack).toBe(["UnknownError:", actualFrame].join("\n"));
+  });
+
+  test("captureError drops a frameless empty-name V8 stack", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    const error = new Error("Privileged message");
+    error.name = "";
+    error.stack = [
+      "renderMatter@https://stella.test/assets/a.js:1:2",
+      "clientName@https://stella.test/assets/private.js:20:5",
+    ].join("\n");
+
+    analytics.captureError(error);
+
+    const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+    if (!(captured instanceof Error)) {
+      throw new TypeError("Expected a redacted Error");
+    }
+    expect(captured.stack).toBeUndefined();
   });
 
   test("captureError survives a cyclic cause chain", () => {
@@ -468,9 +706,12 @@ describe("PostHog browser analytics adapter", () => {
     });
     wrapper.name = "ClientTelemetryError";
     // Distinguishable stacks: the wrapper's own stack must not win.
-    wrapper.stack = "Error: Privileged wrapper message\n    at boundary";
+    wrapper.stack = [
+      "Error: Privileged wrapper message",
+      "    at boundary (https://stella.test/assets/boundary.js:1:2)",
+    ].join("\n");
     original.stack =
-      "RangeError: Privileged original message\n    at failureSite";
+      "RangeError: Privileged original message\n    at failureSite (https://stella.test/assets/failure.js:3:4)";
     analytics.captureError(wrapper);
 
     const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
@@ -478,7 +719,9 @@ describe("PostHog browser analytics adapter", () => {
       throw new TypeError("Expected a redacted Error");
     }
     expect(captured.name).toBe("ClientTelemetryError");
-    expect(captured.stack).toBe("ClientTelemetryError:\n    at failureSite");
+    expect(captured.stack).toBe(
+      "ClientTelemetryError:\n    at failureSite (https://stella.test/assets/failure.js:3:4)",
+    );
   });
 
   test("captureError attaches the telemetry area slug and nothing free-form", () => {

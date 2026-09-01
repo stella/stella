@@ -51,6 +51,7 @@ jobs:
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
       release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
+      stack_redaction_browsers_required: ${{ steps.changed-files.outputs.stack_redaction_browsers_required }}
       web_build_required: ${{ steps.changed-files.outputs.web_build_required }}
       web_image_smoke_required: ${{ steps.changed-files.outputs.web_image_smoke_required }}
       windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
@@ -106,6 +107,7 @@ jobs:
               echo "mobile_build_required=true"
               echo "package_checks_required=true"
               echo "release_typecheck_required=false"
+              echo "stack_redaction_browsers_required=true"
               echo "web_build_required=true"
               echo "web_image_smoke_required=true"
               echo "windows_scripts_required=true"
@@ -130,6 +132,7 @@ jobs:
               echo "mobile_build_required=false"
               echo "package_checks_required=true"
               echo "release_typecheck_required=false"
+              echo "stack_redaction_browsers_required=false"
               echo "web_build_required=false"
               echo "web_image_smoke_required=false"
               echo "windows_scripts_required=false"
@@ -165,6 +168,7 @@ jobs:
           legal_atlas_image_required=false
           mobile_build_required=false
           release_typecheck_required=false
+          stack_redaction_browsers_required=false
           web_build_required=false
           web_image_smoke_required=false
           windows_scripts_required=false
@@ -175,6 +179,11 @@ jobs:
             case "$file" in
               .github/workflows/agent-sandbox-canary.yml|.github/workflows/ci.yml|packages/agent-engine/*|package.json|bun.lock|scripts/bun-ci-retry.sh)
                 agent_sandbox_docker_required=true
+                ;;
+            esac
+            case "$file" in
+              apps/web/src/lib/analytics/posthog.ts|apps/web/src/lib/analytics/stack-redaction.ts|apps/web/src/lib/analytics/error-diagnostics.ts|apps/web/e2e/stack-redaction/*|apps/web/e2e/playwright.stack-redaction.config.ts|apps/web/e2e/tsconfig.json|apps/web/tsconfig.json|apps/web/package.json|scripts/bun-ci-retry.sh|bunfig.toml|package.json|bun.lock|.npmrc|.github/workflows/ci.yml)
+                stack_redaction_browsers_required=true
                 ;;
             esac
             case "$file" in
@@ -247,6 +256,7 @@ jobs:
             echo "mobile_build_required=$mobile_build_required"
             echo "package_checks_required=$package_checks_required"
             echo "release_typecheck_required=$release_typecheck_required"
+            echo "stack_redaction_browsers_required=$stack_redaction_browsers_required"
             echo "web_build_required=$web_build_required"
             echo "web_image_smoke_required=$web_image_smoke_required"
             echo "windows_scripts_required=$windows_scripts_required"
@@ -1628,6 +1638,36 @@ jobs:
             /tmp/web-production.log
           retention-days: 7
 
+  stack-redaction-browsers:
+    needs: ci-plan
+    if: >-
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@2703e4d3ed115089e593e4ca5cc749be4a5d8cee
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Install Firefox and WebKit
+        run: bunx playwright install --with-deps firefox webkit
+
+      - name: Test browser stack redaction
+        run: bun --filter @stll/web test:e2e:stack-redaction
+
   e2e-vite-canary:
     needs: ci-plan
     if: >-
@@ -2290,6 +2330,7 @@ jobs:
         landing-build,
         marketing-screenshots,
         e2e,
+        stack-redaction-browsers,
         api-image-deps,
         legal-atlas-image,
         windows-scripts,
@@ -2318,6 +2359,7 @@ jobs:
           PLAN_RESULT: ${{ needs.ci-plan.result }}
           POSTGRES_SUITES_RESULT: ${{ needs.postgres-suites.result }}
           RELEASE_TYPECHECK_RESULT: ${{ needs.release-typecheck.result }}
+          STACK_REDACTION_BROWSERS_RESULT: ${{ needs.stack-redaction-browsers.result }}
           TYPECHECK_BASELINE_RESULT: ${{ needs.typecheck-baseline.result }}
           WEB_RESULT: ${{ needs.web-build.result }}
           WEB_IMAGE_SMOKE_RESULT: ${{ needs.web-image-smoke.result }}
@@ -2337,6 +2379,7 @@ jobs:
                   || "$CODE_QUALITY_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "cancelled" \
                   || "$POSTGRES_SUITES_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "cancelled" \
                   || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" \
+                  || "$STACK_REDACTION_BROWSERS_RESULT" == "failure" || "$STACK_REDACTION_BROWSERS_RESULT" == "cancelled" \
                   || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" \
                   || "$WEB_RESULT" == "failure" || "$WEB_RESULT" == "cancelled" \
                   || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" \
@@ -2374,12 +2417,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$COLLAB_REDIS_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$MARKETING_SCREENSHOTS_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$COLLAB_REDIS_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" || "$STACK_REDACTION_BROWSERS_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$MARKETING_SCREENSHOTS_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$COLLAB_REDIS_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$MARKETING_SCREENSHOTS_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$COLLAB_REDIS_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$STACK_REDACTION_BROWSERS_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$MARKETING_SCREENSHOTS_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi

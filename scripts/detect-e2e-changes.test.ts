@@ -674,6 +674,38 @@ describe("detect-e2e-changes", () => {
     expect(playwrightSetup).toContain("bunx playwright install-deps chromium");
   });
 
+  test("isolates cross-engine stack redaction from Chromium E2E", () => {
+    const plan = workflowJob("ci-plan");
+    const stackRedaction = workflowJob("stack-redaction-browsers");
+    const result = workflowJob("ci-result");
+
+    expect(plan).toContain("stack_redaction_browsers_required:");
+    for (const owningPath of [
+      "apps/web/src/lib/analytics/stack-redaction.ts",
+      "apps/web/e2e/stack-redaction/*",
+      "apps/web/e2e/playwright.stack-redaction.config.ts",
+      "apps/web/e2e/tsconfig.json",
+      "apps/web/tsconfig.json",
+      "scripts/bun-ci-retry.sh",
+      "bunfig.toml",
+      ".npmrc",
+    ]) {
+      expect(plan).toContain(owningPath);
+    }
+    expect(stackRedaction).toContain(
+      "needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'",
+    );
+    expect(stackRedaction).toContain(
+      "bunx playwright install --with-deps firefox webkit",
+    );
+    expect(stackRedaction).toContain(
+      "bun --filter @stll/web test:e2e:stack-redaction",
+    );
+    expect(stackRedaction).not.toContain("setup-playwright");
+    expect(result).toContain("stack-redaction-browsers");
+    expect(result).toContain("STACK_REDACTION_BROWSERS_RESULT");
+  });
+
   test("mints the release App token only inside its deployment environment", () => {
     // The key is an environment secret of `release-app`, whose deployment
     // policy is main and release tags. A job that reads it without declaring

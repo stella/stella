@@ -3,14 +3,12 @@ import { posthog } from "posthog-js";
 import type { CaptureResult, SupportedWebVitalsMetrics } from "posthog-js";
 
 import { env } from "@/env";
-import {
-  normalizeTelemetryErrorTypeName,
-  telemetryErrorType,
-} from "@/lib/analytics/error-diagnostics";
+import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
 import { isErrorReference } from "@/lib/analytics/error-reference";
 import { fingerprintExceptionEvent } from "@/lib/analytics/exception-fingerprint";
 import { pickIngestionRequired } from "@/lib/analytics/posthog-ingestion";
 import type { sanitizeRouteErrorLifecycleEvent } from "@/lib/analytics/posthog-route-error";
+import { captureRedactedException } from "@/lib/analytics/stack-redaction";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 import type {
   Analytics,
@@ -93,48 +91,6 @@ const telemetryAreaProperty = (
     : undefined;
 };
 
-// The deepest error in a `cause` chain carries the stack of the original
-// failure site; wrapper classes (boundary telemetry errors) only record
-// where they were constructed. `cause` is writable, so third-party code can
-// hand us a cycle; the visited set bounds the walk.
-const deepestCause = (error: Error): Error => {
-  let current = error;
-  const seen = new Set<Error>([error]);
-  while (current.cause instanceof Error && !seen.has(current.cause)) {
-    current = current.cause;
-    seen.add(current);
-  }
-  return current;
-};
-
-// A V8 stack begins with `<name>: <message>`; the message can carry PII, so
-// keep only the frame lines (`    at …`), which name bundled assets and
-// minified symbols but never user content.
-const redactedStack = (error: Error): string | undefined => {
-  const { stack } = deepestCause(error);
-  if (typeof stack !== "string") {
-    return undefined;
-  }
-  const frames = stack.split("\n").filter((line) => /^\s+at /u.test(line));
-  if (frames.length === 0) {
-    return undefined;
-  }
-  return [`${telemetryErrorType(error)}:`, ...frames].join("\n");
-};
-
-const toRedactedTelemetryError = (error: unknown): Error => {
-  // eslint-disable-next-line unicorn/error-message -- the original message is intentionally dropped so telemetry cannot leak PII from the underlying error; the error class is carried in `.name` instead.
-  const redacted = new Error("");
-  redacted.name = telemetryErrorType(error);
-  const stack = error instanceof Error ? redactedStack(error) : undefined;
-  if (stack === undefined) {
-    Reflect.deleteProperty(redacted, "stack");
-  } else {
-    redacted.stack = stack;
-  }
-  return redacted;
-};
-
 // Structural frame fields only: code locations and symbol names from the
 // deployed bundle. Free-text fields (context lines, local variables) never
 // pass through.
@@ -152,9 +108,9 @@ type SanitizedFrame = {
 // beyond identifier punctuation is treated as untrusted and dropped.
 const FRAME_SYMBOL = /^[\w$.<>[\]#~]{1,120}$/u;
 
-const stripQuery = (url: string): string => {
-  const queryIndex = url.indexOf("?");
-  return queryIndex === -1 ? url : url.slice(0, queryIndex);
+const stripUrlMetadata = (url: string): string => {
+  const terminator = url.search(/[?#]/u);
+  return terminator === -1 ? url : url.slice(0, terminator);
 };
 
 const sanitizeFrame = (frame: unknown): SanitizedFrame => {
@@ -169,8 +125,10 @@ const sanitizeFrame = (frame: unknown): SanitizedFrame => {
   const colno = frame["colno"];
   return {
     ...(typeof platform === "string" ? { platform } : {}),
-    // Query strings on asset URLs can carry tokens; keep only the path.
-    ...(typeof filename === "string" ? { filename: stripQuery(filename) } : {}),
+    // URL metadata on asset URLs can carry tokens; keep only the path.
+    ...(typeof filename === "string"
+      ? { filename: stripUrlMetadata(filename) }
+      : {}),
     ...(typeof functionName === "string" && FRAME_SYMBOL.test(functionName)
       ? { function: functionName }
       : {}),
@@ -594,9 +552,11 @@ export const createPostHogAnalytics = ({
         return;
       }
       logDevError(error, devErrorContext(context));
-      posthog.captureException(toRedactedTelemetryError(error), {
-        ...errorContextProperties(context),
-        ...telemetryAreaProperty(error),
+      captureRedactedException(error, (redacted) => {
+        posthog.captureException(redacted, {
+          ...errorContextProperties(context),
+          ...telemetryAreaProperty(error),
+        });
       });
     },
     capturePageViewed: ({ path }) => {
