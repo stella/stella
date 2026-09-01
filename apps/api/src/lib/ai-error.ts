@@ -58,18 +58,24 @@ const providerStatusCode = (error: unknown): number | null => {
     return null;
   }
 
-  // Range-checked like the nested body fields below: an integer outside the
-  // HTTP range is not a status, and treating one as one both mis-names the
-  // failure (>= 500 would read as a provider outage) and puts a meaningless
-  // number in the failure log.
-  const statusCode = error["statusCode"];
-  if (isHttpStatus(statusCode)) {
-    return statusCode;
-  }
+  // A `HandlerError` answers with a status of this service's own: the AI stack
+  // wraps a provider failure in a fixed 502 and keeps the provider's status in
+  // `code`. Reading `status` off one names every wrapped failure by the
+  // wrapper, so only the provider-owned fields below are read for it.
+  if (!HandlerError.is(error)) {
+    // Range-checked like the nested body fields below: an integer outside the
+    // HTTP range is not a status, and treating one as one both mis-names the
+    // failure (>= 500 would read as a provider outage) and puts a meaningless
+    // number in the failure log.
+    const statusCode = error["statusCode"];
+    if (isHttpStatus(statusCode)) {
+      return statusCode;
+    }
 
-  const status = error["status"];
-  if (isHttpStatus(status)) {
-    return status;
+    const status = error["status"];
+    if (isHttpStatus(status)) {
+      return status;
+    }
   }
 
   // TanStack's RUN_ERROR contract carries `code` as a string. Its adapters
@@ -193,14 +199,13 @@ const classifyAIErrorInternal = (
     // retrying won't help.
     //
     // Only a provider status or explicit provider-owned credential marker
-    // counts: `HandlerError` carries a `status` of its own, and this service
-    // raises its own 401 refusals, whose curated copy this would otherwise
-    // replace. A provider 403 stays unmapped because it is ambiguous
-    // (permission, region, or account state) where a 401 is not.
+    // counts, which is what keeps a 401 this service raised itself out of
+    // here: its curated copy would otherwise be replaced by the provider's.
+    // A provider 403 stays unmapped because it is ambiguous (permission,
+    // region, or account state) where a 401 is not.
     if (
-      (statusCode === 401 ||
-        (statusCode === null && isProviderCredentialRejection(error))) &&
-      !HandlerError.is(error)
+      statusCode === 401 ||
+      (statusCode === null && isProviderCredentialRejection(error))
     ) {
       return "provider_credentials_rejected";
     }
@@ -284,10 +289,9 @@ const isChatTerminalError = (error: unknown): boolean =>
  * configuration state the caller can act on (no key for the role, 403; a
  * provider or model that does not serve it, 400). They are invisible to
  * `classifyAIError`, which names failures from provider HTTP statuses and
- * explicit provider-owned markers; `HandlerError` carries a `status` of its
- * own, so a 403 reaches the classifier looking like a provider error, matches
- * none of the mapped statuses, and falls through to `unknown`: "a shape this
- * code does not anticipate", the exact opposite of what it is.
+ * explicit provider-owned markers, and a status this service chose is neither:
+ * such a refusal falls through to `unknown`, "a shape this code does not
+ * anticipate", the exact opposite of what it is.
  *
  * A `ChatTerminalError` is invisible to the classifier for the same reason,
  * and carries no status at all to fall back on: the chat stream constructs it

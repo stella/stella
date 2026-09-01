@@ -17,6 +17,7 @@ import {
 } from "@stll/ai-catalog";
 
 import type { CachingDecision } from "@/api/lib/ai-config";
+import { classifyAIError } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   generateTanStackObjectForRole,
@@ -776,6 +777,30 @@ describe("TanStack AI text generation", () => {
       message: "OpenAI rejected the request.",
       status: 502,
     });
+  });
+
+  test("classifies provider statuses after the run-error boundary", async () => {
+    capturedChatOptions.length = 0;
+    nextChatResult = createRunErrorStream({
+      code: "429",
+      message: "OpenAI rate limit exceeded.",
+    });
+
+    const caught = await generateTextForTestModel({
+      caching: noCaching,
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: "Say hello.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toMatchObject({ code: "429", status: 502 });
+    expect(classifyAIError(caught)).toBe("quota_exhausted");
   });
 
   test("propagates provider run errors from streaming text", async () => {
