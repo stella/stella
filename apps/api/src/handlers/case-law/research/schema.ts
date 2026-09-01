@@ -1,12 +1,13 @@
 import { t } from "elysia";
+import type { Static } from "elysia";
 
 import {
-  CASE_LAW_RESEARCH_ANSWER_TYPES,
   CASE_LAW_RESEARCH_DISPOSITIONS,
   CASE_LAW_RESEARCH_QUERY_VERSION,
   CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH,
   CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH,
 } from "@stll/api-contract";
+import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 
 import type {
   caseLawResearchAnswers,
@@ -90,10 +91,26 @@ const researchQuestionSchema = t.String({
   maxLength: CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH,
 });
 
+// Spelled out so Eden keeps the literal union; a mapped `t.Union` widens it.
+// Not `t.UnionEnum` on the optional path: an absent optional UnionEnum coerces
+// to its first member, which would silently retype every column on a rename.
+const researchAnswerTypeSchema = t.Union([
+  t.Literal("yes_no"),
+  t.Literal("text"),
+]);
+
+// Both directions of the mirror: a member added to either side fails here.
+type MirroredAnswerType = Static<typeof researchAnswerTypeSchema>;
+true satisfies MirroredAnswerType extends CaseLawResearchAnswerType
+  ? CaseLawResearchAnswerType extends MirroredAnswerType
+    ? true
+    : never
+  : never;
+
 export const createResearchColumnBodySchema = t.Object(
   {
     question: researchQuestionSchema,
-    answerType: t.UnionEnum(CASE_LAW_RESEARCH_ANSWER_TYPES),
+    answerType: researchAnswerTypeSchema,
   },
   { additionalProperties: false },
 );
@@ -101,11 +118,7 @@ export const createResearchColumnBodySchema = t.Object(
 export const updateResearchColumnBodySchema = t.Object(
   {
     question: t.Optional(researchQuestionSchema),
-    // Not `t.UnionEnum`: an absent optional UnionEnum coerces to its first
-    // member, which would silently retype every column on a rename.
-    answerType: t.Optional(
-      t.Union(CASE_LAW_RESEARCH_ANSWER_TYPES.map((type) => t.Literal(type))),
-    ),
+    answerType: t.Optional(researchAnswerTypeSchema),
   },
   { additionalProperties: false },
 );
@@ -139,15 +152,15 @@ export const runResearchAnswersBodySchema = t.Object(
   { additionalProperties: false },
 );
 
-export const researchAnswersListQuerySchema = t.Object({
-  cursor: t.Optional(t.String({ maxLength: 512 })),
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.caseLawResearchAnswersPageSizeMax,
+export const lookupResearchAnswersBodySchema = t.Object(
+  {
+    decisionIds: t.Array(tSafeId("caseLawDecision"), {
+      minItems: 1,
+      maxItems: LIMITS.caseLawResearchAnswersLookupDecisionsMax,
     }),
-  ),
-});
+  },
+  { additionalProperties: false },
+);
 
 export const toResearchColumnResponse = (
   row: typeof caseLawResearchColumns.$inferSelect,
@@ -163,6 +176,7 @@ export const toResearchColumnResponse = (
 
 export const toResearchAnswerResponse = (
   row: typeof caseLawResearchAnswers.$inferSelect,
+  now: Date,
 ) => ({
   columnId: row.columnId,
   decisionId: row.decisionId,
@@ -172,6 +186,15 @@ export const toResearchAnswerResponse = (
   run: row.run,
   failureReason: row.failureReason,
   updatedAt: row.updatedAt.toISOString(),
+  /**
+   * A pending cell whose run went quiet past the stale window: the process
+   * serving it is gone, and a new run may claim it. Decided on the server's
+   * clock so the client never compares timestamps of its own.
+   */
+  stale:
+    row.state === "pending" &&
+    now.getTime() - row.updatedAt.getTime() >
+      LIMITS.caseLawResearchPendingStaleMs,
 });
 
 export const toResearchTableResponse = (

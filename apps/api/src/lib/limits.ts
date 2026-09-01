@@ -397,8 +397,8 @@ export const LIMITS = {
   caseLawResearchRunDecisionsMax: 100,
   /** Decisions answered concurrently inside one run. */
   caseLawResearchRunConcurrency: 3,
-  /** Answers one list page returns. */
-  caseLawResearchAnswersPageSizeMax: 2000,
+  /** Decisions one answers lookup may name; the client asks for what it shows. */
+  caseLawResearchAnswersLookupDecisionsMax: 500,
   /** A pending cell older than this is a run that died and may be re-queued. */
   caseLawResearchPendingStaleMs: 10 * 60 * 1000,
   /** Decision text sent whole to the model; longer texts are retrieved by passage. */

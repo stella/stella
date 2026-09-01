@@ -2,6 +2,7 @@ import { MoreHorizontalIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type {
+  CaseLawResearchAnswerState,
   CaseLawResearchDisposition,
   CaseLawResearchYesNoValue,
 } from "@stll/api-contract";
@@ -22,6 +23,7 @@ import type { Decision } from "@/features/case-law/components/decision-cells";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
 import {
   DECISION_COLUMN_LABEL_KEYS,
+  DECISION_GROUP_BY_OPTIONS,
   decisionGroupKey,
   decisionTableSchema,
 } from "@/features/case-law/decision-columns";
@@ -141,7 +143,7 @@ export const ResearchTableView = ({
     if (key === "") {
       return t("caseLaw.research.ungrouped");
     }
-    if (answerGroupColumnId(groupBy) !== null) {
+    if (!isDecisionGroupBy(groupBy)) {
       const labelKey = answerGroupLabelKey(key);
       return labelKey === null ? key : t(labelKey);
     }
@@ -200,22 +202,35 @@ const answerGroupKeyFor = (answer: ResearchAnswer | undefined): string => {
 const isYesNoValue = (value: string): value is CaseLawResearchYesNoValue =>
   CASE_LAW_RESEARCH_YES_NO_VALUES.some((candidate) => candidate === value);
 
+/** The states a cell can be grouped under when it holds no yes/no value. */
+const ANSWER_STATE_LABEL_KEYS = {
+  pending: "caseLaw.research.answers.pending",
+  not_allowed: "caseLaw.research.answers.notAllowed",
+  failed: "caseLaw.research.answers.failed",
+} as const satisfies Record<
+  Exclude<CaseLawResearchAnswerState, "answered">,
+  TranslationKey
+>;
+
+type AnswerGroupLabelKey =
+  | (typeof YES_NO_LABEL_KEYS)[keyof typeof YES_NO_LABEL_KEYS]
+  | (typeof ANSWER_STATE_LABEL_KEYS)[keyof typeof ANSWER_STATE_LABEL_KEYS];
+
+const isUnansweredState = (
+  key: string,
+): key is keyof typeof ANSWER_STATE_LABEL_KEYS =>
+  Object.hasOwn(ANSWER_STATE_LABEL_KEYS, key);
+
 /** The label of an answer group; null for a free-text answer, shown verbatim. */
-const answerGroupLabelKey = (key: string): TranslationKey | null => {
+const answerGroupLabelKey = (key: string): AnswerGroupLabelKey | null => {
   if (isYesNoValue(key)) {
     return YES_NO_LABEL_KEYS[key];
   }
-  switch (key) {
-    case "pending":
-      return "caseLaw.research.answers.pending";
-    case "not_allowed":
-      return "caseLaw.research.answers.notAllowed";
-    case "failed":
-      return "caseLaw.research.answers.failed";
-    default:
-      return null;
-  }
+  return isUnansweredState(key) ? ANSWER_STATE_LABEL_KEYS[key] : null;
 };
+
+const isDecisionGroupBy = (value: ResearchGroupBy): value is DecisionGroupBy =>
+  DECISION_GROUP_BY_OPTIONS.some((option) => option === value);
 
 type ColumnLabels = Record<DecisionColumnId, string>;
 
@@ -305,14 +320,14 @@ const groupRows = (
   if (groupBy === "none") {
     return [{ key: null, rows: [...rows] }];
   }
-  const answerColumnId = answerGroupColumnId(groupBy);
   const keyOf = (row: ResearchRow<Decision>): string => {
-    if (answerColumnId !== null) {
-      return answerGroupKeyFor(
-        answersByKey.get(answerKey(answerColumnId, row.decision.id)),
-      );
+    if (isDecisionGroupBy(groupBy)) {
+      return decisionGroupKey(groupBy, row.decision) ?? "";
     }
-    return decisionGroupKey(groupBy, row.decision) ?? "";
+    const answerColumnId = answerGroupColumnId(groupBy) ?? "";
+    return answerGroupKeyFor(
+      answersByKey.get(answerKey(answerColumnId, row.decision.id)),
+    );
   };
   const groups = new Map<string, ResearchRow<Decision>[]>();
   for (const row of rows) {

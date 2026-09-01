@@ -256,37 +256,50 @@ const answerDecision = async (
     questions,
     knownAnchorIds,
   });
-  const completedAt = new Date().toISOString();
-  await writeOutcomes(
-    safeDb,
-    input.organizationId,
-    decisionId,
-    parsed.map((entry) => {
-      if (entry.outcome.state === "failed") {
-        return entry;
-      }
-      const run: CaseLawResearchAnswerRun = {
-        version: 1,
-        model: generated.value.modelId,
-        completedAt,
-        retrieved: text.retrieved,
-        rationale: entry.outcome.rationale,
-        passages: entry.outcome.anchorIds.map((anchorId) => ({
-          anchorId,
-          excerpt: (excerptByAnchor.get(anchorId) ?? "").slice(0, 300),
-        })),
-      };
-      return {
-        columnId: entry.columnId,
-        outcome: {
-          state: "answered",
-          answer: entry.outcome.answer,
-          confidence: entry.outcome.confidence,
-          run,
-        },
-      };
-    }),
+  // The parser speaks in plain column ids; the branded ids come back from the
+  // questions we asked, so an id the model invented can never reach a write.
+  const brandedColumnIds = new Map<string, SafeId<"caseLawResearchColumn">>(
+    questions.map((question) => [question.columnId, question.columnId]),
   );
+  const completedAt = new Date().toISOString();
+  const outcomes: ColumnOutcome[] = [];
+  for (const entry of parsed) {
+    const columnId = brandedColumnIds.get(entry.columnId);
+    if (columnId === undefined) {
+      continue;
+    }
+    if (entry.outcome.state === "failed") {
+      outcomes.push({
+        columnId,
+        outcome: {
+          state: "failed",
+          failureReason: entry.outcome.failureReason,
+        },
+      });
+      continue;
+    }
+    const run: CaseLawResearchAnswerRun = {
+      version: 1,
+      model: generated.value.modelId,
+      completedAt,
+      retrieved: text.retrieved,
+      rationale: entry.outcome.rationale,
+      passages: entry.outcome.anchorIds.map((anchorId) => ({
+        anchorId,
+        excerpt: (excerptByAnchor.get(anchorId) ?? "").slice(0, 300),
+      })),
+    };
+    outcomes.push({
+      columnId,
+      outcome: {
+        state: "answered",
+        answer: entry.outcome.answer,
+        confidence: entry.outcome.confidence,
+        run,
+      },
+    });
+  }
+  await writeOutcomes(safeDb, input.organizationId, decisionId, outcomes);
 };
 
 const pendingColumnsFor = async (
@@ -493,7 +506,10 @@ type AnswerOutcome =
   | { state: "not_allowed" }
   | { state: "failed"; failureReason: ResearchAnswerFailureReason };
 
-type ColumnOutcome = { columnId: string; outcome: AnswerOutcome };
+type ColumnOutcome = {
+  columnId: SafeId<"caseLawResearchColumn">;
+  outcome: AnswerOutcome;
+};
 
 /** Persist one decision's outcomes; only cells still pending are touched. */
 const writeOutcomes = async (

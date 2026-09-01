@@ -1,16 +1,10 @@
 import { Result } from "better-result";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
-// SAFETY: rootDb is used only to build the tenant-scoped handle the detached
-// run writes through after the request scope has ended; the scope carries the
-// caller's organization and user, so RLS applies exactly as in the request.
-// eslint-disable-next-line no-restricted-imports -- background task outlives the request scope; no ctx.safeDb available
-import { rootDb } from "@/api/db/root";
 import {
   caseLawResearchAnswers,
   caseLawResearchColumns,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
 import {
   researchTableParamsSchema,
   runResearchAnswersBodySchema,
@@ -29,6 +23,7 @@ import type { ResearchRunColumn } from "@/api/lib/case-law/research-answer-runne
 import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { createRootSafeDb } from "@/api/lib/root-scoped-db";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
@@ -108,6 +103,8 @@ const runResearchAnswersHandler = createSafeRootHandler(
             inArray(caseLawResearchColumns.id, body.columnIds),
           );
         }
+        // Locked until the pending cells are written, so a question edited in
+        // between cannot have the old wording answered under the new heading.
         const columns = await tx
           .select({
             id: caseLawResearchColumns.id,
@@ -117,7 +114,8 @@ const runResearchAnswersHandler = createSafeRootHandler(
           .from(caseLawResearchColumns)
           .where(and(...columnConditions))
           .orderBy(asc(caseLawResearchColumns.position))
-          .limit(LIMITS.caseLawResearchColumnsPerTable);
+          .limit(LIMITS.caseLawResearchColumnsPerTable)
+          .for("update");
         if (columns.length === 0) {
           return { columns: [], pairs: 0 };
         }
@@ -235,12 +233,13 @@ const runResearchAnswersHandler = createSafeRootHandler(
           promptCachingEnabled,
         },
         {
-          safeDb: createSafeDb(
-            rootDb,
-            [],
-            session.activeOrganizationId,
-            user.id,
-          ),
+          // The run outlives the request; this scope carries the caller's
+          // organization and user, so RLS applies exactly as it did here.
+          safeDb: createRootSafeDb({
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+            workspaceIds: [],
+          }),
           caseLawDb: caseLawPublicReadDb,
         },
       ),

@@ -246,6 +246,11 @@ export const brandPersistedCaseLawResearchTableId = (
 ): SafeId<"caseLawResearchTable"> =>
   toSafeId<"caseLawResearchTable">(researchTableId);
 
+export const brandPersistedCaseLawResearchColumnId = (
+  researchColumnId: string,
+): SafeId<"caseLawResearchColumn"> =>
+  toSafeId<"caseLawResearchColumn">(researchColumnId);
+
 export const brandPersistedTimeEntryId = (
   timeEntryId: string,
 ): SafeId<"timeEntry"> => toSafeId<"timeEntry">(timeEntryId);

@@ -131,12 +131,15 @@ describe("parsing the model's answers", () => {
         expect(parsed.map((entry) => entry.columnId)).toEqual(
           asked.map((entry) => entry.columnId),
         );
-        for (const [index, entry] of parsed.entries()) {
-          const expected = asked[index];
+        for (const [index, expected] of asked.entries()) {
+          const entry = parsed[index];
+          if (entry === undefined) {
+            throw new Error(`no outcome for question ${index}`);
+          }
           if (entry.outcome.state === "failed") {
             continue;
           }
-          expect(entry.outcome.answer.type).toBe(expected?.answerType);
+          expect(entry.outcome.answer.type).toBe(expected.answerType);
           expect(entry.outcome.rationale.length).toBeLessThanOrEqual(600);
           // Cited anchors are a subsequence of the prompt's anchors: nothing
           // invented, and prompt order kept.

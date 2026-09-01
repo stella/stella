@@ -81,6 +81,7 @@ import type {
   ResearchGroupBy,
 } from "@/features/case-law/research/research-table-view";
 import { mergeResearchRows } from "@/features/case-law/research/row-model";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -135,9 +136,6 @@ export const Route = createFileRoute("/law/cases/research/$tableId")({
   component: ResearchTablePage,
   pendingComponent: ResearchTablePending,
 });
-
-/** Decisions one run request queues; the server bounds it the same way. */
-const RUN_BATCH_SIZE = 100;
 
 /** Every column but the language: the case-number cell already names it. */
 const defaultVisibleColumns = (): ReadonlySet<DecisionColumnId> =>
@@ -209,11 +207,6 @@ function ResearchTablePage() {
     decisionsInfiniteOptions(
       savedQueryToDecisionFilters(detail.table.savedQuery),
     ),
-  );
-  // Cells are fetched separately from the table: they change while a run
-  // works, and the poll must not refetch the rows with them.
-  const answersQuery = useQuery(
-    researchAnswersOptions({ activeOrganizationId, tableId }),
   );
   const inspector = useInspectorView();
 
@@ -337,16 +330,29 @@ function ResearchTablePage() {
     queryRows,
     showExcluded,
   });
+  // Cells are fetched for the decisions on screen, separately from the rows:
+  // they change while a run works, and the poll must not refetch the rows.
+  const answersQuery = useQuery(
+    researchAnswersOptions({
+      activeOrganizationId,
+      tableId,
+      decisionIds: mergedRows.map((row) => row.decision.id).toSorted(),
+    }),
+  );
   const answersByKey = new Map(
     (answersQuery.data ?? []).map((answer) => [
       answerKey(answer.columnId, answer.decisionId),
       answer,
     ]),
   );
+  // A filter on a column that no longer exists would reject every row.
+  const activeYesNoFilters = [...yesNoFilters].filter(([columnId]) =>
+    answerColumns.some((column) => column.id === columnId),
+  );
   // A yes/no filter keeps the rows whose cell holds that value; cells that
   // were never answered are not "no", so they drop out too.
   const rows = mergedRows.filter((row) =>
-    [...yesNoFilters].every(([columnId, wanted]) => {
+    activeYesNoFilters.every(([columnId, wanted]) => {
       const answer = answersByKey.get(answerKey(columnId, row.decision.id));
       return (
         answer?.state === "answered" &&
@@ -366,8 +372,7 @@ function ResearchTablePage() {
         tableId,
         decisionIds: mergedRows
           .filter((row) => row.disposition !== "excluded")
-          .map((row) => row.decision.id)
-          .slice(0, RUN_BATCH_SIZE),
+          .map((row) => row.decision.id),
       }),
     onSuccess: async ({ queued }) => {
       if (queued === 0) {
@@ -420,6 +425,22 @@ function ResearchTablePage() {
   const pendingCount = (answersQuery.data ?? []).filter(
     (answer) => answer.state === "pending",
   ).length;
+
+  // A run is a detached continuation of the request that queued it. If the
+  // process serving it went away, its cells stay pending past the stale
+  // window (the server marks them); the first reader to notice queues them
+  // again, once per visit, and the server skips whatever a live run holds.
+  const hasStalePending = (answersQuery.data ?? []).some(
+    (answer) => answer.stale,
+  );
+  const [resumedStale, setResumedStale] = useState(false);
+  useExternalSyncEffect(() => {
+    if (!hasStalePending || resumedStale || run.isPending) {
+      return;
+    }
+    setResumedStale(true);
+    run.mutate({ scope: "table" });
+  }, [hasStalePending, resumedStale, run]);
 
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">

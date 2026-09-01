@@ -1,6 +1,6 @@
 import Elysia from "elysia";
 
-import listResearchAnswers from "@/api/handlers/case-law/research/answers-list";
+import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
 import runResearchAnswers from "@/api/handlers/case-law/research/answers-run";
 import createResearchColumn from "@/api/handlers/case-law/research/columns-create";
 import deleteResearchColumn from "@/api/handlers/case-law/research/columns-delete";
@@ -73,10 +73,10 @@ export const caseLawResearchRoute = new Elysia({ prefix: "/case/research" })
     params: deleteResearchColumn.config.params,
     permissions: deleteResearchColumn.config.permissions,
   })
-  .get("/:tableId/answers", listResearchAnswers.handler, {
-    params: listResearchAnswers.config.params,
-    query: listResearchAnswers.config.query,
-    permissions: listResearchAnswers.config.permissions,
+  .post("/:tableId/answers/lookup", lookupResearchAnswers.handler, {
+    body: lookupResearchAnswers.config.body,
+    params: lookupResearchAnswers.config.params,
+    permissions: lookupResearchAnswers.config.permissions,
   })
   .post("/:tableId/answers/run", runResearchAnswers.handler, {
     body: runResearchAnswers.config.body,
