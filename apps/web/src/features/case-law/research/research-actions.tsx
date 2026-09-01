@@ -85,7 +85,7 @@ export const ResearchTableActions = ({
           onClick={() => {
             detached(
               create.mutateAsync(search),
-              "case-law.research.create-from-search",
+              "research-table.create-from-search",
             );
           }}
           size="sm"

@@ -1,6 +1,9 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
-import type { CaseLawResearchSavedQuery } from "@stll/api-contract";
+import type {
+  CaseLawResearchDisposition,
+  CaseLawResearchSavedQuery,
+} from "@stll/api-contract";
 
 import type { DecisionListFilters } from "@/features/case-law/queries/decisions";
 import { api } from "@/lib/api";
@@ -58,6 +61,34 @@ export const researchTableOptions = (key: ResearchTableKey) =>
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
+
+const researchTableApi = (tableId: string) =>
+  api.case.research({ tableId: toSafeId<"caseLawResearchTable">(tableId) });
+
+export const renameResearchTable = async (tableId: string, name: string) =>
+  unwrapEden(await researchTableApi(tableId).patch({ name }));
+
+export const deleteResearchTable = async (tableId: string) =>
+  unwrapEden(await researchTableApi(tableId).delete());
+
+type SetResearchTableDecisionInput = {
+  tableId: string;
+  decisionId: string;
+  /** Null clears the pin or exclusion, leaving the saved query to decide. */
+  disposition: CaseLawResearchDisposition | null;
+};
+
+export const setResearchTableDecision = async ({
+  decisionId: rawDecisionId,
+  disposition,
+  tableId,
+}: SetResearchTableDecisionInput) => {
+  const table = researchTableApi(tableId);
+  const decisionId = toSafeId<"caseLawDecision">(rawDecisionId);
+  return disposition === null
+    ? unwrapEden(await table.decisions({ decisionId }).delete())
+    : unwrapEden(await table.decisions.put({ decisionId, disposition }));
+};
 
 export type ResearchTableDetail = Awaited<
   ReturnType<NonNullable<ReturnType<typeof researchTableOptions>["queryFn"]>>

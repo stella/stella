@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { JSX } from "react";
 
 import type { TableSchema } from "@stll/ui/data-table";
 
@@ -29,7 +29,8 @@ export const DECISION_COLUMN_IDS = [
 
 export type DecisionColumnId = (typeof DECISION_COLUMN_IDS)[number];
 
-export type DecisionColumnRender = (decision: Decision) => ReactNode;
+/** Synchronous by type: a cell is an element or text, never a promise. */
+export type DecisionColumnRender = (decision: Decision) => JSX.Element | string;
 
 export const DECISION_COLUMN_LABEL_KEYS = {
   caseNumber: "caseLaw.columns.caseNumber",

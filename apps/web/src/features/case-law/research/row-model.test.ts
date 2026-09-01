@@ -3,7 +3,10 @@ import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
-import { mergeResearchRows } from "@/features/case-law/research/row-model";
+import {
+  compareDecisionIds,
+  mergeResearchRows,
+} from "@/features/case-law/research/row-model";
 import type { ResearchDecisionDisposition } from "@/features/case-law/research/row-model";
 
 type Row = { id: string };
@@ -69,7 +72,7 @@ describe("research table rows", () => {
           .toSorted(
             (a, b) =>
               a.position - b.position ||
-              a.decisionId.localeCompare(b.decisionId),
+              compareDecisionIds(a.decisionId, b.decisionId),
           )
           .map((e) => e.decisionId);
         expect(

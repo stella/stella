@@ -244,11 +244,11 @@ export const decisionYear = (
 
 export const DecisionDateCell = ({ decision }: { decision: Decision }) => {
   const format = useFormatter();
-  return <>{formatDecisionDate(decision.decisionDate, format)}</>;
+  return formatDecisionDate(decision.decisionDate, format);
 };
 
 export const DecisionLanguageCell = ({ decision }: { decision: Decision }) => {
   const format = useFormatter();
   const language = normalizeCaseLawLanguageSegment(decision.language);
-  return <>{language === null ? "—" : languageLabel(format, language)}</>;
+  return language === null ? "—" : languageLabel(format, language);
 };

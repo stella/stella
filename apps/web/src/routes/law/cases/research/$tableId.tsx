@@ -46,9 +46,12 @@ import type {
 } from "@/features/case-law/decision-columns";
 import { decisionsInfiniteOptions } from "@/features/case-law/queries/decisions";
 import {
+  deleteResearchTable,
+  renameResearchTable,
   researchTableKeys,
   researchTableOptions,
   savedQueryToDecisionFilters,
+  setResearchTableDecision,
 } from "@/features/case-law/research/queries";
 import type { ResearchTableDetail } from "@/features/case-law/research/queries";
 import { ResearchTableView } from "@/features/case-law/research/research-table-view";
@@ -56,16 +59,14 @@ import { mergeResearchRows } from "@/features/case-law/research/row-model";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
-import { unwrapEden } from "@/lib/errors/api";
 import { pageTitleLiteral } from "@/lib/page-title";
+import { createPublicLawHead } from "@/lib/public-law-seo";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
-import { toSafeId } from "@/lib/safe-id";
 import { loadAuthContext } from "@/routes/-auth-context";
 
 export const Route = createFileRoute("/law/cases/research/$tableId")({
@@ -98,12 +99,14 @@ export const Route = createFileRoute("/law/cases/research/$tableId")({
     );
     return { name: detail.table.name };
   },
-  head: ({ loaderData }) => ({
-    meta: [
-      { title: pageTitleLiteral(loaderData?.name ?? "") },
-      { name: "robots", content: "noindex" },
-    ],
-  }),
+  // A member's private working set: never crawled, never shared as a card.
+  head: ({ loaderData, params }) =>
+    createPublicLawHead({
+      crawlAllowed: false,
+      path: `/law/cases/research/${params.tableId}`,
+      title: pageTitleLiteral(loaderData?.name ?? ""),
+      type: "website",
+    }),
   component: ResearchTablePage,
   pendingComponent: ResearchTablePending,
 });
@@ -185,11 +188,7 @@ function ResearchTablePage() {
 
   const rename = useMutation({
     mutationFn: async (name: string) =>
-      unwrapEden(
-        await api.case
-          .research({ tableId: toSafeId<"caseLawResearchTable">(tableId) })
-          .patch({ name }),
-      ),
+      await renameResearchTable(tableId, name),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: researchTableKeys.all });
     },
@@ -207,26 +206,18 @@ function ResearchTablePage() {
     }: {
       decision: Decision;
       disposition: CaseLawResearchDisposition | null;
-    }) => {
-      const table = api.case.research({
-        tableId: toSafeId<"caseLawResearchTable">(tableId),
-      });
-      const decisionId = toSafeId<"caseLawDecision">(decision.id);
-      return disposition === null
-        ? unwrapEden(await table.decisions({ decisionId }).delete())
-        : unwrapEden(await table.decisions.put({ decisionId, disposition }));
-    },
+    }) =>
+      await setResearchTableDecision({
+        tableId,
+        decisionId: decision.id,
+        disposition,
+      }),
     onSuccess: invalidateTable,
     onError: reportError,
   });
 
   const remove = useMutation({
-    mutationFn: async () =>
-      unwrapEden(
-        await api.case
-          .research({ tableId: toSafeId<"caseLawResearchTable">(tableId) })
-          .delete(),
-      ),
+    mutationFn: async () => await deleteResearchTable(tableId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: researchTableKeys.all });
       await navigate({ to: "/law/cases/research" });
@@ -351,7 +342,7 @@ function ResearchTablePage() {
         onSetDisposition={(decision, disposition) => {
           detached(
             setDisposition.mutateAsync({ decision, disposition }),
-            "case-law.research.set-disposition",
+            "research-table.set-disposition",
           );
         }}
         rows={rows}
@@ -365,7 +356,7 @@ function ResearchTablePage() {
             onClick={() => {
               detached(
                 decisionsQuery.fetchNextPage(),
-                "case-law.research.fetch-next-page",
+                "research-table.fetch-next-page",
               );
             }}
             variant="outline"
@@ -394,7 +385,7 @@ function ResearchTablePage() {
             <Button
               disabled={remove.isPending}
               onClick={() => {
-                detached(remove.mutateAsync(), "case-law.research.delete");
+                detached(remove.mutateAsync(), "research-table.delete");
               }}
               variant="destructive"
             >
@@ -438,7 +429,7 @@ function TableNameField({
         onRename(trimmed).catch(() => {
           setDraft(name);
         }),
-        "case-law.research.rename",
+        "research-table.rename",
       );
     }
   };

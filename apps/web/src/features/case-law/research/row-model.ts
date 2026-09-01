@@ -12,6 +12,14 @@ export type ResearchRow<TDecision> = {
   disposition: CaseLawResearchDisposition | null;
 };
 
+/** Ids are opaque keys, not words: code-point order is the stable tie-break. */
+export const compareDecisionIds = (a: string, b: string): number => {
+  if (a < b) {
+    return -1;
+  }
+  return a > b ? 1 : 0;
+};
+
 type MergeResearchRowsOptions<TDecision> = {
   /** What the saved query returns, in its order; may be several pages. */
   queryRows: readonly TDecision[];
@@ -47,7 +55,8 @@ export const mergeResearchRows = <TDecision extends { id: string }>({
     .filter((entry) => entry.disposition === "pinned")
     .toSorted(
       (a, b) =>
-        a.position - b.position || a.decisionId.localeCompare(b.decisionId),
+        a.position - b.position ||
+        compareDecisionIds(a.decisionId, b.decisionId),
     );
   for (const entry of pinned) {
     const decision = pinnedById.get(entry.decisionId);

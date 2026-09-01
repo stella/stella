@@ -25,19 +25,18 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
 import {
+  deleteResearchTable,
   researchTableKeys,
   researchTablesInfiniteOptions,
 } from "@/features/case-law/research/queries";
 import type { ResearchTableSummary } from "@/features/case-law/research/queries";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
-import { unwrapEden } from "@/lib/errors/api";
 import { pageTitle } from "@/lib/page-title";
+import { createPublicLawHead } from "@/lib/public-law-seo";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
-import { toSafeId } from "@/lib/safe-id";
 import { loadAuthContext } from "@/routes/-auth-context";
 
 export const Route = createFileRoute("/law/cases/research/")({
@@ -60,7 +59,14 @@ export const Route = createFileRoute("/law/cases/research/")({
       researchTablesInfiniteOptions({ activeOrganizationId }),
     );
   },
-  head: () => ({ meta: [{ title: pageTitle("caseLaw.research.title") }] }),
+  // Signed-in only: never crawled, never shared as a card.
+  head: () =>
+    createPublicLawHead({
+      crawlAllowed: false,
+      path: "/law/cases/research",
+      title: pageTitle("caseLaw.research.title"),
+      type: "website",
+    }),
   component: ResearchTablesPage,
   pendingComponent: ResearchTablesPending,
 });
@@ -121,7 +127,7 @@ function ResearchTablesPage() {
           <Button
             disabled={isFetchingNextPage}
             onClick={() => {
-              detached(fetchNextPage(), "case-law.research.fetch-next-page");
+              detached(fetchNextPage(), "research-tables.fetch-next-page");
             }}
             variant="outline"
           >
@@ -141,12 +147,7 @@ function ResearchTableListItem({ table }: { table: ResearchTableSummary }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const remove = useMutation({
-    mutationFn: async () =>
-      unwrapEden(
-        await api.case
-          .research({ tableId: toSafeId<"caseLawResearchTable">(table.id) })
-          .delete(),
-      ),
+    mutationFn: async () => await deleteResearchTable(table.id),
     onSuccess: async () => {
       setDeleteOpen(false);
       await queryClient.invalidateQueries({ queryKey: researchTableKeys.all });
@@ -220,7 +221,7 @@ function ResearchTableListItem({ table }: { table: ResearchTableSummary }) {
             <Button
               disabled={remove.isPending}
               onClick={() => {
-                detached(remove.mutateAsync(), "case-law.research.delete");
+                detached(remove.mutateAsync(), "research-tables.delete");
               }}
               variant="destructive"
             >
