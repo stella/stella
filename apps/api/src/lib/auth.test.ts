@@ -853,6 +853,17 @@ describe("OAuth resource provisioning", () => {
 
     expect(oauthPlugin.options.resourceSeedMode).toBe("none");
   });
+
+  test("the fragment bridge runs after the OAuth provider", () => {
+    const pluginIds = getAuth().options.plugins.map((plugin) => plugin.id);
+    const oauthProviderIndex = pluginIds.indexOf("oauth-provider");
+    const fragmentBridgeIndex = pluginIds.indexOf(
+      "stella-oauth-ui-fragment-bridge",
+    );
+
+    expect(oauthProviderIndex).toBeGreaterThanOrEqual(0);
+    expect(fragmentBridgeIndex).toBeGreaterThan(oauthProviderIndex);
+  });
 });
 
 describe("organization lifecycle hook wiring", () => {

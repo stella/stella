@@ -6,6 +6,7 @@ import {
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth-paths";
+import { bridgeOauthUiRedirect } from "@/api/lib/oauth-ui-fragment";
 
 export {
   OAUTH_UI_CONSENT_PATH,
@@ -14,8 +15,6 @@ export {
 } from "@/api/lib/auth-paths";
 
 const OAUTH_SIGNATURE_PARAM = "sig";
-const OAUTH_QUERY_HASH_PARAM = "oauth_query";
-
 const redirectToFrontend = ({
   path,
   request,
@@ -27,9 +26,14 @@ const redirectToFrontend = ({
   const redirectUrl = new URL(path, `${env.FRONTEND_URL.replace(/\/$/u, "")}/`);
 
   if (url.searchParams.has(OAUTH_SIGNATURE_PARAM)) {
-    const fragment = new URLSearchParams();
-    fragment.set(OAUTH_QUERY_HASH_PARAM, url.search.slice(1));
-    redirectUrl.hash = fragment.toString();
+    const bridged = bridgeOauthUiRedirect({
+      authOrigin: url.origin,
+      frontendUrl: env.FRONTEND_URL,
+      location: url.toString(),
+    });
+    if (bridged) {
+      return Response.redirect(bridged, 302);
+    }
   } else {
     redirectUrl.search = url.search;
   }
