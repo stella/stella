@@ -320,7 +320,6 @@ describe("detect-e2e-changes", () => {
     const guardedSteps = {
       "e2e-production-shard": [
         "Install Playwright browsers",
-        "Wait for production web build",
         "Download production web build",
         "Validate production web build",
         "Start production web server",
@@ -563,12 +562,12 @@ describe("detect-e2e-changes", () => {
 
     const production = workflowJob("e2e-production-shard");
     expect(production).not.toContain("Build web for route checks");
-    expect(production).toContain("Wait for production web build");
+    expect(production).toContain("needs: [ci-plan, web-build]");
+    expect(production).toContain("always()");
+    expect(production).toContain("needs.web-build.result == 'success'");
+    expect(production).not.toContain("Wait for production web build");
     expect(production).toContain("Download production web build");
     expect(production).toContain("Validate production web build");
-    expect(production.indexOf("Install Playwright browsers")).toBeLessThan(
-      production.indexOf("Wait for production web build"),
-    );
 
     // The marketing capture serves that same build, never the Vite dev
     // server: PR CI hands the artifact over, and the callers without a
