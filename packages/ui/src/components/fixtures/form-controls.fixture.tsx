@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { panic } from "better-result";
@@ -44,6 +44,13 @@ const fixtureStyles = `
 const FormControlsFixture = () => {
   const [number, setNumber] = useState<number | null>(null);
 
+  useEffect(() => {
+    document.documentElement.dataset["formControlsReady"] = "true";
+    return () => {
+      delete document.documentElement.dataset["formControlsReady"];
+    };
+  }, []);
+
   return (
     <main>
       <style>{fixtureStyles}</style>
@@ -73,4 +80,3 @@ if (!rootElement) {
 }
 
 createRoot(rootElement).render(<FormControlsFixture />);
-document.documentElement.dataset["formControlsReady"] = "true";

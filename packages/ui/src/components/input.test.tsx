@@ -5,6 +5,13 @@ import { describe, expect, test } from "bun:test";
 import { Input } from "./input";
 
 describe("Input", () => {
+  test("keeps a coarse-pointer target while retaining its visual size classes", () => {
+    const markup = renderToStaticMarkup(<Input />);
+
+    expect(markup).toContain("pointer-coarse:min-h-11");
+    expect(markup).toContain("pointer-coarse:h-full");
+  });
+
   test("search inputs always render their search affordance", () => {
     const markup = renderToStaticMarkup(<Input type="search" />);
 

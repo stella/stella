@@ -35,7 +35,6 @@ export * from "./components/input-group";
 export * from "./components/input-otp";
 export * from "./components/label";
 export * from "./components/menu";
-export * from "./components/number-input";
 export * from "./components/outline-rail";
 export * from "./components/pagination";
 export * from "./components/popover";
