@@ -98,6 +98,8 @@ export type {
 export {
   buildKanbanBoardMatrix,
   createKanbanDropIntent,
+  getKanbanBoardColumnIdentity,
+  getKanbanBoardLaneIdentity,
   KANBAN_BOARD_AXES,
   orderKanbanCellsByColumns,
 } from "./matrix";
