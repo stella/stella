@@ -339,11 +339,13 @@ const recordParserFixtures = async (): Promise<void> => {
         log(`  ${stem}: no XHTML, skipped`);
         continue;
       }
-      // Every fixture states where it came from, so a recording whose
-      // origin the query did not return is skipped rather than written
-      // with an invented one.
-      if (decision.sourceUrl === undefined) {
-        log(`  ${stem}: no source URL, skipped`);
+      // The XHTML bytes were fetched from the Cellar manifestation
+      // (`documentUrl`), not from the EUR-Lex portal page (`sourceUrl`);
+      // provenance names the former. A recording whose manifestation the
+      // query did not return is skipped rather than written with the
+      // portal URL standing in.
+      if (decision.documentUrl === undefined) {
+        log(`  ${stem}: no manifestation URL, skipped`);
         continue;
       }
 
@@ -351,7 +353,7 @@ const recordParserFixtures = async (): Promise<void> => {
         {
           name: `${stem}.html.gz`,
           bytes: Bun.gzipSync(Buffer.from(decision.sourceRaw)),
-          sourceUrl: decision.sourceUrl,
+          sourceUrl: decision.documentUrl,
         },
       ];
 
