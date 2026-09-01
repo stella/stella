@@ -1031,6 +1031,12 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
           "error.status_code": 403,
         }),
       );
+      expect(warnSpy).not.toHaveBeenCalledWith(
+        "tanstack_ai.generation.failed",
+        expect.objectContaining({
+          "error.provider.status": expect.any(String),
+        }),
+      );
     } finally {
       errorSpy.mockRestore();
       warnSpy.mockRestore();
