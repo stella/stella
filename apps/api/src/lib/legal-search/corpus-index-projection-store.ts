@@ -25,7 +25,10 @@ import {
   indexIdForCorpusProjectionWorkScope,
   type CorpusProjectionAppendScopedWorkOptions,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
-import { corpusIndexProjectionNeedsWork } from "@/api/lib/legal-search/corpus-index-projection-sql";
+import {
+  corpusIndexProjectionNeedsWork,
+  corpusIndexProjectionProducesAppend,
+} from "@/api/lib/legal-search/corpus-index-projection-sql";
 
 export const CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE =
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS;
@@ -251,15 +254,21 @@ export const reserveCorpusProjectionIntentsTx = async <
           }) satisfies typeof corpusIndexProjectionIntents.$inferInsert,
       ),
     )
+    .onConflictDoNothing({
+      target: [
+        corpusIndexProjectionIntents.family,
+        corpusIndexProjectionIntents.generation,
+        corpusIndexProjectionIntents.entityId,
+        corpusIndexProjectionIntents.epoch,
+      ],
+      where: corpusIndexProjectionProducesAppend(
+        corpusIndexProjectionIntents.status,
+      ),
+    })
     .returning({
       id: corpusIndexProjectionIntents.id,
       leaseExpiresAt: corpusIndexProjectionIntents.leaseExpiresAt,
     });
-  if (inserted.length !== reservations.length) {
-    return panic(
-      `Corpus projection reservation inserted ${inserted.length} of ${reservations.length} intents`,
-    );
-  }
   const expiryByIntentId = new Map(
     inserted.map(({ id, leaseExpiresAt: insertedExpiry }) => {
       if (insertedExpiry === null) {
@@ -268,14 +277,13 @@ export const reserveCorpusProjectionIntentsTx = async <
       return [id, insertedExpiry] as const;
     }),
   );
-  return reservations.map((reservation) => {
+  const leases: CorpusProjectionIntentLease[] = [];
+  for (const reservation of reservations) {
     const insertedExpiry = expiryByIntentId.get(reservation.intentId);
     if (insertedExpiry === undefined) {
-      return panic(
-        `Reserved projection intent was not returned: ${reservation.intentId}`,
-      );
+      continue;
     }
-    return {
+    leases.push({
       intentId: reservation.intentId,
       family: reservation.family,
       generation: reservation.generation,
@@ -285,8 +293,9 @@ export const reserveCorpusProjectionIntentsTx = async <
       indexId: reservation.indexId,
       leaseToken: reservation.leaseToken,
       leaseExpiresAt: insertedExpiry,
-    } satisfies CorpusProjectionIntentLease;
-  });
+    });
+  }
+  return leases;
 };
 
 export type CorpusProjectionReplacementCleanup = {

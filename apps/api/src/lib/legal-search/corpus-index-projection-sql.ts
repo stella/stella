@@ -1,5 +1,13 @@
 import { sql, type SQLWrapper } from "drizzle-orm";
 
+import { CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES } from "@/api/lib/legal-search/corpus-index-projection-contract";
+
+const sqlLiteralValues = (values: readonly string[]) =>
+  sql.join(
+    values.map((value) => sql.raw(`'${value}'`)),
+    sql.raw(","),
+  );
+
 type CorpusProjectionWorkColumns = {
   workStatus: SQLWrapper;
   appliedAction: SQLWrapper;
@@ -39,3 +47,7 @@ export const corpusIndexProjectionNeedsWork = ({
 
 export const corpusIndexProjectionIsBlocked = (workStatus: SQLWrapper) =>
   sql`${workStatus} = 'blocked'`;
+
+/** One source of truth for the partial append-epoch uniqueness boundary. */
+export const corpusIndexProjectionProducesAppend = (status: SQLWrapper) =>
+  sql`${status} IN (${sqlLiteralValues(CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES)})`;
