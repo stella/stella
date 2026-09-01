@@ -1,5 +1,13 @@
 # @stll/workspace-ui
 
+## 0.5.2
+
+### Patch Changes
+
+- [#2718](https://github.com/stella/stella/pull/2718) [`3ba47d9`](https://github.com/stella/stella/commit/3ba47d972edf440db68e290d0d1f30c7ab66e8f7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Hide native scrollbar chrome while retaining horizontal overflow in responsive action toolbars.
+
+- [#2717](https://github.com/stella/stella/pull/2717) [`ee35cfa`](https://github.com/stella/stella/commit/ee35cfa57dac2a87187f9451f53e5d40b2aaf683) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep actions attached to a workspace view tab aligned with its label.
+
 ## 0.5.1
 
 ### Patch Changes
