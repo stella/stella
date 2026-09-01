@@ -1,10 +1,12 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
+import { CORPUS_FAMILIES } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
+  lockCorpusIndexGenerationActivationTx,
   readServingCorpusIndexGenerationTx,
   registerCorpusIndexGenerationTx,
   resumeRetiringCorpusIndexGenerationTx,
@@ -42,6 +44,19 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await client.close();
+});
+
+test("the ingestion role can fence every corpus source family", async () => {
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+    for (const family of CORPUS_FAMILIES) {
+      // oxlint-disable-next-line no-await-in-loop -- one transaction proves the role can acquire every source fence
+      await lockCorpusIndexGenerationActivationTx(
+        asTestRaw<Transaction>(tx),
+        family,
+      );
+    }
+  });
 });
 
 test("generation registration is idempotent and manifest-derived", async () => {
