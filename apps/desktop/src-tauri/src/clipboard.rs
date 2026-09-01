@@ -760,6 +760,8 @@ impl ClipboardManager {
         item.set_group_id(None);
       }
     }
+    // Clips that just lost their organiser fall under the history rules.
+    prune_items(&mut self.items, self.retention, Utc::now());
     self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
@@ -811,6 +813,8 @@ impl ClipboardManager {
       return Ok(false);
     };
     item.set_group_id(group_id);
+    // Ungrouping puts the clip back under the history rules.
+    prune_items(&mut self.items, self.retention, Utc::now());
     self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
@@ -2096,6 +2100,39 @@ mod tests {
     assert!(
       items.iter().map(ClipboardItem::byte_len).sum::<usize>() <= MAX_HISTORY_BYTES
     );
+  }
+
+  #[test]
+  fn losing_the_last_organiser_reapplies_retention() {
+    let now = Utc::now();
+    let mut manager = ready_manager();
+    let group_id = manager
+      .create_group("Templates", ClipboardGroupColor::Gray)
+      .unwrap();
+    let mut ungrouped = text_item(now - Duration::days(400), "ungrouped");
+    ungrouped.set_group_id(Some(group_id.clone()));
+    let ungrouped_id = ungrouped.id().to_string();
+    let mut orphaned = text_item(now - Duration::days(400), "orphaned");
+    orphaned.set_group_id(Some(group_id.clone()));
+    manager.items.push(ungrouped);
+    manager.items.push(orphaned);
+
+    assert!(manager.set_item_group(&ungrouped_id, None).unwrap());
+    assert!(
+      manager
+        .items
+        .iter()
+        .all(|item| item.plain_text() != "ungrouped")
+    );
+    assert!(
+      manager
+        .items
+        .iter()
+        .any(|item| item.plain_text() == "orphaned")
+    );
+
+    assert!(manager.delete_group(&group_id).unwrap());
+    assert!(manager.items.is_empty());
   }
 
   #[test]
