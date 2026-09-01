@@ -114,7 +114,7 @@ const deepestCause = (error: Error): Error => {
 // free-form text cannot ride along as a frame.
 const V8_STACK_FRAME_SYNTAX = /^\s+at /u;
 const CALLSITE_STACK_FRAME_SYNTAX =
-  /^(?:[Aa]sync\*)?(?:[\w$.<>[\]#~/]{0,120}|(?:global|module|eval) code)@\S+:\d+:\d+$/u;
+  /^(?:[Aa]sync\*)?(?:[\p{ID_Continue}$.<>[\]#~/]{0,120}|(?:global|module|eval) code)@\S+:\d+:\d+$/u;
 
 const hasOnlyDecimalDigits = (
   value: string,
@@ -131,6 +131,16 @@ const hasOnlyDecimalDigits = (
     }
   }
   return true;
+};
+
+const hasCallsiteStackSyntax = (line: string): boolean => {
+  const columnSeparator = line.lastIndexOf(":");
+  const lineSeparator = line.lastIndexOf(":", columnSeparator - 1);
+  return (
+    line.lastIndexOf("@", lineSeparator - 1) !== -1 &&
+    hasOnlyDecimalDigits(line, lineSeparator + 1, columnSeparator) &&
+    hasOnlyDecimalDigits(line, columnSeparator + 1, line.length)
+  );
 };
 
 const stripStackFrameUrlMetadata = (frame: string): string => {
@@ -169,38 +179,16 @@ const stripStackFrameUrlMetadata = (frame: string): string => {
   return `${frame.slice(0, urlEnd)}${frame.slice(lineSeparator)}`;
 };
 
-const serializedErrorHeader = (error: Error): string => {
-  const name = typeof error.name === "string" ? error.name : "Error";
-  const message = typeof error.message === "string" ? error.message : "";
-  if (name.length === 0) {
-    return message;
-  }
-  return message.length === 0 ? name : `${name}: ${message}`;
-};
-
-const stackWithoutHeader = (error: Error, stack: string): string => {
-  const header = serializedErrorHeader(error);
-  if (stack === header) {
-    return "";
-  }
-  const prefix = `${header}\n`;
-  return stack.startsWith(prefix) ? stack.slice(prefix.length) : stack;
-};
-
 const redactedStack = (error: Error): string | undefined => {
   const source = deepestCause(error);
   const { stack } = source;
   if (typeof stack !== "string") {
     return undefined;
   }
-  const lines = stackWithoutHeader(source, stack)
-    .split("\n")
-    .filter((line) => line.length > 0);
-  // Callsite engines serialize only frames. Any other line means this is a
-  // V8-style stack whose header may no longer match mutable Error fields.
-  const frameSyntax = lines.every((line) =>
-    CALLSITE_STACK_FRAME_SYNTAX.test(line),
-  )
+  const lines = stack.split("\n").filter((line) => line.length > 0);
+  // Callsite engines start with a bare frame; V8 starts with its serialized
+  // error header. Classify from that immutable text, not mutable Error fields.
+  const frameSyntax = hasCallsiteStackSyntax(lines.at(0) ?? "")
     ? CALLSITE_STACK_FRAME_SYNTAX
     : V8_STACK_FRAME_SYNTAX;
   const frames = lines

@@ -418,6 +418,7 @@ describe("PostHog browser analytics adapter", () => {
       "handleClick/<@https://stella.test/assets/index.js:22:3",
       "async*renderMatter@https://stella.test/assets/index.js:26:5",
       "Async*@https://stella.test/assets/index.js:28:6",
+      "calculÉchéance@https://stella.test/assets/index.js:29:6",
       "global code@https://stella.test/assets/index.js:30:7",
     ],
     indented: [
@@ -434,9 +435,10 @@ describe("PostHog browser analytics adapter", () => {
         key: "phc_test",
       });
       const error = new RangeError("Privileged document name");
-      error.stack = ["RangeError: Privileged document name", ...frames].join(
-        "\n",
-      );
+      error.stack =
+        _syntax === "callsite"
+          ? frames.join("\n")
+          : ["RangeError: Privileged document name", ...frames].join("\n");
 
       analytics.captureError(error);
 
@@ -487,7 +489,9 @@ describe("PostHog browser analytics adapter", () => {
         key: "phc_test",
       });
       const error = new Error("Privileged document name");
-      error.stack = [`Error: ${error.message}`, frame].join("\n");
+      error.stack = frame.startsWith("    at ")
+        ? [`Error: ${error.message}`, frame].join("\n")
+        : frame;
 
       analytics.captureError(error);
 
@@ -507,7 +511,7 @@ describe("PostHog browser analytics adapter", () => {
     const injectedFrame =
       "clientName@https://stella.test/assets/private.js:20:5";
     const actualFrame =
-      "renderMatter@https://stella.test/assets/index.js:10:15";
+      "    at renderMatter (https://stella.test/assets/index.js:10:15)";
     const error = new Error(`Privileged document name\n${injectedFrame}`);
     error.stack = [`Error: ${error.message}`, actualFrame].join("\n");
 
@@ -543,6 +547,26 @@ describe("PostHog browser analytics adapter", () => {
     expect(captured.stack).toBe(
       ["ClientTelemetryError:", actualFrame].join("\n"),
     );
+  });
+
+  test("captureError cannot partially remove a stale serialized header", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    const injectedFrame =
+      "clientName@https://stella.test/assets/private.js:20:5";
+    const error = new Error(`Public summary\n${injectedFrame}`);
+    error.stack = `Error: ${error.message}`;
+    error.message = "Public summary";
+
+    analytics.captureError(error);
+
+    const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+    if (!(captured instanceof Error)) {
+      throw new TypeError("Expected a redacted Error");
+    }
+    expect(captured.stack).toBeUndefined();
   });
 
   test("captureError survives a cyclic cause chain", () => {
