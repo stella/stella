@@ -279,6 +279,13 @@ test("final manifests make every storage and index cost explicit", () => {
       commit_timeout_secs: 60,
       docstore_blocksize: 1_000_000,
       docstore_compression_level: 8,
+      merge_policy: {
+        type: "stable_log",
+        maturation_period: "4hours",
+        merge_factor: 10,
+        max_merge_factor: 12,
+        min_level_num_docs: 100_000,
+      },
       split_num_docs_target: 10_000_000,
       resources: { heap_size: 2_000_000_000 },
     });

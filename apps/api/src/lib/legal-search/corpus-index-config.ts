@@ -76,26 +76,28 @@ type CorpusIndexFieldMapping = {
   output_format?: "number" | "string" | "rfc3339";
 };
 
-/**
- * Split merging. The engine's default `stable_log` policy matures a split
- * after one day, and a matured split is never merged again: a backfill that
- * writes for longer than that leaves its early splits frozen small and
- * numerous. That is a query-time cost, not a storage one — a cold query pays
- * one object-store round trip per split it cannot prune, so split count
- * multiplies cold latency for as long as the generation lives.
- *
- * The period is therefore set past the length of a full-corpus backfill, so
- * splits written during one still consolidate before they mature. The rest are
- * the engine's defaults, restated: a merge policy declared by halves is harder
- * to reason about than one declared whole.
- */
+type CorpusIndexMergePolicy = {
+  type: "stable_log";
+  maturation_period: string;
+  merge_factor: number;
+  max_merge_factor: number;
+  min_level_num_docs: number;
+};
+
+/** Merge policy retained by the legacy generation helpers. */
 export const CORPUS_INDEX_MERGE_POLICY = {
   type: "stable_log",
   maturation_period: "7days",
   merge_factor: 10,
   max_merge_factor: 12,
   min_level_num_docs: 100_000,
-} as const;
+} as const satisfies CorpusIndexMergePolicy;
+
+/** Final-index merge window and asynchronous-delete settlement bound. */
+export const CORPUS_FINAL_INDEX_MERGE_POLICY = {
+  ...CORPUS_INDEX_MERGE_POLICY,
+  maturation_period: "4hours",
+} as const satisfies CorpusIndexMergePolicy;
 
 /** Engine commit window pinned by final-generation manifests and clients. */
 export const CORPUS_INDEX_COMMIT_TIMEOUT_SECS = 60;
@@ -123,7 +125,7 @@ export type CorpusIndexConfig = {
     store_source: boolean;
   };
   indexing_settings: {
-    merge_policy: typeof CORPUS_INDEX_MERGE_POLICY;
+    merge_policy: CorpusIndexMergePolicy;
     commit_timeout_secs?: number;
     docstore_blocksize?: number;
     docstore_compression_level?: number;
