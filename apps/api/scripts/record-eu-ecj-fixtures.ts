@@ -371,6 +371,12 @@ const recordParserFixtures = async (): Promise<void> => {
 
       const pair = portalPairFor(stem);
       if (pair !== undefined) {
+        // The portal page, unlike the manifestation, is what `sourceUrl`
+        // names; a decision without one cannot record its pair honestly.
+        if (decision.sourceUrl === undefined) {
+          log(`  ${stem}: no portal URL, pair left as recorded`);
+          continue;
+        }
         // oxlint-disable-next-line no-await-in-loop -- one portal request per declared pair
         const portal = await fetchPortalPage(decision);
         if (portal.outcome !== "served") {
