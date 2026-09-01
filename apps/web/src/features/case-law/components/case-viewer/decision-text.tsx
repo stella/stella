@@ -400,6 +400,24 @@ const renderBlocksWithHoldingZone = ({
 }): ReactNode[] => {
   const result: ReactNode[] = [];
 
+  // The last paragraph of each footnote carries the return arrow. A block
+  // ends its footnote when the one after it is not a continuation (a
+  // continuation is a footnote paragraph with an empty label).
+  const footnoteLastIds = new Set<string>();
+  for (const [index, block] of blocks.entries()) {
+    if (block.type !== "paragraph" || block.note?.type !== "footnote") {
+      continue;
+    }
+    const next = blocks[index + 1];
+    const nextContinues =
+      next?.type === "paragraph" &&
+      next.note?.type === "footnote" &&
+      next.note.label === "";
+    if (!nextContinues) {
+      footnoteLastIds.add(block.id);
+    }
+  }
+
   // Group consecutive blocks by heading ID for continuous lines.
   // Same category but different heading = separate groups.
   type Group = {
@@ -459,6 +477,7 @@ const renderBlocksWithHoldingZone = ({
               anchorsByPieceId={anchorsByPieceId}
               block={block}
               key={block.id}
+              noteBackJump={footnoteLastIds.has(block.id)}
               rangesByPieceId={rangesByPieceId}
               variant="case-law"
             />

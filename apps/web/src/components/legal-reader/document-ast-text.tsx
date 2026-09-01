@@ -627,6 +627,31 @@ const jumpToNoteReference = (anchorId: string) => {
   blockEl.dataset["highlight"] = "";
 };
 
+/** A continuation paragraph's anchor carries the head anchor plus a part
+ * suffix; the back jump always returns from the footnote's head. */
+const noteHeadAnchorOf = (anchorId: string): string =>
+  anchorId.replace(/-p\d+$/u, "");
+
+/**
+ * The return arrow at the end of a footnote: jumps back to the sentence
+ * that cites it, mirroring the clickable footnote number.
+ */
+const NoteBackJump = ({ anchorId }: { anchorId: string }) => {
+  const t = useTranslations();
+  return (
+    <button
+      aria-label={t("common.back")}
+      className="reader-note-back"
+      data-reader-chrome=""
+      onClick={() => jumpToNoteReference(noteHeadAnchorOf(anchorId))}
+      title={t("common.back")}
+      type="button"
+    >
+      {"\u21B5"}
+    </button>
+  );
+};
+
 const footnoteTextCarriesLabel = (
   label: string,
   plainText: string,
@@ -645,12 +670,15 @@ export const BlockRenderer = ({
   activeMatchIndex,
   anchorsByPieceId,
   block,
+  noteBackJump = false,
   rangesByPieceId,
   variant,
 }: {
   activeMatchIndex: number;
   anchorsByPieceId?: Record<string, TextAnchor[]> | undefined;
   block: Block;
+  /** Render the return arrow: this is the last paragraph of a footnote. */
+  noteBackJump?: boolean | undefined;
   rangesByPieceId: Record<string, SearchMatchRange[]>;
   variant: ReaderVariant;
 }) => {
@@ -766,6 +794,9 @@ export const BlockRenderer = ({
           pieceId={block.id}
           ranges={rangesForPiece(rangesByPieceId, block.id)}
         />
+        {noteBackJump && block.note?.type === "footnote" && (
+          <NoteBackJump anchorId={block.anchorId} />
+        )}
       </p>
     );
   }

@@ -225,3 +225,20 @@ div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
   border-radius: 0.25rem;
   transition: background-color 120ms ease-out;
 }
+
+/* The footnote's return arrow: back to the sentence that cites it. */
+.reader-note-back {
+  margin-inline-start: 0.4em;
+  border: 0;
+  padding: 0;
+  background: none;
+  font-family: var(--font-sans, sans-serif);
+  font-size: 0.9em;
+  color: var(--color-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.reader-note-back:hover {
+  text-decoration: underline;
+}
