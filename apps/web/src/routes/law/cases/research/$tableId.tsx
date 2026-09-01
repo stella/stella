@@ -8,6 +8,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH } from "@stll/api-contract";
@@ -405,7 +406,7 @@ function ResearchTablePage() {
         return;
       default: {
         const exhaustive: never = action;
-        return exhaustive;
+        panic(`Unhandled research column action: ${String(exhaustive)}`);
       }
     }
   };
