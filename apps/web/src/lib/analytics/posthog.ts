@@ -107,15 +107,26 @@ const deepestCause = (error: Error): Error => {
   return current;
 };
 
-// A V8 stack begins with `<name>: <message>`; the message can carry PII, so
-// keep only the frame lines (`    at …`), which name bundled assets and
-// minified symbols but never user content.
+// Engines disagree on frame syntax: V8 indents frames with `at ` under a
+// `<name>: <message>` header, while SpiderMonkey and JavaScriptCore write
+// bare `<symbol>@<url>:<line>:<column>` lines and no header at all. Matching
+// both shapes keeps the frames, which name bundled assets and minified
+// symbols, and drops everything else, including the header whose message can
+// carry PII. A callsite line carries no message: its symbol runs up to the
+// `@`, so a header (`<name>: <message>`, always spaced) cannot match it.
+const STACK_FRAME_SYNTAX: readonly RegExp[] = [
+  /^\s+at /u,
+  /^[^\s@]*@\S+:\d+:\d+$/u,
+];
+
 const redactedStack = (error: Error): string | undefined => {
   const { stack } = deepestCause(error);
   if (typeof stack !== "string") {
     return undefined;
   }
-  const frames = stack.split("\n").filter((line) => /^\s+at /u.test(line));
+  const frames = stack
+    .split("\n")
+    .filter((line) => STACK_FRAME_SYNTAX.some((syntax) => syntax.test(line)));
   if (frames.length === 0) {
     return undefined;
   }

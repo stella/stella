@@ -410,6 +410,41 @@ describe("PostHog browser analytics adapter", () => {
     expect(captured.stack).toContain("    at ");
   });
 
+  // Frame syntax is engine-specific, so the redaction has to hold for each
+  // one: every frame survives, and the header carrying the message does not.
+  const ENGINE_FRAMES = {
+    callsite: [
+      "renderMatter@https://stella.test/assets/index.js:10:15",
+      "handleClick/<@https://stella.test/assets/index.js:22:3",
+    ],
+    indented: [
+      "    at renderMatter (https://stella.test/assets/index.js:10:15)",
+      "    at handleClick (https://stella.test/assets/index.js:22:3)",
+    ],
+  } as const satisfies Record<string, readonly string[]>;
+
+  test.each(Object.entries(ENGINE_FRAMES))(
+    "captureError keeps %s frames and drops the message",
+    (_syntax, frames) => {
+      const { analytics } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+      const error = new RangeError("Privileged document name");
+      error.stack = ["RangeError: Privileged document name", ...frames].join(
+        "\n",
+      );
+
+      analytics.captureError(error);
+
+      const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+      if (!(captured instanceof Error)) {
+        throw new TypeError("Expected a redacted Error");
+      }
+      expect(captured.stack).toBe(["RangeError:", ...frames].join("\n"));
+    },
+  );
+
   test("captureError survives a cyclic cause chain", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",
