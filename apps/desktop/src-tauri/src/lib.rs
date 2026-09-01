@@ -1,4 +1,5 @@
 mod app_lifecycle;
+mod autostart;
 mod bridge;
 mod clipboard;
 mod clipboard_commands;
@@ -14,6 +15,7 @@ mod diagnostics;
 mod e2e;
 mod i18n;
 mod keychain;
+mod relaunch;
 mod session_manager;
 mod session_store;
 mod sse;
@@ -262,6 +264,9 @@ pub fn run() {
                       tracing::warn!(error = %err, "up-to-date notification failed");
                     }
                   }
+                  updater::CheckOutcome::Installed { version } => {
+                    tracing::info!(version = %version, "tray-triggered update installed, relaunching");
+                  }
                   updater::CheckOutcome::Failed(msg) => {
                     tracing::warn!(error = %msg, "tray-triggered updater check failed");
                   }
@@ -329,10 +334,9 @@ pub fn run() {
       // configured background-launch argument. Enabling overwrites the
       // existing registration without changing one the user disabled.
       {
-        let autostart = handle.autolaunch();
-        match autostart.is_enabled() {
+        match handle.autolaunch().is_enabled() {
           Ok(true) => {
-            if let Err(error) = autostart.enable() {
+            if let Err(error) = autostart::enable(&handle) {
               tracing::warn!(error = %error, "auto-start registration could not be refreshed");
             }
           }

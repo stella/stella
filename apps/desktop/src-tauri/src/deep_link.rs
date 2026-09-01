@@ -169,6 +169,9 @@ pub fn handle_url(
           updater::CheckOutcome::UpToDate => {
             tracing::debug!("deep link updater check: up to date");
           }
+          updater::CheckOutcome::Installed { version } => {
+            tracing::info!(version = %version, "deep link update installed, relaunching");
+          }
           updater::CheckOutcome::Failed(error) => {
             tracing::warn!(error = %error, "deep link updater check failed");
           }

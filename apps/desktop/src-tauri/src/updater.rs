@@ -11,9 +11,9 @@
 // - When the tray "Check for updates" item is clicked, run the same
 //   check synchronously and notify whether an update was found.
 // - When an update is found and no desktop edit sessions are
-//   active, download + install + restart. The installer handles
-//   the binary swap; tauri_plugin_process is required for the
-//   post-install restart to work cross-platform.
+//   active, download + install + relaunch. The installer handles
+//   the binary swap; `crate::relaunch` owns the hand-over to the
+//   new binary.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -28,14 +28,13 @@ use crate::session_manager::SessionManager;
 const STARTUP_CHECK_DELAY: Duration = Duration::from_secs(10);
 const BACKGROUND_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
-// Outcome of an update check that *did not* apply an update. The
-// "update applied" path doesn't appear here because the install
-// step calls `AppHandle::restart()`, which exits the current
-// process and never returns.
+// `Installed` means the exit of this process has been requested and
+// the relaunch is under way; callers must not schedule further work.
 #[derive(Debug)]
 pub enum CheckOutcome {
   Deferred { version: String },
   UpToDate,
+  Installed { version: String },
   Failed(String),
 }
 
@@ -63,6 +62,10 @@ pub fn schedule_startup_check(handle: AppHandle, manager: Arc<Mutex<SessionManag
         }
         CheckOutcome::UpToDate => {
           tracing::debug!("background updater: up to date");
+        }
+        CheckOutcome::Installed { version } => {
+          tracing::info!(version = %version, "background updater: installed, relaunching");
+          return;
         }
         CheckOutcome::Failed(err) => {
           tracing::warn!(error = %err, "background updater check failed");
@@ -111,10 +114,20 @@ pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckO
     return CheckOutcome::Failed(msg);
   }
 
-  // Restart so the new binary takes over. `restart` exits the
-  // current process and never returns; the type-level `!` coerces
-  // to `CheckOutcome` to satisfy the signature.
-  handle.restart()
+  // On Windows the plugin has already handed off to the installer and
+  // exited; this line only runs where the bundle was swapped in place.
+  if let Err(err) = crate::relaunch::after_update(handle) {
+    notify(
+      handle,
+      "Stella update installed",
+      "Quit and reopen Stella to finish updating.",
+    );
+    return CheckOutcome::Failed(format!(
+      "v{version} installed but the relaunch failed: {err}"
+    ));
+  }
+
+  CheckOutcome::Installed { version }
 }
 
 fn notify(handle: &AppHandle, title: &str, body: &str) {
