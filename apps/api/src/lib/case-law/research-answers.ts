@@ -33,6 +33,8 @@ export const RESEARCH_ANSWER_FAILURE_REASONS = [
   "model_error",
   "missing_answer",
   "wrong_type",
+  /** The run itself failed before it could classify the cell. */
+  "run_error",
 ] as const;
 
 export type ResearchAnswerFailureReason =

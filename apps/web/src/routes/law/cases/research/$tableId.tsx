@@ -345,9 +345,12 @@ function ResearchTablePage() {
       answer,
     ]),
   );
-  // A filter on a column that no longer exists would reject every row.
+  // A filter on a column that no longer exists, or no longer asks a yes/no
+  // question, would reject every row.
   const activeYesNoFilters = [...yesNoFilters].filter(([columnId]) =>
-    answerColumns.some((column) => column.id === columnId),
+    answerColumns.some(
+      (column) => column.id === columnId && column.answerType === "yes_no",
+    ),
   );
   // A yes/no filter keeps the rows whose cell holds that value; cells that
   // were never answered are not "no", so they drop out too.

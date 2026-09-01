@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, exists, inArray, sql } from "drizzle-orm";
 
 import type {
   CaseLawResearchAnswerRun,
@@ -8,7 +8,10 @@ import type {
 import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { caseLawResearchAnswers } from "@/api/db/schema";
+import {
+  caseLawResearchAnswers,
+  caseLawResearchColumns,
+} from "@/api/db/schema";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -92,9 +95,31 @@ export const runResearchAnswers = async (
         return;
       }
       // oxlint-disable-next-line no-await-in-loop -- one worker of a bounded pool drains its share sequentially
-      await answerDecision(decisionId, input, deps).catch((error: unknown) => {
-        captureError(error, {
-          source: "case-law-research-answers",
+      const failure = await answerDecision(decisionId, input, deps).then(
+        () => null,
+        (error: unknown) => error ?? new Error("research answer run failed"),
+      );
+      if (failure === null) {
+        continue;
+      }
+      captureError(failure, {
+        source: "case-law-research-answers",
+        decisionId,
+      });
+      // Whatever this decision still had pending is not coming: say so rather
+      // than leave the cells to age out.
+      // oxlint-disable-next-line no-await-in-loop -- follows the failure it reports, for the same decision
+      await writeOutcomes(
+        deps.safeDb,
+        input,
+        decisionId,
+        input.columns.map((column) => ({
+          columnId: column.columnId,
+          outcome: { state: "failed", failureReason: "run_error" },
+        })),
+      ).catch((writeError: unknown) => {
+        captureError(writeError, {
+          source: "case-law-research-answers-cleanup",
           decisionId,
         });
       });
@@ -142,7 +167,7 @@ const answerDecision = async (
   const fail = async (failureReason: ResearchAnswerFailureReason) =>
     await writeOutcomes(
       safeDb,
-      input.organizationId,
+      input,
       decisionId,
       questions.map((question) => ({
         columnId: question.columnId,
@@ -166,7 +191,7 @@ const answerDecision = async (
   if (!allowsDerivedAi(decision.source.descriptor)) {
     await writeOutcomes(
       safeDb,
-      input.organizationId,
+      input,
       decisionId,
       questions.map((question) => ({
         columnId: question.columnId,
@@ -299,7 +324,7 @@ const answerDecision = async (
       },
     });
   }
-  await writeOutcomes(safeDb, input.organizationId, decisionId, outcomes);
+  await writeOutcomes(safeDb, input, decisionId, outcomes);
 };
 
 const pendingColumnsFor = async (
@@ -511,16 +536,29 @@ type ColumnOutcome = {
   outcome: AnswerOutcome;
 };
 
-/** Persist one decision's outcomes; only cells still pending are touched. */
+/**
+ * Persist one decision's outcomes. Only cells still pending are touched, and
+ * only while the column still asks the question this run answered: a question
+ * reworded mid-run drops its old answers, and this write must not put an
+ * answer to the old wording under the new heading.
+ */
 const writeOutcomes = async (
   safeDb: SafeDb,
-  organizationId: SafeId<"organization">,
+  input: Pick<RunResearchAnswersInput, "columns" | "organizationId">,
   decisionId: SafeId<"caseLawDecision">,
   outcomes: readonly ColumnOutcome[],
 ): Promise<void> => {
+  const { organizationId } = input;
+  const askedByColumn = new Map(
+    input.columns.map((column) => [column.columnId, column]),
+  );
   const now = new Date();
   const written = await safeDb(async (tx) => {
     for (const { columnId, outcome } of outcomes) {
+      const asked = askedByColumn.get(columnId);
+      if (asked === undefined) {
+        continue;
+      }
       const values =
         outcome.state === "answered"
           ? {
@@ -551,6 +589,18 @@ const writeOutcomes = async (
             eq(caseLawResearchAnswers.decisionId, decisionId),
             eq(caseLawResearchAnswers.organizationId, organizationId),
             eq(caseLawResearchAnswers.state, "pending"),
+            exists(
+              tx
+                .select({ one: sql`1` })
+                .from(caseLawResearchColumns)
+                .where(
+                  and(
+                    eq(caseLawResearchColumns.id, columnId),
+                    eq(caseLawResearchColumns.question, asked.question),
+                    eq(caseLawResearchColumns.answerType, asked.answerType),
+                  ),
+                ),
+            ),
           ),
         );
     }
