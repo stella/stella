@@ -333,7 +333,11 @@ const GeneralPane = ({
             }}
             value={language}
           >
-            <ComboboxInput className="w-40" id="desktop-language" />
+            <ComboboxInput
+              className="w-40"
+              id="desktop-language"
+              showTrigger={false}
+            />
             <ComboboxPopup align="end">
               <ComboboxList>
                 {(supportedLanguage: SupportedLanguage) => (
