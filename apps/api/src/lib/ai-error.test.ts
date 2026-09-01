@@ -33,6 +33,16 @@ const tanStackRunError = (code: number) =>
     message: `provider responded ${code}`,
   }) satisfies Record<string, unknown>;
 
+// The transport wrapper the AI stack raises for a provider RUN_ERROR: its own
+// status is a fixed 502 and the provider's status rides on `code`. An adapter
+// forwards the structured body as `rawEvent` only when the SDK exception
+// exposes one, so the code is often all the wrapper carries.
+const wrappedRunError = (code: number) =>
+  new HandlerError({
+    ...tanStackRunError(code),
+    status: 502,
+  });
+
 const providerErrorBody = (code: number, status: string) =>
   ({
     error: {
@@ -166,6 +176,28 @@ describe("classifyAIError", () => {
     expect(classifyAIError(tanStackProviderError(503))).toBe(
       "provider_unavailable",
     );
+  });
+
+  test("names the provider status the transport wrapper carries as its code", () => {
+    expect(classifyAIError(wrappedRunError(429))).toBe("quota_exhausted");
+    expect(classifyAIError(wrappedRunError(402))).toBe("provider_billing");
+    expect(classifyAIError(wrappedRunError(404))).toBe("model_unavailable");
+    expect(classifyAIError(wrappedRunError(401))).toBe(
+      "provider_credentials_rejected",
+    );
+    expect(classifyAIError(wrappedRunError(503))).toBe("provider_unavailable");
+  });
+
+  test("does not read the transport wrapper's own status as the provider's", () => {
+    // The 502 is this service's, chosen for any run error alike, so it is
+    // evidence of nothing: naming it would report a provider outage for a
+    // failure that never said what went wrong.
+    const error = new HandlerError({
+      message: "generation failed",
+      status: 502,
+    });
+
+    expect(classifyAIError(error)).toBe("unknown");
   });
 
   test("reads the status from a nested provider error body", () => {
@@ -352,6 +384,9 @@ describe("providerStatusFields", () => {
       [apiCallError(503), "503"],
       [tanStackProviderError(429), "429"],
       [providerErrorBody(404, "NOT_FOUND"), "404"],
+      // The wrapper's fixed 502 would report an outage for an unmapped
+      // provider status; the code it carries is the one the classifier read.
+      [wrappedRunError(403), "403"],
     ] as const) {
       expect(providerStatusFields(error)).toEqual({
         "error.provider.status": status,
