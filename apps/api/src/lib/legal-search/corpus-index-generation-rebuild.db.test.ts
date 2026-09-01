@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
@@ -31,6 +31,25 @@ const ENTITY_ID = toSafeId<"legislationDocument">(
 const INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000902",
 );
+const LEASE_TOKEN = "0198e331-e578-7000-8000-000000000903";
+const MIGRATION_URLS = [
+  new URL(
+    "../../../drizzle/20260825142000_corpus_index_projection_intents/migration.sql",
+    import.meta.url,
+  ),
+  new URL(
+    "../../../drizzle/20260825211300_corpus_projection_delete_guard_record/migration.sql",
+    import.meta.url,
+  ),
+  new URL(
+    "../../../drizzle/20260901060000_concurrent_corpus_projection_revision_fence/migration.sql",
+    import.meta.url,
+  ),
+  new URL(
+    "../../../drizzle/20260901070000_final_corpus_projection_rebuild/migration.sql",
+    import.meta.url,
+  ),
+] as const;
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -45,6 +64,25 @@ const runInTransaction = async <Value>(
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
+  for (const migrationUrl of MIGRATION_URLS) {
+    // oxlint-disable-next-line no-await-in-loop -- migration-owned functions and their triggers must install in production order
+    const migration = await Bun.file(migrationUrl).text();
+    for (const statement of migration.split("--> statement-breakpoint")) {
+      const ddl = statement.trim();
+      if (
+        !ddl.includes("guard_corpus_index_projection_history_delete") &&
+        !ddl.includes("corpus_index_projection_intents_delete_guard") &&
+        !ddl.includes("corpus_index_projection_states_delete_guard") &&
+        !ddl.includes("lock_corpus_projection_mutations_shared") &&
+        !ddl.includes("lock_corpus_projection_mutations_exclusive") &&
+        !ddl.includes("purge_rebuilding_corpus_index_projection_history")
+      ) {
+        continue;
+      }
+      // oxlint-disable-next-line no-await-in-loop -- each trigger depends on the preceding migration-owned function
+      await db.execute(sql.raw(ddl));
+    }
+  }
   await db.insert(corpusIndexGenerations).values({
     ...TARGET,
     cluster: "q09",
@@ -66,8 +104,10 @@ beforeAll(async () => {
     epoch: 1n,
     fingerprint: "a".repeat(64),
     indexId: "legislation_v2_cze",
-    status: "cancelled",
-    cancelledAt: new Date(),
+    status: "append_started",
+    leaseToken: LEASE_TOKEN,
+    leaseExpiresAt: new Date("2026-09-01T12:00:00.000Z"),
+    appendStartedAt: new Date("2026-09-01T11:59:00.000Z"),
   });
 });
 
@@ -89,18 +129,28 @@ test("replaces only an empty non-serving generation", async () => {
     message:
       "Corpus generation rebuild state is not empty: legislation/legislation_v2",
   });
+  const unfencedDelete: unknown = await db
+    .delete(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, ENTITY_ID))
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  expect(unfencedDelete).toMatchObject({
+    message: expect.stringContaining(
+      "retiring corpus index projection history requires the rebuild fence",
+    ),
+  });
   expect(
     await runInTransaction(
       async (tx) =>
         await deleteCorpusIndexGenerationProjectionBatchTx(tx, TARGET, 1),
     ),
-  ).toEqual({ status: "deleted_states", count: 1 });
-  expect(
-    await runInTransaction(
-      async (tx) =>
-        await deleteCorpusIndexGenerationProjectionBatchTx(tx, TARGET, 1),
-    ),
-  ).toEqual({ status: "deleted_intents", count: 1 });
+  ).toEqual({
+    status: "deleted_history",
+    stateCount: 1,
+    intentCount: 1,
+  });
   expect(
     await runInTransaction(
       async (tx) =>

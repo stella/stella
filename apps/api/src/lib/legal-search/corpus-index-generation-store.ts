@@ -398,11 +398,10 @@ export const beginCorpusIndexGenerationRebuildTx = async (
 };
 
 export type CorpusIndexGenerationRebuildStep =
-  | { status: "deleted_states"; count: number }
-  | { status: "deleted_intents"; count: number }
+  | { status: "deleted_history"; stateCount: number; intentCount: number }
   | { status: "empty"; count: 0 };
 
-/** Delete one bounded projection-state page from a retiring generation. */
+/** Delete one bounded projection-history page from a retiring generation. */
 export const deleteCorpusIndexGenerationProjectionBatchTx = async (
   tx: Transaction,
   target: CorpusIndexGenerationTarget,
@@ -410,37 +409,24 @@ export const deleteCorpusIndexGenerationProjectionBatchTx = async (
 ): Promise<CorpusIndexGenerationRebuildStep> => {
   const limit = validateRebuildBatchSize(requestedLimit);
   await requireRebuildTarget(tx, target, "retiring");
-  const deletedStates = await tx.execute(sql`
-    DELETE FROM ${corpusIndexProjectionStates} state
-     WHERE state.ctid IN (
-       SELECT candidate.ctid
-         FROM ${corpusIndexProjectionStates} candidate
-        WHERE candidate.family = ${target.family}
-          AND candidate.generation = ${target.generation}
-        ORDER BY candidate.entity_id
-        LIMIT ${limit}
-     )
-    RETURNING state.entity_id
+  const purged = await tx.execute(sql`
+    SELECT deleted_state_count, deleted_intent_count
+      FROM public.purge_rebuilding_corpus_index_projection_history(
+        ${target.family}, ${target.generation}, ${limit}
+      )
   `);
-  const stateCount = rebuildRowsOf(deletedStates).length;
-  if (stateCount > 0) {
-    return { status: "deleted_states", count: stateCount };
+  const row = rebuildRowsOf(purged).at(0);
+  if (
+    !isRecord(row) ||
+    typeof row["deleted_state_count"] !== "number" ||
+    typeof row["deleted_intent_count"] !== "number"
+  ) {
+    return panic("Corpus generation rebuild purge result is malformed");
   }
-  const deletedIntents = await tx.execute(sql`
-    DELETE FROM ${corpusIndexProjectionIntents} intent
-     WHERE intent.ctid IN (
-       SELECT candidate.ctid
-         FROM ${corpusIndexProjectionIntents} candidate
-        WHERE candidate.family = ${target.family}
-          AND candidate.generation = ${target.generation}
-        ORDER BY candidate.created_at, candidate.id
-        LIMIT ${limit}
-     )
-    RETURNING intent.id
-  `);
-  const intentCount = rebuildRowsOf(deletedIntents).length;
-  return intentCount > 0
-    ? { status: "deleted_intents", count: intentCount }
+  const stateCount = row["deleted_state_count"];
+  const intentCount = row["deleted_intent_count"];
+  return stateCount > 0 || intentCount > 0
+    ? { status: "deleted_history", stateCount, intentCount }
     : { status: "empty", count: 0 };
 };
 
@@ -449,6 +435,7 @@ export const completeCorpusIndexGenerationRebuildTx = async (
   tx: Transaction,
   target: CorpusIndexGenerationTarget,
 ): Promise<void> => {
+  await lockCorpusIndexGenerationActivationTx(tx, target.family);
   await requireRebuildTarget(tx, target, "retiring");
   const remaining = await tx.execute(sql`
     SELECT EXISTS (
