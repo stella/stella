@@ -775,12 +775,12 @@ const oauthUiFragmentBridgePlugin = {
       {
         matcher: (ctx: HookEndpointContext) =>
           ctx.path?.startsWith("/oauth2/") ?? false,
-        // eslint-disable-next-line typescript/require-await -- createAuthMiddleware requires a Promise-returning handler; bridging mutates Better Auth's synchronous response boundary only.
         handler: createAuthMiddleware(async (ctx) => {
           bridgeOauthUiInteraction(ctx.context, {
             authOrigin: env.BETTER_AUTH_URL,
             frontendUrl: env.FRONTEND_URL,
           });
+          await Promise.resolve();
         }),
       },
     ],
