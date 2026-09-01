@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import type {
+  AnalysisHeading,
+  DecisionAnalysis,
+} from "@stll/legal-ast/analysis";
+
 import { parseAnalysisResponse } from "./use-decision-analysis";
 
 const heading = {
@@ -10,7 +15,7 @@ const heading = {
   endAnchorId: "a2",
   annotations: [],
   children: [],
-};
+} satisfies AnalysisHeading;
 
 const analysis = {
   version: 2,
@@ -18,7 +23,7 @@ const analysis = {
   model: "test-model",
   inputFingerprint: "f".repeat(64),
   tree: [heading],
-};
+} satisfies DecisionAnalysis;
 
 describe("decision analysis response parsing", () => {
   test("accepts a complete analysis", () => {
