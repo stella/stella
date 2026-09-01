@@ -182,24 +182,30 @@ export const WorkspaceFrame = (props: WorkspaceFrameProps) => {
     </WorkspaceShell>
   );
 
-  if (inspector?.mobile === undefined || inspectorPresentation === "desktop") {
+  if (inspector?.mobile === undefined) {
     return frame;
   }
 
   return (
     <Sheet
-      open={inspector.mobile.open}
-      onOpenChange={inspector.mobile.onOpenChange}
+      open={inspectorPresentation === "mobile" && inspector.mobile.open}
+      onOpenChange={(open) => {
+        if (inspectorPresentation === "mobile") {
+          inspector.mobile?.onOpenChange(open);
+        }
+      }}
     >
       {frame}
-      <SheetPopup
-        className="h-dvh w-full max-w-none border-0 p-0 md:hidden"
-        showCloseButton={false}
-        side="inline-end"
-      >
-        <SheetTitle className="sr-only">{inspector.mobile.label}</SheetTitle>
-        {inspector.mobile.content}
-      </SheetPopup>
+      {inspectorPresentation === "mobile" ? (
+        <SheetPopup
+          className="h-dvh w-full max-w-none border-0 p-0"
+          showCloseButton={false}
+          side="inline-end"
+        >
+          <SheetTitle className="sr-only">{inspector.mobile.label}</SheetTitle>
+          {inspector.mobile.content}
+        </SheetPopup>
+      ) : null}
     </Sheet>
   );
 };
