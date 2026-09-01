@@ -31,18 +31,27 @@ mod macos {
 
   // Positional parameters: $1 = pid to wait for, $2 = bundle path, the
   // rest = arguments for the relaunched app. Waiting for the old process
-  // keeps the single-instance socket free for the new one.
+  // keeps the single-instance socket free for the new one. Nothing
+  // observes the helper after this process exits, so the helper posts
+  // the fallback notification itself when the relaunch does not happen.
   const RELAUNCH_SCRIPT: &str = r#"
+fallback() {
+  /usr/bin/osascript -e 'display notification "Quit and reopen Stella to finish updating." with title "Stella update installed"' >/dev/null 2>&1
+  exit 1
+}
 i=0
 while kill -0 "$1" 2>/dev/null; do
   i=$((i + 1))
-  if [ "$i" -ge 300 ]; then exit 1; fi
+  if [ "$i" -ge 300 ]; then fallback; fi
   sleep 0.1
 done
 bundle="$2"
 shift 2
-if [ "$#" -gt 0 ]; then exec /usr/bin/open "$bundle" --args "$@"; fi
-exec /usr/bin/open "$bundle"
+if [ "$#" -gt 0 ]; then
+  /usr/bin/open "$bundle" --args "$@" || fallback
+else
+  /usr/bin/open "$bundle" || fallback
+fi
 "#;
 
   pub fn after_update(handle: &AppHandle) -> Result<(), String> {
