@@ -27,6 +27,7 @@ import {
 } from "./chrome";
 import { InspectorDock } from "./dock";
 import { TOOLBAR_ROW_HEIGHT } from "./layout-tokens";
+import { INSPECTOR_RAIL_WIDTH } from "./pane-width";
 
 const classesOf = (markup: string, slot: string): string[] => {
   const match = new RegExp(`<[^>]*data-slot="${slot}"[^>]*>`, "u").exec(markup);
@@ -199,6 +200,44 @@ describe("dock", () => {
     expect(classesOf(renderDock(true), "inspector-dock")).toEqual(
       expect.arrayContaining(["hidden", "md:block"]),
     );
+  });
+
+  test("owns the permanent rail footprint and composition", () => {
+    const rail = <InspectorRail />;
+    const markup = renderToStaticMarkup(
+      <InspectorDock
+        rail={rail}
+        resizeHandleLabel="Resize"
+        resizeHandleProps={noopHandlers}
+        showPaneContent
+        width={512}
+      >
+        <Inspector />
+      </InspectorDock>,
+    );
+
+    expect(markup.match(/width:560px/gu)?.length).toBe(2);
+    expect(markup).toContain('data-slot="inspector-rail"');
+  });
+
+  test("keeps the permanent rail when pane content is collapsed", () => {
+    const markup = renderToStaticMarkup(
+      <InspectorDock
+        rail={<InspectorRail />}
+        resizeHandleLabel="Resize"
+        resizeHandleProps={noopHandlers}
+        showPaneContent={false}
+        width={512}
+      >
+        <Inspector />
+      </InspectorDock>,
+    );
+
+    expect(
+      markup.match(new RegExp(`width:${INSPECTOR_RAIL_WIDTH}px`, "gu"))?.length,
+    ).toBe(2);
+    expect(markup).toContain('data-slot="inspector-rail"');
+    expect(markup).not.toContain('data-slot="inspector"');
   });
 });
 

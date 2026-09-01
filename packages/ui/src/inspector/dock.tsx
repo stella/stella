@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "../lib/utils";
+import { INSPECTOR_RAIL_WIDTH } from "./pane-width";
 
 /**
  * Docked inspector pane: an in-flow spacer plus a fixed overlay.
@@ -36,6 +37,8 @@ type InspectorResizeHandleProps = {
 type InspectorDockProps = {
   children: ReactNode;
   className?: string | undefined;
+  /** Permanent inline-end rail shown beside the pane, or by itself when collapsed. */
+  rail?: ReactNode | undefined;
   /** Accessible name for the drag handle. */
   resizeHandleLabel: string;
   /** Handlers and ARIA state from `useInspectorPaneWidth`. */
@@ -52,12 +55,19 @@ export const InspectorDock = ({
   children,
   className,
   onResetWidth,
+  rail,
   resizeHandleLabel,
   resizeHandleProps,
   showPaneContent,
   width,
 }: InspectorDockProps) => {
-  const widthPx = `${width}px`;
+  let dockWidth = width;
+  if (rail !== undefined) {
+    dockWidth = showPaneContent
+      ? width + INSPECTOR_RAIL_WIDTH
+      : INSPECTOR_RAIL_WIDTH;
+  }
+  const widthPx = `${dockWidth}px`;
 
   return (
     <div
@@ -96,7 +106,14 @@ export const InspectorDock = ({
             onDoubleClick={onResetWidth}
           />
         )}
-        <div className="bg-sidebar flex h-full w-full flex-col">{children}</div>
+        {showPaneContent ? (
+          <div className="bg-sidebar flex h-full w-full flex-row rtl:flex-row-reverse">
+            <div className="min-w-0 flex-1">{children}</div>
+            {rail}
+          </div>
+        ) : (
+          rail
+        )}
       </div>
     </div>
   );
