@@ -16,7 +16,7 @@ export const ResponsiveActionToolbar = ({
 }: React.ComponentProps<"div">) => (
   <div
     className={cn(
-      "flex min-w-0 scrollbar-none flex-nowrap items-center gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden",
+      "flex min-w-0 [scrollbar-width:none] flex-nowrap items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
       className,
     )}
     {...props}
