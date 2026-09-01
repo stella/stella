@@ -84,17 +84,26 @@ type AnalysisClaim = AnalysisStoreKey & {
   observed: unknown;
 };
 
+type AnalysisSave = {
+  decisionId: SafeId<"caseLawDecision">;
+  analysis: DecisionAnalysis;
+  /** The row's `contentHash` when the run was claimed. */
+  contentHash: string | null;
+};
+
 type AnalysisStore = {
   /**
    * Takes the row for a run over `fingerprint`, provided it still holds
    * `observed`. False when another request got there first.
    */
   claim: (claim: AnalysisClaim) => Promise<boolean>;
-  /** Stores the result, only where the row still carries its fingerprint. */
-  save: (
-    decisionId: SafeId<"caseLawDecision">,
-    analysis: DecisionAnalysis,
-  ) => Promise<void>;
+  /**
+   * Stores the result, only where the row still carries this run's
+   * fingerprint and the document it was claimed under. A re-parse during
+   * the run changes `contentHash`; the result would then be rejected by
+   * the next read anyway, so it is not worth the write.
+   */
+  save: (save: AnalysisSave) => Promise<void>;
   /** Releases this run's sentinel, and only this run's. */
   clear: (key: AnalysisStoreKey) => Promise<void>;
   /** What the store holds beside the row; null where the row is the store. */
@@ -113,7 +122,7 @@ const dbAnalysisStore: AnalysisStore = {
   },
   // Use rootDb (not scopedDb) because case-law analysis is global,
   // not workspace-scoped.
-  save: async (decisionId, analysis) => {
+  save: async ({ analysis, contentHash, decisionId }) => {
     // audit: skip — background AI analysis output; no user-facing state change
     await rootDb
       .update(caseLawDecisions)
@@ -122,6 +131,7 @@ const dbAnalysisStore: AnalysisStore = {
         and(
           eq(caseLawDecisions.id, decisionId),
           sql`${storedAnalysisFingerprint} = ${analysis.inputFingerprint}`,
+          sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${contentHash}`,
         ),
       );
   },
@@ -156,7 +166,9 @@ const memoryAnalysisStore: AnalysisStore = {
     memoryAnalyses.set(decisionId, analysisSentinel(fingerprint, new Date()));
     return await Promise.resolve(true);
   },
-  save: async (decisionId, analysis) => {
+  // The document behind a memory entry is a read-only row this process
+  // never re-parses, so the fingerprint alone identifies the run here.
+  save: async ({ analysis, decisionId }) => {
     const held = parsePersistedDecisionAnalysis(memoryAnalyses.get(decisionId));
     if (held?.inputFingerprint === analysis.inputFingerprint) {
       memoryAnalyses.set(decisionId, analysis);
@@ -225,14 +237,26 @@ const createAnalysisHeading = ({
  * config change made during the in-flight generation does not
  * retarget mid-run.
  */
-const runGeneration = async (
-  decisionId: SafeId<"caseLawDecision">,
-  input: AnalysisInput,
-  country: string,
-  organizationId: SafeId<"organization">,
-  orgAIConfig: OrgAIConfig | null,
-  promptCachingEnabled: boolean,
-) => {
+type RunGenerationOptions = {
+  decisionId: SafeId<"caseLawDecision">;
+  input: AnalysisInput;
+  country: string;
+  /** The row's `contentHash` at claim time; the save is fenced on it. */
+  contentHash: string | null;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  promptCachingEnabled: boolean;
+};
+
+const runGeneration = async ({
+  contentHash,
+  country,
+  decisionId,
+  input,
+  orgAIConfig,
+  organizationId,
+  promptCachingEnabled,
+}: RunGenerationOptions) => {
   // audit: skip — background AI analysis output
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     feature: "case-law.analysis",
@@ -288,7 +312,7 @@ const runGeneration = async (
       tree: headings,
     };
 
-    await analysisStore().save(decisionId, analysis);
+    await analysisStore().save({ analysis, contentHash, decisionId });
   } catch (error) {
     captureError(error, {
       source: "case-law-analysis",
@@ -435,14 +459,15 @@ export const generateAnalysis = async (
 
   // Fire-and-forget generation
   detached(
-    runGeneration(
+    runGeneration({
+      contentHash: decision.contentHash,
+      country: decision.country,
       decisionId,
       input,
-      decision.country,
-      organizationId,
       orgAIConfig,
+      organizationId,
       promptCachingEnabled,
-    ),
+    }),
     "analysis-generate.run-generation",
   );
 
