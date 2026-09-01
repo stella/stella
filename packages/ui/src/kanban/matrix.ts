@@ -175,6 +175,7 @@ export const buildKanbanBoardMatrix = <
   const columns = getRenderableGroups(group, uncategorizedLabel);
   for (const destination of destinations) {
     columns.push({
+      destination,
       value: `${destinationValuePrefix}${destination.id}`,
       label: destination.label,
     });
@@ -299,12 +300,7 @@ export const createKanbanDropIntent = <
   }
 
   const changes: KanbanDropAxisChange<TGroupId>[] = [];
-  const destination = target.column.value.startsWith(destinationValuePrefix)
-    ? {
-        id: target.column.value.slice(destinationValuePrefix.length),
-        label: target.column.label,
-      }
-    : null;
+  const destination = target.column.destination ?? null;
   if (destination === null && source.column.value !== target.column.value) {
     changes.push({ groupBy, value: target.column.value });
   }

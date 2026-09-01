@@ -207,6 +207,10 @@ describe("kanban board matrix", () => {
       throw new Error("Expected a terminal destination column");
     }
     expect(destination.label).toBe("Archive");
+    expect(destination.destination).toEqual({
+      id: "archive",
+      label: "Archive",
+    });
     expect(
       matrix.cells.filter(
         (cell) => cell.coordinate.column.value === destination.value,
