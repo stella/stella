@@ -234,7 +234,7 @@ jobs:
 
       # Cross-repo reference resolves regardless of which release tag this
       # job checks out, unlike a workspace-local action.
-      - uses: stella/.github/actions/setup-bun-cached@0f814e1a0c6c7401778e661209553b6e15f8d92a
+      - uses: stella/.github/actions/setup-bun-cached@2703e4d3ed115089e593e4ca5cc749be4a5d8cee
 
       # --ignore-scripts: the package builds run tsc/tsdown only and do not
       # depend on install lifecycle scripts; other CI jobs build the same
@@ -518,7 +518,7 @@ jobs:
       contents: write # Create immutable package tags and GitHub releases.
       id-token: write # Exchange a short-lived npm trusted-publishing credential.
     # The repository owner publishes this versioned shared contract.
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@0f814e1a0c6c7401778e661209553b6e15f8d92a # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2703e4d3ed115089e593e4ca5cc749be4a5d8cee # release job environment input
     with:
       # The release App key is an environment secret; the shared job runs in
       # this environment so only main and release tags can mint the token.
