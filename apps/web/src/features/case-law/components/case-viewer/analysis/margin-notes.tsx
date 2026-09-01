@@ -14,6 +14,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Textarea } from "@stll/ui/textarea";
+import { containedHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -329,8 +330,7 @@ const AnalysisNote = ({
       onBlur={() => onHover(false)}
       // oxlint-disable-next-line require-contained-handler/require-contained-handler -- measure callback ref, no portal-bearing descendants
       onClick={onJump}
-      // oxlint-disable-next-line require-contained-handler/require-contained-handler -- measure callback ref, no portal-bearing descendants
-      onFocus={() => onHover(true)}
+      onFocus={containedHandler(null, () => onHover(true))}
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}
       ref={(el) => measureRef(el, item.id)}

@@ -410,10 +410,11 @@ const NoteRefLink = ({
         </span>
       }
       render={
-        // The note reference's visible text is injected as the Tooltip
-        // trigger's children by the composition below.
-        // oxlint-disable-next-line jsx-a11y/anchor-has-content -- children injected by Tooltip trigger composition
+        // The visible text is injected as the Tooltip trigger's children by
+        // the composition below; the aria-label satisfies the accessible
+        // name statically.
         <a
+          aria-label={href.slice(1)}
           className="reader-note-ref"
           href={sanitizeHref(href)}
           onClick={(event) => {
