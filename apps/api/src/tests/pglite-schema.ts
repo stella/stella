@@ -28,6 +28,18 @@ const AGENT_SKILL_REVISIONS_MIGRATION_PATH = nodePath.join(
   "20260827080000_agent_skill_revisions",
   "migration.sql",
 );
+const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [
+  nodePath.join(
+    DRIZZLE_DIR,
+    "20260826004100_corpus_projection_revision_fence",
+    "migration.sql",
+  ),
+  nodePath.join(
+    DRIZZLE_DIR,
+    "20260901060000_concurrent_corpus_projection_revision_fence",
+    "migration.sql",
+  ),
+] as const;
 
 type PgliteSchemaDb = {
   execute: (query: SQL) => Promise<unknown>;
@@ -159,6 +171,32 @@ export const installPgliteAgentSkillRevisionTrigger = async (
   for (const statement of statements) {
     // oxlint-disable-next-line no-await-in-loop -- function/trigger DDL must execute in source order
     await db.execute(sql.raw(statement));
+  }
+};
+
+const CORPUS_PROJECTION_REVISION_STATEMENT_PREFIXES = [
+  "CREATE FUNCTION",
+  "CREATE OR REPLACE FUNCTION",
+  "REVOKE ALL ON FUNCTION",
+  "GRANT EXECUTE ON FUNCTION",
+  "CREATE TRIGGER",
+] as const;
+
+/** Install the projection mutation fence omitted by declarative schema push. */
+export const installPgliteCorpusProjectionRevisionFence = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  for (const migrationPath of CORPUS_PROJECTION_REVISION_MIGRATION_PATHS) {
+    const statements = readMigrationStatements(migrationPath).filter(
+      (statement) =>
+        CORPUS_PROJECTION_REVISION_STATEMENT_PREFIXES.some((prefix) =>
+          executableSql(statement).startsWith(prefix),
+        ),
+    );
+    for (const statement of statements) {
+      // oxlint-disable-next-line no-await-in-loop -- function/trigger DDL must execute in source order
+      await db.execute(sql.raw(statement));
+    }
   }
 };
 

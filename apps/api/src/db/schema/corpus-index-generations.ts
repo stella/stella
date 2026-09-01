@@ -35,6 +35,8 @@ export const corpusIndexGenerations = p.pgTable(
     cluster: p.text({ enum: QUICKWIT_CLUSTERS }).notNull(),
     manifestDigest: p.varchar("manifest_digest", { length: 64 }).notNull(),
     status: p.text({ enum: CORPUS_INDEX_GENERATION_STATUSES }).notNull(),
+    // Compatibility for pre-transaction-revision readers during rollout.
+    // Drop after those binaries have left the rollback window.
     projectionRevision: p
       .bigint("projection_revision", { mode: "number" })
       .default(1)
@@ -84,5 +86,47 @@ export const corpusIndexGenerations = p.pgTable(
     ),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
+ * Transaction revisions for projection mutations. Writers append at most one
+ * row per generation and transaction, so revision reads do not serialize
+ * unrelated projection work on the generation registry row.
+ */
+export const corpusIndexProjectionRevisions = p.pgTable(
+  "corpus_index_projection_revisions",
+  {
+    family: p.text({ enum: CORPUS_FAMILIES }).notNull(),
+    generation: p
+      .varchar({ length: CORPUS_INDEX_GENERATION_MAX_LENGTH })
+      .notNull(),
+    revision: p.bigint({ mode: "number" }).notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "corpus_index_projection_revisions_pkey",
+      columns: [t.family, t.generation, t.revision],
+    }),
+    p
+      .foreignKey({
+        name: "corpus_index_projection_revisions_generation_fk",
+        columns: [t.family, t.generation],
+        foreignColumns: [
+          corpusIndexGenerations.family,
+          corpusIndexGenerations.generation,
+        ],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "corpus_index_projection_revisions_family_values",
+      sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,
+    ),
+    p.check(
+      "corpus_index_projection_revisions_revision_positive",
+      sql`${t.revision} > 0`,
+    ),
+    ...globalCaseLawPolicies(),
   ],
 );

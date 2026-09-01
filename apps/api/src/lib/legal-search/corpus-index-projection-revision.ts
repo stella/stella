@@ -1,10 +1,11 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
+  corpusIndexProjectionRevisions,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
@@ -13,6 +14,8 @@ type CorpusProjectionRevisionTarget = {
   family: CorpusFamily;
   generation: string;
 };
+
+const CORPUS_PROJECTION_REVISION_PRUNE_LIMIT = 1000;
 
 const targetKey = ({ family, generation }: CorpusProjectionRevisionTarget) =>
   `${family}/${generation}`;
@@ -36,14 +39,15 @@ const projectionRevisionQuery = (
   target: CorpusProjectionRevisionTarget,
 ) =>
   tx
-    .select({ projectionRevision: corpusIndexGenerations.projectionRevision })
-    .from(corpusIndexGenerations)
+    .select({ projectionRevision: corpusIndexProjectionRevisions.revision })
+    .from(corpusIndexProjectionRevisions)
     .where(
       and(
-        eq(corpusIndexGenerations.family, target.family),
-        eq(corpusIndexGenerations.generation, target.generation),
+        eq(corpusIndexProjectionRevisions.family, target.family),
+        eq(corpusIndexProjectionRevisions.generation, target.generation),
       ),
     )
+    .orderBy(desc(corpusIndexProjectionRevisions.revision))
     .limit(1);
 
 const requireProjectionRevision = (
@@ -63,17 +67,26 @@ const requireProjectionRevision = (
   return revision;
 };
 
-/** Read the mutation clock without holding its row lock across engine I/O. */
+/** Read the latest committed mutation without holding a proof fence. */
 export const readCorpusIndexProjectionRevisionTx = async (
   tx: Transaction,
   target: CorpusProjectionRevisionTarget,
 ): Promise<number> =>
   requireProjectionRevision(await projectionRevisionQuery(tx, target), target);
 
+/** Join the database-enforced writer side of the projection mutation fence. */
+export const lockCorpusIndexProjectionWriterTx = async (
+  tx: Transaction,
+): Promise<void> => {
+  await tx.execute(
+    sql`SELECT public.lock_corpus_projection_mutations_shared()`,
+  );
+};
+
 /**
- * Acquire generation mutation fences in one stable order before any projection
- * state or intent row is locked. Revision triggers then update rows already
- * owned by the transaction instead of attempting a deadlock-prone lock upgrade.
+ * Join the shared mutation fence, then validate every target without locking
+ * the generation registry. Projection-table triggers enforce the same fence
+ * for writes that do not pass through this helper.
  */
 export const lockCorpusIndexProjectionMutationsTx = async (
   tx: Transaction,
@@ -83,6 +96,7 @@ export const lockCorpusIndexProjectionMutationsTx = async (
   if (ordered.length === 0) {
     return panic("Corpus projection mutation requires a generation target");
   }
+  await lockCorpusIndexProjectionWriterTx(tx);
   const predicate = or(
     ...ordered.map(({ family, generation }) =>
       and(
@@ -94,7 +108,7 @@ export const lockCorpusIndexProjectionMutationsTx = async (
   if (predicate === undefined) {
     return panic("Corpus projection mutation target predicate is empty");
   }
-  const locked = await tx
+  const registered = await tx
     .select({
       family: corpusIndexGenerations.family,
       generation: corpusIndexGenerations.generation,
@@ -105,11 +119,10 @@ export const lockCorpusIndexProjectionMutationsTx = async (
       asc(corpusIndexGenerations.family),
       asc(corpusIndexGenerations.generation),
     )
-    .limit(ordered.length)
-    .for("update");
+    .limit(ordered.length);
   if (
-    locked.length !== ordered.length ||
-    locked.some((target, index) => {
+    registered.length !== ordered.length ||
+    registered.some((target, index) => {
       const expected = ordered.at(index);
       return (
         expected === undefined || targetKey(target) !== targetKey(expected)
@@ -118,6 +131,40 @@ export const lockCorpusIndexProjectionMutationsTx = async (
   ) {
     return panic("Corpus projection mutation generation is not registered");
   }
+};
+
+const pruneCorpusIndexProjectionRevisionsTx = async (
+  tx: Transaction,
+  target: CorpusProjectionRevisionTarget,
+  currentRevision: number,
+): Promise<void> => {
+  await tx.execute(sql`
+    DELETE FROM ${corpusIndexProjectionRevisions} revision
+    WHERE revision.ctid IN (
+      SELECT candidate.ctid
+      FROM ${corpusIndexProjectionRevisions} candidate
+      WHERE candidate.family = ${target.family}
+        AND candidate.generation = ${target.generation}
+        AND candidate.revision < ${currentRevision}
+      ORDER BY candidate.revision
+      LIMIT ${CORPUS_PROJECTION_REVISION_PRUNE_LIMIT}
+    )
+  `);
+};
+
+const lockCorpusIndexProjectionExclusiveTx = async (
+  tx: Transaction,
+  target: CorpusProjectionRevisionTarget,
+): Promise<number> => {
+  await tx.execute(
+    sql`SELECT public.lock_corpus_projection_mutations_exclusive()`,
+  );
+  const revision = requireProjectionRevision(
+    await projectionRevisionQuery(tx, target),
+    target,
+  );
+  await pruneCorpusIndexProjectionRevisionsTx(tx, target, revision);
+  return revision;
 };
 
 export const lockCorpusIndexProjectionIntentMutationsTx = async (
@@ -143,29 +190,19 @@ export const lockCorpusIndexProjectionIntentMutationsTx = async (
 };
 
 /**
- * Fence a generation's desired/applied state at one exact mutation revision.
- * Projection-table statement triggers need an exclusive lock on this row, so
- * they cannot commit across a transaction that holds this proof through flip.
+ * Fence desired/applied state at one exact mutation revision. The exclusive
+ * transaction fence waits for every writer and prevents a new projection
+ * mutation from committing across the proof transaction.
  */
 export const lockCorpusIndexProjectionRevisionTx = async (
   tx: Transaction,
   target: CorpusProjectionRevisionTarget,
-): Promise<number> =>
-  requireProjectionRevision(
-    await projectionRevisionQuery(tx, target).for("share"),
-    target,
-  );
+): Promise<number> => await lockCorpusIndexProjectionExclusiveTx(tx, target);
 
 /**
- * Serialize explicit promotion before its final proof and serving flip. This
- * avoids two operators taking shared proofs and deadlocking while both try to
- * upgrade the generation row for the transition.
+ * Serialize explicit promotion before its final proof and serving flip.
  */
 export const lockCorpusIndexProjectionPromotionTx = async (
   tx: Transaction,
   target: CorpusProjectionRevisionTarget,
-): Promise<number> =>
-  requireProjectionRevision(
-    await projectionRevisionQuery(tx, target).for("update"),
-    target,
-  );
+): Promise<number> => await lockCorpusIndexProjectionExclusiveTx(tx, target);

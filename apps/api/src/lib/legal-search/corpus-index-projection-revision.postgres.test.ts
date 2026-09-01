@@ -20,7 +20,10 @@ import {
   reconcileCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 
-import { lockCorpusIndexProjectionMutationsTx } from "./corpus-index-projection-revision";
+import {
+  lockCorpusIndexProjectionMutationsTx,
+  lockCorpusIndexProjectionPromotionTx,
+} from "./corpus-index-projection-revision";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -33,7 +36,7 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("corpus projection mutation fence (postgres)", () => {
-    test("opposite target orders serialize without deadlocking", async () => {
+    test("opposite target orders can mutate concurrently", async () => {
       const firstClient = new SQL({ url: databaseUrl, max: 1 });
       const secondClient = new SQL({ url: databaseUrl, max: 1 });
       const firstDb = drizzle({
@@ -182,7 +185,7 @@ if (!databaseUrl || !runPostgresTests) {
           secondFenceAcquired.promise.then(() => true),
           Bun.sleep(100).then(() => false),
         ]);
-        expect(acquiredWhileFirstHeld).toBe(false);
+        expect(acquiredWhileFirstHeld).toBe(true);
 
         releaseFirstFence.resolve(undefined);
         const results = await Promise.allSettled([
@@ -214,6 +217,80 @@ if (!databaseUrl || !runPostgresTests) {
           .where(eq(legislationSources.id, legislationSourceId));
         await firstDb.delete(corpusIndexGenerations).where(generationPredicate);
         await Promise.all([firstClient.close(), secondClient.close()]);
+      }
+    });
+
+    test("promotion waits for every in-flight mutation", async () => {
+      const writerClient = new SQL({ url: databaseUrl, max: 1 });
+      const promotionClient = new SQL({ url: databaseUrl, max: 1 });
+      const writerDb = drizzle({
+        client: writerClient,
+        relations: databaseRelations,
+      });
+      const promotionDb = drizzle({
+        client: promotionClient,
+        relations: databaseRelations,
+      });
+      const target = {
+        family: "case_law",
+        generation: `case_law_v${Date.now()}`,
+      } as const;
+      const entityId = toSafeId<"caseLawDecision">(Bun.randomUUIDv7());
+      const writerLocked = Promise.withResolvers<undefined>();
+      const releaseWriter = Promise.withResolvers<undefined>();
+      const promotionAttempted = Promise.withResolvers<undefined>();
+      const promotionLocked = Promise.withResolvers<undefined>();
+
+      try {
+        await writerDb.insert(corpusIndexGenerations).values({
+          ...target,
+          cluster: "q09",
+          manifestDigest: "f".repeat(64),
+          status: "building",
+        });
+        const writer = writerDb.transaction(async (tx) => {
+          await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
+          await tx.insert(corpusIndexProjectionStates).values({
+            ...target,
+            entityId,
+            desiredAction: "erase",
+            desiredEpoch: 1n,
+          });
+          writerLocked.resolve(undefined);
+          await releaseWriter.promise;
+        });
+        await writerLocked.promise;
+
+        const promotion = promotionDb.transaction(async (tx) => {
+          await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
+          promotionAttempted.resolve(undefined);
+          await lockCorpusIndexProjectionPromotionTx(tx, target);
+          promotionLocked.resolve(undefined);
+        });
+        await promotionAttempted.promise;
+
+        const overtookWriter = await Promise.race([
+          promotionLocked.promise.then(() => true),
+          Bun.sleep(100).then(() => false),
+        ]);
+        expect(overtookWriter).toBe(false);
+
+        releaseWriter.resolve(undefined);
+        await Promise.all([writer, promotion]);
+      } finally {
+        releaseWriter.resolve(undefined);
+        await writerDb
+          .delete(corpusIndexProjectionStates)
+          .where(eq(corpusIndexProjectionStates.entityId, entityId));
+        await writerDb
+          .delete(corpusIndexGenerations)
+          .where(
+            and(
+              eq(corpusIndexGenerations.family, target.family),
+              eq(corpusIndexGenerations.generation, target.generation),
+            ),
+          );
+        await Promise.all([writerClient.close(), promotionClient.close()]);
       }
     });
 

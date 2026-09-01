@@ -26,6 +26,7 @@ import {
   type CorpusIndexProjectionInput,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 
 const CORPUS_INDEX_MANIFEST_COUNT = Object.keys(CORPUS_INDEX_MANIFESTS).length;
@@ -506,6 +507,7 @@ const activeManifests = async (
   tx: Transaction,
   family: CorpusIndexProjectionSubject["family"],
 ): Promise<RegisteredManifest[]> => {
+  await lockCorpusIndexProjectionWriterTx(tx);
   const rows = await tx
     .select()
     .from(corpusIndexGenerations)
@@ -523,8 +525,7 @@ const activeManifests = async (
       ),
     )
     .orderBy(asc(corpusIndexGenerations.generation))
-    .limit(CORPUS_INDEX_MANIFEST_COUNT + 1)
-    .for("update");
+    .limit(CORPUS_INDEX_MANIFEST_COUNT + 1);
   if (rows.length > CORPUS_INDEX_MANIFEST_COUNT) {
     return panic(`Active corpus generation registry exceeds its manifest set`);
   }
@@ -564,16 +565,15 @@ export const readActiveCorpusProjectionManifest = async (
 };
 
 /**
- * Validate an active manifest while taking the generation-local mutation
- * fence. Every projection state or intent mutation must take this lock before
- * its first projection-row lock so statement-trigger revision bumps cannot
- * deadlock while upgrading shared generation locks.
+ * Validate an active manifest while joining the transaction-scoped mutation
+ * fence. The database triggers enforce the same fence at the write boundary.
  */
 export const lockActiveCorpusProjectionManifestForMutation = async (
   tx: Transaction,
   family: CorpusIndexProjectionSubject["family"],
   generation: string,
 ): Promise<CorpusIndexManifest> => {
+  await lockCorpusIndexProjectionWriterTx(tx);
   const rows = await tx
     .select()
     .from(corpusIndexGenerations)
@@ -587,8 +587,7 @@ export const lockActiveCorpusProjectionManifestForMutation = async (
         ),
       ),
     )
-    .limit(1)
-    .for("update");
+    .limit(1);
   const row = rows.at(0);
   if (row === undefined) {
     return panic(
@@ -600,8 +599,8 @@ export const lockActiveCorpusProjectionManifestForMutation = async (
 
 /**
  * Cleanup outlives serving eligibility. Retiring generations can still carry
- * unknown append outcomes, so cleanup verifies and share-locks their immutable
- * registered manifest without requiring an active lifecycle status.
+ * unknown append outcomes, so cleanup verifies their immutable registered
+ * manifest without requiring an active lifecycle status.
  */
 export const readRegisteredCorpusProjectionManifestForCleanup = async (
   tx: Transaction,
@@ -617,8 +616,7 @@ export const readRegisteredCorpusProjectionManifestForCleanup = async (
         eq(corpusIndexGenerations.generation, generation),
       ),
     )
-    .limit(1)
-    .for("share");
+    .limit(1);
   const row = rows.at(0);
   if (row === undefined) {
     return panic(
@@ -628,12 +626,13 @@ export const readRegisteredCorpusProjectionManifestForCleanup = async (
   return requireRegisteredCorpusIndexManifest(row);
 };
 
-/** Lock a registered generation before mutating cleanup or retirement state. */
+/** Validate a registered generation while joining the mutation fence. */
 export const lockRegisteredCorpusProjectionManifestForMutation = async (
   tx: Transaction,
   family: CorpusIndexProjectionSubject["family"],
   generation: string,
 ): Promise<CorpusIndexManifest> => {
+  await lockCorpusIndexProjectionWriterTx(tx);
   const rows = await tx
     .select()
     .from(corpusIndexGenerations)
@@ -643,8 +642,7 @@ export const lockRegisteredCorpusProjectionManifestForMutation = async (
         eq(corpusIndexGenerations.generation, generation),
       ),
     )
-    .limit(1)
-    .for("update");
+    .limit(1);
   const row = rows.at(0);
   if (row === undefined) {
     return panic(
@@ -878,6 +876,7 @@ export const ensureCorpusProjectionDesiredStateTx = async (
   generation: string,
 ): Promise<{ epoch: bigint; created: boolean }> => {
   const locked = await lockProjectionInput(tx, subject);
+  await lockCorpusIndexProjectionWriterTx(tx);
   const generationRows = await tx
     .select()
     .from(corpusIndexGenerations)
@@ -891,8 +890,7 @@ export const ensureCorpusProjectionDesiredStateTx = async (
         ),
       ),
     )
-    .limit(1)
-    .for("update");
+    .limit(1);
   const generationRow = generationRows.at(0);
   if (generationRow === undefined) {
     return panic(

@@ -18,6 +18,7 @@ import {
 import {
   createSchemaPglite,
   installPgliteAgentSkillRevisionTrigger,
+  installPgliteCorpusProjectionRevisionFence,
   installPgliteSchemaPrerequisites,
   installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
@@ -102,6 +103,10 @@ const CORPUS_PROJECTION_HISTORY_TABLES_SQL = [
   .map(getTableName)
   .map(quoteSqlIdentifier)
   .join(", ");
+
+const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
+  getTableName(schema.corpusIndexProjectionRevisions),
+);
 
 // The snapshot bakes in the superset every suite needs: RLS roles, schema,
 // workspace-access objects, and the role grants. Suites that never SET ROLE
@@ -251,13 +256,15 @@ const ROLE_GRANT_STATEMENTS = [
   `
     REVOKE INSERT, UPDATE, DELETE ON TABLE
       "corpus_index_generations",
-      ${CORPUS_PROJECTION_HISTORY_TABLES_SQL}
+      ${CORPUS_PROJECTION_HISTORY_TABLES_SQL},
+      ${CORPUS_PROJECTION_REVISION_TABLE_SQL}
     FROM stella
   `,
   `
     GRANT SELECT ON TABLE
       "corpus_index_generations",
-      ${CORPUS_PROJECTION_HISTORY_TABLES_SQL}
+      ${CORPUS_PROJECTION_HISTORY_TABLES_SQL},
+      ${CORPUS_PROJECTION_REVISION_TABLE_SQL}
     TO stella_ingestion
   `,
   `
@@ -271,6 +278,11 @@ const ROLE_GRANT_STATEMENTS = [
   `
     GRANT INSERT, UPDATE ON TABLE
       ${CORPUS_PROJECTION_HISTORY_TABLES_SQL}
+    TO stella_ingestion
+  `,
+  `
+    GRANT INSERT, DELETE ON TABLE
+      ${CORPUS_PROJECTION_REVISION_TABLE_SQL}
     TO stella_ingestion
   `,
   // Preserve the v0.7.22 reader contract until its rollback window closes.
@@ -328,6 +340,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteAgentSkillRevisionTrigger(db);
+  await installPgliteCorpusProjectionRevisionFence(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
     // oxlint-disable-next-line no-await-in-loop -- grants run sequentially on one test DB connection
