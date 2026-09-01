@@ -97,7 +97,7 @@ type CorpusIndexMaturationPeriod =
 /** Render the manifest value exactly as Quickwit's metadata API does. */
 export const canonicalCorpusIndexMaturationPeriod = (
   value: CorpusIndexMaturationPeriod,
-): string => QUICKWIT_CANONICAL_MATURATION_PERIOD[value];
+) => QUICKWIT_CANONICAL_MATURATION_PERIOD[value];
 
 /** Merge policy retained by the legacy generation helpers. */
 export const CORPUS_INDEX_MERGE_POLICY = {
