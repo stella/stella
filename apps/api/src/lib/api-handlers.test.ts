@@ -16,9 +16,14 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   DatabaseError,
+  DatabaseRlsError,
   HandlerError,
   UsageLimitExceededError,
 } from "@/api/lib/errors/tagged-errors";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
@@ -327,6 +332,71 @@ describe("createSafeRootHandler permission gate", () => {
 
     expect(bodyRan).toBe(true);
     expect(result).toEqual({ ok: true });
+  });
+});
+
+describe("request.failed severity", () => {
+  const runFailingHandler = async (error: SafeDbError) => {
+    const analytics = installRecordingAnalytics();
+    const recordingLogger = installRecordingLogger();
+    try {
+      const endpoint = createSafeRootHandler(
+        {
+          permissions: { workspace: ["read"] },
+          mcp: { type: "internal", reason: "health_infra" },
+        },
+        async function* () {
+          return Result.err(error);
+        },
+      );
+      const safeDb: SafeDb = async <T>() =>
+        Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+
+      const response = await endpoint.handler(createContext(endpoint, safeDb));
+
+      return {
+        response,
+        failures: recordingLogger.records.filter(
+          (record) => record.message === "request.failed",
+        ),
+        exceptions: analytics.exceptions(),
+      };
+    } finally {
+      recordingLogger.restore();
+      analytics.restore();
+    }
+  };
+
+  test("grades a row-level security denial as a client outcome", async () => {
+    const { response, failures, exceptions } = await runFailingHandler(
+      new DatabaseRlsError({
+        message: "Database row-level security rejected the request",
+      }),
+    );
+
+    if (!("code" in response)) {
+      throw new Error("expected a status response");
+    }
+    expect(response.code).toBe(400);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.severityText).toBe("WARN");
+    expect(failures[0]?.attributes?.["http.status_code"]).toBe(400);
+    // The grade changes, the report does not: a denial still reaches capture.
+    expect(exceptions).toHaveLength(1);
+  });
+
+  test("grades a database failure as a server fault", async () => {
+    const { response, failures } = await runFailingHandler(
+      new DatabaseError({ message: "connection closed" }),
+    );
+
+    if (!("code" in response)) {
+      throw new Error("expected a status response");
+    }
+    expect(response.code).toBe(500);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.severityText).toBe("ERROR");
+    expect(failures[0]?.attributes?.["http.status_code"]).toBe(500);
   });
 });
 
