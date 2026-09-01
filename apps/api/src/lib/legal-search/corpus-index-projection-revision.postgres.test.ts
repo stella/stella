@@ -8,7 +8,6 @@ import {
   caseLawDecisions,
   caseLawSources,
   corpusIndexGenerations,
-  corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   legislationDocuments,
   legislationSources,
@@ -236,16 +235,28 @@ if (!databaseUrl || !runPostgresTests) {
         family: "case_law",
         generation: `case_law_v${Date.now()}`,
       } as const;
+      const sourceId = toSafeId<"caseLawSource">(Bun.randomUUIDv7());
       const entityId = toSafeId<"caseLawDecision">(Bun.randomUUIDv7());
-      const intentId = toSafeId<"corpusIndexProjectionIntent">(
-        Bun.randomUUIDv7(),
-      );
       const writerLocked = Promise.withResolvers<undefined>();
       const releaseWriter = Promise.withResolvers<undefined>();
       const promotionAttempted = Promise.withResolvers<undefined>();
       const promotionLocked = Promise.withResolvers<undefined>();
 
       try {
+        await writerDb.insert(caseLawSources).values({
+          id: sourceId,
+          adapterKey: `projection-promotion-fence-${Date.now()}`,
+          name: "Projection promotion fence",
+        });
+        await writerDb.insert(caseLawDecisions).values({
+          id: entityId,
+          sourceId,
+          caseNumber: `projection-promotion-fence-${Date.now()}`,
+          court: "Projection fence court",
+          country: "CZE",
+          language: "cs",
+          projectionEpoch: 1n,
+        });
         await writerDb.insert(corpusIndexGenerations).values({
           ...target,
           cluster: "q09",
@@ -254,15 +265,11 @@ if (!databaseUrl || !runPostgresTests) {
         });
         const writer = writerDb.transaction(async (tx) => {
           await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
-          await tx.insert(corpusIndexProjectionIntents).values({
+          await tx.insert(corpusIndexProjectionStates).values({
             ...target,
-            id: intentId,
             entityId,
-            epoch: 1n,
-            fingerprint: "a".repeat(64),
-            indexId: "case_law_v5_cs_sk",
-            status: "cancelled",
-            cancelledAt: new Date("2026-09-01T00:00:00.000Z"),
+            desiredAction: "erase",
+            desiredEpoch: 1n,
           });
           writerLocked.resolve(undefined);
           await releaseWriter.promise;
@@ -288,8 +295,28 @@ if (!databaseUrl || !runPostgresTests) {
       } finally {
         releaseWriter.resolve(undefined);
         await writerDb
-          .delete(corpusIndexProjectionIntents)
-          .where(eq(corpusIndexProjectionIntents.id, intentId));
+          .update(corpusIndexGenerations)
+          .set({ status: "retired" })
+          .where(
+            and(
+              eq(corpusIndexGenerations.family, target.family),
+              eq(corpusIndexGenerations.generation, target.generation),
+            ),
+          );
+        await writerDb
+          .delete(corpusIndexProjectionStates)
+          .where(
+            and(
+              eq(corpusIndexProjectionStates.family, target.family),
+              eq(corpusIndexProjectionStates.generation, target.generation),
+            ),
+          );
+        await writerDb
+          .delete(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, entityId));
+        await writerDb
+          .delete(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId));
         await writerDb
           .delete(corpusIndexGenerations)
           .where(
