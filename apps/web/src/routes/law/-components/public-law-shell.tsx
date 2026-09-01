@@ -7,6 +7,7 @@ import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
 import { TopBarCitations } from "@/features/case-law/components/top-bar-citations";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
+import { LAW_END_DOCK_WIDTH_VAR } from "@/lib/law-end-dock";
 import { toStatuteCountrySegment } from "@/lib/statute-route";
 import { PublicLawInspector } from "@/routes/law/-components/public-law-inspector";
 
@@ -67,7 +68,15 @@ function PublicLawTopBar() {
   });
 
   return (
-    <header className="bg-sidebar flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4">
+    <header
+      className="bg-sidebar flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4"
+      // The case reader's docked inspector overlays the bar's inline-end for
+      // its width (it owns the top row there); keep the bar's actions beside
+      // it rather than beneath it.
+      style={{
+        paddingInlineEnd: `calc(1rem + var(${LAW_END_DOCK_WIDTH_VAR}, 0px))`,
+      }}
+    >
       {isMobile && (
         <>
           <SidebarTrigger className="-ms-1" />

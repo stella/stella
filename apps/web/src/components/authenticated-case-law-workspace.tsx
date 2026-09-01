@@ -16,6 +16,7 @@ import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/de
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
+import { LAW_END_DOCK_WIDTH_VAR } from "@/lib/law-end-dock";
 import type { SafeId } from "@/lib/safe-id";
 
 type AuthenticatedCaseLawWorkspaceProps = {
@@ -102,12 +103,16 @@ const CaseLawInspector = ({
       "--folio-find-replace-right",
       widthPx,
     );
+    // The law shell's top bar spans the full window; it pads its inline-end
+    // by this width so its actions stay visible beside the dock.
+    document.documentElement.style.setProperty(LAW_END_DOCK_WIDTH_VAR, widthPx);
 
     return () => {
       document.documentElement.style.removeProperty(TOAST_RIGHT_OFFSET_VAR);
       document.documentElement.style.removeProperty(
         "--folio-find-replace-right",
       );
+      document.documentElement.style.removeProperty(LAW_END_DOCK_WIDTH_VAR);
     };
   }, [widthPx]);
 
@@ -120,8 +125,12 @@ const CaseLawInspector = ({
         data-state={showPaneContent ? "expanded" : "collapsed"}
       >
         <div className="bg-sidebar relative" style={{ width: widthPx }} />
+        {/* Full-height, above the shell top bar (sticky z-20): the dock's own
+            h-12 header owns the top row for its width, as in the workspace
+            chrome. The bar pads its inline-end by LAW_END_DOCK_WIDTH_VAR so
+            its actions are not covered. */}
         <div
-          className="fixed inset-y-0 end-0 z-10 hidden h-svh md:flex"
+          className="fixed inset-y-0 end-0 z-30 hidden h-svh md:flex"
           style={{ width: widthPx }}
         >
           {showPaneContent && (
