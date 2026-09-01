@@ -81,6 +81,9 @@ test("the real OAuth authorization redirect keeps its signed query in the fragme
 
     await page.goto(authorizeUrl.toString(), { waitUntil: "commit" });
     const authorizeResponse = await authorizeResponsePromise;
+    await expect(page.getByRole("heading", { name: /sign in/iu })).toBeVisible({
+      timeout: 30_000,
+    });
     const locationHeader = authorizeResponse.headers()["location"];
     expect(locationHeader).toBeDefined();
 
