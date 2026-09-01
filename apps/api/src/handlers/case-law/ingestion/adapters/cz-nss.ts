@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
+import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -413,7 +414,17 @@ const todayIso = (): string => {
  * anything a row carries has to survive a round trip through JSONB.
  */
 export type ParsedRow = {
+  /** The docket alone, which is what a citation names and what rows key on. */
   caseNumber: string;
+  /**
+   * The reference exactly as the portal's citation states it, sheet number
+   * included, so the split back into docket and sheet stays reversible from
+   * what gets stored.
+   *
+   * Absent on rows a version of this parser before the sheet was kept parked
+   * as JSONB; those replay with no sheet, as they did when they were listed.
+   */
+  publishedCaseNumber: string | undefined;
   decisionDate: string | undefined;
   decisionType: string | undefined;
   outcome: string | undefined;
@@ -467,22 +478,26 @@ export const parseResultRows = (html: string): ParsedRow[] => {
 
     // č may appear as literal or HTML entity (&#x10D; &#x10d; &#269;)
     // Stop at comma to exclude publication reference (e.g. ", č. 421/2004 Sb. NSS")
+    // The sheet number the citation appends is taken by the capture and split
+    // off below, not discarded here: dropped at the regex, the sheet is gone
+    // from the row and nothing downstream can state where the document sits.
     const citMatch =
-      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*(?<caseNumber>[^",\s][^",]*?)(?:-\d+)?[",]/iu.exec(
+      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*(?<reference>[^",\s][^",]*?)[",]/iu.exec(
         block,
       );
-    const caseNumber = citMatch?.groups?.["caseNumber"]?.trim();
-    if (!caseNumber || caseNumber.length > 100) {
+    const publishedCaseNumber = citMatch?.groups?.["reference"]?.trim();
+    if (!publishedCaseNumber || publishedCaseNumber.length > 100) {
       // Skip malformed or overly long case numbers
-      if (caseNumber) {
+      if (publishedCaseNumber) {
         logger.warn("case_law.ingestion.malformed_case_number_skipped", {
           adapterKey: ADAPTER_KEYS.CZ_NSS,
-          caseNumberLength: caseNumber.length,
-          caseNumberSample: caseNumber.slice(0, 50),
+          caseNumberLength: publishedCaseNumber.length,
+          caseNumberSample: publishedCaseNumber.slice(0, 50),
         });
       }
       continue;
     }
+    const { caseNumber } = splitCaseReference(publishedCaseNumber);
 
     const detailMatch =
       /href="\/DokumentDetail\/Index\/(?<documentId>\d+)"/u.exec(block);
@@ -517,6 +532,7 @@ export const parseResultRows = (html: string): ParsedRow[] => {
 
     rows.push({
       caseNumber,
+      publishedCaseNumber,
       decisionDate,
       decisionType,
       outcome: undefined,
@@ -795,9 +811,13 @@ const rowToResult = (
     return undefined;
   })();
   const decisionType = (detail.decisionType ?? row.decisionType)?.toLowerCase();
+  // This source publishes the docket with the sheet number appended.
+  const publishedCaseNumber = row.publishedCaseNumber ?? row.caseNumber;
+  const { sheetNumber } = splitCaseReference(publishedCaseNumber);
 
   return {
     caseNumber: row.caseNumber,
+    sheetNumber,
     ...(detail.citation === undefined
       ? {}
       : {
@@ -833,6 +853,10 @@ const rowToResult = (
     documentUrl: row.documentUrl,
     metadata: {
       caseNumber: row.caseNumber,
+      sheetNumber,
+      // The reference exactly as the court publishes it, docket and sheet
+      // together, so the split stays reversible from what we stored.
+      publishedCaseNumber,
       court,
       ecli: detail.ecli,
       judge: detail.judge,
@@ -902,11 +926,18 @@ const reparseStoredRaw = (
 
   const citation = nonEmptyString(stored.metadata["citation"]);
   const sourceDocumentId = stored.sourceDocumentId ?? undefined;
+  // The row stores the published reference beside the docket, which is what
+  // makes the sheet recoverable here: rebuilt without it, a replay would write
+  // the sheet column back to null on every row it touched.
+  const { sheetNumber } = splitCaseReference(
+    nonEmptyString(stored.metadata["publishedCaseNumber"]) ?? stored.caseNumber,
+  );
 
   return {
     type: "parsed",
     result: {
       caseNumber: stored.caseNumber,
+      sheetNumber,
       ...(citation === undefined
         ? {}
         : {
@@ -1448,6 +1479,7 @@ const isOptionalString = (value: unknown): value is string | undefined =>
 const isCzNssListingRow = (value: unknown): value is ParsedRow =>
   isRecord(value) &&
   typeof value["caseNumber"] === "string" &&
+  isOptionalString(value["publishedCaseNumber"]) &&
   isOptionalString(value["decisionDate"]) &&
   isOptionalString(value["decisionType"]) &&
   isOptionalString(value["outcome"]) &&

@@ -23,8 +23,14 @@ import {
  * shape `splitCaseReference` applies at ingest, expressed in SQL so a batch is
  * one statement. The year is what keeps references that merely end in a number
  * (`0T/42/2019`) from being split.
+ *
+ * The optional space on either side of the dash mirrors the split's, and has
+ * to: rows stored before the ingest read the spaced form carry it in
+ * `case_number`, and a pattern the ingest accepts but the backfill does not
+ * leaves exactly those rows behind. Group 1 ends on a digit, so the docket
+ * this writes back carries no trailing space.
  */
-export const SHEET_PATTERN = String.raw`^(.*/\d{2,4})-(\d+)$`;
+export const SHEET_PATTERN = String.raw`^(.*/\d{2,4}) ?- ?(\d+)$`;
 
 /** How many rows carry a sheet number, and how many of them can be split. */
 export const sheetNumberSurveyStatement = (): SQL => sql`

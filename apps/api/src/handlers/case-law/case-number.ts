@@ -15,8 +15,14 @@
  * number for another reason: Slovak `0T/42/2019` and Polish `II AKa 198/23`
  * have no trailing group to take, while `11 C 153/2025-28` does. Anchored at
  * the end so an internal dash (`ECLI:CZ:...`) is untouched.
+ *
+ * Czech courts set the separator either tight or spaced, and the same court
+ * does both: a citation line prints `10 A 46/2015-66` where the decision's own
+ * header prints `10 A 46/2015 - 66`. A single space on either side is part of
+ * the suffix, not of the docket, so both forms reduce to one docket. The
+ * docket group ends on a digit, so no spacing can survive into what is stored.
  */
-const SHEET_SUFFIX = /^(?<docket>.*\/\d{2,4})-(?<sheet>\d+)$/u;
+const SHEET_SUFFIX = /^(?<docket>.*\/\d{2,4}) ?- ?(?<sheet>\d+)$/u;
 
 type CaseReference = {
   caseNumber: string;

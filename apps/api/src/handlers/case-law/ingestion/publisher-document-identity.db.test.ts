@@ -144,6 +144,7 @@ const NSS_SESSION = {
 const czNssRow = (documentId: string) =>
   ({
     caseNumber: "1 Az 4/2026",
+    publishedCaseNumber: "1 Az 4/2026-79",
     decisionDate: "10.06.2026",
     decisionType: "Rozsudek",
     outcome: undefined,

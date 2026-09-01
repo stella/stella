@@ -405,13 +405,35 @@ describe("cz-nss listing rows", () => {
   test("reads the docket, the document id and the date off a row", () => {
     const rows = parseResultRows(rowBlock(MUNICIPAL_ROW));
     expect(rows).toHaveLength(1);
-    // The sheet number is dropped: a citation names the docket alone.
+    // The sheet number comes off the docket, because a citation names the
+    // docket alone, and is kept beside it rather than dropped.
     expect(rows.at(0)?.caseNumber).toBe("1 Az 4/2026");
+    expect(rows.at(0)?.publishedCaseNumber).toBe("1 Az 4/2026-79");
     expect(rows.at(0)?.documentId).toBe("784237");
     expect(rows.at(0)?.documentUrl).toBe(
       `${BASE_URL}/DokumentDetail/Index/784237`,
     );
     expect(rows.at(0)?.decisionDate).toBe("10.06.2026");
+  });
+
+  test("reads a docket the citation spaces off its sheet number", () => {
+    // The portal's citations are tight, its documents spaced; both forms name
+    // one case, so both have to reduce to one docket.
+    const rows = parseResultRows(
+      rowBlock({ ...MUNICIPAL_ROW, citedCaseNumber: "1 Az 4/2026 - 79" }),
+    );
+
+    expect(rows.at(0)?.caseNumber).toBe("1 Az 4/2026");
+    expect(rows.at(0)?.publishedCaseNumber).toBe("1 Az 4/2026 - 79");
+  });
+
+  test("keeps a docket the citation states with no sheet number", () => {
+    const rows = parseResultRows(
+      rowBlock({ ...MUNICIPAL_ROW, citedCaseNumber: "1 Az 4/2026" }),
+    );
+
+    expect(rows.at(0)?.caseNumber).toBe("1 Az 4/2026");
+    expect(rows.at(0)?.publishedCaseNumber).toBe("1 Az 4/2026");
   });
 
   test("skips blocks that carry no citation", () => {
@@ -478,6 +500,7 @@ describe("cz-nss listing rows", () => {
   test("a row the portal lists without a document link has nothing to key on", () => {
     const row: ParsedRow = {
       caseNumber: "1 Az 4/2026",
+      publishedCaseNumber: undefined,
       decisionDate: undefined,
       decisionType: undefined,
       outcome: undefined,
@@ -618,6 +641,9 @@ describe("cz-nss listSlicePage", () => {
     // The loop parks the payload as JSONB, so the round trip is the contract.
     expect(throughJsonb(payload)).toEqual({
       caseNumber: "1 Az 4/2026",
+      // Parked with the row, because the sheet is only recoverable from the
+      // reference as published and the build runs days after the listing.
+      publishedCaseNumber: "1 Az 4/2026-79",
       decisionDate: "10.06.2026",
       // The results table states no decision type of its own, so the row's
       // heuristic picks up the displayed reference, non-breaking spaces and
@@ -962,6 +988,12 @@ describe("cz-nss buildDecision", () => {
       return;
     }
     expect(built.decision.caseNumber).toBe("1 Az 4/2026");
+    // The sheet is stored beside the docket, with the reference as published,
+    // so nothing has to guess how the court set the two together.
+    expect(built.decision.sheetNumber).toBe("79");
+    expect(built.decision.metadata["publishedCaseNumber"]).toBe(
+      "1 Az 4/2026-79",
+    );
     expect(built.decision.language).toBe("cs");
     // The portal lists the city court's decision; the ECLI names the court,
     // so the row is stored under it rather than under the portal's own.
@@ -986,6 +1018,32 @@ describe("cz-nss buildDecision", () => {
     expect(built.decision.sourceUrl).toBe(
       `${BASE_URL}/DokumentDetail/Index/${MUNICIPAL_ROW.documentId}`,
     );
+  });
+
+  test("a payload parked before the sheet was kept still builds", async () => {
+    // Rows the loop parked under an older parser carry no published
+    // reference. They build with the sheet they were listed with, which is
+    // none, rather than being refused for a field they could not have stated.
+    const legacy: ParsedRow = {
+      caseNumber: "1 Az 4/2026",
+      publishedCaseNumber: undefined,
+      decisionDate: "10.06.2026",
+      decisionType: undefined,
+      outcome: undefined,
+      documentUrl: `${BASE_URL}/DokumentDetail/Index/${MUNICIPAL_ROW.documentId}`,
+      documentId: MUNICIPAL_ROW.documentId,
+    };
+    installStub({ search: [] });
+
+    const built = await reconciliation.buildDecision(throughJsonb(legacy));
+
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    expect(built.decision.caseNumber).toBe("1 Az 4/2026");
+    expect(built.decision.sheetNumber).toBeUndefined();
+    expect(built.decision.metadata["publishedCaseNumber"]).toBe("1 Az 4/2026");
   });
 
   test("replays stored HTML to the same result without contacting the court", async () => {
@@ -1026,6 +1084,10 @@ describe("cz-nss buildDecision", () => {
       return;
     }
     expect(outcome.result).toEqual(decision);
+    // Named as well as covered by the equality above: the replay reads the
+    // sheet back off the stored reference, and a replay that dropped it would
+    // clear the column on every row it touched.
+    expect(outcome.result.sheetNumber).toBe("79");
   });
 
   test("refuses to write a row whose document the court did not serve", async () => {
