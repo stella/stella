@@ -3,7 +3,6 @@ import {
   CORPUS_INDEX_GENERATION_MAX_LENGTH,
 } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
-  CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES,
   CORPUS_INDEX_DESIRED_ACTIONS,
   CORPUS_INDEX_DOCUMENT_COUNT_REQUIRED_INTENT_STATUSES,
   CORPUS_INDEX_INTENT_STATUSES,
@@ -13,6 +12,7 @@ import {
 import {
   corpusIndexProjectionIsBlocked,
   corpusIndexProjectionNeedsWork,
+  corpusIndexProjectionProducesAppend,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
 
 import {
@@ -83,9 +83,7 @@ export const corpusIndexProjectionIntents = p.pgTable(
     p
       .uniqueIndex("corpus_index_projection_intents_append_epoch_uidx")
       .on(t.family, t.generation, t.entityId, t.epoch)
-      .where(
-        sql`${t.status} IN (${sqlValues(CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES)})`,
-      ),
+      .where(corpusIndexProjectionProducesAppend(t.status)),
     p
       .uniqueIndex("corpus_index_projection_intents_identity_uidx")
       .on(

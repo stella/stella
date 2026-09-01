@@ -333,6 +333,73 @@ test("a route-scoped reservation claims only its desired physical index", async 
   ).toEqual([{ entityId: POL_DECISION_ID }]);
 });
 
+test("a reservation that loses the append-epoch election returns no lease", async () => {
+  await db.execute(
+    sql.raw(`
+      CREATE FUNCTION inject_competing_projection_reservation()
+      RETURNS trigger
+      LANGUAGE plpgsql
+      AS $$
+      BEGIN
+        IF pg_trigger_depth() = 1 THEN
+          INSERT INTO corpus_index_projection_intents (
+            id,
+            family,
+            generation,
+            entity_id,
+            epoch,
+            fingerprint,
+            index_id,
+            status,
+            lease_token,
+            lease_expires_at
+          ) VALUES (
+            '${SECOND_INTENT_ID}',
+            NEW.family,
+            NEW.generation,
+            NEW.entity_id,
+            NEW.epoch,
+            NEW.fingerprint,
+            NEW.index_id,
+            'reserved',
+            '${SECOND_LEASE_TOKEN}',
+            NEW.lease_expires_at
+          );
+        END IF;
+        RETURN NEW;
+      END;
+      $$;
+    `),
+  );
+  await db.execute(
+    sql.raw(`
+      CREATE TRIGGER inject_competing_projection_reservation
+      BEFORE INSERT ON corpus_index_projection_intents
+      FOR EACH ROW
+      EXECUTE FUNCTION inject_competing_projection_reservation();
+    `),
+  );
+
+  const leases = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 1,
+        leaseMs: 60_000,
+        newIntentId: () => FIRST_INTENT_ID,
+        newLeaseToken: () => FIRST_LEASE_TOKEN,
+      }),
+  );
+
+  expect(leases).toEqual([]);
+  expect(
+    await db
+      .select({ id: corpusIndexProjectionIntents.id })
+      .from(corpusIndexProjectionIntents),
+  ).toEqual([{ id: SECOND_INTENT_ID }]);
+});
+
 test("an unregistered route fails before reservation mutates state", async () => {
   // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
   // type-aware lint; capture the rejection explicitly instead.
