@@ -42,10 +42,6 @@ const MIGRATION_URLS = [
     import.meta.url,
   ),
   new URL(
-    "../../../drizzle/20260901060000_concurrent_corpus_projection_revision_fence/migration.sql",
-    import.meta.url,
-  ),
-  new URL(
     "../../../drizzle/20260901070000_final_corpus_projection_rebuild/migration.sql",
     import.meta.url,
   ),
@@ -73,8 +69,6 @@ beforeAll(async () => {
         !ddl.includes("guard_corpus_index_projection_history_delete") &&
         !ddl.includes("corpus_index_projection_intents_delete_guard") &&
         !ddl.includes("corpus_index_projection_states_delete_guard") &&
-        !ddl.includes("lock_corpus_projection_mutations_shared") &&
-        !ddl.includes("lock_corpus_projection_mutations_exclusive") &&
         !ddl.includes("purge_rebuilding_corpus_index_projection_history")
       ) {
         continue;
