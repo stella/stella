@@ -3,6 +3,8 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import ts from "typescript";
 
+import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
+
 const BETTER_RESULT_PACKAGE = `${path.sep}node_modules${path.sep}better-result${path.sep}`;
 const RESULT_VARIANT_STATUS = new Map([
   ["Err", "error"],
@@ -914,9 +916,10 @@ const createProgram = ({
     undefined,
     configPath,
   );
-  if (parsed.errors.length > 0) {
+  const errors = withoutTsgoOnlyOptionDiagnostics(parsed.errors);
+  if (errors.length > 0) {
     panic(
-      parsed.errors
+      errors
         .map(({ messageText }) =>
           ts.flattenDiagnosticMessageText(messageText, "\n"),
         )

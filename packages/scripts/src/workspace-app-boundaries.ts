@@ -3,6 +3,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
+
 const APP_BOUNDARY_LEDGER_PATH = "scripts/app-boundary-exceptions.json";
 const DEPENDENCY_FIELDS = [
   "dependencies",
@@ -246,7 +248,10 @@ const readTsconfig = (
       },
     },
   );
-  const diagnostics = [...unrecoverableDiagnostics, ...(parsed?.errors ?? [])]
+  const diagnostics = withoutTsgoOnlyOptionDiagnostics([
+    ...unrecoverableDiagnostics,
+    ...(parsed?.errors ?? []),
+  ])
     .filter(({ code }) => code !== NO_TYPESCRIPT_INPUTS_DIAGNOSTIC_CODE)
     .map((diagnostic) =>
       ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),

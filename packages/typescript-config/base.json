@@ -2,6 +2,17 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "display": "stella base",
   "compilerOptions": {
+    // One checker per project, not the default four. Parallel checkers hold
+    // independent type caches and are assigned files by position, so each one
+    // re-instantiates the Eden treaty surface cold; TypeScript abandons any
+    // statement that instantiates more than five million types and yields
+    // `any`, flooding blameless files with `any`/`unknown` errors that move
+    // whenever a file is added. `packages/scripts/src/tsc-native.ts` documents
+    // the mechanics and passes `--singleThreaded` for the `typecheck` scripts;
+    // oxlint-tsgolint runs the same checker with no such flag, so the option
+    // has to live in the config both drivers read. One checker is also cheaper
+    // in time and memory: parallel checkers duplicate the instantiations.
+    "checkers": 1,
     "allowJs": true,
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
