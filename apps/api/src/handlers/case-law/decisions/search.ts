@@ -21,7 +21,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
-import { readDecisionLanguageAlternateCounts } from "@/api/lib/case-law/language-alternate-counts";
+import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import {
   redistributableCaseLawSource,
   redistributableCaseLawSourceSqlFor,
@@ -48,6 +48,7 @@ import {
   corpusIndexRoute,
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
+import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import {
   blendStableCitationAuthority,
@@ -144,15 +145,12 @@ const searchPostgresDecisions = async (
     ? sql`AND d.language = ${body.language}`
     : sql``;
 
-  // One fragment for the ORDER BY and the cursor predicate alike: keyset
-  // pagination is only stable while the two are the same expression.
   const scoreExpr = blendedRankSql(ftsSearch.rank, sql`cb.authority`);
 
+  // The ORDER BY and the cursor predicate read the same materialized score
+  // column: keyset pagination is only stable while the two agree.
   const cursorFilter = parsedCursor
-    ? sql`AND (
-        ${scoreExpr},
-        sd.decision_id
-      ) < (
+    ? sql`AND (m.score, m.decision_id) < (
         ${parsedCursor.score}::float8,
         ${parsedCursor.id}
       )`
@@ -195,9 +193,45 @@ const searchPostgresDecisions = async (
     ) cb
   `);
 
+  // Every matched language version, scored once. The page and the total both
+  // read this set, so the representative rule below sees exactly what the
+  // page does.
+  const matchedCte = sql`
+    matched AS (
+      SELECT
+        sd.decision_id,
+        d.language_group_key,
+        ${scoreExpr} AS score,
+        cb.cnt AS citation_count
+      FROM case_law_search_documents sd
+      JOIN case_law_decisions d
+        ON d.id = sd.decision_id
+      ${redistributableSourceJoin}
+      LEFT JOIN ${citationAuthorityLateral} ON true
+      WHERE ${ftsSearch.predicate}
+        ${allFilters}
+    )
+  `;
+
+  // A judgment matched in several languages is one result. Its representative
+  // is the matched version with the lowest id: a property of the row and the
+  // query, not of the page, so the keyset cursor stays valid across pages.
+  const representativeFilter = sql`
+    (
+      m.language_group_key IS NULL
+      OR NOT EXISTS (
+        SELECT 1
+        FROM matched sibling
+        WHERE sibling.language_group_key = m.language_group_key
+          AND sibling.decision_id < m.decision_id
+      )
+    )
+  `;
+
   const hitsQuery = sql`
+    WITH ${matchedCte}
     SELECT
-      sd.decision_id,
+      m.decision_id,
       d.case_number,
       d.slug,
       d.ecli,
@@ -228,35 +262,38 @@ const searchPostgresDecisions = async (
         ${ftsSearch.headlineQuery},
         ${TS_HEADLINE_CONFIG}
       ) AS headline,
-      ${scoreExpr} AS score,
-      cb.cnt AS citation_count,
+      m.score,
+      m.citation_count,
       d.created_at
-    FROM case_law_search_documents sd
+    FROM matched m
     JOIN case_law_decisions d
-      ON d.id = sd.decision_id
-    ${redistributableSourceJoin}
+      ON d.id = m.decision_id
+    JOIN case_law_search_documents sd
+      ON sd.decision_id = m.decision_id
     ${bodyPreviewJoin}
-    LEFT JOIN ${citationAuthorityLateral} ON true
-    WHERE ${ftsSearch.predicate}
-      ${allFilters}
+    WHERE ${representativeFilter}
       ${cursorFilter}
-    ORDER BY score DESC, sd.decision_id DESC
+    ORDER BY m.score DESC, m.decision_id DESC
     LIMIT ${limit + 1}
   `;
 
   const countQuery = sql`
+    WITH ${matchedCte}
     SELECT count(*)::int AS total
-    FROM case_law_search_documents sd
-    JOIN case_law_decisions d
-      ON d.id = sd.decision_id
-    ${redistributableSourceJoin}
-    WHERE ${ftsSearch.predicate}
-      ${allFilters}
+    FROM matched m
+    WHERE ${representativeFilter}
+  `;
+
+  // Court and country facets count judgments, not language versions: a
+  // multilingual decision contributes one to its court however many versions
+  // matched. The language facet is per version by definition.
+  const judgmentCountSql = sql`
+    count(distinct coalesce(d.language_group_key, sd.decision_id::text))::int
   `;
 
   // Court facet: cross-filtered (respects country + language)
   const courtFacetQuery = sql`
-    SELECT d.court AS value, count(*)::int AS count
+    SELECT d.court AS value, ${judgmentCountSql} AS count
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
@@ -275,7 +312,7 @@ const searchPostgresDecisions = async (
 
   // Country facet: cross-filtered (respects court + language)
   const countryFacetQuery = sql`
-    SELECT d.country AS value, count(*)::int AS count
+    SELECT d.country AS value, ${judgmentCountSql} AS count
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
@@ -349,25 +386,11 @@ const searchPostgresDecisions = async (
         .filter((value): value is string => value !== null),
     ),
   ];
-  const languageAlternateCounts =
-    languageGroupKeys.length > 0
-      ? await readDecisionLanguageAlternateCounts({
-          caseLawDb,
-          languageGroupKeys,
-        })
-      : [];
-  const languageAlternateCountByGroupKey = new Map(
-    languageAlternateCounts
-      .filter(
-        (
-          row,
-        ): row is {
-          count: number;
-          languageGroupKey: string;
-        } => row.languageGroupKey !== null,
-      )
-      .map((row) => [row.languageGroupKey, row.count]),
-  );
+  const alternatesByGroupKey =
+    await readPublicDecisionLanguageAlternatesByGroup({
+      caseLawDb,
+      languageGroupKeys,
+    });
 
   const lastRaw = resultRows.at(-1);
   const nextCursor =
@@ -391,11 +414,10 @@ const searchPostgresDecisions = async (
       court: String(row["court"]),
       country: String(row["country"]),
       language: String(row["language"]),
-      languageAlternateCount:
+      languageAlternates:
         languageGroupKey === null
-          ? 0
-          : (languageAlternateCountByGroupKey.get(languageGroupKey) ?? 1),
-      languageGroupKey,
+          ? []
+          : (alternatesByGroupKey.get(languageGroupKey) ?? []),
       decisionDate: toNullableString(row["decision_date"]),
       decisionType: toNullableString(row["decision_type"]),
       sourceUrl: toNullableString(row["source_url"]),
@@ -596,10 +618,17 @@ export const rehydrateCaseLawCandidates = async ({
     rows.map((row) => [String(row.id), row.citationAuthority]),
   );
 
+  // Candidates missing from Postgres (index/DB drift) are dropped, then the
+  // language versions of one decision fold into their best-scoring member.
+  const { representatives } = collapseByLanguageGroup(
+    candidates.filter((candidate) => byId.has(candidate.id)),
+    (candidateId) => byId.get(candidateId)?.languageGroupKey ?? null,
+  );
+
   return {
     context: { byId },
     ranked: blendStableCitationAuthority({
-      candidates: candidates.filter((candidate) => byId.has(candidate.id)),
+      candidates: representatives,
       authorityById,
     }),
   };
@@ -679,25 +708,11 @@ const searchCorpusIndexDecisions = async (
         .filter((value): value is string => value !== null),
     ),
   ];
-  const languageAlternateCounts =
-    languageGroupKeys.length > 0
-      ? await readDecisionLanguageAlternateCounts({
-          caseLawDb,
-          languageGroupKeys,
-        })
-      : [];
-  const languageAlternateCountByGroupKey = new Map(
-    languageAlternateCounts
-      .filter(
-        (
-          row,
-        ): row is {
-          count: number;
-          languageGroupKey: string;
-        } => row.languageGroupKey !== null,
-      )
-      .map((row) => [row.languageGroupKey, row.count]),
-  );
+  const alternatesByGroupKey =
+    await readPublicDecisionLanguageAlternatesByGroup({
+      caseLawDb,
+      languageGroupKeys,
+    });
 
   const last = pageRanked.at(-1);
   const nextCursor = hasMore && last ? encodeCursor(last.score, last.id) : null;
@@ -721,11 +736,10 @@ const searchCorpusIndexDecisions = async (
         court: row.court,
         country: row.country,
         language: row.language,
-        languageAlternateCount:
+        languageAlternates:
           row.languageGroupKey === null
-            ? 0
-            : (languageAlternateCountByGroupKey.get(row.languageGroupKey) ?? 1),
-        languageGroupKey: row.languageGroupKey,
+            ? []
+            : (alternatesByGroupKey.get(row.languageGroupKey) ?? []),
         decisionDate: row.decisionDate,
         decisionType: row.decisionType,
         sourceUrl: row.sourceUrl,

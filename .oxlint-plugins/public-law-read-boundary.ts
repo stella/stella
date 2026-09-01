@@ -231,7 +231,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           missingLanguageAlternateCounts:
-            "{{functionName}} must directly invoke readDecisionLanguageAlternateCounts() so every public search result exposes the same route-safe language metadata.",
+            "{{functionName}} must directly invoke readPublicDecisionLanguageAlternatesByGroup() so every public search result exposes the same route-safe language versions.",
         },
       },
       createOnce(context) {
@@ -262,7 +262,7 @@ export default eslintCompatPlugin({
                 functionNode === undefined ||
                 !invokesInOwnBody(
                   functionNode,
-                  "readDecisionLanguageAlternateCounts",
+                  "readPublicDecisionLanguageAlternatesByGroup",
                 )
               ) {
                 context.report({

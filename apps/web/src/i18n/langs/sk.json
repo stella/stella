@@ -442,6 +442,10 @@
     "filters": {
       "searchPlaceholder": "Hľadať podľa spisovej značky..."
     },
+    "languages": {
+      "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazykov}}",
+      "matchedIn": "Zhoda v jazyku {language}"
+    },
     "loadingMore": "Načítavajú sa ďalšie...",
     "provision": {
       "article": "čl. {value}",

@@ -34,9 +34,9 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { readDecisionAnalysis } from "@/api/lib/case-law/decision-analysis";
 import {
-  readDecisionLanguageAlternateCounts,
-  readDecisionLanguageAlternateCountsQuery,
-} from "@/api/lib/case-law/language-alternate-counts";
+  readPublicDecisionLanguageAlternatesByGroup,
+  readPublicDecisionLanguageAlternatesQuery,
+} from "@/api/lib/case-law/language-alternates";
 import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
 import { getCollator } from "@/api/lib/collation";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
@@ -553,7 +553,7 @@ describe("public-law reader role", () => {
 
     const list = await listDecisionsHandler({}, caseLawDb);
     expect(list).toMatchObject({ items: [] });
-    await readDecisionLanguageAlternateCounts({
+    await readPublicDecisionLanguageAlternatesByGroup({
       caseLawDb,
       languageGroupKeys: ["reader-role-census"],
     });
@@ -620,11 +620,11 @@ describe("public-law reader role", () => {
         await readPgFtsBrowseFacets(tx, { excludedSourceIds: [], limit: 10 });
         exercised.add(readPgFtsBrowseFacets.publicLawSharedQuery);
 
-        await readDecisionLanguageAlternateCountsQuery(tx, [
+        await readPublicDecisionLanguageAlternatesQuery(tx, [
           "reader-role-census",
         ]);
         exercised.add(
-          readDecisionLanguageAlternateCountsQuery.publicLawSharedQuery,
+          readPublicDecisionLanguageAlternatesQuery.publicLawSharedQuery,
         );
 
         await readDocumentContextDecision(tx, decisionId);

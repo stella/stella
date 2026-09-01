@@ -442,6 +442,10 @@
     "filters": {
       "searchPlaceholder": "Buscar por número de expediente..."
     },
+    "languages": {
+      "count": "{count, plural, one {# idioma} other {# idiomas}}",
+      "matchedIn": "Coincidencia en {language}"
+    },
     "loadingMore": "Cargando más...",
     "provision": {
       "article": "art. {value}",

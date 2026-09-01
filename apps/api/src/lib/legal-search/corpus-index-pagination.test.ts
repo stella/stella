@@ -240,3 +240,91 @@ describe("document paging survives the passage fan-out", () => {
     expect(page.hasMore).toBe(true);
   });
 });
+
+/**
+ * The ranker may fold several candidates into one hit (the language versions
+ * of one judgment). The page must then hold `limit` folded hits, and a folded
+ * member must never resurface as its own hit on a later page: the scan
+ * replays the same order, so the same member represents the group each time.
+ */
+describe("ranker-folded candidates stay folded across pages", () => {
+  const groupOf = (id: string): string | null =>
+    id.startsWith("c-131-12-") ? "ECLI:EU:C:2014:317" : null;
+
+  const readFoldedPage = async (
+    limit: number,
+    parsedCursor: { score: number; id: string } | null,
+  ) =>
+    await readCorpusIndexSearchPage({
+      cluster: "q09",
+      indexId: "case_law_v5_eu",
+      query: "text:google",
+      limit,
+      parsedCursor,
+      snippetFields: ["text"],
+      extractId: (hit: CorpusIndexHit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      unseenScoreUpperBound: (score) => score,
+      rankCandidates: async (candidates) => {
+        const representativeByGroup = new Map<string, string>();
+        const ranked = [];
+        for (const candidate of candidates) {
+          const group = groupOf(candidate.id);
+          if (group !== null) {
+            if (representativeByGroup.has(group)) {
+              continue;
+            }
+            representativeByGroup.set(group, candidate.id);
+          }
+          ranked.push({
+            id: candidate.id,
+            score: candidate.score,
+            lexicalScore: candidate.score,
+            citationAuthority: 0,
+          });
+        }
+        return { context: null, ranked };
+      },
+    });
+
+  beforeEach(() => {
+    // The judgment matched in 24 languages, interleaved with unrelated
+    // decisions so the fold cannot rely on runs.
+    const languages = Array.from({ length: 24 }, (_, i) => `l${i}`);
+    engineHits = languages.flatMap((language, index) => [
+      { document_id: `c-131-12-${language}` },
+      { document_id: `other-${index}` },
+    ]);
+  });
+
+  test("one judgment is one hit however many languages matched", async () => {
+    const page = await readFoldedPage(3, null);
+
+    expect(page.pageRanked.map((hit) => hit.id)).toEqual([
+      "c-131-12-l0",
+      "other-0",
+      "other-1",
+    ]);
+    expect(page.hasMore).toBe(true);
+  });
+
+  test("no folded member resurfaces on later pages", async () => {
+    const seen: string[] = [];
+    let cursor: { score: number; id: string } | null = null;
+    for (let pageIndex = 0; pageIndex < 20; pageIndex += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- each page depends on the cursor the previous one emitted
+      const page = await readFoldedPage(3, cursor);
+      seen.push(...page.pageRanked.map((hit) => hit.id));
+      const last = page.pageRanked.at(-1);
+      if (!page.hasMore || last === undefined) {
+        break;
+      }
+      cursor = { score: last.score, id: last.id };
+    }
+
+    expect(seen.filter((id) => groupOf(id) !== null)).toEqual(["c-131-12-l0"]);
+    expect(seen.filter((id) => groupOf(id) === null)).toHaveLength(24);
+    expect(new Set(seen).size).toBe(seen.length);
+  });
+});

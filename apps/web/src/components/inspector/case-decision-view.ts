@@ -27,7 +27,6 @@ type CaseDecisionTarget = {
   court: string;
   decisionId: string;
   language?: string | null | undefined;
-  languageAlternateCount?: number | null | undefined;
   languageAlternates?: readonly unknown[] | null | undefined;
   slug?: string | null | undefined;
 };
@@ -114,7 +113,6 @@ export const createCaseDecisionViewTab = ({
   court,
   decisionId,
   language,
-  languageAlternateCount,
   languageAlternates,
   slug,
 }: CaseDecisionTarget): CaseDecisionViewTab => {
@@ -124,7 +122,6 @@ export const createCaseDecisionViewTab = ({
     court,
     decisionId,
     language,
-    languageAlternateCount,
     languageAlternates,
     slug,
   });

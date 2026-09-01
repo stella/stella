@@ -442,6 +442,10 @@
     "filters": {
       "searchPlaceholder": "البحث برقم القضية..."
     },
+    "languages": {
+      "count": "{count, plural, zero {لا توجد لغات} one {لغة واحدة} two {لغتان} few {# لغات} many {# لغة} other {# لغة}}",
+      "matchedIn": "تطابق باللغة {language}"
+    },
     "loadingMore": "جارٍ تحميل المزيد...",
     "provision": {
       "article": "المادة {value}",

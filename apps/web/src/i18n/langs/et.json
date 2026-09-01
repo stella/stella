@@ -442,6 +442,10 @@
     "filters": {
       "searchPlaceholder": "Otsi kohtuasja numbri järgi..."
     },
+    "languages": {
+      "count": "{count, plural, one {# keel} other {# keelt}}",
+      "matchedIn": "Vaste keeles: {language}"
+    },
     "loadingMore": "Laadib rohkem...",
     "provision": {
       "article": "art {value}",

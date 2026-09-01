@@ -75,13 +75,13 @@ describe("public legal material routes", () => {
     expect(
       shouldUsePublicLegalMaterialLanguageSegment({
         language: "en",
-        languageAlternateCount: 1,
+        languageAlternates: [{ language: "en" }],
       }),
     ).toBe(false);
     expect(
       shouldUsePublicLegalMaterialLanguageSegment({
         language: "en",
-        languageAlternateCount: 2,
+        languageAlternates: [{ language: "en" }, { language: "fr" }],
       }),
     ).toBe(true);
   });
@@ -116,23 +116,6 @@ describe("public legal material routes", () => {
       materialType: "guidelines",
       slug: "guidelines-on-dpia",
       version: "wp-248-rev-01",
-    });
-  });
-
-  test("uses explicit material language alternate counts from public APIs", () => {
-    expect(
-      createPublicLegalMaterialRouteParams({
-        authority: "EDPB",
-        language: "EN",
-        languageAlternateCount: 2,
-        materialType: "guidelines",
-        slug: "Guidelines 05/2020 on consent",
-      }),
-    ).toEqual({
-      authority: "edpb",
-      language: "en",
-      materialType: "guidelines",
-      slug: "guidelines-05-2020-on-consent",
     });
   });
 });

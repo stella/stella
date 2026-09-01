@@ -442,6 +442,10 @@
     "filters": {
       "searchPlaceholder": "Meklēt pēc lietas numura..."
     },
+    "languages": {
+      "count": "{count, plural, zero {# valodu} one {# valoda} other {# valodas}}",
+      "matchedIn": "Atbilstība valodā: {language}"
+    },
     "loadingMore": "Ielādē vairāk...",
     "provision": {
       "article": "{value}. pants",

@@ -184,25 +184,6 @@ describe("case-law decision routes", () => {
     });
   });
 
-  test("uses explicit case-law language alternate counts from public APIs", () => {
-    expect(
-      createCaseLawDecisionRouteParams({
-        decisionId: DECISION_ID,
-        caseNumber: "C-123/22",
-        country: "EUR",
-        court: "Court of Justice",
-        language: "EN",
-        languageAlternateCount: 2,
-        slug: "c-123-22",
-      }),
-    ).toEqual({
-      country: "eur",
-      court: "court-of-justice",
-      language: "en",
-      slug: "c-123-22",
-    });
-  });
-
   test("uses stable fallbacks for missing public route metadata", () => {
     expect(
       createCaseLawDecisionRouteParams({

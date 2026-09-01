@@ -442,6 +442,10 @@
     "filters": {
       "searchPlaceholder": "Ieškoti pagal bylos numerį..."
     },
+    "languages": {
+      "count": "{count, plural, one {# kalba} few {# kalbos} many {# kalbos} other {# kalbų}}",
+      "matchedIn": "Atitikmuo {language} kalba"
+    },
     "loadingMore": "Kraunama daugiau...",
     "provision": {
       "article": "{value} str.",

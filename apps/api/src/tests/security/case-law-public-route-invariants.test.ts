@@ -41,8 +41,8 @@ const SEARCH_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/search.ts";
 const SEARCH_DECISIONS_SCHEMA_FILE =
   "apps/api/src/handlers/case-law/decisions/search-schema.ts";
-const LANGUAGE_ALTERNATE_COUNTS_FILE =
-  "apps/api/src/lib/case-law/language-alternate-counts.ts";
+const LANGUAGE_ALTERNATES_FILE =
+  "apps/api/src/lib/case-law/language-alternates.ts";
 const SITEMAP_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/sitemap.ts";
 const PUBLIC_READ_DB_FILE = "apps/api/src/lib/public-law-read-db.ts";
@@ -99,8 +99,8 @@ const readNonRedistributableSourcesSource = async () =>
 const readSearchSource = async () => await readSource(SEARCH_DECISIONS_FILE);
 const readSearchSchemaSource = async () =>
   await readSource(SEARCH_DECISIONS_SCHEMA_FILE);
-const readLanguageAlternateCountsSource = async () =>
-  await readSource(LANGUAGE_ALTERNATE_COUNTS_FILE);
+const readLanguageAlternatesSource = async () =>
+  await readSource(LANGUAGE_ALTERNATES_FILE);
 const readSitemapSource = async () => await readSource(SITEMAP_DECISIONS_FILE);
 const readPublicReadDbSource = async () =>
   await readSource(PUBLIC_READ_DB_FILE);
@@ -266,7 +266,7 @@ describe("public case-law route boundary", () => {
     expect(source).toContain("caseNumber: decision.caseNumber");
     expect(source).toContain("slug: decision.slug");
     expect(source).toContain("languageAlternates,");
-    expect(source).toContain("caseLawDecisions.language");
+    expect(source).toContain("language: decision.language");
     expect(source).toContain("fulltext,");
     // Slug lookup and its language matching moved into the gate module, which
     // resolves every subject. Both halves of the normalisation are pinned
@@ -317,9 +317,11 @@ describe("public case-law route boundary", () => {
     expect(source).not.toContain("organization");
     expect(source).not.toContain("matter");
     expect(source).toContain("d.language_group_key");
-    expect(source).toContain("readDecisionLanguageAlternateCounts");
-    expect(source).toContain("languageAlternateCount:");
-    expect(source).toContain("languageGroupKey,");
+    expect(source).toContain("readPublicDecisionLanguageAlternatesByGroup");
+    expect(source).toContain("languageAlternates:");
+    // The hit contract carries the versions themselves; a count would let a
+    // client link a language it cannot resolve.
+    expect(source).not.toContain("languageAlternateCount");
   });
 
   test("public search validates source IDs before SQL filters", async () => {
@@ -338,25 +340,23 @@ describe("public case-law route boundary", () => {
     expect(searchSource).toContain("!isUuid(parsedCursor.id)");
   });
 
-  test("public language alternate counts only include route-safe languages", async () => {
-    const [listSource, languageAlternateCountsSource] = await Promise.all([
+  test("public language alternates are gated, bounded and route-safe", async () => {
+    const [listSource, languageAlternatesSource] = await Promise.all([
       readListSource(),
-      readLanguageAlternateCountsSource(),
+      readLanguageAlternatesSource(),
     ]);
 
-    expect(listSource).toContain("readDecisionLanguageAlternateCounts");
-    expect(languageAlternateCountsSource).toContain(
-      "validCaseLawLanguageAlternateCountSql",
+    expect(listSource).toContain("readPublicDecisionLanguageAlternatesByGroup");
+    expect(languageAlternatesSource).toContain("redistributableCaseLawSource,");
+    expect(languageAlternatesSource).toContain(
+      "LIMITS.caseLawLanguageAlternatesPerGroupMax",
     );
-    expect(languageAlternateCountsSource).toContain("count(distinct");
-    expect(languageAlternateCountsSource).toContain("replace(lower(");
-    expect(languageAlternateCountsSource).toContain("filter (where");
-    expect(languageAlternateCountsSource).toMatch(
-      /~ \$\{CASE_LAW_LANGUAGE_SEGMENT_PATTERN\}/u,
+    // One version per route-safe language: the same normalisation the public
+    // routes apply, so an alternate the client cannot link is never offered.
+    expect(languageAlternatesSource).toContain(
+      "normalizePublicDecisionLanguage(alternate.language)",
     );
-    expect(languageAlternateCountsSource).toContain(
-      "^[a-z]{2,3}(-[a-z0-9]{2,8})*$",
-    );
+    expect(languageAlternatesSource).not.toContain("...alternate,");
   });
 
   test("public sitemap payload is an explicit public allowlist", async () => {
@@ -402,9 +402,13 @@ describe("public case-law route boundary", () => {
       await readNonRedistributableSourcesSource();
     const searchSource = await readSearchSource();
     const sitemapSource = await readSitemapSource();
+    const languageAlternatesSource = await readLanguageAlternatesSource();
 
     expect(listSource).toContain("redistributableCaseLawSource");
-    expect(decisionSource).toContain("redistributableCaseLawSource");
+    // The decision read's only ungated-by-subject query is the alternates
+    // list, which lives in the shared module and gates each version there.
+    expect(decisionSource).toContain("listPublicDecisionLanguageAlternates(");
+    expect(languageAlternatesSource).toContain("redistributableCaseLawSource,");
     // The per-subject gate moved out of the handler and into the factory that
     // mints its subject, so it is enforced for every subject route at once;
     // `public-subject.test.ts` censuses those routes in both directions.

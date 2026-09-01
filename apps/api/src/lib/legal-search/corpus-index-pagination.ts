@@ -128,18 +128,21 @@ export const readCorpusIndexSearchPage = async <TContext>({
   let startOffset = 0;
   let totalHits = Number.POSITIVE_INFINITY;
 
-  // Chunk-space scan budget, grown to keep document-space reach constant
+  // Chunk-space scan budget, grown to keep result-space reach constant
   // across index layouts. Recomputed each round from what the scan has seen so
   // far, so it costs nothing until an index actually returns several passages
-  // per document.
+  // per document. Once a ranking exists, the unit is what the ranker emits:
+  // candidates it folded together (the language versions of one decision)
+  // consumed scan budget the same way extra passages did.
   const scanBudget = (): number => {
-    if (passageCountById.size === 0) {
+    const resultUnits =
+      ranking === null
+        ? passageCountById.size
+        : Math.max(1, ranking.ranked.length);
+    if (resultUnits === 0) {
       return LIMITS.corpusIndexSearchScanLimit;
     }
-    const perDocument = Math.min(
-      startOffset / passageCountById.size,
-      PASSAGE_OVER_FETCH,
-    );
+    const perDocument = Math.min(startOffset / resultUnits, PASSAGE_OVER_FETCH);
     return Math.ceil(
       LIMITS.corpusIndexSearchScanLimit * Math.max(1, perDocument),
     );

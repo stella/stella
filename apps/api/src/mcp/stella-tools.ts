@@ -1746,7 +1746,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           country: hit.country,
           court: hit.court,
           language: hit.language,
-          languageAlternateCount: hit.languageAlternateCount,
+          languageAlternates: hit.languageAlternates,
           slug: hit.slug,
         }),
         caseNumber: hit.caseNumber,

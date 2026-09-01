@@ -1,10 +1,10 @@
 import { panic, Result, UnhandledException } from "better-result";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { caseLawDecisions } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import {
   listIncomingDecisionCitations,
@@ -12,7 +12,6 @@ import {
 } from "@/api/handlers/case-law/decisions/citations";
 import {
   DECISION_NOT_FOUND,
-  normalizePublicDecisionLanguage,
   type RedistributableDecisionSubject,
 } from "@/api/handlers/case-law/decisions/public-subject";
 import {
@@ -24,7 +23,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
-import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { listPublicDecisionLanguageAlternates } from "@/api/lib/case-law/language-alternates";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
@@ -44,79 +43,6 @@ import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
-
-type PublicDecisionLanguageAlternate = {
-  caseNumber: string;
-  country: string;
-  court: string;
-  decisionDate: string | null;
-  id: string;
-  language: string;
-  slug: string | null;
-  updatedAt: Date;
-};
-
-const dedupeAlternatesByLanguage = (
-  alternates: readonly PublicDecisionLanguageAlternate[],
-): PublicDecisionLanguageAlternate[] => {
-  const seenLanguages = new Set<string>();
-  const dedupedAlternates: PublicDecisionLanguageAlternate[] = [];
-
-  for (const alternate of alternates) {
-    const normalizedLanguage = normalizePublicDecisionLanguage(
-      alternate.language,
-    );
-    if (normalizedLanguage === null || seenLanguages.has(normalizedLanguage)) {
-      continue;
-    }
-
-    seenLanguages.add(normalizedLanguage);
-    dedupedAlternates.push(alternate);
-  }
-
-  return dedupedAlternates;
-};
-
-const listPublicDecisionLanguageAlternates = async ({
-  tx,
-  languageGroupKey,
-}: {
-  tx: CaseLawPublicReadTransaction;
-  languageGroupKey: string | null;
-}): Promise<PublicDecisionLanguageAlternate[]> => {
-  if (languageGroupKey === null) {
-    return [];
-  }
-
-  const alternates = await tx
-    .select({
-      id: caseLawDecisions.id,
-      caseNumber: caseLawDecisions.caseNumber,
-      slug: caseLawDecisions.slug,
-      country: caseLawDecisions.country,
-      court: caseLawDecisions.court,
-      decisionDate: caseLawDecisions.decisionDate,
-      language: caseLawDecisions.language,
-      updatedAt: caseLawDecisions.updatedAt,
-    })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .where(
-      and(
-        eq(caseLawDecisions.languageGroupKey, languageGroupKey),
-        redistributableCaseLawSource,
-      ),
-    )
-    .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id))
-    // Bound the per-group read: a languageGroupKey normally holds only this
-    // decision's language variants, but a malformed/over-merged key could
-    // match many rows and make this public read unbounded — the sitemap path
-    // caps the same read for the same reason. Capped variants still dedupe.
-    .limit(LIMITS.caseLawLanguageAlternatesPerGroupMax);
-  const dedupedAlternates = dedupeAlternatesByLanguage(alternates);
-
-  return dedupedAlternates.length > 1 ? dedupedAlternates : [];
-};
 
 const corpusReadEnabled = (): boolean => corpusStorageMode !== "off";
 

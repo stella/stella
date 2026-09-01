@@ -442,6 +442,10 @@
     "filters": {
       "searchPlaceholder": "Szukaj po sygnaturze akt..."
     },
+    "languages": {
+      "count": "{count, plural, one {# język} few {# języki} many {# języków} other {# języka}}",
+      "matchedIn": "Dopasowanie w języku {language}"
+    },
     "loadingMore": "Ładowanie kolejnych...",
     "provision": {
       "article": "art. {value}",

@@ -442,6 +442,10 @@
     "filters": {
       "searchPlaceholder": "Hledat podle spisové značky..."
     },
+    "languages": {
+      "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazyků}}",
+      "matchedIn": "Shoda v jazyce {language}"
+    },
     "loadingMore": "Načítání dalších...",
     "provision": {
       "article": "čl. {value}",

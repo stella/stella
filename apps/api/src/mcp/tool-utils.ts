@@ -798,17 +798,9 @@ const isCaseLawLanguageAlternate = (
   "language" in alternate &&
   typeof alternate.language === "string";
 
-const getCaseLawLanguageAlternateCount = ({
-  languageAlternateCount,
-  languageAlternates,
-}: {
-  languageAlternateCount?: number | null | undefined;
-  languageAlternates?: readonly unknown[] | null | undefined;
-}): number => {
-  if (languageAlternateCount !== null && languageAlternateCount !== undefined) {
-    return languageAlternateCount;
-  }
-
+const getCaseLawLanguageAlternateCount = (
+  languageAlternates: readonly unknown[] | null | undefined,
+): number => {
   if (!languageAlternates) {
     return 0;
   }
@@ -833,7 +825,6 @@ type CaseLawDecisionUrlInput = {
   country: string;
   court: string;
   language?: string | null | undefined;
-  languageAlternateCount?: number | null | undefined;
   languageAlternates?: readonly unknown[] | null | undefined;
   slug?: string | null | undefined;
 };
@@ -851,7 +842,6 @@ export const buildCaseLawDecisionUrl = ({
   country,
   court,
   language,
-  languageAlternateCount,
   languageAlternates,
   slug,
 }: CaseLawDecisionUrlInput) => {
@@ -866,10 +856,7 @@ export const buildCaseLawDecisionUrl = ({
 
   if (
     languageSegment !== null &&
-    getCaseLawLanguageAlternateCount({
-      languageAlternateCount,
-      languageAlternates,
-    }) > 1
+    getCaseLawLanguageAlternateCount(languageAlternates) > 1
   ) {
     return `${basePath}/${languageSegment}/${decisionSlug}`;
   }
