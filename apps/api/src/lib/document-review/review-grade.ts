@@ -27,6 +27,8 @@ import type {
   AskExtraction,
   DocxFolioCitation,
 } from "@/api/lib/document-review/review-extract";
+import { resolveReviewTargetLanguage } from "@/api/lib/document-review/target-language";
+import type { ReviewTargetLanguage } from "@/api/lib/document-review/target-language";
 import {
   buildGroundedReviewFix,
   type GroundedReviewFix,
@@ -162,16 +164,19 @@ type GradingOutcome =
  * ideal language: the difference is wording, so the delta is `language` and
  * the op is a whole-block replacement. A missing clause has no semantically
  * verified insertion anchor, so it stays a finding until a reviewer chooses
- * where it belongs.
+ * where it belongs. Ideal language is authored, not generated, so one written
+ * in another language than the document's yields a finding without a fix.
  */
 const buildTierFix = ({
   verdict,
   citations,
   ideal,
+  targetLanguage,
 }: {
   verdict: VerdictTier | null;
   citations: readonly DocxFolioCitation[];
   ideal: string | undefined;
+  targetLanguage: ReviewTargetLanguage;
 }): ReviewFix | null => {
   if (verdict !== "deviation") {
     return null;
@@ -181,6 +186,7 @@ const buildTierFix = ({
     proposedText: ideal,
     supportingEvidenceVerified: true,
     targetAnchors: citations,
+    targetLanguage,
   });
 };
 
@@ -413,6 +419,7 @@ const runBatchesWithConcurrency = async <Batch>({
 const gradeReferenceStandards = async ({
   pairs,
   target,
+  targetLanguage,
   perspective,
   referenceEntityVersionIds,
   deps,
@@ -421,6 +428,7 @@ const gradeReferenceStandards = async ({
 }: {
   pairs: readonly ReferencePair[];
   target: PreparedDocxFile;
+  targetLanguage: ReviewTargetLanguage;
   perspective: ReviewPerspective;
   referenceEntityVersionIds: readonly SafeId<"entityVersion">[];
   deps: AiGradingDeps;
@@ -446,6 +454,7 @@ const gradeReferenceStandards = async ({
       const outcome = await gradeReferencePositionsForReview({
         positions: batch.map((pair) => pair.reference),
         target,
+        targetLanguage,
         perspective,
         targetEntityVersionId: deps.entityVersionId,
         referenceEntityVersionIds,
@@ -478,6 +487,7 @@ type ProjectGradingArgs = {
   grading: GradingOutcome;
   citations: readonly DocxFolioCitation[];
   ideal: string | undefined;
+  targetLanguage: ReviewTargetLanguage;
 };
 
 type ProjectedGrading = Pick<
@@ -489,6 +499,7 @@ const projectGrading = ({
   grading,
   citations,
   ideal,
+  targetLanguage,
 }: ProjectGradingArgs): ProjectedGrading => {
   switch (grading.status) {
     case "graded":
@@ -498,7 +509,12 @@ const projectGrading = ({
         ...(grading.matchedRef === undefined
           ? {}
           : { matchedRef: grading.matchedRef }),
-        fix: buildTierFix({ verdict: grading.verdict, citations, ideal }),
+        fix: buildTierFix({
+          verdict: grading.verdict,
+          citations,
+          ideal,
+          targetLanguage,
+        }),
       };
     case "ungraded":
       return {
@@ -590,6 +606,7 @@ export const buildFindings = async ({
   // pass is finished.
   const modelVerdicts = new Map<string, GradingOutcome>();
   const referenceGradings = new Map<string, ReferenceGrading>();
+  const targetLanguage = resolveReviewTargetLanguage(target);
   const project = (position: Position): ReviewFinding =>
     projectFinding({
       position,
@@ -599,6 +616,7 @@ export const buildFindings = async ({
       decided,
       modelVerdicts,
       referenceGradings,
+      targetLanguage,
     });
   const emit = async (batch: readonly Position[]): Promise<void> => {
     await onGraded(batch.map(project));
@@ -616,6 +634,7 @@ export const buildFindings = async ({
     gradeReferenceStandards({
       pairs: referencePairs,
       target,
+      targetLanguage,
       perspective,
       referenceEntityVersionIds,
       deps,
@@ -635,6 +654,7 @@ type ProjectFindingArgs = {
   decided: ReadonlyMap<string, GradingOutcome>;
   modelVerdicts: ReadonlyMap<string, GradingOutcome>;
   referenceGradings: ReadonlyMap<string, ReferenceGrading>;
+  targetLanguage: ReviewTargetLanguage;
 };
 
 /** One position plus whatever has been decided about it, as the single
@@ -648,6 +668,7 @@ const projectFinding = ({
   decided,
   modelVerdicts,
   referenceGradings,
+  targetLanguage,
 }: ProjectFindingArgs): ReviewFinding => {
   const pair = referencePair(position, passageTextById);
   if (pair !== null) {
@@ -678,6 +699,7 @@ const projectFinding = ({
     grading,
     citations,
     ideal: tiers?.ideal,
+    targetLanguage,
   });
 
   return {

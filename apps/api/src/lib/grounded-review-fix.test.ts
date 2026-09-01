@@ -11,13 +11,17 @@ import { buildGroundedReviewFix } from "@/api/lib/grounded-review-fix";
 
 const BLOCK_TEXT =
   "Claims must be notified within 12 months of Completion, failing which they lapse.";
+const CZECH_BLOCK_TEXT =
+  "Poskytovatel odpovídá za škodu způsobenou porušením této smlouvy a nahradí ji objednateli.";
 
 const anchors = [{ blockId: "p-1", text: BLOCK_TEXT }];
+const czechAnchors = [{ blockId: "p-1", text: CZECH_BLOCK_TEXT }];
 
 const parameterDelta = (
   targetText: string,
   standardText: string,
   blockText = BLOCK_TEXT,
+  standardBlockText = "within 6 months of Completion",
 ): ReviewDelta => ({
   kind: "parameter",
   target: {
@@ -30,7 +34,7 @@ const parameterDelta = (
     text: standardText,
     value: 6,
     unit: "months",
-    citation: { blockId: "p-9", text: "within 6 months of Completion" },
+    citation: { blockId: "p-9", text: standardBlockText },
   },
 });
 
@@ -42,6 +46,7 @@ describe("buildGroundedReviewFix", () => {
         proposedText: null,
         supportingEvidenceVerified: true,
         targetAnchors: anchors,
+        targetLanguage: "EN-GB",
       }),
     ).toEqual({
       kind: "replaceInBlock",
@@ -64,6 +69,7 @@ describe("buildGroundedReviewFix", () => {
         proposedText: null,
         supportingEvidenceVerified: true,
         targetAnchors: anchors,
+        targetLanguage: "EN-GB",
       }),
     ).toBeNull();
   });
@@ -75,6 +81,7 @@ describe("buildGroundedReviewFix", () => {
         proposedText: null,
         supportingEvidenceVerified: true,
         targetAnchors: anchors,
+        targetLanguage: "EN-GB",
       }),
     ).toBeNull();
   });
@@ -86,6 +93,27 @@ describe("buildGroundedReviewFix", () => {
         proposedText: "within 6 months",
         supportingEvidenceVerified: true,
         targetAnchors: anchors,
+        targetLanguage: "EN-GB",
+      }),
+    ).toBeNull();
+  });
+
+  // The term is copied verbatim from the standard, so a standard in another
+  // language would splice that language into the document. The term itself is
+  // too short to tell; the block it was copied from is not.
+  test("a term copied from a standard in another language yields no fix", () => {
+    expect(
+      buildGroundedReviewFix({
+        delta: parameterDelta(
+          "12 months",
+          "6 měsíců",
+          BLOCK_TEXT,
+          "Nároky musí být oznámeny do 6 měsíců od dokončení, jinak zanikají.",
+        ),
+        proposedText: null,
+        supportingEvidenceVerified: true,
+        targetAnchors: anchors,
+        targetLanguage: "EN-GB",
       }),
     ).toBeNull();
   });
@@ -107,6 +135,7 @@ describe("buildGroundedReviewFix", () => {
         proposedText: "(e) any management fees paid to a Seller Group company;",
         supportingEvidenceVerified: true,
         targetAnchors: anchors,
+        targetLanguage: "EN-GB",
       }),
     ).toEqual({
       kind: "insertAfterBlock",
@@ -127,6 +156,7 @@ describe("buildGroundedReviewFix", () => {
         proposedText: '"Losses" means all losses, liabilities and costs.',
         supportingEvidenceVerified: true,
         targetAnchors: anchors,
+        targetLanguage: "EN-GB",
       }),
     ).toEqual({
       kind: "insertAfterBlock",
@@ -142,11 +172,43 @@ describe("buildGroundedReviewFix", () => {
         proposedText: "Fairly Disclosed means disclosed in sufficient detail.",
         supportingEvidenceVerified: true,
         targetAnchors: anchors,
+        targetLanguage: "EN-GB",
       }),
     ).toEqual({
       kind: "replaceBlock",
       blockId: "p-1",
       text: "Fairly Disclosed means disclosed in sufficient detail.",
+    });
+  });
+
+  test("wording in another language than the document's is not an edit", () => {
+    expect(
+      buildGroundedReviewFix({
+        delta: { kind: "language" },
+        proposedText:
+          "The provider is liable for damage caused by a breach of this agreement and shall compensate the customer.",
+        supportingEvidenceVerified: true,
+        targetAnchors: czechAnchors,
+        targetLanguage: "CS",
+      }),
+    ).toBeNull();
+  });
+
+  // No resolved language means no claim to enforce; the guard stands down
+  // rather than reject on a guess.
+  test("a document with no resolved language gets no language guard", () => {
+    expect(
+      buildGroundedReviewFix({
+        delta: { kind: "language" },
+        proposedText: "The provider is liable for damage caused by a breach.",
+        supportingEvidenceVerified: true,
+        targetAnchors: czechAnchors,
+        targetLanguage: null,
+      }),
+    ).toEqual({
+      kind: "replaceBlock",
+      blockId: "p-1",
+      text: "The provider is liable for damage caused by a breach.",
     });
   });
 
@@ -157,6 +219,7 @@ describe("buildGroundedReviewFix", () => {
         proposedText: "Some replacement.",
         supportingEvidenceVerified: false,
         targetAnchors: anchors,
+        targetLanguage: "EN-GB",
       }),
     ).toBeNull();
   });
@@ -168,6 +231,7 @@ describe("buildGroundedReviewFix", () => {
         proposedText: "Some replacement.",
         supportingEvidenceVerified: true,
         targetAnchors: [],
+        targetLanguage: "EN-GB",
       }),
     ).toBeNull();
     expect(
@@ -176,6 +240,7 @@ describe("buildGroundedReviewFix", () => {
         proposedText: "   ",
         supportingEvidenceVerified: true,
         targetAnchors: anchors,
+        targetLanguage: "EN-GB",
       }),
     ).toBeNull();
   });

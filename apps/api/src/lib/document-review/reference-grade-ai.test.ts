@@ -1,9 +1,12 @@
 /**
  * The model-dispatch boundary of reference grading: what tenant scope reaches
- * model ingress, and what a provider failure reports. The derivation itself is
- * covered by `reference-grade.test.ts`.
+ * model ingress, what a provider failure reports, and when a batch is sent
+ * back for repair. The derivation itself is covered by
+ * `reference-grade.test.ts`, the repair rules by
+ * `reference-grade-repair.test.ts`.
  */
 
+import type { ModelMessage } from "@tanstack/ai";
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
@@ -22,21 +25,46 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type CapturedGenerateOptions = {
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
+  messages: readonly ModelMessage[];
 };
 
+const POSITION_ID = "11111111-1111-4111-8111-111111111111";
+
+const answer = (blockId: string) => ({
+  positionId: POSITION_ID,
+  assessment: "different" as const,
+  consensus: "single" as const,
+  rationale: "The target differs.",
+  recommendation: "",
+  impact: "unknown" as const,
+  direction: "unknown" as const,
+  delta: {
+    targetValue: null,
+    standardValue: null,
+    items: [],
+    term: "",
+    inTarget: false,
+    inStandard: false,
+  },
+  proposedText: null,
+  targetCitations: [{ blockId }],
+});
+
 const capturedGenerateOptions: CapturedGenerateOptions[] = [];
+/** Answers the mock hands back in order; a call past the queue answers
+ *  nothing. Queued rather than `mockResolvedValueOnce`, which would skip the
+ *  capture above. */
+const queuedAnswers: { findings: ReturnType<typeof answer>[] }[] = [];
 const generateObjectMock = mock(async (options: CapturedGenerateOptions) => {
   capturedGenerateOptions.push(options);
-  return await Promise.resolve({ findings: [] });
+  return await Promise.resolve(queuedAnswers.shift() ?? { findings: [] });
 });
-// SAFETY: This suite only dispatches the reference-grading schema and
-// configures outputs matching that schema; Bun's mock type cannot express that
-// generic tie.
 const generateObjectForTest =
-  generateObjectMock as typeof generateTanStackObjectForRole;
+  asTestRaw<typeof generateTanStackObjectForRole>(generateObjectMock);
 
 const organizationId = toSafeId<"organization">("organization-fixture");
 const workspaceId = toSafeId<"workspace">("workspace-fixture");
@@ -61,7 +89,7 @@ const grade = async () =>
     perspective: NEUTRAL_PERSPECTIVE,
     positions: [
       {
-        sourceId: "11111111-1111-4111-8111-111111111111",
+        sourceId: POSITION_ID,
         issue: "Payment timing",
         termKind: "language",
         passages: [
@@ -86,6 +114,7 @@ const grade = async () =>
       simplifiedName: "F0",
       blocks: [{ id: "target-block", kind: "paragraph", text: "Alpha term" }],
     },
+    targetLanguage: null,
     targetEntityVersionId: toSafeId<"entityVersion">("target-version-fixture"),
     referenceEntityVersionIds: [
       toSafeId<"entityVersion">("reference-version-fixture"),
@@ -105,6 +134,8 @@ describe("reference grading AI boundary", () => {
   let logs: RecordingLogger;
 
   beforeEach(() => {
+    capturedGenerateOptions.length = 0;
+    queuedAnswers.length = 0;
     analytics = installRecordingAnalytics();
     logs = installRecordingLogger();
   });
@@ -115,7 +146,7 @@ describe("reference grading AI boundary", () => {
   });
 
   test("passes the authorized workspace scope to model ingress", async () => {
-    capturedGenerateOptions.length = 0;
+    queuedAnswers.push({ findings: [answer("target-block")] });
 
     const result = await grade();
 
@@ -124,6 +155,52 @@ describe("reference grading AI boundary", () => {
       workspaceId,
     ]);
     expect(analytics.exceptions()).toEqual([]);
+  });
+
+  test("a batch that checks out is one call", async () => {
+    queuedAnswers.push({ findings: [answer("target-block")] });
+
+    await grade();
+
+    expect(capturedGenerateOptions).toHaveLength(1);
+  });
+
+  test("an answer the documents contradict is re-asked once, with the batch shown back", async () => {
+    queuedAnswers.push(
+      { findings: [answer("no-such-block")] },
+      { findings: [answer("target-block")] },
+    );
+
+    const result = await grade();
+
+    expect(capturedGenerateOptions).toHaveLength(2);
+    const repair = capturedGenerateOptions.at(1)?.messages ?? [];
+    expect(repair.map(({ role }) => role)).toEqual([
+      "user",
+      "assistant",
+      "user",
+    ]);
+    expect(repair.at(0)).toEqual(capturedGenerateOptions.at(0)?.messages.at(0));
+    expect(repair.at(1)?.content).toContain("no-such-block");
+    expect(repair.at(2)?.content).toContain(`positionId=${POSITION_ID}`);
+    expect(repair.at(2)?.content).toContain("cites no-such-block");
+    expect(
+      Result.isOk(result) ? result.value.get(POSITION_ID)?.citations : null,
+    ).toEqual([{ blockId: "target-block", text: "Alpha term" }]);
+  });
+
+  test("an answer that still fails after repair is dropped, not re-asked", async () => {
+    queuedAnswers.push(
+      { findings: [answer("no-such-block")] },
+      { findings: [answer("no-such-block")] },
+    );
+
+    const result = await grade();
+
+    expect(capturedGenerateOptions).toHaveLength(2);
+    expect(
+      Result.isOk(result) ? result.value.get(POSITION_ID)?.explanation : null,
+    ).toEqual({ type: "insufficient-evidence" });
   });
 
   test("reports a provider failure under the reference review feature", async () => {
