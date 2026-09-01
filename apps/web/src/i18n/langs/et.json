@@ -435,7 +435,9 @@
       "yearTitle": "{year}: {count, plural, one {# viide} other {# viidet}}"
     },
     "columns": {
-      "caseNumber": "Kohtuasja number"
+      "caseNumber": "Kohtuasja number",
+      "citedBy": "Viidatud",
+      "headnote": "Lühikokkuvõte"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Plokktsitaat viitega",
@@ -446,14 +448,12 @@
     },
     "decisionNotFound": "Otsust ei leitud",
     "emptyState": "Otsuseid ei leitud. Seadistage allikas ja käivitage sünkroonimine kohtupraktika importimiseks.",
-    "filters": {
-      "searchPlaceholder": "Otsi kohtuasja numbri järgi..."
-    },
     "languages": {
       "count": "{count, plural, one {# keel} other {# keelt}}",
       "matchedIn": "Vaste keeles: {language}"
     },
     "loadingMore": "Laadib rohkem...",
+    "newestDecisions": "Uusimad lahendid",
     "notesFilter": {
       "ai": "AI",
       "human": "Inimeste"
@@ -491,6 +491,11 @@
       "ungrouped": "Väärtuseta",
       "updated": "Viimati muudetud {date}"
     },
+    "sameCaseNumber": "{count, plural, one {# lahend kannab} other {# lahendit kannavad}} seda kohtuasja numbrit. Valige kohus.",
+    "searchAskPrompt": "{query} (kohtupraktika, {country})",
+    "searchAskPromptAll": "{query} (kohtupraktika)",
+    "searchLabel": "Otsi kohtupraktikast",
+    "searchPlaceholder": "Kohtuasja number, ECLI või sõnad, nt 22 Cdo 2653/2012",
     "seo": {
       "browse": "Sirvi kohtupraktikat",
       "countries": "Riigid",

@@ -1,12 +1,17 @@
-import { and, desc, eq, isNull, lt, notExists, or, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import { and, desc, eq, isNull, notExists, or, sql } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import {
+  decisionHeadnoteSql,
+  normalizeDecisionHeadnote,
+} from "@/api/lib/case-law/decision-headnote";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import {
   redistributableCaseLawSource,
@@ -18,13 +23,13 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
-import {
-  createTimestampIdCursorCodec,
-  parsePgTimestampCursorValue,
-  pgTimestampCursorBoundary,
-} from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
-import { createCursorPage } from "@/api/lib/pagination";
+import {
+  createCursorPage,
+  decodePaginationCursor,
+  encodePaginationCursor,
+  isDateOnlyPaginationCursorPart,
+} from "@/api/lib/pagination";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 export const listDecisionsQuerySchema = t.Object({
@@ -41,10 +46,54 @@ export const listDecisionsQuerySchema = t.Object({
 
 type ListDecisionsQuery = Static<typeof listDecisionsQuerySchema>;
 
-const caseLawCreatedAtCursor = createTimestampIdCursorCodec({
-  column: caseLawDecisions.createdAt,
-  brandId: brandPersistedCaseLawDecisionId,
-});
+/**
+ * The browse walk is newest decision first. Undated decisions sort last, as
+ * one band, which is what the corpus-generation cursor index already stores
+ * (`coalesce(decision_date, '-infinity')`, then id), so the walk is an index
+ * range in either direction.
+ */
+export const decisionDateSortKeySql = (decisionDate: SQLWrapper): SQL<string> =>
+  sql<string>`coalesce(${decisionDate}, '-infinity'::date)`;
+
+/** Where a browse page ended: the last row's decision date (null when undated) and id. */
+type DecisionDateCursor = {
+  decisionDate: string | null;
+  id: SafeId<"caseLawDecision">;
+};
+
+const encodeDecisionDateCursor = ({
+  decisionDate,
+  id,
+}: DecisionDateCursor): string => encodePaginationCursor([decisionDate, id]);
+
+const decodeDecisionDateCursor = (
+  cursor: string,
+): DecisionDateCursor | null => {
+  const parts = decodePaginationCursor(cursor);
+  if (parts?.length !== 2) {
+    return null;
+  }
+  const [decisionDate, id] = parts;
+  if (
+    typeof id !== "string" ||
+    !isUuid(id) ||
+    (decisionDate !== null && !isDateOnlyPaginationCursorPart(decisionDate))
+  ) {
+    return null;
+  }
+  return { decisionDate, id: brandPersistedCaseLawDecisionId(id) };
+};
+
+/**
+ * Rows strictly after the cursor in walk order. One row comparison on the same
+ * expressions the ORDER BY uses, so the predicate and the sort cannot drift.
+ */
+const decisionDateKeysetAfter = ({
+  decisionDate,
+  id,
+}: DecisionDateCursor): SQL =>
+  sql`(${decisionDateSortKeySql(caseLawDecisions.decisionDate)}, ${caseLawDecisions.id})
+    < (coalesce(${decisionDate}::date, '-infinity'::date), ${id}::uuid)`;
 
 /** The language versions of a decision, so the sibling rule can be applied to them. */
 const sibling = alias(caseLawDecisions, "sibling");
@@ -106,49 +155,11 @@ export const listDecisionsHandler = async (
   ];
 
   if (query.cursor) {
-    const currentCursor = caseLawCreatedAtCursor.decode(query.cursor);
-    if (currentCursor) {
-      const cursorCondition = caseLawCreatedAtCursor.keysetAfter({
-        cursor: currentCursor,
-        direction: "descending",
-        idColumn: caseLawDecisions.id,
-      });
-      if (cursorCondition) {
-        conditions.push(cursorCondition);
-      }
-    } else {
-      const separatorIdx = query.cursor.indexOf("_");
-      if (separatorIdx > 0) {
-        const ts = query.cursor.slice(0, separatorIdx);
-        const id = query.cursor.slice(separatorIdx + 1);
-        const timestamp = parsePgTimestampCursorValue(ts);
-        if (timestamp === null || !isUuid(id)) {
-          return status(400, { message: "Invalid cursor" });
-        }
-        const cursorCondition = caseLawCreatedAtCursor.keysetAfter({
-          cursor: {
-            timestamp,
-            id: brandPersistedCaseLawDecisionId(id),
-          },
-          direction: "descending",
-          idColumn: caseLawDecisions.id,
-        });
-        if (cursorCondition) {
-          conditions.push(cursorCondition);
-        }
-      } else {
-        const timestamp = parsePgTimestampCursorValue(query.cursor);
-        if (timestamp === null) {
-          return status(400, { message: "Invalid cursor" });
-        }
-        // Old cursors without an id cannot express a tie-break. Retain their
-        // timestamp-only boundary while all newly emitted cursors use the
-        // complete shared tuple codec below.
-        conditions.push(
-          lt(caseLawDecisions.createdAt, pgTimestampCursorBoundary(timestamp)),
-        );
-      }
+    const cursor = decodeDecisionDateCursor(query.cursor);
+    if (cursor === null) {
+      return status(400, { message: "Invalid cursor" });
     }
+    conditions.push(decisionDateKeysetAfter(cursor));
   }
 
   const decisions = await caseLawDb((tx) =>
@@ -165,9 +176,9 @@ export const listDecisionsHandler = async (
         decisionDate: caseLawDecisions.decisionDate,
         decisionType: caseLawDecisions.decisionType,
         sourceUrl: caseLawDecisions.sourceUrl,
+        headnote: decisionHeadnoteSql(caseLawDecisions.metadata),
+        citationCount: caseLawDecisions.citationCount,
         createdAt: caseLawDecisions.createdAt,
-        createdAtCursor:
-          caseLawCreatedAtCursor.cursorValue.as("created_at_cursor"),
       })
       .from(caseLawDecisions)
       .innerJoin(
@@ -209,7 +220,10 @@ export const listDecisionsHandler = async (
           ),
         ),
       )
-      .orderBy(desc(caseLawDecisions.createdAt), desc(caseLawDecisions.id))
+      .orderBy(
+        desc(decisionDateSortKeySql(caseLawDecisions.decisionDate)),
+        desc(caseLawDecisions.id),
+      )
       .limit(limit + 1),
   );
 
@@ -226,7 +240,7 @@ export const listDecisionsHandler = async (
       languageGroupKeys,
     });
 
-  const page = createCursorPage({
+  return createCursorPage({
     rows: decisions.map((decision) => ({
       id: decision.id,
       caseNumber: decision.caseNumber,
@@ -241,18 +255,15 @@ export const listDecisionsHandler = async (
       decisionDate: decision.decisionDate,
       decisionType: decision.decisionType,
       sourceUrl: decision.sourceUrl,
+      headnote: normalizeDecisionHeadnote(decision.headnote),
+      citationCount: decision.citationCount,
       createdAt: decision.createdAt,
-      createdAtCursor: decision.createdAtCursor,
     })),
     limit,
     cursorForItem: (item) =>
-      caseLawCreatedAtCursor.encode(item.createdAtCursor, item.id),
+      encodeDecisionDateCursor({
+        decisionDate: item.decisionDate,
+        id: item.id,
+      }),
   });
-
-  return {
-    ...page,
-    items: page.items.map(
-      ({ createdAtCursor: _createdAtCursor, ...item }) => item,
-    ),
-  };
 };

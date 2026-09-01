@@ -435,7 +435,9 @@
       "yearTitle": "{year}: {count, plural, one {# citação} other {# citações}}"
     },
     "columns": {
-      "caseNumber": "Número do processo"
+      "caseNumber": "Número do processo",
+      "citedBy": "Citada por",
+      "headnote": "Ementa"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Citação em bloco com referência",
@@ -446,14 +448,12 @@
     },
     "decisionNotFound": "Decisão não encontrada",
     "emptyState": "Nenhuma decisão encontrada. Configure uma fonte e execute uma sincronização para importar jurisprudência.",
-    "filters": {
-      "searchPlaceholder": "Pesquisar por número do processo..."
-    },
     "languages": {
       "count": "{count, plural, one {# idioma} other {# idiomas}}",
       "matchedIn": "Correspondência em {language}"
     },
     "loadingMore": "Carregando mais...",
+    "newestDecisions": "Decisões mais recentes",
     "notesFilter": {
       "ai": "IA",
       "human": "Humanas"
@@ -491,6 +491,11 @@
       "ungrouped": "Sem valor",
       "updated": "Última edição em {date}"
     },
+    "sameCaseNumber": "{count, plural, one {# decisão tem} other {# decisões têm}} este número de processo. Escolha o tribunal.",
+    "searchAskPrompt": "{query} (jurisprudência de {country})",
+    "searchAskPromptAll": "{query} (jurisprudência)",
+    "searchLabel": "Pesquisar jurisprudência",
+    "searchPlaceholder": "Número do processo, ECLI ou palavras, p. ex. 22 Cdo 2653/2012",
     "seo": {
       "browse": "Explorar jurisprudência",
       "countries": "Países",

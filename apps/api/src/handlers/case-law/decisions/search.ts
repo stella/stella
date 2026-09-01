@@ -20,6 +20,10 @@ import { arrayOrEmpty } from "@/api/lib/array";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import {
+  decisionHeadnoteSql,
+  normalizeDecisionHeadnote,
+} from "@/api/lib/case-law/decision-headnote";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import {
@@ -254,6 +258,7 @@ const searchPostgresDecisions = async (
       d.decision_date,
       d.decision_type,
       d.source_url,
+      ${decisionHeadnoteSql(sql.raw("d.metadata"))} AS headnote,
       ts_headline(
         ${headlineRegconfig},
         left(
@@ -419,6 +424,7 @@ const searchPostgresDecisions = async (
       decisionDate: toNullableString(row["decision_date"]),
       decisionType: toNullableString(row["decision_type"]),
       sourceUrl: toNullableString(row["source_url"]),
+      headnote: normalizeDecisionHeadnote(row["headnote"]),
       headline: headline ? escapeAndHighlight(headline) : null,
       // Postgres FTS scores whole decisions, so there is no passage to anchor
       // the hit to. Kept on both paths so the response shape does not depend
@@ -593,6 +599,7 @@ export const rehydrateCaseLawCandidates = async ({
               decisionDate: caseLawDecisions.decisionDate,
               decisionType: caseLawDecisions.decisionType,
               sourceUrl: caseLawDecisions.sourceUrl,
+              headnote: decisionHeadnoteSql(caseLawDecisions.metadata),
               citationCount: caseLawDecisions.citationCount,
               citationAuthority: caseLawDecisions.citationAuthority,
               createdAt: caseLawDecisions.createdAt,
@@ -742,6 +749,7 @@ const searchCorpusIndexDecisions = async (
         decisionDate: row.decisionDate,
         decisionType: row.decisionType,
         sourceUrl: row.sourceUrl,
+        headnote: normalizeDecisionHeadnote(row.headnote),
         headline: snippetById.get(hit.id) ?? null,
         // Additive: the anchor of the passage the snippet came from, so a
         // result can open the decision scrolled to what matched. Null on a

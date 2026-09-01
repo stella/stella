@@ -23,7 +23,6 @@
   "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts::useCreateBBoxes": 1,
   "apps/web/src/components/workspaces/hooks/use-sync-justifications.ts::useSyncJustificationChunks": 3,
   "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx::WorkflowStartConfirmationPromptProvider": 1,
-  "apps/web/src/features/case-law/components/decision-filters.tsx::DecisionFilters": 5,
   "apps/web/src/features/chat/hooks/use-chat-session.ts::useChatSession": 25,
   "apps/web/src/features/guides/use-guide-runner.ts::useGuideRunner": 0,
   "apps/web/src/hooks/use-effect.ts::useExternalSyncEffect": 0,

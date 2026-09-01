@@ -435,7 +435,9 @@
       "yearTitle": "{year}: {count, plural, zero {لا استشهادات} one {استشهاد واحد} two {استشهادان} few {# استشهادات} many {# استشهادًا} other {# استشهاد}}"
     },
     "columns": {
-      "caseNumber": "رقم القضية"
+      "caseNumber": "رقم القضية",
+      "citedBy": "مُستشهد به",
+      "headnote": "خلاصة الحكم"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "اقتباس كتلي مع الإحالة",
@@ -446,14 +448,12 @@
     },
     "decisionNotFound": "لم يُعثر على القرار",
     "emptyState": "لم يُعثر على أي قرارات. اضبط مصدرًا وشغّل مزامنة لاستيراد الاجتهاد القضائي.",
-    "filters": {
-      "searchPlaceholder": "البحث برقم القضية..."
-    },
     "languages": {
       "count": "{count, plural, zero {لا توجد لغات} one {لغة واحدة} two {لغتان} few {# لغات} many {# لغة} other {# لغة}}",
       "matchedIn": "تطابق باللغة {language}"
     },
     "loadingMore": "جارٍ تحميل المزيد...",
+    "newestDecisions": "أحدث الأحكام",
     "notesFilter": {
       "ai": "ذكاء اصطناعي",
       "human": "بشرية"
@@ -491,6 +491,11 @@
       "ungrouped": "بدون قيمة",
       "updated": "آخر تعديل {date}"
     },
+    "sameCaseNumber": "{count, plural, zero {لا يوجد حكم يحمل} one {حكم واحد يحمل} two {حكمان يحملان} few {# أحكام تحمل} many {# حكمًا تحمل} other {# حكم تحمل}} رقم القضية هذا. اختر المحكمة.",
+    "searchAskPrompt": "{query} (السوابق القضائية في {country})",
+    "searchAskPromptAll": "{query} (السوابق القضائية)",
+    "searchLabel": "البحث في السوابق القضائية",
+    "searchPlaceholder": "رقم القضية أو ECLI أو كلمات، مثل 22 Cdo 2653/2012",
     "seo": {
       "browse": "تصفّح الاجتهاد القضائي",
       "countries": "الدول",

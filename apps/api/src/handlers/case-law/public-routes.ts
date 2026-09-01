@@ -11,6 +11,10 @@ import {
   readDecisionQuerySchema,
 } from "@/api/handlers/case-law/decisions/get";
 import { hydrateDeferredDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import {
+  listLatestDecisionsHandler,
+  listLatestDecisionsQuerySchema,
+} from "@/api/handlers/case-law/decisions/latest";
 import listLeadingCitations from "@/api/handlers/case-law/decisions/leading-citations";
 import {
   listDecisionsHandler,
@@ -65,6 +69,23 @@ const listDecisionFacets = createSafePublicHandler(
   async function* ({ query }) {
     const response = yield* Result.await(
       Result.tryPromise(async () => await listDecisionFacetsHandler(query)),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const listLatestDecisions = createSafePublicHandler(
+  {
+    mcp: { type: "internal", reason: "public_indexing" },
+    query: listLatestDecisionsQuerySchema,
+  },
+  async function* ({ query }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await listLatestDecisionsHandler(query, caseLawPublicReadDb),
+      ),
     );
 
     return Result.ok(response);
@@ -205,6 +226,9 @@ export const publicCaseLawRoute = new Elysia({
   })
   .get("/decisions/facets", listDecisionFacets.handler, {
     query: listDecisionFacets.config.query,
+  })
+  .get("/decisions/latest", listLatestDecisions.handler, {
+    query: listLatestDecisions.config.query,
   })
   .get("/decisions/by-slug/:slug", readDecisionBySlug.handler, {
     params: readDecisionBySlug.config.params,

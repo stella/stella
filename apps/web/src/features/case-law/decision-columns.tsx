@@ -4,10 +4,12 @@ import type { TableSchema } from "@stll/ui/data-table";
 
 import {
   CaseNumberCell,
+  CitedByCell,
   CountryPill,
   DecisionDateCell,
   DecisionLanguageCell,
   decisionYear,
+  HeadnoteCell,
 } from "@/features/case-law/components/decision-cells";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { TranslationKey } from "@/i18n/types";
@@ -24,6 +26,8 @@ export const DECISION_COLUMN_IDS = [
   "country",
   "date",
   "type",
+  "headnote",
+  "citedBy",
   "language",
 ] as const;
 
@@ -38,12 +42,21 @@ export const DECISION_COLUMN_LABEL_KEYS = {
   country: "common.country",
   date: "common.date",
   type: "common.type",
+  headnote: "caseLaw.columns.headnote",
+  citedBy: "caseLaw.columns.citedBy",
   language: "common.language",
 } as const satisfies Record<DecisionColumnId, TranslationKey>;
 
 const contentColumn = {
   sort: false,
   hide: false,
+  resize: true,
+  pin: false,
+} as const;
+
+const hideableContentColumn = {
+  sort: false,
+  hide: true,
   resize: true,
   pin: false,
 } as const;
@@ -95,6 +108,22 @@ export const decisionTableSchema: TableSchema<DecisionColumnRender> = {
       label: "",
       render: (decision) => decision.decisionType ?? "—",
       size: 120,
+      capabilities: metadataColumn,
+      emphasis: "metadata",
+    },
+    {
+      id: "headnote",
+      label: "",
+      render: (decision) => <HeadnoteCell decision={decision} />,
+      size: 420,
+      capabilities: hideableContentColumn,
+      emphasis: "content",
+    },
+    {
+      id: "citedBy",
+      label: "",
+      render: (decision) => <CitedByCell decision={decision} />,
+      size: 96,
       capabilities: metadataColumn,
       emphasis: "metadata",
     },

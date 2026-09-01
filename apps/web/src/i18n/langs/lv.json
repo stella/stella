@@ -435,7 +435,9 @@
       "yearTitle": "{year}: {count, plural, zero {# atsauču} one {# atsauce} other {# atsauces}}"
     },
     "columns": {
-      "caseNumber": "Lietas numurs"
+      "caseNumber": "Lietas numurs",
+      "citedBy": "Citēts",
+      "headnote": "Kopsavilkums"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Bloka citāts ar atsauci",
@@ -446,14 +448,12 @@
     },
     "decisionNotFound": "Lēmums nav atrasts",
     "emptyState": "Lēmumi nav atrasti. Konfigurējiet avotu un palaidiet sinhronizāciju, lai importētu tiesu praksi.",
-    "filters": {
-      "searchPlaceholder": "Meklēt pēc lietas numura..."
-    },
     "languages": {
       "count": "{count, plural, zero {# valodu} one {# valoda} other {# valodas}}",
       "matchedIn": "Atbilstība valodā: {language}"
     },
     "loadingMore": "Ielādē vairāk...",
+    "newestDecisions": "Jaunākie nolēmumi",
     "notesFilter": {
       "ai": "MI",
       "human": "Cilvēku"
@@ -491,6 +491,11 @@
       "ungrouped": "Bez vērtības",
       "updated": "Pēdējo reizi labota {date}"
     },
+    "sameCaseNumber": "{count, plural, zero {# nolēmumu ir} one {# nolēmumam ir} other {# nolēmumiem ir}} šis lietas numurs. Izvēlieties tiesu.",
+    "searchAskPrompt": "{query} (judikatūra, {country})",
+    "searchAskPromptAll": "{query} (judikatūra)",
+    "searchLabel": "Meklēt judikatūrā",
+    "searchPlaceholder": "Lietas numurs, ECLI vai vārdi, piem. 22 Cdo 2653/2012",
     "seo": {
       "browse": "Pārlūkot judikatūru",
       "countries": "Valstis",

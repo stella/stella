@@ -435,7 +435,9 @@
       "yearTitle": "{year}: {count, plural, one {# citata} few {# citatos} many {# citatos} other {# citatų}}"
     },
     "columns": {
-      "caseNumber": "Bylos numeris"
+      "caseNumber": "Bylos numeris",
+      "citedBy": "Cituojama",
+      "headnote": "Santrauka"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokinė citata su nuoroda",
@@ -446,14 +448,12 @@
     },
     "decisionNotFound": "Sprendimas nerastas",
     "emptyState": "Sprendimų nerasta. Sukonfigūruokite šaltinį ir paleiskite sinchronizavimą, kad importuotumėte teismų praktiką.",
-    "filters": {
-      "searchPlaceholder": "Ieškoti pagal bylos numerį..."
-    },
     "languages": {
       "count": "{count, plural, one {# kalba} few {# kalbos} many {# kalbos} other {# kalbų}}",
       "matchedIn": "Atitikmuo {language} kalba"
     },
     "loadingMore": "Kraunama daugiau...",
+    "newestDecisions": "Naujausi sprendimai",
     "notesFilter": {
       "ai": "DI",
       "human": "Žmonių"
@@ -491,6 +491,11 @@
       "ungrouped": "Be vertės",
       "updated": "Paskutinį kartą redaguota {date}"
     },
+    "sameCaseNumber": "{count, plural, one {# sprendimas turi} few {# sprendimai turi} many {# sprendimo turi} other {# sprendimų turi}} šį bylos numerį. Pasirinkite teismą.",
+    "searchAskPrompt": "{query} (teismų praktika, {country})",
+    "searchAskPromptAll": "{query} (teismų praktika)",
+    "searchLabel": "Ieškoti teismų praktikoje",
+    "searchPlaceholder": "Bylos numeris, ECLI arba žodžiai, pvz. 22 Cdo 2653/2012",
     "seo": {
       "browse": "Naršyti teismų praktiką",
       "countries": "Šalys",

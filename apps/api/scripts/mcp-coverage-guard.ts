@@ -86,7 +86,7 @@ const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
   // endpoint. Endpoints made with it count under `createSafePublicSubjectHandler`
   // in their own files.
   "apps/api/src/handlers/case-law/decisions/public-subject.ts": 1,
-  "apps/api/src/handlers/case-law/public-routes.ts": 9,
+  "apps/api/src/handlers/case-law/public-routes.ts": 10,
   "apps/api/src/handlers/files/routes.ts": 4,
   "apps/api/src/handlers/legislation/public-routes.ts": 5,
   "apps/api/src/handlers/search/routes.ts": 5,

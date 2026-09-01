@@ -439,6 +439,8 @@ type Messages = {
     };
     "columns": {
       "caseNumber": "Case number";
+      "citedBy": "Cited by";
+      "headnote": "Headnote";
     };
     "copyMenu": {
       "blockQuoteWithCitation": "Block quote with citation";
@@ -449,14 +451,12 @@ type Messages = {
     };
     "decisionNotFound": "Decision not found";
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.";
-    "filters": {
-      "searchPlaceholder": "Search by case number...";
-    };
     "languages": {
       "count": "{count, plural, one {# language} other {# languages}}";
       "matchedIn": "Matched in {language}";
     };
     "loadingMore": "Loading more...";
+    "newestDecisions": "Newest decisions";
     "notesFilter": {
       "ai": "AI";
       "human": "Human";
@@ -494,6 +494,11 @@ type Messages = {
       "ungrouped": "Without value";
       "updated": "Last edited {date}";
     };
+    "sameCaseNumber": "{count, plural, one {# decision shares} other {# decisions share}} this case number. Pick the court.";
+    "searchAskPrompt": "{query} (case law of {country})";
+    "searchAskPromptAll": "{query} (case law)";
+    "searchLabel": "Search case law";
+    "searchPlaceholder": "Case number, ECLI or words, e.g. 22 Cdo 2653/2012";
     "seo": {
       "browse": "Browse case law";
       "countries": "Countries";

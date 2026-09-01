@@ -435,7 +435,9 @@
       "yearTitle": "{year} : {count, plural, one {# citation} other {# citations}}"
     },
     "columns": {
-      "caseNumber": "Numéro d'affaire"
+      "caseNumber": "Numéro d'affaire",
+      "citedBy": "Citée par",
+      "headnote": "Sommaire"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Citation en bloc avec référence",
@@ -446,14 +448,12 @@
     },
     "decisionNotFound": "Décision introuvable",
     "emptyState": "Aucune décision trouvée. Configurez une source et lancez une synchronisation pour importer la jurisprudence.",
-    "filters": {
-      "searchPlaceholder": "Rechercher par numéro d'affaire..."
-    },
     "languages": {
       "count": "{count, plural, one {# langue} other {# langues}}",
       "matchedIn": "Correspondance en {language}"
     },
     "loadingMore": "Chargement en cours…",
+    "newestDecisions": "Décisions les plus récentes",
     "notesFilter": {
       "ai": "IA",
       "human": "Humaines"
@@ -491,6 +491,11 @@
       "ungrouped": "Sans valeur",
       "updated": "Dernière modification le {date}"
     },
+    "sameCaseNumber": "{count, plural, one {# décision porte} other {# décisions portent}} ce numéro d'affaire. Choisissez la juridiction.",
+    "searchAskPrompt": "{query} (jurisprudence, {country})",
+    "searchAskPromptAll": "{query} (jurisprudence)",
+    "searchLabel": "Rechercher dans la jurisprudence",
+    "searchPlaceholder": "Numéro d'affaire, ECLI ou mots-clés, p. ex. 22 Cdo 2653/2012",
     "seo": {
       "browse": "Parcourir la jurisprudence",
       "countries": "Pays",
