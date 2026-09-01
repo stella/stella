@@ -523,6 +523,27 @@ type Block = HeadingBlock | ParagraphBlock | TableBlock;
 Every block has: `id` (nanoid), `anchorId` (stable for deep
 links), `plainText` (for search/AI), and typed inlines.
 
+The role sets live in `packages/legal-ast/src/document-ast.ts`
+(`HEADING_ROLES`, `PARAGRAPH_ROLES`, `TABLE_ROLES`); add a role there
+and nowhere else. Writers validate against the strict schema; the
+persisted reader degrades a role it does not declare (a newer writer
+during a rolling deploy, or a row written past ingestion) instead of
+failing the document, and reports it through
+`StoredBlockRolesDegradedError`.
+
+## Decision analysis
+
+`case_law_decisions.analysis` anchors AI notes to block `anchorId`s, so
+it carries `inputFingerprint`, a digest of the complete model input
+(`analysisInputOf`: language, metadata header, anchored text). A
+re-parse renumbers blocks and changes the fingerprint; the read then
+treats the stored analysis as absent and regenerates. Never serve an
+analysis without comparing its fingerprint to the current input, and
+read the AST through corpus storage (`readDecisionAnalysisAst`): a
+canonical row has no Postgres copy. A run takes the row by
+compare-and-swap on the value the request read (`stored-analysis.ts`),
+never by restating the JavaScript classification in SQL.
+
 Inline types: `text` (with optional `anonymized`), `bold`,
 `italic`, `link`, `line-break`.
 

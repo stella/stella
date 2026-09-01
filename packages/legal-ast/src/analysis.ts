@@ -31,27 +31,34 @@ export type AnalysisHeading = {
   children: AnalysisHeading[];
 };
 
+/**
+ * The document an analysis was computed over, as one value: a digest of
+ * the exact text the model was shown, anchors included. Every anchor in
+ * the tree names a block of that text, so an analysis whose fingerprint
+ * differs from the current document's is stale, not merely old: a
+ * re-parse that renumbers blocks moves every note onto the wrong
+ * paragraph while the words stay the same. Readers compare before they
+ * trust; a mismatch reads as no analysis.
+ */
+export type AnalysisInputFingerprint = string;
+
 export type DecisionAnalysis = {
-  version: 1;
+  version: 2;
   generatedAt: string;
   model: string;
+  inputFingerprint: AnalysisInputFingerprint;
   tree: AnalysisHeading[];
 };
 
+/** The in-flight marker a generation run holds on the row. */
 export type AnalysisGenerating = {
-  version: 1;
+  version: 2;
   status: "generating";
   startedAt: string;
+  inputFingerprint: AnalysisInputFingerprint;
 };
 
-export type AnalysisInProgress = DecisionAnalysis & {
-  status: "generating";
-};
-
-export type PersistedDecisionAnalysis =
-  | DecisionAnalysis
-  | AnalysisInProgress
-  | AnalysisGenerating;
+export type PersistedDecisionAnalysis = DecisionAnalysis | AnalysisGenerating;
 
 export const analysisAnnotationSchema: v.GenericSchema<AnalysisAnnotation> =
   v.object({
@@ -87,45 +94,39 @@ export const analysisHeadingSchema: v.GenericSchema<AnalysisHeading> = v.object(
   },
 );
 
+const inputFingerprintSchema = v.pipe(v.string(), v.minLength(1));
+
+/**
+ * Version 1 carried no fingerprint, so nothing could tell whether its
+ * anchors still named the document. Such a row is unreadable here on
+ * purpose: it reads as no analysis and is regenerated against the current
+ * document on the next open.
+ */
 export const decisionAnalysisSchema: v.GenericSchema<DecisionAnalysis> =
   v.strictObject({
-    version: v.literal(1),
+    version: v.literal(2),
     generatedAt: v.string(),
     model: v.string(),
+    inputFingerprint: inputFingerprintSchema,
     tree: v.array(analysisHeadingSchema),
-  });
-
-const analysisInProgressSchema: v.GenericSchema<AnalysisInProgress> =
-  v.strictObject({
-    version: v.literal(1),
-    generatedAt: v.string(),
-    model: v.string(),
-    tree: v.array(analysisHeadingSchema),
-    status: v.literal("generating"),
   });
 
 const analysisGeneratingSchema: v.GenericSchema<AnalysisGenerating> =
   v.strictObject({
-    version: v.literal(1),
+    version: v.literal(2),
     status: v.literal("generating"),
     startedAt: v.string(),
+    inputFingerprint: inputFingerprintSchema,
   });
 
 const persistedDecisionAnalysisSchema: v.GenericSchema<PersistedDecisionAnalysis> =
-  v.union([
-    analysisInProgressSchema,
-    analysisGeneratingSchema,
-    decisionAnalysisSchema,
-  ]);
+  v.union([analysisGeneratingSchema, decisionAnalysisSchema]);
 
 export const isAnalysisGenerating = (val: unknown): val is AnalysisGenerating =>
   v.is(analysisGeneratingSchema, val);
 
 export const isDecisionAnalysis = (val: unknown): val is DecisionAnalysis =>
   v.is(decisionAnalysisSchema, val);
-
-export const isAnalysisInProgress = (val: unknown): val is AnalysisInProgress =>
-  v.is(analysisInProgressSchema, val);
 
 export const parsePersistedDecisionAnalysis = (
   val: unknown,

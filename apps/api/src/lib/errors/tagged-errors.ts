@@ -1,5 +1,7 @@
 import { TaggedError } from "better-result";
 
+import type { UnrecognisedBlockRole } from "@stll/legal-ast/document-ast";
+
 export { FetchBoundaryError } from "@stll/errors";
 
 export type HandlerErrorStatusCode =
@@ -214,6 +216,20 @@ export class CorpusPayloadUnavailableError extends TaggedError(
   documentId: string;
   key: string;
   cause?: unknown;
+}> {}
+
+/**
+ * A stored document AST carried block roles this reader does not declare.
+ * The read served the document with those roles degraded (see
+ * `tolerantRole` in `@stll/legal-ast/document-ast`); this is telemetry
+ * only, so the row is visible: either a writer newer than this reader, or
+ * a row written past the ingestion boundary that needs repair.
+ */
+export class StoredBlockRolesDegradedError extends TaggedError(
+  "StoredBlockRolesDegradedError",
+)<{
+  message: string;
+  roles: readonly UnrecognisedBlockRole[];
 }> {}
 
 /** Validation/domain-layer errors: no valid inputs, invalid config. */

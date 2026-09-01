@@ -42,11 +42,6 @@ const completeAnalysis = (
 ): DecisionAnalysis | null =>
   analysis !== null && !("status" in analysis) ? analysis : null;
 
-const analysisTree = (
-  analysis: PersistedDecisionAnalysis | null,
-): DecisionAnalysis["tree"] =>
-  analysis !== null && "tree" in analysis ? analysis.tree : [];
-
 export const parseAnalysisResponse = (
   value: unknown,
 ): AnalysisResponse | null => {
@@ -64,11 +59,8 @@ export const parseAnalysisResponse = (
   }
 
   if (status === "generating") {
-    const analysis = parsePersistedDecisionAnalysis(value["analysis"]);
-    return {
-      status: "generating",
-      tree: analysisTree(analysis),
-    };
+    // The run holds only a sentinel on the row; the tree arrives whole.
+    return { status: "generating", tree: [] };
   }
 
   if (status === "error") {

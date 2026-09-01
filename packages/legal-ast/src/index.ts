@@ -4,7 +4,6 @@ export {
   CORE_CATEGORIES,
   decisionAnalysisSchema,
   isAnalysisGenerating,
-  isAnalysisInProgress,
   isDecisionAnalysis,
   parsePersistedDecisionAnalysis,
 } from "./analysis.js";
@@ -12,7 +11,7 @@ export type {
   AnalysisAnnotation,
   AnalysisGenerating,
   AnalysisHeading,
-  AnalysisInProgress,
+  AnalysisInputFingerprint,
   CoreCategory,
   DecisionAnalysis,
   PersistedDecisionAnalysis,

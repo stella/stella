@@ -5,6 +5,8 @@
  * output with a Valibot schema; no textual schema description needed.
  */
 
+import type { AnalysisInputFingerprint } from "@stll/legal-ast/analysis";
+
 /**
  * Behavioral guidelines shared across all language prompts.
  * Inserted at the end of each language-specific system prompt.
@@ -49,3 +51,62 @@ export const formatDecisionForPrompt = (
       b.plainText.trim().length > 0 ? [`[${b.anchorId}] ${b.plainText}`] : [],
     )
     .join("\n\n");
+
+export type AnalysisPromptDecision = {
+  court: string;
+  country: string;
+  decisionType: string | null;
+  language: string;
+};
+
+/**
+ * Everything the model is shown for one decision: the system prompt as
+ * resolved for the decision's language, and the user message, which
+ * carries the metadata header and the anchored text.
+ */
+export type AnalysisInput = {
+  language: string;
+  systemPrompt: string;
+  userMessage: string;
+  fingerprint: AnalysisInputFingerprint;
+};
+
+type AnalysisInputOptions = {
+  blocks: { anchorId: string; plainText: string; type: string }[];
+  decision: AnalysisPromptDecision;
+  /** The system prompt already resolved for `decision.language`. */
+  systemPrompt: string;
+};
+
+const INPUT_SEPARATOR = "\n";
+
+/**
+ * The fingerprint a persisted analysis carries: a digest of the complete
+ * model input, so it is by construction what the model was shown. The
+ * anchors are in the text, so a re-parse that renumbers blocks changes it
+ * even when the words do not (the stored notes would then name the wrong
+ * paragraphs); a corrected court, type or language changes it too, and so
+ * does an edit to the system prompt, since the answer follows all of them.
+ */
+export const analysisInputOf = ({
+  blocks,
+  decision,
+  systemPrompt,
+}: AnalysisInputOptions): AnalysisInput => {
+  const userMessage = `Court: ${decision.court}
+Country: ${decision.country}
+Type: ${decision.decisionType ?? "unknown"}
+
+${formatDecisionForPrompt(blocks)}`;
+  const fingerprint = new Bun.CryptoHasher("sha256")
+    .update(systemPrompt)
+    .update(INPUT_SEPARATOR)
+    .update(userMessage)
+    .digest("hex");
+  return {
+    language: decision.language,
+    systemPrompt,
+    userMessage,
+    fingerprint,
+  };
+};
