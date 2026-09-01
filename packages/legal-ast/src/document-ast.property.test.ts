@@ -15,6 +15,7 @@ import fc from "fast-check";
 import { propertyConfig } from "@stll/property-testing";
 
 import { plainTextOf, projectPlainText } from "./document-ast.js";
+import { hasInlineChildren } from "./inline.js";
 import type { Inline } from "./inline.js";
 
 // Fixed seed: a counterexample must be reproducible from the CI log.
@@ -61,7 +62,7 @@ const characterCount = (nodes: readonly Inline[]): number => {
       total += node.text.length;
     } else if (node.type === "line-break") {
       total += 1;
-    } else {
+    } else if (hasInlineChildren(node)) {
       total += characterCount(node.children);
     }
   }

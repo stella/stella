@@ -34,6 +34,7 @@ export const PROVENANCE_SUFFIX = ".provenance.json";
  * Adding a root is how a fixture directory opts into the hash guard.
  */
 export const CAPTURED_FIXTURE_ROOTS = [
+  "src/handlers/case-law/ingestion/adapters/__fixtures__",
   "src/handlers/case-law/ingestion/parsers/__fixtures__",
 ] as const;
 
@@ -83,6 +84,14 @@ export const LEGACY_NOTE =
  * `recorded`.
  */
 export const LEGACY_CAPTURES = [
+  "src/handlers/case-law/ingestion/adapters/__fixtures__/at-courts-page.json.gz",
+  "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-ns-page.json.gz",
+  "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-us-page.json.gz",
+  "src/handlers/case-law/ingestion/adapters/__fixtures__/eu-ecj-fulltext-cs.html",
+  "src/handlers/case-law/ingestion/adapters/__fixtures__/eu-ecj-fulltext-en.html",
+  "src/handlers/case-law/ingestion/adapters/__fixtures__/eu-ecj-sparql.json",
+  "src/handlers/case-law/ingestion/adapters/__fixtures__/pl-courts-page.json.gz",
+  "src/handlers/case-law/ingestion/adapters/__fixtures__/sk-courts-page.json.gz",
   "src/handlers/case-law/ingestion/parsers/__fixtures__/at-findok-bfg-2026.xml",
   "src/handlers/case-law/ingestion/parsers/__fixtures__/at-ris-jjt-1925.xml",
   "src/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/62013TO0488.cs.fmx.xml.gz",
