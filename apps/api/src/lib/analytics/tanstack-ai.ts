@@ -14,7 +14,11 @@ import type {
   UsageServiceTier,
 } from "@/api/db/schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
+import {
+  classifyAIError,
+  isAnticipatedAIFailure,
+  providerStatusFields,
+} from "@/api/lib/ai-error";
 import { captureError as captureTelemetryError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -399,7 +403,10 @@ export const createTanStackAIAnalyticsCallbacks = ({
     // both log at WARN; an unanticipated shape is the only one logged at
     // ERROR. Same split as `reportStreamFailure` in the chat stream handler.
     // The status is what names an anticipated failure once `ai.error_kind`
-    // cannot, and a number carries no request content.
+    // cannot, and a number carries no request content. `providerStatusFields`
+    // carries the provider's own status for the same reason, and separates a
+    // status this code does not map from a failure that carried none at all;
+    // without it an `unknown` kind is indistinguishable between the two.
     const kind = classifyAIError(error);
     const attributes = {
       "error.type": errorTag(error),
@@ -412,6 +419,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
             "ai.model": resolvedModelInfo.modelId,
           }
         : {}),
+      ...providerStatusFields(error),
     };
     if (isAnticipatedAIFailure(error, kind)) {
       logger.warn("tanstack_ai.generation.failed", attributes);

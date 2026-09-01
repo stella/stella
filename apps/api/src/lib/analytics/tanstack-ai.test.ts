@@ -1036,4 +1036,74 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       warnSpy.mockRestore();
     }
   });
+
+  test("carries the provider status of an unmapped failure", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { classifyAIError } = await import("@/api/lib/ai-error");
+    const { logger } = await import("@/api/lib/observability/logger");
+    // A provider 403 is ambiguous (permission, region, or account state), so
+    // the classifier leaves it unmapped and the sink logs it at ERROR. The
+    // status is then the only thing separating it from a failure that carried
+    // no status anywhere in its cause chain.
+    const error = Object.assign(new Error("request failed"), { status: 403 });
+
+    expect(classifyAIError(error)).toBe("unknown");
+
+    const errorSpy = spyOn(logger, "error");
+
+    try {
+      createTanStackAIAnalyticsCallbacks({
+        analytics: {
+          capture: () => undefined,
+          flush: async () => undefined,
+          identifyOrganizationGroup: () => undefined,
+        },
+        feature: "search.refine",
+        traceId: "trace_provider_status",
+      }).captureError(error);
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        "tanstack_ai.generation.failed",
+        expect.objectContaining({
+          "ai.error_kind": "unknown",
+          "error.provider.status": "403",
+        }),
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  test("reports no provider status when the failure carries none", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { logger } = await import("@/api/lib/observability/logger");
+    const error = new Error("request failed");
+
+    const errorSpy = spyOn(logger, "error");
+
+    try {
+      createTanStackAIAnalyticsCallbacks({
+        analytics: {
+          capture: () => undefined,
+          flush: async () => undefined,
+          identifyOrganizationGroup: () => undefined,
+        },
+        feature: "search.refine",
+        traceId: "trace_no_provider_status",
+      }).captureError(error);
+
+      // Assert the sink ran before asserting a key is absent from it, so a
+      // sink that never fired cannot satisfy the absence vacuously.
+      expect(errorSpy).toHaveBeenCalledWith(
+        "tanstack_ai.generation.failed",
+        expect.objectContaining({ "ai.error_kind": "unknown" }),
+      );
+      const attributes = errorSpy.mock.calls.at(0)?.[1];
+      expect(attributes).not.toHaveProperty("error.provider.status");
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
 });
