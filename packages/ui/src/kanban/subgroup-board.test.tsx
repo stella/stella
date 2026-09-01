@@ -33,7 +33,7 @@ const schema: KanbanSchema<Row, Property> = {
 
 const group = resolveKanbanGrouping({ groupBy: "_status", schema });
 const subgroup = resolveKanbanGrouping({ groupBy: "owner", schema });
-const noSubgroup = resolveKanbanGrouping({ groupBy: null, schema });
+const noSubgroup = resolveKanbanGrouping({ groupBy: "", schema });
 const testLabel = (...values: readonly unknown[]) => values.join(":");
 const matrix = buildKanbanBoardMatrix({
   group,
