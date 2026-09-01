@@ -1,6 +1,8 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "ignorePatterns": [
+    "apps/api/src/handlers/case-law/ingestion/**/__fixtures__/**/*.html",
+    "apps/api/src/handlers/case-law/ingestion/adapters/__fixtures__/eu-ecj-sparql.json",
     "**/*.gen.*",
     "**/*.min.*",
     "sbom.cdx.json",

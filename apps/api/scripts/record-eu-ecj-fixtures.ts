@@ -43,6 +43,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/corpus";
 import { encodeGzipJson } from "@/api/lib/gzip-json";
 
+import {
+  formatProvenance,
+  provenancePathOf,
+  sha256Of,
+} from "../src/tests/fixture-provenance";
 import { seedId } from "./seed-utils";
 
 /**
@@ -126,10 +131,13 @@ const log = (message: string): void => {
  * serves it either directly or wrapped in a zip, depending on how the
  * document was published, and negotiates on an exact media type.
  */
+/** A Formex manifestation and the Cellar URL it was served from. */
+type FormexCapture = { bytes: Uint8Array; sourceUrl: string };
+
 const fetchFormex = async (
   celex: string,
   languageUri: string,
-): Promise<Uint8Array | undefined> => {
+): Promise<FormexCapture | undefined> => {
   const query = `
 PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
 SELECT DISTINCT ?manifestation WHERE {
@@ -171,7 +179,10 @@ SELECT DISTINCT ?manifestation WHERE {
     },
   });
   if (typed.ok) {
-    return new Uint8Array(await typed.arrayBuffer());
+    return {
+      bytes: new Uint8Array(await typed.arrayBuffer()),
+      sourceUrl: contentUrl,
+    };
   }
 
   const zipped = await fetch(contentUrl, {
@@ -181,7 +192,12 @@ SELECT DISTINCT ?manifestation WHERE {
   if (!zipped.ok) {
     return undefined;
   }
-  return await unzipSingleEntry(new Uint8Array(await zipped.arrayBuffer()));
+  const entry = await unzipSingleEntry(
+    new Uint8Array(await zipped.arrayBuffer()),
+  );
+  return entry === undefined
+    ? undefined
+    : { bytes: entry, sourceUrl: contentUrl };
 };
 
 const firstManifestationUri = (payload: unknown): string | undefined => {
@@ -233,8 +249,19 @@ const celexOf = (decision: IngestionResult): string => {
   return typeof celex === "string" ? celex : "";
 };
 
-/** One fixture file, held back until its whole group is in hand. */
-type StagedFixture = { name: string; bytes: Uint8Array };
+/**
+ * One fixture file, held back until its whole group is in hand.
+ *
+ * `sourceUrl` is carried per fixture rather than derived at write time:
+ * the three kinds of recording come from three different URLs (the
+ * decision's own manifestation, its Formex sibling in Cellar, the portal
+ * page), and a sidecar naming the wrong one is worse than none.
+ */
+type StagedFixture = {
+  name: string;
+  bytes: Uint8Array;
+  sourceUrl: string;
+};
 
 /**
  * Outcome of asking the portal for the page half of a pair.
@@ -312,11 +339,21 @@ const recordParserFixtures = async (): Promise<void> => {
         log(`  ${stem}: no XHTML, skipped`);
         continue;
       }
+      // The XHTML bytes were fetched from the Cellar manifestation
+      // (`documentUrl`), not from the EUR-Lex portal page (`sourceUrl`);
+      // provenance names the former. A recording whose manifestation the
+      // query did not return is skipped rather than written with the
+      // portal URL standing in.
+      if (decision.documentUrl === undefined) {
+        log(`  ${stem}: no manifestation URL, skipped`);
+        continue;
+      }
 
       const staged: StagedFixture[] = [
         {
           name: `${stem}.html.gz`,
           bytes: Bun.gzipSync(Buffer.from(decision.sourceRaw)),
+          sourceUrl: decision.documentUrl,
         },
       ];
 
@@ -327,12 +364,19 @@ const recordParserFixtures = async (): Promise<void> => {
       } else {
         staged.push({
           name: `${stem}.fmx.xml.gz`,
-          bytes: Bun.gzipSync(new Uint8Array(formex)),
+          bytes: Bun.gzipSync(new Uint8Array(formex.bytes)),
+          sourceUrl: formex.sourceUrl,
         });
       }
 
       const pair = portalPairFor(stem);
       if (pair !== undefined) {
+        // The portal page, unlike the manifestation, is what `sourceUrl`
+        // names; a decision without one cannot record its pair honestly.
+        if (decision.sourceUrl === undefined) {
+          log(`  ${stem}: no portal URL, pair left as recorded`);
+          continue;
+        }
         // oxlint-disable-next-line no-await-in-loop -- one portal request per declared pair
         const portal = await fetchPortalPage(decision);
         if (portal.outcome !== "served") {
@@ -344,12 +388,28 @@ const recordParserFixtures = async (): Promise<void> => {
         staged.push({
           name: `${portalStem(pair)}.html.gz`,
           bytes: Bun.gzipSync(Buffer.from(portal.html)),
+          sourceUrl: decision.sourceUrl,
         });
       }
 
-      for (const { name, bytes } of staged) {
-        // oxlint-disable-next-line no-await-in-loop -- one write per staged fixture
-        await Bun.write(new URL(name, PARSER_FIXTURES_DIR), bytes);
+      const capturedAt = new Date().toISOString();
+      for (const { name, bytes, sourceUrl } of staged) {
+        // The sidecar pins the bytes written beside it; fixture-provenance
+        // rechecks the hash on every test run, so a recording and its
+        // provenance can never be committed apart.
+        // oxlint-disable-next-line no-await-in-loop -- one fixture (bytes + sidecar) per iteration
+        await Promise.all([
+          Bun.write(new URL(name, PARSER_FIXTURES_DIR), bytes),
+          Bun.write(
+            new URL(provenancePathOf(name), PARSER_FIXTURES_DIR),
+            formatProvenance({
+              capture: "recorded",
+              sha256: sha256Of(bytes),
+              sourceUrl,
+              capturedAt,
+            }),
+          ),
+        ]);
       }
       log(`  ${stem}: ${staged.map((fixture) => fixture.name).join(", ")}`);
     }

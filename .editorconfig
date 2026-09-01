@@ -10,3 +10,17 @@ insert_final_newline = true
 
 [*.md]
 trim_trailing_whitespace = false
+
+# Captured fixtures hold the bytes a source served, verbatim. Trimming
+# trailing whitespace or inserting a final newline rewrites the input the
+# parser suite is tested against — that is how a dropped-whitespace bug
+# hides behind a green suite — and breaks the sha256 in the fixture's
+# .provenance.json sidecar. Sidecars themselves are ordinary generated
+# JSON and keep the defaults.
+[apps/api/src/handlers/case-law/ingestion/**/__fixtures__/**]
+trim_trailing_whitespace = false
+insert_final_newline = false
+
+[apps/api/src/handlers/case-law/ingestion/**/__fixtures__/**.provenance.json]
+trim_trailing_whitespace = true
+insert_final_newline = true
