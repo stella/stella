@@ -103,6 +103,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // Corpus-index generation identity is immutable control-plane state. The
   // request role resolves serving generations but never mutates the registry.
   "corpus_index_generations",
+  // Mutation revisions are appended and pruned only by ingestion triggers;
+  // request code may read the current proof watermark.
+  "corpus_index_projection_revisions",
   // Final-generation desired/applied state and append intents are durable
   // control-plane records. Request handlers may observe them; ingestion alone
   // mutates the state machine.
