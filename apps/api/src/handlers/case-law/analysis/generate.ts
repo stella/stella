@@ -13,7 +13,6 @@ import * as v from "valibot";
 
 import type {
   AnalysisHeading,
-  AnalysisInputFingerprint,
   DecisionAnalysis,
   PersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
@@ -21,8 +20,6 @@ import {
   analysisHeadingInputSchema,
   parsePersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
-import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
 
 // SAFETY: rootDb is used only inside runGeneration, which runs in
 // a fire-and-forget background task after the request scope has
@@ -45,10 +42,13 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
-  analysisInputFingerprint,
-  formatDecisionForPrompt,
+  analysisInputOf,
+  type AnalysisInput,
 } from "@/api/lib/case-law/analysis-prompt";
-import { readDecisionAnalysis } from "@/api/lib/case-law/decision-analysis";
+import {
+  readDecisionAnalysis,
+  readDecisionAnalysisAst,
+} from "@/api/lib/case-law/decision-analysis";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { detached } from "@/api/lib/detached";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -70,20 +70,6 @@ import {
 } from "./stored-analysis";
 
 /**
- * What the model is shown, and the fingerprint a stored analysis must
- * carry to count as computed over it.
- */
-type AnalysisInput = {
-  decisionText: string;
-  fingerprint: AnalysisInputFingerprint;
-};
-
-const analysisInputOf = (ast: DocumentAst): AnalysisInput => {
-  const decisionText = formatDecisionForPrompt(ast.blocks);
-  return { decisionText, fingerprint: analysisInputFingerprint(decisionText) };
-};
-
-/**
  * Where an analysis and its in-flight sentinel live: the decision row in
  * the local database, normally. A shared corpus read through the read-only
  * handle cannot take that write, so production reports the analysis
@@ -93,12 +79,17 @@ const analysisInputOf = (ast: DocumentAst): AnalysisInput => {
  * the row may have been re-parsed since a run began, and a run's result
  * or sentinel cleanup must then leave the newer parse's state alone.
  */
+type AnalysisClaim = AnalysisStoreKey & {
+  /** The stored value this request read and found wanting; see `claimableAnalysisRow`. */
+  observed: unknown;
+};
+
 type AnalysisStore = {
   /**
-   * Takes the row for a run over `fingerprint`. False when the row already
-   * holds a live sentinel or a finished analysis for that same input.
+   * Takes the row for a run over `fingerprint`, provided it still holds
+   * `observed`. False when another request got there first.
    */
-  claim: (key: AnalysisStoreKey) => Promise<boolean>;
+  claim: (claim: AnalysisClaim) => Promise<boolean>;
   /** Stores the result, only where the row still carries its fingerprint. */
   save: (
     decisionId: SafeId<"caseLawDecision">,
@@ -111,13 +102,12 @@ type AnalysisStore = {
 };
 
 const dbAnalysisStore: AnalysisStore = {
-  claim: async ({ decisionId, fingerprint }) => {
+  claim: async ({ decisionId, fingerprint, observed }) => {
     // audit: skip — background AI analysis sentinel; no user-facing state change
-    const now = new Date();
     const [updated] = await rootDb
       .update(caseLawDecisions)
-      .set({ analysis: analysisSentinel(fingerprint, now) })
-      .where(claimableAnalysisRow({ decisionId, fingerprint, now }))
+      .set({ analysis: analysisSentinel(fingerprint, new Date()) })
+      .where(claimableAnalysisRow({ decisionId, observed }))
       .returning({ id: caseLawDecisions.id });
     return updated !== undefined;
   },
@@ -154,17 +144,16 @@ const dbAnalysisStore: AnalysisStore = {
 const memoryAnalyses = new Map<SafeId<"caseLawDecision">, unknown>();
 
 const memoryAnalysisStore: AnalysisStore = {
-  claim: async ({ decisionId, fingerprint }) => {
-    const now = new Date();
-    const state = storedAnalysisState({
-      stored: memoryAnalyses.get(decisionId),
-      fingerprint,
-      now,
-    });
-    if (state.kind !== "none") {
+  claim: async ({ decisionId, fingerprint, observed }) => {
+    // The same compare-and-swap as the row, over what this process holds:
+    // an entry must still be the one this request read (entries are the
+    // exact objects stored, so identity is equality). No entry means the
+    // request read the read-only row, which this store never writes.
+    const held = memoryAnalyses.get(decisionId);
+    if (held !== undefined && held !== observed) {
       return await Promise.resolve(false);
     }
-    memoryAnalyses.set(decisionId, analysisSentinel(fingerprint, now));
+    memoryAnalyses.set(decisionId, analysisSentinel(fingerprint, new Date()));
     return await Promise.resolve(true);
   },
   save: async (decisionId, analysis) => {
@@ -239,24 +228,13 @@ const createAnalysisHeading = ({
 const runGeneration = async (
   decisionId: SafeId<"caseLawDecision">,
   input: AnalysisInput,
-  decision: {
-    court: string;
-    country: string;
-    language: string;
-    decisionType: string | null;
-  },
+  country: string,
   organizationId: SafeId<"organization">,
   orgAIConfig: OrgAIConfig | null,
   promptCachingEnabled: boolean,
 ) => {
   // audit: skip — background AI analysis output
-  const systemPrompt = getSystemPrompt(decision.language);
-
-  const userMessage = `Court: ${decision.court}
-Country: ${decision.country}
-Type: ${decision.decisionType ?? "unknown"}
-
-${input.decisionText}`;
+  const systemPrompt = getSystemPrompt(input.language);
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     feature: "case-law.analysis",
@@ -265,8 +243,8 @@ ${input.decisionText}`;
     orgAIConfig,
     properties: {
       decision_id: decisionId,
-      jurisdiction: decision.country,
-      language: decision.language,
+      jurisdiction: country,
+      language: input.language,
       organization_id: organizationId,
     },
     sessionId: decisionId,
@@ -291,7 +269,7 @@ ${input.decisionText}`;
         scopeKey: decisionId,
       }),
       system: systemPrompt,
-      prompt: userMessage,
+      prompt: input.userMessage,
       outputSchema: analysisOutputSchema,
       abortSignal: AbortSignal.timeout(120_000),
     });
@@ -300,7 +278,7 @@ ${input.decisionText}`;
     const headings = result.headings.map((heading) =>
       createAnalysisHeading({
         heading,
-        language: decision.language,
+        language: input.language,
       }),
     );
 
@@ -377,17 +355,18 @@ export const generateAnalysis = async (
           metadata: decision.metadata,
         })
       : null;
-  const ast = reparsed ?? parseUsableDocumentAst(decision.documentAst);
+  const ast = reparsed ?? (await readDecisionAnalysisAst(decision));
   if (ast === null) {
     return Result.ok({
       status: "error",
       error: "Decision has no parseable AST",
     });
   }
-  const input = analysisInputOf(ast);
+  const input = analysisInputOf(ast.blocks, decision);
 
+  const observed = analysisStore().peek(decisionId) ?? decision.analysis;
   const stored = storedAnalysisState({
-    stored: analysisStore().peek(decisionId) ?? decision.analysis,
+    stored: observed,
     fingerprint: input.fingerprint,
     now: new Date(),
   });
@@ -443,12 +422,12 @@ export const generateAnalysis = async (
   }
 
   // Another request won the race: return generating.
-  if (
-    !(await analysisStore().claim({
-      decisionId,
-      fingerprint: input.fingerprint,
-    }))
-  ) {
+  const claimed = await analysisStore().claim({
+    decisionId,
+    fingerprint: input.fingerprint,
+    observed,
+  });
+  if (!claimed) {
     return Result.ok({ status: "generating" });
   }
 
@@ -457,7 +436,7 @@ export const generateAnalysis = async (
     runGeneration(
       decisionId,
       input,
-      decision,
+      decision.country,
       organizationId,
       orgAIConfig,
       promptCachingEnabled,

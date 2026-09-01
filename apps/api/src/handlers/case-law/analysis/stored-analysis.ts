@@ -1,11 +1,11 @@
 /**
  * What a stored decision analysis is worth for the document as it reads
- * now, and which rows a new generation run may take. Pure over the row's
+ * now, and how a new generation run takes the row. Pure over the row's
  * `analysis` value and the current input fingerprint; the store in
  * `generate.ts` applies these against Postgres or memory.
  */
 
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type {
   AnalysisGenerating,
@@ -38,6 +38,7 @@ export const analysisSentinel = (
  * A finished analysis over the same input, a run still in flight over the
  * same input, or nothing. A value over any other input is stale, whatever
  * its shape: its anchors name blocks of a document that no longer exists.
+ * A value the parser rejects is nothing too, whatever it claims.
  */
 export type StoredAnalysisState =
   | { kind: "done"; analysis: DecisionAnalysis }
@@ -74,28 +75,33 @@ export type AnalysisStoreKey = {
 export const storedAnalysisFingerprint = sql`${caseLawDecisions.analysis}->>'inputFingerprint'`;
 
 /**
- * The rows a run over `fingerprint` may take: no analysis, an analysis or
- * sentinel over another input (stale, whatever its shape), or a sentinel
- * over this input that has outlived `SENTINEL_STALE_MS`. The SQL twin of
- * `storedAnalysisState` reading `none`, decided in the UPDATE itself so
- * two requests cannot both read a claimable row and both start a run.
+ * The row a run may take: the one that still holds exactly the value this
+ * request read and classified as `none`. A compare-and-swap rather than a
+ * SQL restatement of `storedAnalysisState`, so the two cannot disagree: a
+ * value the parser rejects, a stale sentinel and a foreign fingerprint are
+ * all claimable for the same reason, that the JavaScript reading said so
+ * of this very value. Two requests that read the same value race on the
+ * UPDATE and one loses; a row that changed underneath is left to the next
+ * read. `jsonb` equality is structural, so the key order the driver
+ * returned the value in does not matter.
  */
 export const claimableAnalysisRow = ({
   decisionId,
-  fingerprint,
-  now,
-}: AnalysisStoreKey & { now: Date }) => {
-  // Both sides are `toISOString()` output, so text order is time order.
-  const staleBefore = new Date(now.getTime() - SENTINEL_STALE_MS).toISOString();
-  return and(
+  observed,
+}: {
+  decisionId: SafeId<"caseLawDecision">;
+  /**
+   * The `analysis` value this request read from the row, as read: it may
+   * be a shape the parser rejected, which is one of the reasons to claim.
+   */
+  observed: unknown;
+}) =>
+  and(
     eq(caseLawDecisions.id, decisionId),
-    or(
-      isNull(caseLawDecisions.analysis),
-      sql`${storedAnalysisFingerprint} IS DISTINCT FROM ${fingerprint}`,
-      and(
-        sql`${caseLawDecisions.analysis}->>'status' = 'generating'`,
-        sql`${caseLawDecisions.analysis}->>'startedAt' < ${staleBefore}`,
-      ),
-    ),
+    observed === null || observed === undefined
+      ? isNull(caseLawDecisions.analysis)
+      : // `::text::jsonb`, never a bare `::jsonb`: the driver would encode
+        // the already-serialised string once more and the comparison would
+        // never match.
+        sql`${caseLawDecisions.analysis} = ${JSON.stringify(observed)}::text::jsonb`,
   );
-};

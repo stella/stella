@@ -52,14 +52,47 @@ export const formatDecisionForPrompt = (
     )
     .join("\n\n");
 
+export type AnalysisPromptDecision = {
+  court: string;
+  country: string;
+  decisionType: string | null;
+  language: string;
+};
+
 /**
- * The fingerprint a persisted analysis carries: a digest of the prompt
- * text itself, so it is by construction what the model was shown. The
- * anchors are in that text, so a re-parse that renumbers blocks changes
- * the fingerprint even when the words do not; that is the case it exists
- * for, since the stored anchors would then name the wrong paragraphs.
+ * Everything the model is shown for one decision: the language, which
+ * selects the system prompt, and the user message, which carries the
+ * metadata header and the anchored text.
  */
-export const analysisInputFingerprint = (
-  decisionText: string,
-): AnalysisInputFingerprint =>
-  new Bun.CryptoHasher("sha256").update(decisionText).digest("hex");
+export type AnalysisInput = {
+  language: string;
+  userMessage: string;
+  fingerprint: AnalysisInputFingerprint;
+};
+
+const INPUT_SEPARATOR = "\n";
+
+/**
+ * The fingerprint a persisted analysis carries: a digest of the complete
+ * model input, so it is by construction what the model was shown. The
+ * anchors are in the text, so a re-parse that renumbers blocks changes it
+ * even when the words do not (the stored notes would then name the wrong
+ * paragraphs); a corrected court, type or language changes it too, since
+ * the prompt and the answer's language follow them.
+ */
+export const analysisInputOf = (
+  blocks: { anchorId: string; plainText: string; type: string }[],
+  decision: AnalysisPromptDecision,
+): AnalysisInput => {
+  const userMessage = `Court: ${decision.court}
+Country: ${decision.country}
+Type: ${decision.decisionType ?? "unknown"}
+
+${formatDecisionForPrompt(blocks)}`;
+  const fingerprint = new Bun.CryptoHasher("sha256")
+    .update(decision.language)
+    .update(INPUT_SEPARATOR)
+    .update(userMessage)
+    .digest("hex");
+  return { language: decision.language, userMessage, fingerprint };
+};

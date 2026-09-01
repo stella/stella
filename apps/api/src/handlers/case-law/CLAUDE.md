@@ -534,11 +534,15 @@ failing the document, and reports it through
 ## Decision analysis
 
 `case_law_decisions.analysis` anchors AI notes to block `anchorId`s, so
-it carries `inputFingerprint`, a digest of the exact prompt text
-(`analysisInputFingerprint`). A re-parse renumbers blocks and changes
-the fingerprint; the read then treats the stored analysis as absent and
-regenerates. Never serve an analysis without comparing its fingerprint
-to the current text (`stored-analysis.ts`).
+it carries `inputFingerprint`, a digest of the complete model input
+(`analysisInputOf`: language, metadata header, anchored text). A
+re-parse renumbers blocks and changes the fingerprint; the read then
+treats the stored analysis as absent and regenerates. Never serve an
+analysis without comparing its fingerprint to the current input, and
+read the AST through corpus storage (`readDecisionAnalysisAst`): a
+canonical row has no Postgres copy. A run takes the row by
+compare-and-swap on the value the request read (`stored-analysis.ts`),
+never by restating the JavaScript classification in SQL.
 
 Inline types: `text` (with optional `anonymized`), `bold`,
 `italic`, `link`, `line-break`.
