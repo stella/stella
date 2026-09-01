@@ -1,11 +1,26 @@
 import { QueryClient } from "@tanstack/react-query";
-import { beforeAll, expect, test } from "bun:test";
+import { afterEach, beforeAll, expect, mock, test } from "bun:test";
 
 beforeAll(() => {
   process.env["VITE_API_URL"] ??= "https://api.example.test";
 });
 
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
 test("starts the chat connector catalogue while the entity gate is unresolved", async () => {
+  const connectorRequest = Promise.withResolvers<string | URL | Request>();
+  const connectorResponse = Promise.withResolvers<Response>();
+  const fetchMock = mock(async (input: string | URL | Request) => {
+    connectorRequest.resolve(input);
+    return await connectorResponse.promise;
+  });
+  globalThis.fetch = Object.assign(fetchMock, {
+    preconnect: originalFetch.preconnect,
+  });
   const { loadDocumentEntityWithChatPrefetch } =
     await import("./-document-loader");
   const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
@@ -24,16 +39,17 @@ test("starts the chat connector catalogue while the entity gate is unresolved", 
     entityGateResolved = true;
     return undefined;
   });
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  const request = await connectorRequest.promise;
 
+  expect(new Request(request).url).toContain("/v1/mcp/connectors");
+  expect(fetchMock).toHaveBeenCalledTimes(1);
   expect(
     queryClient.getQueryState(connectorOptions.queryKey)?.fetchStatus,
   ).toBe("fetching");
   expect(entityGateResolved).toBeFalse();
 
-  await queryClient.cancelQueries({ queryKey: connectorOptions.queryKey });
   entity.resolve({ id: "entity-A" });
+  connectorResponse.resolve(Response.json([]));
   expect(await loadPromise).toEqual({ id: "entity-A" });
+  await queryClient.query({ ...connectorOptions, staleTime: "static" });
 });
