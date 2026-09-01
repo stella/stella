@@ -277,6 +277,9 @@ export const inlinesToPlainText = (inlines: readonly Inline[]): string => {
  */
 const trimLeadingWhitespace = (nodes: Inline[]): Inline[] => {
   const result = [...nodes];
+  // Page anchors passed on the way in: zero-width on the text axis, so
+  // neither whitespace to drop nor content that ends the trim.
+  const kept: Inline[] = [];
 
   while (result.length > 0) {
     const first = result[0];
@@ -285,6 +288,12 @@ const trimLeadingWhitespace = (nodes: Inline[]): Inline[] => {
     }
 
     if (first.type === "line-break") {
+      result.shift();
+      continue;
+    }
+
+    if (first.type === "page-anchor") {
+      kept.push(first);
       result.shift();
       continue;
     }
@@ -309,7 +318,8 @@ const trimLeadingWhitespace = (nodes: Inline[]): Inline[] => {
     result.shift();
   }
 
-  return result;
+  kept.push(...result);
+  return kept;
 };
 
 export const stripInlinePrefix = (
