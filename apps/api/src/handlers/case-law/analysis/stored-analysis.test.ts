@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
+
 import {
   analysisSentinel,
   SENTINEL_STALE_MS,
@@ -10,7 +12,7 @@ const NOW = new Date("2026-09-01T12:00:00.000Z");
 const CURRENT = "c".repeat(64);
 const PREVIOUS = "p".repeat(64);
 
-const analysisOver = (fingerprint: string) => ({
+const analysisOver = (fingerprint: string): DecisionAnalysis => ({
   version: 2,
   generatedAt: "2026-08-31T09:00:00.000Z",
   model: "test-model",
