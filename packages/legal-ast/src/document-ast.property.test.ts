@@ -54,19 +54,24 @@ const inlineTree: fc.Arbitrary<Inline> = fc.letrec<{ node: Inline }>((tie) => ({
 
 const inlines = fc.array(inlineTree, { maxLength: 5 });
 
-/** Every character the tree carries, counted without flattening it. */
-const characterCount = (nodes: readonly Inline[]): number => {
-  let total = 0;
+/**
+ * The exact character sequence the tree carries, built independently of
+ * `plainTextOf`: text verbatim, a line break as "\n", containers by
+ * their children. Comparing against this, not against a length, is what
+ * catches a substituted NBSP or a reordered run.
+ */
+const rawTextOf = (nodes: readonly Inline[]): string => {
+  let out = "";
   for (const node of nodes) {
     if (node.type === "text") {
-      total += node.text.length;
+      out += node.text;
     } else if (node.type === "line-break") {
-      total += 1;
+      out += "\n";
     } else if (hasInlineChildren(node)) {
-      total += characterCount(node.children);
+      out += rawTextOf(node.children);
     }
   }
-  return total;
+  return out;
 };
 
 const LETTER_RE = /\p{L}/gu;
@@ -77,13 +82,14 @@ const letters = (text: string): string => text.match(LETTER_RE)?.join("") ?? "";
 describe("plainTextOf (properties)", () => {
   /**
    * The raw axis normalizes nothing. Every character in the tree
-   * survives, so no whitespace run is squeezed and no edge is trimmed —
-   * exactly the guarantee the offset consumers rely on.
+   * survives in place, so no whitespace run is squeezed, no NBSP is
+   * folded and no edge is trimmed — exactly the guarantee the offset
+   * consumers rely on.
    */
-  test("preserves every character in the tree", () => {
+  test("is exactly the tree's character sequence", () => {
     fc.assert(
       fc.property(inlines, (tree) => {
-        expect(plainTextOf(tree)).toHaveLength(characterCount(tree));
+        expect(plainTextOf(tree)).toBe(rawTextOf(tree));
       }),
       config(400),
     );
