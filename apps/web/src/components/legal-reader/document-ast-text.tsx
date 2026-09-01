@@ -295,14 +295,69 @@ const renderInline = ({
     );
   }
 
+  if (node.type === "underline") {
+    return (
+      <u className="underline-offset-2" key={key}>
+        {renderInlineChildren({ children: node.children, context, offset })}
+      </u>
+    );
+  }
+
+  if (node.type === "superscript") {
+    return (
+      <sup key={key}>
+        {renderInlineChildren({ children: node.children, context, offset })}
+      </sup>
+    );
+  }
+
+  if (node.type === "subscript") {
+    return (
+      <sub key={key}>
+        {renderInlineChildren({ children: node.children, context, offset })}
+      </sub>
+    );
+  }
+
+  // A reference to another authority. `data-cite` carries the citation as
+  // the publisher printed it, so the citator reads it off the element
+  // rather than re-parsing the words around it; the words themselves are
+  // the children and stay on the text axis untouched.
+  if (node.type === "citation") {
+    if (sanitizeHref(node.href) === undefined) {
+      return (
+        <span data-cite={node.cite} key={key}>
+          {renderInlineChildren({ children: node.children, context, offset })}
+        </span>
+      );
+    }
+    return (
+      <a
+        className="decoration-border underline underline-offset-2 hover:decoration-current"
+        data-cite={node.cite}
+        href={sanitizeHref(node.href)}
+        key={key}
+        rel="noopener noreferrer"
+        target="_blank"
+      >
+        {renderInlineChildren({
+          children: node.children,
+          // A link inside a link sends the click to whichever the browser
+          // picks; the source's own link wins.
+          context: { ...context, anchors: [] },
+          offset,
+        })}
+      </a>
+    );
+  }
+
   // A page boundary: zero characters on the text axis (no offset advance),
   // shown as a hanging margin marker plus a hair-thin tick at the exact
   // break point. Neither is selectable, so copies stay clean.
   if (node.type === "page-anchor") {
-    const scanHref = node.href ?? "";
     return (
       <Fragment key={key}>
-        {sanitizeHref(scanHref) === "" ? (
+        {sanitizeHref(node.href) === undefined ? (
           <span className="reader-page-marker" data-reader-chrome="">
             {node.label}
           </span>
@@ -310,7 +365,7 @@ const renderInline = ({
           <a
             className="reader-page-marker"
             data-reader-chrome=""
-            href={sanitizeHref(scanHref)}
+            href={sanitizeHref(node.href)}
             rel="noopener noreferrer"
             target="_blank"
           >
@@ -657,6 +712,11 @@ const footnoteTextCarriesLabel = (
   label: string,
   plainText: string,
 ): boolean => {
+  // Nothing to draw: a mark the source did not print adds no information,
+  // and an empty button is an invisible click target.
+  if (label === "") {
+    return true;
+  }
   const escaped = label.replace(REGEXP_SPECIALS_RE, (match) => `\\${match}`);
   // The label must end at a boundary: closing punctuation, or anything that
   // is not a letter or digit. Without it, label "1" would swallow a note
@@ -672,6 +732,7 @@ export const BlockRenderer = ({
   anchorsByPieceId,
   block,
   noteBackJump = false,
+  noteHead = true,
   rangesByPieceId,
   variant,
 }: {
@@ -680,6 +741,12 @@ export const BlockRenderer = ({
   block: Block;
   /** Render the return arrow: this is the last paragraph of a footnote. */
   noteBackJump?: boolean | undefined;
+  /**
+   * Render the note's label: this is the first paragraph of a footnote.
+   * A reader that does not group a footnote's parts leaves this alone,
+   * and every footnote paragraph is treated as its own first part.
+   */
+  noteHead?: boolean | undefined;
   rangesByPieceId: Record<string, SearchMatchRange[]>;
   variant: ReaderVariant;
 }) => {
@@ -728,8 +795,8 @@ export const BlockRenderer = ({
       (block.role === undefined || !nonJustifiedRoles.has(block.role));
     const noteLabel = block.note?.type === "footnote" ? block.note.label : null;
     const showNoteLabel =
+      noteHead &&
       noteLabel !== null &&
-      noteLabel !== "" &&
       !footnoteTextCarriesLabel(noteLabel, block.plainText);
     return (
       <p
@@ -802,6 +869,31 @@ export const BlockRenderer = ({
     );
   }
 
+  // A figure the publisher printed with the document. `alt` is whatever the
+  // source labelled it with, and an empty string when it labelled it with
+  // nothing — which is the correct markup for decoration a screen reader
+  // should skip, not a gap to fill with invented words.
+  if (block.type === "image") {
+    return (
+      <figure
+        className="group relative my-4 scroll-mt-[var(--reader-anchor-offset)]"
+        data-anchor={block.anchorId}
+        id={block.anchorId}
+      >
+        <BlockPermalink anchorId={block.anchorId} />
+        <img
+          alt={block.alt ?? ""}
+          className="mx-auto h-auto max-w-full"
+          decoding="async"
+          height={block.height}
+          loading="lazy"
+          src={block.src}
+          width={block.width}
+        />
+      </figure>
+    );
+  }
+
   // The permalink is a link, and a link is not allowed inside `<table>`, so
   // the wrapper carries it. The anchor id stays on the table itself: it is
   // what every deep link already written points at.
@@ -823,11 +915,17 @@ export const BlockRenderer = ({
                   rowIndex,
                   columnIndex,
                 });
+                const Cell = cell.header ? "th" : "td";
 
                 return (
-                  <td
-                    className="border-border/55 border-b px-3 py-1 align-top last:border-b-0"
+                  <Cell
+                    className={cn(
+                      "border-border/55 border-b px-3 py-1 align-top last:border-b-0",
+                      cell.header && "text-start font-semibold",
+                    )}
+                    colSpan={cell.colSpan}
                     key={pieceId}
+                    rowSpan={cell.rowSpan}
                   >
                     <InlineContent
                       activeMatchIndex={activeMatchIndex}
@@ -835,7 +933,7 @@ export const BlockRenderer = ({
                       pieceId={pieceId}
                       ranges={rangesForPiece(rangesByPieceId, pieceId)}
                     />
-                  </td>
+                  </Cell>
                 );
               })}
             </tr>
@@ -892,6 +990,13 @@ export const buildDocumentAstSearchPieces = (
   const pieces: SearchPiece[] = [];
 
   for (const block of blocks) {
+    // A figure's only text is its alt, which is chrome for a screen
+    // reader rather than the document's words: a find-bar hit on it
+    // would scroll to a picture with nothing highlighted in it.
+    if (block.type === "image") {
+      continue;
+    }
+
     if (block.type === "table") {
       for (const [rowIndex, row] of block.rows.entries()) {
         for (const [columnIndex, cell] of row.entries()) {

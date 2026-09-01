@@ -129,3 +129,75 @@ describe("InlineContent anchors", () => {
     expect(marked).toContain("nález</mark>");
   });
 });
+
+const renderInlines = (nodes: Inline[]) =>
+  renderToStaticMarkup(
+    <InlineContent
+      activeMatchIndex={-1}
+      inlines={nodes}
+      pieceId="p"
+      ranges={[]}
+    />,
+  );
+
+describe("InlineContent kinds", () => {
+  test("emphasis kinds render as the elements the source printed", () => {
+    expect(
+      renderInlines([
+        { children: [{ text: "3", type: "text" }], type: "superscript" },
+        { children: [{ text: "2", type: "text" }], type: "subscript" },
+        { children: [{ text: "not", type: "text" }], type: "underline" },
+      ]),
+    ).toBe('<sup>3</sup><sub>2</sub><u class="underline-offset-2">not</u>');
+  });
+
+  test("a citation carries its printed reference for the citator to read", async () => {
+    const html = renderInlines([
+      {
+        children: [{ text: "the earlier case", type: "text" }],
+        cite: "Rep. 2019, 412",
+        type: "citation",
+      },
+    ]);
+
+    expect(html).toContain('data-cite="Rep. 2019, 412"');
+    expect(html).not.toContain("<a ");
+    // The reference is metadata beside the words, never words of its own.
+    expect(await visibleText(html)).toBe("the earlier case");
+  });
+
+  test("a linked citation renders as a link and still carries the reference", () => {
+    const html = renderInlines([
+      {
+        children: [{ text: "the earlier case", type: "text" }],
+        cite: "Rep. 2019, 412",
+        href: "https://reports.test/2019/412",
+        type: "citation",
+      },
+    ]);
+
+    expect(html).toContain('href="https://reports.test/2019/412"');
+    expect(html).toContain('data-cite="Rep. 2019, 412"');
+  });
+
+  test("a citation whose link is unusable still renders its words", async () => {
+    const html = renderInlines([
+      {
+        children: [{ text: "the earlier case", type: "text" }],
+        cite: "Rep. 2019, 412",
+        href: "data:text/html,<p>x</p>",
+        type: "citation",
+      },
+    ]);
+
+    expect(html).not.toContain("<a ");
+    expect(html).not.toContain("data:text/html");
+    expect(await visibleText(html)).toBe("the earlier case");
+  });
+
+  test("a page anchor with no usable scan link is not an anchor", () => {
+    expect(
+      renderInlines([{ label: "495", type: "page-anchor" }]),
+    ).not.toContain("<a ");
+  });
+});

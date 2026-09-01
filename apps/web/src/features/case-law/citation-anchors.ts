@@ -1,3 +1,4 @@
+import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { inlinesToPlainText } from "@/components/legal-reader/document-ast-text";
@@ -95,7 +96,7 @@ export const locateCitationAnchors = ({
 
   const result: Record<string, CitationAnchorSpan[]> = {};
   for (const block of blocks) {
-    if (block.type === "table") {
+    if (!hasBlockInlines(block)) {
       continue;
     }
     // The reader renders and highlights over the inline flattening, not

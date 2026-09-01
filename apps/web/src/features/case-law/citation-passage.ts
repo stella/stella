@@ -1,3 +1,4 @@
+import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { inlinesToPlainText } from "@/components/legal-reader/document-ast-text";
@@ -30,18 +31,16 @@ export const findCitationPassage = ({
   sectionText: string | undefined;
 }): CitationPassage | null => {
   const spans = locateCitationAnchors({ blocks, citations: [citation] });
-  const textBlocks = blocks.filter((block) => block.type !== "table");
+  const textBlocks = blocks.filter(hasBlockInlines);
   const sourceBlocks =
     sectionText === undefined
       ? textBlocks
-      : blocks.filter(
-          (block) =>
-            block.type !== "table" &&
-            sectionText.includes(inlinesToPlainText(block.inlines)),
+      : textBlocks.filter((block) =>
+          sectionText.includes(inlinesToPlainText(block.inlines)),
         );
   for (const block of sourceBlocks) {
     const hit = spans[block.id]?.at(0);
-    if (hit === undefined || block.type === "table") {
+    if (hit === undefined) {
       continue;
     }
     return {
