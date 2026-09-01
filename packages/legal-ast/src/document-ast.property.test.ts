@@ -14,7 +14,19 @@ import fc from "fast-check";
 
 import { propertyConfig, propertySeed } from "@stll/property-testing";
 
-import { plainTextOf, projectPlainText } from "./document-ast.js";
+import {
+  omitDerivablePlainText,
+  parseDocumentAst,
+  plainTextOf,
+  projectPlainText,
+  withProjectedPlainText,
+} from "./document-ast.js";
+import type {
+  Block,
+  DocumentAst,
+  HeadingLevel,
+  TableCell,
+} from "./document-ast.js";
 import { hasInlineChildren } from "./inline.js";
 import type { Inline } from "./inline.js";
 
@@ -35,20 +47,40 @@ const textContent = fc
   })
   .map((parts) => parts.join(""));
 
+/**
+ * The emphasis kinds are one shape — a discriminator plus children — so
+ * they are generated from their names rather than listed one arbitrary
+ * at a time. A kind added to the union has to be added here too, or the
+ * wire round trip below never sees it.
+ */
+const EMPHASIS_TYPES = [
+  "bold",
+  "italic",
+  "underline",
+  "superscript",
+  "subscript",
+] as const;
+
 const inlineTree: fc.Arbitrary<Inline> = fc.letrec<{ node: Inline }>((tie) => ({
   node: fc.oneof(
     { maxDepth: 3, depthSize: "small" },
     textContent.map((text): Inline => ({ type: "text", text })),
     fc.constant<Inline>({ type: "line-break" }),
+    fc.constant<Inline>({ type: "page-anchor", label: "495" }),
     fc
-      .array(tie("node"), { maxLength: 3 })
-      .map((children): Inline => ({ type: "bold", children })),
-    fc
-      .array(tie("node"), { maxLength: 3 })
-      .map((children): Inline => ({ type: "italic", children })),
+      .tuple(
+        fc.constantFrom(...EMPHASIS_TYPES),
+        fc.array(tie("node"), { maxLength: 3 }),
+      )
+      .map(([type, children]): Inline => ({ type, children })),
     fc.array(tie("node"), { maxLength: 3 }).map((children): Inline => ({
       type: "link",
       href: "https://court.test/d",
+      children,
+    })),
+    fc.array(tie("node"), { maxLength: 3 }).map((children): Inline => ({
+      type: "citation",
+      cite: "Rep. 2019, 412",
       children,
     })),
   ),
@@ -139,6 +171,136 @@ describe("projectPlainText (properties)", () => {
         );
       }),
       config(400),
+    );
+  });
+});
+
+const cellSpan = fc.option(fc.integer({ min: 2, max: 4 }), { nil: undefined });
+
+/**
+ * The optional fields are spread in conditionally so an absent one is
+ * absent rather than present-and-undefined: the wire round trip compares
+ * the parsed object against this one, and `{ colSpan: undefined }` is not
+ * what a reader rebuilds from JSON that never carried the key.
+ */
+const makeCell = ([cellInlines, colSpan, rowSpan, header]: [
+  Inline[],
+  number | undefined,
+  number | undefined,
+  boolean,
+]): TableCell => ({
+  inlines: cellInlines,
+  plainText: "",
+  ...(colSpan === undefined ? {} : { colSpan }),
+  ...(rowSpan === undefined ? {} : { rowSpan }),
+  ...(header ? { header: true as const } : {}),
+});
+
+const tableCell = fc
+  .tuple(inlines, cellSpan, cellSpan, fc.boolean())
+  .map(makeCell);
+
+const HEADING_LEVELS = [1, 2, 3, 4, 5, 6] as const satisfies HeadingLevel[];
+
+/** Identity the document arbitrary overwrites once the blocks are ordered. */
+const BLANK = { id: "", anchorId: "", plainText: "" };
+
+const makeHeading = ([level, blockInlines]: [
+  HeadingLevel,
+  Inline[],
+]): Block => ({
+  ...BLANK,
+  type: "heading",
+  level,
+  inlines: blockInlines,
+});
+
+const makeParagraph = ([blockInlines, number]: [
+  Inline[],
+  number | undefined,
+]): Block => ({
+  ...BLANK,
+  type: "paragraph",
+  inlines: blockInlines,
+  ...(number === undefined ? {} : { number }),
+});
+
+const makeTable = (rows: TableCell[][]): Block => ({
+  ...BLANK,
+  type: "table",
+  rows,
+});
+
+const makeImage = (alt: string | undefined): Block => ({
+  ...BLANK,
+  type: "image",
+  src: "https://assets.test/seal.png",
+  ...(alt === undefined ? {} : { alt }),
+  width: 120,
+  height: 80,
+});
+
+const blockArbitrary: fc.Arbitrary<Block> = fc.oneof(
+  fc.tuple(fc.constantFrom(...HEADING_LEVELS), inlines).map(makeHeading),
+  fc
+    .tuple(
+      inlines,
+      fc.option(fc.integer({ min: 1, max: 99 }), { nil: undefined }),
+    )
+    .map(makeParagraph),
+  fc
+    .array(fc.array(tableCell, { minLength: 1, maxLength: 3 }), {
+      minLength: 1,
+      maxLength: 3,
+    })
+    .map(makeTable),
+  fc.option(textContent, { nil: undefined }).map(makeImage),
+);
+
+const identified = (block: Block, index: number): Block => ({
+  ...block,
+  id: `b${String(index)}`,
+  anchorId: `b-${String(index)}`,
+});
+
+const documentAst: fc.Arbitrary<DocumentAst> = fc
+  .array(blockArbitrary, { maxLength: 6 })
+  .map((blocks) =>
+    withProjectedPlainText({
+      version: 1,
+      source: {
+        system: "test",
+        documentId: "d",
+        webUrl: "https://court.test/d",
+        printUrl: "https://court.test/d/print",
+      },
+      metadata: {
+        caseNumber: null,
+        ecli: null,
+        court: null,
+        decisionDate: null,
+        decisionType: null,
+        keywords: [],
+        statutes: [],
+      },
+      blocks: blocks.map(identified),
+    }),
+  );
+
+describe("wire round trip (properties)", () => {
+  /**
+   * Dropping a rebuildable `plainText` is lossless only while every kind
+   * of block can rebuild it. Generated over every block kind rather than
+   * sampled, because the failure is silent: a kind whose text the reader
+   * cannot rebuild comes back with an empty string, not an error.
+   */
+  test("omitting the derivable text and parsing it back is the identity", () => {
+    fc.assert(
+      fc.property(documentAst, (ast) => {
+        const wire = omitDerivablePlainText(ast);
+        expect(parseDocumentAst(JSON.stringify(wire))).toEqual(ast);
+      }),
+      config(300),
     );
   });
 });
