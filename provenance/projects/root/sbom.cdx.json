@@ -97,7 +97,19 @@
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
+            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#14"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#15"
+          },
+          {
             "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#11"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-review-start-mode.ts#1"
           },
           {
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#1"
@@ -110,6 +122,9 @@
           },
           {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-find.ts#1"
@@ -218,6 +233,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-inline-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-last-translation-target.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-latest-callback.ts#1"
@@ -355,10 +373,10 @@
             "location": "packages/ui/src/lib/utils.ts#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#1"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#7"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#6"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#13"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#1"
@@ -472,16 +490,25 @@
             "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#31"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
+            "location": "apps/web/src/components/ai-suggestions/review-margin-notes.tsx#18"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#9"
+            "location": "apps/web/src/components/ai-suggestions/review-margin-notes.tsx#19"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#1"
+            "location": "apps/web/src/components/ai-suggestions/review-passage-side.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-position-header.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-redline-preview.tsx#10"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#2"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#1"
@@ -781,6 +808,9 @@
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#3"
           },
           {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
           },
           {
@@ -791,9 +821,6 @@
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/suggestions-facet.tsx#23"
           },
           {
             "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#1"
@@ -908,9 +935,6 @@
           },
           {
             "location": "apps/web/src/components/require-ai-key.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/responsive-action-toolbar.tsx#1"
           },
           {
             "location": "apps/web/src/components/route-components.tsx#1"
@@ -2080,6 +2104,9 @@
             "location": "packages/workspace-ui/src/conditions/builder.tsx#2"
           },
           {
+            "location": "packages/workspace-ui/src/responsive-action-toolbar.tsx#1"
+          },
+          {
             "location": "packages/workspace-ui/src/table-skeleton-rows.tsx#1"
           },
           {
@@ -2192,7 +2219,7 @@
           "name": "Chris Swithinbank <swithinbank@gmail.com>"
         }
       ],
-      "bom-ref": "pkg:npm/@astrojs/starlight@0.41.7",
+      "bom-ref": "pkg:npm/@astrojs/starlight@0.41.9",
       "description": "Build beautiful, high-performance documentation websites with Astro",
       "evidence": {
         "identity": [
@@ -2245,10 +2272,10 @@
           "value": "apps/landing/node_modules/@astrojs/starlight/package.json"
         }
       ],
-      "purl": "pkg:npm/%40astrojs/starlight@0.41.7",
+      "purl": "pkg:npm/%40astrojs/starlight@0.41.9",
       "scope": "required",
       "type": "library",
-      "version": "0.41.7"
+      "version": "0.41.9"
     },
     {
       "authors": [
@@ -2517,7 +2544,7 @@
             "location": "packages/ui/src/kanban/drag-interactions.ts#3"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#8"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#6"
@@ -2532,7 +2559,7 @@
             "location": "packages/ui/src/kanban/drag-interactions.ts#4"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#12"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#20"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#7"
@@ -2547,10 +2574,10 @@
             "location": "packages/ui/src/kanban/drag-interactions.ts#6"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#13"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#21"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#14"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#22"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#8"
@@ -2690,7 +2717,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1116.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1118.0",
       "description": "AWS SDK for JavaScript Cloudwatch Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2743,13 +2770,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-cloudwatch/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1116.0",
+      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1118.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1116.0"
+      "version": "3.1118.0"
     },
     {
       "authors": [
@@ -2757,7 +2784,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1116.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1118.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2813,13 +2840,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1116.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1118.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1116.0"
+      "version": "3.1118.0"
     },
     {
       "authors": [
@@ -2827,7 +2854,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1116.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1118.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2880,13 +2907,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1116.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1118.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1116.0"
+      "version": "3.1118.0"
     },
     {
       "authors": [
@@ -2894,7 +2921,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1116.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1118.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2947,13 +2974,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1116.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1118.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1116.0"
+      "version": "3.1118.0"
     },
     {
       "authors": [
@@ -2961,7 +2988,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1116.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1118.0",
       "evidence": {
         "identity": [
           {
@@ -3013,13 +3040,13 @@
           "value": "apps/api/node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1116.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1118.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1116.0"
+      "version": "3.1118.0"
     },
     {
       "authors": [
@@ -3058,7 +3085,19 @@
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
+            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#14"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#15"
+          },
+          {
             "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#11"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-review-start-mode.ts#1"
           },
           {
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#1"
@@ -3071,6 +3110,9 @@
           },
           {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-find.ts#1"
@@ -3179,6 +3221,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-inline-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-last-translation-target.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-latest-callback.ts#1"
@@ -3316,10 +3361,10 @@
             "location": "packages/ui/src/lib/utils.ts#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#1"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#7"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#6"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#13"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#1"
@@ -3433,16 +3478,25 @@
             "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#31"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
+            "location": "apps/web/src/components/ai-suggestions/review-margin-notes.tsx#18"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#9"
+            "location": "apps/web/src/components/ai-suggestions/review-margin-notes.tsx#19"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#1"
+            "location": "apps/web/src/components/ai-suggestions/review-passage-side.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-position-header.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-redline-preview.tsx#10"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#2"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#1"
@@ -3742,6 +3796,9 @@
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#3"
           },
           {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
           },
           {
@@ -3752,9 +3809,6 @@
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/suggestions-facet.tsx#23"
           },
           {
             "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#1"
@@ -3869,9 +3923,6 @@
           },
           {
             "location": "apps/web/src/components/require-ai-key.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/responsive-action-toolbar.tsx#1"
           },
           {
             "location": "apps/web/src/components/route-components.tsx#1"
@@ -5039,6 +5090,9 @@
           },
           {
             "location": "packages/workspace-ui/src/conditions/builder.tsx#2"
+          },
+          {
+            "location": "packages/workspace-ui/src/responsive-action-toolbar.tsx#1"
           },
           {
             "location": "packages/workspace-ui/src/table-skeleton-rows.tsx#1"
@@ -5582,22 +5636,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/desktop/src/mainview/main.tsx#2"
-          },
-          {
-            "location": "apps/desktop/src/mainview/main.tsx#3"
-          },
-          {
-            "location": "apps/playground/src/main.tsx#3"
-          },
-          {
-            "location": "apps/web/src/client.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/drag-preview.tsx#12"
-          },
-          {
-            "location": "packages/ui/src/kanban/fixtures/sortable-interactions.fixture.tsx#1"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#14"
           },
           {
             "location": "apps/desktop/src/mainview/main.tsx#2"
@@ -5649,6 +5688,24 @@
           },
           {
             "location": "packages/ui/src/kanban/sortable-interactions.tsx#4"
+          },
+          {
+            "location": "apps/desktop/src/mainview/main.tsx#2"
+          },
+          {
+            "location": "apps/desktop/src/mainview/main.tsx#3"
+          },
+          {
+            "location": "apps/playground/src/main.tsx#3"
+          },
+          {
+            "location": "apps/web/src/client.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/drag-preview.tsx#12"
+          },
+          {
+            "location": "packages/ui/src/kanban/fixtures/sortable-interactions.fixture.tsx#1"
           }
         ]
       },
@@ -5750,7 +5807,7 @@
       "version": "3.5.17"
     },
     {
-      "bom-ref": "pkg:npm/@google/genai@2.18.0",
+      "bom-ref": "pkg:npm/@google/genai@2.19.0",
       "evidence": {
         "identity": [
           {
@@ -5802,10 +5859,10 @@
           "value": "apps/api/node_modules/@google/genai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40google/genai@2.18.0",
+      "purl": "pkg:npm/%40google/genai@2.19.0",
       "scope": "required",
       "type": "library",
-      "version": "2.18.0"
+      "version": "2.19.0"
     },
     {
       "bom-ref": "pkg:npm/@hocuspocus/extension-redis@4.6.0",
@@ -6823,7 +6880,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/@posthog/react@1.10.4",
+      "bom-ref": "pkg:npm/@posthog/react@1.10.5",
       "description": "Provides components and hooks for React integrations of PostHog.",
       "evidence": {
         "identity": [
@@ -6854,7 +6911,19 @@
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
+            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#14"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#15"
+          },
+          {
             "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#11"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-review-start-mode.ts#1"
           },
           {
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#1"
@@ -6867,6 +6936,9 @@
           },
           {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-find.ts#1"
@@ -6975,6 +7047,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-inline-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-last-translation-target.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-latest-callback.ts#1"
@@ -7112,10 +7187,10 @@
             "location": "packages/ui/src/lib/utils.ts#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#1"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#7"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#6"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#13"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#1"
@@ -7229,16 +7304,25 @@
             "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#31"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
+            "location": "apps/web/src/components/ai-suggestions/review-margin-notes.tsx#18"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#9"
+            "location": "apps/web/src/components/ai-suggestions/review-margin-notes.tsx#19"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#1"
+            "location": "apps/web/src/components/ai-suggestions/review-passage-side.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-position-header.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-redline-preview.tsx#10"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#2"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#1"
@@ -7538,6 +7622,9 @@
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#3"
           },
           {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
           },
           {
@@ -7548,9 +7635,6 @@
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/suggestions-facet.tsx#23"
           },
           {
             "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#1"
@@ -7665,9 +7749,6 @@
           },
           {
             "location": "apps/web/src/components/require-ai-key.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/responsive-action-toolbar.tsx#1"
           },
           {
             "location": "apps/web/src/components/route-components.tsx#1"
@@ -8837,6 +8918,9 @@
             "location": "packages/workspace-ui/src/conditions/builder.tsx#2"
           },
           {
+            "location": "packages/workspace-ui/src/responsive-action-toolbar.tsx#1"
+          },
+          {
             "location": "packages/workspace-ui/src/table-skeleton-rows.tsx#1"
           },
           {
@@ -8874,10 +8958,10 @@
           "value": "apps/web/node_modules/@posthog/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40posthog/react@1.10.4",
+      "purl": "pkg:npm/%40posthog/react@1.10.5",
       "scope": "required",
       "type": "library",
-      "version": "1.10.4"
+      "version": "1.10.5"
     },
     {
       "bom-ref": "pkg:npm/@react-email/components@1.0.12",
@@ -10759,6 +10843,9 @@
             "location": "apps/api/src/handlers/chat/types.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/document-reviews/reference-positions.ts#30"
+          },
+          {
             "location": "apps/api/src/lib/agent-skills/skill-tools.ts#1"
           },
           {
@@ -11174,7 +11261,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.102.0",
+      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.102.5",
       "description": "Developer tools to interact with and visualize the TanStack/react-query cache",
       "evidence": {
         "identity": [
@@ -11227,13 +11314,13 @@
           "value": "apps/web/node_modules/@tanstack/react-query-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.102.0",
+      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.102.5",
       "scope": "required",
       "tags": [
         "tools"
       ],
       "type": "library",
-      "version": "5.102.0"
+      "version": "5.102.5"
     },
     {
       "authors": [
@@ -11241,7 +11328,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query@5.102.0",
+      "bom-ref": "pkg:npm/@tanstack/react-query@5.102.5",
       "description": "Hooks for managing, caching and syncing asynchronous and remote data in React",
       "evidence": {
         "identity": [
@@ -11259,6 +11346,9 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#18"
+          },
           {
             "location": "apps/web/src/components/ai-suggestions/document-review-queries.ts#1"
           },
@@ -11683,9 +11773,6 @@
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#30"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#11"
-          },
-          {
             "location": "apps/web/src/components/app-sidebar.tsx#22"
           },
           {
@@ -11809,7 +11896,7 @@
             "location": "apps/web/src/components/inspector/inspector-rail.tsx#3"
           },
           {
-            "location": "apps/web/src/components/inspector/playbook-facet.tsx#10"
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#11"
           },
           {
             "location": "apps/web/src/components/inspector/skill-history/proposal-review.tsx#1"
@@ -12401,10 +12488,10 @@
           "value": "apps/web/node_modules/@tanstack/react-query/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query@5.102.0",
+      "purl": "pkg:npm/%40tanstack/react-query@5.102.5",
       "scope": "required",
       "type": "library",
-      "version": "5.102.0"
+      "version": "5.102.5"
     },
     {
       "authors": [
@@ -12476,7 +12563,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router-ssr-query@1.167.1",
+      "bom-ref": "pkg:npm/@tanstack/react-router-ssr-query@1.167.2",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -12529,10 +12616,10 @@
           "value": "apps/web/node_modules/@tanstack/react-router-ssr-query/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router-ssr-query@1.167.1",
+      "purl": "pkg:npm/%40tanstack/react-router-ssr-query@1.167.2",
       "scope": "required",
       "type": "library",
-      "version": "1.167.1"
+      "version": "1.167.2"
     },
     {
       "authors": [
@@ -12637,6 +12724,9 @@
             "location": "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx#4"
           },
           {
+            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/app-sidebar.tsx#28"
           },
           {
@@ -12709,7 +12799,7 @@
             "location": "apps/web/src/components/inspector/inspector-rail.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/playbook-facet.tsx#11"
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#12"
           },
           {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#14"
@@ -12725,6 +12815,9 @@
           },
           {
             "location": "apps/web/src/components/matter-ref-link.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/notification-bell.tsx#4"
           },
           {
             "location": "apps/web/src/components/pdf/page-anonymization.tsx#3"
@@ -13693,7 +13786,7 @@
             "location": "apps/desktop/src/telemetry/desktop-telemetry.ts#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#15"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#23"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#3"
@@ -13702,13 +13795,16 @@
             "location": "apps/desktop/src/mainview/App.tsx#3"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#16"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#24"
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#4"
           },
           {
             "location": "apps/desktop/src/mainview/main.tsx#5"
+          },
+          {
+            "location": "apps/desktop/src/mainview/main.tsx#6"
           }
         ]
       },
@@ -13748,7 +13844,7 @@
       "version": "2.11.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/core@3.30.2",
+      "bom-ref": "pkg:npm/@tiptap/core@3.30.4",
       "description": "headless rich text editor",
       "evidence": {
         "identity": [
@@ -13840,13 +13936,13 @@
           "value": "apps/web/node_modules/@tiptap/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/core@3.30.2",
+      "purl": "pkg:npm/%40tiptap/core@3.30.4",
       "scope": "required",
       "type": "library",
-      "version": "3.30.2"
+      "version": "3.30.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.30.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.30.4",
       "description": "bold extension for tiptap",
       "evidence": {
         "identity": [
@@ -13905,13 +14001,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-bold/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-bold@3.30.2",
+      "purl": "pkg:npm/%40tiptap/extension-bold@3.30.4",
       "scope": "required",
       "type": "library",
-      "version": "3.30.2"
+      "version": "3.30.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-document@3.30.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-document@3.30.4",
       "description": "document extension for tiptap",
       "evidence": {
         "identity": [
@@ -13967,13 +14063,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-document/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-document@3.30.2",
+      "purl": "pkg:npm/%40tiptap/extension-document@3.30.4",
       "scope": "required",
       "type": "library",
-      "version": "3.30.2"
+      "version": "3.30.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.30.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.30.4",
       "description": "hard break extension for tiptap",
       "evidence": {
         "identity": [
@@ -14026,13 +14122,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-hard-break/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.30.2",
+      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.30.4",
       "scope": "required",
       "type": "library",
-      "version": "3.30.2"
+      "version": "3.30.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.30.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.30.4",
       "description": "heading extension for tiptap",
       "evidence": {
         "identity": [
@@ -14085,13 +14181,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-heading/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-heading@3.30.2",
+      "purl": "pkg:npm/%40tiptap/extension-heading@3.30.4",
       "scope": "required",
       "type": "library",
-      "version": "3.30.2"
+      "version": "3.30.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-history@3.30.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-history@3.30.4",
       "description": "history extension for tiptap",
       "evidence": {
         "identity": [
@@ -14150,13 +14246,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-history/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-history@3.30.2",
+      "purl": "pkg:npm/%40tiptap/extension-history@3.30.4",
       "scope": "required",
       "type": "library",
-      "version": "3.30.2"
+      "version": "3.30.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.30.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.30.4",
       "description": "italic extension for tiptap",
       "evidence": {
         "identity": [
@@ -14209,13 +14305,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-italic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-italic@3.30.2",
+      "purl": "pkg:npm/%40tiptap/extension-italic@3.30.4",
       "scope": "required",
       "type": "library",
-      "version": "3.30.2"
+      "version": "3.30.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-list@3.30.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-list@3.30.4",
       "description": "List extension for tiptap",
       "evidence": {
         "identity": [
@@ -14268,13 +14364,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-list/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-list@3.30.2",
+      "purl": "pkg:npm/%40tiptap/extension-list@3.30.4",
       "scope": "required",
       "type": "library",
-      "version": "3.30.2"
+      "version": "3.30.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.30.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.30.4",
       "description": "mention extension for tiptap",
       "evidence": {
         "identity": [
@@ -14345,13 +14441,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-mention/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-mention@3.30.2",
+      "purl": "pkg:npm/%40tiptap/extension-mention@3.30.4",
       "scope": "required",
       "type": "library",
-      "version": "3.30.2"
+      "version": "3.30.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.30.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.30.4",
       "description": "paragraph extension for tiptap",
       "evidence": {
         "identity": [
@@ -14410,13 +14506,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-paragraph/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.30.2",
+      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.30.4",
       "scope": "required",
       "type": "library",
-      "version": "3.30.2"
+      "version": "3.30.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.30.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.30.4",
       "description": "placeholder extension for tiptap",
       "evidence": {
         "identity": [
@@ -14475,13 +14571,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-placeholder/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.30.2",
+      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.30.4",
       "scope": "required",
       "type": "library",
-      "version": "3.30.2"
+      "version": "3.30.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-text@3.30.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-text@3.30.4",
       "description": "text extension for tiptap",
       "evidence": {
         "identity": [
@@ -14540,13 +14636,13 @@
           "value": "apps/web/node_modules/@tiptap/extension-text/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-text@3.30.2",
+      "purl": "pkg:npm/%40tiptap/extension-text@3.30.4",
       "scope": "required",
       "type": "library",
-      "version": "3.30.2"
+      "version": "3.30.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/pm@3.30.2",
+      "bom-ref": "pkg:npm/@tiptap/pm@3.30.4",
       "description": "prosemirror wrapper package for tiptap",
       "evidence": {
         "identity": [
@@ -14617,13 +14713,13 @@
           "value": "apps/web/node_modules/@tiptap/pm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/pm@3.30.2",
+      "purl": "pkg:npm/%40tiptap/pm@3.30.4",
       "scope": "required",
       "type": "library",
-      "version": "3.30.2"
+      "version": "3.30.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/react@3.30.2",
+      "bom-ref": "pkg:npm/@tiptap/react@3.30.4",
       "description": "React components for tiptap",
       "evidence": {
         "identity": [
@@ -14654,7 +14750,19 @@
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
+            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#14"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#15"
+          },
+          {
             "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#11"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-review-start-mode.ts#1"
           },
           {
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#1"
@@ -14667,6 +14775,9 @@
           },
           {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-find.ts#1"
@@ -14775,6 +14886,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-inline-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-last-translation-target.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-latest-callback.ts#1"
@@ -14912,10 +15026,10 @@
             "location": "packages/ui/src/lib/utils.ts#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#1"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#7"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#6"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#13"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#1"
@@ -15029,16 +15143,25 @@
             "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#31"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
+            "location": "apps/web/src/components/ai-suggestions/review-margin-notes.tsx#18"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#9"
+            "location": "apps/web/src/components/ai-suggestions/review-margin-notes.tsx#19"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#1"
+            "location": "apps/web/src/components/ai-suggestions/review-passage-side.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-position-header.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-redline-preview.tsx#10"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#2"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#1"
@@ -15338,6 +15461,9 @@
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#3"
           },
           {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
           },
           {
@@ -15348,9 +15474,6 @@
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/suggestions-facet.tsx#23"
           },
           {
             "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#1"
@@ -15465,9 +15588,6 @@
           },
           {
             "location": "apps/web/src/components/require-ai-key.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/responsive-action-toolbar.tsx#1"
           },
           {
             "location": "apps/web/src/components/route-components.tsx#1"
@@ -16637,6 +16757,9 @@
             "location": "packages/workspace-ui/src/conditions/builder.tsx#2"
           },
           {
+            "location": "packages/workspace-ui/src/responsive-action-toolbar.tsx#1"
+          },
+          {
             "location": "packages/workspace-ui/src/table-skeleton-rows.tsx#1"
           },
           {
@@ -16674,13 +16797,13 @@
           "value": "apps/web/node_modules/@tiptap/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/react@3.30.2",
+      "purl": "pkg:npm/%40tiptap/react@3.30.4",
       "scope": "required",
       "type": "library",
-      "version": "3.30.2"
+      "version": "3.30.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/suggestion@3.30.2",
+      "bom-ref": "pkg:npm/@tiptap/suggestion@3.30.4",
       "description": "suggestion plugin for tiptap",
       "evidence": {
         "identity": [
@@ -16751,10 +16874,10 @@
           "value": "apps/web/node_modules/@tiptap/suggestion/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/suggestion@3.30.2",
+      "purl": "pkg:npm/%40tiptap/suggestion@3.30.4",
       "scope": "required",
       "type": "library",
-      "version": "3.30.2"
+      "version": "3.30.4"
     },
     {
       "authors": [
@@ -17109,7 +17232,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/astro@7.2.4",
+      "bom-ref": "pkg:npm/astro@7.2.7",
       "description": "Astro is a modern site builder with web best practices, performance, and DX front-of-mind.",
       "evidence": {
         "identity": [
@@ -17135,6 +17258,9 @@
           },
           {
             "location": "apps/landing/src/integrations/og-cards.ts#13"
+          },
+          {
+            "location": "apps/landing/src/integrations/sitemap-lastmod.ts#5"
           },
           {
             "location": "apps/landing/src/pages/images/changelog/[release].png.ts#1"
@@ -17174,13 +17300,13 @@
           "value": "apps/landing/node_modules/astro/package.json"
         }
       ],
-      "purl": "pkg:npm/astro@7.2.4",
+      "purl": "pkg:npm/astro@7.2.7",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "7.2.4"
+      "version": "7.2.7"
     },
     {
       "bom-ref": "pkg:npm/better-auth@1.7.1",
@@ -17371,7 +17497,7 @@
             "location": "apps/api/scripts/build-mcp-apps.ts#1"
           },
           {
-            "location": "apps/api/scripts/capability-description-guard.ts#45"
+            "location": "apps/api/scripts/capability-description-guard.ts#42"
           },
           {
             "location": "apps/api/scripts/exact-mirror-guard.ts#35"
@@ -17968,34 +18094,43 @@
             "location": "apps/api/src/handlers/dev/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/document-reviews/create-run.ts#11"
+            "location": "apps/api/src/handlers/document-reviews/create-run.ts#14"
           },
           {
-            "location": "apps/api/src/handlers/document-reviews/decide-finding.ts#10"
+            "location": "apps/api/src/handlers/document-reviews/decide-finding.ts#16"
           },
           {
             "location": "apps/api/src/handlers/document-reviews/export-run.ts#8"
           },
           {
-            "location": "apps/api/src/handlers/document-reviews/list-runs.ts#13"
+            "location": "apps/api/src/handlers/document-reviews/list-runs.ts#23"
           },
           {
             "location": "apps/api/src/handlers/document-reviews/list-sources.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/document-reviews/propose-topics.ts#1"
+            "location": "apps/api/src/handlers/document-reviews/parties.ts#12"
           },
           {
-            "location": "apps/api/src/handlers/document-reviews/read-run.ts#9"
+            "location": "apps/api/src/handlers/document-reviews/prepare-proposal.ts#12"
           },
           {
-            "location": "apps/api/src/handlers/document-reviews/reference-topics.ts#1"
+            "location": "apps/api/src/handlers/document-reviews/propose-positions-stream.ts#15"
+          },
+          {
+            "location": "apps/api/src/handlers/document-reviews/propose-positions.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/document-reviews/read-passages.ts#14"
+          },
+          {
+            "location": "apps/api/src/handlers/document-reviews/read-run.ts#8"
+          },
+          {
+            "location": "apps/api/src/handlers/document-reviews/reference-positions.ts#31"
           },
           {
             "location": "apps/api/src/handlers/document-reviews/review-selection.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/document-reviews/review-topics.ts#1"
           },
           {
             "location": "apps/api/src/handlers/document-translations/create-run.ts#1"
@@ -18037,7 +18172,7 @@
             "location": "apps/api/src/handlers/docx-suggestions/revert.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/bilingual/create.ts#11"
+            "location": "apps/api/src/handlers/entities/bilingual/create.ts#12"
           },
           {
             "location": "apps/api/src/handlers/entities/check-stamp.ts#1"
@@ -18568,7 +18703,13 @@
             "location": "apps/api/src/handlers/playbooks/derive-ask.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/playbooks/from-run.ts#11"
+          },
+          {
             "location": "apps/api/src/handlers/playbooks/from-starter.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/get.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/instantiate-starter.ts#1"
@@ -19264,6 +19405,9 @@
             "location": "apps/api/src/handlers/workspaces/read-overview-activity-actors.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/workspaces/read-overview-activity.logic.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/workspaces/read-overview-activity.query.ts#1"
           },
           {
@@ -19471,10 +19615,19 @@
             "location": "apps/api/src/lib/document-processing-readiness.ts#1"
           },
           {
+            "location": "apps/api/src/lib/document-review/parties.ts#13"
+          },
+          {
             "location": "apps/api/src/lib/document-review/prepare-review-files.ts#1"
           },
           {
-            "location": "apps/api/src/lib/document-review/reference-compare.ts#1"
+            "location": "apps/api/src/lib/document-review/read-run-detail.ts#17"
+          },
+          {
+            "location": "apps/api/src/lib/document-review/reference-grade.ts#19"
+          },
+          {
+            "location": "apps/api/src/lib/document-review/reference-passages.ts#22"
           },
           {
             "location": "apps/api/src/lib/document-review/review-extract.ts#1"
@@ -19483,7 +19636,13 @@
             "location": "apps/api/src/lib/document-review/review-grade.ts#1"
           },
           {
-            "location": "apps/api/src/lib/document-review/run-queue.ts#20"
+            "location": "apps/api/src/lib/document-review/review-suggestion-staging.ts#15"
+          },
+          {
+            "location": "apps/api/src/lib/document-review/run-queue.ts#19"
+          },
+          {
+            "location": "apps/api/src/lib/document-review/suggestion-finding-sync.ts#14"
           },
           {
             "location": "apps/api/src/lib/document-translation/bilingual-batch-runner.ts#1"
@@ -19861,6 +20020,9 @@
             "location": "apps/api/src/lib/scheduler/tasks/template-deletion-cleanup.ts#1"
           },
           {
+            "location": "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts#1"
           },
           {
@@ -19868,6 +20030,9 @@
           },
           {
             "location": "apps/api/src/lib/scouts/infosoud-hearings.logic.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/scouts/work-attention.ts#1"
           },
           {
             "location": "apps/api/src/lib/search/extract-content.ts#12"
@@ -20182,6 +20347,9 @@
             "location": "apps/landing/src/integrations/og-cards.ts#14"
           },
           {
+            "location": "apps/landing/src/integrations/sitemap-lastmod.ts#6"
+          },
+          {
             "location": "apps/landing/src/lib/og-card-path.ts#4"
           },
           {
@@ -20209,7 +20377,7 @@
             "location": "apps/web/src/components/ai-suggestions/docx-suggestion-persistence.ts#25"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/playbook-review-store.ts#16"
+            "location": "apps/web/src/components/ai-suggestions/playbook-review-store.ts#15"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#13"
@@ -20248,16 +20416,13 @@
             "location": "apps/web/src/components/inspector/inspector-tabs-slice.ts#1"
           },
           {
-            "location": "apps/web/src/components/inspector/playbook-review-results.logic.ts#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/review-apply-accepted.logic.ts#7"
-          },
-          {
             "location": "apps/web/src/components/matter-target-picker.logic.ts#1"
           },
           {
             "location": "apps/web/src/components/matter-target-picker.logic.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/translate-document-dialog.logic.ts#1"
           },
           {
             "location": "apps/web/src/components/workspaces/hooks/use-start-workflow.logic.ts#1"
@@ -20587,6 +20752,9 @@
             "location": "scripts/changeset-guard.ts#23"
           },
           {
+            "location": "scripts/check-duplicate-raster-assets.ts#3"
+          },
+          {
             "location": "scripts/check-internal-module-mock-ledger.ts#15"
           },
           {
@@ -20623,6 +20791,9 @@
             "location": "scripts/publish-manifest.ts#13"
           },
           {
+            "location": "scripts/publish-package-selection.ts#1"
+          },
+          {
             "location": "scripts/ratchet.ts#34"
           },
           {
@@ -20644,13 +20815,13 @@
             "location": "apps/api/src/lib/email/email.tsx#2"
           },
           {
-            "location": "apps/desktop/src/mainview/main.tsx#6"
+            "location": "apps/desktop/src/mainview/main.tsx#7"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#31"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#12"
+            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#5"
           },
           {
             "location": "apps/web/src/components/auth/otp-panel.tsx#6"
@@ -20701,7 +20872,7 @@
             "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/playbook-facet.tsx#12"
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#13"
           },
           {
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#3"
@@ -20806,6 +20977,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#5"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#5"
           },
           {
@@ -20858,6 +21032,9 @@
           },
           {
             "location": "apps/web/src/routes/tools/contribute.tsx#5"
+          },
+          {
+            "location": "packages/ui/src/kanban/fixtures/sortable-interactions.fixture.tsx#3"
           },
           {
             "location": "packages/workspace-ui/src/conditions/builder.tsx#4"
@@ -20988,7 +21165,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@6.2.0",
+      "bom-ref": "pkg:npm/bullmq@6.2.2",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -21031,7 +21208,7 @@
             "location": "apps/api/src/lib/document-processing-queue.ts#2"
           },
           {
-            "location": "apps/api/src/lib/document-review/run-queue.ts#21"
+            "location": "apps/api/src/lib/document-review/run-queue.ts#20"
           },
           {
             "location": "apps/api/src/lib/document-translation/run-queue.ts#2"
@@ -21092,10 +21269,10 @@
           "value": "apps/api/node_modules/bullmq/package.json"
         }
       ],
-      "purl": "pkg:npm/bullmq@6.2.0",
+      "purl": "pkg:npm/bullmq@6.2.2",
       "scope": "required",
       "type": "library",
-      "version": "6.2.0"
+      "version": "6.2.2"
     },
     {
       "authors": [
@@ -21950,6 +22127,9 @@
             "location": "apps/api/src/db/schema/document-translations.ts#1"
           },
           {
+            "location": "apps/api/src/db/schema/docx-suggestions.ts#1"
+          },
+          {
             "location": "apps/api/src/db/schema/extraction-runs.ts#1"
           },
           {
@@ -22295,25 +22475,25 @@
             "location": "apps/api/src/handlers/dev/routes.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/document-reviews/create-run.ts#12"
+            "location": "apps/api/src/handlers/document-reviews/create-run.ts#15"
           },
           {
-            "location": "apps/api/src/handlers/document-reviews/decide-finding.ts#11"
+            "location": "apps/api/src/handlers/document-reviews/decide-finding.ts#17"
           },
           {
             "location": "apps/api/src/handlers/document-reviews/export-run.ts#9"
           },
           {
-            "location": "apps/api/src/handlers/document-reviews/list-runs.ts#14"
+            "location": "apps/api/src/handlers/document-reviews/list-runs.ts#24"
           },
           {
-            "location": "apps/api/src/handlers/document-reviews/list-runs.ts#15"
+            "location": "apps/api/src/handlers/document-reviews/list-runs.ts#25"
           },
           {
             "location": "apps/api/src/handlers/document-reviews/list-sources.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/document-reviews/read-run.ts#10"
+            "location": "apps/api/src/handlers/document-reviews/parties.ts#13"
           },
           {
             "location": "apps/api/src/handlers/document-translations/create-run.ts#2"
@@ -22749,6 +22929,9 @@
           },
           {
             "location": "apps/api/src/handlers/playbooks/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/from-run.ts#12"
           },
           {
             "location": "apps/api/src/handlers/playbooks/list-versions.ts#2"
@@ -23375,7 +23558,7 @@
             "location": "apps/api/src/lib/document-review/approved-playbook-versions.ts#11"
           },
           {
-            "location": "apps/api/src/lib/document-review/decision-carry-over.ts#18"
+            "location": "apps/api/src/lib/document-review/decision-carry-over.ts#19"
           },
           {
             "location": "apps/api/src/lib/document-review/decision-counts.ts#15"
@@ -23387,10 +23570,25 @@
             "location": "apps/api/src/lib/document-review/finding-write.ts#10"
           },
           {
-            "location": "apps/api/src/lib/document-review/run-finalize.ts#19"
+            "location": "apps/api/src/lib/document-review/position-decisions.ts#13"
           },
           {
-            "location": "apps/api/src/lib/document-review/run-queue.ts#22"
+            "location": "apps/api/src/lib/document-review/read-run-detail.ts#18"
+          },
+          {
+            "location": "apps/api/src/lib/document-review/reference-passages.ts#23"
+          },
+          {
+            "location": "apps/api/src/lib/document-review/review-suggestion-staging.ts#16"
+          },
+          {
+            "location": "apps/api/src/lib/document-review/run-finalize.ts#23"
+          },
+          {
+            "location": "apps/api/src/lib/document-review/run-queue.ts#21"
+          },
+          {
+            "location": "apps/api/src/lib/document-review/suggestion-finding-sync.ts#15"
           },
           {
             "location": "apps/api/src/lib/document-review/table-run-create.ts#11"
@@ -23400,6 +23598,9 @@
           },
           {
             "location": "apps/api/src/lib/document-translation/run-queue.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/document-translation/version-language.ts#12"
           },
           {
             "location": "apps/api/src/lib/entities/create-from-buffer.ts#2"
@@ -23705,6 +23906,9 @@
             "location": "apps/api/src/lib/scheduler/tasks/template-deletion-cleanup.ts#2"
           },
           {
+            "location": "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts#2"
           },
           {
@@ -23712,6 +23916,9 @@
           },
           {
             "location": "apps/api/src/lib/scouts/document-review.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/scouts/work-attention.ts#2"
           },
           {
             "location": "apps/api/src/lib/search/chat-thread-scope-sql.ts#1"
@@ -24559,10 +24766,22 @@
             "location": "apps/api/src/handlers/document-reviews/export-run.ts#10"
           },
           {
-            "location": "apps/api/src/handlers/document-reviews/list-runs.ts#16"
+            "location": "apps/api/src/handlers/document-reviews/list-runs.ts#26"
           },
           {
             "location": "apps/api/src/handlers/document-reviews/list-sources.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/document-reviews/parties.ts#14"
+          },
+          {
+            "location": "apps/api/src/handlers/document-reviews/passages-routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/document-reviews/prepare-proposal.ts#13"
+          },
+          {
+            "location": "apps/api/src/handlers/document-reviews/read-passages.ts#15"
           },
           {
             "location": "apps/api/src/handlers/document-reviews/routes.ts#1"
@@ -24595,7 +24814,7 @@
             "location": "apps/api/src/handlers/docx-suggestions/schemas.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/bilingual/create.ts#12"
+            "location": "apps/api/src/handlers/entities/bilingual/create.ts#13"
           },
           {
             "location": "apps/api/src/handlers/entities/check-stamp.ts#3"
@@ -25136,6 +25355,9 @@
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/from-run.ts#13"
           },
           {
             "location": "apps/api/src/handlers/playbooks/from-starter.ts#2"
@@ -26102,7 +26324,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-router@57.0.15",
+      "bom-ref": "pkg:npm/expo-router@57.0.16",
       "description": "Expo Router is a file-based router for React Native and web applications.",
       "evidence": {
         "identity": [
@@ -26158,13 +26380,13 @@
           "value": "apps/mobile/node_modules/expo-router/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-router@57.0.15",
+      "purl": "pkg:npm/expo-router@57.0.16",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "57.0.15"
+      "version": "57.0.16"
     },
     {
       "authors": [
@@ -26970,7 +27192,7 @@
             "location": "apps/web/src/lib/value-types.ts#22"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#36"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#44"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#12"
@@ -27006,10 +27228,16 @@
             "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#34"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#18"
+            "location": "apps/web/src/components/ai-suggestions/review-margin-notes.tsx#21"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#3"
+            "location": "apps/web/src/components/ai-suggestions/review-position-row.tsx#11"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-redline-preview.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#6"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#39"
@@ -27186,7 +27414,7 @@
             "location": "apps/web/src/components/inspector/inspector-tab-header.tsx#3"
           },
           {
-            "location": "apps/web/src/components/inspector/playbook-facet.tsx#25"
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#30"
           },
           {
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#4"
@@ -27228,7 +27456,7 @@
             "location": "apps/web/src/components/matter-target-picker.tsx#16"
           },
           {
-            "location": "apps/web/src/components/notification-bell.tsx#4"
+            "location": "apps/web/src/components/notification-bell.tsx#5"
           },
           {
             "location": "apps/web/src/components/organization/invite-member-dialog.tsx#8"
@@ -27247,6 +27475,12 @@
           },
           {
             "location": "apps/web/src/components/public-workspace-shell.tsx#11"
+          },
+          {
+            "location": "apps/web/src/components/review-flags.tsx#10"
+          },
+          {
+            "location": "apps/web/src/components/review-flags.tsx#18"
           },
           {
             "location": "apps/web/src/components/route-components.tsx#6"
@@ -27636,7 +27870,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#19"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#21"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#11"
@@ -27688,9 +27922,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/empty-state.tsx#3"
@@ -28377,7 +28608,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.418.10",
+      "bom-ref": "pkg:npm/posthog-js@1.419.4",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -28436,10 +28667,10 @@
           "value": "apps/web/node_modules/posthog-js/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.418.10",
+      "purl": "pkg:npm/posthog-js@1.419.4",
       "scope": "required",
       "type": "library",
-      "version": "1.418.10"
+      "version": "1.419.4"
     },
     {
       "authors": [
@@ -28447,7 +28678,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.50.0",
+      "bom-ref": "pkg:npm/posthog-node@5.51.2",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -28496,10 +28727,10 @@
           "value": "apps/api/node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.50.0",
+      "purl": "pkg:npm/posthog-node@5.51.2",
       "scope": "required",
       "type": "library",
-      "version": "5.50.0"
+      "version": "5.51.2"
     },
     {
       "bom-ref": "pkg:npm/prism-react-renderer@2.4.1",
@@ -29136,22 +29367,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/desktop/src/mainview/main.tsx#2"
-          },
-          {
-            "location": "apps/desktop/src/mainview/main.tsx#3"
-          },
-          {
-            "location": "apps/playground/src/main.tsx#3"
-          },
-          {
-            "location": "apps/web/src/client.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/drag-preview.tsx#12"
-          },
-          {
-            "location": "packages/ui/src/kanban/fixtures/sortable-interactions.fixture.tsx#1"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#14"
           },
           {
             "location": "apps/desktop/src/mainview/main.tsx#2"
@@ -29203,6 +29419,24 @@
           },
           {
             "location": "packages/ui/src/kanban/sortable-interactions.tsx#4"
+          },
+          {
+            "location": "apps/desktop/src/mainview/main.tsx#2"
+          },
+          {
+            "location": "apps/desktop/src/mainview/main.tsx#3"
+          },
+          {
+            "location": "apps/playground/src/main.tsx#3"
+          },
+          {
+            "location": "apps/web/src/client.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/drag-preview.tsx#12"
+          },
+          {
+            "location": "packages/ui/src/kanban/fixtures/sortable-interactions.fixture.tsx#1"
           }
         ]
       },
@@ -29445,7 +29679,19 @@
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
+            "location": "apps/web/src/components/ai-suggestions/document-review-passage-texts.ts#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#14"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-folio-document-blocks.ts#15"
+          },
+          {
             "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#11"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/use-review-start-mode.ts#1"
           },
           {
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#1"
@@ -29458,6 +29704,9 @@
           },
           {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-find.ts#1"
@@ -29566,6 +29815,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-inline-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-last-translation-target.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-latest-callback.ts#1"
@@ -29703,10 +29955,10 @@
             "location": "packages/ui/src/lib/utils.ts#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#1"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#7"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#6"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#13"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#1"
@@ -29820,16 +30072,25 @@
             "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#31"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
+            "location": "apps/web/src/components/ai-suggestions/review-margin-notes.tsx#18"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#9"
+            "location": "apps/web/src/components/ai-suggestions/review-margin-notes.tsx#19"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#1"
+            "location": "apps/web/src/components/ai-suggestions/review-passage-side.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-position-header.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-redline-preview.tsx#10"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#2"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#1"
@@ -30129,6 +30390,9 @@
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#3"
           },
           {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
           },
           {
@@ -30139,9 +30403,6 @@
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/suggestions-facet.tsx#23"
           },
           {
             "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#1"
@@ -30256,9 +30517,6 @@
           },
           {
             "location": "apps/web/src/components/require-ai-key.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/responsive-action-toolbar.tsx#1"
           },
           {
             "location": "apps/web/src/components/route-components.tsx#1"
@@ -31428,6 +31686,9 @@
             "location": "packages/workspace-ui/src/conditions/builder.tsx#2"
           },
           {
+            "location": "packages/workspace-ui/src/responsive-action-toolbar.tsx#1"
+          },
+          {
             "location": "packages/workspace-ui/src/table-skeleton-rows.tsx#1"
           },
           {
@@ -31743,7 +32004,7 @@
           "name": "Hayden Bleasel <hayden.bleasel@vercel.com>"
         }
       ],
-      "bom-ref": "pkg:npm/streamdown@2.5.0",
+      "bom-ref": "pkg:npm/streamdown@2.6.0",
       "description": "A drop-in replacement for react-markdown, designed for AI-powered streaming.",
       "evidence": {
         "identity": [
@@ -31799,10 +32060,10 @@
           "value": "apps/web/node_modules/streamdown/package.json"
         }
       ],
-      "purl": "pkg:npm/streamdown@2.5.0",
+      "purl": "pkg:npm/streamdown@2.6.0",
       "scope": "required",
       "type": "library",
-      "version": "2.5.0"
+      "version": "2.6.0"
     },
     {
       "authors": [
@@ -32352,10 +32613,10 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#20"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#22"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#22"
@@ -32431,6 +32692,9 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-finding-label.ts#15"
+          },
           {
             "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#14"
           },
@@ -32525,7 +32789,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-sort-labels.ts#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#37"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#45"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#13"
@@ -32573,10 +32837,22 @@
             "location": "apps/web/src/components/ai-suggestions/review-bar.tsx#35"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#19"
+            "location": "apps/web/src/components/ai-suggestions/review-margin-notes.tsx#22"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#4"
+            "location": "apps/web/src/components/ai-suggestions/review-passage-side.tsx#14"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-position-row.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-presence-matrix.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-term-row.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#7"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#41"
@@ -32825,7 +33101,7 @@
             "location": "apps/web/src/components/inspector/inspector-tab-header.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/playbook-facet.tsx#26"
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#31"
           },
           {
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#5"
@@ -32882,7 +33158,7 @@
             "location": "apps/web/src/components/matter-target-picker.tsx#17"
           },
           {
-            "location": "apps/web/src/components/notification-bell.tsx#5"
+            "location": "apps/web/src/components/notification-bell.tsx#6"
           },
           {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#8"
@@ -32910,6 +33186,9 @@
           },
           {
             "location": "apps/web/src/components/require-ai-key.tsx#7"
+          },
+          {
+            "location": "apps/web/src/components/review-flags.tsx#19"
           },
           {
             "location": "apps/web/src/components/route-components.tsx#7"
@@ -33509,7 +33788,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#25"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#21"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#23"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#12"
@@ -33590,7 +33869,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#17"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/empty-state.tsx#5"
@@ -33966,7 +34245,7 @@
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#34"
           },
           {
-            "location": "apps/web/src/components/inspector/playbook-facet.tsx#27"
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#32"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#24"
@@ -34134,7 +34413,7 @@
             "location": "apps/api/src/handlers/contacts/extract-procuracao.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/document-reviews/reference-topics.ts#2"
+            "location": "apps/api/src/handlers/document-reviews/reference-position-normalizer.ts#22"
           },
           {
             "location": "apps/api/src/handlers/entities/organize-suggestions.ts#5"
@@ -34218,7 +34497,10 @@
             "location": "apps/api/src/lib/deepl/client.ts#17"
           },
           {
-            "location": "apps/api/src/lib/document-review/reference-compare.ts#2"
+            "location": "apps/api/src/lib/document-review/parties.ts#14"
+          },
+          {
+            "location": "apps/api/src/lib/document-review/reference-grade.ts#20"
           },
           {
             "location": "apps/api/src/lib/document-source.ts#20"
@@ -34404,6 +34686,9 @@
             "location": "apps/collab/src/server.ts#11"
           },
           {
+            "location": "apps/web/src/components/ai-suggestions/document-review-proposal-stream.ts#17"
+          },
+          {
             "location": "apps/web/src/components/chat-decision-passage.ts#9"
           },
           {
@@ -34569,7 +34854,7 @@
             "location": "scripts/selfhost-contract.ts#1"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#5"
+            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#8"
           },
           {
             "location": "apps/web/src/components/auth/sign-in-panel.tsx#9"
@@ -34910,7 +35195,7 @@
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#21"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/playbook-review-store.ts#17"
+            "location": "apps/web/src/components/ai-suggestions/playbook-review-store.ts#16"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-store.ts#11"
@@ -35051,10 +35336,7 @@
             "location": "apps/web/src/components/inspector/inspector-panel.tsx#14"
           },
           {
-            "location": "apps/web/src/components/inspector/playbook-facet.tsx#28"
-          },
-          {
-            "location": "apps/web/src/components/inspector/suggestions-facet.tsx#25"
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#33"
           },
           {
             "location": "apps/web/src/components/pdf/page-anonymization.tsx#4"
@@ -35138,10 +35420,7 @@
             "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#29"
           },
           {
-            "location": "apps/web/src/components/inspector/playbook-facet.tsx#28"
-          },
-          {
-            "location": "apps/web/src/components/inspector/suggestions-facet.tsx#25"
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#33"
           },
           {
             "location": "apps/web/src/components/pdf/page-anonymization.tsx#4"
