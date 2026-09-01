@@ -416,6 +416,8 @@ describe("PostHog browser analytics adapter", () => {
     callsite: [
       "renderMatter@https://stella.test/assets/index.js:10:15",
       "handleClick/<@https://stella.test/assets/index.js:22:3",
+      "async*renderMatter@https://stella.test/assets/index.js:26:5",
+      "Async*@https://stella.test/assets/index.js:28:6",
       "global code@https://stella.test/assets/index.js:30:7",
     ],
     indented: [
@@ -455,6 +457,12 @@ describe("PostHog browser analytics adapter", () => {
     indented: {
       frame:
         "    at renderMatter (https://stella.test/assets/index.js?token=private:10:15)",
+      safeFrame:
+        "    at renderMatter (https://stella.test/assets/index.js:10:15)",
+    },
+    indentedWithQueryParentheses: {
+      frame:
+        "    at renderMatter (https://stella.test/assets/index.js?token=private(value):10:15)",
       safeFrame:
         "    at renderMatter (https://stella.test/assets/index.js:10:15)",
     },

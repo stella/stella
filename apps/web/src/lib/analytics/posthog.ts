@@ -114,7 +114,7 @@ const deepestCause = (error: Error): Error => {
 // free-form text cannot ride along as a frame.
 const STACK_FRAME_SYNTAX = [
   /^\s+at /u,
-  /^(?:[\w$.<>[\]#~/]{0,120}|(?:global|module|eval) code)@\S+:\d+:\d+$/u,
+  /^(?:[Aa]sync\*)?(?:[\w$.<>[\]#~/]{0,120}|(?:global|module|eval) code)@\S+:\d+:\d+$/u,
 ] as const;
 
 const hasOnlyDecimalDigits = (
@@ -149,10 +149,14 @@ const stripStackFrameQuery = (frame: string): string => {
   const v8Prefix = frame.trimStart().startsWith("at ")
     ? frame.indexOf("at ") + 3
     : -1;
-  const urlStart =
-    v8Prefix === -1
-      ? frame.indexOf("@") + 1
-      : Math.max(v8Prefix, frame.lastIndexOf("(", lineSeparator) + 1);
+  let urlStart = frame.indexOf("@") + 1;
+  if (v8Prefix !== -1) {
+    const locationSeparator = frame.indexOf(" (", v8Prefix);
+    urlStart =
+      locationSeparator === -1 || locationSeparator > lineSeparator
+        ? v8Prefix
+        : locationSeparator + 2;
+  }
   const query = frame.indexOf("?", urlStart);
   if (query === -1 || query > lineSeparator) {
     return frame;
