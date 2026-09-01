@@ -1030,6 +1030,7 @@
     "archive": "أرشفة",
     "ask": "اسأل",
     "askAI": "اسأل AI",
+    "askInChat": "السؤال في الدردشة",
     "author": "الكاتب",
     "back": "رجوع",
     "cancel": "إلغاء",
@@ -2325,7 +2326,6 @@
       "addReference": "إضافة {name} كمرجع",
       "addTopic": "إضافة موضوع",
       "allDecided": "تم البت في كل النتائج هنا.",
-      "askInChat": "السؤال في الدردشة",
       "assessment": {
         "additionalInTarget": "إضافة في المستند المستهدف",
         "aligned": "منسجم",
@@ -3692,8 +3692,11 @@
     "provisionHistoryUnavailable": "تعذّر تحميل سجل هذه المادة.",
     "provisionPromptSubject": "{provision} من {statute} ({eli}) بصيغتها النافذة منذ {date}",
     "provisionPromptSubjectUndated": "{provision} من {statute} ({eli})",
+    "recentlyAmended": "المعدَّلة مؤخرًا",
+    "resolvedAlias": "تم التعرف عليه باسم {label}",
+    "searchAskPrompt": "{query} (تشريعات {country})",
     "searchLabel": "البحث في التشريعات",
-    "searchPlaceholder": "ابحث بالعنوان أو الرقم...",
+    "searchPlaceholder": "الرقم أو الاسم أو العنوان، مثل 89/2012 Sb.",
     "showInText": "عرض في النص",
     "status": {
       "current": "نافذ",

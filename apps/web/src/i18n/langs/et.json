@@ -1030,6 +1030,7 @@
     "archive": "Arhiveeri",
     "ask": "Küsi",
     "askAI": "Küsi AI-lt",
+    "askInChat": "Küsi vestluses",
     "author": "Autor",
     "back": "Tagasi",
     "cancel": "Tühista",
@@ -2325,7 +2326,6 @@
       "addReference": "Lisa {name} võrdlusena",
       "addTopic": "Lisa teema",
       "allDecided": "Kõik siinsed leiud on otsustatud.",
-      "askInChat": "Küsi vestluses",
       "assessment": {
         "additionalInTarget": "Sihtdokumendis lisaks",
         "aligned": "Kooskõlas",
@@ -3692,8 +3692,11 @@
     "provisionHistoryUnavailable": "Selle sätte ajalugu ei õnnestunud laadida.",
     "provisionPromptSubject": "{statute} ({eli}) {provision} redaktsioonis, mis kehtib alates {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "recentlyAmended": "Viimati muudetud",
+    "resolvedAlias": "Tuvastatud kui {label}",
+    "searchAskPrompt": "{query} ({country} õigusaktid)",
     "searchLabel": "Otsi õigusaktidest",
-    "searchPlaceholder": "Otsi pealkirja või numbri järgi...",
+    "searchPlaceholder": "Number, lühinimi või pealkiri, nt 89/2012 Sb.",
     "showInText": "Näita tekstis",
     "status": {
       "current": "Kehtiv",

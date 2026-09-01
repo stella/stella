@@ -20,8 +20,12 @@ const VERSIONS_PAGE_SIZE = 200;
 const VERSIONS_MAX_PAGES = 5;
 
 export type StatuteListFilters = {
+  /** Narrows an act-number lookup to one publisher collection (`sb`, `zz`). */
+  collection?: string;
   country: string;
   language?: string;
+  /** An act number, `<number>/<year>`: the list resolves that work. */
+  number?: string;
   query?: string;
 };
 
@@ -41,8 +45,10 @@ export const statuteKeys = {
     ...statuteKeys.all,
     "list",
     {
+      collection: filters.collection,
       country: filters.country,
       language: filters.language,
+      number: filters.number,
       query: filters.query,
     },
   ],
@@ -69,7 +75,11 @@ export const statutesInfiniteOptions = (filters: StatuteListFilters) =>
           country: filters.country,
           limit: DEFAULT_PAGE_SIZE,
           ...(pageParam !== null && { cursor: pageParam }),
+          ...(filters.collection !== undefined && {
+            collection: filters.collection,
+          }),
           ...(filters.language !== undefined && { language: filters.language }),
+          ...(filters.number !== undefined && { number: filters.number }),
           ...(filters.query !== undefined && { query: filters.query }),
         },
         fetch: { signal },

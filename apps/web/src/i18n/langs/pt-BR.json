@@ -1030,6 +1030,7 @@
     "archive": "Arquivar",
     "ask": "Perguntar",
     "askAI": "Perguntar à IA",
+    "askInChat": "Perguntar no chat",
     "author": "Autor",
     "back": "Voltar",
     "cancel": "Cancelar",
@@ -2325,7 +2326,6 @@
       "addReference": "Adicionar {name} como referência",
       "addTopic": "Adicionar tópico",
       "allDecided": "Todas as constatações aqui foram decididas.",
-      "askInChat": "Perguntar no chat",
       "assessment": {
         "additionalInTarget": "Adicional no documento-alvo",
         "aligned": "Alinhado",
@@ -3692,8 +3692,11 @@
     "provisionHistoryUnavailable": "Não foi possível carregar o histórico deste dispositivo.",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), na redação em vigor desde {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "recentlyAmended": "Alteradas recentemente",
+    "resolvedAlias": "Reconhecido como {label}",
+    "searchAskPrompt": "{query} (legislação: {country})",
     "searchLabel": "Buscar na legislação",
-    "searchPlaceholder": "Buscar por título ou número...",
+    "searchPlaceholder": "Número, nome ou título, ex.: 89/2012 Sb.",
     "showInText": "Mostrar no texto",
     "status": {
       "current": "Em vigor",

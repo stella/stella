@@ -1030,6 +1030,7 @@
     "archive": "Arhivēt",
     "ask": "Jautāt",
     "askAI": "Jautāt AI",
+    "askInChat": "Jautāt tērzēšanā",
     "author": "Autors",
     "back": "Atpakaļ",
     "cancel": "Atcelt",
@@ -2325,7 +2326,6 @@
       "addReference": "Pievienot {name} kā atsauci",
       "addTopic": "Pievienot tēmu",
       "allDecided": "Par visiem šeit redzamajiem secinājumiem ir pieņemts lēmums.",
-      "askInChat": "Jautāt tērzēšanā",
       "assessment": {
         "additionalInTarget": "Papildus mērķa dokumentā",
         "aligned": "Saskaņots",
@@ -3692,8 +3692,11 @@
     "provisionHistoryUnavailable": "Neizdevās ielādēt šīs normas vēsturi.",
     "provisionPromptSubject": "{statute} ({eli}) {provision} redakcijā, kas ir spēkā kopš {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "recentlyAmended": "Nesen grozītie",
+    "resolvedAlias": "Atpazīts kā {label}",
+    "searchAskPrompt": "{query} ({country} tiesību akti)",
     "searchLabel": "Meklēt tiesību aktos",
-    "searchPlaceholder": "Meklēt pēc nosaukuma vai numura...",
+    "searchPlaceholder": "Numurs, nosaukums vai virsraksts, piem. 89/2012 Sb.",
     "showInText": "Rādīt tekstā",
     "status": {
       "current": "Spēkā",

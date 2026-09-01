@@ -1030,6 +1030,7 @@
     "archive": "Archivovat",
     "ask": "Zeptat se",
     "askAI": "Zeptat se AI",
+    "askInChat": "Zeptat se v chatu",
     "author": "Autor",
     "back": "Zpět",
     "cancel": "Zrušit",
@@ -2325,7 +2326,6 @@
       "addReference": "Přidat {name} jako referenci",
       "addTopic": "Přidat téma",
       "allDecided": "Všechna zjištění zde jsou rozhodnutá.",
-      "askInChat": "Zeptat se v chatu",
       "assessment": {
         "additionalInTarget": "Navíc v cílovém dokumentu",
         "aligned": "Shodné",
@@ -3692,8 +3692,11 @@
     "provisionHistoryUnavailable": "Historii tohoto ustanovení se nepodařilo načíst.",
     "provisionPromptSubject": "{provision} předpisu {statute} ({eli}) ve znění účinném od {date}",
     "provisionPromptSubjectUndated": "{provision} předpisu {statute} ({eli})",
+    "recentlyAmended": "Naposledy novelizované",
+    "resolvedAlias": "Rozpoznáno jako {label}",
+    "searchAskPrompt": "{query} (právní předpisy: {country})",
     "searchLabel": "Hledat v právních předpisech",
-    "searchPlaceholder": "Hledat podle názvu nebo čísla...",
+    "searchPlaceholder": "Číslo, zkratka nebo název, např. 89/2012 Sb.",
     "showInText": "Zobrazit v textu",
     "status": {
       "current": "Účinné",

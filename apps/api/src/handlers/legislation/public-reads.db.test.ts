@@ -1,7 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import fc from "fast-check";
 
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import { propertyConfig } from "@stll/property-testing";
+import { foldToAscii } from "@stll/text-normalize";
 
 import {
   LEGISLATION_TITLE_SORT_KEY_CHARS,
@@ -14,7 +18,7 @@ import {
   readPublicLegislationHandler,
 } from "@/api/handlers/legislation/get";
 import {
-  LEGISLATION_TITLE_CURSOR_KIND,
+  LEGISLATION_LIST_CURSOR_KIND,
   listStatutesHandler,
 } from "@/api/handlers/legislation/list";
 import { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
@@ -56,6 +60,24 @@ const longTitleAct = createSafeId<"legislationDocument">();
 const registerAct = createSafeId<"legislationDocument">();
 const sunsetAct = createSafeId<"legislationDocument">();
 const withheldAct = createSafeId<"legislationDocument">();
+const czechCivilCode = createSafeId<"legislationDocument">();
+const czechCivilCodeAmendment = createSafeId<"legislationDocument">();
+const corporationsAct = createSafeId<"legislationDocument">();
+
+/**
+ * The default listing, newest consolidation first, ties broken by id
+ * descending. The two civil code languages open on the same day, so their
+ * mutual order is whatever the generated ids say.
+ */
+const recencyOrder = [
+  corporationsAct,
+  ...[civilCodeCurrent, civilCodeEnglish].toSorted((a, b) => (a < b ? 1 : -1)),
+  czechCivilCodeAmendment,
+  czechCivilCode,
+  labourCode,
+  longTitleAct,
+  registerAct,
+];
 const enumeratedAmendments = Array.from(
   { length: 1000 },
   (_, index) => `act-${index.toString(36).padStart(4, "0")}`,
@@ -294,6 +316,36 @@ beforeAll(
         versionValidFrom: "2000-01-01",
         versionValidTo: null,
       }),
+      // A code and the act amending it, titled the way the publisher titles
+      // them: the amendment's title contains the code's name, the code's own
+      // name starts with it. Its number shares a suffix with 89/2012.
+      seedDocument({
+        id: czechCivilCode,
+        sourceId: openSourceId,
+        eli: "CZ/2012/1089",
+        title: "1089/2012 Sb., občanský zákoník",
+        versionValidFrom: "2014-01-01",
+        versionValidTo: null,
+      }),
+      seedDocument({
+        id: czechCivilCodeAmendment,
+        sourceId: openSourceId,
+        eli: "CZ/2016/460",
+        title:
+          "460/2016 Sb., kterým se mění zákon č. 1089/2012 Sb., občanský zákoník",
+        versionValidFrom: "2017-02-28",
+        versionValidTo: null,
+      }),
+      // A publisher-shaped ELI, so the collection segment is there to match.
+      seedDocument({
+        id: corporationsAct,
+        sourceId: openSourceId,
+        eli: "https://www.e-sbirka.cz/eli/cz/sb/2012/90",
+        title:
+          "90/2012 Sb., o obchodních společnostech a družstvech (zákon o obchodních korporacích)",
+        versionValidFrom: "2021-01-01",
+        versionValidTo: null,
+      }),
     ]);
 
     workspaceDb = async (read) =>
@@ -401,21 +453,20 @@ describe("public statute list", () => {
     expect(ids).not.toContain(civilCodeFuture);
   });
 
-  test("returns one row per work, ordered by title", async () => {
+  test("returns one row per work, newest consolidation first", async () => {
     const page = expectPage(
       await listStatutesHandler({ country: "CZE" }, legislationDb),
     );
 
     expect(longOfficialTitle.length).toBeGreaterThan(1024);
-    expect(page.items.map((item) => item.title)).toEqual([
-      "Civil Code",
-      "Civil Code (English)",
-      "Labour Code",
-      longOfficialTitle,
-      "Public Registers Act",
-    ]);
+    expect(page.items.map((item) => item.id)).toEqual(recencyOrder);
     expect(
-      page.items.every((item) => !Object.hasOwn(item, "titleSortKey")),
+      page.items.every(
+        (item) =>
+          !Object.hasOwn(item, "titleSortKey") &&
+          !Object.hasOwn(item, "validFromKey") &&
+          !Object.hasOwn(item, "rank"),
+      ),
     ).toBe(true);
   });
 
@@ -473,11 +524,77 @@ describe("public statute list", () => {
     expect(byEli.items.map((item) => item.id)).toEqual([registerAct]);
   });
 
-  test("walks every work exactly once across cursor pages", async () => {
+  test("matches a title typed without diacritics or case", async () => {
+    // The fixture differs from the query before folding, so the match below
+    // is the fold's doing and not a coincidence of the seed.
+    expect("občanský zákoník".normalize("NFC")).not.toBe("OBCANSKY zakonik");
+    const page = expectPage(
+      await listStatutesHandler(
+        { country: "CZE", query: "OBCANSKY zakonik" },
+        legislationDb,
+      ),
+    );
+
+    expect(page.items.map((item) => item.id)).toEqual([
+      czechCivilCode,
+      czechCivilCodeAmendment,
+    ]);
+  });
+
+  test("ranks the act named by the text above the acts amending it", async () => {
+    const page = expectPage(
+      await listStatutesHandler(
+        { country: "CZE", query: "občanský zákoník" },
+        legislationDb,
+      ),
+    );
+
+    // Both titles contain the term; only the code's own name starts with it.
+    expect(page.items.map((item) => item.id)).toEqual([
+      czechCivilCode,
+      czechCivilCodeAmendment,
+    ]);
+  });
+
+  test("resolves an act by its number across the work's languages", async () => {
+    const page = expectPage(
+      await listStatutesHandler(
+        { country: "CZE", number: "89/2012" },
+        legislationDb,
+      ),
+    );
+
+    // The tail is anchored: 1089/2012 shares a suffix and must stay out.
+    expect(new Set(page.items.map((item) => item.id))).toEqual(
+      new Set([civilCodeCurrent, civilCodeEnglish]),
+    );
+  });
+
+  test("resolves an act by number within a named collection only", async () => {
+    const inCollection = expectPage(
+      await listStatutesHandler(
+        { country: "CZE", collection: "sb", number: "90/2012" },
+        legislationDb,
+      ),
+    );
+    const elsewhere = expectPage(
+      await listStatutesHandler(
+        { country: "CZE", collection: "ul1", number: "90/2012" },
+        legislationDb,
+      ),
+    );
+
+    expect(inCollection.items.map((item) => item.id)).toEqual([
+      corporationsAct,
+    ]);
+    expect(elsewhere.items).toEqual([]);
+  });
+
+  test("walks every work exactly once across recency cursor pages", async () => {
     const seen: string[] = [];
     let cursor: string | null = null;
 
-    for (let request = 0; request < 5; request += 1) {
+    for (let request = 0; request < 10; request += 1) {
       // Cursor pagination is sequential by construction: each request needs
       // the cursor the previous one returned.
       const page: StatutePage = expectPage(
@@ -501,8 +618,42 @@ describe("public statute list", () => {
       expect(cursor.length).toBeLessThanOrEqual(PAGINATION_CURSOR_MAX_CHARS);
       const cursorParts = decodePaginationCursor(cursor);
       expect(cursorParts).toHaveLength(3);
-      expect(cursorParts?.at(0)).toBe(LEGISLATION_TITLE_CURSOR_KIND);
-      const sortKey = cursorParts?.at(1);
+      expect(cursorParts?.at(0)).toBe(LEGISLATION_LIST_CURSOR_KIND.recent);
+      expect(cursorParts?.at(1)).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+    }
+
+    expect(cursor).toBeNull();
+    expect(seen).toEqual(recencyOrder);
+  });
+
+  test("walks every search hit exactly once across search cursor pages", async () => {
+    const seen: string[] = [];
+    let cursor: string | null = null;
+
+    for (let request = 0; request < 10; request += 1) {
+      const page: StatutePage = expectPage(
+        // eslint-disable-next-line eslint/no-await-in-loop -- keyset walk
+        await listStatutesHandler(
+          {
+            country: "CZE",
+            limit: 1,
+            query: "code",
+            ...(cursor === null ? {} : { cursor }),
+          },
+          legislationDb,
+        ),
+      );
+
+      seen.push(...page.items.map((item) => item.id));
+      cursor = page.nextCursor;
+
+      if (cursor === null) {
+        break;
+      }
+      const cursorParts = decodePaginationCursor(cursor);
+      expect(cursorParts).toHaveLength(4);
+      expect(cursorParts?.at(0)).toBe(LEGISLATION_LIST_CURSOR_KIND.search);
+      const sortKey = cursorParts?.at(2);
       expect(typeof sortKey).toBe("string");
       if (typeof sortKey !== "string") {
         throw new TypeError("Expected a title sort key in the tagged cursor");
@@ -513,19 +664,15 @@ describe("public statute list", () => {
     }
 
     expect(cursor).toBeNull();
-    expect(seen).toEqual([
-      civilCodeCurrent,
-      civilCodeEnglish,
-      labourCode,
-      longTitleAct,
-      registerAct,
-    ]);
+    // Nothing is named "code", so every hit ranks alike and title order rules.
+    expect(seen).toEqual([civilCodeCurrent, civilCodeEnglish, labourCode]);
   });
 
-  test("rejects the retired full-title cursor protocol", async () => {
+  test("rejects the retired title cursor protocol", async () => {
     const legacyCursor = encodePaginationCursor([
-      "Civil Code (English)",
-      civilCodeEnglish,
+      "title-prefix-v1",
+      "Labour Code",
+      labourCode,
     ]);
     const result = await listStatutesHandler(
       { country: "CZE", cursor: legacyCursor, limit: 1 },
@@ -539,41 +686,15 @@ describe("public statute list", () => {
     });
   });
 
-  test("accepts and preserves the next release's bounded cursor protocol", async () => {
-    const maximumEscapedCursor = encodePaginationCursor([
-      LEGISLATION_TITLE_CURSOR_KIND,
-      "\u0001".repeat(LEGISLATION_TITLE_SORT_KEY_CHARS),
-      longTitleAct,
-    ]);
-    expect(maximumEscapedCursor.length).toBeLessThanOrEqual(
-      PAGINATION_CURSOR_MAX_CHARS,
-    );
-
-    const boundedCursor = encodePaginationCursor([
-      LEGISLATION_TITLE_CURSOR_KIND,
+  test("rejects a cursor from the other ordering", async () => {
+    const searchCursor = encodePaginationCursor([
+      LEGISLATION_LIST_CURSOR_KIND.search,
+      "1",
       "Labour Code",
       labourCode,
     ]);
-    const page = expectPage(
-      await listStatutesHandler(
-        { country: "CZE", cursor: boundedCursor, limit: 1 },
-        legislationDb,
-      ),
-    );
-
-    expect(page.items.map((item) => item.id)).toEqual([longTitleAct]);
-    expect(decodePaginationCursor(page.nextCursor ?? "")).toEqual([
-      LEGISLATION_TITLE_CURSOR_KIND,
-      Array.from(longOfficialTitle)
-        .slice(0, LEGISLATION_TITLE_SORT_KEY_CHARS)
-        .join(""),
-      longTitleAct,
-    ]);
-  });
-
-  test("rejects a cursor outside the bounded title protocol", async () => {
     const result = await listStatutesHandler(
-      { country: "CZE", cursor: "not-a-cursor" },
+      { country: "CZE", cursor: searchCursor, limit: 1 },
       legislationDb,
     );
 
@@ -582,6 +703,54 @@ describe("public statute list", () => {
       code: 400,
       response: { message: "Invalid cursor" },
     });
+  });
+
+  test("rejects a cursor outside either protocol", async () => {
+    // A date that is well-formed but not a calendar day would otherwise
+    // reach the `::date` cast and surface as a server error.
+    const forgedDate = encodePaginationCursor([
+      LEGISLATION_LIST_CURSOR_KIND.recent,
+      "2026-99-99",
+      labourCode,
+    ]);
+    for (const cursor of ["not-a-cursor", forgedDate]) {
+      // eslint-disable-next-line eslint/no-await-in-loop -- each cursor is its own request
+      const result = await listStatutesHandler(
+        { country: "CZE", cursor },
+        legislationDb,
+      );
+
+      expect(result).not.toHaveProperty("items");
+      expect(result).toMatchObject({
+        code: 400,
+        response: { message: "Invalid cursor" },
+      });
+    }
+  });
+
+  test("the title fold agrees with the client-side fold", async () => {
+    const latinText = fc.string({
+      unit: fc.constantFrom(
+        ..."aábcčdďeéěfghiíjklľĺmnňoóôöőpqrřsštťuúůüűvwxyýzžAÁČĎÉĚÍŇÓŘŠŤÚŮÝŽłŁßøØæÆ 0123456789/.,()-".split(
+          "",
+        ),
+      ),
+      maxLength: 40,
+    });
+    await fc.assert(
+      fc.asyncProperty(latinText, async (text) => {
+        const folded = await legislationDb(async (tx) => {
+          const [row] = await tx
+            .select({ folded: sql<string>`legislation_title_fold(${text})` })
+            .from(legislationSources)
+            .limit(1);
+          return row?.folded;
+        });
+
+        expect(folded).toBe(foldToAscii(text).toLowerCase());
+      }),
+      propertyConfig({ numRuns: 40 }),
+    );
   });
 });
 

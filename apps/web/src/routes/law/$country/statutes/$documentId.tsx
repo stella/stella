@@ -36,6 +36,7 @@ import {
   EM_DASH,
   formatValidityDate,
 } from "@/features/statutes/statute-format";
+import { useMountEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { pageTitleLiteral } from "@/lib/page-title";
@@ -71,6 +72,19 @@ const searchSchema = v.object({
       v.string(),
       v.trim(),
       v.transform((value) => (isCalendarDate(value) ? value : undefined)),
+    ),
+  ),
+  /**
+   * A provision designation to open at (`§ 2079`), as the statutes box sends
+   * it. Read by the outline's jump field; anything it cannot parse just
+   * narrows nothing.
+   */
+  jump: v.optional(
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.maxLength(32),
+      v.transform((value) => (value.length > 0 ? value : undefined)),
     ),
   ),
 });
@@ -239,6 +253,7 @@ const StatuteReader = ({
   const navigate = Route.useNavigate();
   const asOfLabelId = useId();
   const asOf = Route.useSearch({ select: (search) => search.asOf });
+  const requestedJump = Route.useSearch({ select: (search) => search.jump });
   const readerRef = useRef<HTMLDivElement>(null);
 
   const header = statute ?? work;
@@ -277,7 +292,7 @@ const StatuteReader = ({
     [documentId, goTo],
   );
 
-  const [jumpValue, setJumpValue] = useState("");
+  const [jumpValue, setJumpValue] = useState(requestedJump ?? "");
   // An unparseable or absent AST is a real state: the reader then renders
   // the plain fulltext instead of blocks.
   const ast = statute ? parseDocumentAst(statute.documentAst) : null;
@@ -286,6 +301,22 @@ const StatuteReader = ({
   const jump = parseOutlineJump(jumpValue);
   const visibleOutline = filterOutlineItems(outline, jump);
   const jumpAnchorId = findProvisionAnchorId(outline, jump);
+
+  // A jump named in the URL is honoured once, when the reader mounts with
+  // the text already loaded; after that the field is the reader's own.
+  useMountEffect(() => {
+    const container = readerRef.current;
+
+    if (
+      requestedJump === undefined ||
+      jumpAnchorId === null ||
+      container === null
+    ) {
+      return;
+    }
+
+    jumpToAnchor(jumpAnchorId, container);
+  });
 
   // The keys a provision's incoming citations are filed under. Both come off
   // the document itself: nothing about the work is inferred here.

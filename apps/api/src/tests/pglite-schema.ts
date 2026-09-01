@@ -5,6 +5,8 @@ import { sql, type SQL } from "drizzle-orm";
 import { readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { ASCII_FOLD_TABLE } from "@stll/text-normalize";
+
 import { WORKSPACE_ACCESS_VIEW_NAME } from "@/api/db/rls";
 
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
@@ -57,11 +59,41 @@ const readMigrationStatements = (migrationPath: string): string[] =>
 const executableSql = (statement: string): string =>
   statement.replace(/^[ \t]*--[^\n]*/gmu, "").trim();
 
+/**
+ * PGlite ships no `unaccent`, so the production `legislation_title_fold`
+ * (migration 20260901130000) cannot be installed verbatim. This double is
+ * generated from the fold table the unaccent parity test pins against the
+ * real extension: NFD plus combining-mark removal for everything Unicode can
+ * decompose, then the table's rules for the letters it cannot (`ł`, `ß`, `ø`).
+ */
+const legislationTitleFoldPgliteSql = (): string => {
+  const entries = Object.entries(ASCII_FOLD_TABLE);
+  const singles = entries.filter(([, folded]) => folded.length === 1);
+  const multis = entries.filter(([, folded]) => folded.length !== 1);
+  const quote = (value: string): string => `$fold$${value}$fold$`;
+  let expression =
+    "regexp_replace(normalize($1, NFD), '[\\u0300-\\u036f]', '', 'g')";
+  expression = `translate(${expression}, ${quote(singles.map(([from]) => from).join(""))}, ${quote(singles.map(([, to]) => to).join(""))})`;
+  for (const [from, to] of multis) {
+    expression = `replace(${expression}, ${quote(from)}, ${quote(to)})`;
+  }
+  return `CREATE OR REPLACE FUNCTION legislation_title_fold(input text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+STRICT
+PARALLEL SAFE
+AS $body$
+  SELECT lower(${expression})
+$body$`;
+};
+
 export const installPgliteSchemaPrerequisites = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
   await db.execute(sql.raw("CREATE EXTENSION IF NOT EXISTS pg_trgm"));
   await db.execute(sql.raw(arabicNormalizeFunctionSql()));
+  await db.execute(sql.raw(legislationTitleFoldPgliteSql()));
   // Drizzle emits policies that reference this view before its backing tables
   // exist. Install a harmless shape-compatible stub for schema creation; the
   // security test database replaces it after pushSchema finishes.

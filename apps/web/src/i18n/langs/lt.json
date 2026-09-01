@@ -1030,6 +1030,7 @@
     "archive": "Archyvuoti",
     "ask": "Klausti",
     "askAI": "Klausti DI",
+    "askInChat": "Klausti pokalbyje",
     "author": "Autorius",
     "back": "Atgal",
     "cancel": "Atšaukti",
@@ -2325,7 +2326,6 @@
       "addReference": "Pridėti {name} kaip referenciją",
       "addTopic": "Pridėti temą",
       "allDecided": "Visos čia esančios išvados nuspręstos.",
-      "askInChat": "Klausti pokalbyje",
       "assessment": {
         "additionalInTarget": "Papildomai tiksliniame dokumente",
         "aligned": "Suderinta",
@@ -3692,8 +3692,11 @@
     "provisionHistoryUnavailable": "Nepavyko įkelti šios nuostatos istorijos.",
     "provisionPromptSubject": "{statute} ({eli}) {provision}, redakcija, galiojanti nuo {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "recentlyAmended": "Neseniai pakeisti",
+    "resolvedAlias": "Atpažinta kaip {label}",
+    "searchAskPrompt": "{query} ({country} teisės aktai)",
     "searchLabel": "Ieškoti teisės aktų",
-    "searchPlaceholder": "Ieškoti pagal pavadinimą arba numerį...",
+    "searchPlaceholder": "Numeris, pavadinimas arba antraštė, pvz. 89/2012 Sb.",
     "showInText": "Rodyti tekste",
     "status": {
       "current": "Galiojantis",
