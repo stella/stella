@@ -2,7 +2,6 @@ import { lazy, StrictMode, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root as ReactRoot } from "react-dom/client";
 
-import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { panic } from "better-result";
 
@@ -16,6 +15,7 @@ import {
   loadMessages,
 } from "../i18n";
 import type { DesktopMessages } from "../i18n";
+import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { useSystemTheme } from "../shared/use-system-theme";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -58,24 +58,25 @@ const Root = () => {
     };
   }, [language]);
 
-  useEffect(() => {
-    let cleanup: (() => void) | undefined;
-    void listen<{ language: string }>(
-      DESKTOP_LANGUAGE_CHANGED_EVENT,
-      ({ payload }) => {
-        if (isSupportedLanguage(payload.language)) {
-          setLanguage(payload.language);
-        }
-      },
-    ).then((unlisten) => {
-      cleanup = unlisten;
-      return;
-    });
-
-    return () => {
-      cleanup?.();
-    };
-  }, []);
+  useEffect(
+    () =>
+      subscribeDesktopEvent<{ language: string }>({
+        event: DESKTOP_LANGUAGE_CHANGED_EVENT,
+        handler: ({ payload }) => {
+          if (isSupportedLanguage(payload.language)) {
+            setLanguage(payload.language);
+          }
+        },
+        onError: () => {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+            window: telemetryWindow,
+          });
+        },
+      }),
+    [],
+  );
 
   const windowLabel = getCurrentWindow().label;
   let content = <App />;

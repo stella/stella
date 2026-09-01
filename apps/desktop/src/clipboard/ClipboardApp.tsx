@@ -21,7 +21,6 @@ import {
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import {
   ClipboardIcon,
   CircleHelpIcon,
@@ -78,6 +77,7 @@ import {
 import { StellaMark } from "@stll/ui/stella-mark";
 import { cn } from "@stll/ui/utils";
 
+import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
@@ -1146,33 +1146,27 @@ const ClipboardApp = () => {
         });
     };
     readSnapshot();
-    let stopListening: (() => void) | undefined;
-    void listen("clipboard-history-changed", readSnapshot)
-      .then((unlisten) => {
-        if (disposed) {
-          unlisten();
-          return undefined;
-        }
-        stopListening = unlisten;
-        // Re-read once the subscription exists: the off-mutex initialization
-        // may have installed history and emitted its one-shot change event
-        // between the first read and this listener, which would otherwise
-        // leave the window stuck on the empty initializing snapshot.
-        readSnapshot();
-        return undefined;
-      })
-      .catch(() => {
+    const stopListening = subscribeDesktopEvent({
+      event: "clipboard-history-changed",
+      handler: readSnapshot,
+      onError: () => {
         reportDesktopError({
           code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
           operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistorySubscribe,
           window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
         });
         setError({ message: errorReadHistory, source: "read" });
-      });
+      },
+      // Re-read once the subscription exists: the off-mutex initialization
+      // may have installed history and emitted its one-shot change event
+      // between the first read and this listener, which would otherwise
+      // leave the window stuck on the empty initializing snapshot.
+      onSubscribed: readSnapshot,
+    });
     return () => {
       stopObservingReopens();
       disposed = true;
-      stopListening?.();
+      stopListening();
     };
   }, [errorReadHistory]);
 
