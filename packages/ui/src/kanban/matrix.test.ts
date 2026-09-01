@@ -5,6 +5,8 @@ import { resolveKanbanGrouping } from "./grouping";
 import {
   buildKanbanBoardMatrix,
   createKanbanDropIntent,
+  getKanbanBoardColumnIdentity,
+  getKanbanBoardLaneIdentity,
   orderKanbanCellsByColumns,
 } from "./matrix";
 import type {
@@ -146,6 +148,36 @@ describe("kanban board matrix", () => {
       matrix.cells.flatMap((cell) => cell.rows).map((row) => row.id),
     ).toEqual(["one", "three", "two"]);
     expect(matrix.cells.at(0)?.rows.map((row) => row.id)).toEqual(["one"]);
+  });
+
+  test("keeps subgroup fallback values out of the group-column domain", () => {
+    const matrix = buildKanbanBoardMatrix({
+      group: {
+        type: "built-in",
+        propertyId: "_status",
+        group: {
+          id: "_status",
+          options: [{ label: "Unassigned", value: "unassigned" }],
+        },
+      },
+      resolveGroupValue: valueFor,
+      rows: [{ id: "one", owner: "unassigned", status: "unassigned" }],
+      subgroup,
+      uncategorizedLabel: "No value",
+    });
+
+    expect(matrix.columns.map(columnValue)).toEqual(["unassigned", null]);
+    expect(
+      matrix.lanes.map((lane) =>
+        lane.type === "group" ? lane.group.value : null,
+      ),
+    ).toEqual(["ada", "lin", null]);
+    const columnKeys = new Set(
+      matrix.columns.map(getKanbanBoardColumnIdentity),
+    );
+    const laneKeys = new Set(matrix.lanes.map(getKanbanBoardLaneIdentity));
+    expect([...columnKeys].filter((key) => laneKeys.has(key))).toEqual([]);
+    expect(matrix.cells.filter((cell) => cell.rows.length > 0)).toHaveLength(1);
   });
 
   test("a diagonal move carries both changed axes in one intent", () => {

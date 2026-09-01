@@ -29,8 +29,6 @@ export type KanbanGroup = {
   color?: string | undefined;
   colorBg?: string | undefined;
   optionColor?: OptionColor | undefined;
-  /** Present when this group is a terminal destination, not a data option. */
-  destination?: { id: string; label: string } | undefined;
 };
 
 /**

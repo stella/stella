@@ -89,17 +89,26 @@ export type OrderKanbanCellsByColumnsParams<TRow> = {
   columns: readonly KanbanBoardColumn[];
 };
 
-const columnIdentity = (column: KanbanBoardColumn): string =>
+/** Stable identity for a visible board column; group and destination domains stay distinct. */
+export const getKanbanBoardColumnIdentity = (
+  column: KanbanBoardColumn,
+): string =>
   column.type === "group"
     ? `group:${optionValueKey(column.group.value)}`
     : `destination:${column.destination.id}`;
+
+/** Stable identity for a swimlane; it can never alias a visible column. */
+export const getKanbanBoardLaneIdentity = (lane: KanbanBoardLane): string =>
+  lane.type === "none"
+    ? "lane:none"
+    : `lane:${optionValueKey(lane.group.value)}`;
 
 const assertUniqueColumnIdentities = (
   columns: readonly KanbanBoardColumn[],
 ): void => {
   const identities = new Set<string>();
   for (const column of columns) {
-    const identity = columnIdentity(column);
+    const identity = getKanbanBoardColumnIdentity(column);
     if (identities.has(identity)) {
       return panic(`Duplicate Kanban board column identity: ${identity}`);
     }
@@ -113,19 +122,26 @@ export const orderKanbanCellsByColumns = <TRow>({
   columns,
 }: OrderKanbanCellsByColumnsParams<TRow>): KanbanBoardCell<TRow>[] => {
   const orderByValue = new Map(
-    columns.map((column, index) => [columnIdentity(column), index]),
+    columns.map((column, index) => [
+      getKanbanBoardColumnIdentity(column),
+      index,
+    ]),
   );
   const getColumnOrder = (cell: KanbanBoardCell<TRow>) => {
-    const order = orderByValue.get(columnIdentity(cell.coordinate.column));
+    const order = orderByValue.get(
+      getKanbanBoardColumnIdentity(cell.coordinate.column),
+    );
     return order ?? panic("Visible Kanban cell has no column order");
   };
   return cells
-    .filter((cell) => orderByValue.has(columnIdentity(cell.coordinate.column)))
+    .filter((cell) =>
+      orderByValue.has(getKanbanBoardColumnIdentity(cell.coordinate.column)),
+    )
     .toSorted((left, right) => getColumnOrder(left) - getColumnOrder(right));
 };
 
 const cellKey = ({ column, lane }: KanbanBoardCoordinate): string =>
-  `${columnIdentity(column)}|${lane.type === "none" ? "none" : optionValueKey(lane.group.value)}`;
+  `${getKanbanBoardColumnIdentity(column)}|${getKanbanBoardLaneIdentity(lane)}`;
 
 const groupContainsValue = (
   groups: readonly KanbanGroup[],
