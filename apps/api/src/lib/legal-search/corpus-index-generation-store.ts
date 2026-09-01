@@ -397,7 +397,7 @@ export const beginCorpusIndexGenerationRebuildTx = async (
   }
 };
 
-export type CorpusIndexGenerationRebuildStep =
+type CorpusIndexGenerationRebuildStep =
   | { status: "deleted_history"; stateCount: number; intentCount: number }
   | { status: "empty"; count: 0 };
 
