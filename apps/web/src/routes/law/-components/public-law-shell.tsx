@@ -67,7 +67,14 @@ function PublicLawTopBar() {
   });
 
   return (
-    <header className="bg-sidebar flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4">
+    <header
+      // The case reader's docked inspector overlays the bar's inline-end for
+      // its width (it owns the top row there); keep the bar's actions beside
+      // it rather than beneath it. The dock renders from `md` up only, so
+      // the padding is scoped the same way — below `md` the plain px-4
+      // applies and the published width is ignored.
+      className="bg-sidebar flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4 md:pe-[calc(1rem+var(--law-end-dock-width,0px))]"
+    >
       {isMobile && (
         <>
           <SidebarTrigger className="-ms-1" />
