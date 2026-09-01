@@ -53,14 +53,9 @@ const renderBoard = (expandEmptyLanes = false) =>
           }
         : {})}
       matrix={matrix}
-      renderCell={({ cell, laneValue }) => (
+      renderCell={({ cell, count, laneValue }) => (
         <span>
-          {testLabel(
-            "cell",
-            laneValue,
-            cell.coordinate.column.value,
-            cell.rows.length,
-          )}
+          {testLabel("cell", laneValue, cell.coordinate.column.value, count)}
         </span>
       )}
       renderColumnHeader={({ column, count }) => (

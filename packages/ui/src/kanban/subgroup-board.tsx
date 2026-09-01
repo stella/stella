@@ -23,6 +23,8 @@ export type KanbanSubgroupLaneIdentityContext = {
 
 export type KanbanSubgroupCellContext<TRow> = {
   cell: KanbanBoardCell<TRow>;
+  /** Number of rows in this lane/column intersection, including zero. */
+  count: number;
   laneValue: string | null;
 };
 
@@ -189,7 +191,11 @@ export const KanbanSubgroupBoard = <TRow,>({
                       className="w-[300px] shrink-0"
                       key={groupValueKey(cell.coordinate.column.value)}
                     >
-                      {renderCell({ cell, laneValue: group.value })}
+                      {renderCell({
+                        cell,
+                        count: cell.rows.length,
+                        laneValue: group.value,
+                      })}
                     </div>
                   ))}
                 </div>
