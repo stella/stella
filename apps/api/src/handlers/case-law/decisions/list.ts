@@ -1,12 +1,17 @@
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, notExists, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { readDecisionLanguageAlternateCounts } from "@/api/lib/case-law/language-alternate-counts";
-import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
+import {
+  redistributableCaseLawSource,
+  redistributableCaseLawSourceFor,
+} from "@/api/lib/case-law/redistribution";
 import {
   isUuid,
   tPaginationCursor,
@@ -41,12 +46,64 @@ const caseLawCreatedAtCursor = createTimestampIdCursorCodec({
   brandId: brandPersistedCaseLawDecisionId,
 });
 
+/** The language versions of a decision, so the sibling rule can be applied to them. */
+const sibling = alias(caseLawDecisions, "sibling");
+const siblingSource = alias(caseLawSources, "sibling_source");
+
+/** The table or its alias: the alias carries its own table name in the types. */
+type DecisionFilterColumns = Record<
+  | "country"
+  | "court"
+  | "decisionDate"
+  | "decisionType"
+  | "language"
+  | "sourceId",
+  AnyPgColumn
+>;
+
+/**
+ * The request filters against one decision row. Applied to the listed row and
+ * to its language siblings alike: a sibling the request would not list must
+ * not hide the version it would.
+ */
+const decisionFilterConditions = (
+  query: ListDecisionsQuery,
+  decision: DecisionFilterColumns,
+): SQL[] => {
+  const conditions: SQL[] = [];
+  if (query.court) {
+    conditions.push(eq(decision.court, query.court));
+  }
+  if (query.country) {
+    conditions.push(eq(decision.country, query.country));
+  }
+  if (query.dateFrom) {
+    conditions.push(sql`${decision.decisionDate} >= ${query.dateFrom}`);
+  }
+  if (query.dateTo) {
+    conditions.push(sql`${decision.decisionDate} <= ${query.dateTo}`);
+  }
+  if (query.decisionType) {
+    conditions.push(eq(decision.decisionType, query.decisionType));
+  }
+  if (query.sourceId) {
+    conditions.push(eq(decision.sourceId, query.sourceId));
+  }
+  if (query.language) {
+    conditions.push(eq(decision.language, query.language));
+  }
+  return conditions;
+};
+
 export const listDecisionsHandler = async (
   query: ListDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
   const limit = query.limit ?? LIMITS.caseLawSearchPageSizeDefault;
-  const conditions: SQL[] = [redistributableCaseLawSource];
+  const conditions: SQL[] = [
+    redistributableCaseLawSource,
+    ...decisionFilterConditions(query, caseLawDecisions),
+  ];
 
   if (query.cursor) {
     const currentCursor = caseLawCreatedAtCursor.decode(query.cursor);
@@ -94,34 +151,6 @@ export const listDecisionsHandler = async (
     }
   }
 
-  if (query.court) {
-    conditions.push(eq(caseLawDecisions.court, query.court));
-  }
-
-  if (query.country) {
-    conditions.push(eq(caseLawDecisions.country, query.country));
-  }
-
-  if (query.dateFrom) {
-    conditions.push(sql`${caseLawDecisions.decisionDate} >= ${query.dateFrom}`);
-  }
-
-  if (query.dateTo) {
-    conditions.push(sql`${caseLawDecisions.decisionDate} <= ${query.dateTo}`);
-  }
-
-  if (query.decisionType) {
-    conditions.push(eq(caseLawDecisions.decisionType, query.decisionType));
-  }
-
-  if (query.sourceId) {
-    conditions.push(eq(caseLawDecisions.sourceId, query.sourceId));
-  }
-
-  if (query.language) {
-    conditions.push(eq(caseLawDecisions.language, query.language));
-  }
-
   const decisions = await caseLawDb((tx) =>
     tx
       .select({
@@ -145,7 +174,41 @@ export const listDecisionsHandler = async (
         caseLawSources,
         eq(caseLawSources.id, caseLawDecisions.sourceId),
       )
-      .where(and(...conditions))
+      .where(
+        and(
+          ...conditions,
+          // A multilingual decision is listed once, by its oldest listable
+          // version. Rows only ever arrive with newer timestamps, so no later
+          // ingested translation can displace the representative between two
+          // pages of one walk, and the keyset cursor stays valid. Siblings are
+          // held to the same filters and the same redistribution gate as the
+          // row itself.
+          or(
+            isNull(caseLawDecisions.languageGroupKey),
+            notExists(
+              tx
+                .select({ one: sql`1` })
+                .from(sibling)
+                .innerJoin(
+                  siblingSource,
+                  eq(siblingSource.id, sibling.sourceId),
+                )
+                .where(
+                  and(
+                    eq(
+                      sibling.languageGroupKey,
+                      caseLawDecisions.languageGroupKey,
+                    ),
+                    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement, nothing round-trips through a JS Date
+                    sql`(${sibling.createdAt}, ${sibling.id}) < (${caseLawDecisions.createdAt}, ${caseLawDecisions.id})`,
+                    redistributableCaseLawSourceFor(siblingSource.descriptor),
+                    ...decisionFilterConditions(query, sibling),
+                  ),
+                ),
+            ),
+          ),
+        ),
+      )
       .orderBy(desc(caseLawDecisions.createdAt), desc(caseLawDecisions.id))
       .limit(limit + 1),
   );
@@ -157,25 +220,11 @@ export const listDecisionsHandler = async (
         .filter((value): value is string => value !== null),
     ),
   ];
-  const languageAlternateCounts =
-    languageGroupKeys.length > 0
-      ? await readDecisionLanguageAlternateCounts({
-          caseLawDb,
-          languageGroupKeys,
-        })
-      : [];
-  const languageAlternateCountByGroupKey = new Map(
-    languageAlternateCounts
-      .filter(
-        (
-          row,
-        ): row is {
-          count: number;
-          languageGroupKey: string;
-        } => row.languageGroupKey !== null,
-      )
-      .map((row) => [row.languageGroupKey, row.count]),
-  );
+  const alternatesByGroupKey =
+    await readPublicDecisionLanguageAlternatesByGroup({
+      caseLawDb,
+      languageGroupKeys,
+    });
 
   const page = createCursorPage({
     rows: decisions.map((decision) => ({
@@ -186,12 +235,9 @@ export const listDecisionsHandler = async (
       court: decision.court,
       country: decision.country,
       language: decision.language,
-      languageAlternateCount:
-        decision.languageGroupKey === null
-          ? 0
-          : (languageAlternateCountByGroupKey.get(decision.languageGroupKey) ??
-            1),
-      languageGroupKey: decision.languageGroupKey,
+      languageAlternates: alternatesByGroupKey.alternatesFor(
+        decision.languageGroupKey,
+      ),
       decisionDate: decision.decisionDate,
       decisionType: decision.decisionType,
       sourceUrl: decision.sourceUrl,

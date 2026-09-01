@@ -32,7 +32,6 @@ type CitedDecisionLinkProps = {
     decisionType?: string | null | undefined;
     id: string;
     language?: string | null | undefined;
-    languageAlternateCount?: number | null | undefined;
     languageAlternates?: readonly unknown[] | null | undefined;
     slug?: string | null | undefined;
   };
@@ -57,7 +56,6 @@ export const CitedDecisionLink = ({
     court: decision.court,
     decisionId: decision.id,
     language: decision.language,
-    languageAlternateCount: decision.languageAlternateCount,
     languageAlternates: decision.languageAlternates,
     slug: decision.slug,
   });
@@ -75,7 +73,6 @@ export const CitedDecisionLink = ({
         court: decision.court,
         decisionId: decision.id,
         language: decision.language,
-        languageAlternateCount: decision.languageAlternateCount,
         languageAlternates: decision.languageAlternates,
         slug: decision.slug,
       }),

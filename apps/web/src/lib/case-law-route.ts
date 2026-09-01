@@ -14,7 +14,6 @@ export type CaseLawDecisionSearchHit = {
   decisionId: string;
   ecli: string | null;
   language?: string | null;
-  languageAlternateCount?: number | null;
   languageAlternates?: readonly unknown[] | null;
   slug?: string | null;
 };
@@ -256,7 +255,6 @@ export const createCaseLawDecisionRouteParams = ({
   court,
   decisionId,
   language,
-  languageAlternateCount,
   languageAlternates,
   slug,
 }: {
@@ -265,7 +263,6 @@ export const createCaseLawDecisionRouteParams = ({
   court: string;
   decisionId: string;
   language?: string | null | undefined;
-  languageAlternateCount?: number | null | undefined;
   languageAlternates?: readonly unknown[] | null | undefined;
   slug?: string | null | undefined;
 }): CaseLawDecisionRouteParams => {
@@ -279,13 +276,7 @@ export const createCaseLawDecisionRouteParams = ({
     slug: createCaseLawDecisionRouteParam({ caseNumber, decisionId, slug }),
   };
 
-  if (
-    !shouldUseCaseLawLanguageSegment({
-      language,
-      languageAlternateCount,
-      languageAlternates,
-    })
-  ) {
+  if (!shouldUseCaseLawLanguageSegment({ language, languageAlternates })) {
     return baseParams;
   }
 
@@ -312,30 +303,17 @@ export const normalizeCaseLawLanguageSegment = (
 
 export const shouldUseCaseLawLanguageSegment = ({
   language,
-  languageAlternateCount,
   languageAlternates,
 }: {
   language?: string | null | undefined;
-  languageAlternateCount?: number | null | undefined;
   languageAlternates?: readonly unknown[] | null | undefined;
 }): boolean =>
   normalizeCaseLawLanguageSegment(language) !== null &&
-  getCaseLawLanguageAlternateCount({
-    languageAlternateCount,
-    languageAlternates,
-  }) > 1;
+  getCaseLawLanguageAlternateCount(languageAlternates) > 1;
 
-const getCaseLawLanguageAlternateCount = ({
-  languageAlternateCount,
-  languageAlternates,
-}: {
-  languageAlternateCount?: number | null | undefined;
-  languageAlternates?: readonly unknown[] | null | undefined;
-}): number => {
-  if (languageAlternateCount !== null && languageAlternateCount !== undefined) {
-    return languageAlternateCount;
-  }
-
+const getCaseLawLanguageAlternateCount = (
+  languageAlternates: readonly unknown[] | null | undefined,
+): number => {
   if (!languageAlternates) {
     return 0;
   }

@@ -442,6 +442,10 @@
     "filters": {
       "searchPlaceholder": "Nach Aktenzeichen suchen..."
     },
+    "languages": {
+      "count": "{count, plural, one {# Sprache} other {# Sprachen}}",
+      "matchedIn": "Treffer auf {language}"
+    },
     "loadingMore": "Weitere werden geladen…",
     "provision": {
       "article": "Artikel {value}",

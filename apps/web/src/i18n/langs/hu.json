@@ -442,6 +442,10 @@
     "filters": {
       "searchPlaceholder": "Keresés ügyszám alapján..."
     },
+    "languages": {
+      "count": "{count, plural, one {# nyelv} other {# nyelv}}",
+      "matchedIn": "Találat {language} nyelven"
+    },
     "loadingMore": "Betöltés folyamatban...",
     "provision": {
       "article": "{value}. cikk",

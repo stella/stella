@@ -23,7 +23,6 @@ export type PublicLegalMaterialRouteParams = {
 export type PublicLegalMaterialRouteInput = {
   authority: string;
   language?: string | null;
-  languageAlternateCount?: number | null;
   languageAlternates?: readonly unknown[] | null;
   materialType: PublicLegalMaterialType;
   slug: string;
@@ -44,23 +43,17 @@ export const normalizePublicLegalMaterialLanguageSegment = (
 
 export const shouldUsePublicLegalMaterialLanguageSegment = ({
   language,
-  languageAlternateCount,
   languageAlternates,
 }: {
   language?: string | null | undefined;
-  languageAlternateCount?: number | null | undefined;
   languageAlternates?: readonly unknown[] | null | undefined;
 }): boolean =>
   normalizePublicLegalMaterialLanguageSegment(language) !== null &&
-  getPublicLegalMaterialLanguageAlternateCount({
-    languageAlternateCount,
-    languageAlternates,
-  }) > 1;
+  getPublicLegalMaterialLanguageAlternateCount(languageAlternates) > 1;
 
 export const createPublicLegalMaterialRouteParams = ({
   authority,
   language,
-  languageAlternateCount,
   languageAlternates,
   materialType,
   slug,
@@ -82,7 +75,6 @@ export const createPublicLegalMaterialRouteParams = ({
   if (
     !shouldUsePublicLegalMaterialLanguageSegment({
       language,
-      languageAlternateCount,
       languageAlternates,
     })
   ) {
@@ -128,17 +120,9 @@ const normalizePublicLegalMaterialVersionSegment = (
   version: string | null | undefined,
 ): string | null => normalizePublicLegalMaterialPathSegment(version ?? "");
 
-const getPublicLegalMaterialLanguageAlternateCount = ({
-  languageAlternateCount,
-  languageAlternates,
-}: {
-  languageAlternateCount?: number | null | undefined;
-  languageAlternates?: readonly unknown[] | null | undefined;
-}): number => {
-  if (languageAlternateCount !== null && languageAlternateCount !== undefined) {
-    return languageAlternateCount;
-  }
-
+const getPublicLegalMaterialLanguageAlternateCount = (
+  languageAlternates: readonly unknown[] | null | undefined,
+): number => {
   if (!languageAlternates) {
     return 0;
   }

@@ -442,6 +442,10 @@
     "filters": {
       "searchPlaceholder": "Pesquisar por número do processo..."
     },
+    "languages": {
+      "count": "{count, plural, one {# idioma} other {# idiomas}}",
+      "matchedIn": "Correspondência em {language}"
+    },
     "loadingMore": "Carregando mais...",
     "provision": {
       "article": "art. {value}",

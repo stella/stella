@@ -442,6 +442,10 @@
     "filters": {
       "searchPlaceholder": "Rechercher par numéro d'affaire..."
     },
+    "languages": {
+      "count": "{count, plural, one {# langue} other {# langues}}",
+      "matchedIn": "Correspondance en {language}"
+    },
     "loadingMore": "Chargement en cours…",
     "provision": {
       "article": "art. {value}",

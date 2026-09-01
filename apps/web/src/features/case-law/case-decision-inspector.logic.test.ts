@@ -42,7 +42,7 @@ describe("case decision inspector", () => {
       court: "NSS",
       decisionId: "decision-id",
       language: "cs",
-      languageAlternateCount: 2,
+      languageAlternates: [{ language: "cs" }, { language: "en" }],
       slug: "4-as-3-2008",
     }).payload;
 
@@ -103,7 +103,7 @@ describe("case decision inspector", () => {
         court: "Court of Justice",
         decisionId: "eu-decision-id",
         language: "es",
-        languageAlternateCount: 11,
+        languageAlternates: [{ language: "es" }, { language: "en" }],
         slug: "c-400-99-f472865427c41152",
       }).payload,
     );

@@ -189,12 +189,12 @@ describe("buildCaseLawDecisionUrl", () => {
         court: "NS",
         slug: "s",
         language: "cs",
-        languageAlternateCount: 2,
+        languageAlternates: [{ language: "cs" }, { language: "en" }],
       }),
     ).toBe(`${BASE}/law/cze/cases/ns/cs/s`);
   });
 
-  test("omits the language segment when only one alternate exists", () => {
+  test("omits the language segment when the decision has no alternates", () => {
     expect(
       buildCaseLawDecisionUrl({
         caseNumber: "1/24",
@@ -202,7 +202,7 @@ describe("buildCaseLawDecisionUrl", () => {
         court: "NS",
         slug: "s",
         language: "cs",
-        languageAlternateCount: 1,
+        languageAlternates: [],
       }),
     ).toBe(`${BASE}/law/cze/cases/ns/s`);
   });
@@ -215,7 +215,7 @@ describe("buildCaseLawDecisionUrl", () => {
         court: "NS",
         slug: "s",
         language: "not a language",
-        languageAlternateCount: 5,
+        languageAlternates: [{ language: "cs" }, { language: "en" }],
       }),
     ).toBe(`${BASE}/law/cze/cases/ns/s`);
   });
@@ -228,12 +228,12 @@ describe("buildCaseLawDecisionUrl", () => {
         court: "NS",
         slug: "s",
         language: "CS_CZ",
-        languageAlternateCount: 2,
+        languageAlternates: [{ language: "cs-CZ" }, { language: "en" }],
       }),
     ).toBe(`${BASE}/law/cze/cases/ns/cs-cz/s`);
   });
 
-  test("counts distinct normalized language alternates when no explicit count is given", () => {
+  test("counts distinct normalized language alternates", () => {
     const url = buildCaseLawDecisionUrl({
       caseNumber: "1/24",
       country: "CZE",
@@ -262,20 +262,6 @@ describe("buildCaseLawDecisionUrl", () => {
         slug: "s",
         language: "cs",
         languageAlternates: [{ language: "cs" }, { language: "CS" }],
-      }),
-    ).toBe(`${BASE}/law/cze/cases/ns/s`);
-  });
-
-  test("prefers the explicit alternate count over the alternates array", () => {
-    expect(
-      buildCaseLawDecisionUrl({
-        caseNumber: "1/24",
-        country: "CZE",
-        court: "NS",
-        slug: "s",
-        language: "cs",
-        languageAlternateCount: 1,
-        languageAlternates: [{ language: "cs" }, { language: "en" }],
       }),
     ).toBe(`${BASE}/law/cze/cases/ns/s`);
   });

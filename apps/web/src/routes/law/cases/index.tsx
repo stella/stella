@@ -160,7 +160,7 @@ export const Route = createFileRoute("/law/cases/")({
                     court: decision.court,
                     decisionId: decision.id,
                     language: decision.language,
-                    languageAlternateCount: decision.languageAlternateCount,
+                    languageAlternates: decision.languageAlternates,
                     slug: decision.slug,
                   }),
                 ),

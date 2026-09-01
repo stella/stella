@@ -5,7 +5,7 @@ export const PUBLIC_LAW_SHARED_QUERY = {
   caseLawDecisionRead: "case-law.decision-read",
   caseLawDecisionTextPresence: "case-law.decision-text-presence",
   caseLawDocumentContext: "case-law.document-context",
-  caseLawLanguageAlternateCounts: "case-law.language-alternate-counts",
+  caseLawLanguageAlternates: "case-law.language-alternates",
   caseLawNonRedistributableSources: "case-law.non-redistributable-sources",
 } as const;
 

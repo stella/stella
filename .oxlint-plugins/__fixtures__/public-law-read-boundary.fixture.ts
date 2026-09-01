@@ -1,6 +1,6 @@
 // Passive regression fixture for public-law-read-boundary.
 
-declare const readDecisionLanguageAlternateCounts: () => Promise<void>;
+declare const readPublicDecisionLanguageAlternatesByGroup: () => Promise<void>;
 declare const configureExternalReadTransaction: (
   tx: unknown,
   isolation: string,
@@ -16,12 +16,13 @@ declare const database: {
 };
 
 export const searchPostgresDecisions = async () => {
-  await readDecisionLanguageAlternateCounts();
+  await readPublicDecisionLanguageAlternatesByGroup();
 };
 
 // oxlint-disable-next-line public-law-read-boundary/require-language-alternate-counts -- fixture: a nested callback does not prove this search path invokes the shared reader
 export const searchCorpusIndexDecisions = () => {
-  const deferredRead = async () => await readDecisionLanguageAlternateCounts();
+  const deferredRead = async () =>
+    await readPublicDecisionLanguageAlternatesByGroup();
   return deferredRead;
 };
 

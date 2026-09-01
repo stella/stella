@@ -445,6 +445,10 @@ type Messages = {
     "filters": {
       "searchPlaceholder": "Search by case number...";
     };
+    "languages": {
+      "count": "{count, plural, one {# language} other {# languages}}";
+      "matchedIn": "Matched in {language}";
+    };
     "loadingMore": "Loading more...";
     "provision": {
       "article": "Art. {value}";
