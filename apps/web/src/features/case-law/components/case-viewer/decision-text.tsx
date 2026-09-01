@@ -506,18 +506,10 @@ const renderBlocksWithHoldingZone = ({
           group.blocks,
           apparatusIds,
           apparatusLabel,
-          (block) =>
-            isHoldingBlock(block) ? (
-              <div className="font-[520]" key={block.id}>
-                <BlockRenderer
-                  activeMatchIndex={activeMatchIndex}
-                  anchorsByPieceId={anchorsByPieceId}
-                  block={block}
-                  rangesByPieceId={rangesByPieceId}
-                  variant="case-law"
-                />
-              </div>
-            ) : (
+          (block) => {
+            // One renderer for every block: a footnote can carry any role,
+            // holding included, so its grouping travels with it either way.
+            const rendered = (
               <BlockRenderer
                 activeMatchIndex={activeMatchIndex}
                 anchorsByPieceId={anchorsByPieceId}
@@ -528,7 +520,15 @@ const renderBlocksWithHoldingZone = ({
                 rangesByPieceId={rangesByPieceId}
                 variant="case-law"
               />
-            ),
+            );
+            return isHoldingBlock(block) ? (
+              <div className="font-[520]" key={block.id}>
+                {rendered}
+              </div>
+            ) : (
+              rendered
+            );
+          },
         )}
       </div>,
     );
