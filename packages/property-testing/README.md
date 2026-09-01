@@ -64,9 +64,9 @@ not assume a property file is seeded because this package offers it.
 
 ## Environment variables
 
-| Variable | Set by | Effect |
-| --- | --- | --- |
-| `PROPERTY_TEST_NUM_RUNS_FACTOR` | nightly workflow | Scales every property's `numRuns` and `propertyTestTimeout`; also switches `propertySeed()` to exploring. |
-| `PROPERTY_TEST_SEED` | a person replaying a failure | Pins `propertySeed()` to that seed. |
-| `PROPERTY_TEST_TIMEOUT_BASE_MS` | owning test runner | Baseline `propertyTestDefaultTimeout()` scales from. |
-| `CI` | CI | Turns on fast-check verbose reporting, so a failing run logs every shrunk value. |
+| Variable                        | Set by                       | Effect                                                                                                    |
+| ------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `PROPERTY_TEST_NUM_RUNS_FACTOR` | nightly workflow             | Scales every property's `numRuns` and `propertyTestTimeout`; also switches `propertySeed()` to exploring. |
+| `PROPERTY_TEST_SEED`            | a person replaying a failure | Pins `propertySeed()` to that seed.                                                                       |
+| `PROPERTY_TEST_TIMEOUT_BASE_MS` | owning test runner           | Baseline `propertyTestDefaultTimeout()` scales from.                                                      |
+| `CI`                            | CI                           | Turns on fast-check verbose reporting, so a failing run logs every shrunk value.                          |

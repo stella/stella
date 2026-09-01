@@ -52,14 +52,21 @@ const isCi = (): boolean => {
  * fc.assert(fc.property(arb, predicate), propertyConfig({ numRuns: 200 }));
  * ```
  */
-export const propertyConfig = <Ts>(
-  params: fc.Parameters<Ts> = {},
-): fc.Parameters<Ts> => {
+export const propertyConfig = <Ts>({
+  seed,
+  ...params
+}: Omit<fc.Parameters<Ts>, "seed"> & {
+  seed?: number | undefined;
+} = {}): fc.Parameters<Ts> => {
   const factor = readNumRunsFactor(process.env[NUM_RUNS_FACTOR_ENV]);
   const baseNumRuns = params.numRuns ?? FAST_CHECK_DEFAULT_NUM_RUNS;
   return {
     verbose: isCi(),
     ...params,
+    // `propertySeed()` yields undefined under the nightly sweep; fast-check
+    // treats an explicit undefined seed as an unset one, but the exact
+    // optional-property check does not, so the key is omitted instead.
+    ...(seed === undefined ? {} : { seed }),
     numRuns: Math.ceil(baseNumRuns * factor),
   };
 };
