@@ -178,17 +178,18 @@ const answerDecision = async (
   const decision = await caseLawDb(
     async (tx) => await readResearchDecision(tx, decisionId),
   );
-  if (
-    decision === null ||
-    decision.source === null ||
-    !isRedistributable(decision.source.descriptor)
-  ) {
+  if (decision === null) {
+    await fail("decision_unavailable");
+    return;
+  }
+  const { source } = decision;
+  if (source === null || !isRedistributable(source.descriptor)) {
     await fail("decision_unavailable");
     return;
   }
   // Sources carry different reuse terms. One whose terms withhold derived AI
   // use is read and listed, but its text is never sent to a model.
-  if (!allowsDerivedAi(decision.source.descriptor)) {
+  if (!allowsDerivedAi(source.descriptor)) {
     await writeOutcomes(
       safeDb,
       input,

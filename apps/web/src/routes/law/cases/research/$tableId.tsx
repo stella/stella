@@ -332,7 +332,7 @@ function ResearchTablePage() {
   });
   // Cells are fetched for the decisions on screen, separately from the rows:
   // they change while a run works, and the poll must not refetch the rows.
-  const answersQuery = useQuery(
+  const { data: answerCells = [] } = useQuery(
     researchAnswersOptions({
       activeOrganizationId,
       tableId,
@@ -340,7 +340,7 @@ function ResearchTablePage() {
     }),
   );
   const answersByKey = new Map(
-    (answersQuery.data ?? []).map((answer) => [
+    answerCells.map((answer) => [
       answerKey(answer.columnId, answer.decisionId),
       answer,
     ]),
@@ -425,7 +425,7 @@ function ResearchTablePage() {
     );
   };
 
-  const pendingCount = (answersQuery.data ?? []).filter(
+  const pendingCount = answerCells.filter(
     (answer) => answer.state === "pending",
   ).length;
 
@@ -433,9 +433,7 @@ function ResearchTablePage() {
   // process serving it went away, its cells stay pending past the stale
   // window (the server marks them); the first reader to notice queues them
   // again, once per visit, and the server skips whatever a live run holds.
-  const hasStalePending = (answersQuery.data ?? []).some(
-    (answer) => answer.stale,
-  );
+  const hasStalePending = answerCells.some((answer) => answer.stale);
   const [resumedStale, setResumedStale] = useState(false);
   useExternalSyncEffect(() => {
     if (!hasStalePending || resumedStale || run.isPending) {
