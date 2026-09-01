@@ -150,6 +150,46 @@ describe("buildGroundedReviewFix", () => {
     });
   });
 
+  test("does not insert a standard written in another language", () => {
+    const czechTarget = [
+      {
+        blockId: "p-1",
+        text: "Poskytovatel odpovídá za škodu způsobenou porušením této smlouvy a nahradí ji objednateli.",
+      },
+    ];
+
+    expect(
+      buildGroundedReviewFix({
+        delta: { kind: "language" },
+        proposedText:
+          "The provider is liable for damage caused by a breach of this agreement and shall compensate the customer.",
+        supportingEvidenceVerified: true,
+        targetAnchors: czechTarget,
+      }),
+    ).toBeNull();
+  });
+
+  test("allows a cross-language replacement only when explicitly requested", () => {
+    expect(
+      buildGroundedReviewFix({
+        delta: { kind: "language" },
+        proposedText: "The provider is liable for damage caused by a breach.",
+        supportingEvidenceVerified: true,
+        targetAnchors: [
+          {
+            blockId: "p-1",
+            text: "Poskytovatel odpovídá za škodu způsobenou porušením této smlouvy a nahradí ji objednateli.",
+          },
+        ],
+        translationRequested: true,
+      }),
+    ).toEqual({
+      kind: "replaceBlock",
+      blockId: "p-1",
+      text: "The provider is liable for damage caused by a breach.",
+    });
+  });
+
   test("an ungrounded conclusion never becomes an executable edit", () => {
     expect(
       buildGroundedReviewFix({

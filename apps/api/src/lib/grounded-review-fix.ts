@@ -11,6 +11,7 @@
 
 import type { ReviewDelta } from "@/api/lib/document-review/review-delta";
 import type { DocxFolioCitation } from "@/api/lib/document-review/review-extract";
+import { detectDocumentTranslationSourceLanguage } from "@/api/lib/document-translation/source-language";
 
 export type GroundedReviewFix =
   | { kind: "replaceInBlock"; blockId: string; find: string; replace: string }
@@ -29,6 +30,20 @@ type BuildGroundedReviewFixArgs = {
   /** Verified target citations, in the order the engine cited them. The first
    *  is the semantic anchor; this boundary never invents one from position. */
   targetAnchors: readonly DocxFolioCitation[];
+  /** Translation is an explicit user action; review fixes preserve the target
+   * document's language by default, even when the standard is multilingual. */
+  translationRequested?: boolean;
+};
+
+const matchesTargetLanguage = (
+  targetText: string,
+  proposedText: string,
+): boolean => {
+  const target = detectDocumentTranslationSourceLanguage(targetText);
+  const proposed = detectDocumentTranslationSourceLanguage(proposedText);
+  return target.type !== "detected" || proposed.type !== "detected"
+    ? true
+    : target.language === proposed.language;
 };
 
 /** Occurrences of `needle` in `haystack`; `needle` is never empty here. */
@@ -51,6 +66,7 @@ const countOccurrences = (haystack: string, needle: string): number => {
 const buildParameterFix = (
   delta: Extract<ReviewDelta, { kind: "parameter" }>,
   proposedText: string | null | undefined,
+  translationRequested: boolean,
 ): GroundedReviewFix | null => {
   const target = delta.target;
   if (target === null) {
@@ -62,6 +78,12 @@ const buildParameterFix = (
     return null;
   }
   if (countOccurrences(target.citation.text, find) !== 1) {
+    return null;
+  }
+  if (
+    !translationRequested &&
+    !matchesTargetLanguage(target.citation.text, replace)
+  ) {
     return null;
   }
   return {
@@ -81,17 +103,27 @@ export const buildGroundedReviewFix = ({
   proposedText,
   supportingEvidenceVerified,
   targetAnchors,
+  translationRequested = false,
 }: BuildGroundedReviewFixArgs): GroundedReviewFix | null => {
   if (!supportingEvidenceVerified) {
     return null;
   }
   if (delta.kind === "parameter") {
-    return buildParameterFix(delta, proposedText);
+    return buildParameterFix(delta, proposedText, translationRequested);
   }
 
   const text = proposedText?.trim();
   const blockId = targetAnchors.at(0)?.blockId;
   if (!text || blockId === undefined) {
+    return null;
+  }
+  if (
+    !translationRequested &&
+    !matchesTargetLanguage(
+      targetAnchors.map(({ text: value }) => value).join("\n"),
+      text,
+    )
+  ) {
     return null;
   }
   switch (delta.kind) {
