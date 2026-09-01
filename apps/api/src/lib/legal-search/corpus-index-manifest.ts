@@ -15,6 +15,7 @@ import {
   CORPUS_INDEX_DATE_INPUT_FORMATS,
   DECISION_TIMESTAMP_FIELD,
   FOLDED_TOKENIZER,
+  canonicalCorpusIndexMaturationPeriod,
   type CorpusIndexConfig,
 } from "@/api/lib/legal-search/corpus-index-config";
 import { QUICKWIT_V09_BINARY_VERSION } from "@/api/lib/legal-search/corpus-index-engine-version";
@@ -363,7 +364,19 @@ export const corpusIndexConfigFromManifest = (
   indexId: string,
 ): CorpusIndexConfig => {
   const config = structuredClone(manifest.engine.indexConfig);
-  return { ...config, index_id: indexId };
+  return {
+    ...config,
+    index_id: indexId,
+    indexing_settings: {
+      ...config.indexing_settings,
+      merge_policy: {
+        ...config.indexing_settings.merge_policy,
+        maturation_period: canonicalCorpusIndexMaturationPeriod(
+          config.indexing_settings.merge_policy.maturation_period,
+        ),
+      },
+    },
+  };
 };
 
 /**
