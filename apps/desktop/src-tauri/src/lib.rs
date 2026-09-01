@@ -15,6 +15,7 @@ mod diagnostics;
 mod e2e;
 mod i18n;
 mod keychain;
+mod logging;
 mod relaunch;
 mod session_manager;
 mod session_store;
@@ -31,25 +32,19 @@ macro_rules! generate_stella_handler {
   };
 }
 
+use clipboard::{ClipboardAppState, ClipboardManager};
+use clipboard_commands::ClipboardEditorState;
+use commands::AppState;
+use session_manager::SessionManager;
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartManagerExt};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_notification::NotificationExt;
 use tokio::sync::Mutex;
-use tracing_subscriber::EnvFilter;
-
-use clipboard::{ClipboardAppState, ClipboardManager};
-use clipboard_commands::ClipboardEditorState;
-use commands::AppState;
-use session_manager::SessionManager;
 
 pub fn run() {
-  tracing_subscriber::fmt()
-    .with_env_filter(
-      EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-    )
-    .init();
+  logging::init();
 
   i18n::init();
 
