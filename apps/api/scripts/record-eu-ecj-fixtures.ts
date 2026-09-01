@@ -386,21 +386,22 @@ const recordParserFixtures = async (): Promise<void> => {
 
       const capturedAt = new Date().toISOString();
       for (const { name, bytes, sourceUrl } of staged) {
-        // oxlint-disable-next-line no-await-in-loop -- one write per staged fixture
-        await Bun.write(new URL(name, PARSER_FIXTURES_DIR), bytes);
-        // The sidecar pins the bytes just written; fixture-provenance
+        // The sidecar pins the bytes written beside it; fixture-provenance
         // rechecks the hash on every test run, so a recording and its
         // provenance can never be committed apart.
-        // oxlint-disable-next-line no-await-in-loop -- one sidecar per staged fixture
-        await Bun.write(
-          new URL(provenancePathOf(name), PARSER_FIXTURES_DIR),
-          formatProvenance({
-            capture: "recorded",
-            sha256: sha256Of(bytes),
-            sourceUrl,
-            capturedAt,
-          }),
-        );
+        // oxlint-disable-next-line no-await-in-loop -- one fixture (bytes + sidecar) per iteration
+        await Promise.all([
+          Bun.write(new URL(name, PARSER_FIXTURES_DIR), bytes),
+          Bun.write(
+            new URL(provenancePathOf(name), PARSER_FIXTURES_DIR),
+            formatProvenance({
+              capture: "recorded",
+              sha256: sha256Of(bytes),
+              sourceUrl,
+              capturedAt,
+            }),
+          ),
+        ]);
       }
       log(`  ${stem}: ${staged.map((fixture) => fixture.name).join(", ")}`);
     }
