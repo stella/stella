@@ -140,32 +140,12 @@ describe("collapseSpacedLetters (properties)", () => {
   });
 
   /**
-   * DEFECT, left failing on purpose (the fix belongs in its own PR).
-   *
-   * `collapseSpacedLetters` is not idempotent. It collapses runs whose
-   * letters are separated by exactly one space, and only afterwards
-   * squeezes multi-space runs to one:
-   *
-   *   collapseSpacedLetters("a  b  c  d") === "a b c d"
-   *   collapseSpacedLetters("a b c d")    === "abcd"
-   *
-   * A double-spaced run is invisible to the run regex on the first pass,
-   * and the squeeze then leaves behind exactly the single-spaced shape
-   * the regex was looking for. The same text therefore normalizes to two
-   * different strings depending on how many times the function has run.
-   *
-   * That matters because this function is documented as "the single
-   * source of the threshold", applied at index time during ingestion and
-   * again at query time by the case-viewer's find-in-page normalizer,
-   * precisely so both sides agree and highlight offsets stay aligned.
-   * Two applications disagreeing is the failure that contract exists to
-   * prevent.
-   *
-   * The fix is an ordering change (squeeze before matching, or let the
-   * run regex accept multi-space separators). It changes which runs
-   * collapse, so it needs its own review rather than riding along here.
+   * Regression for the defect this file was written to catch: the
+   * function collapsed more on its second application than on its first,
+   * so index-time and query-time normalization of the same text
+   * disagreed. Fixed by applying the collapse to a fixpoint.
    */
-  test.skip("is idempotent", () => {
+  test("is idempotent", () => {
     fc.assert(
       fc.property(noisyLine, (input) => {
         const once = collapseSpacedLetters(input);
@@ -173,6 +153,49 @@ describe("collapseSpacedLetters (properties)", () => {
         expect(collapseSpacedLetters(once)).toBe(once);
       }),
       config(500),
+    );
+  });
+
+  /**
+   * The same guarantee stated from the other side: text already in normal
+   * form is returned untouched. This is what lets a caller normalize
+   * defensively without risking a second, different collapse.
+   */
+  test("is the identity on text already in normal form", () => {
+    fc.assert(
+      fc.property(noisyLine, (input) => {
+        const normalized = collapseSpacedLetters(input);
+
+        expect(collapseSpacedLetters(normalized)).toBe(normalized);
+      }),
+      config(500),
+    );
+  });
+
+  /**
+   * The specific input that used to need two calls.
+   */
+  test("collapses a run written with two spaces in one call", () => {
+    expect(collapseSpacedLetters("a  b  c  d")).toBe("abcd");
+  });
+
+  /**
+   * Guard against the tempting wrong fix. Widening the pattern's letter
+   * separator to `+` also makes one pass settle, and merges the whole
+   * verdict into one word: a single space separates the letters of an
+   * emphasized word, a wider gap separates two of them. If this ever
+   * reads "Žalobasezamítá", that distinction has been lost.
+   *
+   * "s e" stays spaced because of the documented four-letter floor —
+   * Czech and Slovak spell too many one-letter words to join a shorter
+   * run safely.
+   */
+  test("keeps letter-spaced words apart when the word gap is wider", () => {
+    expect(collapseSpacedLetters("Ž a l o b a  s e  z a m í t á")).toBe(
+      "Žaloba s e zamítá",
+    );
+    expect(collapseSpacedLetters("Ž a l o b a  z a m í t á")).toBe(
+      "Žaloba zamítá",
     );
   });
 });

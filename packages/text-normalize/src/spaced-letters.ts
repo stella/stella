@@ -52,16 +52,59 @@ let lastInput: string | undefined;
 let lastResult: string | undefined;
 
 /**
+ * One collapse pass: join every spaced-letter run, then normalize any
+ * resulting multi-spaces to a single space.
+ *
+ * A pass only ever deletes space characters, so it either leaves the
+ * text alone or makes it strictly shorter. That is what bounds the loop
+ * below.
+ */
+const collapsePass = (text: string): string =>
+  text
+    .replace(spacedLetterRunRegex(), (match) => match.replace(SPACE_RE, ""))
+    .replace(MULTI_SPACE_RE, " ");
+
+/**
  * Collapse every spaced-letter run in `text` to its concatenated letters,
- * then normalize any resulting multi-spaces to a single space.
+ * normalizing multi-spaces to a single space.
+ *
+ * Applied to a fixpoint rather than once, so `f(f(x)) === f(x)` holds for
+ * every input. A single pass did not settle: the pattern matches letters
+ * separated by exactly one space, while the multi-space squeeze runs
+ * afterwards, so a run written with two spaces survived the pass and came
+ * out in the very shape the pattern was looking for. The next call then
+ * collapsed what the previous one had not.
+ *
+ * That mattered because the two sides of a search comparison are folded
+ * at different times — index time during ingestion, query time in the
+ * case-viewer's find-in-page — and the query side is handed text the
+ * index side already collapsed. A function that collapsed more on its
+ * second application made those two sides disagree, which is exactly the
+ * alignment this module exists to guarantee.
+ *
+ * Widening the pattern's separator to `+` would also settle it in one
+ * pass, and is wrong: a single space separates the letters of one
+ * emphasized word, and a wider gap separates two of them. Accepting both
+ * as letter separators collapses `Ž a l o b a  s e  z a m í t á` to
+ * `Žalobasezamítá` — the whole verdict as one word. The loop keeps that
+ * distinction inside each pass.
  */
 export const collapseSpacedLetters = (text: string): string => {
   if (text === lastInput && lastResult !== undefined) {
     return lastResult;
   }
-  const result = text
-    .replace(spacedLetterRunRegex(), (match) => match.replace(SPACE_RE, ""))
-    .replace(MULTI_SPACE_RE, " ");
+
+  let result = text;
+  for (;;) {
+    const next = collapsePass(result);
+    // Terminates: a pass that changes anything strictly shortens the
+    // text, and a pass that changes nothing ends the loop.
+    if (next === result) {
+      break;
+    }
+    result = next;
+  }
+
   lastInput = text;
   lastResult = result;
   return result;
