@@ -12,9 +12,9 @@ import {
 
 const EXPECTED_DIGESTS = {
   case_law_v5:
-    "07de324370d49c611adfaa9b0667853a936a33deaf16e36d69859c051bdfdce4",
+    "7ee1e1bdbc0a1c746407333cac6eba21446d32b0eca461235569eac4197ed0ce",
   legislation_v2:
-    "4b10263aa850392fc929b596a776a7bda7746d39e190a4224aeb54510b310fba",
+    "dc252d8635081d8037e7f9b1aca6713181a27390e8eb6dda54139ae6a1e68583",
 } as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, string>;
 
 test("the final-generation registry is exact and fails closed", () => {
@@ -279,6 +279,13 @@ test("final manifests make every storage and index cost explicit", () => {
       commit_timeout_secs: 60,
       docstore_blocksize: 1_000_000,
       docstore_compression_level: 8,
+      merge_policy: {
+        type: "stable_log",
+        maturation_period: "4hours",
+        merge_factor: 10,
+        max_merge_factor: 12,
+        min_level_num_docs: 100_000,
+      },
       split_num_docs_target: 10_000_000,
       resources: { heap_size: 2_000_000_000 },
     });
