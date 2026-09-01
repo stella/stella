@@ -351,24 +351,6 @@ const renderInline = ({
     );
   }
 
-  // A reporter page boundary hangs in the margin at its own line, the way
-  // the published volume prints it; the link still opens the official scan.
-  // Absolute positioning keeps the marker at the line the inline occupies.
-  if (safeHref.includes("tile.loc.gov")) {
-    return (
-      <a
-        className="reader-page-marker"
-        data-reader-chrome=""
-        href={sanitizeHref(node.href)}
-        key={key}
-        rel="noopener noreferrer"
-        target="_blank"
-      >
-        {children}
-      </a>
-    );
-  }
-
   return (
     <a
       className="decoration-border underline underline-offset-2 hover:decoration-current"
