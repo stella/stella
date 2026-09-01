@@ -350,10 +350,14 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
     const $el = $(el);
     const tag = el.tagName.toLowerCase();
 
-    // A list nested inside a list item is already emitted by
-    // its ancestor's inline walk, which recurses through every
-    // descendant. Processing it again would duplicate its text.
-    if ((tag === "ol" || tag === "ul") && $el.parents("li").length > 0) {
+    // Anything inside a list item is already emitted by that item's
+    // inline walk, which recurses through the whole subtree, so
+    // matching a descendant block here would duplicate its text.
+    // Aspose commonly wraps item content in a <p>, and a nested list
+    // in a <ul>/<ol>. A <table> inside an item therefore reaches the
+    // AST as the item's flattened text rather than as a table block:
+    // that is rule 10's trade, completeness before fidelity.
+    if ($el.parents("li").length > 0) {
       return;
     }
 

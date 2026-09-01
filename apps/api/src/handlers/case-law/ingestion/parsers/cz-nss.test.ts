@@ -370,6 +370,31 @@ describe("parseNssDecisionHtml", () => {
       expect(bullet?.plainText).not.toMatch(/^[IVX]+\.\s/u);
     });
 
+    test("emits a block-wrapped list item exactly once", () => {
+      const wrappedHtml = bulletHtml.replace(
+        "<p>[2] Krajský soud žalobu zamítl.</p>",
+        `<ul type="disc">
+          <li><p>zabalená položka</p></li>
+        </ul>
+        <ol type="I">
+          <li><p>zabalený výrok</p></li>
+        </ol>
+        <p>[2] Krajský soud žalobu zamítl.</p>`,
+      );
+
+      const { documentAst, fulltext } = parseNssDecisionHtml(
+        baseInput(wrappedHtml),
+      );
+
+      const countIn = (needle: string) =>
+        documentAst.blocks.filter((block) => block.plainText.includes(needle))
+          .length;
+
+      expect(countIn("zabalená položka")).toBe(1);
+      expect(countIn("zabalený výrok")).toBe(1);
+      expect(fulltext.split("zabalená položka").length - 1).toBe(1);
+    });
+
     test("emits each bullet exactly once when a list is nested", () => {
       const nestedHtml = bulletHtml.replace(
         "<p>[2] Krajský soud žalobu zamítl.</p>",
