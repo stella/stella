@@ -127,7 +127,7 @@ const hasOnlyDecimalDigits = (
   }
   for (let index = start; index < end; index += 1) {
     const code = value.codePointAt(index);
-    if (code < 48 || code > 57) {
+    if (code === undefined || code < 48 || code > 57) {
       return false;
     }
   }
