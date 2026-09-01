@@ -9,6 +9,7 @@ import {
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH } from "@stll/api-contract";
 import type { CaseLawResearchDisposition } from "@stll/api-contract";
 import {
   AlertDialog,
@@ -248,8 +249,8 @@ function ResearchTablePage() {
         <div className="min-w-0 flex-1">
           <TableNameField
             name={detail.table.name}
-            onRename={(name) => {
-              detached(rename.mutateAsync(name), "case-law.research.rename");
+            onRename={async (name) => {
+              await rename.mutateAsync(name);
             }}
           />
           <SavedQuerySummary table={detail.table} />
@@ -409,14 +410,15 @@ function ResearchTablePage() {
 
 /**
  * The table's name, edited in place. The field owns the draft while it has
- * focus and hands it back on blur or Enter; the server value wins otherwise.
+ * focus and hands it back on blur or Enter; the server value wins otherwise,
+ * including when the rename is refused (the caller has already reported it).
  */
 function TableNameField({
   name,
   onRename,
 }: {
   name: string;
-  onRename: (name: string) => void;
+  onRename: (name: string) => Promise<void>;
 }) {
   const t = useTranslations();
   const [draft, setDraft] = useState(name);
@@ -433,7 +435,12 @@ function TableNameField({
       return;
     }
     if (trimmed !== name) {
-      onRename(trimmed);
+      detached(
+        onRename(trimmed).catch(() => {
+          setDraft(name);
+        }),
+        "case-law.research.rename",
+      );
     }
   };
 
@@ -441,7 +448,7 @@ function TableNameField({
     <Input
       aria-label={t("common.name")}
       className="hover:border-input focus-visible:border-input h-9 max-w-xl border-transparent bg-transparent px-1 text-lg font-semibold shadow-none"
-      maxLength={256}
+      maxLength={CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH}
       onBlur={commit}
       onChange={(event) => setDraft(event.currentTarget.value)}
       onKeyDown={(event) => {

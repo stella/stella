@@ -8,6 +8,9 @@ import type { SafeId } from "./safe-id";
  */
 export const CASE_LAW_RESEARCH_QUERY_VERSION = 1 as const;
 
+/** A table's name; a search saved as a table is cut to this before it is sent. */
+export const CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH = 256;
+
 /** How one decision deviates from what the saved query returns. */
 export const CASE_LAW_RESEARCH_DISPOSITIONS = ["pinned", "excluded"] as const;
 

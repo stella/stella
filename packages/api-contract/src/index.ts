@@ -280,6 +280,7 @@ export { encodeRfc3986Component } from "./rfc3986";
 export {
   CASE_LAW_RESEARCH_DISPOSITIONS,
   CASE_LAW_RESEARCH_QUERY_VERSION,
+  CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH,
 } from "./case-law-research";
 export type {
   CaseLawResearchDisposition,

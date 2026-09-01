@@ -3,6 +3,7 @@ import { t } from "elysia";
 import {
   CASE_LAW_RESEARCH_DISPOSITIONS,
   CASE_LAW_RESEARCH_QUERY_VERSION,
+  CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH,
 } from "@stll/api-contract";
 
 import type { caseLawResearchTables } from "@/api/db/schema";
@@ -27,7 +28,7 @@ export const researchSavedQueryBodySchema = t.Object(
 
 export const researchTableNameSchema = t.String({
   minLength: 1,
-  maxLength: 256,
+  maxLength: CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH,
 });
 
 export const researchTableParamsSchema = t.Object({

@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -39,7 +40,9 @@ export const ResearchTableActions = ({
     mutationFn: async (query: string) =>
       unwrapEden(
         await api.case.research.post({
-          name: query,
+          // A search may be longer than a name; the words still identify the
+          // table and can be renamed in place.
+          name: query.slice(0, CASE_LAW_RESEARCH_TABLE_NAME_MAX_LENGTH),
           savedQuery: decisionFiltersToSavedQuery({
             ...filters,
             search: query,

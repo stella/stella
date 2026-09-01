@@ -83,7 +83,12 @@ const setResearchTableDecision = createSafeRootHandler(
           .select({
             count: sql<number>`count(*)::int`,
             maxPosition: sql<number>`coalesce(max(${caseLawResearchTableDecisions.position}), 0)::int`,
-            alreadyPresent: sql<boolean>`bool_or(${caseLawResearchTableDecisions.decisionId} = ${decisionId})`,
+            alreadyPresent: sql<boolean>`coalesce(bool_or(${caseLawResearchTableDecisions.decisionId} = ${decisionId}), false)`,
+            // The decision's current pin slot, so a repeated pin (a retry, a
+            // double click) keeps its place instead of moving to the end.
+            pinnedPosition: sql<
+              number | null
+            >`max(${caseLawResearchTableDecisions.position}) filter (where ${caseLawResearchTableDecisions.decisionId} = ${decisionId} and ${caseLawResearchTableDecisions.disposition} = 'pinned')`,
           })
           .from(caseLawResearchTableDecisions)
           .where(eq(caseLawResearchTableDecisions.tableId, tableId));
@@ -95,8 +100,14 @@ const setResearchTableDecision = createSafeRootHandler(
         ) {
           return { status: "limit" as const };
         }
-        const position =
-          disposition === "pinned" ? (aggregate?.maxPosition ?? 0) + 1 : 0;
+        const pinnedPosition = aggregate?.pinnedPosition ?? null;
+        let position = 0;
+        if (disposition === "pinned") {
+          position =
+            pinnedPosition === null
+              ? (aggregate?.maxPosition ?? 0) + 1
+              : pinnedPosition;
+        }
 
         await tx
           .insert(caseLawResearchTableDecisions)

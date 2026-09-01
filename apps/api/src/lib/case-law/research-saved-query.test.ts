@@ -4,6 +4,7 @@ import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import { parseCaseLawResearchSavedQuery } from "@/api/lib/case-law/research-saved-query";
 
 const isoDate = fc
@@ -30,7 +31,7 @@ const validQuery = fc.record(
     dateTo: isoDate,
     decisionType: filterText(32),
     language: filterText(8),
-    sourceId: fc.uuid(),
+    sourceId: fc.uuid().map((id) => toSafeId<"caseLawSource">(id)),
   },
   { requiredKeys: ["version", "query"] },
 );
