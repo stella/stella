@@ -466,6 +466,9 @@
       "sentence": "zdanie {value}",
       "subsection": "ust. {value}"
     },
+    "reader": {
+      "headMatter": "Część wstępna"
+    },
     "seo": {
       "browse": "Przeglądaj orzecznictwo",
       "countries": "Kraje",

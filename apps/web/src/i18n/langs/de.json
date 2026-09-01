@@ -466,6 +466,9 @@
       "sentence": "Satz {value}",
       "subsection": "Abs. {value}"
     },
+    "reader": {
+      "headMatter": "Rubrum"
+    },
     "seo": {
       "browse": "Rechtsprechung durchsuchen",
       "countries": "Länder",

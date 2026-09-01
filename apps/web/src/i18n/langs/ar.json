@@ -466,6 +466,9 @@
       "sentence": "الجملة {value}",
       "subsection": "الفقرة {value}"
     },
+    "reader": {
+      "headMatter": "الديباجة"
+    },
     "seo": {
       "browse": "تصفّح الاجتهاد القضائي",
       "countries": "الدول",

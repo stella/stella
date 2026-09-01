@@ -469,6 +469,9 @@ type Messages = {
       "sentence": "sentence {value}";
       "subsection": "para. {value}";
     };
+    "reader": {
+      "headMatter": "Head matter";
+    };
     "seo": {
       "browse": "Browse case law";
       "countries": "Countries";

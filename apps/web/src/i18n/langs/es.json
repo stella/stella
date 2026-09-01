@@ -466,6 +466,9 @@
       "sentence": "frase {value}",
       "subsection": "apdo. {value}"
     },
+    "reader": {
+      "headMatter": "Encabezamiento"
+    },
     "seo": {
       "browse": "Explorar jurisprudencia",
       "countries": "Países",

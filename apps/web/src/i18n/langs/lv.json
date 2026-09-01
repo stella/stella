@@ -466,6 +466,9 @@
       "sentence": "{value}. teikums",
       "subsection": "{value}. daļa"
     },
+    "reader": {
+      "headMatter": "Ievaddaļa"
+    },
     "seo": {
       "browse": "Pārlūkot judikatūru",
       "countries": "Valstis",

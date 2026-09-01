@@ -466,6 +466,9 @@
       "sentence": "phrase {value}",
       "subsection": "al. {value}"
     },
+    "reader": {
+      "headMatter": "En-tête"
+    },
     "seo": {
       "browse": "Parcourir la jurisprudence",
       "countries": "Pays",

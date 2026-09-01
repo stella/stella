@@ -466,6 +466,9 @@
       "sentence": "{value} sakinys",
       "subsection": "{value} d."
     },
+    "reader": {
+      "headMatter": "Antraštinė dalis"
+    },
     "seo": {
       "browse": "Naršyti teismų praktiką",
       "countries": "Šalys",

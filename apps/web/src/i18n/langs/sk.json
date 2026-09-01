@@ -466,6 +466,9 @@
       "sentence": "veta {value}",
       "subsection": "ods. {value}"
     },
+    "reader": {
+      "headMatter": "Úvodná časť"
+    },
     "seo": {
       "browse": "Prehliadať judikatúru",
       "countries": "Krajiny",

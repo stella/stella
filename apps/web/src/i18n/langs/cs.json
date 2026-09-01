@@ -466,6 +466,9 @@
       "sentence": "věta {value}",
       "subsection": "odst. {value}"
     },
+    "reader": {
+      "headMatter": "Úvodní část"
+    },
     "seo": {
       "browse": "Procházet judikaturu",
       "countries": "Země",
