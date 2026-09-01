@@ -47,3 +47,19 @@ test("retains Firefox and WebKit frames without URL metadata", async ({
   expect(captured.redactedStack).not.toContain("matter=private");
   expect(captured.redactedStack).not.toContain("client");
 });
+
+test("drops Firefox and WebKit stacks that open with message text", async ({
+  page,
+}) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  const captured = await page.evaluate(() =>
+    window.captureHeaderInjectedError(),
+  );
+
+  expect(captured.originalStack).toMatch(/^Privileged matter client name\n/u);
+  expect(captured.originalStack).toContain("captureHeaderInjectedError@");
+  expect(captured.name).toBe("TypeError");
+  expect(captured.message).toBe("");
+  expect(captured.redactedStack).toBeUndefined();
+});

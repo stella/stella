@@ -449,6 +449,46 @@ describe("PostHog browser analytics adapter", () => {
     },
   );
 
+  test("stack redaction drops a callsite stack that starts with message text", () => {
+    expect(
+      redactTelemetryStack({
+        errorType: "Error",
+        stack: [
+          "Privileged document name",
+          "clientName@https://stella.test/assets/private.js:20:5",
+        ].join("\n"),
+        syntax: "callsite",
+      }),
+    ).toBeUndefined();
+  });
+
+  // A header whose message is frame-shaped is still a header: no engine
+  // may read it as a frame, with or without frames beneath it.
+  test.each(["callsite", "v8"] as const)(
+    "stack redaction drops a frame-shaped header under %s syntax",
+    (syntax) => {
+      expect(
+        redactTelemetryStack({
+          errorType: "TypeError",
+          stack:
+            "TypeError: notify jane@https://my.stll.app/matters/Client-Smith:1:2",
+          syntax,
+        }),
+      ).toBeUndefined();
+    },
+  );
+
+  test("stack redaction keeps callsite frames under a native built-in frame", () => {
+    const frame = "renderMatter@https://stella.test/assets/index.js:10:15";
+    expect(
+      redactTelemetryStack({
+        errorType: "SyntaxError",
+        stack: ["parse@[native code]", frame].join("\n"),
+        syntax: "callsite",
+      }),
+    ).toBe(["SyntaxError:", frame].join("\n"));
+  });
+
   const URL_METADATA_FRAMES = {
     callsiteQuery: {
       frame:

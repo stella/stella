@@ -22,7 +22,24 @@ const deepestCause = (error: Error): Error => {
 const V8_STACK_FRAME_SYNTAX = /^\s+at /u;
 const CALLSITE_STACK_FRAME_SYNTAX =
   /^(?:[Aa]sync\*)?(?:[\p{ID_Continue}$.<>[\]#~/]{0,120}|(?:global|module|eval) code)@\S+:\d+:\d+$/u;
+// JavaScriptCore reports built-ins as `<symbol>@[native code]`: no location
+// to keep, but a genuine stack start.
+const CALLSITE_NATIVE_FRAME_SYNTAX =
+  /^(?:[Aa]sync\*)?[\p{ID_Continue}$.<>[\]#~/]{0,120}@\[native code\]$/u;
 type StackFrameSyntax = "callsite" | "v8";
+
+// Neither callsite engine writes a header, so a stack whose first line is not
+// a frame was assembled by hand (a copied message, a rehydrated V8 stack).
+// Callsite-shaped lines below such a line are indistinguishable from message
+// content, so the whole stack is untrusted.
+const startsWithCallsiteFrame = (lines: readonly string[]): boolean => {
+  const first = lines.find((line) => line.length > 0);
+  return (
+    first !== undefined &&
+    (CALLSITE_STACK_FRAME_SYNTAX.test(first) ||
+      CALLSITE_NATIVE_FRAME_SYNTAX.test(first))
+  );
+};
 
 const hasOnlyDecimalDigits = (
   value: string,
@@ -129,10 +146,14 @@ export const redactTelemetryStack = ({
   stack,
   syntax,
 }: RedactTelemetryStackOptions): string | undefined => {
+  const lines = stack.split("\n");
+  if (syntax === "callsite" && !startsWithCallsiteFrame(lines)) {
+    return undefined;
+  }
   const frameSyntax =
     syntax === "callsite" ? CALLSITE_STACK_FRAME_SYNTAX : V8_STACK_FRAME_SYNTAX;
   const frames: string[] = [];
-  for (const line of stack.split("\n")) {
+  for (const line of lines) {
     if (!frameSyntax.test(line)) {
       continue;
     }
