@@ -14,8 +14,6 @@ minimumReleaseAgeExcludes = [
   # the normal five-day quarantine admits the currently pinned release.
   # TanStack's paired SSR releases stream query arrays, avoiding an undefined
   # whole-state hydration path with Query 5.102.5. Keep the pair coherent.
-  "@tanstack/react-router-ssr-query", # quarantine-expires: 2026-08-31T23:36:29.534Z
-  "@tanstack/router-ssr-query-core", # quarantine-expires: 2026-08-31T23:36:29.277Z
   # @silurus/ooxml 0.82.1 adds host-controlled XLSX viewer chrome colors.
   # Remove this exception once the normal quarantine admits it.
   # @vscode/markdown-editor ships near-daily pre-release builds; the hybrid
