@@ -214,6 +214,14 @@ const bootstrapCaseLaw = async (
       ? []
       : [gt(caseLawDecisions.id, afterEntityId)]),
   ];
+  const projectionConditions = [
+    eq(corpusIndexProjectionStates.family, "case_law"),
+    eq(corpusIndexProjectionStates.generation, generation),
+    eq(corpusIndexProjectionStates.entityId, caseLawDecisions.id),
+    ...(afterEntityId === undefined
+      ? []
+      : [gt(corpusIndexProjectionStates.entityId, afterEntityId)]),
+  ];
   const candidates = await tx
     .select({
       documentId: caseLawDecisions.id,
@@ -222,14 +230,7 @@ const bootstrapCaseLaw = async (
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
-    .leftJoin(
-      corpusIndexProjectionStates,
-      and(
-        eq(corpusIndexProjectionStates.family, "case_law"),
-        eq(corpusIndexProjectionStates.generation, generation),
-        eq(corpusIndexProjectionStates.entityId, caseLawDecisions.id),
-      ),
-    )
+    .leftJoin(corpusIndexProjectionStates, and(...projectionConditions))
     .where(and(...conditions))
     .orderBy(asc(caseLawDecisions.id))
     .limit(limit)
@@ -264,14 +265,7 @@ const bootstrapCaseLaw = async (
       projectionEpoch: caseLawDecisions.projectionEpoch,
     })
     .from(caseLawDecisions)
-    .leftJoin(
-      corpusIndexProjectionStates,
-      and(
-        eq(corpusIndexProjectionStates.family, "case_law"),
-        eq(corpusIndexProjectionStates.generation, generation),
-        eq(corpusIndexProjectionStates.entityId, caseLawDecisions.id),
-      ),
-    )
+    .leftJoin(corpusIndexProjectionStates, and(...projectionConditions))
     .where(and(...conditions, inArray(caseLawDecisions.id, candidateIds)))
     .orderBy(asc(caseLawDecisions.id))
     .limit(limit)
@@ -416,6 +410,14 @@ const bootstrapLegislation = async (
       ? []
       : [gt(legislationDocuments.id, afterEntityId)]),
   ];
+  const projectionConditions = [
+    eq(corpusIndexProjectionStates.family, "legislation"),
+    eq(corpusIndexProjectionStates.generation, generation),
+    eq(corpusIndexProjectionStates.entityId, legislationDocuments.id),
+    ...(afterEntityId === undefined
+      ? []
+      : [gt(corpusIndexProjectionStates.entityId, afterEntityId)]),
+  ];
   const candidates = await tx
     .select({
       documentId: legislationDocuments.id,
@@ -427,14 +429,7 @@ const bootstrapLegislation = async (
       legislationSources,
       eq(legislationSources.id, legislationDocuments.sourceId),
     )
-    .leftJoin(
-      corpusIndexProjectionStates,
-      and(
-        eq(corpusIndexProjectionStates.family, "legislation"),
-        eq(corpusIndexProjectionStates.generation, generation),
-        eq(corpusIndexProjectionStates.entityId, legislationDocuments.id),
-      ),
-    )
+    .leftJoin(corpusIndexProjectionStates, and(...projectionConditions))
     .where(and(...conditions))
     .orderBy(asc(legislationDocuments.id))
     .limit(limit)
@@ -468,14 +463,7 @@ const bootstrapLegislation = async (
       projectionEpoch: legislationDocuments.projectionEpoch,
     })
     .from(legislationDocuments)
-    .leftJoin(
-      corpusIndexProjectionStates,
-      and(
-        eq(corpusIndexProjectionStates.family, "legislation"),
-        eq(corpusIndexProjectionStates.generation, generation),
-        eq(corpusIndexProjectionStates.entityId, legislationDocuments.id),
-      ),
-    )
+    .leftJoin(corpusIndexProjectionStates, and(...projectionConditions))
     .where(and(...conditions, inArray(legislationDocuments.id, candidateIds)))
     .orderBy(asc(legislationDocuments.id))
     .limit(limit)
