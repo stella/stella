@@ -127,3 +127,11 @@ export type {
   WorkspaceViewDirection,
   WorkspaceViewDropPosition,
 } from "./view-switcher.logic";
+export { WorkspaceFrame } from "./workspace-frame";
+export type {
+  WorkspaceFrameEndRail,
+  WorkspaceFrameInspector,
+  WorkspaceFrameNavigation,
+  WorkspaceFrameNavigationItem,
+  WorkspaceFrameProps,
+} from "./workspace-frame";

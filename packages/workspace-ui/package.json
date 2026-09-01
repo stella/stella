@@ -44,6 +44,7 @@
     "./table-skeleton-rows": "./src/table-skeleton-rows.tsx",
     "./types": "./src/types.ts",
     "./view-switcher": "./src/view-switcher.tsx",
+    "./workspace-frame": "./src/workspace-frame.tsx",
     "./view-switcher-logic": "./src/view-switcher.logic.ts"
   },
   "publishConfig": {
