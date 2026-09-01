@@ -35,6 +35,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
   listingIdentityKey,
@@ -977,6 +978,32 @@ describe("cz-nss buildDecision", () => {
     return throughJsonb(payload);
   };
 
+  /** Crawl one decision whose citation states the reference given. */
+  const crawledWithCitation = async (citedCaseNumber: string) => {
+    installStub({
+      search: [
+        htmlResponse(
+          searchPage({
+            statedCount: 1,
+            rows: [{ ...MUNICIPAL_ROW, citedCaseNumber }],
+          }),
+        ),
+      ],
+    });
+    const listed = await reconciliation.listSlicePage({
+      slice: SLICE,
+      page: 0,
+    });
+    installStub({ search: [] });
+    const built = await reconciliation.buildDecision(
+      throughJsonb(listed.items.at(0)?.payload),
+    );
+    if (built.type !== "built") {
+      throw new TypeError("Expected the fixture decision to build");
+    }
+    return built.decision;
+  };
+
   test("builds a decision from a listed payload", async () => {
     const payload = await listedRow();
     installStub({ search: [] });
@@ -1046,6 +1073,45 @@ describe("cz-nss buildDecision", () => {
     expect(built.decision.metadata["publishedCaseNumber"]).toBe("1 Az 4/2026");
   });
 
+  /**
+   * The refresh check skips a row whose source hash stands still, so a row
+   * stored before the sheet was read has to hash differently once its listing
+   * states one. Without this the recovered sheet never reaches the row.
+   */
+  test("a citation that states a sheet number moves the source hash", async () => {
+    const withSheet = await crawledWithCitation("1 Az 4/2026-79");
+    const withoutSheet = await crawledWithCitation("1 Az 4/2026");
+
+    expect(withSheet.sheetNumber).toBe("79");
+    expect(withoutSheet.sheetNumber).toBeUndefined();
+    expect(withSheet.rawHash).not.toBe(withoutSheet.rawHash);
+  });
+
+  /**
+   * The other half of that bargain: a row the court states no sheet for gains
+   * nothing from this change and must not be rewritten for it. The literal is
+   * the hash's pre-existing input, so re-hashing the sheetless corpus cannot
+   * happen without editing this line.
+   */
+  test("a citation with no sheet number hashes as it did before", async () => {
+    const decision = await crawledWithCitation("1 Az 4/2026");
+
+    expect(decision.rawHash).toBe(
+      hashContent("1 Az 4/2026|2026-06-10|rozsudek"),
+    );
+  });
+
+  test("the court's spacing does not move the source hash", async () => {
+    const tight = await crawledWithCitation("1 Az 4/2026-79");
+    const spaced = await crawledWithCitation("1 Az 4/2026 - 79");
+
+    // Spacing is typography, not the document moving. Were it hashed, a court
+    // re-spacing its citations would rewrite its whole corpus, and a legacy
+    // row would never agree with the crawl that re-reads it.
+    expect(spaced.rawHash).toBe(tight.rawHash);
+    expect(spaced.metadata["publishedCaseNumber"]).toBe("1 Az 4/2026 - 79");
+  });
+
   test("replays stored HTML to the same result without contacting the court", async () => {
     const payload = await listedRow();
     installStub({ search: [] });
@@ -1088,6 +1154,97 @@ describe("cz-nss buildDecision", () => {
     // sheet back off the stored reference, and a replay that dropped it would
     // clear the column on every row it touched.
     expect(outcome.result.sheetNumber).toBe("79");
+  });
+
+  /** Replay one stored row, stated as the database holds it. */
+  const replayStored = async ({
+    caseNumber,
+    metadata,
+  }: {
+    caseNumber: string;
+    metadata: Record<string, unknown>;
+  }) => {
+    const decision = await crawledWithCitation("1 Az 4/2026-79");
+    const reparse = czNssAdapter.reparseStoredRaw;
+    if (reparse === undefined) {
+      throw new TypeError("Expected cz-nss to implement stored-raw replay");
+    }
+    globalThis.fetch = asFetchMock(() => {
+      throw new TypeError("Stored-raw replay must not contact the publisher");
+    });
+
+    const outcome = await reparse({
+      raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+      contentType: decision.sourceRawContentType ?? null,
+      caseNumber,
+      sourceDocumentId: decision.sourceDocumentId ?? null,
+      language: decision.language,
+      court: decision.court,
+      ecli: decision.ecli ?? null,
+      decisionDate: decision.decisionDate ?? null,
+      decisionType: decision.decisionType ?? null,
+      sourceUrl: decision.sourceUrl ?? null,
+      documentUrl: decision.documentUrl ?? null,
+      metadata,
+    } satisfies StoredRawReparseInput);
+
+    return { crawled: decision, outcome };
+  };
+
+  /**
+   * The shape the backfill leaves a legacy row in: the docket in its own
+   * column, the sheet in its own, and the reference as the court published it
+   * surviving nowhere but the metadata the older ingest wrote.
+   */
+  test("a replay recovers the published reference a legacy row keeps in metadata", async () => {
+    const { crawled, outcome } = await replayStored({
+      caseNumber: "1 Az 4/2026",
+      metadata: { caseNumber: "1 Az 4/2026 - 79" },
+    });
+
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
+      return;
+    }
+    expect(outcome.result.sheetNumber).toBe("79");
+    expect(outcome.result.metadata["publishedCaseNumber"]).toBe(
+      "1 Az 4/2026 - 79",
+    );
+    // The reference is stored as the court set it, spacing and all, and the
+    // row still hashes as the crawl that re-reads it would hash it.
+    expect(outcome.result.rawHash).toBe(crawled.rawHash);
+  });
+
+  test("a replay reads the sheet off a legacy row the backfill has not reached", async () => {
+    const { outcome } = await replayStored({
+      caseNumber: "1 Az 4/2026 - 79",
+      metadata: { caseNumber: "1 Az 4/2026 - 79" },
+    });
+
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
+      return;
+    }
+    // The case number is left exactly as stored: the replay's identity check
+    // compares it against the row, and the backfill owns that rewrite.
+    expect(outcome.result.caseNumber).toBe("1 Az 4/2026 - 79");
+    expect(outcome.result.sheetNumber).toBe("79");
+  });
+
+  test("a replay leaves a metadata reference naming another case alone", async () => {
+    const { outcome } = await replayStored({
+      caseNumber: "1 Az 4/2026",
+      metadata: { caseNumber: "9 As 9/2026-12" },
+    });
+
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
+      return;
+    }
+    // Metadata is the publisher's, not ours: a field naming another docket
+    // buys this row no sheet.
+    expect(outcome.result.sheetNumber).toBeUndefined();
+    expect(outcome.result.metadata["publishedCaseNumber"]).toBe("1 Az 4/2026");
   });
 
   test("refuses to write a row whose document the court did not serve", async () => {
