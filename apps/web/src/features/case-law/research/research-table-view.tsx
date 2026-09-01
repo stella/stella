@@ -178,9 +178,12 @@ const groupRows = (
   const groups = new Map<string, ResearchRow<Decision>[]>();
   for (const row of rows) {
     const key = decisionGroupKey(groupBy, row.decision) ?? "";
-    const bucket = groups.get(key) ?? [];
-    bucket.push(row);
-    groups.set(key, bucket);
+    const bucket = groups.get(key);
+    if (bucket === undefined) {
+      groups.set(key, [row]);
+    } else {
+      bucket.push(row);
+    }
   }
   return [...groups.entries()].map(([key, groupedRows]) => ({
     key,

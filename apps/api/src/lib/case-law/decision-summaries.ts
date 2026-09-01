@@ -67,10 +67,7 @@ export const readPublicDecisionSummaries = async ({
 
   return rows.map(({ languageGroupKey, ...row }) => ({
     ...row,
-    languageAlternates:
-      languageGroupKey === null
-        ? []
-        : (alternatesByGroupKey.get(languageGroupKey) ?? []),
+    languageAlternates: alternatesByGroupKey.alternatesFor(languageGroupKey),
     createdAt: row.createdAt.toISOString(),
   }));
 };

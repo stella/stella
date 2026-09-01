@@ -105,9 +105,9 @@ export const Route = createFileRoute("/law/cases/research/$tableId")({
   pendingComponent: ResearchTablePending,
 });
 
-const DEFAULT_VISIBLE_COLUMNS: ReadonlySet<DecisionColumnId> = new Set(
-  DECISION_COLUMN_IDS.filter((id) => id !== "language"),
-);
+/** Every column but the language: the case-number cell already names it. */
+const defaultVisibleColumns = (): ReadonlySet<DecisionColumnId> =>
+  new Set(DECISION_COLUMN_IDS.filter((id) => id !== "language"));
 
 const GROUP_BY_LABEL_KEYS = {
   none: "common.none",
@@ -161,7 +161,7 @@ function ResearchTablePage() {
   const [groupBy, setGroupBy] = useState<DecisionGroupBy>("none");
   const [visibleColumns, setVisibleColumns] = useState<
     ReadonlySet<DecisionColumnId>
-  >(DEFAULT_VISIBLE_COLUMNS);
+  >(defaultVisibleColumns);
   const [showExcluded, setShowExcluded] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
