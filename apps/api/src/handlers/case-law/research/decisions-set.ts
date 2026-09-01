@@ -100,14 +100,10 @@ const setResearchTableDecision = createSafeRootHandler(
         ) {
           return { status: "limit" as const };
         }
-        const pinnedPosition = aggregate?.pinnedPosition ?? null;
-        let position = 0;
-        if (disposition === "pinned") {
-          position =
-            pinnedPosition === null
-              ? (aggregate?.maxPosition ?? 0) + 1
-              : pinnedPosition;
-        }
+        const position =
+          disposition === "pinned"
+            ? (aggregate?.pinnedPosition ?? (aggregate?.maxPosition ?? 0) + 1)
+            : 0;
 
         await tx
           .insert(caseLawResearchTableDecisions)

@@ -34,7 +34,7 @@ const updateResearchTable = createSafeRootHandler(
     session,
   }) {
     const name = body.name?.trim();
-    if (name !== undefined && name.length === 0) {
+    if (name?.length === 0) {
       return Result.err(
         new HandlerError({ status: 400, message: "A name is required" }),
       );

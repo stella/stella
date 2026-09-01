@@ -4,9 +4,9 @@ import * as v from "valibot";
 import { CASE_LAW_RESEARCH_QUERY_VERSION } from "@stll/api-contract";
 import type { CaseLawResearchSavedQuery } from "@stll/api-contract";
 
-import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedCaseLawSourceId } from "@/api/lib/safe-id-boundaries";
 
 // `exactOptional`: an absent filter is absent, never `undefined`, so the parsed
 // value is the contract type itself under `exactOptionalPropertyTypes`.
@@ -39,7 +39,8 @@ export const caseLawResearchSavedQuerySchema = v.strictObject({
     v.pipe(
       v.string(),
       v.uuid(),
-      v.transform((value) => toSafeId<"caseLawSource">(value)),
+      // The id names a stored source; the route schema brands it the same way.
+      v.transform(brandPersistedCaseLawSourceId),
     ),
   ),
 });
