@@ -4,6 +4,20 @@
  */
 export const STATUTES_DEFAULT_COUNTRY = "cze";
 
+/**
+ * Jurisdictions the statutes browser covers, as route segments, with the
+ * region code their names are rendered from. Order is the picker's order.
+ */
+export const STATUTE_COUNTRIES = {
+  cze: { region: "CZ" },
+  svk: { region: "SK" },
+} as const satisfies Record<string, { region: string }>;
+
+export type StatuteCountry = keyof typeof STATUTE_COUNTRIES;
+
+export const isStatuteCountry = (value: string): value is StatuteCountry =>
+  Object.hasOwn(STATUTE_COUNTRIES, value);
+
 const COUNTRY_SEGMENT_PATTERN = /^[a-z]{2,3}$/u;
 
 /** Country segment for a statutes URL: lower-case ISO code, or the default. */

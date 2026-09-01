@@ -3855,7 +3855,7 @@ const ReviewCardActions = ({
         variant="ghost"
       >
         <MessageSquareIcon className="me-1 size-3.5" />
-        {t("inspector.review.askInChat")}
+        {t("common.askInChat")}
       </Button>
     </section>
   );

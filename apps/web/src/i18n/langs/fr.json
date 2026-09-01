@@ -1026,6 +1026,7 @@
     "archive": "Archiver",
     "ask": "Demander",
     "askAI": "Demander à l’IA",
+    "askInChat": "Demander dans le chat",
     "author": "Auteur",
     "back": "Retour",
     "cancel": "Annuler",
@@ -2321,7 +2322,6 @@
       "addReference": "Ajouter {name} comme référence",
       "addTopic": "Ajouter un thème",
       "allDecided": "Tous les constats ici ont été traités.",
-      "askInChat": "Demander dans le chat",
       "assessment": {
         "additionalInTarget": "Supplémentaire dans le document cible",
         "aligned": "Cohérent",
@@ -3688,8 +3688,11 @@
     "provisionHistoryUnavailable": "Impossible de charger l'historique de cette disposition.",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), dans sa rédaction en vigueur depuis le {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "recentlyAmended": "Modifiés récemment",
+    "resolvedAlias": "Reconnu comme {label}",
+    "searchAskPrompt": "{query} (législation : {country})",
     "searchLabel": "Rechercher dans la législation",
-    "searchPlaceholder": "Rechercher par titre ou numéro...",
+    "searchPlaceholder": "Numéro, nom ou intitulé, p. ex. 89/2012 Sb.",
     "showInText": "Afficher dans le texte",
     "status": {
       "current": "En vigueur",

@@ -1026,6 +1026,7 @@
     "archive": "Archiwizuj",
     "ask": "Zapytaj",
     "askAI": "Zapytaj AI",
+    "askInChat": "Zapytaj w czacie",
     "author": "Autor",
     "back": "Wstecz",
     "cancel": "Anuluj",
@@ -2321,7 +2322,6 @@
       "addReference": "Dodaj {name} jako referencję",
       "addTopic": "Dodaj temat",
       "allDecided": "Wszystkie ustalenia zostały rozstrzygnięte.",
-      "askInChat": "Zapytaj w czacie",
       "assessment": {
         "additionalInTarget": "Dodatkowe w dokumencie docelowym",
         "aligned": "Spójne",
@@ -3688,8 +3688,11 @@
     "provisionHistoryUnavailable": "Nie udało się wczytać historii tego przepisu.",
     "provisionPromptSubject": "{provision} aktu {statute} ({eli}) w brzmieniu obowiązującym od {date}",
     "provisionPromptSubjectUndated": "{provision} aktu {statute} ({eli})",
+    "recentlyAmended": "Ostatnio zmienione",
+    "resolvedAlias": "Rozpoznano jako {label}",
+    "searchAskPrompt": "{query} (ustawodawstwo: {country})",
     "searchLabel": "Szukaj w aktach prawnych",
-    "searchPlaceholder": "Szukaj według tytułu lub numeru...",
+    "searchPlaceholder": "Numer, skrót lub tytuł, np. 89/2012 Sb.",
     "showInText": "Pokaż w tekście",
     "status": {
       "current": "Obowiązujący",

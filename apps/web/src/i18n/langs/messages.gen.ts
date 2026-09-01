@@ -1029,6 +1029,7 @@ type Messages = {
     "archive": "Archive";
     "ask": "Ask";
     "askAI": "Ask AI";
+    "askInChat": "Ask in chat";
     "author": "Author";
     "back": "Back";
     "cancel": "Cancel";
@@ -2324,7 +2325,6 @@ type Messages = {
       "addReference": "Add {name} as a reference";
       "addTopic": "Add topic";
       "allDecided": "Every finding here has been decided.";
-      "askInChat": "Ask in chat";
       "assessment": {
         "additionalInTarget": "Additional in target";
         "aligned": "Consistent with references";
@@ -3691,8 +3691,11 @@ type Messages = {
     "provisionHistoryUnavailable": "This provision's history could not be loaded.";
     "provisionPromptSubject": "{provision} of {statute} ({eli}), in the wording in force since {date}";
     "provisionPromptSubjectUndated": "{provision} of {statute} ({eli})";
+    "recentlyAmended": "Recently amended";
+    "resolvedAlias": "Recognized as {label}";
+    "searchAskPrompt": "{query} (legislation of {country})";
     "searchLabel": "Search statutes";
-    "searchPlaceholder": "Search by title or number...";
+    "searchPlaceholder": "Number, name or title, e.g. 89/2012 Sb.";
     "showInText": "Show in the text";
     "status": {
       "current": "In force";

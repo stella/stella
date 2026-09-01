@@ -1,23 +1,29 @@
 import { useCallback, useState } from "react";
 
-import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Button } from "@stll/ui/button";
-import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { StatuteStatusPill } from "@/features/statutes/components/statute-status-pill";
+import {
+  StatuteListRow,
+  StatuteListRowSkeleton,
+} from "@/features/statutes/components/statute-list-row";
+import { StatuteSearch } from "@/features/statutes/components/statute-search";
 import { statutesInfiniteOptions } from "@/features/statutes/queries/statutes";
 import type { StatuteListFilters } from "@/features/statutes/queries/statutes";
 import {
-  EM_DASH,
-  formatValidityDate,
-} from "@/features/statutes/statute-format";
-import { useFormatter } from "@/i18n/formatting-context";
+  parseStatuteQuery,
+  type StatuteQueryIntent,
+} from "@/features/statutes/statute-query-intent";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import {
@@ -29,11 +35,15 @@ import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import {
   createStatuteIndexPath,
   createStatutePath,
+  isStatuteCountry,
   toStatuteCountrySegment,
 } from "@/lib/statute-route";
 
 /** What the route accepts in `q`, and therefore what the field may hold. */
 const MAX_QUERY_LENGTH = 256;
+
+// Stable keys so loading rows never fall back to array-index keys.
+const SKELETON_ROW_KEYS = ["a", "b", "c", "d", "e", "f"] as const;
 
 const searchSchema = v.object({
   q: v.optional(
@@ -48,13 +58,46 @@ const searchSchema = v.object({
 
 type StatutesIndexSearch = v.InferOutput<typeof searchSchema>;
 
+/**
+ * What an entry asks for in this jurisdiction. A country the grammar does
+ * not know reads every entry as text.
+ */
+const readIntent = (
+  country: string,
+  q: string | undefined,
+): StatuteQueryIntent => {
+  if (q === undefined) {
+    return { type: "empty" };
+  }
+  return isStatuteCountry(country)
+    ? parseStatuteQuery(country, q)
+    : { type: "text", text: q };
+};
+
 const createStatuteFilters = (
   country: string,
-  { q }: StatutesIndexSearch,
-): StatuteListFilters => ({
-  country: country.toUpperCase(),
-  ...(q ? { query: q } : {}),
-});
+  intent: StatuteQueryIntent,
+): StatuteListFilters => {
+  const scope = { country: country.toUpperCase() };
+  switch (intent.type) {
+    case "empty":
+      return scope;
+    case "act":
+      return {
+        ...scope,
+        number: `${intent.number}/${intent.year}`,
+        ...(intent.collection === null
+          ? {}
+          : { collection: intent.collection }),
+      };
+    case "text":
+      return { ...scope, query: intent.text };
+    default: {
+      const exhaustive: never = intent;
+      return exhaustive;
+    }
+  }
+};
 
 const createStatutesIndexPath = (
   country: string,
@@ -71,7 +114,12 @@ export const Route = createFileRoute("/law/$country/statutes/")({
   loader: async ({ context: { queryClient }, deps, params }) => {
     const pages = await ensureRouteInfiniteQueryData(
       queryClient,
-      statutesInfiniteOptions(createStatuteFilters(params.country, deps)),
+      statutesInfiniteOptions(
+        createStatuteFilters(
+          params.country,
+          readIntent(params.country, deps.q),
+        ),
+      ),
     );
 
     const firstPage = pages.pages.at(0);
@@ -113,25 +161,59 @@ export const Route = createFileRoute("/law/$country/statutes/")({
   pendingComponent: PublicStatutesIndexPending,
 });
 
+/**
+ * What the list under the box is: the recency shelf when nothing was typed,
+ * the alias the entry was read as, nothing for a plain search or a number.
+ */
+function ListHeading({ intent }: { intent: StatuteQueryIntent }) {
+  const t = useTranslations();
+
+  if (intent.type === "empty") {
+    return <ListHeadingText>{t("statutes.recentlyAmended")}</ListHeadingText>;
+  }
+  if (intent.type === "act" && intent.label !== null) {
+    return (
+      <ListHeadingText>
+        {t("statutes.resolvedAlias", { label: intent.label })}
+      </ListHeadingText>
+    );
+  }
+  return null;
+}
+
+function ListHeadingText({ children }: { children: string }) {
+  return (
+    <h2 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+      {children}
+    </h2>
+  );
+}
+
 function PublicStatutesIndexPending() {
   const t = useTranslations();
 
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       <h1 className="text-lg font-semibold">{t("statutes.title")}</h1>
-      <Skeleton className="h-9 w-full max-w-xs rounded-md" />
-      <div className="flex flex-col gap-2">
-        <Skeleton className="h-14 w-full rounded-md" />
-        <Skeleton className="h-14 w-full rounded-md" />
-        <Skeleton className="h-14 w-full rounded-md" />
+      <div className="flex flex-wrap items-center gap-2">
+        <Skeleton className="h-9 w-36 rounded-md" />
+        <Skeleton className="h-9 w-full max-w-md flex-1 rounded-md" />
       </div>
+      <Skeleton className="h-4 w-40" />
+      <ul className="flex flex-col gap-2">
+        {SKELETON_ROW_KEYS.map((key) => (
+          <li key={key}>
+            <StatuteListRowSkeleton />
+          </li>
+        ))}
+      </ul>
     </main>
   );
 }
 
 function PublicStatutesIndex() {
   const t = useTranslations();
-  const format = useFormatter();
+  const queryClient = useQueryClient();
   const country = Route.useParams({ select: (params) => params.country });
   const search = Route.useSearch({ select: ({ q }) => ({ q }) });
   const navigate = Route.useNavigate();
@@ -172,25 +254,76 @@ function PublicStatutesIndex() {
     }
   }
 
+  const intent = readIntent(country, search.q);
+  const filters = createStatuteFilters(country, intent);
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery({
-      ...statutesInfiniteOptions(createStatuteFilters(country, search)),
+      ...statutesInfiniteOptions(filters),
       placeholderData: keepPreviousData,
     });
 
   const statutes = data ? data.pages.flatMap((page) => page.items) : [];
 
+  // Enter on an act reference opens the act when exactly one work answers
+  // to it. Several (the same number in two collections) stay listed, so the
+  // reader picks; nothing is guessed. The field's value is read directly:
+  // the debounced URL write may still be pending.
+  const openSingleMatch = () => {
+    const submitted = readIntent(country, queryInput.trim() || undefined);
+    if (submitted.type !== "act") {
+      return;
+    }
+    writeQuery.flush();
+    detached(
+      (async () => {
+        const pages = await ensureRouteInfiniteQueryData(
+          queryClient,
+          statutesInfiniteOptions(createStatuteFilters(country, submitted)),
+        );
+        const firstPage = pages.pages.at(0);
+        if (firstPage?.items.length !== 1) {
+          return;
+        }
+        const only = firstPage.items.at(0);
+        if (only === undefined) {
+          return;
+        }
+        await navigate({
+          params: {
+            country: toStatuteCountrySegment(only.country),
+            documentId: only.id,
+          },
+          search:
+            submitted.provision === null ? {} : { jump: submitted.provision },
+          to: "/law/$country/statutes/$documentId",
+        });
+      })(),
+      "statutes.open-match",
+    );
+  };
+
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       <h1 className="text-lg font-semibold">{t("statutes.title")}</h1>
-      <Input
-        aria-label={t("statutes.searchLabel")}
-        className="max-w-xs"
+      <StatuteSearch
+        country={country}
         maxLength={MAX_QUERY_LENGTH}
-        onChange={(event) => handleQueryChange(event.currentTarget.value)}
-        placeholder={t("statutes.searchPlaceholder")}
-        value={queryInput}
+        onCountryChange={(nextCountry) => {
+          detached(
+            navigate({
+              params: { country: nextCountry },
+              search: (previous) => previous,
+              to: "/law/$country/statutes",
+            }),
+            "statutes.switch-country",
+          );
+        }}
+        onQueryChange={handleQueryChange}
+        onSubmit={openSingleMatch}
+        query={queryInput}
       />
+
+      <ListHeading intent={intent} />
 
       {statutes.length === 0 && !isLoading ? (
         <p className="text-muted-foreground text-sm">
@@ -198,34 +331,17 @@ function PublicStatutesIndex() {
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {statutes.map((statute) => (
-            <li key={statute.id}>
-              <Link
-                className="hover:bg-muted/50 block rounded-md border px-4 py-3 transition-colors"
-                params={{
-                  country: toStatuteCountrySegment(statute.country),
-                  documentId: statute.id,
-                }}
-                to="/law/$country/statutes/$documentId"
-              >
-                <span className="text-foreground block font-medium">
-                  {statute.title}
-                </span>
-                <span className="text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-                  <span>{statute.eli}</span>
-                  <StatuteStatusPill status={statute.status} />
-                  <span>
-                    {t("statutes.inForceSince", {
-                      date:
-                        formatValidityDate(statute.versionValidFrom, format) ??
-                        formatValidityDate(statute.effectiveDate, format) ??
-                        EM_DASH,
-                    })}
-                  </span>
-                </span>
-              </Link>
-            </li>
-          ))}
+          {isLoading
+            ? SKELETON_ROW_KEYS.map((key) => (
+                <li key={key}>
+                  <StatuteListRowSkeleton />
+                </li>
+              ))
+            : statutes.map((statute) => (
+                <li key={statute.id}>
+                  <StatuteListRow statute={statute} />
+                </li>
+              ))}
         </ul>
       )}
 

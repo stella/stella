@@ -1026,6 +1026,7 @@
     "archive": "Archivovať",
     "ask": "Opýtať sa",
     "askAI": "Opýtať sa AI",
+    "askInChat": "Opýtať sa v chate",
     "author": "Autor",
     "back": "Späť",
     "cancel": "Zrušiť",
@@ -2321,7 +2322,6 @@
       "addReference": "Pridať {name} ako referenciu",
       "addTopic": "Pridať tému",
       "allDecided": "Všetky zistenia sú rozhodnuté.",
-      "askInChat": "Opýtať sa v chate",
       "assessment": {
         "additionalInTarget": "Navyše v cieľovom dokumente",
         "aligned": "Zhodné",
@@ -3688,8 +3688,11 @@
     "provisionHistoryUnavailable": "Históriu tohto ustanovenia sa nepodarilo načítať.",
     "provisionPromptSubject": "{provision} predpisu {statute} ({eli}) v znení účinnom od {date}",
     "provisionPromptSubjectUndated": "{provision} predpisu {statute} ({eli})",
+    "recentlyAmended": "Naposledy novelizované",
+    "resolvedAlias": "Rozpoznané ako {label}",
+    "searchAskPrompt": "{query} (právne predpisy: {country})",
     "searchLabel": "Hľadať v právnych predpisoch",
-    "searchPlaceholder": "Hľadať podľa názvu alebo čísla...",
+    "searchPlaceholder": "Číslo, skratka alebo názov, napr. 40/1964 Zb.",
     "showInText": "Zobraziť v texte",
     "status": {
       "current": "Účinné",

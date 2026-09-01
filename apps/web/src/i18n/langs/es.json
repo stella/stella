@@ -1026,6 +1026,7 @@
     "archive": "Archivar",
     "ask": "Preguntar",
     "askAI": "Preguntar a la IA",
+    "askInChat": "Preguntar en el chat",
     "author": "Autor",
     "back": "Volver",
     "cancel": "Cancelar",
@@ -2321,7 +2322,6 @@
       "addReference": "Añadir {name} como referencia",
       "addTopic": "Añadir tema",
       "allDecided": "Todos los hallazgos aquí están decididos.",
-      "askInChat": "Preguntar en el chat",
       "assessment": {
         "additionalInTarget": "Adicional en el documento objetivo",
         "aligned": "Alineado",
@@ -3688,8 +3688,11 @@
     "provisionHistoryUnavailable": "No se ha podido cargar el historial de este precepto.",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), en la redacción vigente desde el {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "recentlyAmended": "Modificadas recientemente",
+    "resolvedAlias": "Reconocido como {label}",
+    "searchAskPrompt": "{query} (legislación de {country})",
     "searchLabel": "Buscar en la legislación",
-    "searchPlaceholder": "Buscar por título o número...",
+    "searchPlaceholder": "Número, nombre o título, p. ej. 89/2012 Sb.",
     "showInText": "Ver en el texto",
     "status": {
       "current": "En vigor",

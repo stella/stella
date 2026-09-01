@@ -1026,6 +1026,7 @@
     "archive": "Archivieren",
     "ask": "Fragen",
     "askAI": "KI fragen",
+    "askInChat": "Im Chat fragen",
     "author": "Autor",
     "back": "Zurück",
     "cancel": "Abbrechen",
@@ -2321,7 +2322,6 @@
       "addReference": "{name} als Referenz hinzufügen",
       "addTopic": "Thema hinzufügen",
       "allDecided": "Alle Ergebnisse hier sind entschieden.",
-      "askInChat": "Im Chat fragen",
       "assessment": {
         "additionalInTarget": "Zusätzlich im Zieldokument",
         "aligned": "Übereinstimmend",
@@ -3688,8 +3688,11 @@
     "provisionHistoryUnavailable": "Der Verlauf dieser Vorschrift konnte nicht geladen werden.",
     "provisionPromptSubject": "{provision} von {statute} ({eli}) in der seit {date} geltenden Fassung",
     "provisionPromptSubjectUndated": "{provision} von {statute} ({eli})",
+    "recentlyAmended": "Zuletzt geändert",
+    "resolvedAlias": "Erkannt als {label}",
+    "searchAskPrompt": "{query} (Rechtsvorschriften: {country})",
     "searchLabel": "Rechtsvorschriften durchsuchen",
-    "searchPlaceholder": "Nach Titel oder Nummer suchen...",
+    "searchPlaceholder": "Nummer, Kurzname oder Titel, z. B. 89/2012 Sb.",
     "showInText": "Im Text anzeigen",
     "status": {
       "current": "In Kraft",

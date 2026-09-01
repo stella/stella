@@ -1026,6 +1026,7 @@
     "archive": "Archiválás",
     "ask": "Kérdezés",
     "askAI": "AI megkérdezése",
+    "askInChat": "Kérdezze meg a chatben",
     "author": "Szerző",
     "back": "Vissza",
     "cancel": "Mégse",
@@ -2321,7 +2322,6 @@
       "addReference": "{name} hozzáadása referenciaként",
       "addTopic": "Téma hozzáadása",
       "allDecided": "Itt minden megállapítás eldöntve.",
-      "askInChat": "Kérdezze meg a chatben",
       "assessment": {
         "additionalInTarget": "További elem a céldokumentumban",
         "aligned": "Összhangban",
@@ -3688,8 +3688,11 @@
     "provisionHistoryUnavailable": "A rendelkezés története nem tölthető be.",
     "provisionPromptSubject": "{statute} ({eli}) {provision}, a {date} napjától hatályos szöveg szerint",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "recentlyAmended": "Legutóbb módosított",
+    "resolvedAlias": "Felismerve: {label}",
+    "searchAskPrompt": "{query} ({country} jogszabályai)",
     "searchLabel": "Keresés a jogszabályok között",
-    "searchPlaceholder": "Keresés cím vagy szám alapján...",
+    "searchPlaceholder": "Szám, rövid név vagy cím, pl. 89/2012 Sb.",
     "showInText": "Megjelenítés a szövegben",
     "status": {
       "current": "Hatályos",
