@@ -90,8 +90,8 @@ export const corpusIndexGenerations = p.pgTable(
 );
 
 /**
- * Transaction revisions for projection mutations. Writers append at most one
- * row per generation and transaction, so revision reads do not serialize
+ * Sequence-ordered revisions for projection mutations. Writers append at most
+ * one row per generation and transaction, so revision reads do not serialize
  * unrelated projection work on the generation registry row.
  */
 export const corpusIndexProjectionRevisions = p.pgTable(
@@ -101,7 +101,13 @@ export const corpusIndexProjectionRevisions = p.pgTable(
     generation: p
       .varchar({ length: CORPUS_INDEX_GENERATION_MAX_LENGTH })
       .notNull(),
-    revision: p.bigint({ mode: "number" }).notNull(),
+    revision: p
+      .bigint({ mode: "number" })
+      .generatedAlwaysAsIdentity({
+        name: "corpus_index_projection_revisions_revision_seq",
+        cache: 1,
+      }),
+    transactionId: p.bigint("transaction_id", { mode: "number" }).notNull(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
@@ -119,6 +125,9 @@ export const corpusIndexProjectionRevisions = p.pgTable(
         ],
       })
       .onDelete("cascade"),
+    p
+      .unique("corpus_index_projection_revisions_transaction_unique")
+      .on(t.family, t.generation, t.transactionId),
     p.check(
       "corpus_index_projection_revisions_family_values",
       sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,

@@ -1,12 +1,15 @@
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 
--- Projection revisions are append-only transaction observations. They avoid
--- turning the generation registry into a row-lock mutex for every writer.
+-- Projection revisions are append-only mutation observations. The identity
+-- sequence orders mutation statements; the transaction id only coalesces
+-- repeated statements for one generation inside the same transaction.
 CREATE TABLE "corpus_index_projection_revisions" (
   "family" text NOT NULL,
   "generation" varchar(32) NOT NULL,
-  "revision" bigint NOT NULL,
+  "revision" bigint GENERATED ALWAYS AS IDENTITY
+    (SEQUENCE NAME "corpus_index_projection_revisions_revision_seq" CACHE 1) NOT NULL,
+  "transaction_id" bigint NOT NULL,
   "created_at" timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT "corpus_index_projection_revisions_pkey"
     PRIMARY KEY ("family", "generation", "revision"),
@@ -14,6 +17,8 @@ CREATE TABLE "corpus_index_projection_revisions" (
     FOREIGN KEY ("family", "generation")
     REFERENCES "corpus_index_generations" ("family", "generation")
     ON DELETE CASCADE,
+  CONSTRAINT "corpus_index_projection_revisions_transaction_unique"
+    UNIQUE ("family", "generation", "transaction_id"),
   CONSTRAINT "corpus_index_projection_revisions_family_values"
     CHECK ("family" IN ('case_law','legislation')),
   CONSTRAINT "corpus_index_projection_revisions_revision_positive"
@@ -33,6 +38,8 @@ CREATE POLICY "case_law_ingestion_access"
 GRANT SELECT ON TABLE "corpus_index_projection_revisions" TO stella;--> statement-breakpoint
 GRANT SELECT, INSERT, DELETE ON TABLE "corpus_index_projection_revisions"
   TO stella_ingestion;--> statement-breakpoint
+GRANT USAGE, SELECT ON SEQUENCE
+  "corpus_index_projection_revisions_revision_seq" TO stella_ingestion;--> statement-breakpoint
 
 -- Writers share one transaction lock. Final proof and promotion take its
 -- exclusive counterpart, which waits for in-flight writers and blocks new
@@ -111,9 +118,9 @@ CREATE TRIGGER "corpus_index_generations_projection_lifecycle_fence"
   FOR EACH STATEMENT
   EXECUTE FUNCTION "fence_corpus_projection_generation_lifecycle"();--> statement-breakpoint
 
--- Existing statement triggers keep their names, but now append the current
--- transaction id once per changed generation instead of updating one shared
--- registry row. ON CONFLICT folds multiple statements in one transaction.
+-- Existing statement triggers keep their names. The sequence is deliberately
+-- CACHE 1: a proof under the exclusive fence observes a watermark that every
+-- later mutation must exceed, even when its transaction id was assigned first.
 CREATE OR REPLACE FUNCTION "bump_corpus_projection_revision_from_new"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -122,7 +129,7 @@ SET search_path = pg_catalog, public
 AS $$
 BEGIN
   INSERT INTO public."corpus_index_projection_revisions"
-    ("family", "generation", "revision")
+    ("family", "generation", "transaction_id")
   SELECT DISTINCT
     changed."family",
     changed."generation",
@@ -141,7 +148,7 @@ SET search_path = pg_catalog, public
 AS $$
 BEGIN
   INSERT INTO public."corpus_index_projection_revisions"
-    ("family", "generation", "revision")
+    ("family", "generation", "transaction_id")
   SELECT DISTINCT
     changed."family",
     changed."generation",
@@ -160,7 +167,7 @@ SET search_path = pg_catalog, public
 AS $$
 BEGIN
   INSERT INTO public."corpus_index_projection_revisions"
-    ("family", "generation", "revision")
+    ("family", "generation", "transaction_id")
   SELECT DISTINCT
     changed."family",
     changed."generation",
@@ -184,7 +191,7 @@ SET search_path = pg_catalog, public
 AS $$
 BEGIN
   INSERT INTO public."corpus_index_projection_revisions"
-    ("family", "generation", "revision")
+    ("family", "generation", "transaction_id")
   VALUES (
     NEW."family",
     NEW."generation",
@@ -204,7 +211,7 @@ CREATE TRIGGER "corpus_index_generations_projection_revision_seed"
 
 -- stella-migration-safety: reviewed insert-select - the source is the closed, single-digit generation registry; rollback drops the new table
 INSERT INTO "corpus_index_projection_revisions"
-  ("family", "generation", "revision")
+  ("family", "generation", "transaction_id")
 SELECT
   generation."family",
   generation."generation",

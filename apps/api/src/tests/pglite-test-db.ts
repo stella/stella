@@ -285,6 +285,10 @@ const ROLE_GRANT_STATEMENTS = [
       ${CORPUS_PROJECTION_REVISION_TABLE_SQL}
     TO stella_ingestion
   `,
+  `
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public
+    TO stella_ingestion
+  `,
   // Preserve the v0.7.22 reader contract until its rollback window closes.
   `
     GRANT USAGE ON SCHEMA public TO stella_caselaw_reader

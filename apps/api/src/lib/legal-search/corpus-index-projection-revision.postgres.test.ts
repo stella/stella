@@ -23,6 +23,7 @@ import {
 import {
   lockCorpusIndexProjectionMutationsTx,
   lockCorpusIndexProjectionPromotionTx,
+  readCorpusIndexProjectionRevisionTx,
 } from "./corpus-index-projection-revision";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -326,6 +327,168 @@ if (!databaseUrl || !runPostgresTests) {
             ),
           );
         await Promise.all([writerClient.close(), promotionClient.close()]);
+      }
+    });
+
+    test("a transaction with an older id cannot hide a post-proof mutation", async () => {
+      const olderClient = new SQL({ url: databaseUrl, max: 1 });
+      const newerClient = new SQL({ url: databaseUrl, max: 1 });
+      const proofClient = new SQL({ url: databaseUrl, max: 1 });
+      const olderDb = drizzle({
+        client: olderClient,
+        relations: databaseRelations,
+      });
+      const newerDb = drizzle({
+        client: newerClient,
+        relations: databaseRelations,
+      });
+      const proofDb = drizzle({
+        client: proofClient,
+        relations: databaseRelations,
+      });
+      const suffix = Date.now();
+      const target = {
+        family: "case_law",
+        generation: `case_law_v${suffix}`,
+      } as const;
+      const sourceId = toSafeId<"caseLawSource">(Bun.randomUUIDv7());
+      const entityIds = [
+        toSafeId<"caseLawDecision">(Bun.randomUUIDv7()),
+        toSafeId<"caseLawDecision">(Bun.randomUUIDv7()),
+      ] as const;
+      const allowOlderMutation = Promise.withResolvers<undefined>();
+      const olderIdAssigned = Promise.withResolvers<number>();
+      const olderMutationAttempted = Promise.withResolvers<undefined>();
+      const olderMutationFinished = Promise.withResolvers<undefined>();
+      const releaseProof = Promise.withResolvers<undefined>();
+      const proofLocked = Promise.withResolvers<undefined>();
+      const activeTransactions = new Set<Promise<unknown>>();
+
+      try {
+        await olderDb.insert(caseLawSources).values({
+          id: sourceId,
+          adapterKey: `projection-revision-order-${suffix}`,
+          name: "Projection revision order",
+        });
+        await olderDb.insert(caseLawDecisions).values(
+          entityIds.map((id, index) => ({
+            id,
+            sourceId,
+            caseNumber: `projection-revision-order-${suffix}-${index}`,
+            court: "Projection revision court",
+            country: "CZE",
+            language: "cs",
+            projectionEpoch: 1n,
+          })),
+        );
+        await olderDb.insert(corpusIndexGenerations).values({
+          ...target,
+          cluster: "q09",
+          manifestDigest: "1".repeat(64),
+          status: "building",
+        });
+
+        const olderMutation = olderDb.transaction(async (tx) => {
+          await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
+          const [row] = await tx.execute(sql<{ transactionId: string }>`
+            SELECT pg_current_xact_id()::text AS "transactionId"
+          `);
+          const transactionId = Number(row?.transactionId);
+          expect(Number.isSafeInteger(transactionId)).toBe(true);
+          olderIdAssigned.resolve(transactionId);
+          await allowOlderMutation.promise;
+          olderMutationAttempted.resolve(undefined);
+          await tx.insert(corpusIndexProjectionStates).values({
+            ...target,
+            entityId: entityIds[1],
+            desiredAction: "erase",
+            desiredEpoch: 1n,
+          });
+          olderMutationFinished.resolve(undefined);
+        });
+        activeTransactions.add(olderMutation);
+        const olderTransactionId = await olderIdAssigned.promise;
+
+        const newerTransactionId = await newerDb.transaction(async (tx) => {
+          const [row] = await tx.execute(sql<{ transactionId: string }>`
+            SELECT pg_current_xact_id()::text AS "transactionId"
+          `);
+          await tx.insert(corpusIndexProjectionStates).values({
+            ...target,
+            entityId: entityIds[0],
+            desiredAction: "erase",
+            desiredEpoch: 1n,
+          });
+          return Number(row?.transactionId);
+        });
+        expect(newerTransactionId).toBeGreaterThan(olderTransactionId);
+
+        const proof = proofDb.transaction(async (tx) => {
+          await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
+          const proofRevision = await lockCorpusIndexProjectionPromotionTx(
+            tx,
+            target,
+          );
+          proofLocked.resolve(undefined);
+          await releaseProof.promise;
+          return proofRevision;
+        });
+        activeTransactions.add(proof);
+        await proofLocked.promise;
+        allowOlderMutation.resolve(undefined);
+        await olderMutationAttempted.promise;
+        const mutationOvertookProof = await Promise.race([
+          olderMutationFinished.promise.then(() => true),
+          Bun.sleep(100).then(() => false),
+        ]);
+        expect(mutationOvertookProof).toBe(false);
+
+        releaseProof.resolve(undefined);
+        const [proofRevision] = await Promise.all([proof, olderMutation]);
+        const finalRevision = await proofDb.transaction(
+          async (tx) => await readCorpusIndexProjectionRevisionTx(tx, target),
+        );
+        expect(finalRevision).toBeGreaterThan(proofRevision);
+      } finally {
+        allowOlderMutation.resolve(undefined);
+        releaseProof.resolve(undefined);
+        await Promise.allSettled(activeTransactions);
+        await olderDb
+          .update(corpusIndexGenerations)
+          .set({ status: "retired" })
+          .where(
+            and(
+              eq(corpusIndexGenerations.family, target.family),
+              eq(corpusIndexGenerations.generation, target.generation),
+            ),
+          );
+        await olderDb
+          .delete(corpusIndexProjectionStates)
+          .where(
+            and(
+              eq(corpusIndexProjectionStates.family, target.family),
+              eq(corpusIndexProjectionStates.generation, target.generation),
+            ),
+          );
+        await olderDb
+          .delete(caseLawDecisions)
+          .where(inArray(caseLawDecisions.id, entityIds));
+        await olderDb
+          .delete(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId));
+        await olderDb
+          .delete(corpusIndexGenerations)
+          .where(
+            and(
+              eq(corpusIndexGenerations.family, target.family),
+              eq(corpusIndexGenerations.generation, target.generation),
+            ),
+          );
+        await Promise.all([
+          olderClient.close(),
+          newerClient.close(),
+          proofClient.close(),
+        ]);
       }
     });
 
