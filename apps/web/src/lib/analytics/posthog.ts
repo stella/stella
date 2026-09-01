@@ -116,7 +116,49 @@ const STACK_FRAME_SYNTAX = [
   /^\s+at /u,
   /^(?:[\w$.<>[\]#~/]{0,120}|(?:global|module|eval) code)@\S+:\d+:\d+$/u,
 ] as const;
-const STACK_FRAME_QUERY = /\?[^\s)]*(?=:\d+:\d+\)?$)/u;
+
+const hasOnlyDecimalDigits = (
+  value: string,
+  start: number,
+  end: number,
+): boolean => {
+  if (start >= end) {
+    return false;
+  }
+  for (let index = start; index < end; index += 1) {
+    const code = value.codePointAt(index);
+    if (code < 48 || code > 57) {
+      return false;
+    }
+  }
+  return true;
+};
+
+const stripStackFrameQuery = (frame: string): string => {
+  const frameEnd = frame.endsWith(")") ? frame.length - 1 : frame.length;
+  const columnSeparator = frame.lastIndexOf(":", frameEnd - 1);
+  const lineSeparator = frame.lastIndexOf(":", columnSeparator - 1);
+  if (
+    lineSeparator === -1 ||
+    !hasOnlyDecimalDigits(frame, lineSeparator + 1, columnSeparator) ||
+    !hasOnlyDecimalDigits(frame, columnSeparator + 1, frameEnd)
+  ) {
+    return frame;
+  }
+
+  const v8Prefix = frame.trimStart().startsWith("at ")
+    ? frame.indexOf("at ") + 3
+    : -1;
+  const urlStart =
+    v8Prefix === -1
+      ? frame.indexOf("@") + 1
+      : Math.max(v8Prefix, frame.lastIndexOf("(", lineSeparator) + 1);
+  const query = frame.indexOf("?", urlStart);
+  if (query === -1 || query > lineSeparator) {
+    return frame;
+  }
+  return `${frame.slice(0, query)}${frame.slice(lineSeparator)}`;
+};
 
 const serializedErrorHeader = (error: Error): string => {
   const name = typeof error.name === "string" ? error.name : "Error";
@@ -145,7 +187,7 @@ const redactedStack = (error: Error): string | undefined => {
   const frames = stackWithoutHeader(source, stack)
     .split("\n")
     .filter((line) => STACK_FRAME_SYNTAX.some((syntax) => syntax.test(line)))
-    .map((line) => line.replace(STACK_FRAME_QUERY, ""));
+    .map(stripStackFrameQuery);
   if (frames.length === 0) {
     return undefined;
   }
