@@ -101,7 +101,7 @@ const assertUniqueColumnIdentities = (
   for (const column of columns) {
     const identity = columnIdentity(column);
     if (identities.has(identity)) {
-      throw new Error(`Duplicate Kanban board column identity: ${identity}`);
+      return panic(`Duplicate Kanban board column identity: ${identity}`);
     }
     identities.add(identity);
   }
