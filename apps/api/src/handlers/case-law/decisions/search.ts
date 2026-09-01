@@ -214,8 +214,9 @@ const searchPostgresDecisions = async (
   `;
 
   // A judgment matched in several languages is one result. Its representative
-  // is the matched version with the lowest id: a property of the row and the
-  // query, not of the page, so the keyset cursor stays valid across pages.
+  // is its best-scoring matched version, id as the tie-break: a property of
+  // the row and the query, not of the page, so the keyset cursor stays valid
+  // across pages.
   const representativeFilter = sql`
     (
       m.language_group_key IS NULL
@@ -223,7 +224,7 @@ const searchPostgresDecisions = async (
         SELECT 1
         FROM matched sibling
         WHERE sibling.language_group_key = m.language_group_key
-          AND sibling.decision_id < m.decision_id
+          AND (sibling.score, sibling.decision_id) > (m.score, m.decision_id)
       )
     )
   `;
@@ -615,20 +616,22 @@ export const rehydrateCaseLawCandidates = async ({
     rows.map((row) => [String(row.id), row.citationAuthority]),
   );
 
-  // Candidates missing from Postgres (index/DB drift) are dropped, then the
-  // language versions of one decision fold into their best-scoring member.
+  // Candidates missing from Postgres (index/DB drift) are dropped. Every
+  // version is blended before the fold, so a version whose citation authority
+  // lifts it past a lexically stronger sibling still stands for the judgment;
+  // the versions of one decision then fold into their best-blended member. The
+  // scan's early-stop bound guarantees no unseen version could out-blend an
+  // emitted page, so the representative is the same on every rescan.
+  const ranked = blendStableCitationAuthority({
+    candidates: candidates.filter((candidate) => byId.has(candidate.id)),
+    authorityById,
+  });
   const { representatives } = collapseByLanguageGroup(
-    candidates.filter((candidate) => byId.has(candidate.id)),
-    (candidateId) => byId.get(candidateId)?.languageGroupKey ?? null,
+    ranked,
+    (hitId) => byId.get(hitId)?.languageGroupKey ?? null,
   );
 
-  return {
-    context: { byId },
-    ranked: blendStableCitationAuthority({
-      candidates: representatives,
-      authorityById,
-    }),
-  };
+  return { context: { byId }, ranked: representatives };
 };
 
 const searchCorpusIndexDecisions = async (

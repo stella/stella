@@ -223,15 +223,12 @@ const CaseNumberCell = ({ decision }: { decision: Decision }) => {
   );
 };
 
-const DecisionLink = ({
-  children,
-  className,
-  params,
-}: {
-  children: ReactNode;
-  className: string;
-  params: CaseLawDecisionRouteParams;
-}) =>
+/** The public decision route as a Link element, on whichever of the two routes the params name. */
+const decisionLinkElement = (
+  params: CaseLawDecisionRouteParams,
+  className?: string,
+  children?: ReactNode,
+) =>
   params.language === undefined ? (
     <Link
       className={className}
@@ -258,6 +255,16 @@ const DecisionLink = ({
       {children}
     </Link>
   );
+
+const DecisionLink = ({
+  children,
+  className,
+  params,
+}: {
+  children: ReactNode;
+  className: string;
+  params: CaseLawDecisionRouteParams;
+}) => decisionLinkElement(params, className, children);
 
 const DecisionLanguageMenu = ({
   alternates,
@@ -287,20 +294,19 @@ const DecisionLanguageMenu = ({
         {alternates.map((alternate) => (
           <MenuItem
             key={alternate.id}
-            render={
-              <DecisionLink
-                className="flex w-full items-center"
-                params={createCaseLawDecisionRouteParams({
-                  caseNumber: alternate.caseNumber,
-                  country: alternate.country,
-                  court: alternate.court,
-                  decisionId: alternate.id,
-                  language: alternate.language,
-                  languageAlternates: alternates,
-                  slug: alternate.slug,
-                })}
-              />
-            }
+            // A bare Link element: the menu item merges its role, ref and
+            // keyboard handlers into it, which a wrapper component would drop.
+            render={decisionLinkElement(
+              createCaseLawDecisionRouteParams({
+                caseNumber: alternate.caseNumber,
+                country: alternate.country,
+                court: alternate.court,
+                decisionId: alternate.id,
+                language: alternate.language,
+                languageAlternates: alternates,
+                slug: alternate.slug,
+              }),
+            )}
           >
             {languageLabel(format, alternate.language)}
           </MenuItem>

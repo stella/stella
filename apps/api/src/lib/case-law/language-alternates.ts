@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type {
@@ -45,10 +45,16 @@ export type PublicDecisionLanguageAlternatesByGroup = {
 
 const NO_ALTERNATES: readonly PublicDecisionLanguageAlternate[] = [];
 
+/** The same lower-case, hyphenated form the public routes use for a language. */
+const normalizedLanguageSql = sql<string>`replace(lower(${caseLawDecisions.language}), '_', '-')`;
+const ROUTE_LANGUAGE_PATTERN = "^[a-z]{2,3}(-[a-z0-9]{2,8})*$";
+
 /**
- * Every redistributable language version in the given groups, ordered so that
- * grouping below is deterministic. Bounded per requested group: a
- * malformed or over-merged key cannot make this public read unbounded.
+ * Every redistributable language version in the given groups: one row per
+ * route-safe normalized language, at most
+ * `caseLawLanguageAlternatesPerGroupMax` per group. Both bounds are applied
+ * per group in the database, so a malformed or over-merged key can neither
+ * make this public read unbounded nor starve the other groups on the page.
  */
 export const readPublicDecisionLanguageAlternatesQuery =
   definePublicLawSharedQuery(
@@ -56,8 +62,8 @@ export const readPublicDecisionLanguageAlternatesQuery =
     async (
       tx: CaseLawPublicReadTransaction,
       languageGroupKeys: readonly string[],
-    ): Promise<PublicDecisionLanguageAlternateRow[]> =>
-      await tx
+    ): Promise<PublicDecisionLanguageAlternateRow[]> => {
+      const versions = tx
         .select({
           id: caseLawDecisions.id,
           caseNumber: caseLawDecisions.caseNumber,
@@ -67,6 +73,10 @@ export const readPublicDecisionLanguageAlternatesQuery =
           decisionDate: caseLawDecisions.decisionDate,
           language: caseLawDecisions.language,
           languageGroupKey: caseLawDecisions.languageGroupKey,
+          languageRank: sql<number>`row_number() over (
+            partition by ${caseLawDecisions.languageGroupKey}, ${normalizedLanguageSql}
+            order by ${caseLawDecisions.id}
+          )`.as("language_rank"),
         })
         .from(caseLawDecisions)
         .innerJoin(
@@ -77,55 +87,80 @@ export const readPublicDecisionLanguageAlternatesQuery =
           and(
             inArray(caseLawDecisions.languageGroupKey, [...languageGroupKeys]),
             redistributableCaseLawSource,
+            sql`${normalizedLanguageSql} ~ ${ROUTE_LANGUAGE_PATTERN}`,
           ),
         )
-        .orderBy(
-          asc(caseLawDecisions.languageGroupKey),
-          asc(caseLawDecisions.language),
-          asc(caseLawDecisions.id),
+        .as("versions");
+      const capped = tx
+        .select({
+          id: versions.id,
+          caseNumber: versions.caseNumber,
+          slug: versions.slug,
+          country: versions.country,
+          court: versions.court,
+          decisionDate: versions.decisionDate,
+          language: versions.language,
+          languageGroupKey: versions.languageGroupKey,
+          groupRank: sql<number>`row_number() over (
+            partition by ${versions.languageGroupKey}
+            order by ${versions.language}, ${versions.id}
+          )`.as("group_rank"),
+        })
+        .from(versions)
+        .where(eq(versions.languageRank, 1))
+        .as("capped");
+      return await tx
+        .select({
+          id: capped.id,
+          caseNumber: capped.caseNumber,
+          slug: capped.slug,
+          country: capped.country,
+          court: capped.court,
+          decisionDate: capped.decisionDate,
+          language: capped.language,
+          languageGroupKey: capped.languageGroupKey,
+        })
+        .from(capped)
+        .where(
+          lte(capped.groupRank, LIMITS.caseLawLanguageAlternatesPerGroupMax),
         )
+        .orderBy(
+          asc(capped.languageGroupKey),
+          asc(capped.language),
+          asc(capped.id),
+        )
+        // Exactly the per-group ceilings summed; states the bound the window
+        // filter above already guarantees.
         .limit(
           languageGroupKeys.length *
             LIMITS.caseLawLanguageAlternatesPerGroupMax,
-        ),
+        );
+    },
   );
 
-type LanguageGroup = {
-  languages: Set<string>;
-  alternates: PublicDecisionLanguageAlternate[];
-};
-
 /**
- * Group rows by language group, one version per normalized language, capped
- * per group. A group with a single language is not a multilingual decision
- * and offers no alternates.
+ * Group the query's rows by language group. The query already yields one
+ * version per route-safe language; a group with a single version is not a
+ * multilingual decision and offers no alternates.
  */
 export const groupPublicDecisionLanguageAlternates = (
   rows: readonly PublicDecisionLanguageAlternateRow[],
 ): PublicDecisionLanguageAlternatesByGroup => {
-  const groups = new Map<string, LanguageGroup>();
+  const groups = new Map<string, PublicDecisionLanguageAlternate[]>();
 
   for (const { languageGroupKey, ...alternate } of rows) {
-    if (languageGroupKey === null) {
-      continue;
-    }
-    const language = normalizePublicDecisionLanguage(alternate.language);
-    if (language === null) {
+    if (
+      languageGroupKey === null ||
+      normalizePublicDecisionLanguage(alternate.language) === null
+    ) {
       continue;
     }
     let group = groups.get(languageGroupKey);
     if (group === undefined) {
-      group = { languages: new Set(), alternates: [] };
+      group = [];
       groups.set(languageGroupKey, group);
     }
-    if (
-      group.languages.has(language) ||
-      group.languages.size >= LIMITS.caseLawLanguageAlternatesPerGroupMax
-    ) {
-      continue;
-    }
-    group.languages.add(language);
-    group.alternates.push(alternate);
+    group.push(alternate);
   }
 
   return {
@@ -134,9 +169,7 @@ export const groupPublicDecisionLanguageAlternates = (
         return NO_ALTERNATES;
       }
       const group = groups.get(languageGroupKey);
-      return group === undefined || group.alternates.length < 2
-        ? NO_ALTERNATES
-        : group.alternates;
+      return group === undefined || group.length < 2 ? NO_ALTERNATES : group;
     },
   };
 };

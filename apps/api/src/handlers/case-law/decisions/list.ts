@@ -177,11 +177,12 @@ export const listDecisionsHandler = async (
       .where(
         and(
           ...conditions,
-          // A multilingual decision is listed once, by the version this walk
-          // reaches first: the one no listable sibling sorts ahead of. That is
-          // a property of the row, not of the page, so the keyset cursor stays
-          // valid across pages. Siblings are held to the same filters and the
-          // same redistribution gate as the row itself.
+          // A multilingual decision is listed once, by its oldest listable
+          // version. Rows only ever arrive with newer timestamps, so no later
+          // ingested translation can displace the representative between two
+          // pages of one walk, and the keyset cursor stays valid. Siblings are
+          // held to the same filters and the same redistribution gate as the
+          // row itself.
           or(
             isNull(caseLawDecisions.languageGroupKey),
             notExists(
@@ -199,7 +200,7 @@ export const listDecisionsHandler = async (
                       caseLawDecisions.languageGroupKey,
                     ),
                     // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement, nothing round-trips through a JS Date
-                    sql`(${sibling.createdAt}, ${sibling.id}) > (${caseLawDecisions.createdAt}, ${caseLawDecisions.id})`,
+                    sql`(${sibling.createdAt}, ${sibling.id}) < (${caseLawDecisions.createdAt}, ${caseLawDecisions.id})`,
                     redistributableCaseLawSourceFor(siblingSource.descriptor),
                     ...decisionFilterConditions(query, sibling),
                   ),
