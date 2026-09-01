@@ -3,14 +3,12 @@ import { posthog } from "posthog-js";
 import type { CaptureResult, SupportedWebVitalsMetrics } from "posthog-js";
 
 import { env } from "@/env";
-import {
-  normalizeTelemetryErrorTypeName,
-  telemetryErrorType,
-} from "@/lib/analytics/error-diagnostics";
+import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
 import { isErrorReference } from "@/lib/analytics/error-reference";
 import { fingerprintExceptionEvent } from "@/lib/analytics/exception-fingerprint";
 import { pickIngestionRequired } from "@/lib/analytics/posthog-ingestion";
 import type { sanitizeRouteErrorLifecycleEvent } from "@/lib/analytics/posthog-route-error";
+import { captureRedactedException } from "@/lib/analytics/stack-redaction";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 import type {
   Analytics,
@@ -91,146 +89,6 @@ const telemetryAreaProperty = (
   return typeof area === "string" && TELEMETRY_AREA.test(area)
     ? { area }
     : undefined;
-};
-
-// The deepest error in a `cause` chain carries the stack of the original
-// failure site; wrapper classes (boundary telemetry errors) only record
-// where they were constructed. `cause` is writable, so third-party code can
-// hand us a cycle; the visited set bounds the walk.
-const deepestCause = (error: Error): Error => {
-  let current = error;
-  const seen = new Set<Error>([error]);
-  while (current.cause instanceof Error && !seen.has(current.cause)) {
-    current = current.cause;
-    seen.add(current);
-  }
-  return current;
-};
-
-// Engines disagree on frame syntax: V8 indents frames with `at ` under a
-// `<name>: <message>` header, while SpiderMonkey and JavaScriptCore write
-// bare `<symbol>@<url>:<line>:<column>` lines and no header at all. Known JSC
-// engine labels contain spaces; other callsite labels stay symbol-shaped so
-// free-form text cannot ride along as a frame.
-const V8_STACK_FRAME_SYNTAX = /^\s+at /u;
-const CALLSITE_STACK_FRAME_SYNTAX =
-  /^(?:[Aa]sync\*)?(?:[\p{ID_Continue}$.<>[\]#~/]{0,120}|(?:global|module|eval) code)@\S+:\d+:\d+$/u;
-type StackFrameSyntax = "callsite" | "v8";
-
-const hasOnlyDecimalDigits = (
-  value: string,
-  start: number,
-  end: number,
-): boolean => {
-  if (start >= end) {
-    return false;
-  }
-  for (let index = start; index < end; index += 1) {
-    const code = value.codePointAt(index);
-    if (code === undefined || code < 48 || code > 57) {
-      return false;
-    }
-  }
-  return true;
-};
-
-const stripStackFrameUrlMetadata = (frame: string): string => {
-  const frameEnd = frame.endsWith(")") ? frame.length - 1 : frame.length;
-  const columnSeparator = frame.lastIndexOf(":", frameEnd - 1);
-  const lineSeparator = frame.lastIndexOf(":", columnSeparator - 1);
-  if (
-    lineSeparator === -1 ||
-    !hasOnlyDecimalDigits(frame, lineSeparator + 1, columnSeparator) ||
-    !hasOnlyDecimalDigits(frame, columnSeparator + 1, frameEnd)
-  ) {
-    return frame;
-  }
-
-  const v8Prefix = frame.trimStart().startsWith("at ")
-    ? frame.indexOf("at ") + 3
-    : -1;
-  let urlStart = frame.indexOf("@") + 1;
-  if (v8Prefix !== -1) {
-    const locationSeparator = frame.indexOf(" (", v8Prefix);
-    urlStart =
-      locationSeparator === -1 || locationSeparator > lineSeparator
-        ? v8Prefix
-        : locationSeparator + 2;
-  }
-  let urlEnd = lineSeparator;
-  for (const terminator of ["?", "#"] as const) {
-    const index = frame.indexOf(terminator, urlStart);
-    if (index !== -1 && index < urlEnd) {
-      urlEnd = index;
-    }
-  }
-  if (urlEnd === lineSeparator) {
-    return frame;
-  }
-  return `${frame.slice(0, urlEnd)}${frame.slice(lineSeparator)}`;
-};
-
-const runtimeStackFrameSyntax = (): StackFrameSyntax | undefined => {
-  const stack = new Error("stack syntax probe").stack;
-  if (typeof stack !== "string") {
-    return undefined;
-  }
-  const lines = stack.split("\n").filter((line) => line.length > 0);
-  if (lines.some((line) => V8_STACK_FRAME_SYNTAX.test(line))) {
-    return "v8";
-  }
-  return lines.some((line) => CALLSITE_STACK_FRAME_SYNTAX.test(line))
-    ? "callsite"
-    : undefined;
-};
-
-type RedactTelemetryStackOptions = {
-  errorType: string;
-  stack: string;
-  syntax: StackFrameSyntax;
-};
-
-export const redactTelemetryStack = ({
-  errorType,
-  stack,
-  syntax,
-}: RedactTelemetryStackOptions): string | undefined => {
-  const frameSyntax =
-    syntax === "callsite" ? CALLSITE_STACK_FRAME_SYNTAX : V8_STACK_FRAME_SYNTAX;
-  const frames = stack
-    .split("\n")
-    .filter((line) => frameSyntax.test(line))
-    .map(stripStackFrameUrlMetadata);
-  if (frames.length === 0) {
-    return undefined;
-  }
-  return [`${errorType}:`, ...frames].join("\n");
-};
-
-const redactedStack = (error: Error): string | undefined => {
-  const { stack } = deepestCause(error);
-  const syntax = runtimeStackFrameSyntax();
-  if (typeof stack !== "string" || syntax === undefined) {
-    return undefined;
-  }
-  return redactTelemetryStack({
-    errorType: telemetryErrorType(error),
-    stack,
-    syntax,
-  });
-};
-
-const toRedactedTelemetryError = (error: unknown): Error => {
-  // eslint-disable-next-line unicorn/error-message -- the original message is intentionally dropped so telemetry cannot leak PII from the underlying error; the error class is carried in `.name` instead.
-  const redacted = new Error("");
-  redacted.name = telemetryErrorType(error);
-  const stack = error instanceof Error ? redactedStack(error) : undefined;
-  if (stack === undefined) {
-    Reflect.deleteProperty(redacted, "stack");
-  } else {
-    redacted.stack = stack;
-  }
-  return redacted;
 };
 
 // Structural frame fields only: code locations and symbol names from the
@@ -694,9 +552,11 @@ export const createPostHogAnalytics = ({
         return;
       }
       logDevError(error, devErrorContext(context));
-      posthog.captureException(toRedactedTelemetryError(error), {
-        ...errorContextProperties(context),
-        ...telemetryAreaProperty(error),
+      captureRedactedException(error, (redacted) => {
+        posthog.captureException(redacted, {
+          ...errorContextProperties(context),
+          ...telemetryAreaProperty(error),
+        });
       });
     },
     capturePageViewed: ({ path }) => {

@@ -83,8 +83,8 @@ void mock.module("posthog-js", () => ({
   posthog: posthogMock,
 }));
 
-const { createPostHogAnalytics, redactTelemetryStack } =
-  await import("./posthog");
+const { createPostHogAnalytics } = await import("./posthog");
+const { redactTelemetryStack } = await import("./stack-redaction");
 const { sanitizeRouteErrorLifecycleEvent } =
   await import("./posthog-route-error");
 
@@ -396,9 +396,12 @@ describe("PostHog browser analytics adapter", () => {
       host: "https://posthog.test",
       key: "phc_test",
     });
-    analytics.captureError(
-      new TypeError("Privileged document name and server payload"),
-    );
+    const error = new TypeError("Privileged document name and server payload");
+    error.stack = [
+      `TypeError: ${error.message}`,
+      "    at renderMatter (https://stella.test/assets/index.js:10:15)",
+    ].join("\n");
+    analytics.captureError(error);
 
     const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
     expect(captured).toBeInstanceOf(Error);
@@ -408,7 +411,7 @@ describe("PostHog browser analytics adapter", () => {
     }
     expect(captured.stack).toStartWith("TypeError:\n");
     expect(captured.stack).not.toContain("Privileged document name");
-    expect(captured.stack).toContain("    at ");
+    expect(captured.stack).toContain("    at renderMatter");
   });
 
   // Frame syntax is engine-specific, so the redaction has to hold for each
@@ -487,6 +490,29 @@ describe("PostHog browser analytics adapter", () => {
           syntax: frame.startsWith("    at ") ? "v8" : "callsite",
         }),
       ).toBe(["Error:", safeFrame].join("\n"));
+    },
+  );
+
+  const UNSAFE_SOURCE_FRAMES = {
+    callsiteData:
+      "renderMatter@data:text/javascript,throw%20new%20Error(%22PrivilegedMatterName%22):1:1",
+    indentedData:
+      "    at renderMatter (data:text/javascript,throw%20new%20Error(%22PrivilegedMatterName%22):1:1)",
+    callsiteBlob: "renderMatter@blob:https://stella.test/private-token:1:1",
+    indentedCredentials:
+      "    at renderMatter (https://client:secret@stella.test/index.js:1:1)",
+  } as const;
+
+  test.each(Object.entries(UNSAFE_SOURCE_FRAMES))(
+    "stack redaction drops unsafe %s locations",
+    (_kind, frame) => {
+      expect(
+        redactTelemetryStack({
+          errorType: "Error",
+          stack: frame,
+          syntax: frame.startsWith("    at ") ? "v8" : "callsite",
+        }),
+      ).toBeUndefined();
     },
   );
 
@@ -680,9 +706,12 @@ describe("PostHog browser analytics adapter", () => {
     });
     wrapper.name = "ClientTelemetryError";
     // Distinguishable stacks: the wrapper's own stack must not win.
-    wrapper.stack = "Error: Privileged wrapper message\n    at boundary";
+    wrapper.stack = [
+      "Error: Privileged wrapper message",
+      "    at boundary (https://stella.test/assets/boundary.js:1:2)",
+    ].join("\n");
     original.stack =
-      "RangeError: Privileged original message\n    at failureSite";
+      "RangeError: Privileged original message\n    at failureSite (https://stella.test/assets/failure.js:3:4)";
     analytics.captureError(wrapper);
 
     const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
@@ -690,7 +719,9 @@ describe("PostHog browser analytics adapter", () => {
       throw new TypeError("Expected a redacted Error");
     }
     expect(captured.name).toBe("ClientTelemetryError");
-    expect(captured.stack).toBe("ClientTelemetryError:\n    at failureSite");
+    expect(captured.stack).toBe(
+      "ClientTelemetryError:\n    at failureSite (https://stella.test/assets/failure.js:3:4)",
+    );
   });
 
   test("captureError attaches the telemetry area slug and nothing free-form", () => {
