@@ -5,6 +5,8 @@
  * output with a Valibot schema; no textual schema description needed.
  */
 
+import type { AnalysisInputFingerprint } from "@stll/legal-ast/analysis";
+
 /**
  * Behavioral guidelines shared across all language prompts.
  * Inserted at the end of each language-specific system prompt.
@@ -49,3 +51,15 @@ export const formatDecisionForPrompt = (
       b.plainText.trim().length > 0 ? [`[${b.anchorId}] ${b.plainText}`] : [],
     )
     .join("\n\n");
+
+/**
+ * The fingerprint a persisted analysis carries: a digest of the prompt
+ * text itself, so it is by construction what the model was shown. The
+ * anchors are in that text, so a re-parse that renumbers blocks changes
+ * the fingerprint even when the words do not; that is the case it exists
+ * for, since the stored anchors would then name the wrong paragraphs.
+ */
+export const analysisInputFingerprint = (
+  decisionText: string,
+): AnalysisInputFingerprint =>
+  new Bun.CryptoHasher("sha256").update(decisionText).digest("hex");

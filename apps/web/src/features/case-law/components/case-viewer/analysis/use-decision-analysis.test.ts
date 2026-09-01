@@ -12,34 +12,54 @@ const heading = {
   children: [],
 };
 
+const analysis = {
+  version: 2,
+  generatedAt: "2026-08-23T10:00:00.000Z",
+  model: "test-model",
+  inputFingerprint: "f".repeat(64),
+  tree: [heading],
+};
+
 describe("decision analysis response parsing", () => {
-  test("keeps the canonical in-progress tree", () => {
+  test("accepts a complete analysis", () => {
+    expect(parseAnalysisResponse({ status: "done", analysis })).toEqual({
+      status: "done",
+      analysis,
+    });
+  });
+
+  test("a generating response carries no tree yet", () => {
     expect(
       parseAnalysisResponse({
         status: "generating",
         analysis: {
-          version: 1,
+          version: 2,
           status: "generating",
-          generatedAt: "2026-08-23T10:00:00.000Z",
-          model: "test-model",
-          tree: [heading],
+          startedAt: "2026-08-23T10:00:00.000Z",
+          inputFingerprint: "f".repeat(64),
         },
       }),
-    ).toEqual({ status: "generating", tree: [heading] });
+    ).toEqual({ status: "generating", tree: [] });
   });
 
-  test("rejects an in-progress payload presented as complete", () => {
+  test("rejects a sentinel presented as complete", () => {
     expect(
       parseAnalysisResponse({
         status: "done",
         analysis: {
-          version: 1,
+          version: 2,
           status: "generating",
-          generatedAt: "2026-08-23T10:00:00.000Z",
-          model: "test-model",
-          tree: [heading],
+          startedAt: "2026-08-23T10:00:00.000Z",
+          inputFingerprint: "f".repeat(64),
         },
       }),
+    ).toBeNull();
+  });
+
+  test("rejects an analysis without a fingerprint", () => {
+    const { inputFingerprint: _absent, ...unfingerprinted } = analysis;
+    expect(
+      parseAnalysisResponse({ status: "done", analysis: unfingerprinted }),
     ).toBeNull();
   });
 });
