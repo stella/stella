@@ -49,6 +49,22 @@ export const appendTextInline = (
   });
 };
 
+/**
+ * What a whitespace-only Aspose spacer span contributes to the inline
+ * tree. The span's own glyphs do not encode the gap it paints — the
+ * width lives in CSS (`width:36pt`) or in an `&nbsp;` run of arbitrary
+ * length — so every such span yields the same canonical gap.
+ *
+ * Two characters, because cz-nss's letter-spacing reassembly reads one
+ * space as a letter separator and two or more as a word boundary. Both
+ * are U+00A0 rather than U+0020: HTML collapses runs of ordinary
+ * whitespace, so an ordinary-space gap would be indistinguishable from
+ * the indentation a pretty-printed export puts between two spans. Every
+ * consumer folds the pair back to a single space through
+ * `collapseSpacedLetters`.
+ */
+export const ASPOSE_SPACER_GAP = "\u00a0\u00a0";
+
 export type WalkInlinesOptions = {
   /**
    * Map/validate `<a>` hrefs (e.g. `sanitizeUrl`, which returns
@@ -120,9 +136,14 @@ export const walkInlines = (
       if (options.parseSpanStyle && tag === "span") {
         const style = $child.attr("style") ?? "";
 
-        // Skip Aspose spacer spans only when they contain no meaningful
-        // text. Modern exports use these for tab stops and invisible
-        // fills, but older conversions sometimes place real words inside.
+        // Aspose spacer spans carry horizontal space rather than words:
+        // tab stops, alignment fills, and the gap between two
+        // letter-spaced words. Emit that gap instead of dropping the
+        // span; dropping it welds the neighbouring words together and
+        // leaves the letter-spacing reassembly to guess a boundary that
+        // is no longer in the text. Older conversions sometimes put real
+        // words inside these spans, so only whitespace-only spans become
+        // a gap.
         if (
           style.includes("-aw-import:ignore") ||
           style.includes("-aw-import:spaces") ||
@@ -130,6 +151,7 @@ export const walkInlines = (
         ) {
           const innerText = $child.text().trim();
           if (!innerText) {
+            appendTextInline(inlines, ASPOSE_SPACER_GAP, childAnon);
             return;
           }
         }

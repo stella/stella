@@ -155,6 +155,28 @@ type SpacedBoldRun = {
   endIndex: number;
 };
 
+/**
+ * Applied to whitespace-only text, this matches every character HTML
+ * collapses: U+00A0 is the one it renders at its written width.
+ */
+const COLLAPSIBLE_WHITESPACE_RE = /[^\u00a0]/gu;
+
+/**
+ * Carry the part of a stepped-over whitespace node that belongs to the
+ * gap between two letters. Only the non-breaking spaces count: HTML
+ * collapses ordinary whitespace, so the newline and indentation a
+ * pretty-printed export puts between two wrappers paint nothing and must
+ * not widen a letter separator into a word boundary. Whatever survives is
+ * appended as a fresh node, because the caller merges text nodes by
+ * mutating them in place.
+ */
+const appendNonCollapsibleGap = (step: Inline[], text: string): void => {
+  const gap = text.replace(COLLAPSIBLE_WHITESPACE_RE, "");
+  if (gap.length > 0) {
+    step.push({ type: "text", text: gap });
+  }
+};
+
 const collectSpacedBoldRun = (
   source: readonly Inline[],
   startIndex: number,
@@ -173,12 +195,14 @@ const collectSpacedBoldRun = (
   let endIndex = startIndex;
 
   while (endIndex + 1 < source.length) {
+    const step: Inline[] = [];
     let separatorIndex = endIndex + 1;
     const gapBeforeSeparator = source.at(separatorIndex);
     if (
       gapBeforeSeparator?.type === "text" &&
       gapBeforeSeparator.text.trim().length === 0
     ) {
+      appendNonCollapsibleGap(step, gapBeforeSeparator.text);
       separatorIndex += 1;
     }
 
@@ -189,6 +213,7 @@ const collectSpacedBoldRun = (
     ) {
       break;
     }
+    step.push(...separator.children);
 
     let letterIndex = separatorIndex + 1;
     const gapBeforeLetter = source.at(letterIndex);
@@ -196,6 +221,7 @@ const collectSpacedBoldRun = (
       gapBeforeLetter?.type === "text" &&
       gapBeforeLetter.text.trim().length === 0
     ) {
+      appendNonCollapsibleGap(step, gapBeforeLetter.text);
       letterIndex += 1;
     }
 
@@ -208,7 +234,7 @@ const collectSpacedBoldRun = (
       break;
     }
 
-    children.push(...separator.children, ...letter.children);
+    children.push(...step, ...letter.children);
     endIndex = letterIndex;
   }
 

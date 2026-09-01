@@ -30,6 +30,45 @@ const findAllByRole = (blocks: Block[], role: string) =>
 const findAllByType = (blocks: Block[], type: string) =>
   blocks.filter((b) => b.type === type);
 
+const bold = (text: string): string =>
+  `<p style="text-align:center"><span style="font-weight:bold">${text}</span></p>`;
+
+const TRAILING_PUNCTUATION_RE = /[,:;.!?]$/u;
+
+const splitTrailingPunctuation = (
+  sentence: string,
+): { body: string; punctuation: string } => {
+  const punctuation = TRAILING_PUNCTUATION_RE.exec(sentence)?.[0] ?? "";
+  return {
+    body: punctuation ? sentence.slice(0, -punctuation.length) : sentence,
+    punctuation,
+  };
+};
+
+/** Render a sentence the way a publisher letter-spaces it for emphasis. */
+const letterSpace = (sentence: string, gap: string): string => {
+  const { body, punctuation } = splitTrailingPunctuation(sentence);
+  const spaced = body
+    .split(" ")
+    .map((word) => word.split("").join(" "))
+    .join(gap);
+  return punctuation ? `${spaced} ${punctuation}` : spaced;
+};
+
+/** One emphasis wrapper per letter, the shape Aspose exports. */
+const perLetterWrappers = (sentence: string, wordGap: () => string): string => {
+  const letterGap = `<span style="font-weight:bold">&nbsp;</span>`;
+  return sentence
+    .split(" ")
+    .map((word) =>
+      word
+        .split("")
+        .map((letter) => `<span style="font-weight:bold">${letter}</span>`)
+        .join(letterGap),
+    )
+    .join(wordGap());
+};
+
 // ── Minimal decision HTML ───────────────────────────────────
 
 const minimalHtml = `
@@ -808,6 +847,143 @@ describe("parseNssDecisionHtml", () => {
       expect(new Set(footnotes.map((footnote) => footnote.anchorId)).size).toBe(
         footnotes.length,
       );
+    });
+  });
+
+  // ── Letter-spaced emphasis ──────────────────────────────
+
+  describe("letter-spaced emphasis", () => {
+    const rulingOf = (verdictHtml: string): string => {
+      const html = `<html><body><p style="text-align:center">10 A 46/2015 - 66</p>${bold("ROZSUDEK")}${bold("JMÉNEM REPUBLIKY")}<p>Krajský soud v Českých Budějovicích rozhodl v senátě ve věci žalobce proti žalovanému o žalobě proti rozhodnutí žalovaného ze dne 1. 1. 2015,</p><p style="text-align:center"><span style="font-weight:bold;letter-spacing:3pt">t a k t o :</span></p>${verdictHtml}${bold("Odůvodnění:")}<p>[1] Krajský soud přezkoumal napadené rozhodnutí.</p></body></html>`;
+
+      const { documentAst } = parseNssDecisionHtml(
+        baseInput(html, { caseNumber: "10 A 46/2015" }),
+      );
+      // The verdict is whatever follows the "takto:" separator, so the
+      // locator stays independent of the sentence under test.
+      const taktoIndex = documentAst.blocks.findIndex(
+        (block) => block.plainText === "takto:",
+      );
+      return documentAst.blocks.at(taktoIndex + 1)?.plainText ?? "";
+    };
+
+    // The reported defect: KSČB 10 A 46/2015 - 66 rendered
+    // "Žaloba sez amítá." because the word gap between two emphasized
+    // runs was an Aspose spacer span, which the walker dropped. With the
+    // gap gone the run stopped looking letter-spaced, and the fallback
+    // collapse re-cut the word boundaries one letter off.
+    test("collapses a verdict whose word gaps are Aspose spacer spans", () => {
+      const spacer = `<span style="font-weight:bold; -aw-import:spaces">&nbsp;&nbsp;&nbsp;</span>`;
+      const verdict = `<p><span style="font-weight:bold">Ž a l o b a</span>${spacer}<span style="font-weight:bold">s e</span>${spacer}<span style="font-weight:bold">z a m í t á .</span></p>`;
+
+      expect(rulingOf(verdict)).toBe("Žaloba se zamítá.");
+    });
+
+    test.each([
+      [
+        "-aw-import:spaces",
+        `<span style="font-weight:bold; -aw-import:spaces">&nbsp;&nbsp;&nbsp;</span>`,
+      ],
+      [
+        "-aw-import:ignore",
+        `<span style="font-weight:bold; -aw-import:ignore">   </span>`,
+      ],
+      [
+        "display:inline-block",
+        `<span style="font-weight:bold; display:inline-block; width:12pt">&nbsp;</span>`,
+      ],
+      [
+        "empty inline-block",
+        `<span style="font-weight:bold; display:inline-block; width:12pt"></span>`,
+      ],
+    ])("treats a %s spacer span as a word boundary", (_style, spacer) => {
+      const verdict = `<p><span style="font-weight:bold">Ž a l o b a</span>${spacer}<span style="font-weight:bold">s e</span>${spacer}<span style="font-weight:bold">z a m í t á .</span></p>`;
+
+      expect(rulingOf(verdict)).toBe("Žaloba se zamítá.");
+    });
+
+    test("collapses per-letter wrappers separated by a spacer span", () => {
+      const verdict = `<p>${perLetterWrappers("Žaloba se zamítá", () => `<span style="font-weight:bold; -aw-import:spaces">&nbsp;&nbsp;</span>`)}<span style="font-weight:bold">.</span></p>`;
+
+      expect(rulingOf(verdict)).toBe("Žaloba se zamítá.");
+    });
+
+    // A word gap split across two adjacent inlines: the spacer span
+    // lands beside the ordinary letter separator rather than replacing
+    // it, so neither node carries the whole boundary on its own.
+    test("collapses a word gap split across adjacent inlines", () => {
+      const gap = `<span style="font-weight:bold; -aw-import:spaces">&nbsp;</span><span style="font-weight:bold">&nbsp;</span>`;
+      const verdict = `<p>${perLetterWrappers("Žaloba se zamítá", () => gap)}<span style="font-weight:bold">.</span></p>`;
+
+      expect(rulingOf(verdict)).toBe("Žaloba se zamítá.");
+    });
+
+    // Indentation between two wrappers is source formatting: HTML
+    // collapses it, so it must not widen a letter separator into a word
+    // boundary.
+    test("ignores pretty-printer indentation between wrappers", () => {
+      const verdict = `<p>\n  ${perLetterWrappers("Žaloba se zamítá", () => `<span style="font-weight:bold">&nbsp;&nbsp;&nbsp;&nbsp;</span>`).replaceAll("</span><span", "</span>\n  <span")}.\n</p>`;
+
+      expect(rulingOf(verdict)).toBe("Žaloba se zamítá.");
+    });
+
+    // Round trip: letter-space a sentence with every gap width the
+    // publisher emits, in every markup shape, and require the original
+    // sentence back verbatim. The parser may join the letter-spacing and
+    // nothing else — the reader never rewrites court text.
+    describe("round trip", () => {
+      const sentences = [
+        "Žaloba se zamítá.",
+        "Kasační stížnost se zamítá.",
+        "Rozsudek krajského soudu se zrušuje.",
+        "Věc se vrací žalovanému k dalšímu řízení.",
+        "Žádný z účastníků nemá právo na náhradu nákladů řízení.",
+      ] as const;
+
+      const gaps = {
+        "two spaces": "  ",
+        "three spaces": "   ",
+        "two non-breaking spaces": "\u00a0\u00a0",
+        "four non-breaking spaces": "\u00a0\u00a0\u00a0\u00a0",
+        "mixed space and non-breaking space": " \u00a0",
+      } as const;
+
+      for (const sentence of sentences) {
+        for (const [gapName, gap] of Object.entries(gaps)) {
+          test(`one wrapper, ${gapName}: ${sentence}`, () => {
+            const verdict = `<p><span style="font-weight:bold;letter-spacing:3pt">${letterSpace(sentence, gap)}</span></p>`;
+
+            expect(rulingOf(verdict)).toBe(sentence);
+          });
+        }
+
+        test(`spacer-span gaps: ${sentence}`, () => {
+          const spacer = `<span style="font-weight:bold; -aw-import:spaces">&nbsp;&nbsp;&nbsp;</span>`;
+          const { body, punctuation } = splitTrailingPunctuation(sentence);
+          const verdict = `<p>${body
+            .split(" ")
+            .map(
+              (word) =>
+                `<span style="font-weight:bold">${word.split("").join(" ")}</span>`,
+            )
+            .join(
+              spacer,
+            )}<span style="font-weight:bold"> ${punctuation}</span></p>`;
+
+          expect(rulingOf(verdict)).toBe(sentence);
+        });
+
+        test(`per-letter wrappers: ${sentence}`, () => {
+          const { body, punctuation } = splitTrailingPunctuation(sentence);
+          const verdict = `<p>${perLetterWrappers(
+            body,
+            () =>
+              `<span style="font-weight:bold; -aw-import:spaces">&nbsp;&nbsp;</span>`,
+          )}<span style="font-weight:bold">${punctuation}</span></p>`;
+
+          expect(rulingOf(verdict)).toBe(sentence);
+        });
+      }
     });
   });
 
