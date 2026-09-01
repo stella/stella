@@ -188,7 +188,46 @@ describe("kanban board matrix", () => {
         { groupBy: "_status", value: "done" },
         { groupBy: "owner", value: "lin" },
       ],
+      destination: null,
       type: "move",
     });
+  });
+
+  test("keeps terminal destinations as real matrix columns and drop targets", () => {
+    const matrix = buildKanbanBoardMatrix({
+      destinations: [{ id: "archive", label: "Archive" }],
+      group,
+      resolveGroupValue: valueFor,
+      rows: [{ id: "one", owner: "ada", status: "open" }],
+      subgroup,
+      uncategorizedLabel: "No value",
+    });
+    const destination = matrix.columns.at(-1);
+    if (destination === undefined) {
+      throw new Error("Expected a terminal destination column");
+    }
+    expect(destination.label).toBe("Archive");
+    expect(
+      matrix.cells.filter(
+        (cell) => cell.coordinate.column.value === destination.value,
+      ),
+    ).toHaveLength(3);
+    const sourceCell = matrix.cells.at(0);
+    const sourceLane = matrix.lanes.at(0);
+    if (sourceCell === undefined || sourceLane === undefined) {
+      throw new Error("Expected a source matrix cell and lane");
+    }
+    const intent = createKanbanDropIntent({
+      cardId: "one",
+      group,
+      source: sourceCell.coordinate,
+      subgroup,
+      target: {
+        column: destination,
+        lane: sourceLane,
+      },
+    });
+    expect(intent?.destination).toEqual({ id: "archive", label: "Archive" });
+    expect(intent?.changes).toEqual([]);
   });
 });
