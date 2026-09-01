@@ -72,6 +72,7 @@
     "language": "Valoda",
     "languageDescription": "Izvēlieties desktop lietotnes valodu.",
     "managedOfficeEditing": "Pārvaldīta Office failu rediģēšana stella vajadzībām.",
+    "noLanguagesFound": "Nav atbilstošu valodu",
     "notAvailableYet": "Vēl nav pieejams",
     "notConnected": "Nav savienots",
     "notificationDocumentReady": "Dokuments gatavs",

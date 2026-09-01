@@ -72,6 +72,7 @@
     "language": "Jazyk",
     "languageDescription": "Zvolte jazyk desktopové aplikace.",
     "managedOfficeEditing": "Spravované úpravy souborů Office pro stella.",
+    "noLanguagesFound": "Žádné odpovídající jazyky",
     "notAvailableYet": "Zatím nedostupné",
     "notConnected": "Nepřipojeno",
     "notificationDocumentReady": "Dokument připraven",

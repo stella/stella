@@ -72,6 +72,7 @@
     "language": "Keel",
     "languageDescription": "Valige töölauarakenduse keel.",
     "managedOfficeEditing": "Hallatud Office'i failide muutmine stella jaoks.",
+    "noLanguagesFound": "Sobivaid keeli pole",
     "notAvailableYet": "Pole veel saadaval",
     "notConnected": "Ühendamata",
     "notificationDocumentReady": "Dokument valmis",

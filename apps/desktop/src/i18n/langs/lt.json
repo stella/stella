@@ -72,6 +72,7 @@
     "language": "Kalba",
     "languageDescription": "Pasirinkite desktop programos kalbą.",
     "managedOfficeEditing": "Valdomas Office failų redagavimas stella programai.",
+    "noLanguagesFound": "Atitinkančių kalbų nėra",
     "notAvailableYet": "Dar nepasiekiama",
     "notConnected": "Neprisijungta",
     "notificationDocumentReady": "Dokumentas paruoštas",

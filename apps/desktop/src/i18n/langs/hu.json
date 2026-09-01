@@ -72,6 +72,7 @@
     "language": "Nyelv",
     "languageDescription": "Válassza ki a desktop alkalmazás nyelvét.",
     "managedOfficeEditing": "Felügyelt Office-fájl szerkesztés a stella számára.",
+    "noLanguagesFound": "Nincs megfelelő nyelv",
     "notAvailableYet": "Még nem érhető el",
     "notConnected": "Nincs csatlakozva",
     "notificationDocumentReady": "Dokumentum kész",

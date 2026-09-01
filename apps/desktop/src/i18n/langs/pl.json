@@ -72,6 +72,7 @@
     "language": "Język",
     "languageDescription": "Wybierz język aplikacji desktop.",
     "managedOfficeEditing": "Zarządzana edycja plików Office dla stella.",
+    "noLanguagesFound": "Brak pasujących języków",
     "notAvailableYet": "Jeszcze niedostępne",
     "notConnected": "Niepołączono",
     "notificationDocumentReady": "Dokument gotowy",
