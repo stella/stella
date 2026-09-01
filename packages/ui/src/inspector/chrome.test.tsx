@@ -216,8 +216,9 @@ describe("dock", () => {
       </InspectorDock>,
     );
 
-    expect(markup.match(/width:560px/gu)?.length).toBe(2);
+    expect(markup.match(/width:512px/gu)?.length).toBe(2);
     expect(markup).toContain('data-slot="inspector-rail"');
+    expect(markup).not.toContain("rtl:flex-row-reverse");
   });
 
   test("keeps the permanent rail when pane content is collapsed", () => {
@@ -238,6 +239,22 @@ describe("dock", () => {
     ).toBe(2);
     expect(markup).toContain('data-slot="inspector-rail"');
     expect(markup).not.toContain('data-slot="inspector"');
+  });
+
+  test("keeps pane-only children mounted when the rail is omitted", () => {
+    const markup = renderToStaticMarkup(
+      <InspectorDock
+        resizeHandleLabel="Resize"
+        resizeHandleProps={noopHandlers}
+        showPaneContent={false}
+        width={512}
+      >
+        <Inspector />
+      </InspectorDock>,
+    );
+
+    expect(markup).toContain('data-slot="inspector"');
+    expect(markup.match(/width:512px/gu)?.length).toBe(2);
   });
 });
 

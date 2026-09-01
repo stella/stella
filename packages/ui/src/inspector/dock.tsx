@@ -61,12 +61,8 @@ export const InspectorDock = ({
   showPaneContent,
   width,
 }: InspectorDockProps) => {
-  let dockWidth = width;
-  if (rail !== undefined) {
-    dockWidth = showPaneContent
-      ? width + INSPECTOR_RAIL_WIDTH
-      : INSPECTOR_RAIL_WIDTH;
-  }
+  const dockWidth =
+    rail !== undefined && !showPaneContent ? INSPECTOR_RAIL_WIDTH : width;
   const widthPx = `${dockWidth}px`;
 
   return (
@@ -106,8 +102,8 @@ export const InspectorDock = ({
             onDoubleClick={onResetWidth}
           />
         )}
-        {showPaneContent ? (
-          <div className="bg-sidebar flex h-full w-full flex-row rtl:flex-row-reverse">
+        {showPaneContent || rail === undefined ? (
+          <div className="bg-sidebar flex h-full w-full flex-row">
             <div className="min-w-0 flex-1">{children}</div>
             {rail}
           </div>

@@ -98,7 +98,7 @@ test("renders one stella-owned frame from typed navigation and rail descriptors"
   expect(rendered).toContain('data-slot="inspector-rail"');
   expect(rendered).toContain('data-slot="inspector-dock"');
   expect(rendered).toContain('data-slot="inspector-rail"');
-  expect(rendered).toContain("width:560px");
+  expect(rendered).toContain("width:512px");
   expect(rendered).toContain(referenceRail);
 });
 
