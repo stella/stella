@@ -35,25 +35,26 @@ export type ServingCorpusIndexGeneration = {
   cluster: QuickwitCluster;
 };
 
+export const CORPUS_INDEX_SOURCE_TABLES = {
+  case_law: caseLawSources,
+  legislation: legislationSources,
+} as const satisfies Record<
+  CorpusFamily,
+  typeof caseLawSources | typeof legislationSources
+>;
+
 /**
  * Fence activation against canonical writers. Writers share-lock their source
  * before checking the registry; the short table fence also covers a source
  * inserted concurrently with first activation.
  */
-const lockCorpusIndexGenerationActivationTx = async (
+export const lockCorpusIndexGenerationActivationTx = async (
   tx: Transaction,
   family: CorpusFamily,
 ): Promise<void> => {
-  switch (family) {
-    case "case_law":
-      await tx.execute(sql`LOCK TABLE ${caseLawSources} IN EXCLUSIVE MODE`);
-      return;
-    case "legislation":
-      await tx.execute(sql`LOCK TABLE ${legislationSources} IN EXCLUSIVE MODE`);
-      return;
-    default:
-      return family satisfies never;
-  }
+  await tx.execute(
+    sql`LOCK TABLE ${CORPUS_INDEX_SOURCE_TABLES[family]} IN EXCLUSIVE MODE`,
+  );
 };
 
 type CorpusIndexGenerationReadTransaction = Pick<Transaction, "select">;

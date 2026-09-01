@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { getTableName } from "drizzle-orm";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
@@ -6,6 +7,7 @@ import {
   CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES,
   CASE_LAW_CORPUS_INDEX_PROJECTION_ACTIONS,
 } from "@/api/db/schema";
+import { CORPUS_INDEX_SOURCE_TABLES } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { CORPUS_LICENSES } from "@/api/lib/legal-search/corpus-source";
 
 const caseLawCorpusIndexSource = new URL("corpus-index.ts", import.meta.url);
@@ -128,6 +130,12 @@ const ingestionLockPrivileges = (table: string): string[] => {
 
   return [...held];
 };
+
+test("every corpus source activation lock has an ingestion-role privilege", () => {
+  for (const table of Object.values(CORPUS_INDEX_SOURCE_TABLES)) {
+    expect(ingestionLockPrivileges(getTableName(table))).not.toHaveLength(0);
+  }
+});
 
 const GENERATION_STATE_TABLES = [
   "case_law_corpus_index_backfills",

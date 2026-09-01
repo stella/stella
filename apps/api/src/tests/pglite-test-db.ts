@@ -192,6 +192,9 @@ const ROLE_GRANT_STATEMENTS = [
       ON TABLE "case_law_sources"
       TO stella_ingestion
   `,
+  `
+    GRANT MAINTAIN ON TABLE "case_law_sources" TO stella_ingestion
+  `,
   // case_law_index_jobs is append-only: ingestion appends audit rows
   // but never updates or deletes them.
   `
@@ -224,6 +227,9 @@ const ROLE_GRANT_STATEMENTS = [
     GRANT UPDATE (sync_cursor, last_sync_at, updated_at)
       ON TABLE "legislation_sources"
       TO stella_ingestion
+  `,
+  `
+    GRANT MAINTAIN ON TABLE "legislation_sources" TO stella_ingestion
   `,
   `
     GRANT INSERT ON TABLE "legislation_index_jobs" TO stella_ingestion
