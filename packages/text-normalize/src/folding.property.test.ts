@@ -13,7 +13,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { propertyConfig, propertySeed } from "@stll/property-testing";
 
 import { applyArabicFolds, applyArabicFoldsWithOffsets } from "./arabic.js";
 import { foldToAscii } from "./ascii-fold.js";
@@ -25,10 +25,12 @@ import {
   foldSearchMatchTextWithOffsets,
 } from "./search-match.js";
 
-// Fixed seed: a counterexample must be reproducible from the CI log.
-const SEED = 20_260_901;
+// Seeded in PR CI so a counterexample is reproducible from the log, and
+// unseeded under the nightly sweep so it explores new inputs. See
+// propertySeed in @stll/property-testing.
 
-const config = (numRuns: number) => propertyConfig({ numRuns, seed: SEED });
+const config = (numRuns: number) =>
+  propertyConfig({ numRuns, seed: propertySeed() });
 
 /**
  * Characters from every script and shape these folds claim to handle:

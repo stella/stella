@@ -10,7 +10,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { propertyConfig, propertySeed } from "@stll/property-testing";
 
 import type { Inline } from "@/api/handlers/case-law/document-ast";
 import {
@@ -18,11 +18,12 @@ import {
   stripInlinePrefix,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
-// Fixed seed: a failing counterexample has to be reproducible from the
-// CI log alone. The nightly sweep widens coverage through numRuns.
-const SEED = 20_260_901;
+// Seeded in PR CI so a counterexample is reproducible from the log, and
+// unseeded under the nightly sweep so it explores new inputs. See
+// propertySeed in @stll/property-testing.
 
-const config = (numRuns: number) => propertyConfig({ numRuns, seed: SEED });
+const config = (numRuns: number) =>
+  propertyConfig({ numRuns, seed: propertySeed() });
 
 /**
  * Text fragments mixing letters with every whitespace encoding a court

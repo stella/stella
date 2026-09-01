@@ -64,6 +64,54 @@ export const propertyConfig = <Ts>(
   };
 };
 
+export const PROPERTY_TEST_SEED_ENV = "PROPERTY_TEST_SEED";
+
+/**
+ * The repo's fixed seed. Arbitrary: it only has to be stable.
+ */
+const DEFAULT_PROPERTY_SEED = 20_260_901;
+
+/**
+ * The seed a property should run with: fixed in PR CI, absent (so
+ * fast-check draws a fresh one) during the nightly sweep.
+ *
+ * ```ts
+ * fc.assert(prop, propertyConfig({ numRuns: 300, seed: propertySeed() }));
+ * ```
+ *
+ * The two runs answer different questions. PR CI is a regression gate: it
+ * must fail the same way for everyone, and a counterexample nobody can
+ * reproduce from the log is a flake, not a finding. The nightly sweep is
+ * the search: it already runs each property ten times longer, and reusing
+ * one seed every night would re-walk the same inputs forever, so it draws
+ * a new one and explores.
+ *
+ * Nightly is detected from `PROPERTY_TEST_NUM_RUNS_FACTOR`, the variable
+ * `.github/workflows/nightly-property-test.yml` already exports to widen
+ * the run budget — one signal for "this is the sweep", rather than a
+ * second flag that could be set inconsistently with the first.
+ *
+ * Set `PROPERTY_TEST_SEED` to pin a specific seed in any environment.
+ * That is how a nightly failure is replayed: the run log prints the seed
+ * fast-check drew, and exporting it here reproduces the run without
+ * editing the test.
+ */
+export const propertySeed = (): number | undefined => {
+  const pinned = process.env[PROPERTY_TEST_SEED_ENV];
+  if (pinned !== undefined && pinned !== "") {
+    const parsed = Number(pinned);
+    if (!Number.isSafeInteger(parsed)) {
+      throw new TypeError(
+        `${PROPERTY_TEST_SEED_ENV} must be an integer seed, got ${pinned}`,
+      );
+    }
+    return parsed;
+  }
+
+  const exploring = readNumRunsFactor(process.env[NUM_RUNS_FACTOR_ENV]) > 1;
+  return exploring ? undefined : DEFAULT_PROPERTY_SEED;
+};
+
 /**
  * Scale a per-test Bun timeout (ms) by the same nightly factor that scales
  * `numRuns`, so an expensive property whose run count grows ×N also gets ×N
