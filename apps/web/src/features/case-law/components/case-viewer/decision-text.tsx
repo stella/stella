@@ -649,8 +649,22 @@ export const DecisionText = ({
     const activeMatch = articleRef.current?.querySelector<HTMLElement>(
       `[data-reader-match-index="${activeMatchIndex}"]`,
     );
+    if (!activeMatch) {
+      return;
+    }
 
-    activeMatch?.scrollIntoView({
+    // A match inside the folded reporter apparatus is invisible while its
+    // <details> stays closed, and scrolling to a hidden descendant reveals
+    // nothing: open every enclosing disclosure first.
+    for (
+      let disclosure = activeMatch.closest("details");
+      disclosure !== null;
+      disclosure = disclosure.parentElement?.closest("details") ?? null
+    ) {
+      disclosure.open = true;
+    }
+
+    activeMatch.scrollIntoView({
       behavior: "smooth",
       block: "center",
       inline: "nearest",
