@@ -1356,6 +1356,25 @@ export default defineConfig({
       },
     },
     {
+      // React Compiler bails out of any component or hook containing a logical
+      // assignment operator, and a bailed-out function is memoized not at all
+      // (scripts/rc-bailouts.ts guards each one against a baseline). So in
+      // apps/web the `if (x === null) x = ...` spelling this rule wants to
+      // rewrite as `??=` is the correct one, and the two guards would otherwise
+      // contradict each other at every call site. Options are restated in full:
+      // oxlint resolves overrides by replacement, not merge.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
+        "typescript/prefer-nullish-coalescing": [
+          "error",
+          {
+            ignoreIfStatements: true,
+            ignorePrimitives: { string: true, boolean: true },
+          },
+        ],
+      },
+    },
+    {
       // Browser surfaces only: `document` does not exist in apps/api's
       // Bun runtime. CLAUDE.md: "No direct document.cookie assignment."
       files: [
