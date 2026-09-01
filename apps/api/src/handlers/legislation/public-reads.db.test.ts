@@ -4,7 +4,10 @@ import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
-import { propertyConfig } from "@stll/property-testing";
+import {
+  propertyConfig,
+  propertyTestTimeout,
+} from "@stll/property-testing";
 import { foldToAscii } from "@stll/text-normalize";
 
 import {
@@ -370,7 +373,7 @@ beforeAll(
       );
     legislationDb = readDb;
   },
-  { timeout: 30_000 },
+  { timeout: propertyTestTimeout(30_000) },
 );
 
 afterAll(async () => {
