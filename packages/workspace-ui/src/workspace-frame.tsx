@@ -88,14 +88,17 @@ export type WorkspaceFrameTopBar = {
   actions?: ReactNode;
 };
 
+type DescribedWorkspaceFrameProps = Extract<
+  WorkspaceFrameProps,
+  { composition: "described" }
+>;
+
 /**
  * Stella's complete workspace frame. Hosts provide route descriptors and
  * actions; this component owns the shell, application rail, end rail, and
  * desktop inspector footprint.
  */
 export const WorkspaceFrame = (props: WorkspaceFrameProps) => {
-  const isCompact = useIsMobile();
-
   if (props.composition === "host-responsive") {
     return (
       <WorkspaceShell
@@ -108,7 +111,17 @@ export const WorkspaceFrame = (props: WorkspaceFrameProps) => {
     );
   }
 
-  const { children, endRail, inspector, navigation, topBar } = props;
+  return <DescribedWorkspaceFrame {...props} />;
+};
+
+const DescribedWorkspaceFrame = ({
+  children,
+  endRail,
+  inspector,
+  navigation,
+  topBar,
+}: DescribedWorkspaceFrameProps) => {
+  const isCompact = useIsMobile();
   const inspectorPresentation = resolveWorkspaceInspectorPresentation({
     hasMobilePresentation: inspector?.mobile !== undefined,
     isCompact,
