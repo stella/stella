@@ -72,6 +72,7 @@
     "language": "Sprache",
     "languageDescription": "Wählen Sie die Sprache der Desktop-App.",
     "managedOfficeEditing": "Verwaltete Office-Dateibearbeitung für stella.",
+    "noLanguagesFound": "Keine passenden Sprachen",
     "notAvailableYet": "Noch nicht verfügbar",
     "notConnected": "Nicht verbunden",
     "notificationDocumentReady": "Dokument bereit",

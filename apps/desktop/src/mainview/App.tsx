@@ -6,16 +6,17 @@ import { useFormatter, useLocale, useTranslations } from "use-intl";
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import {
+  Combobox,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+} from "@stll/ui/combobox";
 import { FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/select";
 import { Separator } from "@stll/ui/separator";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { cn } from "@stll/ui/utils";
@@ -319,25 +320,38 @@ const GeneralPane = ({
               {t("languageDescription")}
             </p>
           </div>
-          <Select
+          <Combobox<SupportedLanguage>
+            autoHighlight
+            items={SUPPORTED_LANGUAGES}
+            itemToStringLabel={(supportedLanguage) =>
+              LANGUAGE_LABELS[supportedLanguage]
+            }
             onValueChange={(value) => {
-              if (value && isSupportedLanguage(value)) {
+              if (value !== null) {
                 onLanguageChange(value);
               }
             }}
             value={language}
           >
-            <SelectTrigger className="w-40" id="desktop-language">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectPopup align="end">
-              {SUPPORTED_LANGUAGES.map((supportedLanguage) => (
-                <SelectItem key={supportedLanguage} value={supportedLanguage}>
-                  {LANGUAGE_LABELS[supportedLanguage]}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
+            <ComboboxInput
+              className="w-40"
+              id="desktop-language"
+              showTrigger={false}
+            />
+            <ComboboxPopup align="end">
+              <ComboboxList>
+                {(supportedLanguage: SupportedLanguage) => (
+                  <ComboboxItem
+                    key={supportedLanguage}
+                    value={supportedLanguage}
+                  >
+                    {LANGUAGE_LABELS[supportedLanguage]}
+                  </ComboboxItem>
+                )}
+              </ComboboxList>
+              <ComboboxEmpty>{t("noLanguagesFound")}</ComboboxEmpty>
+            </ComboboxPopup>
+          </Combobox>
         </div>
       </PanelGroup>
     </div>
