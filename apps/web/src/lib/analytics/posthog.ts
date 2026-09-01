@@ -115,6 +115,7 @@ const deepestCause = (error: Error): Error => {
 const V8_STACK_FRAME_SYNTAX = /^\s+at /u;
 const CALLSITE_STACK_FRAME_SYNTAX =
   /^(?:[Aa]sync\*)?(?:[\p{ID_Continue}$.<>[\]#~/]{0,120}|(?:global|module|eval) code)@\S+:\d+:\d+$/u;
+type StackFrameSyntax = "callsite" | "v8";
 
 const hasOnlyDecimalDigits = (
   value: string,
@@ -169,27 +170,54 @@ const stripStackFrameUrlMetadata = (frame: string): string => {
   return `${frame.slice(0, urlEnd)}${frame.slice(lineSeparator)}`;
 };
 
-const redactedStack = (error: Error): string | undefined => {
-  const source = deepestCause(error);
-  const { stack } = source;
+const runtimeStackFrameSyntax = (): StackFrameSyntax | undefined => {
+  const stack = new Error("stack syntax probe").stack;
   if (typeof stack !== "string") {
     return undefined;
   }
   const lines = stack.split("\n").filter((line) => line.length > 0);
-  // Callsite engines start with a bare frame and never mix in V8 frames. V8
-  // can serialize an empty name, making its message look like a callsite.
-  const hasV8Frames = lines.some((line) => V8_STACK_FRAME_SYNTAX.test(line));
+  if (lines.some((line) => V8_STACK_FRAME_SYNTAX.test(line))) {
+    return "v8";
+  }
+  return lines.some((line) => CALLSITE_STACK_FRAME_SYNTAX.test(line))
+    ? "callsite"
+    : undefined;
+};
+
+type RedactTelemetryStackOptions = {
+  errorType: string;
+  stack: string;
+  syntax: StackFrameSyntax;
+};
+
+export const redactTelemetryStack = ({
+  errorType,
+  stack,
+  syntax,
+}: RedactTelemetryStackOptions): string | undefined => {
   const frameSyntax =
-    !hasV8Frames && CALLSITE_STACK_FRAME_SYNTAX.test(lines.at(0) ?? "")
-      ? CALLSITE_STACK_FRAME_SYNTAX
-      : V8_STACK_FRAME_SYNTAX;
-  const frames = lines
+    syntax === "callsite" ? CALLSITE_STACK_FRAME_SYNTAX : V8_STACK_FRAME_SYNTAX;
+  const frames = stack
+    .split("\n")
     .filter((line) => frameSyntax.test(line))
     .map(stripStackFrameUrlMetadata);
   if (frames.length === 0) {
     return undefined;
   }
-  return [`${telemetryErrorType(error)}:`, ...frames].join("\n");
+  return [`${errorType}:`, ...frames].join("\n");
+};
+
+const redactedStack = (error: Error): string | undefined => {
+  const { stack } = deepestCause(error);
+  const syntax = runtimeStackFrameSyntax();
+  if (typeof stack !== "string" || syntax === undefined) {
+    return undefined;
+  }
+  return redactTelemetryStack({
+    errorType: telemetryErrorType(error),
+    stack,
+    syntax,
+  });
 };
 
 const toRedactedTelemetryError = (error: unknown): Error => {

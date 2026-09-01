@@ -83,7 +83,8 @@ void mock.module("posthog-js", () => ({
   posthog: posthogMock,
 }));
 
-const { createPostHogAnalytics } = await import("./posthog");
+const { createPostHogAnalytics, redactTelemetryStack } =
+  await import("./posthog");
 const { sanitizeRouteErrorLifecycleEvent } =
   await import("./posthog-route-error");
 
@@ -428,25 +429,20 @@ describe("PostHog browser analytics adapter", () => {
   } as const satisfies Record<string, readonly string[]>;
 
   test.each(Object.entries(ENGINE_FRAMES))(
-    "captureError keeps %s frames and drops the message",
+    "stack redaction keeps %s frames and drops the message",
     (_syntax, frames) => {
-      const { analytics } = createPostHogAnalytics({
-        host: "https://posthog.test",
-        key: "phc_test",
-      });
-      const error = new RangeError("Privileged document name");
-      error.stack =
+      const stack =
         _syntax === "callsite"
           ? frames.join("\n")
           : ["RangeError: Privileged document name", ...frames].join("\n");
 
-      analytics.captureError(error);
-
-      const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
-      if (!(captured instanceof Error)) {
-        throw new TypeError("Expected a redacted Error");
-      }
-      expect(captured.stack).toBe(["RangeError:", ...frames].join("\n"));
+      expect(
+        redactTelemetryStack({
+          errorType: "RangeError",
+          stack,
+          syntax: _syntax === "callsite" ? "callsite" : "v8",
+        }),
+      ).toBe(["RangeError:", ...frames].join("\n"));
     },
   );
 
@@ -482,24 +478,15 @@ describe("PostHog browser analytics adapter", () => {
   } as const;
 
   test.each(Object.entries(URL_METADATA_FRAMES))(
-    "captureError removes URL metadata from %s frames",
+    "stack redaction removes URL metadata from %s frames",
     (_syntax, { frame, safeFrame }) => {
-      const { analytics } = createPostHogAnalytics({
-        host: "https://posthog.test",
-        key: "phc_test",
-      });
-      const error = new Error("Privileged document name");
-      error.stack = frame.startsWith("    at ")
-        ? [`Error: ${error.message}`, frame].join("\n")
-        : frame;
-
-      analytics.captureError(error);
-
-      const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
-      if (!(captured instanceof Error)) {
-        throw new TypeError("Expected a redacted Error");
-      }
-      expect(captured.stack).toBe(["Error:", safeFrame].join("\n"));
+      expect(
+        redactTelemetryStack({
+          errorType: "Error",
+          stack: frame,
+          syntax: frame.startsWith("    at ") ? "v8" : "callsite",
+        }),
+      ).toBe(["Error:", safeFrame].join("\n"));
     },
   );
 
@@ -612,6 +599,27 @@ describe("PostHog browser analytics adapter", () => {
       throw new TypeError("Expected a redacted Error");
     }
     expect(captured.stack).toBe(["UnknownError:", actualFrame].join("\n"));
+  });
+
+  test("captureError drops a frameless empty-name V8 stack", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    const error = new Error("Privileged message");
+    error.name = "";
+    error.stack = [
+      "renderMatter@https://stella.test/assets/a.js:1:2",
+      "clientName@https://stella.test/assets/private.js:20:5",
+    ].join("\n");
+
+    analytics.captureError(error);
+
+    const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+    if (!(captured instanceof Error)) {
+      throw new TypeError("Expected a redacted Error");
+    }
+    expect(captured.stack).toBeUndefined();
   });
 
   test("captureError survives a cyclic cause chain", () => {
