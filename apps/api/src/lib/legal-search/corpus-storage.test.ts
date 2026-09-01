@@ -281,6 +281,23 @@ describe("persisted corpus JSON validation", () => {
       "Invalid type: Expected (Object | unknown) but received Object",
     );
   });
+
+  test("serves a stored AST whose block role this reader does not declare", () => {
+    const parsed = parsePersistedCorpusAst({
+      version: 1,
+      blocks: [
+        {
+          id: "p1",
+          anchorId: "p-1",
+          type: "paragraph",
+          role: "declared-by-a-newer-parser",
+          inlines: [{ type: "text", text: "Rozsudok" }],
+        },
+      ],
+    });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.blocks.at(0)?.role).toBe("unknown");
+  });
 });
 
 /**

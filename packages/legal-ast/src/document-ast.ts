@@ -29,36 +29,53 @@ export { hasInlineChildren } from "./inline.js";
  */
 export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 
+/**
+ * The role sets, one per block type, are the source of truth for the role
+ * types, the strict schema a writer validates against, and the tolerant
+ * persisted reader. A role added here reaches all three; a role added
+ * anywhere else is a type error.
+ */
+export const HEADING_ROLES = ["decision-title", "section-heading"] as const;
+
+export type HeadingRole = (typeof HEADING_ROLES)[number];
+
 export type HeadingBlock = {
   id: string;
   anchorId: string;
   type: "heading";
   level: HeadingLevel;
-  role?: "decision-title" | "section-heading" | undefined;
+  role?: HeadingRole | undefined;
   inlines: Inline[];
   plainText: string;
 };
 
-export type ParagraphRole =
-  | "case-number"
-  | "intro"
-  | "history"
-  | "argumentation"
-  | "holding"
-  | "closing"
-  | "signature"
+export const PARAGRAPH_ROLES = [
+  "case-number",
+  "intro",
+  "history",
+  "argumentation",
+  "holding",
+  "closing",
+  "signature",
   /** A passage the decision reproduces from another text (block quotation). */
-  | "quote"
+  "quote",
   /** The centered party block a published reporter opens with. */
-  | "parties"
+  "parties",
   /** Other centered reporter front matter: docket line, argument and
    * decision dates. */
-  | "front-matter"
+  "front-matter",
   /** Reporter-authored apparatus around the decision: counsel appearances,
    * syllabus, headnotes, the panel line. Not the court's own words —
    * readers may fold it away. */
-  | "apparatus"
-  | "unknown";
+  "apparatus",
+  /**
+   * No role known. Also what a persisted reader assigns to a paragraph
+   * whose stored role it does not recognise (see `tolerantRole`).
+   */
+  "unknown",
+] as const;
+
+export type ParagraphRole = (typeof PARAGRAPH_ROLES)[number];
 
 export type ParagraphNote = {
   type: "footnote";
@@ -91,16 +108,27 @@ export type TableCell = {
   plainText: string;
 };
 
+export const TABLE_ROLES = ["related-proceedings", "metadata-table"] as const;
+
+export type TableRole = (typeof TABLE_ROLES)[number];
+
 export type TableBlock = {
   id: string;
   anchorId: string;
   type: "table";
-  role?: "related-proceedings" | "metadata-table" | undefined;
+  role?: TableRole | undefined;
   rows: TableCell[][];
   plainText: string;
 };
 
 export type Block = HeadingBlock | ParagraphBlock | TableBlock;
+
+/** The roles each block type may carry; total over `Block["type"]`. */
+export const BLOCK_ROLES = {
+  heading: HEADING_ROLES,
+  paragraph: PARAGRAPH_ROLES,
+  table: TABLE_ROLES,
+} as const satisfies Record<Block["type"], readonly string[]>;
 
 export type DocumentAstSource = {
   system: string;
@@ -341,7 +369,7 @@ const headingEntries = {
   anchorId: v.string(),
   type: v.literal("heading"),
   level: v.picklist([1, 2, 3, 4, 5, 6]),
-  role: v.optional(v.picklist(["decision-title", "section-heading"])),
+  role: v.optional(v.picklist(HEADING_ROLES)),
   inlines: inlineArraySchema,
 };
 
@@ -349,22 +377,7 @@ const paragraphEntries = {
   id: v.string(),
   anchorId: v.string(),
   type: v.literal("paragraph"),
-  role: v.optional(
-    v.picklist([
-      "case-number",
-      "intro",
-      "history",
-      "argumentation",
-      "holding",
-      "closing",
-      "signature",
-      "quote",
-      "parties",
-      "front-matter",
-      "apparatus",
-      "unknown",
-    ]),
-  ),
+  role: v.optional(v.picklist(PARAGRAPH_ROLES)),
   note: v.optional(
     v.variant("type", [
       v.object({
@@ -384,7 +397,7 @@ const tableEntries = {
   id: v.string(),
   anchorId: v.string(),
   type: v.literal("table"),
-  role: v.optional(v.picklist(["related-proceedings", "metadata-table"])),
+  role: v.optional(v.picklist(TABLE_ROLES)),
   plainText: v.string(),
 };
 
@@ -404,12 +417,108 @@ const wireTableCellSchema: v.GenericSchema<WireTableCell> = v.object({
   plainText: v.optional(v.string()),
 });
 
-/** `blockSchema` with the rebuildable `plainText` fields made optional. */
-const wireBlockSchema: v.GenericSchema<WireBlock> = v.variant("type", [
-  v.object({ ...headingEntries, plainText: v.optional(v.string()) }),
-  v.object({ ...paragraphEntries, plainText: v.optional(v.string()) }),
-  v.object({ ...tableEntries, rows: v.array(v.array(wireTableCellSchema)) }),
+const isMemberOf = <const TRoles extends readonly string[]>(
+  roles: TRoles,
+  role: string,
+): role is TRoles[number] => roles.includes(role);
+
+/**
+ * A stored role the persisted reader does not recognise.
+ *
+ * `role` is the one closed set in a block that grows with every parser,
+ * so a stored value this reader does not know is either a newer writer's
+ * (a deployment in progress, a client bundle older than the API) or a row
+ * written past the ingestion boundary. Either way it names a presentation
+ * hint, not content: failing the whole document over it would take the
+ * text down with the hint. The reader keeps the block and degrades the
+ * role instead — to `fallback`, which for a paragraph is the declared
+ * `unknown` and for the other block types is no role — while the
+ * canonical `documentAstSchema` stays strict, so a writer still cannot
+ * persist a role it does not declare. `unrecognisedBlockRoles` reports
+ * what was degraded so a stored row that needs repair is visible.
+ */
+const tolerantRole = <
+  const TRoles extends readonly string[],
+  TFallback extends TRoles[number] | undefined,
+>(
+  roles: TRoles,
+  fallback: TFallback,
+) =>
+  v.optional(
+    v.pipe(
+      v.string(),
+      v.transform((role): TRoles[number] | TFallback =>
+        isMemberOf(roles, role) ? role : fallback,
+      ),
+    ),
+  );
+
+/**
+ * `blockSchema` with the rebuildable `plainText` fields made optional and
+ * the roles read tolerantly (see `tolerantRole`).
+ */
+const wireBlockSchema: v.GenericSchema<unknown, WireBlock> = v.variant("type", [
+  v.object({
+    ...headingEntries,
+    role: tolerantRole(HEADING_ROLES, undefined),
+    plainText: v.optional(v.string()),
+  }),
+  v.object({
+    ...paragraphEntries,
+    role: tolerantRole(PARAGRAPH_ROLES, "unknown"),
+    plainText: v.optional(v.string()),
+  }),
+  v.object({
+    ...tableEntries,
+    role: tolerantRole(TABLE_ROLES, undefined),
+    rows: v.array(v.array(wireTableCellSchema)),
+  }),
 ]);
+
+export type UnrecognisedBlockRole = {
+  blockId: string | null;
+  type: Block["type"];
+  role: string;
+};
+
+const storedBlockShape = v.object({
+  id: v.optional(v.string()),
+  type: v.picklist(["heading", "paragraph", "table"]),
+  role: v.optional(v.string()),
+});
+
+const storedBlocksShape = v.object({
+  blocks: v.array(v.unknown()),
+});
+
+/**
+ * The roles in a stored AST that the persisted reader degrades.
+ *
+ * Reads the raw value, not the parsed AST, because parsing is where the
+ * information is lost. A value that is not an AST at all reports nothing:
+ * that failure is the parser's to raise.
+ */
+export const unrecognisedBlockRoles = (
+  raw: unknown,
+): readonly UnrecognisedBlockRole[] => {
+  const stored = v.safeParse(storedBlocksShape, raw);
+  if (!stored.success) {
+    return [];
+  }
+  const unrecognised: UnrecognisedBlockRole[] = [];
+  for (const candidate of stored.output.blocks) {
+    const block = v.safeParse(storedBlockShape, candidate);
+    if (!block.success || block.output.role === undefined) {
+      continue;
+    }
+    const { id, role, type } = block.output;
+    if (isMemberOf(BLOCK_ROLES[type], role)) {
+      continue;
+    }
+    unrecognised.push({ blockId: id ?? null, type, role });
+  }
+  return unrecognised;
+};
 
 const documentAstSourceSchema: v.GenericSchema<DocumentAstSource> = v.object({
   system: v.string(),

@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import {
   persistedDocumentAstSchema,
+  unrecognisedBlockRoles,
   type DocumentAst,
 } from "@stll/legal-ast/document-ast";
 
@@ -15,7 +16,10 @@ import {
   zstdDecompressToStringBounded,
 } from "@/api/lib/compression";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
-import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
+import {
+  CorpusPayloadUnavailableError,
+  StoredBlockRolesDegradedError,
+} from "@/api/lib/errors/tagged-errors";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type {
   CorpusLocation,
@@ -76,9 +80,28 @@ export const parsePersistedCorpusSections = (
   value: unknown,
 ): DecisionSection[] | null => v.parse(persistedDecisionSectionsSchema, value);
 
+/**
+ * A malformed stored AST still throws: that is a defect in what was
+ * written. A role this reader does not declare is not: the schema keeps
+ * the block and degrades the role, and the degradation is reported here so
+ * the row stays visible without costing the reader the document.
+ */
 export const parsePersistedCorpusAst = (
   value: unknown,
-): DocumentAst | EmptyAst | null => v.parse(persistedCorpusAstSchema, value);
+): DocumentAst | EmptyAst | null => {
+  const parsed = v.parse(persistedCorpusAstSchema, value);
+  const degraded = unrecognisedBlockRoles(value);
+  if (degraded.length > 0) {
+    captureError(
+      new StoredBlockRolesDegradedError({
+        message: "Stored document AST carries undeclared block roles",
+        roles: degraded,
+      }),
+      { step: "corpus-storage.parsePersistedCorpusAst" },
+    );
+  }
+  return parsed;
+};
 
 /**
  * The single bounded boundary for every corpus object read/write/delete.

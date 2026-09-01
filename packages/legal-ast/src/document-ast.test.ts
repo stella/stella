@@ -3,10 +3,13 @@ import { describe, expect, test } from "bun:test";
 import {
   getDocumentAstMetadata,
   hasUsableAst,
+  HEADING_ROLES,
   isDocumentAst,
   omitDerivablePlainText,
+  PARAGRAPH_ROLES,
   parseDocumentAst,
   parseUsableDocumentAst,
+  unrecognisedBlockRoles,
   withProjectedPlainText,
 } from "./document-ast";
 import type { DocumentAst } from "./document-ast";
@@ -348,5 +351,72 @@ describe("withProjectedPlainText", () => {
     expect(wire.plainText).toBe("zamieta\tNS\nRok");
     expect(wire.rows[0]?.[0]).not.toHaveProperty("plainText");
     expect(parseDocumentAst(JSON.stringify(wireAst))).toEqual(projected);
+  });
+});
+
+describe("persisted roles outside the declared sets", () => {
+  const withRoles = (
+    heading: string | undefined,
+    paragraph: string | undefined,
+  ) => ({
+    ...documentAst,
+    blocks: [
+      { ...documentAst.blocks[0], role: heading },
+      { ...documentAst.blocks[1], role: paragraph },
+    ],
+  });
+
+  test("the canonical guard rejects a role a writer does not declare", () => {
+    expect(isDocumentAst(withRoles("decision-title", "not-a-role"))).toBe(
+      false,
+    );
+    expect(isDocumentAst(withRoles("not-a-role", "intro"))).toBe(false);
+  });
+
+  test("the persisted reader keeps the document and degrades the role", () => {
+    const parsed = parseDocumentAst(withRoles("not-a-role", "not-a-role"));
+    expect(parsed).not.toBeNull();
+    expect(parsed?.blocks.map((block) => block.role)).toEqual([
+      undefined,
+      "unknown",
+    ]);
+  });
+
+  test("the persisted reader leaves declared roles untouched", () => {
+    const parsed = parseDocumentAst(withRoles("section-heading", "holding"));
+    expect(parsed?.blocks.map((block) => block.role)).toEqual([
+      "section-heading",
+      "holding",
+    ]);
+  });
+
+  test("reports what it degraded, by block", () => {
+    expect(
+      unrecognisedBlockRoles(withRoles("section-heading", "verdict")),
+    ).toEqual([{ blockId: "p1", type: "paragraph", role: "verdict" }]);
+    expect(unrecognisedBlockRoles(withRoles("title", "intro"))).toEqual([
+      { blockId: "h1", type: "heading", role: "title" },
+    ]);
+    expect(
+      unrecognisedBlockRoles(withRoles("decision-title", undefined)),
+    ).toEqual([]);
+  });
+
+  test("reports nothing for a value that is not an AST", () => {
+    expect(unrecognisedBlockRoles(null)).toEqual([]);
+    expect(unrecognisedBlockRoles({ blocks: "none" })).toEqual([]);
+  });
+
+  test("invariant: every declared role survives the persisted reader unchanged", () => {
+    for (const role of PARAGRAPH_ROLES) {
+      const stored = withRoles(undefined, role);
+      expect(parseDocumentAst(stored)?.blocks[1]?.role).toBe(role);
+      expect(unrecognisedBlockRoles(stored)).toEqual([]);
+    }
+    for (const role of HEADING_ROLES) {
+      const stored = withRoles(role, undefined);
+      expect(parseDocumentAst(stored)?.blocks[0]?.role).toBe(role);
+      expect(unrecognisedBlockRoles(stored)).toEqual([]);
+    }
   });
 });
