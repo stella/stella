@@ -172,7 +172,7 @@ const inlineText = (inlines: readonly Inline[]): string => {
     } else if (node.type === "page-anchor") {
       // Typography, not content — no characters.
     } else {
-      // bold | italic | link — all carry children
+      // Every remaining kind is a container: its text is its children's.
       text += inlineText(node.children);
     }
   }
@@ -368,8 +368,15 @@ export const validateAst = (
   for (const block of blocks) {
     const text = block.plainText.trim();
 
-    // Tiny blocks (excluding headings which can be short)
-    if (text.length > 0 && text.length < 5 && block.type !== "heading") {
+    // Tiny blocks. A heading is legitimately short, and an image's text
+    // is its alt text — a figure with a two-word label is not a parse
+    // that lost the paragraph around it.
+    if (
+      text.length > 0 &&
+      text.length < 5 &&
+      block.type !== "heading" &&
+      block.type !== "image"
+    ) {
       tinyBlocks++;
     }
 

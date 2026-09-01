@@ -1286,7 +1286,11 @@ const toPlainDecisionText = (decision: {
   if (ast === null) {
     return null;
   }
-  return ast.blocks.map((block) => block.plainText).join("\n\n");
+  // A block with no text of its own (an unlabelled figure) contributes
+  // nothing rather than a blank paragraph.
+  return ast.blocks
+    .flatMap((block) => (block.plainText === "" ? [] : [block.plainText]))
+    .join("\n\n");
 };
 
 const toIsoDateString = (value: unknown): string | null => {

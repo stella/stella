@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
+  persistedAstDegradations,
   persistedDocumentAstSchema,
-  unrecognisedBlockRoles,
   type DocumentAst,
 } from "@stll/legal-ast/document-ast";
 
@@ -18,7 +18,7 @@ import {
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import {
   CorpusPayloadUnavailableError,
-  StoredBlockRolesDegradedError,
+  StoredAstDegradedError,
 } from "@/api/lib/errors/tagged-errors";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type {
@@ -82,20 +82,21 @@ export const parsePersistedCorpusSections = (
 
 /**
  * A malformed stored AST still throws: that is a defect in what was
- * written. A role this reader does not declare is not: the schema keeps
- * the block and degrades the role, and the degradation is reported here so
- * the row stays visible without costing the reader the document.
+ * written. Vocabulary this reader does not declare is not: the schema
+ * keeps what carries text and degrades the rest, and each degradation is
+ * reported here so the row stays visible without costing the reader the
+ * document.
  */
 export const parsePersistedCorpusAst = (
   value: unknown,
 ): DocumentAst | EmptyAst | null => {
   const parsed = v.parse(persistedCorpusAstSchema, value);
-  const degraded = unrecognisedBlockRoles(value);
-  if (degraded.length > 0) {
+  const degradations = persistedAstDegradations(value);
+  if (degradations.length > 0) {
     captureError(
-      new StoredBlockRolesDegradedError({
-        message: "Stored document AST carries undeclared block roles",
-        roles: degraded,
+      new StoredAstDegradedError({
+        message: "Stored document AST carries undeclared vocabulary",
+        degradations,
       }),
       { step: "corpus-storage.parsePersistedCorpusAst" },
     );
