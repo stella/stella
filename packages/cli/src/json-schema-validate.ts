@@ -54,20 +54,36 @@ const STRING_ASSERTION_KEYWORDS = [
   "pattern",
 ] as const;
 
+const FULL_DATE = /^\d{4}-\d{2}-\d{2}$/u;
+
+/**
+ * RFC 3339 §5.6 date-time: full date, `T`, full time with in-range fields
+ * (a leap second allowed), and an offset. `Date.parse` alone also admits a
+ * bare date, an offset-less local time, and out-of-range fields.
+ */
+const RFC3339_DATE_TIME =
+  /^\d{4}-\d{2}-\d{2}[Tt](?:[01]\d|2[0-3]):[0-5]\d:(?:[0-5]\d|60)(?:\.\d+)?(?:[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/u;
+
+/**
+ * Whether a `YYYY-MM-DD` names a day the calendar has. `Date.parse` rolls an
+ * impossible day over ("2026-02-30" becomes March 2nd), so the parsed instant
+ * has to print back as the same day. Every date-bearing format goes through
+ * this one check so no format can trust the lenient parser on its own.
+ */
+const isCalendarDay = (day: string): boolean => {
+  const time = Date.parse(`${day}T00:00:00Z`);
+  return !Number.isNaN(time) && new Date(time).toISOString().startsWith(day);
+};
+
 /**
  * The `format` values the executor asserts. JSON Schema treats `format` as an
  * annotation unless a validator opts in, so an unknown format is ignored rather
  * than failed: the server remains the authority for anything not listed here.
  */
 const KNOWN_STRING_FORMATS = {
-  date: (value: string) =>
-    /^\d{4}-\d{2}-\d{2}$/u.test(value) && !Number.isNaN(Date.parse(value)),
-  // RFC 3339 §5.6: full date, `T`, full time, and an offset; `Date.parse`
-  // alone also admits a bare date or a local time.
+  date: (value: string) => FULL_DATE.test(value) && isCalendarDay(value),
   "date-time": (value: string) =>
-    /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$/u.test(
-      value,
-    ) && !Number.isNaN(Date.parse(value)),
+    RFC3339_DATE_TIME.test(value) && isCalendarDay(value.slice(0, 10)),
   uuid: (value: string) =>
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(
       value,

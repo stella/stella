@@ -601,10 +601,13 @@ describe("format", () => {
       expect(validateAgainstSchema(schema, { at }).valid).toBe(true);
     }
     for (const at of [
-      // A bare date and a local time without an offset both parse under
-      // `Date.parse` and are not date-times.
+      // A bare date, a local time without an offset, a rolled-over day and
+      // an out-of-range hour all parse under `Date.parse` and are not
+      // date-times.
       "2026-01-01",
       "2026-01-01T00:00:00",
+      "2026-02-30T00:00:00Z",
+      "2026-01-01T25:00:00Z",
       "yesterday",
     ]) {
       const result = validateAgainstSchema(schema, { at });
@@ -619,6 +622,10 @@ describe("format", () => {
     const bad = validateAgainstSchema(schema, { day: "2026-13-40" });
     expect(bad.valid).toBe(false);
     expect(bad.valid ? "" : bad.message).toBe("string is not a valid date");
+    // A day the calendar lacks; `Date.parse` alone rolls it into March.
+    expect(validateAgainstSchema(schema, { day: "2026-02-30" }).valid).toBe(
+      false,
+    );
     expect(validateAgainstSchema(schema, { id: "not-a-uuid" }).valid).toBe(
       false,
     );

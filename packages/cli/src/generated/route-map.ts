@@ -5144,19 +5144,7 @@ export const generatedRouteMap: RouteNode = {
                           minimum: 1,
                           maximum: 200,
                           description: "Max entries to return",
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 200,
-                              description: "Max entries to return",
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -5230,8 +5218,18 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "active",
                   },
+                  {
+                    kind: "int",
+                    min: 0,
+                    repeatable: false,
+                    flag: "--sort-order",
+                    prop: "sortOrder",
+                    required: false,
+                    part: "body",
+                    partPath: "sortOrder",
+                  },
                 ],
-                inputOnly: ["body.sortOrder"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -5263,17 +5261,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         sortOrder: {
                           minimum: 0,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                       },
                     },
@@ -5370,8 +5358,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "workspaceId",
                   },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--active",
+                    prop: "active",
+                    required: false,
+                    part: "query",
+                    partPath: "active",
+                  },
                 ],
-                inputOnly: ["query.type", "query.active"],
+                inputOnly: ["query.type"],
                 paginated: true,
                 paginationPart: "query",
                 itemsKey: "items",
@@ -5396,18 +5393,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 1000,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 1000,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -5426,16 +5412,7 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         active: {
-                          anyOf: [
-                            {
-                              type: "boolean",
-                            },
-                            {
-                              format: "boolean",
-                              default: false,
-                              type: "string",
-                            },
-                          ],
+                          type: "boolean",
                         },
                       },
                     },
@@ -5497,8 +5474,18 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "active",
                   },
+                  {
+                    kind: "int",
+                    min: 0,
+                    repeatable: false,
+                    flag: "--sort-order",
+                    prop: "sortOrder",
+                    required: false,
+                    part: "body",
+                    partPath: "sortOrder",
+                  },
                 ],
-                inputOnly: ["body.sortOrder"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -5532,17 +5519,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         sortOrder: {
                           minimum: 0,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                       },
                     },
@@ -6272,18 +6249,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 100,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 100,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                       },
                     },
@@ -6644,8 +6610,18 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "parentId",
                   },
+                  {
+                    kind: "int",
+                    min: 0,
+                    repeatable: false,
+                    flag: "--sort-order",
+                    prop: "sortOrder",
+                    required: false,
+                    part: "body",
+                    partPath: "sortOrder",
+                  },
                 ],
-                inputOnly: ["body.sortOrder"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "knowledge_write",
@@ -6690,17 +6666,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         sortOrder: {
                           minimum: 0,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                       },
                     },
@@ -6820,16 +6786,7 @@ export const generatedRouteMap: RouteNode = {
                                 type: "string",
                               },
                               level: {
-                                anyOf: [
-                                  {
-                                    format: "integer",
-                                    default: 0,
-                                    type: "string",
-                                  },
-                                  {
-                                    type: "integer",
-                                  },
-                                ],
+                                type: "integer",
                               },
                               runs: {
                                 type: "array",
@@ -6862,16 +6819,7 @@ export const generatedRouteMap: RouteNode = {
                                 ],
                               },
                               listLevel: {
-                                anyOf: [
-                                  {
-                                    format: "integer",
-                                    default: 0,
-                                    type: "string",
-                                  },
-                                  {
-                                    type: "integer",
-                                  },
-                                ],
+                                type: "integer",
                               },
                               isDirective: {
                                 type: "boolean",
@@ -7086,19 +7034,7 @@ export const generatedRouteMap: RouteNode = {
                           minimum: 1,
                           maximum: 200,
                           description: "Max clauses to return",
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 200,
-                              description: "Max clauses to return",
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -7235,16 +7171,7 @@ export const generatedRouteMap: RouteNode = {
                                 type: "string",
                               },
                               level: {
-                                anyOf: [
-                                  {
-                                    format: "integer",
-                                    default: 0,
-                                    type: "string",
-                                  },
-                                  {
-                                    type: "integer",
-                                  },
-                                ],
+                                type: "integer",
                               },
                               runs: {
                                 type: "array",
@@ -7277,16 +7204,7 @@ export const generatedRouteMap: RouteNode = {
                                 ],
                               },
                               listLevel: {
-                                anyOf: [
-                                  {
-                                    format: "integer",
-                                    default: 0,
-                                    type: "string",
-                                  },
-                                  {
-                                    type: "integer",
-                                  },
-                                ],
+                                type: "integer",
                               },
                               isDirective: {
                                 type: "boolean",
@@ -7534,16 +7452,7 @@ export const generatedRouteMap: RouteNode = {
                                 type: "string",
                               },
                               level: {
-                                anyOf: [
-                                  {
-                                    format: "integer",
-                                    default: 0,
-                                    type: "string",
-                                  },
-                                  {
-                                    type: "integer",
-                                  },
-                                ],
+                                type: "integer",
                               },
                               runs: {
                                 type: "array",
@@ -7576,16 +7485,7 @@ export const generatedRouteMap: RouteNode = {
                                 ],
                               },
                               listLevel: {
-                                anyOf: [
-                                  {
-                                    format: "integer",
-                                    default: 0,
-                                    type: "string",
-                                  },
-                                  {
-                                    type: "integer",
-                                  },
-                                ],
+                                type: "integer",
                               },
                               isDirective: {
                                 type: "boolean",
@@ -7743,16 +7643,7 @@ export const generatedRouteMap: RouteNode = {
                                 type: "string",
                               },
                               level: {
-                                anyOf: [
-                                  {
-                                    format: "integer",
-                                    default: 0,
-                                    type: "string",
-                                  },
-                                  {
-                                    type: "integer",
-                                  },
-                                ],
+                                type: "integer",
                               },
                               runs: {
                                 type: "array",
@@ -7785,16 +7676,7 @@ export const generatedRouteMap: RouteNode = {
                                 ],
                               },
                               listLevel: {
-                                anyOf: [
-                                  {
-                                    format: "integer",
-                                    default: 0,
-                                    type: "string",
-                                  },
-                                  {
-                                    type: "integer",
-                                  },
-                                ],
+                                type: "integer",
                               },
                               isDirective: {
                                 type: "boolean",
@@ -7992,8 +7874,18 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "label",
                   },
+                  {
+                    kind: "int",
+                    min: 0,
+                    repeatable: false,
+                    flag: "--sort-order",
+                    prop: "sortOrder",
+                    required: false,
+                    part: "body",
+                    partPath: "sortOrder",
+                  },
                 ],
-                inputOnly: ["body.body", "body.sortOrder"],
+                inputOnly: ["body.body"],
                 paginated: false,
                 destructive: false,
                 scope: "knowledge_write",
@@ -8023,16 +7915,7 @@ export const generatedRouteMap: RouteNode = {
                                 type: "string",
                               },
                               level: {
-                                anyOf: [
-                                  {
-                                    format: "integer",
-                                    default: 0,
-                                    type: "string",
-                                  },
-                                  {
-                                    type: "integer",
-                                  },
-                                ],
+                                type: "integer",
                               },
                               runs: {
                                 type: "array",
@@ -8065,16 +7948,7 @@ export const generatedRouteMap: RouteNode = {
                                 ],
                               },
                               listLevel: {
-                                anyOf: [
-                                  {
-                                    format: "integer",
-                                    default: 0,
-                                    type: "string",
-                                  },
-                                  {
-                                    type: "integer",
-                                  },
-                                ],
+                                type: "integer",
                               },
                               isDirective: {
                                 type: "boolean",
@@ -8115,17 +7989,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         sortOrder: {
                           minimum: 0,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                       },
                     },
@@ -8621,6 +8485,16 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "billingAddress.country",
                   },
                   {
+                    kind: "int",
+                    min: 0,
+                    repeatable: false,
+                    flag: "--default-hourly-rate",
+                    prop: "defaultHourlyRate",
+                    required: false,
+                    part: "body",
+                    partPath: "defaultHourlyRate",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--currency",
@@ -8628,6 +8502,17 @@ export const generatedRouteMap: RouteNode = {
                     required: false,
                     part: "body",
                     partPath: "currency",
+                  },
+                  {
+                    kind: "int",
+                    min: 0,
+                    max: 365,
+                    repeatable: false,
+                    flag: "--payment-term-days",
+                    prop: "paymentTermDays",
+                    required: false,
+                    part: "body",
+                    partPath: "paymentTermDays",
                   },
                   {
                     kind: "string",
@@ -8654,8 +8539,6 @@ export const generatedRouteMap: RouteNode = {
                   "body.addresses",
                   "body.metadata",
                   "body.bankAccounts",
-                  "body.defaultHourlyRate",
-                  "body.paymentTermDays",
                 ],
                 paginated: false,
                 destructive: false,
@@ -8957,17 +8840,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         defaultHourlyRate: {
                           minimum: 0,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         currency: {
                           minLength: 3,
@@ -8977,18 +8850,7 @@ export const generatedRouteMap: RouteNode = {
                         paymentTermDays: {
                           minimum: 0,
                           maximum: 365,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              maximum: 365,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         originatingAttorneyId: {
                           minLength: 1,
@@ -9400,18 +9262,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 100,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 100,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 4154,
@@ -9611,6 +9462,16 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "taxId",
                   },
                   {
+                    kind: "int",
+                    min: 0,
+                    repeatable: false,
+                    flag: "--default-hourly-rate",
+                    prop: "defaultHourlyRate",
+                    required: false,
+                    part: "body",
+                    partPath: "defaultHourlyRate",
+                  },
+                  {
                     kind: "nullable-string",
                     repeatable: false,
                     flag: "--currency",
@@ -9618,6 +9479,17 @@ export const generatedRouteMap: RouteNode = {
                     required: false,
                     part: "body",
                     partPath: "currency",
+                  },
+                  {
+                    kind: "int",
+                    min: 0,
+                    max: 365,
+                    repeatable: false,
+                    flag: "--payment-term-days",
+                    prop: "paymentTermDays",
+                    required: false,
+                    part: "body",
+                    partPath: "paymentTermDays",
                   },
                   {
                     kind: "nullable-string",
@@ -9647,8 +9519,6 @@ export const generatedRouteMap: RouteNode = {
                   "body.tags",
                   "body.bankAccounts",
                   "body.billingAddress",
-                  "body.defaultHourlyRate",
-                  "body.paymentTermDays",
                 ],
                 paginated: false,
                 destructive: false,
@@ -10087,17 +9957,7 @@ export const generatedRouteMap: RouteNode = {
                           anyOf: [
                             {
                               minimum: 0,
-                              anyOf: [
-                                {
-                                  format: "integer",
-                                  default: 0,
-                                  type: "string",
-                                },
-                                {
-                                  minimum: 0,
-                                  type: "integer",
-                                },
-                              ],
+                              type: "integer",
                             },
                             {
                               type: "null",
@@ -10123,18 +9983,7 @@ export const generatedRouteMap: RouteNode = {
                             {
                               minimum: 0,
                               maximum: 365,
-                              anyOf: [
-                                {
-                                  format: "integer",
-                                  default: 0,
-                                  type: "string",
-                                },
-                                {
-                                  minimum: 0,
-                                  maximum: 365,
-                                  type: "integer",
-                                },
-                              ],
+                              type: "integer",
                             },
                             {
                               type: "null",
@@ -11843,19 +11692,7 @@ export const generatedRouteMap: RouteNode = {
                           minimum: 1,
                           maximum: 500,
                           description: "Max entities to return",
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 500,
-                              description: "Max entities to return",
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         fieldMode: {
                           anyOf: [
@@ -12110,18 +11947,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 500,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 500,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -12177,18 +12003,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 500,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 500,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -13100,18 +12915,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 500,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 500,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                       },
                     },
@@ -13709,18 +13513,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 500,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 500,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 65368,
@@ -14614,6 +14407,16 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "timezoneId",
                   },
                   {
+                    kind: "int",
+                    min: 1,
+                    repeatable: false,
+                    flag: "--amount",
+                    prop: "amount",
+                    required: true,
+                    part: "body",
+                    partPath: "amount",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--currency",
@@ -14666,8 +14469,19 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "billable",
                   },
+                  {
+                    kind: "int",
+                    min: 0,
+                    max: 100,
+                    repeatable: false,
+                    flag: "--markup",
+                    prop: "markup",
+                    required: false,
+                    part: "body",
+                    partPath: "markup",
+                  },
                 ],
-                inputOnly: ["body.amount", "body.markup"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -14705,17 +14519,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         amount: {
                           minimum: 1,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         currency: {
                           minLength: 3,
@@ -14757,18 +14561,7 @@ export const generatedRouteMap: RouteNode = {
                         markup: {
                           minimum: 0,
                           maximum: 100,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              maximum: 100,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                       },
                     },
@@ -14928,8 +14721,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "query",
                     partPath: "category",
                   },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--billable",
+                    prop: "billable",
+                    required: false,
+                    part: "query",
+                    partPath: "billable",
+                  },
                 ],
-                inputOnly: ["query.billable"],
+                inputOnly: [],
                 paginated: true,
                 paginationPart: "query",
                 itemsKey: "items",
@@ -14954,18 +14756,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 200,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 200,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -15009,16 +14800,7 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         billable: {
-                          anyOf: [
-                            {
-                              type: "boolean",
-                            },
-                            {
-                              format: "boolean",
-                              default: false,
-                              type: "string",
-                            },
-                          ],
+                          type: "boolean",
                         },
                       },
                     },
@@ -15061,6 +14843,16 @@ export const generatedRouteMap: RouteNode = {
                     required: false,
                     part: "body",
                     partPath: "dateIncurred",
+                  },
+                  {
+                    kind: "int",
+                    min: 1,
+                    repeatable: false,
+                    flag: "--amount",
+                    prop: "amount",
+                    required: false,
+                    part: "body",
+                    partPath: "amount",
                   },
                   {
                     kind: "string",
@@ -15116,6 +14908,17 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "billable",
                   },
                   {
+                    kind: "int",
+                    min: 0,
+                    max: 100,
+                    repeatable: false,
+                    flag: "--markup",
+                    prop: "markup",
+                    required: false,
+                    part: "body",
+                    partPath: "markup",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--matter-id",
@@ -15125,7 +14928,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "matterId",
                   },
                 ],
-                inputOnly: ["body.amount", "body.markup", "body.status"],
+                inputOnly: ["body.status"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -15150,17 +14953,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         amount: {
                           minimum: 1,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         currency: {
                           minLength: 3,
@@ -15202,18 +14995,7 @@ export const generatedRouteMap: RouteNode = {
                         markup: {
                           minimum: 0,
                           maximum: 100,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              maximum: 100,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         matterId: {
                           minLength: 36,
@@ -15454,16 +15236,7 @@ export const generatedRouteMap: RouteNode = {
                                         type: "string",
                                       },
                                       value: {
-                                        anyOf: [
-                                          {
-                                            format: "integer",
-                                            default: 0,
-                                            type: "string",
-                                          },
-                                          {
-                                            type: "integer",
-                                          },
-                                        ],
+                                        type: "integer",
                                       },
                                       currency: {
                                         nullable: true,
@@ -15505,18 +15278,7 @@ export const generatedRouteMap: RouteNode = {
                                       amountCents: {
                                         description:
                                           "Amount in the currency's minor units",
-                                        anyOf: [
-                                          {
-                                            format: "integer",
-                                            default: 0,
-                                            type: "string",
-                                          },
-                                          {
-                                            description:
-                                              "Amount in the currency's minor units",
-                                            type: "integer",
-                                          },
-                                        ],
+                                        type: "integer",
                                       },
                                       currency: {
                                         minLength: 3,
@@ -16616,16 +16378,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "string",
                                 },
                                 value: {
-                                  anyOf: [
-                                    {
-                                      format: "integer",
-                                      default: 0,
-                                      type: "string",
-                                    },
-                                    {
-                                      type: "integer",
-                                    },
-                                  ],
+                                  type: "integer",
                                 },
                                 currency: {
                                   nullable: true,
@@ -16667,18 +16420,7 @@ export const generatedRouteMap: RouteNode = {
                                 amountCents: {
                                   description:
                                     "Amount in the currency's minor units",
-                                  anyOf: [
-                                    {
-                                      format: "integer",
-                                      default: 0,
-                                      type: "string",
-                                    },
-                                    {
-                                      description:
-                                        "Amount in the currency's minor units",
-                                      type: "integer",
-                                    },
-                                  ],
+                                  type: "integer",
                                 },
                                 currency: {
                                   minLength: 3,
@@ -17015,50 +16757,17 @@ export const generatedRouteMap: RouteNode = {
                                     hourUtc: {
                                       minimum: 0,
                                       maximum: 23,
-                                      anyOf: [
-                                        {
-                                          format: "integer",
-                                          default: 0,
-                                          type: "string",
-                                        },
-                                        {
-                                          minimum: 0,
-                                          maximum: 23,
-                                          type: "integer",
-                                        },
-                                      ],
+                                      type: "integer",
                                     },
                                     dayOfWeek: {
                                       minimum: 0,
                                       maximum: 6,
-                                      anyOf: [
-                                        {
-                                          format: "integer",
-                                          default: 0,
-                                          type: "string",
-                                        },
-                                        {
-                                          minimum: 0,
-                                          maximum: 6,
-                                          type: "integer",
-                                        },
-                                      ],
+                                      type: "integer",
                                     },
                                     dayOfMonth: {
                                       minimum: 1,
                                       maximum: 28,
-                                      anyOf: [
-                                        {
-                                          format: "integer",
-                                          default: 0,
-                                          type: "string",
-                                        },
-                                        {
-                                          minimum: 1,
-                                          maximum: 28,
-                                          type: "integer",
-                                        },
-                                      ],
+                                      type: "integer",
                                     },
                                   },
                                 },
@@ -17234,18 +16943,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 100,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 100,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -17425,18 +17123,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 100,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 100,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -17613,8 +17300,18 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "inputEntityIds",
                   },
+                  {
+                    kind: "int",
+                    min: 0,
+                    repeatable: false,
+                    flag: "--confirmed-units",
+                    prop: "confirmedUnits",
+                    required: false,
+                    part: "body",
+                    partPath: "confirmedUnits",
+                  },
                 ],
-                inputOnly: ["body.confirmedUnits"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -17646,17 +17343,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         confirmedUnits: {
                           minimum: 0,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                       },
                     },
@@ -17872,50 +17559,17 @@ export const generatedRouteMap: RouteNode = {
                                     hourUtc: {
                                       minimum: 0,
                                       maximum: 23,
-                                      anyOf: [
-                                        {
-                                          format: "integer",
-                                          default: 0,
-                                          type: "string",
-                                        },
-                                        {
-                                          minimum: 0,
-                                          maximum: 23,
-                                          type: "integer",
-                                        },
-                                      ],
+                                      type: "integer",
                                     },
                                     dayOfWeek: {
                                       minimum: 0,
                                       maximum: 6,
-                                      anyOf: [
-                                        {
-                                          format: "integer",
-                                          default: 0,
-                                          type: "string",
-                                        },
-                                        {
-                                          minimum: 0,
-                                          maximum: 6,
-                                          type: "integer",
-                                        },
-                                      ],
+                                      type: "integer",
                                     },
                                     dayOfMonth: {
                                       minimum: 1,
                                       maximum: 28,
-                                      anyOf: [
-                                        {
-                                          format: "integer",
-                                          default: 0,
-                                          type: "string",
-                                        },
-                                        {
-                                          minimum: 1,
-                                          maximum: 28,
-                                          type: "integer",
-                                        },
-                                      ],
+                                      type: "integer",
                                     },
                                   },
                                 },
@@ -18444,19 +18098,7 @@ export const generatedRouteMap: RouteNode = {
                           minimum: 1,
                           maximum: 100,
                           description: "Max invoices to return",
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 100,
-                              description: "Max invoices to return",
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -18862,13 +18504,44 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "lawId",
                   },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--metadata",
+                    prop: "metadata",
+                    required: false,
+                    part: "query",
+                    partPath: "metadata",
+                  },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--analysis",
+                    prop: "analysis",
+                    required: false,
+                    part: "query",
+                    partPath: "analysis",
+                  },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--full-text",
+                    prop: "fullText",
+                    required: false,
+                    part: "query",
+                    partPath: "fullText",
+                  },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--eli",
+                    prop: "eli",
+                    required: false,
+                    part: "query",
+                    partPath: "eli",
+                  },
                 ],
-                inputOnly: [
-                  "query.metadata",
-                  "query.analysis",
-                  "query.fullText",
-                  "query.eli",
-                ],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "read",
@@ -18890,52 +18563,16 @@ export const generatedRouteMap: RouteNode = {
                       type: "object",
                       properties: {
                         metadata: {
-                          anyOf: [
-                            {
-                              type: "boolean",
-                            },
-                            {
-                              format: "boolean",
-                              default: false,
-                              type: "string",
-                            },
-                          ],
+                          type: "boolean",
                         },
                         analysis: {
-                          anyOf: [
-                            {
-                              type: "boolean",
-                            },
-                            {
-                              format: "boolean",
-                              default: false,
-                              type: "string",
-                            },
-                          ],
+                          type: "boolean",
                         },
                         fullText: {
-                          anyOf: [
-                            {
-                              type: "boolean",
-                            },
-                            {
-                              format: "boolean",
-                              default: false,
-                              type: "string",
-                            },
-                          ],
+                          type: "boolean",
                         },
                         eli: {
-                          anyOf: [
-                            {
-                              type: "boolean",
-                            },
-                            {
-                              format: "boolean",
-                              default: false,
-                              type: "string",
-                            },
-                          ],
+                          type: "boolean",
                         },
                       },
                     },
@@ -19208,19 +18845,7 @@ export const generatedRouteMap: RouteNode = {
                           minimum: 1,
                           maximum: 100,
                           description: "Max search results to return",
-                          anyOf: [
-                            {
-                              format: "numeric",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 100,
-                              description: "Max search results to return",
-                              type: "number",
-                            },
-                          ],
+                          type: "number",
                         },
                       },
                     },
@@ -19472,18 +19097,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 100,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 100,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -19570,6 +19184,16 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "propertyId",
                   },
                   {
+                    kind: "int",
+                    min: 0,
+                    repeatable: false,
+                    flag: "--position",
+                    prop: "position",
+                    required: false,
+                    part: "body",
+                    partPath: "position",
+                  },
+                  {
                     kind: "boolean",
                     repeatable: false,
                     flag: "--required",
@@ -19579,7 +19203,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "required",
                   },
                 ],
-                inputOnly: ["body.position"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -19607,17 +19231,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         position: {
                           minimum: 0,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         required: {
                           type: "boolean",
@@ -20039,17 +19653,7 @@ export const generatedRouteMap: RouteNode = {
                                             },
                                             pageNumber: {
                                               minimum: 1,
-                                              anyOf: [
-                                                {
-                                                  format: "integer",
-                                                  default: 0,
-                                                  type: "string",
-                                                },
-                                                {
-                                                  minimum: 1,
-                                                  type: "integer",
-                                                },
-                                              ],
+                                              type: "integer",
                                             },
                                           },
                                         },
@@ -20168,18 +19772,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 200,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 200,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -20450,18 +20043,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 100,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 100,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -20605,18 +20187,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 200,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 200,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -20780,18 +20351,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 500,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 500,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -21063,17 +20623,7 @@ export const generatedRouteMap: RouteNode = {
                                 },
                                 pageNumber: {
                                   minimum: 1,
-                                  anyOf: [
-                                    {
-                                      format: "integer",
-                                      default: 0,
-                                      type: "string",
-                                    },
-                                    {
-                                      minimum: 1,
-                                      type: "integer",
-                                    },
-                                  ],
+                                  type: "integer",
                                 },
                               },
                             },
@@ -21182,18 +20732,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 200,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 200,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -21507,18 +21046,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 100,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 100,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -21804,8 +21332,19 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "matterNumberPattern",
                   },
+                  {
+                    kind: "int",
+                    min: 1,
+                    max: 6,
+                    repeatable: false,
+                    flag: "--matter-number-padding",
+                    prop: "matterNumberPadding",
+                    required: true,
+                    part: "body",
+                    partPath: "matterNumberPadding",
+                  },
                 ],
-                inputOnly: ["body.matterNumberPadding"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "admin_read",
@@ -21825,18 +21364,7 @@ export const generatedRouteMap: RouteNode = {
                         matterNumberPadding: {
                           minimum: 1,
                           maximum: 6,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 6,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                       },
                     },
@@ -21936,6 +21464,17 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "matterNumberPattern",
                   },
                   {
+                    kind: "int",
+                    min: 1,
+                    max: 6,
+                    repeatable: false,
+                    flag: "--matter-number-padding",
+                    prop: "matterNumberPadding",
+                    required: false,
+                    part: "body",
+                    partPath: "matterNumberPadding",
+                  },
+                  {
                     kind: "boolean",
                     repeatable: false,
                     flag: "--prompt-caching-enabled",
@@ -21954,10 +21493,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "memoryExtractionEnabled",
                   },
                 ],
-                inputOnly: [
-                  "body.documentProcessingMode",
-                  "body.matterNumberPadding",
-                ],
+                inputOnly: ["body.documentProcessingMode"],
                 paginated: false,
                 destructive: false,
                 scope: "admin_write",
@@ -21988,18 +21524,7 @@ export const generatedRouteMap: RouteNode = {
                         matterNumberPadding: {
                           minimum: 1,
                           maximum: 6,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 6,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         promptCachingEnabled: {
                           type: "boolean",
@@ -22487,18 +22012,7 @@ export const generatedRouteMap: RouteNode = {
                                                               },
                                                               clauseVersion: {
                                                                 minimum: 1,
-                                                                anyOf: [
-                                                                  {
-                                                                    format:
-                                                                      "integer",
-                                                                    default: 0,
-                                                                    type: "string",
-                                                                  },
-                                                                  {
-                                                                    minimum: 1,
-                                                                    type: "integer",
-                                                                  },
-                                                                ],
+                                                                type: "integer",
                                                               },
                                                             },
                                                           },
@@ -23681,19 +23195,7 @@ export const generatedRouteMap: RouteNode = {
                           minimum: 1,
                           maximum: 100,
                           description: "Max playbooks to return",
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 100,
-                              description: "Max playbooks to return",
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -23745,8 +23247,19 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "playbookId",
                   },
+                  {
+                    kind: "int",
+                    min: 1,
+                    max: 50,
+                    repeatable: false,
+                    flag: "--query-limit",
+                    prop: "query.limit",
+                    required: false,
+                    part: "query",
+                    partPath: "limit",
+                  },
                 ],
-                inputOnly: ["query.limit"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "read",
@@ -23773,18 +23286,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 50,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 50,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                       },
                     },
@@ -23800,8 +23302,21 @@ export const generatedRouteMap: RouteNode = {
                 description:
                   "List the current user's recently used playbooks in the active organization.",
                 access: "read",
-                flags: [],
-                inputOnly: ["query.limit"],
+                flags: [
+                  {
+                    kind: "int",
+                    min: 1,
+                    max: 10,
+                    repeatable: false,
+                    description: "Max recently used playbooks to return",
+                    flag: "--query-limit",
+                    prop: "query.limit",
+                    required: false,
+                    part: "query",
+                    partPath: "limit",
+                  },
+                ],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "read",
@@ -23816,20 +23331,7 @@ export const generatedRouteMap: RouteNode = {
                           minimum: 1,
                           maximum: 10,
                           description: "Max recently used playbooks to return",
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 10,
-                              description:
-                                "Max recently used playbooks to return",
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                       },
                     },
@@ -23855,8 +23357,18 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "playbookId",
                   },
+                  {
+                    kind: "number",
+                    min: 1,
+                    repeatable: false,
+                    flag: "--params-version",
+                    prop: "params.version",
+                    required: true,
+                    part: "params",
+                    partPath: "version",
+                  },
                 ],
-                inputOnly: ["params.version"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "knowledge_write",
@@ -23877,17 +23389,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         version: {
                           minimum: 1,
-                          anyOf: [
-                            {
-                              format: "numeric",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              type: "number",
-                            },
-                          ],
+                          type: "number",
                         },
                       },
                     },
@@ -24242,18 +23744,7 @@ export const generatedRouteMap: RouteNode = {
                                                               },
                                                               clauseVersion: {
                                                                 minimum: 1,
-                                                                anyOf: [
-                                                                  {
-                                                                    format:
-                                                                      "integer",
-                                                                    default: 0,
-                                                                    type: "string",
-                                                                  },
-                                                                  {
-                                                                    minimum: 1,
-                                                                    type: "integer",
-                                                                  },
-                                                                ],
+                                                                type: "integer",
                                                               },
                                                             },
                                                           },
@@ -27932,6 +27423,16 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "userId",
                   },
                   {
+                    kind: "int",
+                    min: 0,
+                    repeatable: false,
+                    flag: "--hourly-rate",
+                    prop: "hourlyRate",
+                    required: true,
+                    part: "body",
+                    partPath: "hourlyRate",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--effective-from",
@@ -27950,7 +27451,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "effectiveTo",
                   },
                 ],
-                inputOnly: ["body.hourlyRate"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -27977,17 +27478,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         hourlyRate: {
                           minimum: 0,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         effectiveFrom: {
                           format: "date",
@@ -28177,18 +27668,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 500,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 500,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -28237,6 +27717,16 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "id",
                   },
                   {
+                    kind: "int",
+                    min: 0,
+                    repeatable: false,
+                    flag: "--hourly-rate",
+                    prop: "hourlyRate",
+                    required: false,
+                    part: "body",
+                    partPath: "hourlyRate",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--effective-from",
@@ -28255,7 +27745,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "effectiveTo",
                   },
                 ],
-                inputOnly: ["body.hourlyRate"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -28276,17 +27766,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         hourlyRate: {
                           minimum: 0,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         effectiveFrom: {
                           format: "date",
@@ -28374,18 +27854,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 200,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 200,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -28834,18 +28303,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 100,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 100,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                       },
                     },
@@ -29368,18 +28826,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 100,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 100,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -29621,6 +29068,26 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "proposalId",
                   },
                   {
+                    kind: "int",
+                    min: 0,
+                    repeatable: false,
+                    flag: "--range-start",
+                    prop: "rangeStart",
+                    required: true,
+                    part: "body",
+                    partPath: "rangeStart",
+                  },
+                  {
+                    kind: "int",
+                    min: 0,
+                    repeatable: false,
+                    flag: "--range-end",
+                    prop: "rangeEnd",
+                    required: true,
+                    part: "body",
+                    partPath: "rangeEnd",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--body",
@@ -29630,7 +29097,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "body",
                   },
                 ],
-                inputOnly: ["body.rangeStart", "body.rangeEnd"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 inputSchema: {
@@ -29657,31 +29124,11 @@ export const generatedRouteMap: RouteNode = {
                         },
                         rangeStart: {
                           minimum: 0,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         rangeEnd: {
                           minimum: 0,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         body: {
                           minLength: 1,
@@ -30470,18 +29917,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 250,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 250,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -32101,18 +31537,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 100,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 100,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -35012,18 +34437,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 100,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 100,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 128,
@@ -35420,8 +34834,18 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "parentId",
                   },
+                  {
+                    kind: "int",
+                    min: 0,
+                    repeatable: false,
+                    flag: "--sort-order",
+                    prop: "sortOrder",
+                    required: false,
+                    part: "body",
+                    partPath: "sortOrder",
+                  },
                 ],
-                inputOnly: ["body.sortOrder"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "templates",
@@ -35466,17 +34890,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         sortOrder: {
                           minimum: 0,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 0,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                       },
                     },
@@ -36305,16 +35719,7 @@ export const generatedRouteMap: RouteNode = {
                                     type: "string",
                                   },
                                   level: {
-                                    anyOf: [
-                                      {
-                                        format: "integer",
-                                        default: 0,
-                                        type: "string",
-                                      },
-                                      {
-                                        type: "integer",
-                                      },
-                                    ],
+                                    type: "integer",
                                   },
                                   runs: {
                                     type: "array",
@@ -36347,16 +35752,7 @@ export const generatedRouteMap: RouteNode = {
                                     ],
                                   },
                                   listLevel: {
-                                    anyOf: [
-                                      {
-                                        format: "integer",
-                                        default: 0,
-                                        type: "string",
-                                      },
-                                      {
-                                        type: "integer",
-                                      },
-                                    ],
+                                    type: "integer",
                                   },
                                   isDirective: {
                                     type: "boolean",
@@ -36523,18 +35919,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 100,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 100,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                       },
                     },
@@ -37180,18 +36565,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 50,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 50,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                       },
                     },
@@ -37472,6 +36846,17 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "timezoneId",
                   },
                   {
+                    kind: "int",
+                    min: 1,
+                    repeatable: false,
+                    description: "Minutes worked (whole minutes)",
+                    flag: "--duration-minutes",
+                    prop: "durationMinutes",
+                    required: true,
+                    part: "body",
+                    partPath: "durationMinutes",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     description: "Description of the work",
@@ -37510,7 +36895,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "activityCode",
                   },
                 ],
-                inputOnly: ["body.durationMinutes"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -37560,18 +36945,7 @@ export const generatedRouteMap: RouteNode = {
                         durationMinutes: {
                           minimum: 1,
                           description: "Minutes worked (whole minutes)",
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              description: "Minutes worked (whole minutes)",
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         narrative: {
                           minLength: 1,
@@ -38048,8 +37422,26 @@ export const generatedRouteMap: RouteNode = {
                     part: "query",
                     partPath: "source",
                   },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--billable",
+                    prop: "billable",
+                    required: false,
+                    part: "query",
+                    partPath: "billable",
+                  },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--has-active-timer",
+                    prop: "hasActiveTimer",
+                    required: false,
+                    part: "query",
+                    partPath: "hasActiveTimer",
+                  },
                 ],
-                inputOnly: ["query.billable", "query.hasActiveTimer"],
+                inputOnly: [],
                 paginated: true,
                 paginationPart: "query",
                 itemsKey: "items",
@@ -38075,19 +37467,7 @@ export const generatedRouteMap: RouteNode = {
                           minimum: 1,
                           maximum: 200,
                           description: "Max entries to return",
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 200,
-                              description: "Max entries to return",
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
@@ -38139,28 +37519,10 @@ export const generatedRouteMap: RouteNode = {
                           enum: ["manual", "timer"],
                         },
                         billable: {
-                          anyOf: [
-                            {
-                              type: "boolean",
-                            },
-                            {
-                              format: "boolean",
-                              default: false,
-                              type: "string",
-                            },
-                          ],
+                          type: "boolean",
                         },
                         hasActiveTimer: {
-                          anyOf: [
-                            {
-                              type: "boolean",
-                            },
-                            {
-                              format: "boolean",
-                              default: false,
-                              type: "string",
-                            },
-                          ],
+                          type: "boolean",
                         },
                       },
                     },
@@ -38233,18 +37595,7 @@ export const generatedRouteMap: RouteNode = {
                               percentage: {
                                 minimum: 1,
                                 maximum: 100,
-                                anyOf: [
-                                  {
-                                    format: "integer",
-                                    default: 0,
-                                    type: "string",
-                                  },
-                                  {
-                                    minimum: 1,
-                                    maximum: 100,
-                                    type: "integer",
-                                  },
-                                ],
+                                type: "integer",
                               },
                             },
                           },
@@ -38536,6 +37887,16 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "timezoneId",
                   },
                   {
+                    kind: "int",
+                    min: 1,
+                    repeatable: false,
+                    flag: "--duration-minutes",
+                    prop: "durationMinutes",
+                    required: false,
+                    part: "body",
+                    partPath: "durationMinutes",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--narrative",
@@ -38599,7 +37960,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "activityCode",
                   },
                 ],
-                inputOnly: ["body.durationMinutes"],
+                inputOnly: [],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -38629,17 +37990,7 @@ export const generatedRouteMap: RouteNode = {
                         },
                         durationMinutes: {
                           minimum: 1,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         narrative: {
                           minLength: 1,
@@ -38802,18 +38153,7 @@ export const generatedRouteMap: RouteNode = {
                             size: {
                               minimum: 1,
                               maximum: 52428800,
-                              anyOf: [
-                                {
-                                  format: "integer",
-                                  default: 0,
-                                  type: "string",
-                                },
-                                {
-                                  minimum: 1,
-                                  maximum: 52428800,
-                                  type: "integer",
-                                },
-                              ],
+                              type: "integer",
                             },
                             sha256Hex: {
                               type: "RegExp",
@@ -38857,18 +38197,7 @@ export const generatedRouteMap: RouteNode = {
                             size: {
                               minimum: 1,
                               maximum: 52428800,
-                              anyOf: [
-                                {
-                                  format: "integer",
-                                  default: 0,
-                                  type: "string",
-                                },
-                                {
-                                  minimum: 1,
-                                  maximum: 52428800,
-                                  type: "integer",
-                                },
-                              ],
+                              type: "integer",
                             },
                             sha256Hex: {
                               type: "RegExp",
@@ -38910,18 +38239,7 @@ export const generatedRouteMap: RouteNode = {
                             size: {
                               minimum: 1,
                               maximum: 2097152,
-                              anyOf: [
-                                {
-                                  format: "integer",
-                                  default: 0,
-                                  type: "string",
-                                },
-                                {
-                                  minimum: 1,
-                                  maximum: 2097152,
-                                  type: "integer",
-                                },
-                              ],
+                              type: "integer",
                             },
                             sha256Hex: {
                               type: "RegExp",
@@ -42828,18 +42146,7 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 100,
-                          anyOf: [
-                            {
-                              format: "integer",
-                              default: 0,
-                              type: "string",
-                            },
-                            {
-                              minimum: 1,
-                              maximum: 100,
-                              type: "integer",
-                            },
-                          ],
+                          type: "integer",
                         },
                         cursor: {
                           maxLength: 512,
