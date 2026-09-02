@@ -71,7 +71,7 @@ const DOM_EXCEPTION_CLASS = /^DOM(?:Error|Exception)$/u;
 // either the name alone or `name: message`, and a `DOMException` can be
 // constructed with any name, so only a standard name is read back: a custom
 // one could carry an identifier, and it falls back to the bare class.
-const DOM_EXCEPTION_NAMES = new Set([
+const DOM_EXCEPTION_NAMES: ReadonlySet<string> = new Set([
   "AbortError",
   "ConstraintError",
   "DataCloneError",
