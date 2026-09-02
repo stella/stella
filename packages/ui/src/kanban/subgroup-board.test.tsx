@@ -123,4 +123,119 @@ describe("KanbanSubgroupBoard", () => {
     expect(markup).toContain("cell::open:1");
     expect(markup).not.toContain("lane:");
   });
+
+  test("renders no band chrome when no column carries a band", () => {
+    expect(renderBoard()).not.toContain("data-kanban-band");
+  });
+});
+
+describe("KanbanSubgroupBoard with column bands", () => {
+  const todo = { id: "todo", label: "To do" };
+  const bandedSchema: KanbanSchema<Row, Property> = {
+    ...schema,
+    builtInGroups: [
+      {
+        id: "_status",
+        options: [
+          { band: todo, label: "Open", value: "open" },
+          { band: todo, label: "Blocked", value: "blocked" },
+          { label: "Done", value: "done" },
+        ],
+      },
+    ],
+  };
+  const bandedGroup = resolveKanbanGrouping({
+    groupBy: "_status",
+    schema: bandedSchema,
+  });
+  const bandedMatrix = buildKanbanBoardMatrix({
+    group: bandedGroup,
+    subgroup: resolveKanbanGrouping({ groupBy: "owner", schema: bandedSchema }),
+    rows: [
+      { id: "one", owner: "ada", status: "open" },
+      { id: "two", owner: "ada", status: "blocked" },
+      { id: "three", owner: "ada", status: "done" },
+    ],
+    uncategorizedLabel: "No value",
+    resolveGroupValue: ({ grouping, row }) =>
+      grouping.type === "built-in" ? row.status : row.owner,
+  });
+  const renderBanded = (collapsed: boolean) =>
+    renderToStaticMarkup(
+      <KanbanSubgroupBoard
+        formatBandToggleLabel={(band, isCollapsed) =>
+          `${isCollapsed ? "Expand" : "Collapse"} ${band.label}`
+        }
+        isBandCollapsed={(band) => collapsed && band.id === "todo"}
+        isLaneCollapsed={() => false}
+        matrix={bandedMatrix}
+        renderCell={({ cell, count, laneValue }) => (
+          <span>
+            {testLabel(
+              "cell",
+              laneValue,
+              cell.coordinate.column.type === "group"
+                ? cell.coordinate.column.group.value
+                : cell.coordinate.column.destination.id,
+              count,
+            )}
+          </span>
+        )}
+        renderCollapsedBandCell={({ band, cells, count, laneValue }) => (
+          <span>
+            {testLabel("folded", laneValue, band.id, cells.length, count)}
+          </span>
+        )}
+        renderColumnHeader={({ column, count }) => (
+          <span>
+            {testLabel(
+              "column",
+              column.type === "group"
+                ? column.group.value
+                : column.destination.id,
+              count,
+            )}
+          </span>
+        )}
+        renderLaneIdentity={({ group: lane, count }) => (
+          <span>{testLabel("lane", lane.value, count)}</span>
+        )}
+        onBandCollapsedChange={() => undefined}
+        onLaneCollapsedChange={() => undefined}
+      />,
+    );
+
+  test("draws one band header over the band's columns with their total", () => {
+    const markup = renderBanded(false);
+
+    expect(markup).toContain('data-kanban-band-row=""');
+    expect(markup.match(/data-kanban-band="todo"/gu)?.length).toBeGreaterThan(
+      0,
+    );
+    expect(markup).toContain('aria-label="Collapse To do"');
+    expect(markup).toContain(">To do<");
+    // Two cards across open and blocked; the un-banded Done column has none.
+    expect(markup).toContain('data-slot="kanban-column-band-header"');
+    expect(markup).toContain("column:open:1");
+    expect(markup).toContain("column:blocked:1");
+    expect(markup).toContain("cell:ada:open:1");
+    expect(markup).toContain("cell:ada:blocked:1");
+    expect(markup).toContain("cell:ada:done:1");
+  });
+
+  test("folds a collapsed band into one slot per row and keeps its cells reachable", () => {
+    const markup = renderBanded(true);
+
+    expect(markup).toContain('data-kanban-band-collapsed=""');
+    expect(markup).toContain('aria-label="Expand To do"');
+    // The band's column headers and cells are gone from the flow...
+    expect(markup).not.toContain("column:open:1");
+    expect(markup).not.toContain("cell:ada:open:1");
+    // ...replaced by one folded slot per lane carrying both hidden cells.
+    expect(markup).toContain("folded:ada:todo:2:2");
+    expect(markup).toContain('data-kanban-lane-column-count="2"');
+    // Columns outside the band are untouched.
+    expect(markup).toContain("column:done:1");
+    expect(markup).toContain("cell:ada:done:1");
+  });
 });

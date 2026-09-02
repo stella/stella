@@ -1,3 +1,4 @@
+import type { KanbanColumnBand } from "@stll/ui/kanban";
 import type { OptionColor } from "@stll/ui/option-color";
 
 export type { OptionColor } from "@stll/ui/option-color";
@@ -117,6 +118,11 @@ export type GenericProperty = {
     | { type: "file" | "text" | "date" | "int" | "money" | "person" }
     | {
         type: "single-select" | "multi-select";
-        options: { value: string; color: OptionColor }[];
+        options: {
+          value: string;
+          color: OptionColor;
+          /** The column band this option's column joins, when the board bands. */
+          band?: KanbanColumnBand | undefined;
+        }[];
       };
 };

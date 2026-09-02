@@ -14,6 +14,18 @@ export type { KanbanCardShellProps } from "./card-shell";
 export { KanbanCardShell } from "./card-shell";
 export type { KanbanCellActionProps } from "./cell-action";
 export { KanbanCellAction } from "./cell-action";
+export type { KanbanColumnBandHeaderProps } from "./column-band-header";
+export { KanbanColumnBandHeader } from "./column-band-header";
+export type { KanbanColumnBandSpan } from "./column-bands";
+export {
+  hasKanbanColumnBands,
+  KANBAN_COLLAPSED_BAND_WIDTH_CLASS,
+  KANBAN_COLLAPSED_BAND_WIDTH_PX,
+  KANBAN_COLUMN_GAP_PX,
+  KANBAN_COLUMN_WIDTH_CLASS,
+  KANBAN_COLUMN_WIDTH_PX,
+  resolveKanbanColumnBands,
+} from "./column-bands";
 export type { KanbanColumnHeaderProps } from "./column-header";
 export { KanbanColumnHeader } from "./column-header";
 export type {
@@ -68,6 +80,7 @@ export {
 } from "./drag-interactions";
 export type {
   KanbanBuiltInGroup,
+  KanbanColumnBand,
   KanbanGroup,
   KanbanGrouping,
   KanbanGroupOption,
@@ -106,12 +119,17 @@ export {
   orderKanbanCellsByColumns,
 } from "./matrix";
 export type {
+  KanbanSubgroupBandHeaderContext,
   KanbanSubgroupBoardProps,
   KanbanSubgroupCellContext,
+  KanbanSubgroupCollapsedBandCellContext,
   KanbanSubgroupColumnHeaderContext,
   KanbanSubgroupLaneIdentityContext,
 } from "./subgroup-board";
-export { KanbanSubgroupBoard } from "./subgroup-board";
+export {
+  KANBAN_BAND_PEEK_DELAY_MS,
+  KanbanSubgroupBoard,
+} from "./subgroup-board";
 export type {
   KanbanVirtualCellPagination,
   KanbanVirtualCellProps,
