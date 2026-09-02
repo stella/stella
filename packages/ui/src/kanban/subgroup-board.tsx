@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { ChevronDownIcon } from "lucide-react";
 
 import { DirectionalIcon } from "../components/directional-icon";
 import { cn } from "../lib/utils";
+import { createBandPeekController } from "./band-peek";
+import type { BandPeekController } from "./band-peek";
 import { KanbanColumnBandHeader } from "./column-band-header";
 import {
   KANBAN_COLLAPSED_BAND_WIDTH_CLASS,
@@ -33,9 +35,6 @@ const spanKey = (span: KanbanColumnBandSpan): string =>
     : `band:${span.band.id}`;
 const rowsIn = <TRow,>(cells: readonly KanbanBoardCell<TRow>[]): number =>
   cells.reduce((sum, cell) => sum + cell.rows.length, 0);
-
-/** How long a pointer rests on a collapsed band before it peeks open. */
-export const KANBAN_BAND_PEEK_DELAY_MS = 400;
 
 type Rendered = ReactElement | null;
 
@@ -169,6 +168,12 @@ export const KanbanSubgroupBoard = <TRow,>({
     () => new Set<string>(),
   );
   const [peekingBandId, setPeekingBandId] = useState<string | null>(null);
+  // The peek's timing rules live in one controller (see `band-peek.ts`); the
+  // board only mirrors which band it reports open.
+  const [peek] = useState(() =>
+    createBandPeekController({ onChange: setPeekingBandId }),
+  );
+  useEffect(() => () => peek.dispose(), [peek]);
 
   const { cellsByLaneValue, countByColumnValue, ungroupedCells } =
     useMemo(() => {
@@ -246,7 +251,13 @@ export const KanbanSubgroupBoard = <TRow,>({
   const isBandFolded = (band: KanbanColumnBand): boolean =>
     peekingBandId !== band.id && isBandCollapsedNow(band);
   const setBandCollapsed = (band: KanbanColumnBand, collapsed: boolean) => {
-    setPeekingBandId(null);
+    // A fold from the caption leaves the new slot under the pointer; the
+    // controller keeps it from peeking straight back open.
+    if (collapsed) {
+      peek.foldedUnderPointer(band.id);
+    } else {
+      peek.bandExpanded(band.id);
+    }
     if (onBandCollapsedChange) {
       onBandCollapsedChange(band, collapsed);
       return;
@@ -261,7 +272,6 @@ export const KanbanSubgroupBoard = <TRow,>({
       return next;
     });
   };
-  const endPeek = () => setPeekingBandId(null);
 
   const columnCount = (column: KanbanBoardColumn) =>
     countByColumnValue.get(columnKey(column)) ?? 0;
@@ -305,8 +315,7 @@ export const KanbanSubgroupBoard = <TRow,>({
               band={band}
               className={KANBAN_COLLAPSED_BAND_WIDTH_CLASS}
               key={spanKey(span)}
-              onPeek={setPeekingBandId}
-              onPeekEnd={endPeek}
+              peek={peek}
             >
               {renderFoldedBand(band, span)}
             </FoldedBandSlot>
@@ -317,8 +326,11 @@ export const KanbanSubgroupBoard = <TRow,>({
             className="flex gap-3"
             data-kanban-band={band?.id}
             key={spanKey(span)}
+            onPointerEnter={
+              band === null ? undefined : () => peek.openPointerEnter(band.id)
+            }
             onPointerLeave={
-              band !== null && peekingBandId === band.id ? endPeek : undefined
+              band === null ? undefined : () => peek.openPointerLeave(band.id)
             }
           >
             {span.columns.map((column) => (
@@ -447,8 +459,7 @@ export const KanbanSubgroupBoard = <TRow,>({
                         KANBAN_COLLAPSED_BAND_WIDTH_CLASS,
                       )}
                       key={spanKey(span)}
-                      onPeek={setPeekingBandId}
-                      onPeekEnd={endPeek}
+                      peek={peek}
                     >
                       {bandHeader(band, span)}
                     </FoldedBandSlot>
@@ -460,9 +471,8 @@ export const KanbanSubgroupBoard = <TRow,>({
                     data-kanban-band={band.id}
                     key={spanKey(span)}
                     style={{ width: `${String(spanWidth(span))}px` }}
-                    onPointerLeave={
-                      peekingBandId === band.id ? endPeek : undefined
-                    }
+                    onPointerEnter={() => peek.openPointerEnter(band.id)}
+                    onPointerLeave={() => peek.openPointerLeave(band.id)}
                   >
                     {bandHeader(band, span)}
                   </div>
@@ -599,60 +609,27 @@ type FoldedBandSlotProps = {
   band: KanbanColumnBand;
   children: ReactNode;
   className: string;
-  onPeek: (bandId: string) => void;
-  onPeekEnd: () => void;
+  peek: BandPeekController;
 };
 
 /**
- * The narrow slot a folded band occupies in a row. A pointer resting on it
- * for `KANBAN_BAND_PEEK_DELAY_MS` peeks the band open; leaving ends the peek
- * and cancels a pending one, so a drag passing over it does not unfold it.
- * The pointer must enter the slot after it appeared: a band folded under a
- * resting pointer does not peek straight back open.
+ * The narrow slot a folded band occupies in a row. Its pointer events go to
+ * the board's peek controller, which decides when a resting pointer peeks
+ * the band open and keeps a slot that appeared under the pointer folded.
  */
 const FoldedBandSlot = ({
   band,
   children,
   className,
-  onPeek,
-  onPeekEnd,
-}: FoldedBandSlotProps) => {
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (timer.current !== null) {
-        clearTimeout(timer.current);
-      }
-    },
-    [],
-  );
-
-  return (
-    <div
-      className={className}
-      data-kanban-band={band.id}
-      data-kanban-band-collapsed=""
-      // The peek arms on movement inside the slot, not on entering it: a
-      // browser reports an enter for a slot that appears under a resting
-      // pointer (the band the user just folded), and that must stay folded.
-      onPointerMove={() => {
-        if (timer.current !== null) {
-          return;
-        }
-        timer.current = setTimeout(() => {
-          timer.current = null;
-          onPeek(band.id);
-        }, KANBAN_BAND_PEEK_DELAY_MS);
-      }}
-      onPointerLeave={() => {
-        if (timer.current !== null) {
-          clearTimeout(timer.current);
-          timer.current = null;
-        }
-        onPeekEnd();
-      }}
-    >
-      {children}
-    </div>
-  );
-};
+  peek,
+}: FoldedBandSlotProps) => (
+  <div
+    className={className}
+    data-kanban-band={band.id}
+    data-kanban-band-collapsed=""
+    onPointerMove={() => peek.slotPointerMove(band.id)}
+    onPointerLeave={() => peek.slotPointerLeave(band.id)}
+  >
+    {children}
+  </div>
+);

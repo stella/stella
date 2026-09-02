@@ -128,8 +128,9 @@ export type {
 } from "./subgroup-board";
 export {
   KANBAN_BAND_PEEK_DELAY_MS,
-  KanbanSubgroupBoard,
-} from "./subgroup-board";
+  KANBAN_BAND_PEEK_LINGER_MS,
+} from "./band-peek";
+export { KanbanSubgroupBoard } from "./subgroup-board";
 export type {
   KanbanVirtualCellPagination,
   KanbanVirtualCellProps,
