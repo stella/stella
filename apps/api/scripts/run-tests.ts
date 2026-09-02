@@ -22,7 +22,10 @@ import {
 import { partitionRunnerArguments, selectTestPaths } from "./test-path-filters";
 
 const PROPERTY_FLAG = "--property";
-const TEST_FILE_GLOB = "src/**/*.test.{ts,tsx}";
+// `evals/` carries only its own colocated unit tests (e.g.
+// `evals/lib/model-turn.test.ts`), never the eval scripts themselves, which
+// call paid models and run on demand.
+const TEST_FILE_GLOB = "{src,evals}/**/*.test.{ts,tsx}";
 // Non-test helper modules live here; some install a module mock at import.
 const TEST_HELPER_GLOB = "src/tests/**/*.ts";
 const MODULE_MOCK_PATTERN = /\bmock\.module\s*\(/u;
@@ -394,11 +397,24 @@ const runPreparedTestBatches = async ({
 
 // A fresh process per test batch makes module memory reclaimable. One
 // process for the full suite grows until the hosted runner terminates it.
-const regularExitCode = await runTestBatches({
-  batchSize: REGULAR_TEST_BATCH_SIZE,
+// `evals/` unit tests get their own batches after the `src/` ones so adding
+// one never shifts the composition of a `src/` batch (a shift changes which
+// files share a process, and that has surfaced order-dependent failures).
+const EVALS_TEST_PREFIX = "evals/";
+const regularSrcTests = regularTests.filter(
+  (testPath) => !testPath.startsWith(EVALS_TEST_PREFIX),
+);
+const regularEvalTests = regularTests.filter((testPath) =>
+  testPath.startsWith(EVALS_TEST_PREFIX),
+);
+const regularExitCode = await runPreparedTestBatches({
+  batchStart: 0,
   isolate: false,
   maxPeakRssMb: MAX_LOGIC_BATCH_PEAK_RSS_MB,
-  testFiles: regularTests,
+  testBatches: [
+    ...composeTestBatches(regularSrcTests, REGULAR_TEST_BATCH_SIZE),
+    ...composeTestBatches(regularEvalTests, REGULAR_TEST_BATCH_SIZE),
+  ],
 });
 if (regularExitCode !== 0) {
   process.exit(regularExitCode);

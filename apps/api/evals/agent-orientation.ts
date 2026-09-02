@@ -53,7 +53,6 @@ import {
   systemPromptsPatch,
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
-import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { getMcpInstructions } from "@/api/mcp/instructions";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
@@ -74,6 +73,7 @@ import type {
   RegistryToolListing,
   RouteNode,
 } from "../../../packages/cli/src/route-types";
+import { runEvalModelTurn } from "./lib/model-turn";
 
 // A bare id resolves through whichever configured provider rates it (GPT
 // models may come from OpenAI or OpenRouter); Claude ids are pinned to
@@ -681,110 +681,102 @@ const runModelTurn = async ({
     role: "chat",
     scopeKey: null,
   });
-  const start = performance.now();
-  const abortController = new AbortController();
-  const abortTimer = setTimeout(
-    () => abortController.abort(),
-    MODEL_REQUEST_TIMEOUT_MS,
-  );
-  const stream = chat({
-    abortController,
-    adapter: model.adapter,
-    messages: [{ role: "user", content: request }],
-    // The run ends at the first tool call (or at the model's text reply on
-    // the CLI surface, which registers no tools at all); nothing executes.
-    agentLoopStrategy: maxIterations(1),
-    ...systemPromptsPatch({ caching, model, system }),
-    modelOptions: mergeGenerationOptions({
-      caching,
-      model,
-      maxOutputTokens: MAX_OUTPUT_TOKENS,
-      serviceTier: "standard",
-      temperature: 0,
-    }),
-    tools,
-  });
-
   let finalText = "";
-  let usage: TokenUsage | null = null;
-  let error: string | null = null;
   const toolNames = new Map<string, string>();
   const argumentTexts = new Map<string, string>();
   const parsedInputs = new Map<string, unknown>();
-  for await (const chunk of stream) {
-    // Exhaustive over ChatStream's real chunk union (`AGUIEvent`, 22
-    // members — narrower than the full `EventType` enum, which also
-    // declares deprecated/unused values this stream never emits) instead
-    // of an if-chain: a renamed or newly added chunk type fails
-    // typechecking at the `satisfies never` default instead of being
-    // silently ignored, which for THIS eval would misclassify a run as
-    // no-call/pass instead of failing loudly.
-    //
-    // TOOL_CALL_START, TOOL_CALL_END, and CUSTOM carry a plain string
-    // literal `type` (not the `EventType` enum member) by design — see
-    // `ToolCallStartEvent`/`ToolCallEndEvent`/`CustomEvent` in
-    // `@tanstack/ai`'s types — so those three cases match on the literal
-    // string instead of the enum member.
-    switch (chunk.type) {
-      case EventType.TEXT_MESSAGE_CONTENT: {
-        finalText += chunk.delta;
-        break;
-      }
-      case EventType.TOOL_CALL_ARGS: {
-        argumentTexts.set(
-          chunk.toolCallId,
-          (argumentTexts.get(chunk.toolCallId) ?? "") + chunk.delta,
-        );
-        break;
-      }
-      case "TOOL_CALL_START": {
-        toolNames.set(chunk.toolCallId, chunk.toolCallName);
-        break;
-      }
-      case "TOOL_CALL_END": {
-        if (chunk.input !== undefined) {
-          parsedInputs.set(chunk.toolCallId, chunk.input);
+  const { error, latencyMs, usage } = await runEvalModelTurn({
+    timeoutMs: MODEL_REQUEST_TIMEOUT_MS,
+    chat: (abortController) =>
+      chat({
+        abortController,
+        adapter: model.adapter,
+        messages: [{ role: "user", content: request }],
+        // The run ends at the first tool call (or at the model's text reply
+        // on the CLI surface, which registers no tools at all); nothing
+        // executes.
+        agentLoopStrategy: maxIterations(1),
+        ...systemPromptsPatch({ caching, model, system }),
+        modelOptions: mergeGenerationOptions({
+          caching,
+          model,
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
+          serviceTier: "standard",
+          temperature: 0,
+        }),
+        tools,
+      }),
+    onChunk: (chunk) => {
+      // Exhaustive over ChatStream's real chunk union (`AGUIEvent`, 22
+      // members — narrower than the full `EventType` enum, which also
+      // declares deprecated/unused values this stream never emits) instead
+      // of an if-chain: a renamed or newly added chunk type fails
+      // typechecking at the `satisfies never` default instead of being
+      // silently ignored, which for THIS eval would misclassify a run as
+      // no-call/pass instead of failing loudly.
+      //
+      // TOOL_CALL_START, TOOL_CALL_END, and CUSTOM carry a plain string
+      // literal `type` (not the `EventType` enum member) by design — see
+      // `ToolCallStartEvent`/`ToolCallEndEvent`/`CustomEvent` in
+      // `@tanstack/ai`'s types — so those three cases match on the literal
+      // string instead of the enum member.
+      switch (chunk.type) {
+        case EventType.TEXT_MESSAGE_CONTENT: {
+          finalText += chunk.delta;
+          break;
         }
-        break;
+        case EventType.TOOL_CALL_ARGS: {
+          argumentTexts.set(
+            chunk.toolCallId,
+            (argumentTexts.get(chunk.toolCallId) ?? "") + chunk.delta,
+          );
+          break;
+        }
+        case "TOOL_CALL_START": {
+          toolNames.set(chunk.toolCallId, chunk.toolCallName);
+          break;
+        }
+        case "TOOL_CALL_END": {
+          if (chunk.input !== undefined) {
+            parsedInputs.set(chunk.toolCallId, chunk.input);
+          }
+          break;
+        }
+        // The run-turn helper captures the error message and usage from
+        // these; this eval scores neither beyond what it already returns.
+        case EventType.RUN_ERROR:
+        case EventType.RUN_FINISHED: {
+          break;
+        }
+        // Every other chunk type carries nothing this eval scores on: only
+        // the first tool call's name/args/input and the final text/usage/error
+        // matter here. Listed explicitly (not folded into an implicit
+        // default) so the ignored set is visible in the diff whenever it grows.
+        case EventType.TEXT_MESSAGE_START:
+        case EventType.TEXT_MESSAGE_END:
+        case EventType.TOOL_CALL_RESULT:
+        case EventType.STATE_SNAPSHOT:
+        case EventType.STATE_DELTA:
+        case EventType.MESSAGES_SNAPSHOT:
+        case "CUSTOM":
+        case EventType.RUN_STARTED:
+        case EventType.STEP_STARTED:
+        case EventType.STEP_FINISHED:
+        case EventType.REASONING_START:
+        case EventType.REASONING_MESSAGE_START:
+        case EventType.REASONING_MESSAGE_CONTENT:
+        case EventType.REASONING_MESSAGE_END:
+        case EventType.REASONING_ENCRYPTED_VALUE:
+        case EventType.REASONING_END: {
+          break;
+        }
+        default: {
+          chunk satisfies never;
+          break;
+        }
       }
-      case EventType.RUN_ERROR: {
-        error = chunk.message;
-        break;
-      }
-      case EventType.RUN_FINISHED: {
-        usage = tokenUsageFromRunFinishedChunk(chunk) ?? null;
-        break;
-      }
-      // Every other chunk type carries nothing this eval scores on: only
-      // the first tool call's name/args/input and the final text/usage/error
-      // matter here. Listed explicitly (not folded into an implicit
-      // default) so the ignored set is visible in the diff whenever it grows.
-      case EventType.TEXT_MESSAGE_START:
-      case EventType.TEXT_MESSAGE_END:
-      case EventType.TOOL_CALL_RESULT:
-      case EventType.STATE_SNAPSHOT:
-      case EventType.STATE_DELTA:
-      case EventType.MESSAGES_SNAPSHOT:
-      case "CUSTOM":
-      case EventType.RUN_STARTED:
-      case EventType.STEP_STARTED:
-      case EventType.STEP_FINISHED:
-      case EventType.REASONING_START:
-      case EventType.REASONING_MESSAGE_START:
-      case EventType.REASONING_MESSAGE_CONTENT:
-      case EventType.REASONING_MESSAGE_END:
-      case EventType.REASONING_ENCRYPTED_VALUE:
-      case EventType.REASONING_END: {
-        break;
-      }
-      default: {
-        chunk satisfies never;
-        break;
-      }
-    }
-  }
-  clearTimeout(abortTimer);
-  const latencyMs = Math.round(performance.now() - start);
+    },
+  });
 
   const firstCallId = [...argumentTexts.keys(), ...parsedInputs.keys()].at(0);
   if (firstCallId === undefined) {
