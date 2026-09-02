@@ -3,17 +3,27 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@stll/api-contract";
+
 import type { ForkProvenance } from "@/features/chat/queries";
-import messages from "@/i18n/langs/en.json";
-import { chatThreadRoute } from "@/lib/chat-thread-ref";
+import de from "@/i18n/langs/de.json";
+import en from "@/i18n/langs/en.json";
+import { ChatThreadTestRouter } from "@/lib/chat-thread-test-router";
 
 import { ChatForkedFromBanner } from "./chat-forked-from-banner";
 
-const render = (forkProvenance: ForkProvenance) =>
+const LOCALES = { de, en } as const;
+
+const render = (
+  forkProvenance: ForkProvenance,
+  locale: keyof typeof LOCALES = "en",
+) =>
   renderToStaticMarkup(
-    <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <ChatForkedFromBanner forkProvenance={forkProvenance} />
-    </IntlProvider>,
+    <ChatThreadTestRouter>
+      <IntlProvider locale={locale} messages={LOCALES[locale]} timeZone="UTC">
+        <ChatForkedFromBanner forkProvenance={forkProvenance} />
+      </IntlProvider>
+    </ChatThreadTestRouter>,
   );
 
 describe("chat forked-from banner", () => {
@@ -29,21 +39,47 @@ describe("chat forked-from banner", () => {
     expect(html).not.toContain("<a ");
   });
 
-  test("routes a global source to the top-level chat path", () => {
-    expect(
-      chatThreadRoute({ threadId: "thread-parent", workspaceId: null }),
-    ).toEqual({
-      to: "/chat/$threadId",
-      params: { threadId: "thread-parent" },
+  test("links a global source at the top-level chat path", () => {
+    const html = render({
+      threadId: "thread-parent",
+      title: "Lease renewal",
+      type: "parent",
+      workspaceId: null,
     });
+
+    expect(html).toContain('href="/chat/thread-parent"');
+    // The title is user text of unknown direction inside a sentence whose
+    // direction comes from the UI locale, so it is isolated in a `bdi`.
+    expect(html).toContain("Forked from <bdi");
+    expect(html).toContain("Lease renewal</bdi>");
   });
 
-  test("routes a matter-scoped source under its matter", () => {
-    expect(
-      chatThreadRoute({ threadId: "thread-parent", workspaceId: "matter-1" }),
-    ).toEqual({
-      to: "/chat/workspaces/$workspaceId/$threadId",
-      params: { workspaceId: "matter-1", threadId: "thread-parent" },
+  test("links a matter-scoped source under its matter", () => {
+    const html = render({
+      threadId: "thread-parent",
+      title: "Lease renewal",
+      type: "parent",
+      workspaceId: "matter-1",
     });
+
+    expect(html).toContain('href="/chat/workspaces/matter-1/thread-parent"');
+  });
+
+  test("names a still-untitled source the way the thread list does", () => {
+    // The stored placeholder is English, so only another locale shows the
+    // label being substituted rather than the raw placeholder echoed back.
+    const html = render(
+      {
+        threadId: "thread-parent",
+        title: CHAT_THREAD_PLACEHOLDER_TITLE,
+        type: "parent",
+        workspaceId: null,
+      },
+      "de",
+    );
+
+    expect(html).toContain("Verzweigt von <bdi");
+    expect(html).toContain("Neuer Chat</bdi>");
+    expect(html).not.toContain(CHAT_THREAD_PLACEHOLDER_TITLE);
   });
 });

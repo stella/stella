@@ -13,6 +13,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import messages from "@/i18n/langs/en.json";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { ChatThreadTestRouter } from "@/lib/chat-thread-test-router";
 
 const previousApiUrl = process.env["VITE_API_URL"];
 process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
@@ -32,30 +33,32 @@ afterAll(() => {
 
 const renderWithProviders = (children: ReactNode) =>
   renderToStaticMarkup(
-    <QueryClientProvider client={new QueryClient()}>
-      <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <ChatMattersContext
-          value={{
-            createDocumentMatters: [],
-            isLoadingCreateDocumentMatters: false,
-          }}
-        >
-          <ChatApprovalContext
+    <ChatThreadTestRouter>
+      <QueryClientProvider client={new QueryClient()}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <ChatMattersContext
             value={{
-              activeOrganizationId: "test-active-organization",
-              alwaysApprovedTools: new Set(),
-              conversationApprovedTools: new Set(),
-              handleAllowInConversation: () => {},
-              handleAlwaysAllow: () => {},
-              handleApprove: () => {},
-              handleDeny: () => {},
+              createDocumentMatters: [],
+              isLoadingCreateDocumentMatters: false,
             }}
           >
-            {children}
-          </ChatApprovalContext>
-        </ChatMattersContext>
-      </IntlProvider>
-    </QueryClientProvider>,
+            <ChatApprovalContext
+              value={{
+                activeOrganizationId: "test-active-organization",
+                alwaysApprovedTools: new Set(),
+                conversationApprovedTools: new Set(),
+                handleAllowInConversation: () => {},
+                handleAlwaysAllow: () => {},
+                handleApprove: () => {},
+                handleDeny: () => {},
+              }}
+            >
+              {children}
+            </ChatApprovalContext>
+          </ChatMattersContext>
+        </IntlProvider>
+      </QueryClientProvider>
+    </ChatThreadTestRouter>,
   );
 
 describe("chat thread messages", () => {
