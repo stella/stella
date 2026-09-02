@@ -471,8 +471,8 @@ export const caseLawDecisions = p.pgTable(
       "case_law_decisions_redacted_payload_erased",
       sql`${t.redactedAt} IS NULL OR (${t.fulltext} IS NULL AND ${t.sections} IS NULL AND ${t.documentAst} IS NULL AND ${t.contentHash} IS NULL)`,
     ),
-    // The year bounds `canonicalDecisionDate` enforces on the write path,
-    // enforced at the table as well; both derive from `DECISION_YEAR_BOUNDS`.
+    // The bounds `canonicalDecisionDate` enforces on the write path,
+    // enforced at the table as well; both derive from `DECISION_DATE_BOUNDS`.
     // A NULL date is allowed: it is how a decision without a usable date is
     // stored.
     p.check(

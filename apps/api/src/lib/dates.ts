@@ -77,19 +77,21 @@ export const parseIsoDateLocal = (value: string): Date | null => {
 const ISO_DATE_LENGTH = 10;
 
 /**
- * Year range a decision date may fall in. The floor predates any court whose
+ * Range a decision date may fall in. The floor year predates any court whose
  * decisions are published as machine-readable records, so a lower year is a
  * transcription or parsing artifact rather than a real date. The ceiling is
- * relative to the current year because a publisher may date a decision
- * slightly ahead; a fixed upper year would go stale.
+ * the current UTC day plus `daysAhead`: a decision cannot have been issued in
+ * the future, and one calendar day of slack covers a court whose local date is
+ * already ahead of UTC when it publishes. Anything later is a parsing
+ * artifact, and a newest-first list would show it first.
  *
  * Exported because the same bounds have to hold in SQL:
  * `decision-date-bounds-sql.ts` derives the table's CHECK constraint and the
  * repair predicate from this declaration rather than restating the numbers.
  */
-export const DECISION_YEAR_BOUNDS = {
-  min: 1800,
-  yearsAhead: 1,
+export const DECISION_DATE_BOUNDS = {
+  minYear: 1800,
+  daysAhead: 1,
 } as const;
 
 /**
@@ -161,9 +163,10 @@ export const isoCalendarDay = (raw: string): string | null => {
  * the value cannot be one.
  *
  * Accepts a bare calendar date or an ISO datetime, and rejects anything that
- * is not a real calendar day (e.g. "2024-02-30") or whose year falls outside
- * `DECISION_YEAR_BOUNDS`. A date column takes a malformed year as readily as
- * a correct one, so callers writing to one need this in front of the write.
+ * is not a real calendar day (e.g. "2024-02-30") or that falls outside
+ * `DECISION_DATE_BOUNDS`. A date column takes a malformed year or a future
+ * day as readily as a correct one, so callers writing to one need this in
+ * front of the write.
  */
 export const canonicalDecisionDate = (raw: string): string | null => {
   const candidate = isoCalendarDay(raw);
@@ -171,8 +174,15 @@ export const canonicalDecisionDate = (raw: string): string | null => {
     return null;
   }
   const year = Number(candidate.slice(0, 4));
-  const maxYear = new Date().getUTCFullYear() + DECISION_YEAR_BOUNDS.yearsAhead;
-  if (year < DECISION_YEAR_BOUNDS.min || year > maxYear) {
+  if (year < DECISION_DATE_BOUNDS.minYear) {
+    return null;
+  }
+  // ISO dates compare correctly as text, and the ceiling is a UTC day so the
+  // host's time zone cannot move it.
+  const ceiling = toUtcDateString(
+    addUtcDays(new Date(), DECISION_DATE_BOUNDS.daysAhead),
+  );
+  if (candidate > ceiling) {
     return null;
   }
   return candidate;

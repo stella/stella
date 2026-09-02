@@ -7,7 +7,11 @@ import nodePath from "node:path";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import { canonicalDecisionDate } from "@/api/lib/dates";
+import {
+  addUtcDays,
+  canonicalDecisionDate,
+  toUtcDateString,
+} from "@/api/lib/dates";
 import {
   CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
   decisionDateOutOfBoundsSql,
@@ -24,7 +28,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const MIGRATION_PATH = nodePath.resolve(
   import.meta.dir,
-  "../../drizzle/20260818090000_case_law_decision_date_bounds/migration.sql",
+  "../../drizzle/20260902100000_case_law_decision_date_ceiling/migration.sql",
 );
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -32,6 +36,7 @@ let db: ReturnType<typeof drizzle>;
 
 const sourceId = createSafeId<"caseLawSource">();
 const currentYear = new Date().getUTCFullYear();
+const day = (offset: number) => toUtcDateString(addUtcDays(new Date(), offset));
 
 /** Both sides of both bounds, plus dates far outside them. */
 const BOUNDARY_DATES: readonly string[] = [
@@ -41,10 +46,12 @@ const BOUNDARY_DATES: readonly string[] = [
   "1800-01-01",
   "1800-01-02",
   "2000-06-15",
-  `${String(currentYear)}-12-31`,
-  `${String(currentYear + 1)}-01-01`,
+  day(-1),
+  day(0),
+  day(1),
+  day(2),
+  day(30),
   `${String(currentYear + 1)}-12-31`,
-  `${String(currentYear + 2)}-01-01`,
   "2944-04-30",
   "9999-12-31",
 ];
