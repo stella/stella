@@ -34,7 +34,7 @@
  *
  * Usage (from apps/api):
  *   bun run eval:extraction
- *   bun run eval:extraction -- --models gpt-5.4-mini,anthropic::claude-sonnet-5
+ *   bun run eval:extraction -- --models gpt-5.6-luna,anthropic::claude-sonnet-5
  *   bun run eval:extraction -- --runs 3 --task de-lease --json out.json
  *
  * Model ids use `provider::modelId` (BYOK direct) or a bare id, which
@@ -67,7 +67,7 @@ import type { AIJustificationOutput } from "@/api/lib/workflow/parse-justificati
 // through whichever configured provider rates it (GPT models may come from
 // OpenAI or OpenRouter); Claude ids are pinned to Anthropic so a
 // non-Anthropic default provider cannot claim them.
-const DEFAULT_MODELS = ["gpt-5.4-mini", "anthropic::claude-sonnet-5"];
+const DEFAULT_MODELS = ["gpt-5.6-luna", "anthropic::claude-sonnet-5"];
 const DEFAULT_RUNS = 1;
 const MODEL_REQUEST_TIMEOUT_MS = 120_000;
 
