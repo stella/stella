@@ -131,7 +131,7 @@
     "ip-address": "^10.5.0",
     "jose": "^6.2.10",
     "jszip": "catalog:",
-    "nodemailer": "^9.0.5",
+    "nodemailer": "^9.0.6",
     "onnxruntime-node": "1.29.0",
     "postal-mime": "^3.0.0",
     "posthog-node": "^5.51.4",
