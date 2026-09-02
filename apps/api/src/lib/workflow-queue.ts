@@ -2024,6 +2024,7 @@ const finishWorkflow = async (
     // they stay stale and trigger an automatic follow-up run below.
     try {
       await scopedDb((tx) =>
+        // oxlint-disable-next-line no-direct-property-table-write/no-direct-property-table-write -- SAFETY: sets only the non-derived `status` column (marks previously-planned rows fresh); no property kind or other derived column is touched, so it does not need to route through the properties owner surfaces
         tx
           .update(properties)
           .set({ status: "fresh" })
