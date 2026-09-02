@@ -49,8 +49,12 @@ const TOOL_CALL_ROLE = "chat" satisfies ModelRole;
 const CAPABILITY_PROBE_TIMEOUT_MS = 20_000;
 const MODEL_ROLE_PROBE_TIMEOUT_MS = 30_000;
 const TOOL_ROUND_TRIP_PROBE_TIMEOUT_MS = 45_000;
-const CANARY_PROBE_MAX_ATTEMPTS = 2;
+// A provider's overload response ("high demand", 503) or a slow first
+// answer must not read as a capability regression: three attempts, with the
+// wait growing from 5s to 20s so a short capacity spike has time to pass.
+const CANARY_PROBE_MAX_ATTEMPTS = 3;
 const CANARY_PROBE_RETRY_DELAY_MS = 5000;
+const CANARY_PROBE_RETRY_BACKOFF = 4;
 const PROVIDER_ERROR_MESSAGE_MAX_LENGTH = 16_384;
 const MILLISECONDS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
 const SYNTHETIC_PROMPT = "Reply with exactly OK.";
@@ -720,7 +724,7 @@ export const runCanaryProbe = async ({
         return { attempts: attempt, error, signal, status: "failed" };
       }
       // oxlint-disable-next-line no-await-in-loop -- bounded backoff separates sequential provider attempts.
-      await wait(retryDelayMs);
+      await wait(retryDelayMs * CANARY_PROBE_RETRY_BACKOFF ** (attempt - 1));
     }
   }
 

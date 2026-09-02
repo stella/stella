@@ -48,6 +48,28 @@ describe("AI provider catalog canary coverage", () => {
   });
 });
 
+describe("AI provider canary overload backoff", () => {
+  test("waits longer before each further attempt and gives an overloaded provider three tries", async () => {
+    const waits: number[] = [];
+    let attempts = 0;
+    const result = await runCanaryProbe({
+      retryDelayMs: 5000,
+      run: async () => {
+        attempts += 1;
+        if (attempts < 3) {
+          throw new ProviderStatusError(503);
+        }
+      },
+      timeoutMs: 1000,
+      wait: async (delayMs) => {
+        waits.push(delayMs);
+      },
+    });
+    expect(result).toEqual({ attempts: 3, status: "passed" });
+    expect(waits).toEqual([5000, 20_000]);
+  });
+});
+
 describe("AI provider PDF canary contract", () => {
   test("sends a real inline PDF rather than a text-only pdf-role probe", () => {
     const message = createPdfCanaryMessages().at(0);
@@ -304,8 +326,8 @@ describe("AI provider canary retry contract", () => {
       })),
     ).toEqual(
       statuses.map(({ retryable, status }) => ({
-        attempts: retryable ? 2 : 1,
-        calls: retryable ? 2 : 1,
+        attempts: retryable ? 3 : 1,
+        calls: retryable ? 3 : 1,
         retryable,
         status,
       })),
