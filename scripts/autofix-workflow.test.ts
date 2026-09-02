@@ -52,29 +52,27 @@ describe("Dependabot Bun autofix boundary", () => {
     );
   });
 
-  test("adds a deterministic empty changeset for @stll/ui updates that lack one", async () => {
+  test("adds a deterministic empty changeset for published dev dependency updates", async () => {
     const workflow = await Bun.file(WORKFLOW_URL).text();
     const changesetStep = workflow.indexOf(
-      "- name: Add missing empty @stll/ui changeset",
+      "- name: Add missing empty dev dependency changeset",
     );
     const restrictionStep = workflow.indexOf(
       "- name: Restrict generated changes",
     );
     const pushStep = workflow.indexOf("- name: Push autofixes");
 
-    expect(workflow).toContain('- "packages/ui/**"');
+    expect(workflow).toContain('- "packages/*/package.json"');
+    expect(workflow).not.toContain('- "packages/ui/**"');
     expect(workflow).toContain(
-      `EMPTY_CHANGESET_PATH: .changeset/dependabot-ui-\${{ github.event.pull_request.number }}.md`,
+      `EMPTY_CHANGESET_PATH: .changeset/dependabot-dev-dependencies-\${{ github.event.pull_request.number }}.md`,
     );
     expect(workflow).toContain("fetch-depth: 0");
     expect(workflow).toContain(
-      `git diff --name-only "\${BASE_SHA}...\${HEAD_SHA}" -- packages/ui`,
+      "bun --no-env-file scripts/dependabot-empty-changeset.ts",
     );
-    expect(workflow).toContain("git diff --name-only --diff-filter=A");
-    expect(workflow).toContain(`".changeset/*.md"`);
-    expect(workflow).toContain(`":(exclude).changeset/README.md"`);
     expect(workflow).toContain(
-      `printf '%s\\n' "---" "---" > "$EMPTY_CHANGESET_PATH"`,
+      `--base "$BASE_SHA" --head "$HEAD_SHA" --output "$EMPTY_CHANGESET_PATH"`,
     );
     expect(workflow).toContain(
       `cmp -s <(printf '%s\\n' "---" "---") "$EMPTY_CHANGESET_PATH"`,

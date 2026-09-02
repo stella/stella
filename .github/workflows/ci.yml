@@ -1002,6 +1002,7 @@ jobs:
           bun test
           scripts/detect-e2e-changes.test.ts
           scripts/autofix-workflow.test.ts
+          scripts/dependabot-empty-changeset.test.ts
 
       - name: Test affected code-check planner
         if: needs.ci-plan.outputs.package_checks_required == 'true'
