@@ -4,7 +4,76 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/tooltip";
 import { containedEventHandler } from "../hooks/use-contained-handler";
 import { cn } from "../lib/utils";
 import { InspectorRailTab } from "./chrome";
+import {
+  resolveEntityTabActivateHandler,
+  resolveEntityTabCloseHandler,
+} from "./entity-tab.logic";
 import { SIDE_RAIL_TAB_ICON_SIZE } from "./layout-tokens";
+
+/**
+ * One rail tab for an open entity: a bordered `InspectorRailTab` cell
+ * showing the active tab's icon, with a tooltip carrying the full label.
+ * Generic over what "entity" means — the host supplies the icon dispatch
+ * (file type, task status, chat, …) and, for kinds that want it, the
+ * inactive-state glyph; this only owns the cell's shared shape and
+ * affordances.
+ */
+export const InspectorEntityTab = ({
+  active,
+  label,
+  glyph,
+  icon,
+  onClose,
+  onSelect,
+  ...props
+}: InspectorEntityTabProps) => (
+  <Tooltip>
+    <TooltipTrigger
+      render={
+        <InspectorRailTab
+          {...props}
+          active={active}
+          aria-label={label}
+          onAuxClick={(event: MouseEvent<HTMLButtonElement>) => {
+            const close = resolveEntityTabCloseHandler(event.button, onClose);
+            if (close) {
+              event.preventDefault();
+              close();
+            }
+          }}
+          onClick={containedEventHandler(
+            resolveEntityTabActivateHandler(onSelect),
+          )}
+        >
+          {/* Written as `InspectorRailTab`'s own JSX children (rather than
+           * `TooltipTrigger`'s) so it's pinned after the `props` spread
+           * above: `props` is typed without `children`, but a wider caller
+           * value could still carry one, and a JSX child beats a spread
+           * `children` positionally. */}
+          {!active && glyph !== undefined ? (
+            <span className="text-[9px] leading-none font-semibold tracking-tight uppercase">
+              {glyph}
+            </span>
+          ) : (
+            <span
+              className={cn(
+                "flex items-center justify-center",
+                SIDE_RAIL_TAB_ICON_SIZE,
+                // No glyph to swap to: dim the persistent icon instead, the
+                // same `!active` treatment a registry-backed rail icon uses
+                // on its own.
+                !active && "opacity-70",
+              )}
+            >
+              {icon}
+            </span>
+          )}
+        </InspectorRailTab>
+      }
+    />
+    <TooltipPopup side="left">{label}</TooltipPopup>
+  </Tooltip>
+);
 
 type InspectorEntityTabPassthroughProps = Omit<
   ComponentProps<"button">,
@@ -43,75 +112,18 @@ export type InspectorEntityTabProps = {
 } & InspectorEntityTabPassthroughProps;
 
 /**
- * One rail tab for an open entity: a bordered `InspectorRailTab` cell
- * showing the active tab's icon, with a tooltip carrying the full label.
- * Generic over what "entity" means — the host supplies the icon dispatch
- * (file type, task status, chat, …) and, for kinds that want it, the
- * inactive-state glyph; this only owns the cell's shared shape and
- * affordances.
- */
-export const InspectorEntityTab = ({
-  active,
-  label,
-  glyph,
-  icon,
-  onClose,
-  onSelect,
-  ...props
-}: InspectorEntityTabProps) => (
-  <Tooltip>
-    <TooltipTrigger
-      render={
-        <InspectorRailTab
-          {...props}
-          active={active}
-          aria-label={label}
-          onAuxClick={(event: MouseEvent<HTMLButtonElement>) => {
-            if (event.button === 1 && onClose) {
-              event.preventDefault();
-              onClose();
-            }
-          }}
-          onClick={containedEventHandler(() => onSelect?.())}
-        >
-          {/* Written as `InspectorRailTab`'s own JSX children (rather than
-           * `TooltipTrigger`'s) so it's pinned after the `props` spread
-           * above: `props` is typed without `children`, but a wider caller
-           * value could still carry one, and a JSX child beats a spread
-           * `children` positionally. */}
-          {!active && glyph !== undefined ? (
-            <span className="text-[9px] leading-none font-semibold tracking-tight uppercase">
-              {glyph}
-            </span>
-          ) : (
-            <span
-              className={cn(
-                "flex items-center justify-center",
-                SIDE_RAIL_TAB_ICON_SIZE,
-                // No glyph to swap to: dim the persistent icon instead, the
-                // same `!active` treatment a registry-backed rail icon uses
-                // on its own.
-                !active && "opacity-70",
-              )}
-            >
-              {icon}
-            </span>
-          )}
-        </InspectorRailTab>
-      }
-    />
-    <TooltipPopup side="left">{label}</TooltipPopup>
-  </Tooltip>
-);
-
-/**
- * Short abbreviation for a rail tab's inactive glyph: the filename stem
- * (extension dropped), the first `length` characters; the cell uppercases it.
+ * Short abbreviation for a rail tab's inactive glyph: the filename stem,
+ * the first `length` characters; the cell uppercases it.
+ *
+ * A leading dot is part of the name, not an extension separator — a
+ * dotfile's own extension (a second dot further in) still drops, but the
+ * leading dot itself survives into the glyph: `entityTabGlyph(".gitignore")`
+ * is `".gi"`, not `""`.
  */
 export const entityTabGlyph = (name: string, length = 3): string => {
-  const dot = name.lastIndexOf(".");
-  const stem = dot === -1 ? name : name.slice(0, dot);
-  // Casing is left to the cell's CSS so the document language decides it
-  // (a Turkish name keeps its dotted capital).
-  return stem.slice(0, length);
+  const leadingDot = name.startsWith(".") ? "." : "";
+  const rest = leadingDot === "" ? name : name.slice(1);
+  const dot = rest.lastIndexOf(".");
+  const stem = dot === -1 ? rest : rest.slice(0, dot);
+  return (leadingDot + stem).slice(0, length);
 };

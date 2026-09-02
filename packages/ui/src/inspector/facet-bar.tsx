@@ -6,6 +6,7 @@ import { Button } from "../components/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../components/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/tooltip";
 import { cn } from "../lib/utils";
+import { resolveFacetOverflow } from "./facet-bar.logic";
 import { TOOLBAR_ROW_HEIGHT } from "./layout-tokens";
 
 export type InspectorFacetBarProps<F extends string> = {
@@ -46,8 +47,10 @@ export type InspectorFacetBarProps<F extends string> = {
  *
  * Labels are never truncated: when the row is too narrow for every
  * chip, the ones that don't fit collapse into a trailing chevron
- * (`˅`) dropdown. The active facet is always pinned visible so the
- * current tab stays readable rather than hiding inside the menu.
+ * (`˅`) dropdown. The active facet is pinned visible ahead of the rest
+ * so the current tab stays readable rather than hiding inside the menu
+ * — except at the narrowest widths, where not even the active chip fits
+ * beside the trigger; see `resolveFacetOverflow`'s narrow-width floor.
  */
 export const InspectorFacetBar = <F extends string>({
   facet,
@@ -102,7 +105,7 @@ export const InspectorFacetBar = <F extends string>({
         (Number.parseFloat(style.paddingInlineStart) || 0) +
         (Number.parseFloat(style.paddingInlineEnd) || 0);
       const gap = Number.parseFloat(style.columnGap) || 0;
-      const available = container.clientWidth - padX;
+      const availableWidth = container.clientWidth - padX;
 
       const cells = [...measure.children];
       const triggerWidth = cells.at(-1)?.getBoundingClientRect().width ?? 0;
@@ -110,52 +113,14 @@ export const InspectorFacetBar = <F extends string>({
         .slice(0, facets.length)
         .map((cell) => cell.getBoundingClientRect().width);
 
-      const total = chipWidths.reduce(
-        (sum, width, index) => sum + width + (index > 0 ? gap : 0),
-        0,
-      );
-      if (total <= available) {
-        setVisibleCount(facets.length);
-        return;
-      }
-
-      // Overflowing: greedily keep chips that fit alongside the trigger.
-      let used = 0;
-      let count = 0;
-      for (const width of chipWidths) {
-        const add = width + (count > 0 ? gap : 0);
-        if (used + add + gap + triggerWidth > available) {
-          break;
-        }
-        used += add;
-        count += 1;
-      }
-
-      // The active facet is pinned into the visible set at render even when it
-      // sits past the greedy fit; it can be wider than the chip it displaces,
-      // so recount reserving the active chip's own width to keep it (and the
-      // trigger) from clipping.
-      const activeIndex = facets.indexOf(facet);
-      if (activeIndex >= count) {
-        const activeWidth = chipWidths[activeIndex] ?? 0;
-        used = activeWidth;
-        count = 0;
-        for (const [i, width] of chipWidths.entries()) {
-          if (i === activeIndex) {
-            continue;
-          }
-          const add = width + gap;
-          if (used + add + gap + triggerWidth > available) {
-            break;
-          }
-          used += add;
-          count += 1;
-        }
-        setVisibleCount(count + 1);
-        return;
-      }
-
-      setVisibleCount(count);
+      const policy = resolveFacetOverflow({
+        activeIndex: facets.indexOf(facet),
+        availableWidth,
+        chipWidths,
+        gap,
+        triggerWidth,
+      });
+      setVisibleCount(policy.visibleCount);
     };
 
     const observer = new ResizeObserver(recompute);
@@ -173,6 +138,12 @@ export const InspectorFacetBar = <F extends string>({
   if (!overflowing) {
     visibleFacets = [...facets];
     overflowFacets = [];
+  } else if (visibleCount === 0) {
+    // `resolveFacetOverflow`'s narrow-width floor: not even the active
+    // chip fits beside the trigger. Show nothing but the trigger — every
+    // facet, including the active one, still reaches through its menu.
+    visibleFacets = [];
+    overflowFacets = [...facets];
   } else if (activeIndex < visibleCount) {
     visibleFacets = facets.slice(0, visibleCount);
     overflowFacets = facets.slice(visibleCount);
@@ -180,7 +151,7 @@ export const InspectorFacetBar = <F extends string>({
     // The active facet would overflow: pin it into the last visible slot
     // so the current tab is always readable, and overflow the rest in
     // their original order.
-    const head = facets.slice(0, Math.max(visibleCount - 1, 0));
+    const head = facets.slice(0, visibleCount - 1);
     visibleFacets = [...head, facet];
     overflowFacets = facets.filter((value) => !visibleFacets.includes(value));
   }

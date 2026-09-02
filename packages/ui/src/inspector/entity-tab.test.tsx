@@ -122,8 +122,16 @@ describe("entityTabGlyph", () => {
     expect(entityTabGlyph("readme")).toBe("rea");
   });
 
-  test("a leading dot (dotfile) has no extension to drop", () => {
-    expect(entityTabGlyph(".gitignore")).toBe("");
+  test("a leading dot is part of the name, not an extension separator", () => {
+    expect(entityTabGlyph(".gitignore")).toBe(".gi");
+  });
+
+  test("a dotfile with no further dot keeps its leading dot in full", () => {
+    expect(entityTabGlyph(".env")).toBe(".en");
+  });
+
+  test("a dotfile's own extension (a second dot) still drops", () => {
+    expect(entityTabGlyph(".env.local")).toBe(".en");
   });
 
   test("honours a custom length", () => {
