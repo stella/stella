@@ -307,7 +307,7 @@ const createFixtureTools = ({
         error: "missing_required_fields",
         missingFields: filled.requiredFieldsRejection,
       };
-      fillCalls.push({ values, result });
+      fillCalls.push({ templateId, values, result });
       return result;
     }
     if ("error" in filled) {
