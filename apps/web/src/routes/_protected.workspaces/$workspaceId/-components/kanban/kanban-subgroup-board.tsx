@@ -209,13 +209,12 @@ const WorkspaceKanbanSubgroupCell = ({
 
   return (
     <KanbanVirtualCell
-      active={isDragOver}
-      backgroundColor={
-        cell.coordinate.column.type === "group" &&
-        cell.coordinate.column.group.colorBg
-          ? `color-mix(in srgb, ${cell.coordinate.column.group.colorBg} 26%, transparent)`
+      accent={
+        cell.coordinate.column.type === "group"
+          ? cell.coordinate.column.group.optionColor
           : undefined
       }
+      active={isDragOver}
       containerRef={cellRef}
       footer={
         columnValue !== null && canCreateTask ? (

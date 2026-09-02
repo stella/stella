@@ -1,4 +1,5 @@
 import {
+  type CSSProperties,
   type Key,
   type ReactNode,
   type RefObject,
@@ -20,6 +21,7 @@ import {
   useVirtualizer,
 } from "@tanstack/react-virtual";
 
+import { type OptionColor, resolveOptionColor } from "../lib/option-color";
 import { cn } from "../lib/utils";
 import {
   useKanbanDropTarget,
@@ -30,6 +32,24 @@ import {
 const DEFAULT_ESTIMATE_SIZE_PX = 128;
 const DEFAULT_OVERSCAN = 8;
 const DEFAULT_LOAD_MORE_THRESHOLD_PX = 200;
+
+/** The CSS custom property every accent tint and the active accent ring are
+ *  derived from, so both stay in lockstep with the resolved colour token. */
+const KANBAN_CELL_ACCENT_VAR = "--kanban-cell-accent" as const;
+
+/** Faint resting wash: matches the alpha `option-color` already uses for its
+ *  own subtle background token, so a tinted cell reads at the same weight as
+ *  the swatch and badges that carry the same colour. */
+const KANBAN_CELL_ACCENT_RESTING_ALPHA = 12;
+/** Stronger wash while a card is dragged over an accented cell. */
+const KANBAN_CELL_ACCENT_ACTIVE_ALPHA = 22;
+/** Ring alpha for the active accent frame, well above the wash so the frame
+ *  still reads as the drag-over affordance rather than more background tint. */
+const KANBAN_CELL_ACCENT_ACTIVE_RING_ALPHA = 55;
+
+type KanbanCellStyle = CSSProperties & {
+  [KANBAN_CELL_ACCENT_VAR]?: string;
+};
 
 const retainActiveSortableIndex = (
   range: Range,
@@ -82,6 +102,14 @@ export type KanbanVirtualCellProps<TRow> = {
   containerRef?: RefObject<HTMLDivElement | null> | undefined;
   active?: boolean | undefined;
   backgroundColor?: string | undefined;
+  /**
+   * Optional colour identity for the cell surface: a faint resting tint at
+   * the same alpha as `option-color`'s own subtle background, with a
+   * stronger accent-coloured wash and ring while `active` is also set. Omit
+   * for the plain neutral surface; `backgroundColor` still wins outright
+   * when both are given, since that prop is the caller's explicit override.
+   */
+  accent?: OptionColor | undefined;
   footer?: ReactNode;
   estimateSize?: number | undefined;
   overscan?: number | undefined;
@@ -99,6 +127,7 @@ export const KanbanVirtualCell = <TRow,>({
   containerRef,
   active = false,
   backgroundColor,
+  accent,
   footer,
   estimateSize = DEFAULT_ESTIMATE_SIZE_PX,
   overscan = DEFAULT_OVERSCAN,
@@ -172,17 +201,48 @@ export const KanbanVirtualCell = <TRow,>({
     dropTarget.setNodeRef(element);
   };
 
+  const accentVariants =
+    accent === undefined ? undefined : resolveOptionColor(accent);
+  const accentAlpha = active
+    ? KANBAN_CELL_ACCENT_ACTIVE_ALPHA
+    : KANBAN_CELL_ACCENT_RESTING_ALPHA;
+  const accentBackground =
+    accentVariants === undefined
+      ? undefined
+      : `color-mix(in srgb, var(${KANBAN_CELL_ACCENT_VAR}) ${accentAlpha}%, var(--background))`;
+  const activeAccentRing =
+    active && accentVariants !== undefined
+      ? `0 0 0 2px color-mix(in srgb, var(${KANBAN_CELL_ACCENT_VAR}) ${KANBAN_CELL_ACCENT_ACTIVE_RING_ALPHA}%, transparent)`
+      : undefined;
+  const style: KanbanCellStyle | undefined =
+    backgroundColor === undefined && accentVariants === undefined
+      ? undefined
+      : {
+          backgroundColor: backgroundColor ?? accentBackground,
+          ...(activeAccentRing === undefined
+            ? undefined
+            : { boxShadow: activeAccentRing }),
+          ...(accentVariants === undefined
+            ? undefined
+            : { [KANBAN_CELL_ACCENT_VAR]: accentVariants.color }),
+        };
+
   const content = (
     <div
       className={cn(
         "bg-muted/20 max-h-[min(60vh,40rem)] min-h-20 overflow-y-auto overscroll-y-contain rounded-xl p-2 transition-[background-color,outline-color]",
-        active && "bg-primary/5 ring-primary/50 ring-2",
+        active &&
+          accentVariants === undefined &&
+          "bg-primary/5 ring-primary/50 ring-2",
         className,
       )}
       data-kanban-cell={sortable?.dropTarget.id}
+      data-kanban-cell-accent={
+        accentVariants === undefined ? undefined : "true"
+      }
       onScroll={handleScroll}
       ref={setScrollElement}
-      style={backgroundColor ? { backgroundColor } : undefined}
+      style={style}
     >
       <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map((virtualRow) => {
