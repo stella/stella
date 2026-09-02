@@ -22,6 +22,7 @@ import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
+import { propertyKindsForTool } from "@/api/lib/properties/property-kinds";
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
 import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
 import { sortDeep } from "@/api/lib/sort-deep";
@@ -342,6 +343,7 @@ export const resolveTemplateProperties = async ({
         name: templateProperty.name,
         content: templateProperty.content,
         tool: sanitizeTemplatePropertyTool(templateProperty.tool),
+        kinds: propertyKindsForTool(templateProperty.tool),
         role: resolveTemplatePropertyRole(templateProperty, roleResolution),
         status: templateProperty.tool.type === "ai-model" ? "stale" : "fresh",
       })

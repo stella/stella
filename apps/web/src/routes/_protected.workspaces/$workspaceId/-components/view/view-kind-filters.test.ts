@@ -159,6 +159,22 @@ describe("view entity kinds", () => {
       ]),
     ).toEqual(["task"]);
   });
+  test("an empty or group leaves the view unrestricted", () => {
+    expect(
+      viewEntityKinds([{ type: "group", combinator: "or", children: [] }]),
+    ).toBeNull();
+    expect(
+      viewEntityKinds([
+        {
+          type: "predicate",
+          operand: { type: "kind" },
+          op: "in",
+          value: ["task"],
+        },
+        { type: "group", combinator: "or", children: [] },
+      ]),
+    ).toEqual(["task"]);
+  });
 });
 
 describe("List view detection", () => {

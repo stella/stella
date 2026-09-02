@@ -1,5 +1,6 @@
 import type { EntityKind } from "@stll/api-contract";
 
+import type { properties } from "@/api/db/schema";
 import type { PropertyTool } from "@/api/db/schema-validators";
 
 /**
@@ -29,3 +30,25 @@ export const propertyKindsForTool = (
       return tool.type satisfies never;
   }
 };
+
+type PropertyKindsForUpdateParams = {
+  /** The stored row before the update: its tool and its stored scope. */
+  previous: Pick<typeof properties.$inferSelect, "kinds" | "tool">;
+  /** The tool the update writes. */
+  next: Pick<PropertyTool, "type">;
+};
+
+/**
+ * The scope an update writes. A manual-input property keeps whatever scope
+ * it already stores: only server code ever narrows a manual property (the
+ * workspace's system file property is created with `["document"]`), and a
+ * rename must not widen it to every kind. Any change of tool type re-derives
+ * the scope from the new tool.
+ */
+export const propertyKindsForUpdate = ({
+  previous,
+  next,
+}: PropertyKindsForUpdateParams): EntityKind[] | null =>
+  next.type === "manual-input" && previous.tool.type === "manual-input"
+    ? previous.kinds
+    : propertyKindsForTool(next);

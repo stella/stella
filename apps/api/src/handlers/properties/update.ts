@@ -36,7 +36,7 @@ import {
   PROPERTY_DEPENDENCY_LIMITS,
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
-import { propertyKindsForTool } from "@/api/lib/properties/property-kinds";
+import { propertyKindsForUpdate } from "@/api/lib/properties/property-kinds";
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
 
 type PropertyWithDeps = {
@@ -304,6 +304,7 @@ const updateProperty = createSafeHandler(
             name: properties.name,
             content: properties.content,
             tool: properties.tool,
+            kinds: properties.kinds,
             role: properties.role,
             status: properties.status,
             playbookSourceId: properties.playbookSourceId,
@@ -460,7 +461,10 @@ const updateProperty = createSafeHandler(
             name,
             content,
             tool: dbTool,
-            kinds: propertyKindsForTool(dbTool),
+            kinds: propertyKindsForUpdate({
+              previous: oldProperty,
+              next: dbTool,
+            }),
             role: nextRole,
             status: isStale ? "stale" : "fresh",
           })
