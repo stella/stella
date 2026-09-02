@@ -97,6 +97,15 @@ type DescribedWorkspaceFrameProps = Extract<
  * Stella's complete workspace frame. Hosts provide route descriptors and
  * actions; this component owns the shell, application rail, end rail, and
  * desktop inspector footprint.
+ *
+ * The two compositions mount different navigation primitives. `described`
+ * renders `navigation.items` through the narrower `ApplicationRail` from
+ * `@stll/ui/application-rail` — a fixed-width, always-collapsed rail with no
+ * expand/collapse state of its own. `host-responsive` passes `navigation`
+ * straight through to `WorkspaceShell` and takes no position on what fills
+ * it; a host that wants an expandable/collapsible sidebar (with mobile
+ * sheet, tooltips-when-collapsed, and persisted open state) mounts the
+ * shell from `@stll/ui/sidebar` there, as this app's `AppSidebar` does.
  */
 export const WorkspaceFrame = (props: WorkspaceFrameProps) => {
   if (props.composition === "host-responsive") {

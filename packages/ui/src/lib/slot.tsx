@@ -3,8 +3,8 @@
  *
  * Renders its single child element with the parent's props
  * (className, style, event handlers, ref, data-* attributes)
- * merged onto it. Used by sidebar components for the
- * `asChild` pattern.
+ * merged onto it. Used by the sidebar shell for the `asChild`
+ * pattern.
  *
  * Ref composition logic adapted from the MIT-licensed
  * `@radix-ui/react-compose-refs` (v1.1.2).
@@ -23,7 +23,7 @@
 
 import { Children, Fragment, cloneElement, isValidElement } from "react";
 
-import { cn } from "@stll/ui/utils";
+import { cn } from "./utils";
 
 type SlotProps = React.HTMLAttributes<HTMLElement> & {
   children?: React.ReactNode;

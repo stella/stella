@@ -47,6 +47,7 @@ export * from "./components/segmented-icon-toggle";
 export * from "./components/select";
 export * from "./components/separator";
 export * from "./components/sheet";
+export * from "./components/sidebar";
 export * from "./components/skeleton";
 export * from "./components/stella-mark";
 export * from "./components/stella-wordmark";

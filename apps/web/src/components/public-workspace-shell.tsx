@@ -30,6 +30,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
+  SidebarToggleHotkey,
   useSidebar,
 } from "@/components/sidebar";
 import { StellaWordmark } from "@/components/stella-wordmark";
@@ -124,6 +125,7 @@ export const PublicWorkspaceShell = ({
   const shell = (
     <PublicSignInRequestContext value={requestAuth}>
       <SidebarProvider>
+        <SidebarToggleHotkey />
         <WorkspaceShell
           endDock={inspector ?? defaultInspector}
           navigation={{
