@@ -51,15 +51,6 @@ export const COMPOSER_COMPACT_TEXT_CELL_CLASS = "relative min-w-0 py-[11px]";
 export const COMPOSER_TEXT_CLASS = "text-sm leading-5";
 
 /**
- * A round control's slot in the compact row: as tall as the row's inner
- * height, with the control centred in it. In a one-line row that centres
- * the control on the text; as the editor grows the row's `items-end` keeps
- * the slot on the last line, where the control stays centred on that line.
- */
-export const COMPOSER_COMPACT_CONTROL_SLOT_CLASS =
-  "flex h-[calc(--spacing(11)-2px)] shrink-0 items-center";
-
-/**
  * The `large` (hero) text well: the padding around the editor. The editor's
  * own stature is `min-h-15` (~3 lines of `text-sm` at `leading-5`), applied
  * on the editable element by each surface because the chat editor targets its

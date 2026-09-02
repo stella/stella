@@ -66,10 +66,10 @@ export const SuggestedActionSurface = ({
 );
 
 /**
- * A row (or stack) of click-to-run "suggested action" chips. Shared by the
- * chat composer's follow-up prompts and the template studio's prompt
- * presets. Horizontal chips scroll sideways so the list never wraps or
- * overflows its container.
+ * A row (or stack) of click-to-run "suggested action" chips. Horizontal
+ * chips scroll sideways so the list never wraps or overflows its container;
+ * the row's trailing edge fades so a clipped chip reads as "more to scroll"
+ * instead of a hard cut.
  */
 export const SuggestedActions = ({
   actions,
@@ -91,7 +91,9 @@ export const SuggestedActions = ({
       aria-label={label}
       className={cn(
         "flex max-w-full gap-1.5",
-        horizontal ? "scrollbar-hover overflow-x-auto" : "flex-col items-start",
+        horizontal
+          ? "scrollbar-hover overflow-x-auto [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] rtl:[mask-image:linear-gradient(to_left,black_calc(100%-2.5rem),transparent)]"
+          : "flex-col items-start",
         className,
       )}
       role="group"
@@ -105,11 +107,11 @@ export const SuggestedActions = ({
           <Button
             aria-keyshortcuts={keyShortcut}
             className={cn(
-              "text-foreground h-8 gap-2 rounded-full px-3 text-xs font-normal sm:text-xs",
+              "text-foreground font-normal",
               !horizontal && "max-w-full",
             )}
             onClick={() => onSelect(action.id)}
-            size="sm"
+            size="chip"
             type="button"
             variant={surface === "plain" ? "outline" : "ghost"}
           >

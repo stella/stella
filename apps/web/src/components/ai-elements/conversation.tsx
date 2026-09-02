@@ -174,16 +174,20 @@ export const ConversationScrollButton = ({
     </Button>
   );
 
-  return placement === "inline" ? (
+  if (placement !== "inline") {
+    return button;
+  }
+
+  // `size-7` matches the suggested-action chips beside it. `className` lands
+  // on the slot, not the button: the caller positions the slot in its row.
+  return (
     <SuggestedActionSurface
       aria-hidden={!isVisible || undefined}
-      className={cn("size-8 shrink-0", !isVisible && "invisible")}
+      className={cn("size-7 shrink-0", !isVisible && "invisible", className)}
       surface={surface}
     >
       {isVisible && button}
     </SuggestedActionSurface>
-  ) : (
-    button
   );
 };
 

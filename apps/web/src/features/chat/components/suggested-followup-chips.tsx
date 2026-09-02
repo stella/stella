@@ -30,6 +30,11 @@ type SuggestedFollowupChipsProps = {
  * caller's choice: `surface="overlay"` (default) for a row floating above the
  * composer, or `surface="plain"` when rendered inside the thread card so the
  * chips sit within the chat window.
+ *
+ * The inline scroll-to-bottom action overlays the row's trailing end (over
+ * the chips' fade-out) rather than taking a leading slot, so the first chip
+ * starts flush with the composer's leading edge whether or not the action
+ * is showing.
  */
 export const SuggestedFollowupChips = ({
   className,
@@ -47,21 +52,21 @@ export const SuggestedFollowupChips = ({
   const resolvedSurface = surface ?? "overlay";
 
   return (
-    <div className={cn("flex max-w-full items-start gap-1.5 pb-2", className)}>
-      {stickToBottom !== null && (
-        <ConversationScrollButton
-          placement="inline"
-          surface={resolvedSurface}
-        />
-      )}
+    <div className={cn("relative max-w-full pb-2", className)}>
       <SuggestedActions
         actions={prompts.map((prompt) => ({ id: prompt, label: prompt }))}
-        className="min-w-0 flex-1"
         label={t("chat.suggestedFollowupsLabel")}
         onSelect={onSelect}
         orientation="horizontal"
         surface={resolvedSurface}
       />
+      {stickToBottom !== null && (
+        <ConversationScrollButton
+          className="absolute end-0 top-0"
+          placement="inline"
+          surface={resolvedSurface}
+        />
+      )}
     </div>
   );
 };

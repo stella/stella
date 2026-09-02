@@ -54,11 +54,11 @@ import type {
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
+import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import {
   COMPOSER_BOX_ANONYMIZED_CLASS,
   COMPOSER_BOX_CLASS,
   COMPOSER_BOX_FOCUS_CLASS,
-  COMPOSER_COMPACT_CONTROL_SLOT_CLASS,
   COMPOSER_COMPACT_ROW_CLASS,
   COMPOSER_COMPACT_TEXT_CELL_CLASS,
   COMPOSER_CONTROL_BUTTON_SIZE,
@@ -851,18 +851,16 @@ export const PromptBar = (props: PromptBarProps) => {
                 {presetScopeChooser.question}
               </span>
               <Button
-                className="h-7 rounded-full px-2.5 text-[12.5px]"
                 onClick={() => resolvePresetScope("selection")}
-                size="sm"
+                size="chip"
                 type="button"
                 variant="ghost"
               >
                 {presetScopeChooser.selectionLabel}
               </Button>
               <Button
-                className="h-7 rounded-full px-2.5 text-[12.5px]"
                 onClick={() => resolvePresetScope("document")}
-                size="sm"
+                size="chip"
                 type="button"
                 variant="ghost"
               >
@@ -935,7 +933,7 @@ export const PromptBar = (props: PromptBarProps) => {
               seats the circle on the editor cell's single text line: the
               shell is items-end, so a bare button would otherwise ride
               below the placeholder's center line. */}
-          <span className={COMPOSER_COMPACT_CONTROL_SLOT_CLASS}>
+          <ComposerControlSlot>
             {minimizedThreadAction ? (
               <Button
                 aria-label={minimizedThreadAction.label}
@@ -978,15 +976,15 @@ export const PromptBar = (props: PromptBarProps) => {
                 }
               />
             )}
-          </span>
+          </ComposerControlSlot>
         </>
       )}
       {layout === "floating" && pendingCount > 0 && (
-        <span className={cn(COMPOSER_COMPACT_CONTROL_SLOT_CLASS, "ps-0.5")}>
+        <ComposerControlSlot className="ps-0.5">
           <span className="bg-muted text-foreground inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums">
             {format.number(pendingCount)}
           </span>
-        </span>
+        </ComposerControlSlot>
       )}
       <div
         className={cn(
@@ -1063,7 +1061,7 @@ export const PromptBar = (props: PromptBarProps) => {
             // The control slot mirrors the (+) menu's seating: the shell
             // is items-end, so the slot rides the bottom text line as the
             // editor grows.
-            <span className={COMPOSER_COMPACT_CONTROL_SLOT_CLASS}>
+            <ComposerControlSlot>
               <ChatComposerActionButton
                 canSend={!composerSubmitDisabled && canSubmit}
                 isGenerating={isGenerating}
@@ -1073,7 +1071,7 @@ export const PromptBar = (props: PromptBarProps) => {
                 }}
                 onStop={onStop}
               />
-            </span>
+            </ComposerControlSlot>
           }
         />
         <TooltipPopup side="top">
