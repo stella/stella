@@ -132,7 +132,7 @@
     "jose": "^6.2.10",
     "jszip": "catalog:",
     "nodemailer": "^9.0.5",
-    "onnxruntime-node": "1.27.0",
+    "onnxruntime-node": "1.29.0",
     "postal-mime": "^3.0.0",
     "posthog-node": "^5.51.2",
     "quickjs-emscripten": "^0.32.0",
