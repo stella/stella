@@ -310,12 +310,30 @@ pub fn clipboard_close_editor(window: WebviewWindow) -> Result<(), String> {
   })
 }
 
-fn write_history_item(state: &ClipboardAppState, id: &str) -> Result<(), String> {
+/// Copying a clip is two steps the user perceives separately: the write to
+/// the system clipboard, then moving the clip to the front of history. The
+/// tag tells the window which one failed.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum ClipboardCopyError {
+  /// Nothing reached the system clipboard.
+  Copy { message: String },
+  /// The window could not hide after a successful copy.
+  Hide { message: String },
+  /// The system clipboard holds the clip, but history could not record it.
+  History { message: String },
+}
+
+fn write_history_item(
+  state: &ClipboardAppState,
+  id: &str,
+) -> Result<(), ClipboardCopyError> {
+  let copy_error = |message: String| ClipboardCopyError::Copy { message };
   let item = {
-    let mut manager = state.lock().map_err(|_| lock_error())?;
+    let mut manager = state.lock().map_err(|_| copy_error(lock_error()))?;
     let item = manager
       .item(id)
-      .ok_or_else(|| ITEM_NOT_FOUND_ERROR.to_string())?;
+      .ok_or_else(|| copy_error(ITEM_NOT_FOUND_ERROR.to_string()))?;
     manager.suppress_next(&item, false);
     item
   };
@@ -323,18 +341,14 @@ fn write_history_item(state: &ClipboardAppState, id: &str) -> Result<(), String>
     if let Ok(mut manager) = state.lock() {
       manager.clear_suppression();
     }
-    return Err(error);
+    return Err(copy_error(error));
   }
-  // The clipboard already holds the clip; failing to reorder history must not
-  // report the copy itself as failed.
-  let touched = state
+  state
     .lock()
     .map_err(|_| lock_error())
-    .and_then(|mut manager| manager.touch_item(id, chrono::Utc::now()));
-  if let Err(error) = touched {
-    tracing::warn!(error = %error, "copied clipboard item could not be moved to the front");
-  }
-  Ok(())
+    .and_then(|mut manager| manager.touch_item(id, chrono::Utc::now()))
+    .map(|_| ())
+    .map_err(|message| ClipboardCopyError::History { message })
 }
 
 #[tauri::command]
@@ -342,10 +356,17 @@ pub fn clipboard_copy_item(
   id: String,
   state: State<'_, ClipboardAppState>,
   window: WebviewWindow,
-) -> Result<(), String> {
-  write_history_item(state.inner(), &id)?;
+) -> Result<(), ClipboardCopyError> {
+  let history = match write_history_item(state.inner(), &id) {
+    Err(error @ ClipboardCopyError::Copy { .. }) => return Err(error),
+    outcome => outcome,
+  };
+  // The clip is on the system clipboard either way, so the hand-off proceeds
+  // and a history failure is reported after it.
   let _ = window.emit(HISTORY_EVENT, ());
   clipboard_window::hide(&window)
+    .map_err(|message| ClipboardCopyError::Hide { message })?;
+  history
 }
 
 #[tauri::command]

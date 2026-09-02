@@ -112,9 +112,14 @@ import {
   measureClipboardSnapshotRequest,
   observeClipboardReopens,
 } from "./clipboard-startup-timing";
-import { CLIPBOARD_RETENTIONS, isClipboardSnapshot } from "./clipboard-types";
+import {
+  CLIPBOARD_RETENTIONS,
+  isClipboardCopyError,
+  isClipboardSnapshot,
+} from "./clipboard-types";
 import type {
   ClipboardCaptureStatus,
+  ClipboardCopyErrorKind,
   ClipboardRetention,
   ClipboardGroup,
   ClipboardGroupColor,
@@ -151,6 +156,28 @@ const RETENTION_LABEL_KEYS = {
   year: "retentionYear",
 } as const satisfies Record<ClipboardRetention, string>;
 const CLIPBOARD_CARD_SELECTOR = "[data-clipboard-id]";
+// Which step of a copy failed decides what the user is told: only a `copy`
+// failure means the clip never reached the system clipboard.
+const COPY_FAILURE_FEEDBACK = {
+  copy: {
+    messageKey: "errorPaste",
+    operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardCopy,
+  },
+  hide: {
+    messageKey: "errorUpdateHistory",
+    operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardWindowHide,
+  },
+  history: {
+    messageKey: "errorUpdateHistory",
+    operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
+  },
+} as const satisfies Record<
+  ClipboardCopyErrorKind,
+  {
+    messageKey: "errorPaste" | "errorUpdateHistory";
+    operation: (typeof DESKTOP_TELEMETRY_OPERATIONS)[keyof typeof DESKTOP_TELEMETRY_OPERATIONS];
+  }
+>;
 // Must match the card's `w-[246px]` and the rail's `gap-3 px-5`.
 const CLIPBOARD_CARD_WIDTH = 246;
 const CLIPBOARD_CARD_GAP = 12;
@@ -1354,14 +1381,19 @@ const ClipboardApp = () => {
 
   const copyItem = (item: ClipboardItem) => {
     setError((current) => (current?.source === "operation" ? null : current));
-    void invoke("clipboard_copy_item", { id: item.id }).catch(() => {
-      reportDesktopError({
-        code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-        operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardCopy,
-        window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
-      });
-      setError({ message: t("errorPaste"), source: "operation" });
-    });
+    void invoke("clipboard_copy_item", { id: item.id }).catch(
+      (error: unknown) => {
+        // An unrecognised rejection means the clip never left the window.
+        const kind = isClipboardCopyError(error) ? error.kind : "copy";
+        const feedback = COPY_FAILURE_FEEDBACK[kind];
+        reportDesktopError({
+          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          operation: feedback.operation,
+          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+        });
+        setError({ message: t(feedback.messageKey), source: "operation" });
+      },
+    );
   };
 
   const openEditor = (id: string) => {

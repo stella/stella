@@ -141,6 +141,24 @@ const isPersistence = (value: unknown): value is ClipboardPersistence => {
   );
 };
 
+export const CLIPBOARD_COPY_ERROR_KINDS = ["copy", "hide", "history"] as const;
+
+export type ClipboardCopyErrorKind =
+  (typeof CLIPBOARD_COPY_ERROR_KINDS)[number];
+
+/** Rejection payload of `clipboard_copy_item`; `kind` names the failed step. */
+export type ClipboardCopyError = {
+  kind: ClipboardCopyErrorKind;
+  message: string;
+};
+
+export const isClipboardCopyError = (
+  value: unknown,
+): value is ClipboardCopyError =>
+  isRecord(value) &&
+  CLIPBOARD_COPY_ERROR_KINDS.some((kind) => kind === value["kind"]) &&
+  typeof value["message"] === "string";
+
 export type ClipboardEditorContext = {
   groups: ClipboardGroup[];
   item: ClipboardItem;
