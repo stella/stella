@@ -1117,7 +1117,7 @@ const ClipboardApp = () => {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [error, setError] = useState<ClipboardAppError | null>(null);
+  const [appError, setError] = useState<ClipboardAppError | null>(null);
   const [dialog, setDialog] = useState<ClipboardDialogState>({
     type: "closed",
   });
@@ -1745,13 +1745,13 @@ const ClipboardApp = () => {
     persistenceWarningLabel = t("errorReadHistory");
   }
   let feedback: ReactNode = null;
-  if (error) {
+  if (appError) {
     feedback = (
       <div
         className="bg-destructive text-destructive-foreground absolute inset-x-0 top-0 z-20 px-5 py-1.5 text-center text-xs"
         role="alert"
       >
-        {error.message}
+        {appError.message}
       </div>
     );
   }
