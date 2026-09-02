@@ -82,7 +82,6 @@ const generateWithCancellation = async (cancelAt: CancellationPoint) => {
   // SAFETY: the adapter is the only part of the resolved model the real chat
   // loop reads on this path; the rest is bookkeeping this canary never routes
   // through a provider.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const model = {
     adapter: createCancellingAdapter(controller, cancelAt),
     keySource: "instance",
