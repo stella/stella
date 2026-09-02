@@ -1,5 +1,17 @@
 # @stll/cli
 
+## 0.8.0
+
+### Minor Changes
+
+- [#2771](https://github.com/stella/stella/pull/2771) [`4c0377f`](https://github.com/stella/stella/commit/4c0377f5ab2a3265ec4f80422118ee29b4ad72ce) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Login persists the default server; `--scopes` takes resource scopes only and the identity set (incl. `offline_access`) is always requested; `whoami` shows the account; `--server` is accepted by every command; the registry drift notice no longer fires for feature-gated tools and names the tools it does report. Removed the no-op `--keychain` flag, renamed `upload --workspace` to `--matter-id`, moved `search read` to `document content`, and `invoke_capability`'s `validateOnly` argument is now `validate_only` (the `--validate-only` flag is unchanged).
+
+- [#2789](https://github.com/stella/stella/pull/2789) [`f584dc5`](https://github.com/stella/stella/commit/f584dc5248faf1e1592ed19dbadb965a585402ee) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Every tool input is snake_case at every depth. `clause save` body paragraphs take `list_kind`, `list_level`, `is_directive`, `directive_kind`, `directive_expression`; `template save` field overlays take `input_type`, `options_from`, `ai_prompt`, `ai_adapt`, `ai_sees_document`, `date_format`, `parts[].input_type` and `validation.min_length`/`max_length`/`min_items`/`max_items`; `organization set-jurisdictions` takes `country_code` and `is_primary`. The former camelCase spellings are rejected. `date-time` inputs admit a leap second only as `23:59:60`.
+
+### Patch Changes
+
+- [#2785](https://github.com/stella/stella/pull/2785) [`41fddf1`](https://github.com/stella/stella/commit/41fddf1ee88637d63b6d31857e2519da067643b2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Generated capability commands expose bounded integer flags where the server advertises them instead of routing those fields to `--input`; `date` and `date-time` inputs are refused when they name a day the calendar lacks or a time field out of range.
+
 ## 0.7.2
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # @stll/ui
 
+## 0.16.1
+
+### Patch Changes
+
+- [#2786](https://github.com/stella/stella/pull/2786) [`0aeaa0f`](https://github.com/stella/stella/commit/0aeaa0f1fab5c562d153dce4338e2c039afb86b6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `InspectorDock` keeps the permanent rail on the pane's inline-start edge, the
+  same order as the workspace inspector panel. Collapsed, the rail is still the
+  whole dock on the viewport edge; expanded, the pane now opens beyond the rail
+  instead of between the content and the rail, so the rail's tabs and toggle
+  stay beside the content they describe.
+
 ## 0.16.0
 
 ### Minor Changes
