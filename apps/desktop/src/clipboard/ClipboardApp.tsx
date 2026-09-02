@@ -502,7 +502,8 @@ const ClipboardCard = ({
           dateTime={item.copiedAt}
           title={copiedAtLabel}
         >
-          {relativeTime}
+          <span aria-hidden="true">{relativeTime}</span>
+          <span className="sr-only">{copiedAtLabel}</span>
         </time>
         {index < 9 ? (
           <kbd className="bg-muted text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
