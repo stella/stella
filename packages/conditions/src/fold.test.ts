@@ -112,6 +112,38 @@ describe("foldCondition", () => {
     expect(foldCondition(node, handlers)).toBe("task&message&document");
   });
 
+  test("a nested group whose own `group` handler returns null is dropped, leaving only its surviving siblings", () => {
+    // Unlike an emptied group (dropped by the fold itself before `group`
+    // runs), this nested group has one surviving leaf child — `group` is
+    // called for it, and here it chooses to reject that combination itself
+    // (e.g. an `or()` of the underlying value type comes back falsy). The
+    // parent must see only the other sibling, not a hole or a crash.
+    const rejectingHandlers: FoldHandlers<string> = {
+      leaf: keepKindLeaf,
+      group: (node, children) => {
+        // Reject any nested "or" group outright; keep the top-level "and".
+        if (node.combinator === "or") {
+          return null;
+        }
+        return joinGroup(node, children);
+      },
+    };
+    const node: ConditionNode = {
+      type: "group",
+      combinator: "and",
+      children: [
+        kindPredicate("task"),
+        {
+          type: "group",
+          combinator: "or",
+          children: [kindPredicate("message")],
+        },
+        kindPredicate("document"),
+      ],
+    };
+    expect(foldCondition(node, rejectingHandlers)).toBe("task&document");
+  });
+
   test("returns null for a top-level leaf that compiles to nothing", () => {
     expect(
       foldCondition(
