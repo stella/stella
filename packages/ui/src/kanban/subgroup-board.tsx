@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import type { ReactElement, ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { DragEvent, ReactElement, ReactNode } from "react";
 
 import { ChevronDownIcon } from "lucide-react";
 
@@ -17,6 +17,7 @@ import {
   resolveKanbanColumnBands,
 } from "./column-bands";
 import type { KanbanColumnBandSpan } from "./column-bands";
+import { KANBAN_CARD_DRAG_MIME } from "./drag-interactions";
 import type { KanbanColumnBand, KanbanGroup } from "./grouping";
 import type {
   KanbanBoardCell,
@@ -54,6 +55,12 @@ export type KanbanSubgroupCellContext<TRow> = {
   /** Number of rows in this lane/column intersection, including zero. */
   count: number;
   laneValue: string | null;
+  /**
+   * The band this cell's column belongs to, or `null` outside any band. Lets
+   * a host that drives its own drag-and-drop (see `dragOverBandId` on the
+   * board) map a cell's droppable id back to the band it should report.
+   */
+  band: KanbanColumnBand | null;
 };
 
 export type KanbanSubgroupBandHeaderContext = {
@@ -70,9 +77,9 @@ export type KanbanSubgroupBandHeaderContext = {
    */
   folded: boolean;
   /**
-   * A custom caption reports which way it was activated; omitting the
-   * activation is read as a pointer fold, the conservative choice for the
-   * peek that follows.
+   * A custom caption may report which way it was activated (pointer vs.
+   * keyboard); the board itself has no use for the distinction and passes
+   * it through unread, purely as information for a host's own header.
    */
   onCollapsedChange: (
     collapsed: boolean,
@@ -137,6 +144,27 @@ export type KanbanSubgroupBoardProps<TRow> = {
   formatCount?: ((count: number) => ReactNode) | undefined;
   footer?: ReactNode;
   className?: string | undefined;
+  /**
+   * The band whose folded slot (or, for a peeked band, whose open part) the
+   * host's own drag is currently over, or `null` when it is over neither.
+   * Omit (`undefined`) when the host does not drive drags itself — the
+   * board's native `dragover`/`dragenter`/`dragleave` listeners already feed
+   * the peek controller in that case. A host drives its own drag when it
+   * builds the drop targets itself (for example a `KanbanSortableBoard`,
+   * whose `onDragOver` reports the active `over` droppable); it maps that
+   * droppable back to a band id — a folded cell's context and an open
+   * cell's context (see `KanbanSubgroupCellContext.band`) both carry the
+   * band — and passes it here. The controller treats "over the band" as
+   * entering the open band when it is already peeked, and as hovering its
+   * folded slot otherwise; leaving it is reported the same way.
+   */
+  dragOverBandId?: string | null | undefined;
+  /**
+   * Whether the host's own drag (see `dragOverBandId`) is in progress.
+   * Flipping to `false` ends any peek immediately, mirroring the native
+   * `dragend`/`drop` listeners the board installs for its own drags.
+   */
+  isDragging?: boolean | undefined;
 } & KanbanSubgroupCollapseControl;
 
 /**
@@ -145,8 +173,8 @@ export type KanbanSubgroupBoardProps<TRow> = {
  * Columns that carry band metadata render under a one-line band caption and
  * can be collapsed as a run: the band folds into one narrow slot in every
  * row, whose cells stay reachable (a host renders its drop target in them),
- * and peeks open while a pointer rests on it, so a drag can still land on a
- * specific column inside. Every row is laid out span by span with the same
+ * and peeks open while a dragged card rests on it, so a drag can still land
+ * on a specific column inside; a plain hover never opens it. Every row is laid out span by span with the same
  * widths, which is what keeps captions, headers, counts, and cells aligned
  * in every state; the caption line never grows past its own height, so a
  * folded band costs no vertical space.
@@ -166,6 +194,8 @@ export const KanbanSubgroupBoard = <TRow,>({
   onBandCollapsedChange,
   footer,
   className,
+  dragOverBandId,
+  isDragging,
 }: KanbanSubgroupBoardProps<TRow>) => {
   const [collapsedLaneValues, setCollapsedLaneValues] = useState(
     () => new Set<string | null>(),
@@ -183,6 +213,52 @@ export const KanbanSubgroupBoard = <TRow,>({
     createBandPeekController({ onChange: setPeekingBandId }),
   );
   useEffect(() => () => peek.dispose(), [peek]);
+  // A drop or a cancelled drag ends the peek wherever the card was; the
+  // open band may never see a leave for it.
+  useEffect(() => {
+    const end = () => peek.dragEnded();
+    window.addEventListener("dragend", end);
+    window.addEventListener("drop", end);
+    return () => {
+      window.removeEventListener("dragend", end);
+      window.removeEventListener("drop", end);
+    };
+  }, [peek]);
+  // A host that drives its own drag (dnd-kit, rather than the board's native
+  // listeners) reports the band its drag is over directly. `undefined` means
+  // the host does not drive drags at all, so no comparison against the
+  // previous id ever runs.
+  const previousDragOverBandId = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      dragOverBandId === undefined ||
+      dragOverBandId === previousDragOverBandId.current
+    ) {
+      return;
+    }
+    const previous = previousDragOverBandId.current;
+    previousDragOverBandId.current = dragOverBandId;
+    if (previous !== null) {
+      if (peekingBandId === previous) {
+        peek.openDragLeave(previous);
+      } else {
+        peek.slotDragLeave(previous);
+      }
+    }
+    if (dragOverBandId !== null) {
+      if (peekingBandId === dragOverBandId) {
+        peek.openDragEnter(dragOverBandId);
+      } else {
+        peek.slotDragOver(dragOverBandId);
+      }
+    }
+  }, [dragOverBandId, peek, peekingBandId]);
+  useEffect(() => {
+    if (isDragging === false) {
+      previousDragOverBandId.current = null;
+      peek.dragEnded();
+    }
+  }, [isDragging, peek]);
 
   const { cellsByLaneValue, countByColumnValue, ungroupedCells } =
     useMemo(() => {
@@ -276,21 +352,14 @@ export const KanbanSubgroupBoard = <TRow,>({
       peek.bandExpanded(staleBandId);
     }
   }, [peek, staleBandId]);
-  const setBandCollapsed = (
-    band: KanbanColumnBand,
-    collapsed: boolean,
-    activation?: KanbanBandToggleActivation,
-  ) => {
-    const viaPointer = activation === undefined ? true : activation.viaPointer;
-    // A pointer fold from the caption leaves the new slot under the pointer;
-    // the controller keeps it from peeking straight back open. A keyboard
-    // fold leaves no pointer there, so the next hover may peek as usual.
-    if (!collapsed) {
-      peek.bandExpanded(band.id);
-    } else if (viaPointer) {
-      peek.foldedUnderPointer(band.id);
-    } else {
+  // `activation` (pointer vs. keyboard) only ever mattered to a suppression
+  // rule the drag-only peek lifecycle can no longer support, so the board
+  // itself ignores it now; it stays informational, for a host's own header.
+  const setBandCollapsed = (band: KanbanColumnBand, collapsed: boolean) => {
+    if (collapsed) {
       peek.bandFolded(band.id);
+    } else {
+      peek.bandExpanded(band.id);
     }
     if (onBandCollapsedChange) {
       onBandCollapsedChange(band, collapsed);
@@ -334,7 +403,10 @@ export const KanbanSubgroupBoard = <TRow,>({
   }: {
     className?: string;
     label?: string;
-    renderColumn: (column: KanbanBoardColumn) => Rendered;
+    renderColumn: (
+      column: KanbanBoardColumn,
+      band: KanbanColumnBand | null,
+    ) => Rendered;
     renderFoldedBand: (
       band: KanbanColumnBand,
       span: KanbanColumnBandSpan,
@@ -360,11 +432,23 @@ export const KanbanSubgroupBoard = <TRow,>({
             className="flex gap-3"
             data-kanban-band={band?.id}
             key={spanKey(span)}
-            onPointerEnter={
-              band === null ? undefined : () => peek.openPointerEnter(band.id)
+            onDragEnter={
+              band === null
+                ? undefined
+                : (event) => {
+                    if (isKanbanCardDragEvent(event)) {
+                      peek.openDragEnter(band.id);
+                    }
+                  }
             }
-            onPointerLeave={
-              band === null ? undefined : () => peek.openPointerLeave(band.id)
+            onDragLeave={
+              band === null
+                ? undefined
+                : (event) => {
+                    if (leavesElement(event) && isKanbanCardDragEvent(event)) {
+                      peek.openDragLeave(band.id);
+                    }
+                  }
             }
           >
             {span.columns.map((column) => (
@@ -372,7 +456,7 @@ export const KanbanSubgroupBoard = <TRow,>({
                 className={KANBAN_COLUMN_WIDTH_CLASS}
                 key={columnKey(column)}
               >
-                {renderColumn(column)}
+                {renderColumn(column, band)}
               </div>
             ))}
           </div>
@@ -393,8 +477,7 @@ export const KanbanSubgroupBoard = <TRow,>({
       columns: span.columns,
       count: span.columns.reduce((sum, column) => sum + columnCount(column), 0),
       folded,
-      onCollapsedChange: (next, activation) =>
-        setBandCollapsed(band, next, activation),
+      onCollapsedChange: (next) => setBandCollapsed(band, next),
     };
     if (renderBandHeader) {
       return <>{renderBandHeader(context)}</>;
@@ -506,8 +589,19 @@ export const KanbanSubgroupBoard = <TRow,>({
                     data-kanban-band={band.id}
                     key={spanKey(span)}
                     style={{ width: `${String(spanWidth(span))}px` }}
-                    onPointerEnter={() => peek.openPointerEnter(band.id)}
-                    onPointerLeave={() => peek.openPointerLeave(band.id)}
+                    onDragEnter={(event) => {
+                      if (isKanbanCardDragEvent(event)) {
+                        peek.openDragEnter(band.id);
+                      }
+                    }}
+                    onDragLeave={(event) => {
+                      if (
+                        leavesElement(event) &&
+                        isKanbanCardDragEvent(event)
+                      ) {
+                        peek.openDragLeave(band.id);
+                      }
+                    }}
                   >
                     {bandHeader(band, span)}
                   </div>
@@ -527,7 +621,7 @@ export const KanbanSubgroupBoard = <TRow,>({
           ? null
           : renderRow({
               className: "pb-1",
-              renderColumn: (column) => {
+              renderColumn: (column, band) => {
                 const cell = ungroupedCells.find(
                   (candidate) =>
                     columnKey(candidate.coordinate.column) ===
@@ -536,6 +630,7 @@ export const KanbanSubgroupBoard = <TRow,>({
                 return cell === undefined ? null : (
                   <>
                     {renderCell({
+                      band,
                       cell,
                       count: cell.rows.length,
                       laneValue: null,
@@ -615,11 +710,12 @@ export const KanbanSubgroupBoard = <TRow,>({
               {!collapsed &&
                 renderRow({
                   className: "pb-1",
-                  renderColumn: (column) => {
+                  renderColumn: (column, band) => {
                     const cell = cellFor(column);
                     return cell === undefined ? null : (
                       <>
                         {renderCell({
+                          band,
                           cell,
                           count: cell.rows.length,
                           laneValue: group.value,
@@ -640,6 +736,24 @@ export const KanbanSubgroupBoard = <TRow,>({
   );
 };
 
+/**
+ * Whether a drag-leave event actually leaves `currentTarget` rather than
+ * moving between its descendants, which fire leave/enter pairs of their own.
+ */
+const leavesElement = (event: DragEvent<HTMLElement>): boolean =>
+  !(
+    event.relatedTarget instanceof Node &&
+    event.currentTarget.contains(event.relatedTarget)
+  );
+
+/**
+ * Whether a native drag event is a kanban card drag, rather than some other
+ * native drag (a column reorder, a file, text) passing over the board. Only
+ * a card drag should ever open or hold a band's peek.
+ */
+const isKanbanCardDragEvent = (event: DragEvent<HTMLElement>): boolean =>
+  event.dataTransfer.types.includes(KANBAN_CARD_DRAG_MIME);
+
 type FoldedBandSlotProps = {
   band: KanbanColumnBand;
   children: ReactNode;
@@ -648,9 +762,9 @@ type FoldedBandSlotProps = {
 };
 
 /**
- * The narrow slot a folded band occupies in a row. Its pointer events go to
- * the board's peek controller, which decides when a resting pointer peeks
- * the band open and keeps a slot that appeared under the pointer folded.
+ * The narrow slot a folded band occupies in a row. Its drag events go to
+ * the board's peek controller, which decides when a resting drag peeks the
+ * band open.
  */
 const FoldedBandSlot = ({
   band,
@@ -659,15 +773,23 @@ const FoldedBandSlot = ({
   peek,
 }: FoldedBandSlotProps) => {
   // A slot that leaves the DOM mid-delay (its band expanded or disappeared)
-  // takes its pending peek and its suppression with it.
+  // takes its pending peek with it.
   useEffect(() => () => peek.slotUnmounted(band.id), [peek, band.id]);
   return (
     <div
       className={className}
       data-kanban-band={band.id}
       data-kanban-band-collapsed=""
-      onPointerMove={() => peek.slotPointerMove(band.id)}
-      onPointerLeave={() => peek.slotPointerLeave(band.id)}
+      onDragOver={(event) => {
+        if (isKanbanCardDragEvent(event)) {
+          peek.slotDragOver(band.id);
+        }
+      }}
+      onDragLeave={(event) => {
+        if (leavesElement(event) && isKanbanCardDragEvent(event)) {
+          peek.slotDragLeave(band.id);
+        }
+      }}
     >
       {children}
     </div>

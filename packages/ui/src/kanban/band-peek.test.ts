@@ -45,9 +45,9 @@ const setup = () => {
 };
 
 describe("band peek controller", () => {
-  test("a pointer resting on a folded slot peeks the band open after the delay", () => {
+  test("a dragged card resting on a folded slot peeks the band open after the delay", () => {
     const { clock, changes, peek } = setup();
-    peek.slotPointerMove("todo");
+    peek.slotDragOver("todo");
     clock.advance(KANBAN_BAND_PEEK_DELAY_MS - 1);
     expect(changes).toEqual([]);
     clock.advance(1);
@@ -56,104 +56,84 @@ describe("band peek controller", () => {
 
   test("leaving the slot before the delay cancels the peek", () => {
     const { clock, changes, peek } = setup();
-    peek.slotPointerMove("todo");
-    peek.slotPointerLeave("todo");
+    peek.slotDragOver("todo");
+    peek.slotDragLeave("todo");
     clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
     expect(changes).toEqual([]);
-  });
-
-  // The defect this guards: folding a band from its caption left the new
-  // slot under the cursor, the first movement peeked it straight back open,
-  // and leaving the caption folded it again, over and over.
-  test("a band folded under the pointer does not peek until the pointer leaves its slot", () => {
-    const { clock, changes, peek } = setup();
-    peek.foldedUnderPointer("todo");
-    peek.slotPointerMove("todo");
-    clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
-    expect(changes).toEqual([]);
-
-    peek.slotPointerLeave("todo");
-    peek.slotPointerMove("todo");
-    clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
-    expect(changes).toEqual(["todo"]);
   });
 
   test("moving between the parts of an open band keeps the peek", () => {
     const { clock, changes, peek } = setup();
-    peek.slotPointerMove("todo");
+    peek.slotDragOver("todo");
     clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
     expect(changes).toEqual(["todo"]);
 
     // Caption to column: leave fires, then enter, within the linger.
-    peek.openPointerLeave("todo");
+    peek.openDragLeave("todo");
     clock.advance(KANBAN_BAND_PEEK_LINGER_MS - 1);
-    peek.openPointerEnter("todo");
+    peek.openDragEnter("todo");
     clock.advance(KANBAN_BAND_PEEK_LINGER_MS * 2);
     expect(changes).toEqual(["todo"]);
   });
 
   test("leaving an open band for longer than the linger ends the peek", () => {
     const { clock, changes, peek } = setup();
-    peek.slotPointerMove("todo");
+    peek.slotDragOver("todo");
     clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
-    peek.openPointerLeave("todo");
+    peek.openDragLeave("todo");
     clock.advance(KANBAN_BAND_PEEK_LINGER_MS);
     expect(changes).toEqual(["todo", null]);
   });
 
   test("pinning a peeked band open ends the peek without a linger", () => {
     const { clock, changes, peek } = setup();
-    peek.slotPointerMove("todo");
+    peek.slotDragOver("todo");
     clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
     peek.bandExpanded("todo");
     expect(changes).toEqual(["todo", null]);
   });
 
-  test("folding a peeked band from its caption ends the peek and suppresses the slot", () => {
-    const { clock, changes, peek } = setup();
-    peek.slotPointerMove("todo");
-    clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
-    peek.foldedUnderPointer("todo");
-    expect(changes).toEqual(["todo", null]);
-    peek.slotPointerMove("todo");
-    clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
-    expect(changes).toEqual(["todo", null]);
-  });
-
   test("a slot that unmounts mid-delay cancels its pending peek", () => {
     const { clock, changes, peek } = setup();
-    peek.slotPointerMove("todo");
+    peek.slotDragOver("todo");
     peek.slotUnmounted("todo");
     clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
     expect(changes).toEqual([]);
   });
 
-  test("a slot that unmounts drops its suppression", () => {
+  test("folding a band ends its peek and lets the slot peek again on the next hover", () => {
     const { clock, changes, peek } = setup();
-    peek.foldedUnderPointer("todo");
-    peek.slotUnmounted("todo");
-    peek.slotPointerMove("todo");
-    clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
-    expect(changes).toEqual(["todo"]);
-  });
-
-  test("a fold without a pointer ends the peek but does not suppress the slot", () => {
-    const { clock, changes, peek } = setup();
-    peek.slotPointerMove("todo");
+    peek.slotDragOver("todo");
     clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
     peek.bandFolded("todo");
     expect(changes).toEqual(["todo", null]);
-    peek.slotPointerMove("todo");
+    peek.slotDragOver("todo");
     clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
     expect(changes).toEqual(["todo", null, "todo"]);
   });
 
+  test("the end of the drag ends the peek at once", () => {
+    const { clock, changes, peek } = setup();
+    peek.slotDragOver("todo");
+    clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
+    peek.dragEnded();
+    expect(changes).toEqual(["todo", null]);
+  });
+
+  test("the end of the drag cancels a pending peek", () => {
+    const { clock, changes, peek } = setup();
+    peek.slotDragOver("todo");
+    peek.dragEnded();
+    clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
+    expect(changes).toEqual([]);
+  });
+
   test("a second band's slot takes over a pending peek", () => {
     const { clock, changes, peek } = setup();
-    peek.slotPointerMove("todo");
+    peek.slotDragOver("todo");
     clock.advance(KANBAN_BAND_PEEK_DELAY_MS / 2);
-    peek.slotPointerLeave("todo");
-    peek.slotPointerMove("done");
+    peek.slotDragLeave("todo");
+    peek.slotDragOver("done");
     clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
     expect(changes).toEqual(["done"]);
   });

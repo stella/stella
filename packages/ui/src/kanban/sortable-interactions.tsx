@@ -457,7 +457,19 @@ export type KanbanSortableBoardProps = {
   sensors?: DndContextProps["sensors"] | undefined;
   /** Overrides dnd-kit's screen-reader announcements when supplied. */
   accessibility?: DndContextProps["accessibility"] | undefined;
+  /**
+   * Fires on drag start and on every drag end or cancel; a board over a
+   * `KanbanSubgroupBoard` combines the two into that board's `isDragging`
+   * (`true` here, `false` on `onDragEnd`/`onDragCancel`).
+   */
   onDragStart?: ((event: KanbanDragStartEvent) => void) | undefined;
+  /**
+   * Fires whenever dnd-kit's collision detection changes the drop target
+   * the drag is over, `event.over` included when it becomes none. A board
+   * over a `KanbanSubgroupBoard` maps `event.over?.id ?? null` to a band id
+   * (via `KanbanSubgroupCellContext.band`, or a droppable registered for a
+   * folded band's slot) to drive that board's `dragOverBandId`.
+   */
   onDragOver?: ((event: KanbanDragOverEvent) => void) | undefined;
   onDragCancel?: ((event: KanbanDragCancelEvent) => void) | undefined;
   /** Called once mounted child drop targets can safely receive input. */

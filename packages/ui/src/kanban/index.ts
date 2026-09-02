@@ -78,6 +78,7 @@ export type {
 } from "./drag-interactions";
 export {
   KANBAN_BOARD_AUTO_SCROLL_SOURCES,
+  KANBAN_CARD_DRAG_MIME,
   registerKanbanBoardAutoScroll,
   registerKanbanCardDrag,
 } from "./drag-interactions";

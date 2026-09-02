@@ -7,6 +7,16 @@ import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/el
 
 type AtlaskitDraggableOptions = Parameters<typeof draggable>[0];
 
+/**
+ * Marks a card drag on the native `DataTransfer` so the board's native
+ * `dragover`/`dragenter`/`dragleave` listeners (which also see reorders,
+ * file drops, and any other native drag passing over the board) can tell a
+ * kanban card drag from everything else. Pragmatic's `getInitialData` never
+ * reaches those native events; only data attached this way does.
+ */
+export const KANBAN_CARD_DRAG_MIME =
+  "application/x-stella-kanban-card" as const;
+
 export type RegisterKanbanCardDragOptions = {
   /** The drag wrapper rendered by `KanbanCardShell`. */
   element: AtlaskitDraggableOptions["element"];
@@ -35,6 +45,7 @@ export const registerKanbanCardDrag = ({
   draggable({
     element,
     getInitialData,
+    getInitialDataForExternal: () => ({ [KANBAN_CARD_DRAG_MIME]: "" }),
     ...(canDrag === undefined ? {} : { canDrag }),
     ...(onDragStart === undefined ? {} : { onDragStart }),
     ...(onDrop === undefined ? {} : { onDrop }),
