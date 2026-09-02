@@ -20,9 +20,17 @@
 //
 //   bun scripts/changeset-guard.ts [--base origin/main]
 
-import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+
+// This module is also imported by the no-install Dependabot autofix runner.
+class ChangesetPolicyError extends Error {
+  readonly _tag = "ChangesetPolicyError";
+}
+
+const panic = (message: string): never => {
+  throw new ChangesetPolicyError(message);
+};
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const POLICY_FILE = "scripts/changeset-policy.json";
