@@ -13,6 +13,7 @@ import { text as readStreamText } from "node:stream/consumers";
 import { decodeAccessTokenClaims } from "./auth/jwt.js";
 import { RESOURCE_SCOPE_PREFIX } from "./auth/scopes.js";
 import type { Context } from "./context.js";
+import { applyDeprecatedInputAliases } from "./deprecated-input-aliases.js";
 import { flagKey } from "./flag-name.js";
 import { validateAgainstSchema } from "./json-schema-validate.js";
 import {
@@ -1089,7 +1090,25 @@ export const runLeafCommand = async ({
     setExit(context, EXIT_CODES.validation);
     return;
   }
-  const built = await buildArgsFromFlags(spec, flags, argsBase);
+
+  // A deprecated input name reaches the CLI only through `--input` (no flag is
+  // generated for it), and both the required-flag check and local schema
+  // validation read the baked schema, which names the replacement. Rewrite the
+  // JSON base before either runs, so the alias each field description
+  // advertises is honored here exactly as it is on the server.
+  const aliased = applyDeprecatedInputAliases({
+    args: argsBase,
+    inputSchema: spec.inputSchema,
+  });
+  if (aliased.status === "conflict") {
+    writers.stderr(
+      `--input invalid at ${aliased.alias}: deprecated alias for ${aliased.canonical}; they were supplied with different values\n`,
+    );
+    setExit(context, EXIT_CODES.validation);
+    return;
+  }
+
+  const built = await buildArgsFromFlags(spec, flags, aliased.args);
   if (!built.ok) {
     writers.stderr(`${built.message}\n`);
     setExit(context, EXIT_CODES.validation);

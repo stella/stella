@@ -463,18 +463,21 @@ const TASKS: readonly Task[] = [
   },
   {
     id: "run-playbook",
-    request: "Run playbook pb_diligence_v2 over matter mat_17.",
+    request: "Run playbook pb_diligence_v2 over workspace ws_diligence_17.",
     mcp: {
       toolName: "run_playbook",
       checkArgs: (args) => [
-        ...field(args, "workspace_id", "mat_17"),
+        ...field(args, "workspace_id", "ws_diligence_17"),
         ...field(args, "playbook_id", "pb_diligence_v2"),
       ],
     },
     cli: {
       kind: "command",
       path: ["playbook", "run"],
-      flags: { "workspace-id": "mat_17", "playbook-id": "pb_diligence_v2" },
+      flags: {
+        "workspace-id": "ws_diligence_17",
+        "playbook-id": "pb_diligence_v2",
+      },
     },
   },
   {
