@@ -11,7 +11,7 @@ import {
 } from "@/features/case-law/components/decision-cells";
 import type { LatestDecisionsCourt } from "@/features/case-law/queries/decisions";
 import { researchTablesInfiniteOptions } from "@/features/case-law/research/queries";
-import type { LegislationShelfItem } from "@/features/statutes/queries/statutes";
+import type { LegislationShelf } from "@/features/statutes/queries/statutes";
 import { formatValidityDate } from "@/features/statutes/statute-format";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -22,12 +22,13 @@ import type { StatuteCountry } from "@/lib/statute-route";
 import {
   LAW_HOME_SHOW_ALL_CLASS,
   LawHomeCard,
+  LawHomeCardGroup,
   LawHomeRow,
   LawHomeRowList,
 } from "@/routes/law/-law-home/law-home-card";
 
-/** Rows per card: a sample the reader scans, not a list they work through. */
-const ROWS_PER_CARD = 3;
+/** Rows per group: a sample the reader scans, not a list they work through. */
+const ROWS_PER_GROUP = 3;
 const RESEARCH_TABLES_PER_CARD = 5;
 
 /** The seeded rank labels the shelf reports, as the words a reader knows. */
@@ -39,19 +40,19 @@ const TIER_LABEL_KEYS = {
 const isKnownTier = (value: string): value is keyof typeof TIER_LABEL_KEYS =>
   Object.hasOwn(TIER_LABEL_KEYS, value);
 
-type TopCourtCardProps = {
+type TopCourtsCardProps = {
   /** The pill's value, so "show all" keeps the reader's scope. */
   countryParam: string;
-  group: LatestDecisionsCourt;
+  groups: readonly LatestDecisionsCourt[];
 };
 
-/** The newest decisions of one apex court. */
-export const TopCourtCard = ({ countryParam, group }: TopCourtCardProps) => {
+/** The newest decisions of the jurisdiction's apex courts, one group per court. */
+export const TopCourtsCard = ({ countryParam, groups }: TopCourtsCardProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const decisions = group.decisions.slice(0, ROWS_PER_CARD);
+  const shown = groups.filter((group) => group.decisions.length > 0);
 
-  if (decisions.length === 0) {
+  if (shown.length === 0) {
     return null;
   }
 
@@ -61,85 +62,99 @@ export const TopCourtCard = ({ countryParam, group }: TopCourtCardProps) => {
       showAll={
         <Link
           className={LAW_HOME_SHOW_ALL_CLASS}
-          search={{ country: countryParam, court: group.court }}
+          search={{ country: countryParam }}
           to="/law/cases"
         >
           {t("common.showAll")}
         </Link>
       }
-      tag={
-        isKnownTier(group.tierLabel)
-          ? t(TIER_LABEL_KEYS[group.tierLabel])
-          : null
-      }
-      title={group.court}
     >
-      <LawHomeRowList>
-        {decisions.map((decision) => (
-          <LawHomeRow
-            key={decision.id}
-            line={decision.headnote}
-            meta={
-              decision.decisionDate === null
-                ? null
-                : formatDecisionDate(decision.decisionDate, format)
-            }
-            title={decisionLinkElement(
-              createCaseLawDecisionRouteParams({
-                caseNumber: decision.caseNumber,
-                country: decision.country,
-                court: decision.court,
-                decisionId: decision.id,
-                language: decision.language,
-                languageAlternates: decision.languageAlternates,
-                slug: decision.slug,
-              }),
-              "text-foreground font-medium hover:underline",
-              <BidiText>{decision.caseNumber}</BidiText>,
-            )}
-          />
-        ))}
-      </LawHomeRowList>
+      {shown.map((group) => (
+        <LawHomeCardGroup
+          key={group.court}
+          tag={
+            isKnownTier(group.tierLabel)
+              ? t(TIER_LABEL_KEYS[group.tierLabel])
+              : null
+          }
+          title={
+            <Link
+              className="hover:underline"
+              search={{ country: countryParam, court: group.court }}
+              to="/law/cases"
+            >
+              {group.court}
+            </Link>
+          }
+        >
+          <LawHomeRowList>
+            {group.decisions.slice(0, ROWS_PER_GROUP).map((decision) => (
+              <LawHomeRow
+                key={decision.id}
+                line={decision.headnote}
+                meta={
+                  decision.decisionDate === null
+                    ? null
+                    : formatDecisionDate(decision.decisionDate, format)
+                }
+                title={decisionLinkElement(
+                  createCaseLawDecisionRouteParams({
+                    caseNumber: decision.caseNumber,
+                    country: decision.country,
+                    court: decision.court,
+                    decisionId: decision.id,
+                    language: decision.language,
+                    languageAlternates: decision.languageAlternates,
+                    slug: decision.slug,
+                  }),
+                  "text-foreground font-medium hover:underline",
+                  <BidiText>{decision.caseNumber}</BidiText>,
+                )}
+              />
+            ))}
+          </LawHomeRowList>
+        </LawHomeCardGroup>
+      ))}
     </LawHomeCard>
   );
 };
 
-/** Which side of the shelf a card shows, and therefore how its dates read. */
-export type LegislationShelfKind = "enteringIntoForce" | "recentlyInForce";
+/** The two sides of the legislation shelf, in the order a reader expects them. */
+const SHELF_SIDES = ["recentlyInForce", "enteringIntoForce"] as const;
+
+type LegislationShelfSide = (typeof SHELF_SIDES)[number];
 
 const SHELF_HEADING_KEYS = {
   enteringIntoForce: "lawHome.enteringIntoForce",
   recentlyInForce: "lawHome.recentlyInForce",
-} as const satisfies Record<LegislationShelfKind, TranslationKey>;
+} as const satisfies Record<LegislationShelfSide, TranslationKey>;
 
-type LegislationShelfCardProps = {
+type LegislationCardProps = {
   country: StatuteCountry;
-  items: readonly LegislationShelfItem[];
-  kind: LegislationShelfKind;
+  shelf: LegislationShelf;
 };
 
-/** One side of the legislation shelf: recently in force, or coming into force. */
-export const LegislationShelfCard = ({
-  country,
-  items,
-  kind,
-}: LegislationShelfCardProps) => {
+/** What recently came into force and what is about to, one group each. */
+export const LegislationCard = ({ country, shelf }: LegislationCardProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const shown = items.slice(0, ROWS_PER_CARD);
+  const sides = SHELF_SIDES.map((side) => ({
+    side,
+    items: shelf[side].slice(0, ROWS_PER_GROUP),
+  })).filter(({ items }) => items.length > 0);
 
-  if (shown.length === 0) {
+  if (sides.length === 0) {
     return null;
   }
 
-  const validityLine = (date: string): string =>
-    kind === "recentlyInForce"
+  const validityLine = (side: LegislationShelfSide, date: string): string =>
+    side === "recentlyInForce"
       ? t("statutes.inForceSince", { date })
       : t("lawHome.inForceFrom", { date });
 
   return (
     <LawHomeCard
-      heading={t(SHELF_HEADING_KEYS[kind])}
+      heading={t("statutes.title")}
       showAll={
         <Link
           className={LAW_HOME_SHOW_ALL_CLASS}
@@ -150,47 +165,51 @@ export const LegislationShelfCard = ({
         </Link>
       }
     >
-      <LawHomeRowList>
-        {shown.map((item) => {
-          const date = formatValidityDate(item.versionValidFrom, format);
-          return (
-            <LawHomeRow
-              key={item.id}
-              line={date === null ? null : validityLine(date)}
-              title={
-                <Link
-                  className="text-foreground font-medium hover:underline"
-                  params={{ country, documentId: item.id }}
-                  to="/law/$country/statutes/$documentId"
-                >
-                  <BidiText>{item.title}</BidiText>
-                </Link>
-              }
-            />
-          );
-        })}
-      </LawHomeRowList>
+      {sides.map(({ side, items }) => (
+        <LawHomeCardGroup key={side} title={t(SHELF_HEADING_KEYS[side])}>
+          <LawHomeRowList>
+            {items.map((item) => {
+              const date = formatValidityDate(item.versionValidFrom, format);
+              return (
+                <LawHomeRow
+                  key={item.id}
+                  line={date === null ? null : validityLine(side, date)}
+                  title={
+                    <Link
+                      className="text-foreground font-medium hover:underline"
+                      params={{ country, documentId: item.id }}
+                      to="/law/$country/statutes/$documentId"
+                    >
+                      <BidiText>{item.title}</BidiText>
+                    </Link>
+                  }
+                />
+              );
+            })}
+          </LawHomeRowList>
+        </LawHomeCardGroup>
+      ))}
     </LawHomeCard>
   );
 };
 
-type IdentifierExamplesCardProps = {
+type IdentifierExamplesProps = {
   examples: readonly string[];
+  /** What the chips are introduced as; the jurisdiction when the page shows several. */
+  label?: string | undefined;
   onExampleSelect: (example: string) => void;
-  /** The jurisdiction the examples belong to, when the page shows several. */
-  title?: string | undefined;
 };
 
 /**
- * What an identifier looks like here, as chips that run the same entry the
- * box would. A reader who has never typed a docket number learns the shape
- * by pressing one.
+ * What an identifier looks like here, as chips under the box that run the
+ * same entry the box would. A reader who has never typed a docket number
+ * learns the shape by pressing one.
  */
-export const IdentifierExamplesCard = ({
+export const IdentifierExamples = ({
   examples,
+  label,
   onExampleSelect,
-  title,
-}: IdentifierExamplesCardProps) => {
+}: IdentifierExamplesProps) => {
   const t = useTranslations();
 
   if (examples.length === 0) {
@@ -198,22 +217,23 @@ export const IdentifierExamplesCard = ({
   }
 
   return (
-    <LawHomeCard heading={t("lawHome.tryIdentifier")} title={title}>
-      <div className="flex flex-wrap gap-2">
-        {examples.map((example) => (
-          <Button
-            className="h-7 text-xs font-normal"
-            key={example}
-            onClick={() => onExampleSelect(example)}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            <BidiText as="span">{example}</BidiText>
-          </Button>
-        ))}
-      </div>
-    </LawHomeCard>
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+      <span className="text-muted-foreground text-xs">
+        {label ?? t("lawHome.tryIdentifier")}
+      </span>
+      {examples.map((example) => (
+        <Button
+          className="text-muted-foreground hover:text-foreground h-6 px-1.5 text-xs font-normal"
+          key={example}
+          onClick={() => onExampleSelect(example)}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          <BidiText as="span">{example}</BidiText>
+        </Button>
+      ))}
+    </div>
   );
 };
 

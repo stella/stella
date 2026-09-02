@@ -116,10 +116,10 @@ export const legislationShelfOptions = (country: string) =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-/** One act on the legislation shelf, as the public reader sees it. */
-export type LegislationShelfItem = Awaited<
+/** The legislation shelf as the public reader sees it: both of its sides. */
+export type LegislationShelf = Awaited<
   ReturnType<NonNullable<ReturnType<typeof legislationShelfOptions>["queryFn"]>>
->["recentlyInForce"][number];
+>;
 
 const readStatute = async (documentId: string, signal: AbortSignal) => {
   const response = await api.law

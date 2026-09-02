@@ -10,44 +10,53 @@ type LawHomeCardProps = {
   heading: string;
   /** The link out to the full list, when the card is a sample of one. */
   showAll?: ReactNode;
-  /** A muted qualifier for the title, e.g. a court's rank. */
-  tag?: string | null | undefined;
-  /** What the card is about, when the heading does not already name it. */
-  title?: string | undefined;
 };
 
 /**
- * One card of the law home: a kind, an optional subject, a handful of rows.
- * A card with nothing to show is not rendered at all, so the grid never
- * carries a placeholder.
+ * One card of the law home: a kind and a handful of rows, grouped where the
+ * kind has several subjects. A card with nothing to show is not rendered at
+ * all, so the grid never carries a placeholder.
  */
 export const LawHomeCard = ({
   children,
   heading,
   showAll,
+}: LawHomeCardProps) => (
+  <section className="border-border/60 flex min-w-0 flex-col gap-4 rounded-lg border p-4">
+    <div className="flex items-baseline justify-between gap-3">
+      <h2 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        {heading}
+      </h2>
+      {showAll}
+    </div>
+    {children}
+  </section>
+);
+
+type LawHomeCardGroupProps = {
+  children: ReactNode;
+  /** A muted qualifier for the title, e.g. a court's rank. */
+  tag?: string | null | undefined;
+  /** The subject of these rows: a court, a side of a shelf. */
+  title: ReactNode;
+};
+
+/** One subject inside a card: its name, its rank, its rows. */
+export const LawHomeCardGroup = ({
+  children,
   tag,
   title,
-}: LawHomeCardProps) => (
-  <section className="border-border/60 flex min-w-0 flex-col gap-3 rounded-lg border p-4">
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <h2 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-          {heading}
-        </h2>
-        {title !== undefined && (
-          <div className="mt-1 flex min-w-0 items-baseline gap-2">
-            <p className="text-foreground min-w-0 truncate text-sm font-medium">
-              {title}
-            </p>
-            {tag !== null && tag !== undefined && (
-              <span className="text-muted-foreground bg-muted/60 shrink-0 rounded px-1.5 py-0.5 text-[0.6875rem]">
-                {tag}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-      {showAll}
+}: LawHomeCardGroupProps) => (
+  <section className="flex min-w-0 flex-col gap-2">
+    <div className="flex min-w-0 items-baseline gap-2">
+      <h3 className="text-foreground min-w-0 truncate text-sm font-medium">
+        {title}
+      </h3>
+      {tag !== null && tag !== undefined && (
+        <span className="text-muted-foreground bg-muted/60 shrink-0 rounded px-1.5 py-0.5 text-[0.6875rem]">
+          {tag}
+        </span>
+      )}
     </div>
     {children}
   </section>

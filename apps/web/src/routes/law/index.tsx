@@ -58,10 +58,10 @@ import {
   statuteCountryOf,
 } from "@/routes/law/-law-home/jurisdictions";
 import {
-  IdentifierExamplesCard,
-  LegislationShelfCard,
+  IdentifierExamples,
+  LegislationCard,
   ResearchTablesCard,
-  TopCourtCard,
+  TopCourtsCard,
 } from "@/routes/law/-law-home/law-home-cards";
 import {
   type LawHomeScope,
@@ -71,8 +71,16 @@ import {
 /** What the box accepts, and therefore what the results route may receive. */
 const MAX_QUERY_LENGTH = 256;
 
-/** Cards while the route's own data is still in flight. */
-const PENDING_CARD_KEYS = ["a", "b", "c"] as const;
+/** Groups per card while the route's own data is still in flight. */
+const PENDING_GROUP_KEYS = ["a", "b", "c"] as const;
+
+/** The page's column: wide enough for two cards, narrow enough to read. */
+const LAW_HOME_COLUMN_CLASS =
+  "mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-6 md:px-6 md:py-8";
+
+/** Courts get the wider column: their rows carry a headnote, statutes a date. */
+const LAW_HOME_GRID_CLASS =
+  "grid gap-4 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]";
 
 const searchSchema = v.object({
   country: v.optional(
@@ -96,6 +104,23 @@ const createLawHomePath = ({ country }: LawHomeSearch): `/law${string}` =>
 
 const HOME_DESCRIPTION =
   "Public legal database: court decisions and consolidated statutes, searchable by identifier or by words.";
+
+/**
+ * The pill's jurisdictions: the ones the home describes, then any other the
+ * facets report. The described ones are always offered, so the pill names
+ * the route's jurisdiction even while the facets are unavailable.
+ */
+const pillJurisdictions = (
+  facetCountries: readonly { value: string }[],
+): string[] => {
+  const codes: string[] = [...LAW_HOME_JURISDICTION_CODES];
+  for (const bucket of facetCountries) {
+    if (!codes.includes(bucket.value)) {
+      codes.push(bucket.value);
+    }
+  }
+  return codes;
+};
 
 /** The chips a jurisdiction offers: every example of every scope it lists. */
 const descriptorExamples = (descriptor: LawHomeDescriptor): readonly string[] =>
@@ -205,36 +230,52 @@ export const Route = createFileRoute("/law/")({
 
 // The loader fetches the facets and both shelves, so without a
 // pendingComponent the route flashes the glowing logo. Render the page's real
-// shape: heading, scope tabs, box, then the card grid.
+// shape: the title and the box, the filter row, then the two columns.
 function LawHomePending() {
   const t = useTranslations();
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
-      <h1 className="text-lg font-semibold">{t("common.legalDatabase")}</h1>
-      <div className="flex flex-col gap-3">
-        <Skeleton className="h-8 w-56 rounded-md" />
-        <div className="flex flex-wrap items-center gap-2">
-          <Skeleton className="h-9 w-40 rounded-md" />
-          <Skeleton className="h-9 w-full max-w-md flex-1 rounded-md" />
-        </div>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {PENDING_CARD_KEYS.map((key) => (
-          <div
-            className="border-border/60 flex flex-col gap-3 rounded-lg border p-4"
-            key={key}
-          >
-            <Skeleton className="h-3 w-24" />
-            <Skeleton className="h-4 w-2/5" />
-            <Skeleton className="h-4 w-4/5" />
-            <Skeleton className="h-4 w-3/5" />
+    <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className={LAW_HOME_COLUMN_CLASS}>
+        <section className="flex flex-col gap-4">
+          <LawHomeTitle>{t("common.legalDatabase")}</LawHomeTitle>
+          <Skeleton className="h-10 w-full rounded-lg" />
+          <div className="flex flex-wrap items-center gap-3">
+            <Skeleton className="h-8 w-52 rounded-md" />
+            <Skeleton className="h-8 w-40 rounded-md" />
+            <Skeleton className="h-6 w-64 rounded-md" />
           </div>
-        ))}
+        </section>
+        <div className={LAW_HOME_GRID_CLASS}>
+          <div className="border-border/60 flex flex-col gap-4 rounded-lg border p-4">
+            <Skeleton className="h-3 w-32" />
+            {PENDING_GROUP_KEYS.map((key) => (
+              <div className="flex flex-col gap-2" key={key}>
+                <Skeleton className="h-4 w-2/5" />
+                <Skeleton className="h-4 w-4/5" />
+                <Skeleton className="h-4 w-3/5" />
+              </div>
+            ))}
+          </div>
+          <div className="border-border/60 flex flex-col gap-4 rounded-lg border p-4">
+            <Skeleton className="h-3 w-28" />
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-4 w-2/5" />
+              <Skeleton className="h-4 w-4/5" />
+              <Skeleton className="h-4 w-3/5" />
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   );
 }
+
+const LawHomeTitle = ({ children }: { children: string }) => (
+  <h1 className="text-2xl font-semibold tracking-tight text-balance">
+    {children}
+  </h1>
+);
 
 function LawHome() {
   const t = useTranslations();
@@ -348,92 +389,91 @@ function LawHome() {
   };
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
-      <h1 className="text-lg font-semibold">{t("common.legalDatabase")}</h1>
+    <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className={LAW_HOME_COLUMN_CLASS}>
+        {/* The one way in: the box, with what narrows it and what it accepts
+            right under it. Everything below is a sample of what it reaches. */}
+        <section className="flex flex-col gap-4">
+          <LawHomeTitle>{t("common.legalDatabase")}</LawHomeTitle>
+          <PublicLawSearch
+            askPrompt={(entry) =>
+              scope === undefined
+                ? t("caseLaw.searchAskPromptAll", { query: entry })
+                : t("caseLaw.searchAskPrompt", {
+                    country: countryName(scope),
+                    query: entry,
+                  })
+            }
+            countries={[
+              { label: t("common.all"), value: CASE_LAW_ALL_COUNTRIES },
+              ...pillJurisdictions(facets.country).map((code) => ({
+                label: countryName(code),
+                value: toCaseLawCountryParam(code),
+              })),
+            ]}
+            country={countryParam}
+            filters={
+              <LawScopeTabs
+                corpora={corpora}
+                onScopeChange={setRequestedScope}
+                scope={activeScope}
+              />
+            }
+            hints={
+              descriptor === null ? null : (
+                <IdentifierExamples
+                  examples={descriptorExamples(descriptor)}
+                  onExampleSelect={selectExample}
+                />
+              )
+            }
+            layout="entry"
+            maxLength={MAX_QUERY_LENGTH}
+            onCountryChange={(next) => {
+              detached(
+                routeNavigate({ replace: true, search: { country: next } }),
+                "law-home.switch-country",
+              );
+            }}
+            onQueryChange={setQueryInput}
+            onSubmit={() => detached(runEntry(queryInput), "law-home.submit")}
+            placeholder={t("lawHome.searchPlaceholder")}
+            query={queryInput}
+            searchLabel={t("lawHome.searchLabel")}
+          />
+          {scope === undefined && (
+            <div className="flex flex-col gap-1.5">
+              {LAW_HOME_JURISDICTION_CODES.map((code) => (
+                <IdentifierExamples
+                  examples={descriptorExamples(LAW_HOME_JURISDICTIONS[code])}
+                  key={code}
+                  label={countryName(code)}
+                  onExampleSelect={selectExample}
+                />
+              ))}
+            </div>
+          )}
+        </section>
 
-      <div className="flex flex-col gap-3">
-        <LawScopeTabs
-          corpora={corpora}
-          onScopeChange={setRequestedScope}
-          scope={activeScope}
-        />
-        <PublicLawSearch
-          askPrompt={(entry) =>
-            scope === undefined
-              ? t("caseLaw.searchAskPromptAll", { query: entry })
-              : t("caseLaw.searchAskPrompt", {
-                  country: countryName(scope),
-                  query: entry,
-                })
-          }
-          countries={[
-            { label: t("common.all"), value: CASE_LAW_ALL_COUNTRIES },
-            ...facets.country.map((bucket) => ({
-              label: countryName(bucket.value),
-              value: toCaseLawCountryParam(bucket.value),
-            })),
-          ]}
-          country={countryParam}
-          maxLength={MAX_QUERY_LENGTH}
-          onCountryChange={(next) => {
-            detached(
-              routeNavigate({ replace: true, search: { country: next } }),
-              "law-home.switch-country",
-            );
-          }}
-          onQueryChange={setQueryInput}
-          onSubmit={() => detached(runEntry(queryInput), "law-home.submit")}
-          placeholder={t("lawHome.searchPlaceholder")}
-          query={queryInput}
-          searchLabel={t("lawHome.searchLabel")}
-        />
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {scope === undefined ? (
-          LAW_HOME_JURISDICTION_CODES.map((code) => (
-            <IdentifierExamplesCard
-              examples={descriptorExamples(LAW_HOME_JURISDICTIONS[code])}
-              key={code}
-              onExampleSelect={selectExample}
-              title={countryName(code)}
-            />
-          ))
-        ) : (
-          <>
-            {latest?.courts.map((group) => (
-              <TopCourtCard
+        {scope !== undefined && (
+          <div className={LAW_HOME_GRID_CLASS}>
+            {latest !== undefined && (
+              <TopCourtsCard
                 countryParam={countryParam}
-                group={group}
-                key={group.court}
-              />
-            ))}
-            {shelf !== undefined && statuteCountry !== null && (
-              <>
-                <LegislationShelfCard
-                  country={statuteCountry}
-                  items={shelf.recentlyInForce}
-                  kind="recentlyInForce"
-                />
-                <LegislationShelfCard
-                  country={statuteCountry}
-                  items={shelf.enteringIntoForce}
-                  kind="enteringIntoForce"
-                />
-              </>
-            )}
-            {descriptor !== null && (
-              <IdentifierExamplesCard
-                examples={descriptorExamples(descriptor)}
-                onExampleSelect={selectExample}
+                groups={latest.courts}
               />
             )}
-            <ResearchTablesCard />
-          </>
+            <div className="flex min-w-0 flex-col gap-4">
+              {shelf !== undefined && statuteCountry !== null && (
+                <LegislationCard country={statuteCountry} shelf={shelf} />
+              )}
+              <ResearchTablesCard />
+            </div>
+          </div>
         )}
-      </div>
 
-      <CaseLawBrowseLinks facets={facets} />
+        <CaseLawBrowseLinks facets={facets} />
+      </div>
     </main>
   );
 }
