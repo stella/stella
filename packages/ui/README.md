@@ -211,6 +211,31 @@ Pointer and touch drops outside registered board targets cancel. Choose an
 explicit `{ type: "handle" }` activation for the 44px handle, or `{ type:
 "item" }` when the whole item is the intended activation surface.
 
+### Column bands
+
+Columns whose options carry a `band` (`KanbanColumnBand`, usually a status
+property's option groups) render under one `KanbanColumnBandHeader` and fold
+as a run. `resolveKanbanColumnBands` derives the bands from the column order
+and rejects a band that resumes after another column, so a header can never
+span two separate runs. A folded band takes one narrow slot in every row;
+render a drop target in `renderCollapsedBandCell` to keep its hidden cells
+reachable, and the slot peeks open while a pointer rests on it. Pass
+`isBandCollapsed` and `onBandCollapsedChange` to persist the fold in a view.
+
+```tsx
+<KanbanSubgroupBoard
+  isBandCollapsed={(band) => collapsedBands.includes(band.id)}
+  matrix={matrix}
+  renderCell={renderCell}
+  renderCollapsedBandCell={({ band, cells, count }) => (
+    <FoldedDropTarget bandId={band.id} cells={cells} count={count} />
+  )}
+  renderColumnHeader={renderColumnHeader}
+  renderLaneIdentity={renderLaneIdentity}
+  onBandCollapsedChange={(band, collapsed) => saveFold(band.id, collapsed)}
+/>
+```
+
 ## Styles
 
 No compiled CSS ships. The components carry Tailwind class names, so the

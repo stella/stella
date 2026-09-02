@@ -2,12 +2,14 @@ import { panic } from "better-result";
 
 import {
   orderKanbanCellsByColumns,
+  resolveKanbanColumnBands,
   resolveKanbanGrouping,
   type KanbanBoardCell,
   type KanbanBoardColumn,
   type KanbanBoardLane,
   type KanbanBoardMatrix,
   type KanbanBuiltInGroup,
+  type KanbanColumnBandSpan,
   type KanbanGroup,
   type KanbanGroupOption,
   type KanbanGrouping,
@@ -36,19 +38,69 @@ export type KanbanSavedAxisState<TGroupId extends string = string> = {
   orderedGroups: readonly KanbanSavedGroupReference[];
 };
 
+/**
+ * The column axis also remembers which column bands are folded. Bands are
+ * addressed by id, not by option reference: a band is metadata over several
+ * options, not an option itself.
+ */
+export type KanbanSavedGroupAxisState<TGroupId extends string = string> =
+  KanbanSavedAxisState<TGroupId> & {
+    collapsedBands: readonly string[];
+  };
+
 export type KanbanSavedSubgroupState<TGroupId extends string = string> =
   KanbanSavedAxisState<TGroupId> & {
     collapsedGroups: readonly KanbanSavedGroupReference[];
   };
+
+/** The shape persisted before column bands existed. */
+export type KanbanSavedViewStateV1<TGroupId extends string = string> = {
+  group: KanbanSavedAxisState<TGroupId>;
+  subgroup: KanbanSavedSubgroupState<TGroupId> | null;
+  version: 1;
+};
 
 /**
  * View state is deliberately separate from the board's domain data. It may
  * change visibility, order, and collapse, but cannot change a card's cell.
  */
 export type KanbanSavedViewState<TGroupId extends string = string> = {
-  group: KanbanSavedAxisState<TGroupId>;
+  group: KanbanSavedGroupAxisState<TGroupId>;
   subgroup: KanbanSavedSubgroupState<TGroupId> | null;
-  version: 1;
+  version: 2;
+};
+
+export const KANBAN_SAVED_VIEW_STATE_VERSION = 2;
+
+/**
+ * Lift a persisted view state to the current shape. Version 1 predates column
+ * bands, so it lifts with no band folded; the current shape passes through.
+ * Every reader of persisted state goes through here, so a version bump is
+ * one branch in this function rather than a check at each consumer.
+ */
+export const normalizeKanbanSavedViewState = <TGroupId extends string = string>(
+  state: KanbanSavedViewStateV1<TGroupId> | KanbanSavedViewState<TGroupId>,
+): KanbanSavedViewState<TGroupId> => {
+  switch (state.version) {
+    case 1:
+      return {
+        group: {
+          collapsedBands: [],
+          emptyGroups: state.group.emptyGroups,
+          groupBy: state.group.groupBy,
+          hiddenGroups: state.group.hiddenGroups,
+          orderedGroups: state.group.orderedGroups,
+        },
+        subgroup: state.subgroup,
+        version: 2,
+      };
+    case 2:
+      return state;
+    default: {
+      const exhaustive: never = state;
+      return exhaustive;
+    }
+  }
 };
 
 export type WorkspaceKanbanProperty<TGroupId extends string = string> =
@@ -101,6 +153,7 @@ export const createWorkspaceKanbanSchema = <
       optionColor: option.color,
       value: option.value,
       label: option.value,
+      ...(option.band === undefined ? {} : { band: option.band }),
     }));
   },
   properties,
@@ -283,7 +336,14 @@ export type KanbanPresentedLane<TRow> = {
   lane: KanbanBoardLane;
 };
 
+/** A run of presented columns under one band header, folded or open. */
+export type KanbanPresentedBand = KanbanColumnBandSpan & {
+  collapsed: boolean;
+};
+
 export type KanbanBoardPresentation<TRow> = {
+  /** The presented columns, span by span, with the view's fold applied. */
+  bands: KanbanPresentedBand[];
   columns: KanbanBoardColumn[];
   lanes: KanbanPresentedLane<TRow>[];
   matrix: KanbanBoardMatrix<TRow>;
@@ -361,5 +421,12 @@ export const presentKanbanBoard = <TRow>({
       }
       return { cells, collapsed, lane };
     });
-  return { columns, lanes, matrix };
+  const bands = resolveKanbanColumnBands(columns).map(
+    ({ band, columns: bandColumns }) => ({
+      band,
+      collapsed: band !== null && state.group.collapsedBands.includes(band.id),
+      columns: bandColumns,
+    }),
+  );
+  return { bands, columns, lanes, matrix };
 };

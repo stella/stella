@@ -11,6 +11,17 @@
 
 import type { OptionColor } from "../lib/option-color";
 
+/**
+ * The band a column belongs to: a named run of adjacent columns the board
+ * shows under one header and can collapse as a unit. A status property's
+ * option groups ("To do", "In progress", "Done") are the usual source.
+ */
+export type KanbanColumnBand = {
+  id: string;
+  label: string;
+  optionColor?: OptionColor | undefined;
+};
+
 /** One column, before the uncategorized bucket is appended. */
 export type KanbanGroupOption = {
   value: string;
@@ -19,6 +30,7 @@ export type KanbanGroupOption = {
   color?: string | undefined;
   colorBg?: string | undefined;
   optionColor?: OptionColor | undefined;
+  band?: KanbanColumnBand | undefined;
 };
 
 /** A column, including the uncategorized bucket (`value: null`). */
@@ -29,6 +41,7 @@ export type KanbanGroup = {
   color?: string | undefined;
   colorBg?: string | undefined;
   optionColor?: OptionColor | undefined;
+  band?: KanbanColumnBand | undefined;
 };
 
 /**
@@ -233,6 +246,7 @@ export const getKanbanGroups = (
     color: option.color,
     colorBg: option.colorBg,
     optionColor: option.optionColor,
+    band: option.band,
   }));
   result.push({ value: null, label: uncategorizedLabel });
   return result;

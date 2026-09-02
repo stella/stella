@@ -4,15 +4,18 @@ import {
   buildKanbanBoardMatrix,
   getKanbanGroupingPropertyId,
 } from "@stll/ui/kanban";
+import type { KanbanBuiltInGroup } from "@stll/ui/kanban";
 
 import {
   createWorkspaceKanbanSchema,
   getWorkspaceKanbanGroupingChoices,
+  normalizeKanbanSavedViewState,
   presentKanbanBoard,
   resolveWorkspaceKanbanView,
 } from "./kanban-view";
 import type {
   KanbanSavedViewState,
+  KanbanSavedViewStateV1,
   WorkspaceKanbanProperty,
 } from "./kanban-view";
 
@@ -49,6 +52,7 @@ const schema = createWorkspaceKanbanSchema({
 
 const state: KanbanSavedViewState<GroupId> = {
   group: {
+    collapsedBands: [],
     emptyGroups: "hide",
     groupBy: "_status",
     hiddenGroups: [],
@@ -61,7 +65,7 @@ const state: KanbanSavedViewState<GroupId> = {
     hiddenGroups: [],
     orderedGroups: [{ type: "option", value: "lin" }],
   },
-  version: 1,
+  version: 2,
 };
 
 describe("workspace kanban view adapter", () => {
@@ -122,6 +126,88 @@ describe("workspace kanban view adapter", () => {
     ).toEqual([{ collapsed: true, value: "ada" }]);
     expect(presentation.matrix.cells.flatMap((cell) => cell.rows)).toEqual([
       { id: "one", owner: "ada", status: "open" },
+    ]);
+    expect(presentation.bands).toEqual([
+      { band: null, collapsed: false, columns: presentation.columns },
+    ]);
+  });
+
+  test("lifts a version 1 view state with no band folded", () => {
+    const legacy: KanbanSavedViewStateV1<GroupId> = {
+      group: {
+        emptyGroups: "show",
+        groupBy: "_status",
+        hiddenGroups: [{ type: "uncategorized" }],
+        orderedGroups: [],
+      },
+      subgroup: null,
+      version: 1,
+    };
+
+    expect(normalizeKanbanSavedViewState(legacy)).toEqual({
+      group: { ...legacy.group, collapsedBands: [] },
+      subgroup: null,
+      version: 2,
+    });
+    expect(normalizeKanbanSavedViewState(state)).toBe(state);
+  });
+
+  test("carries option bands into columns and folds the bands the view collapsed", () => {
+    const todo = { id: "todo", label: "To do" };
+    const noBuiltInGroups: readonly KanbanBuiltInGroup<Row, GroupId>[] = [];
+    const bandedSchema = createWorkspaceKanbanSchema({
+      builtInGroups: noBuiltInGroups,
+      properties: [
+        {
+          content: {
+            options: [
+              { band: todo, color: "blue", value: "open" },
+              { band: todo, color: "blue", value: "blocked" },
+              { color: "green", value: "done" },
+            ],
+            type: "single-select",
+          },
+          id: "_status",
+          name: "Status",
+        },
+      ] satisfies WorkspaceKanbanProperty<GroupId>[],
+    });
+    const bandedState: KanbanSavedViewState<GroupId> = {
+      group: {
+        collapsedBands: ["todo"],
+        emptyGroups: "show",
+        groupBy: "_status",
+        hiddenGroups: [],
+        orderedGroups: [],
+      },
+      subgroup: null,
+      version: 2,
+    };
+    const view = resolveWorkspaceKanbanView({
+      schema: bandedSchema,
+      state: bandedState,
+    });
+    const matrix = buildKanbanBoardMatrix({
+      group: view.group,
+      resolveGroupValue: ({ row }: { row: Row }) => row.status,
+      rows: [{ id: "one", owner: null, status: "blocked" }],
+      subgroup: view.subgroup,
+      uncategorizedLabel: "No value",
+    });
+    const presentation = presentKanbanBoard({ matrix, state: bandedState });
+
+    expect(
+      presentation.bands.map((span) => [
+        span.band?.id ?? null,
+        span.collapsed,
+        span.columns.map((column) =>
+          column.type === "group" ? column.group.value : column.destination.id,
+        ),
+      ]),
+    ).toEqual([
+      ["todo", true, ["open", "blocked"]],
+      [null, false, ["done"]],
+      [null, false, [null]],
     ]);
   });
 
