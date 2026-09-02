@@ -433,12 +433,10 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       "applies. Pass template_id to return that template's full field " +
       "configuration, in the shape the field reference documents " +
       `(see ${TEMPLATE_FIELD_REFERENCE_URI}), plus its named conditions and ` +
-      "formula fields. Omitted optional scalar placeholders render blank; a " +
-      "field marked required is rejected by fill_template when omitted or " +
-      "empty, unless it is AI-fillable. `arrays` lists every {{#each}} loop " +
-      "over object items, so a field path grouped there belongs in `values` " +
-      "as an array of objects (one per `itemFieldPaths` entry), not as a flat " +
-      "dotted key.",
+      "formula fields. Omitted optional scalar placeholders render blank. " +
+      "A required, non-AI-fillable field omitted or empty fails " +
+      "fill_template; `arrays` marks {{#each}} fields as arrays of objects, " +
+      "not dotted keys.",
     inputSchema: {
       type: "object",
       properties: {
