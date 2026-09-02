@@ -184,7 +184,10 @@ type CliOptions = {
 };
 
 const parseRuns = (value: string): number => {
-  const parsed = Number.parseInt(value, 10);
+  if (!/^\d+$/u.test(value)) {
+    return DEFAULT_RUNS;
+  }
+  const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < 1) {
     return DEFAULT_RUNS;
   }
