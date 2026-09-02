@@ -41,3 +41,6 @@ the default provider chain (see `getTanStackTextModelById`).
 - `template-fill.ts`: can a model fill a DOCX template through the
   `fill_template` contract: correct field paths and types, ISO and locale
   date handling, and asking rather than inventing a missing required value.
+- `extraction.ts`: does the structured-extraction path (`generateWorkflowData`)
+  match ground truth across text, date, int, and select fields, and does it
+  answer a question the source never states.
