@@ -27,6 +27,13 @@ const _reportingInsert = tx.insert(reportingTable);
 const _localInsert = tx.insert(properties);
 const _localUpdate = tx.update(properties);
 
+// A nested declaration that reuses the imported alias's name shadows the
+// import for the rest of its scope: the rule resolves the argument through
+// real scope analysis, so this parameter binds its own local `propertyTable`
+// and is never reported, even though the outer scope's `propertyTable` is.
+// oxlint-disable-next-line eslint/no-shadow -- fixture: the shadowed parameter must bind its own local, not the imported alias
+const _saveShadowed = (propertyTable: unknown) => tx.insert(propertyTable);
+
 export const __noDirectPropertyTableWriteFixture = {
   _alias,
   _aliasUpdate,
@@ -34,4 +41,5 @@ export const __noDirectPropertyTableWriteFixture = {
   _reportingInsert,
   _localInsert,
   _localUpdate,
+  _saveShadowed,
 };

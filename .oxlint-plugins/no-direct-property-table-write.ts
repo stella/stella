@@ -13,6 +13,15 @@
 // and a type-only import cannot be passed to `.insert()`/`.update()` so it
 // does not bind either.
 //
+// The `.insert()`/`.update()` argument is resolved through real scope
+// analysis (`sourceCode.getScope` + the enclosing scope chain), not a
+// file-wide name set: a nested declaration that reuses the imported alias's
+// spelling (a function/arrow parameter, a `const`/`let`, a catch clause
+// parameter, a for-loop variable) resolves to its own local binding and is
+// never reported, even inside the scope where it shadows the import. The
+// only way to be flagged is for the identifier to actually resolve back to
+// the `properties` import specifier itself.
+//
 // Owner surfaces (may write `properties` directly):
 //   - apps/api/src/handlers/properties/**
 //   - apps/api/src/lib/properties/**
@@ -36,7 +45,6 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import {
   filenameForContext,
   getImportedName,
-  getImportLocalName,
   isAstNode,
   isIdentifier,
   isStringLiteral,
@@ -56,6 +64,19 @@ const OWNER_FILES = new Set([
 
 const FIXTURE_FILE_SUFFIX =
   ".oxlint-plugins/__fixtures__/no-direct-property-table-write.fixture.ts";
+
+type Scope = {
+  set: Map<string, ScopeVariable>;
+  upper: Scope | null;
+};
+
+type ScopeVariable = {
+  defs: {
+    node: unknown;
+    parent: unknown;
+    type: string;
+  }[];
+};
 
 const isOwnerFile = (filename: string): boolean =>
   OWNER_DIRECTORY_PREFIXES.some((prefix) => filename.includes(prefix)) ||
@@ -85,10 +106,56 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const propertyBindings = new Set<string>();
+        const resolveVariable = (identifier: {
+          name: string;
+        }): ScopeVariable | null => {
+          let scope: Scope | null = context.sourceCode.getScope(identifier);
+          while (scope !== null) {
+            const variable = scope.set.get(identifier.name);
+            if (variable !== undefined) {
+              return variable;
+            }
+            scope = scope.upper;
+          }
+          return null;
+        };
+
+        // Resolve the argument identifier to its actual declaration via the
+        // scope chain, rather than matching on spelling. A nested
+        // declaration that reuses the imported alias's name binds its own
+        // scope variable with its own (non-import) definitions, so it never
+        // matches here — the identifier only reports when it truly resolves
+        // back to the `properties` value import.
+        const isPropertiesSchemaImportReference = (node: unknown): boolean => {
+          if (!isIdentifier(node)) {
+            return false;
+          }
+          const variable = resolveVariable(node);
+          if (variable === null) {
+            return false;
+          }
+          for (const definition of variable.defs) {
+            if (
+              definition.type !== "ImportBinding" ||
+              !isAstNode(definition.node) ||
+              definition.node.type !== "ImportSpecifier" ||
+              definition.node.importKind === "type" ||
+              !isAstNode(definition.parent) ||
+              definition.parent.type !== "ImportDeclaration" ||
+              definition.parent.importKind === "type" ||
+              !isStringLiteral(definition.parent.source) ||
+              definition.parent.source.value !== "@/api/db/schema" ||
+              getImportedName(definition.node) !== "properties"
+            ) {
+              continue;
+            }
+            return true;
+          }
+          return false;
+        };
+
         return {
           before() {
-            propertyBindings.clear();
             const filename = filenameForContext(context);
             if (filename.endsWith(FIXTURE_FILE_SUFFIX)) {
               return true;
@@ -98,28 +165,6 @@ export default eslintCompatPlugin({
               !isTestFile(filename) &&
               !isOwnerFile(filename)
             );
-          },
-          ImportDeclaration(node) {
-            if (
-              !isStringLiteral(node.source) ||
-              node.source.value !== "@/api/db/schema" ||
-              !Array.isArray(node.specifiers) ||
-              node.importKind === "type"
-            ) {
-              return;
-            }
-            for (const specifier of node.specifiers) {
-              if (
-                (isAstNode(specifier) && specifier.importKind === "type") ||
-                getImportedName(specifier) !== "properties"
-              ) {
-                continue;
-              }
-              const localName = getImportLocalName(specifier);
-              if (localName !== null) {
-                propertyBindings.add(localName);
-              }
-            }
           },
           CallExpression(node) {
             const callee = node.callee;
@@ -131,8 +176,7 @@ export default eslintCompatPlugin({
                 isIdentifier(callee.property, "insert") ||
                 isIdentifier(callee.property, "update")
               ) ||
-              !isIdentifier(firstArgument) ||
-              !propertyBindings.has(firstArgument.name)
+              !isPropertiesSchemaImportReference(firstArgument)
             ) {
               return;
             }
