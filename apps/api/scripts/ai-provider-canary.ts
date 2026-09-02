@@ -5,6 +5,7 @@ import { isDeepStrictEqual } from "node:util";
 import * as v from "valibot";
 
 import {
+  BYOK_MODEL_OPTIONS,
   CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
   DEFAULT_MODELS,
   isBYOKModelRoleSupported,
@@ -1344,6 +1345,27 @@ const modelSelections = (provider: CanaryProvider, rotatedModelId?: string) => {
   };
 };
 
+/**
+ * Every model id the catalog can put in front of a user for a provider: the
+ * default of each role plus the whole BYOK list, in catalog order, once
+ * each. The catalog probe below exercises all of them on every run, so a
+ * model a provider retires is caught the next night rather than whenever the
+ * weekly rotation happens to reach it.
+ */
+export const catalogModelIds = (provider: CanaryProvider): string[] => {
+  const ids = new Set<string>();
+  for (const role of MODEL_ROLES) {
+    ids.add(DEFAULT_MODELS[provider][role]);
+  }
+  for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
+    ids.add(modelId);
+  }
+  return [...ids];
+};
+
+// The cheapest role: a short reply, no reasoning budget, no attachment.
+const CATALOG_PROBE_ROLE = "fast" satisfies ModelRole;
+
 type CreateCanaryConfigOptions = {
   apiKey: string;
   provider: CanaryProvider;
@@ -1589,6 +1611,7 @@ const run = async (): Promise<void> => {
     probeRuns: canaryProbeRuns(context),
     provider,
   });
+  failures = await runCatalogCanaryProbes({ apiKey, provider }, failures);
 
   if (args.tier === "weekly") {
     const rotation = weeklyCanaryRotation({
@@ -1651,6 +1674,75 @@ const canaryProbeRuns = (context: CanaryContext): CanaryProbeRun[] => {
     });
   }
   return probeRuns;
+};
+
+type RunCatalogModelProbeOptions = {
+  apiKey: string;
+  modelId: string;
+  provider: CanaryProvider;
+  signal: AbortSignal;
+};
+
+// One minimal generation through the same resolution path the app uses, so
+// the probe fails exactly when a user selecting this id would.
+const runCatalogModelProbe = async ({
+  apiKey,
+  modelId,
+  provider,
+  signal,
+}: RunCatalogModelProbeOptions): Promise<void> => {
+  const config = createCanaryConfig({ apiKey, provider, rotatedModelId: modelId });
+  const model = resolveTanStackTextModel({
+    organizationId: null,
+    orgAIConfig: config,
+    role: CATALOG_PROBE_ROLE,
+  });
+  if (model.provider !== provider || model.modelId !== modelId) {
+    throw new TypeError("Canary resolved an unexpected catalog model.");
+  }
+
+  const output = await generateTanStackTextForRole({
+    abortSignal: signal,
+    caching: NO_CACHING,
+    maxOutputTokens: modelRoleMaxOutputTokens({
+      modelId,
+      role: CATALOG_PROBE_ROLE,
+    }),
+    prompt: SYNTHETIC_PROMPT,
+    organizationId: null,
+    orgAIConfig: config,
+    role: CATALOG_PROBE_ROLE,
+    serviceTier: "standard",
+    tenantWorkspaceIds: NO_TENANT_SCOPE,
+  });
+  requireNonEmptyText(output);
+};
+
+type RunCatalogCanaryProbesOptions = {
+  apiKey: string;
+  provider: CanaryProvider;
+};
+
+const runCatalogCanaryProbes = async (
+  { apiKey, provider }: RunCatalogCanaryProbesOptions,
+  failures: number,
+): Promise<number> => {
+  let totalFailures = failures;
+  for (const modelId of catalogModelIds(provider)) {
+    // oxlint-disable-next-line no-await-in-loop -- catalog probes share the provider quota and must remain sequential.
+    const result = await runCanaryProbe({
+      run: async (signal) => {
+        await runCatalogModelProbe({ apiKey, modelId, provider, signal });
+      },
+      timeoutMs: MODEL_ROLE_PROBE_TIMEOUT_MS,
+    });
+    totalFailures += recordProbeResult({
+      label: `catalog:${modelId}`,
+      provider,
+      result,
+    });
+  }
+  return totalFailures;
 };
 
 const runWeeklyCanaryProbes = async (

@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
+  BYOK_MODEL_OPTIONS,
   CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
   DEFAULT_MODELS,
   isBYOKProviderRoleSupported,
+  MODEL_ROLES,
 } from "@stll/ai-catalog";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
@@ -13,6 +15,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   CanaryCredentialRejectedError,
   CanaryProviderRunError,
+  catalogModelIds,
   classifyCanaryFailure,
   createPdfCanaryMessages,
   CREDENTIAL_REJECTION_SIGNATURES,
@@ -29,6 +32,21 @@ import {
   toolRoundTripPromptForProvider,
 } from "./ai-provider-canary";
 import { CANARY_PROVIDERS } from "./ai-provider-canary-config";
+
+describe("AI provider catalog canary coverage", () => {
+  test("probes every selectable model id of a provider exactly once", () => {
+    for (const provider of CANARY_PROVIDERS) {
+      const ids = catalogModelIds(provider);
+      expect(new Set(ids).size).toBe(ids.length);
+      for (const role of MODEL_ROLES) {
+        expect(ids).toContain(DEFAULT_MODELS[provider][role]);
+      }
+      for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
+        expect(ids).toContain(modelId);
+      }
+    }
+  });
+});
 
 describe("AI provider PDF canary contract", () => {
   test("sends a real inline PDF rather than a text-only pdf-role probe", () => {
