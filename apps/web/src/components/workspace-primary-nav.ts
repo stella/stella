@@ -18,7 +18,7 @@ type WorkspacePrimaryRoute =
   | "/contacts"
   | "/inbox"
   | "/knowledge"
-  | "/law/cases"
+  | "/law"
   | "/tools"
   | "/workspaces";
 
@@ -69,7 +69,7 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
     id: "caseLaw",
     kind: "route",
     labelKey: "common.caseLaw",
-    to: "/law/cases",
+    to: "/law",
   },
   {
     icon: BlocksIcon,

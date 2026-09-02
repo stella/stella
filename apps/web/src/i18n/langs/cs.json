@@ -2981,6 +2981,20 @@
       "shadowed": "Překryto týmovou dovedností"
     }
   },
+  "lawHome": {
+    "enteringIntoForce": "Brzy nabude účinnosti",
+    "inForceFrom": "Účinné od {date}",
+    "recentlyInForce": "Nedávno nabylo účinnosti",
+    "scopeLabel": "Hledat v",
+    "searchLabel": "Hledat v právní databázi",
+    "searchPlaceholder": "Spisová značka, číslo předpisu, ECLI nebo slova",
+    "tier": {
+      "constitutional": "Ústavní přezkum",
+      "supreme": "Nejvyšší instance"
+    },
+    "topCourts": "Z vrcholných soudů",
+    "tryIdentifier": "Vyzkoušejte identifikátor"
+  },
   "markdownEditor": {
     "rawLabel": "Zdroj Markdownu"
   },

@@ -2981,6 +2981,20 @@
       "shadowed": "Uždengta komandos įgūdžio"
     }
   },
+  "lawHome": {
+    "enteringIntoForce": "Netrukus įsigalios",
+    "inForceFrom": "Įsigalioja {date}",
+    "recentlyInForce": "Neseniai įsigaliojo",
+    "scopeLabel": "Ieškoti",
+    "searchLabel": "Ieškoti teisės duomenų bazėje",
+    "searchPlaceholder": "Bylos numeris, akto numeris, ECLI arba žodžiai",
+    "tier": {
+      "constitutional": "Konstitucinė kontrolė",
+      "supreme": "Aukščiausioji instancija"
+    },
+    "topCourts": "Iš aukščiausiųjų teismų",
+    "tryIdentifier": "Išbandykite identifikatorių"
+  },
   "markdownEditor": {
     "rawLabel": "Markdown pirminis tekstas"
   },

@@ -2981,6 +2981,20 @@
       "shadowed": "Shadowed by team skill"
     }
   },
+  "lawHome": {
+    "enteringIntoForce": "Entering into force",
+    "inForceFrom": "In force from {date}",
+    "recentlyInForce": "Recently in force",
+    "scopeLabel": "Search in",
+    "searchLabel": "Search the legal database",
+    "searchPlaceholder": "Case number, act number, ECLI or words",
+    "tier": {
+      "constitutional": "Constitutional review",
+      "supreme": "Highest instance"
+    },
+    "topCourts": "From the top courts",
+    "tryIdentifier": "Try an identifier"
+  },
   "markdownEditor": {
     "rawLabel": "Markdown source"
   },

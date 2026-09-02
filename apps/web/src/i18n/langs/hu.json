@@ -2981,6 +2981,20 @@
       "shadowed": "A csapat készsége felülírja"
     }
   },
+  "lawHome": {
+    "enteringIntoForce": "Hamarosan hatályba lép",
+    "inForceFrom": "Hatálybalépés: {date}",
+    "recentlyInForce": "Nemrég hatályba lépett",
+    "scopeLabel": "Keresés itt",
+    "searchLabel": "Keresés a jogi adatbázisban",
+    "searchPlaceholder": "Ügyszám, jogszabályszám, ECLI vagy szavak",
+    "tier": {
+      "constitutional": "Alkotmányossági felülvizsgálat",
+      "supreme": "Legfelsőbb fórum"
+    },
+    "topCourts": "A legfelsőbb bíróságoktól",
+    "tryIdentifier": "Próbáljon ki egy azonosítót"
+  },
   "markdownEditor": {
     "rawLabel": "Markdown-forrás"
   },

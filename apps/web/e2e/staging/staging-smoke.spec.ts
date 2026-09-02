@@ -155,13 +155,11 @@ test.describe("public hydration", () => {
       }
     });
 
-    await page.goto("/law/cases", { waitUntil: "commit" });
-    // Scoped to the decisions table: the shell sidebar also carries a
-    // /law/cases nav link that a page-wide href filter could match.
-    const firstDecision = page
-      .getByRole("table")
-      .locator('a[href*="/cases/"]')
-      .first();
+    await page.goto("/law", { waitUntil: "commit" });
+    // A decision link, not a list link: the nav, the top bar and the browse
+    // links all point at `/law/cases` (no trailing slash), so only a
+    // decision's own path matches `/cases/`.
+    const firstDecision = page.locator('a[href*="/cases/"]').first();
 
     await expect(firstDecision).toBeVisible();
     const datePickerTrigger = page

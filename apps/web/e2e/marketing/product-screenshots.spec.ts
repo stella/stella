@@ -66,7 +66,6 @@ const captures = [
   // HomeProductStory.astro's data chapter.
   {
     name: "story-public-data-1",
-    path: "/law/cases",
     prepare: "open-decision",
     decisionText: "IV.ÚS 1394/24",
     readyText: "Case Law",
@@ -74,7 +73,6 @@ const captures = [
   },
   {
     name: "story-public-data-2",
-    path: "/law/cases",
     prepare: "open-decision",
     decisionText: "IV C 1273/16",
     readyText: "Case Law",
@@ -82,7 +80,6 @@ const captures = [
   },
   {
     name: "story-public-data-3",
-    path: "/law/cases",
     prepare: "open-decision",
     decisionText: "25Cbr/166/2024",
     readyText: "Case Law",
@@ -115,7 +112,6 @@ const captures = [
   },
   {
     name: "public-data",
-    path: "/law/cases",
     prepare: "open-decision",
     decisionText: "IV.ÚS 1394/24",
     readyText: "Case Law",
@@ -150,7 +146,7 @@ test("capture landing product screenshots", async ({
   // already org-scoped — no org-picker UI to drive. Land on a real page first:
   // a fresh page sits on about:blank, where the localStorage access in the
   // theme loop below throws a SecurityError.
-  await page.goto("/law/cases", { waitUntil: "domcontentloaded" });
+  await page.goto("/law", { waitUntil: "domcontentloaded" });
   // `domcontentloaded` only means the document parsed; on a cold dev server the
   // client still has to compile and hydrate the app before anything but the
   // splash paints (measured at ~11s locally, several times that on a CI
@@ -159,7 +155,7 @@ test("capture landing product screenshots", async ({
   await expect(page.locator("main").first()).toBeVisible({
     timeout: COLD_COMPILE_TIMEOUT,
   });
-  await expect(page.getByText("Case Law").first()).toBeVisible({
+  await expect(page.getByText("Legal database").first()).toBeVisible({
     timeout: COLD_COMPILE_TIMEOUT,
   });
 
@@ -193,7 +189,15 @@ test("capture landing product screenshots", async ({
       if (requestedCapture && capture.name !== requestedCapture) {
         continue;
       }
-      const capturePath = "path" in capture ? capture.path : agentThreadPath;
+      // A decision capture searches for its own decision: `/law/cases` with
+      // nothing to show results for redirects to the home, and only a
+      // searched decision is deterministically on screen.
+      const searchedPath =
+        "decisionText" in capture
+          ? `/law/cases?q=${encodeURIComponent(capture.decisionText)}`
+          : undefined;
+      const declaredPath = "path" in capture ? capture.path : agentThreadPath;
+      const capturePath = searchedPath ?? declaredPath;
       if (!capturePath) {
         throw new Error(`${capture.name}: no path resolved for this capture`);
       }

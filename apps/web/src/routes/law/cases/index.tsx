@@ -7,21 +7,20 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 
 import {
   CASE_LAW_ALL_COUNTRIES,
   defaultCaseLawCountryForLocale,
-  fromCaseLawCountryParam,
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
+import { CaseLawBrowseLinks } from "@/features/case-law/components/case-law-browse-links";
 import { CaseLawSearch } from "@/features/case-law/components/case-law-search";
 import {
   DecisionFilterChips,
@@ -32,26 +31,25 @@ import {
   DecisionTable,
 } from "@/features/case-law/components/decision-table";
 import type { Decision } from "@/features/case-law/components/decision-table";
-import { LatestDecisionsShelf } from "@/features/case-law/components/latest-decisions-shelf";
 import {
   type DecisionQueryIntent,
   exactDecisionMatches,
-  parseDecisionQuery,
 } from "@/features/case-law/decision-query-intent";
+import {
+  caseLawCountryScope,
+  createDecisionFiltersFromSearch,
+  openDecisionMatch,
+  readDecisionIntent,
+  validDecisionYear,
+} from "@/features/case-law/open-decision-match";
 import {
   decisionFacetsOptions,
   decisionsInfiniteOptions,
-  latestDecisionsOptions,
 } from "@/features/case-law/queries/decisions";
-import type {
-  CaseLawBrowseFacets,
-  DecisionListFilters,
-} from "@/features/case-law/queries/decisions";
+import type { CaseLawBrowseFacets } from "@/features/case-law/queries/decisions";
 import { ResearchTableActions } from "@/features/case-law/research/research-actions";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
-import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-preference";
 import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
@@ -87,51 +85,11 @@ const optionalBrowseStringSchema = (maxLength: number) =>
 const searchSchema = v.object({
   country: optionalBrowseStringSchema(3),
   court: optionalBrowseStringSchema(512),
-  notFound: v.optional(v.boolean()),
   q: optionalBrowseStringSchema(MAX_QUERY_LENGTH),
   year: optionalBrowseStringSchema(4),
 });
 
 type CaseLawIndexSearch = v.InferOutput<typeof searchSchema>;
-
-const validYear = (year: string | undefined): string | undefined =>
-  /^\d{4}$/u.test(year ?? "") ? year : undefined;
-
-/**
- * The corpus country the pill names: none for `all`, else the code. A URL
- * without a country is scoped by `beforeLoad` before this is ever read.
- */
-const countryScope = (country: string | undefined): string | undefined =>
-  country === undefined || country === CASE_LAW_ALL_COUNTRIES
-    ? undefined
-    : fromCaseLawCountryParam(country);
-
-const readIntent = (q: string | undefined): DecisionQueryIntent =>
-  q === undefined ? { type: "empty" } : parseDecisionQuery(q);
-
-const createDecisionFiltersFromSearch = ({
-  country,
-  court,
-  q,
-  year,
-}: CaseLawIndexSearch): DecisionListFilters => {
-  const scope = countryScope(country);
-  const normalizedYear = validYear(year);
-  const intent = readIntent(q);
-
-  return {
-    ...(scope === undefined ? {} : { country: scope }),
-    ...(court ? { court } : {}),
-    ...(normalizedYear
-      ? {
-          dateFrom: `${normalizedYear}-01-01`,
-          dateTo: `${normalizedYear}-12-31`,
-        }
-      : {}),
-    ...(intent.type === "identifier" ? { search: intent.value } : {}),
-    ...(intent.type === "text" ? { search: intent.text } : {}),
-  };
-};
 
 const createCaseLawIndexPath = ({
   country,
@@ -140,7 +98,7 @@ const createCaseLawIndexPath = ({
   year,
 }: CaseLawIndexSearch): `/law/cases${string}` => {
   const params = new URLSearchParams();
-  const normalizedYear = validYear(year);
+  const normalizedYear = validDecisionYear(year);
   if (country) {
     params.set("country", country.toLowerCase());
   }
@@ -163,7 +121,7 @@ const createCaseLawIndexDescription = ({
   court,
   year,
 }: CaseLawIndexSearch): string => {
-  const scope = [court, countryScope(country), validYear(year)]
+  const scope = [court, caseLawCountryScope(country), validDecisionYear(year)]
     .filter(Boolean)
     .join(", ");
   if (scope) {
@@ -173,38 +131,43 @@ const createCaseLawIndexDescription = ({
   return "Public case-law database with indexable court decisions and legal source materials.";
 };
 
-/** The shelf shows for a scoped, query-less page: nothing typed, one jurisdiction. */
-const shelfCountry = (search: CaseLawIndexSearch): string | undefined =>
-  search.q === undefined &&
-  search.court === undefined &&
-  search.year === undefined
-    ? countryScope(search.country)
-    : undefined;
-
 export const Route = createFileRoute("/law/cases/")({
   validateSearch: searchSchema,
-  // A first visit starts in the jurisdiction the UI language points at, and
-  // the URL says so, so the page and its links agree on the scope. Readers in
-  // other languages, and crawlers, start unscoped. A server-side redirect for
-  // the same reason `/law` uses one: this is a public SSR path.
   loaderDeps: ({ search }) => search,
+  // This is a results screen, not an entry screen: with nothing to show
+  // results for, the reader belongs on the home. A first visit also starts in
+  // the jurisdiction the UI language points at, and the URL says so, so the
+  // page and its links agree on the scope; readers in other languages, and
+  // crawlers, start unscoped. Both are server-side redirects because this is
+  // a public SSR path: the throw becomes a real HTTP redirect for crawlers
+  // and no-JS clients. The blank-page race that no-beforeload-redirect guards
+  // against is specific to the client-only _protected subtree.
   beforeLoad: ({ search }) => {
-    if (search.country !== undefined) {
-      return;
+    const localeDefault = defaultCaseLawCountryForLocale(getMessageLocale());
+    const country =
+      search.country ??
+      (localeDefault === null
+        ? undefined
+        : toCaseLawCountryParam(localeDefault));
+
+    if (
+      search.q === undefined &&
+      search.court === undefined &&
+      search.year === undefined
+    ) {
+      throw redirect({ to: "/law", search: { country }, replace: true });
     }
-    const country = defaultCaseLawCountryForLocale(getMessageLocale());
-    if (country === null) {
-      return;
+
+    if (search.country === undefined && country !== undefined) {
+      throw redirect({
+        to: "/law/cases",
+        search: { ...search, country },
+        replace: true,
+      });
     }
-    throw redirect({
-      to: "/law/cases",
-      search: { ...search, country: toCaseLawCountryParam(country) },
-      replace: true,
-    });
   },
   loader: async ({ context: { queryClient }, deps }) => {
-    const scope = countryScope(deps.country);
-    const shelf = shelfCountry(deps);
+    const scope = caseLawCountryScope(deps.country);
     const [decisionPages] = await Promise.all([
       ensureRouteInfiniteQueryData(
         queryClient,
@@ -215,9 +178,6 @@ export const Route = createFileRoute("/law/cases/")({
       scope === undefined
         ? Promise.resolve()
         : ensureRouteQueryData(queryClient, decisionFacetsOptions(scope)),
-      shelf === undefined
-        ? Promise.resolve()
-        : ensureRouteQueryData(queryClient, latestDecisionsOptions(shelf)),
     ]);
 
     const firstPage = decisionPages.pages.at(0);
@@ -265,9 +225,9 @@ export const Route = createFileRoute("/law/cases/")({
   pendingComponent: PublicCaseLawIndexPending,
 });
 
-// The loader fetches decisions, facets and the shelf, so without a
-// pendingComponent the route flashes the glowing logo. Reuse the real table
-// skeleton plus the page chrome during route-pending.
+// The loader fetches decisions and facets, so without a pendingComponent the
+// route flashes the glowing logo. Reuse the real table skeleton plus the page
+// chrome during route-pending.
 function PublicCaseLawIndexPending() {
   const t = useTranslations();
   return (
@@ -295,31 +255,13 @@ function PublicCaseLawIndex() {
   const search = Route.useSearch({
     select: ({ country, court, q, year }) => ({ country, court, q, year }),
   });
-  const notFound = Route.useSearch({ select: (s) => s.notFound });
   const navigate = Route.useNavigate();
-
-  useExternalSyncEffect(() => {
-    if (!notFound) {
-      return;
-    }
-    stellaToast.add({
-      title: t("caseLaw.decisionNotFound"),
-      type: "error",
-    });
-    detached(
-      navigate({
-        replace: true,
-        search: (prev) => ({ ...prev, notFound: undefined }),
-      }),
-      "cases.navigate",
-    );
-  }, [notFound, navigate, t]);
+  const routerNavigate = useNavigate();
 
   const countryParam = search.country ?? CASE_LAW_ALL_COUNTRIES;
-  const scope = countryScope(search.country);
-  const intent = readIntent(search.q);
+  const scope = caseLawCountryScope(search.country);
+  const intent = readDecisionIntent(search.q);
   const filters = createDecisionFiltersFromSearch(search);
-  const shelf = shelfCountry(search);
 
   const [queryInput, setQueryInput] = useState(search.q ?? "");
   // What the field last asked the URL to hold. A navigation that lands on
@@ -362,10 +304,6 @@ function PublicCaseLawIndex() {
     ...decisionFacetsOptions(scope),
     enabled: scope !== undefined,
   });
-  const { data: latest } = useQuery({
-    ...latestDecisionsOptions(shelf ?? ""),
-    enabled: shelf !== undefined,
-  });
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery({
       ...decisionsInfiniteOptions(filters),
@@ -399,7 +337,7 @@ function PublicCaseLawIndex() {
 
   const selection: DecisionFilterSelection = {
     court: search.court,
-    year: validYear(search.year),
+    year: validDecisionYear(search.year),
   };
   const setSelection = (next: DecisionFilterSelection) => {
     // A pending debounced query write would otherwise land after this
@@ -423,86 +361,22 @@ function PublicCaseLawIndex() {
   // picks; nothing is guessed. The field's value is read directly: the
   // debounced URL write may still be pending.
   const openSingleMatch = () => {
-    const submitted = readIntent(queryInput.trim() || undefined);
-    if (submitted.type !== "identifier") {
+    const entry = queryInput.trim();
+    if (entry.length === 0) {
       return;
     }
     writeQuery.flush();
     detached(
-      (async () => {
-        const pages = await ensureRouteInfiniteQueryData(
-          queryClient,
-          decisionsInfiniteOptions(
-            createDecisionFiltersFromSearch({ ...search, q: submitted.value }),
-          ),
-        );
-        // Only a result set the page has seen whole can prove the match is
-        // the only one: with more pages unseen, another court's decision
-        // under the same docket may still be coming, so the list stays and
-        // the reader picks.
-        const firstPage = pages.pages.at(0);
-        if (firstPage === undefined || firstPage.nextCursor !== null) {
-          return;
-        }
-        const matches = exactDecisionMatches(
-          submitted.value,
-          firstPage.decisions,
-        );
-        const only = matches.length === 1 ? matches.at(0) : undefined;
-        if (only === undefined) {
-          return;
-        }
-        const preferred = pickPreferredCaseLawLanguageVariant({
-          alternates: only.languageAlternates,
-          matchedLanguage: only.language,
-          uiLocale,
-        });
-        const target =
-          preferred === null
-            ? {
-                caseNumber: only.caseNumber,
-                country: only.country,
-                court: only.court,
-                decisionId: only.id,
-                language: only.language,
-                slug: only.slug,
-              }
-            : {
-                caseNumber: preferred.caseNumber,
-                country: preferred.country,
-                court: preferred.court,
-                decisionId: preferred.id,
-                language: preferred.language,
-                slug: preferred.slug,
-              };
-        const params = createCaseLawDecisionRouteParams({
-          ...target,
-          languageAlternates: only.languageAlternates,
-        });
-        await (params.language === undefined
-          ? navigate({
-              params: {
-                country: params.country,
-                court: params.court,
-                slug: params.slug,
-              },
-              to: "/law/$country/cases/$court/$slug",
-            })
-          : navigate({
-              params: {
-                country: params.country,
-                court: params.court,
-                language: params.language,
-                slug: params.slug,
-              },
-              to: "/law/$country/cases/$court/$language/$slug",
-            }));
-      })(),
+      openDecisionMatch({
+        navigate: routerNavigate,
+        queryClient,
+        search: { ...search, q: entry },
+        uiLocale,
+      }),
       "cases.open-match",
     );
   };
 
-  const showShelf = shelf !== undefined && latest !== undefined;
   const order = intent.type === "empty" ? "newest" : "relevance";
 
   return (
@@ -539,14 +413,12 @@ function PublicCaseLawIndex() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <ListHeading exactCount={exact.length} intent={intent} />
         <div className="flex flex-wrap items-center gap-2">
-          {!showShelf && (
-            <DecisionFilterChips
-              courts={courtBuckets}
-              onSelectionChange={setSelection}
-              selection={selection}
-              years={yearBuckets}
-            />
-          )}
+          <DecisionFilterChips
+            courts={courtBuckets}
+            onSelectionChange={setSelection}
+            selection={selection}
+            years={yearBuckets}
+          />
           <DecisionColumnChooser
             hiddenColumnIds={hiddenColumnIds}
             onHiddenColumnIdsChange={setHiddenColumnIds}
@@ -554,39 +426,29 @@ function PublicCaseLawIndex() {
         </div>
       </div>
 
-      {showShelf && latest.courts.length > 0 ? (
-        <LatestDecisionsShelf
-          countryParam={countryParam}
-          courts={latest.courts}
-          hiddenColumnIds={hiddenColumnIds}
-        />
-      ) : (
-        <>
-          <DecisionTable
-            decisions={ordered}
-            hiddenColumnIds={hiddenColumnIds}
-            isLoading={isLoading}
-            order={order}
-          />
-          {hasNextPage && (
-            <div className="flex justify-center py-4">
-              <Button
-                disabled={isFetchingNextPage}
-                onClick={() => {
-                  detached(
-                    (async () => await fetchNextPage())(),
-                    "cases.fetch-next-page",
-                  );
-                }}
-                variant="outline"
-              >
-                {isFetchingNextPage
-                  ? t("caseLaw.loadingMore")
-                  : t("common.loadMore")}
-              </Button>
-            </div>
-          )}
-        </>
+      <DecisionTable
+        decisions={ordered}
+        hiddenColumnIds={hiddenColumnIds}
+        isLoading={isLoading}
+        order={order}
+      />
+      {hasNextPage && (
+        <div className="flex justify-center py-4">
+          <Button
+            disabled={isFetchingNextPage}
+            onClick={() => {
+              detached(
+                (async () => await fetchNextPage())(),
+                "cases.fetch-next-page",
+              );
+            }}
+            variant="outline"
+          >
+            {isFetchingNextPage
+              ? t("caseLaw.loadingMore")
+              : t("common.loadMore")}
+          </Button>
+        </div>
       )}
 
       <CaseLawBrowseLinks facets={allFacets} />
@@ -595,8 +457,8 @@ function PublicCaseLawIndex() {
 }
 
 /**
- * What the list under the box is: the recency shelf when nothing was typed,
- * a choice between courts when a docket names several decisions, nothing
+ * What the list under the box is: newest first while a filter alone narrows
+ * it, a choice between courts when a docket names several decisions, nothing
  * for a plain search.
  */
 function ListHeading({
@@ -623,76 +485,4 @@ function ListHeading({
     );
   }
   return <span />;
-}
-
-function CaseLawBrowseLinks({ facets }: { facets: CaseLawBrowseFacets }) {
-  const t = useTranslations();
-
-  if (
-    facets.country.length === 0 &&
-    facets.court.length === 0 &&
-    facets.year.length === 0
-  ) {
-    return null;
-  }
-
-  return (
-    <nav
-      aria-label={t("caseLaw.seo.browse")}
-      className="border-border/45 bg-background/60 grid gap-4 border-y py-4 text-sm md:grid-cols-3"
-    >
-      <BrowseGroup
-        buckets={facets.country}
-        createSearch={(value) => ({ country: value.toLowerCase() })}
-        title={t("caseLaw.seo.countries")}
-      />
-      <BrowseGroup
-        buckets={facets.court}
-        createSearch={(value) => ({ court: value })}
-        title={t("caseLaw.seo.courts")}
-      />
-      <BrowseGroup
-        buckets={facets.year}
-        createSearch={(value) => ({ year: value })}
-        title={t("caseLaw.seo.years")}
-      />
-    </nav>
-  );
-}
-
-function BrowseGroup({
-  buckets,
-  createSearch,
-  title,
-}: {
-  buckets: readonly { count: number; value: string }[];
-  createSearch: (value: string) => CaseLawIndexSearch;
-  title: string;
-}) {
-  const format = useFormatter();
-  if (buckets.length === 0) {
-    return null;
-  }
-
-  return (
-    <section className="min-w-0">
-      <h2 className="text-foreground mb-2 text-sm font-medium">{title}</h2>
-      <ul className="space-y-1">
-        {buckets.map((bucket) => (
-          <li className="flex min-w-0 items-baseline gap-2" key={bucket.value}>
-            <Link
-              className="text-primary min-w-0 truncate hover:underline"
-              search={createSearch(bucket.value)}
-              to="/law/cases"
-            >
-              {bucket.value}
-            </Link>
-            <span className="text-muted-foreground shrink-0 text-xs">
-              {format.number(bucket.count)}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
 }

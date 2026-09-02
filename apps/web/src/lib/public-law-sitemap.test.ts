@@ -187,6 +187,7 @@ describe("public law sitemap", () => {
       publicLawIndexingEnabled: true,
     });
 
+    expect(xml).toContain("<loc>http://localhost:3000/law</loc>");
     expect(xml).toContain("http://localhost:3000/law/cases");
     expect(xml).not.toContain("workspace");
     expect(xml).not.toContain("organization");
@@ -604,7 +605,12 @@ describe("public law sitemap", () => {
   });
 
   test("public case-law list route preloads first page for SSR links", async () => {
-    const source = await readSource("apps/web/src/routes/law/cases/index.tsx");
+    const [source, browseSource] = await Promise.all([
+      readSource("apps/web/src/routes/law/cases/index.tsx"),
+      readSource(
+        "apps/web/src/features/case-law/components/case-law-browse-links.tsx",
+      ),
+    ]);
 
     expect(source).toContain("loader:");
     expect(source).toContain("ensureRouteInfiniteQueryData");
@@ -614,7 +620,19 @@ describe("public law sitemap", () => {
     expect(source).toContain("decisionsInfiniteOptions(");
     expect(source).toContain("validateSearch: searchSchema");
     expect(source).toContain("CaseLawBrowseLinks");
-    expect(source).toContain('to="/law/cases"');
+    // The crawlable facet links moved to the shared component both the home
+    // and the results screen render.
+    expect(browseSource).toContain('to="/law/cases"');
+  });
+
+  test("public law home preloads its shelves for SSR", async () => {
+    const source = await readSource("apps/web/src/routes/law/index.tsx");
+
+    expect(source).toContain("validateSearch: searchSchema");
+    expect(source).toContain("latestDecisionsOptions(scope)");
+    expect(source).toContain("legislationShelfOptions(scope)");
+    expect(source).toContain("createLegalCollectionJsonLd");
+    expect(source).toContain("CaseLawBrowseLinks");
   });
 
   test("public law SSR modules do not statically import auth", async () => {

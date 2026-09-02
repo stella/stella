@@ -2981,6 +2981,20 @@
       "shadowed": "Przesłonięte przez umiejętność zespołu"
     }
   },
+  "lawHome": {
+    "enteringIntoForce": "Wkrótce wejdzie w życie",
+    "inForceFrom": "Obowiązuje od {date}",
+    "recentlyInForce": "Niedawno weszło w życie",
+    "scopeLabel": "Szukaj w",
+    "searchLabel": "Szukaj w bazie prawnej",
+    "searchPlaceholder": "Sygnatura, numer aktu, ECLI lub słowa",
+    "tier": {
+      "constitutional": "Kontrola konstytucyjna",
+      "supreme": "Najwyższa instancja"
+    },
+    "topCourts": "Z najwyższych sądów",
+    "tryIdentifier": "Wypróbuj identyfikator"
+  },
   "markdownEditor": {
     "rawLabel": "Źródło Markdown"
   },

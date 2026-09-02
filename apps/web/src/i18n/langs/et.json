@@ -2981,6 +2981,20 @@
       "shadowed": "Meeskonna oskus varjutab"
     }
   },
+  "lawHome": {
+    "enteringIntoForce": "Peagi jõustuv",
+    "inForceFrom": "Jõustub {date}",
+    "recentlyInForce": "Hiljuti jõustunud",
+    "scopeLabel": "Otsi",
+    "searchLabel": "Otsi õigusandmebaasist",
+    "searchPlaceholder": "Kohtuasja number, akti number, ECLI või sõnad",
+    "tier": {
+      "constitutional": "Põhiseaduslikkuse järelevalve",
+      "supreme": "Kõrgeim aste"
+    },
+    "topCourts": "Kõrgeimatest kohtutest",
+    "tryIdentifier": "Proovi tunnust"
+  },
   "markdownEditor": {
     "rawLabel": "Markdowni lähtekood"
   },

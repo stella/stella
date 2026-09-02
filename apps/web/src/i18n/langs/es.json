@@ -2981,6 +2981,20 @@
       "shadowed": "Oculta por la habilidad del equipo"
     }
   },
+  "lawHome": {
+    "enteringIntoForce": "Próxima entrada en vigor",
+    "inForceFrom": "En vigor desde el {date}",
+    "recentlyInForce": "En vigor recientemente",
+    "scopeLabel": "Buscar en",
+    "searchLabel": "Buscar en la base de datos jurídica",
+    "searchPlaceholder": "Número de asunto, número de norma, ECLI o palabras",
+    "tier": {
+      "constitutional": "Control de constitucionalidad",
+      "supreme": "Última instancia"
+    },
+    "topCourts": "De los tribunales superiores",
+    "tryIdentifier": "Prueba un identificador"
+  },
   "markdownEditor": {
     "rawLabel": "Código fuente Markdown"
   },

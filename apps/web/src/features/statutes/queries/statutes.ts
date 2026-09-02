@@ -52,6 +52,7 @@ export const statuteKeys = {
       query: filters.query,
     },
   ],
+  shelf: (country: string) => [...statuteKeys.all, "shelf", { country }],
   byId: (documentId: string) => [...statuteKeys.all, "detail", documentId],
   asOf: (key: StatuteAsOfKey) => [
     ...statuteKeys.all,
@@ -93,6 +94,32 @@ export const statutesInfiniteOptions = (filters: StatuteListFilters) =>
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
+
+/**
+ * The law home's legislation shelf: what came into force lately and what
+ * comes into force next, for one jurisdiction.
+ */
+export const legislationShelfOptions = (country: string) =>
+  queryOptions({
+    queryKey: statuteKeys.shelf(country),
+    queryFn: async ({ signal }) => {
+      const response = await api.law.statutes.shelf.get({
+        query: { country },
+        fetch: { signal },
+      });
+
+      const data = unwrapEden(response);
+      assertPublicLawApiData(data, "readPublicLegislationShelf");
+
+      return data;
+    },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+/** One act on the legislation shelf, as the public reader sees it. */
+export type LegislationShelfItem = Awaited<
+  ReturnType<NonNullable<ReturnType<typeof legislationShelfOptions>["queryFn"]>>
+>["recentlyInForce"][number];
 
 const readStatute = async (documentId: string, signal: AbortSignal) => {
   const response = await api.law

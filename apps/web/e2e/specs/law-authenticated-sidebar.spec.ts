@@ -10,9 +10,10 @@ test("authenticated law pages retain the user's recent matters", async ({
   const workspaceName = `${label}-${workspace.id.slice(0, 8)}`;
 
   try {
-    await page.goto("/law/cases", { waitUntil: "domcontentloaded" });
+    // /law is the law entry; it scopes itself to a jurisdiction on arrival.
+    await page.goto("/law", { waitUntil: "domcontentloaded" });
 
-    await expect(page).toHaveURL(/\/law\/cases(?:[/?#]|$)/u);
+    await expect(page).toHaveURL(/\/law(?:[/?#]|$)/u);
     await expect(
       page
         .locator('[data-slot="sidebar"]')

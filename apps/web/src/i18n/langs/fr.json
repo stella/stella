@@ -2981,6 +2981,20 @@
       "shadowed": "Masquée par la compétence d’équipe"
     }
   },
+  "lawHome": {
+    "enteringIntoForce": "Entrée en vigueur prochaine",
+    "inForceFrom": "En vigueur à partir du {date}",
+    "recentlyInForce": "Entrée en vigueur récente",
+    "scopeLabel": "Rechercher dans",
+    "searchLabel": "Rechercher dans la base juridique",
+    "searchPlaceholder": "Numéro d'affaire, numéro de texte, ECLI ou mots",
+    "tier": {
+      "constitutional": "Contrôle de constitutionnalité",
+      "supreme": "Dernière instance"
+    },
+    "topCourts": "Des juridictions suprêmes",
+    "tryIdentifier": "Essayez un identifiant"
+  },
   "markdownEditor": {
     "rawLabel": "Source Markdown"
   },

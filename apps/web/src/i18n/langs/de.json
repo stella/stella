@@ -2981,6 +2981,20 @@
       "shadowed": "Durch Team-Skill verdeckt"
     }
   },
+  "lawHome": {
+    "enteringIntoForce": "Tritt demnächst in Kraft",
+    "inForceFrom": "In Kraft ab {date}",
+    "recentlyInForce": "Kürzlich in Kraft getreten",
+    "scopeLabel": "Suchen in",
+    "searchLabel": "Rechtsdatenbank durchsuchen",
+    "searchPlaceholder": "Aktenzeichen, Gesetzesnummer, ECLI oder Stichwörter",
+    "tier": {
+      "constitutional": "Verfassungskontrolle",
+      "supreme": "Höchste Instanz"
+    },
+    "topCourts": "Von den Höchstgerichten",
+    "tryIdentifier": "Kennung ausprobieren"
+  },
   "markdownEditor": {
     "rawLabel": "Markdown-Quelltext"
   },

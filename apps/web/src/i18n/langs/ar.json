@@ -2981,6 +2981,20 @@
       "shadowed": "محجوبة بمهارة الفريق"
     }
   },
+  "lawHome": {
+    "enteringIntoForce": "يدخل حيز النفاذ قريبًا",
+    "inForceFrom": "نافذ اعتبارًا من {date}",
+    "recentlyInForce": "دخل حيز النفاذ مؤخرًا",
+    "scopeLabel": "البحث في",
+    "searchLabel": "البحث في قاعدة البيانات القانونية",
+    "searchPlaceholder": "رقم القضية أو رقم التشريع أو ECLI أو كلمات",
+    "tier": {
+      "constitutional": "الرقابة الدستورية",
+      "supreme": "أعلى درجة"
+    },
+    "topCourts": "من المحاكم العليا",
+    "tryIdentifier": "جرّب معرّفًا"
+  },
   "markdownEditor": {
     "rawLabel": "مصدر Markdown"
   },
