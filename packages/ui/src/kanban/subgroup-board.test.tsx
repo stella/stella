@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
+import { KanbanColumnBandHeader } from "./column-band-header";
 import type { KanbanSchema } from "./grouping";
 import { resolveKanbanGrouping } from "./grouping";
 import { buildKanbanBoardMatrix } from "./matrix";
@@ -126,6 +127,43 @@ describe("KanbanSubgroupBoard", () => {
 
   test("renders no band chrome when no column carries a band", () => {
     expect(renderBoard()).not.toContain("data-kanban-band");
+  });
+});
+
+describe("KanbanColumnBandHeader", () => {
+  // A collapsed band that peeks open under the pointer keeps reporting
+  // itself collapsed: its toggle offers to pin it open, never to close it,
+  // so a click on a peeked band does not fold it straight back.
+  test("shows the full caption for a peeked band with an expand toggle", () => {
+    const markup = renderToStaticMarkup(
+      <KanbanColumnBandHeader
+        collapsed
+        compact={false}
+        meta="2"
+        title="To do"
+        toggleLabel="Expand To do"
+        onCollapsedChange={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).toContain('aria-label="Expand To do"');
+    expect(markup).toContain(">To do<");
+    expect(markup).not.toContain('data-compact=""');
+  });
+
+  test("keeps only the toggle in the narrow slot of a folded band", () => {
+    const markup = renderToStaticMarkup(
+      <KanbanColumnBandHeader
+        collapsed
+        title="To do"
+        toggleLabel="Expand To do"
+        onCollapsedChange={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain('data-compact=""');
+    expect(markup).not.toContain(">To do<");
   });
 });
 

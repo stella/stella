@@ -8,4 +8,5 @@ header, bands no longer stretch to the tallest one, and a folded band shows
 only its toggle in that line while its name is set vertically in the narrow
 column body over the count. A folded band peeks open on pointer movement
 inside its slot rather than on entering it, so a band folded under a resting
-pointer stays folded.
+pointer stays folded; while it peeks, its caption keeps reporting the band
+collapsed and the toggle pins it open instead of closing it again.

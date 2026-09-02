@@ -61,7 +61,14 @@ export type KanbanSubgroupBandHeaderContext = {
   columns: KanbanBoardColumn[];
   /** Rows across the band's columns, every lane included. */
   count: number;
+  /** The persisted state the toggle reports and flips. */
   collapsed: boolean;
+  /**
+   * Whether the band renders as one narrow slot right now. False while a
+   * collapsed band peeks open under the pointer, so a caption can show its
+   * name and offer to pin the band open.
+   */
+  folded: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
 };
 
@@ -228,14 +235,16 @@ export const KanbanSubgroupBoard = <TRow,>({
     });
   };
 
-  const isBandFolded = (band: KanbanColumnBand): boolean => {
-    if (peekingBandId === band.id) {
-      return false;
-    }
-    return isBandCollapsed
-      ? isBandCollapsed(band)
-      : collapsedBandIds.has(band.id);
-  };
+  /** The band's persisted state: what the toggle reports and flips. */
+  const isBandCollapsedNow = (band: KanbanColumnBand): boolean =>
+    isBandCollapsed ? isBandCollapsed(band) : collapsedBandIds.has(band.id);
+  /**
+   * Whether the band renders folded right now. A peek opens the layout
+   * without changing the persisted state, so a peeked band still reports
+   * itself collapsed and its toggle pins it open rather than closing it.
+   */
+  const isBandFolded = (band: KanbanColumnBand): boolean =>
+    peekingBandId !== band.id && isBandCollapsedNow(band);
   const setBandCollapsed = (band: KanbanColumnBand, collapsed: boolean) => {
     setPeekingBandId(null);
     if (onBandCollapsedChange) {
@@ -330,12 +339,14 @@ export const KanbanSubgroupBoard = <TRow,>({
     band: KanbanColumnBand,
     span: KanbanColumnBandSpan,
   ): Rendered => {
-    const collapsed = isBandFolded(band);
+    const collapsed = isBandCollapsedNow(band);
+    const folded = isBandFolded(band);
     const context: KanbanSubgroupBandHeaderContext = {
       band,
       collapsed,
       columns: span.columns,
       count: span.columns.reduce((sum, column) => sum + columnCount(column), 0),
+      folded,
       onCollapsedChange: (next) => setBandCollapsed(band, next),
     };
     if (renderBandHeader) {
@@ -344,6 +355,7 @@ export const KanbanSubgroupBoard = <TRow,>({
     return (
       <KanbanColumnBandHeader
         collapsed={collapsed}
+        compact={folded}
         meta={formatCount(context.count)}
         title={band.label}
         toggleLabel={

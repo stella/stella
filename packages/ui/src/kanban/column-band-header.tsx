@@ -12,8 +12,14 @@ export type KanbanColumnBandHeaderProps = {
   swatch?: ReactNode;
   /** Short text after the name, such as the band's card count. */
   meta?: ReactNode;
-  /** Whether the band's columns are shown; drives the toggle and its icon. */
+  /** The band's persisted state; drives the toggle, its icon, and its label. */
   collapsed: boolean;
+  /**
+   * Render only the toggle, for the narrow slot of a folded band. Defaults to
+   * `collapsed`; a board that peeks a collapsed band open passes `false` so
+   * the caption shows the name while the toggle still offers to pin it open.
+   */
+  compact?: boolean | undefined;
   /** Accessible name for the toggle, such as "Collapse To do". */
   toggleLabel: string;
   onCollapsedChange: (collapsed: boolean) => void;
@@ -32,6 +38,7 @@ export const KanbanColumnBandHeader = ({
   swatch,
   meta,
   collapsed,
+  compact = collapsed,
   toggleLabel,
   onCollapsedChange,
   actions,
@@ -39,9 +46,10 @@ export const KanbanColumnBandHeader = ({
   <div
     className={cn(
       "flex h-7 items-center gap-1",
-      collapsed ? "justify-center" : "pe-1",
+      compact ? "justify-center" : "pe-1",
     )}
     data-collapsed={collapsed ? "" : undefined}
+    data-compact={compact ? "" : undefined}
     data-slot="kanban-column-band-header"
   >
     <button
@@ -61,7 +69,7 @@ export const KanbanColumnBandHeader = ({
         icon={ChevronDownIcon}
       />
     </button>
-    {collapsed ? null : (
+    {compact ? null : (
       <>
         {swatch}
         <span className="flex min-w-0 flex-1 items-baseline gap-1.5 truncate text-xs font-medium">
