@@ -1,0 +1,39 @@
+import { expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/pglite";
+import nodePath from "node:path";
+
+import { caseLawCourtWeights } from "@/api/db/schema";
+import { COURT_WEIGHT_SEED } from "@/api/handlers/case-law/court-weight-seed";
+import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+const MIGRATION = nodePath.resolve(
+  import.meta.dir,
+  "../../../drizzle/20260902090000_case_law_court_weight_seed/migration.sql",
+);
+
+test("the seed migration applies and is idempotent", async () => {
+  const client = await createTestPglite();
+  const db = drizzle({ client });
+  const statements = (await Bun.file(MIGRATION).text())
+    .split("--> statement-breakpoint")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  for (const statement of statements) {
+    // oxlint-disable-next-line no-await-in-loop -- statements apply in order
+    await db.execute(sql.raw(statement));
+  }
+  const first = await db.select().from(caseLawCourtWeights);
+  expect(first).toHaveLength(COURT_WEIGHT_SEED.length);
+  for (const statement of statements) {
+    // oxlint-disable-next-line no-await-in-loop -- statements apply in order
+    await db.execute(sql.raw(statement));
+  }
+  const second = await db.select().from(caseLawCourtWeights);
+  expect(second).toHaveLength(COURT_WEIGHT_SEED.length);
+  expect(
+    second.find((row) => row.country === "EU" && row.tierLabel === "supreme")
+      ?.weight,
+  ).toBe(8);
+  await client.close();
+}, 60_000);

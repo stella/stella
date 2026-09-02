@@ -1,8 +1,6 @@
 /**
- * Dynamic court weight loader with in-memory cache.
- *
- * Replaces the hardcoded COURT_TIERS array in citation-score.ts
- * with database-driven weights per jurisdiction.
+ * Court weight loader with in-memory cache: the seeded per-jurisdiction rank
+ * table, compiled once a minute.
  */
 
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -36,13 +34,11 @@ export const loadCourtWeights = async (): Promise<CourtWeightMap> => {
   const rows = await readCourtWeightRows();
 
   if (rows.length === 0) {
-    // Self-host before seeding, or a fresh environment that has not run
-    // seed-court-weights.ts yet: callers fall back to the hardcoded
-    // LEGACY_COURT_TIERS in citation-score.ts. Surface this so an
-    // unseeded production table is visible rather than silently ranking
-    // every non-CZ/SK court the same.
+    // The seed migration inserts the rows, so an empty table is a database
+    // that was not migrated. Every court then weighs the default; this line
+    // is what makes that visible.
     logger.warn("case_law.court_weights.table_empty", {
-      fallback: "legacy_hardcoded_tiers",
+      effect: "default_weight_for_every_court",
     });
   }
 
@@ -134,36 +130,29 @@ export const loadCourtWeightsForCountry = async (
  * this WeakMap simply misses and recomputes, and the old entry is GC'd along
  * with its map.
  */
-const flattenedEntriesCache = new WeakMap<
-  CourtWeightMap,
-  CourtWeightEntry[] | undefined
->();
+const flattenedEntriesCache = new WeakMap<CourtWeightMap, CourtWeightEntry[]>();
 
 /**
  * Flatten every country's entries into one list, sorted by tier
  * descending so the highest-authority pattern is checked first.
  *
  * For building a single SQL `CASE` expression (`courtWeightSql`) that is
- * not scoped to one jurisdiction — citation graphs cross borders, so the
+ * not scoped to one jurisdiction: citation graphs cross borders, so the
  * citing court in `citation-authority.ts` and `decisions/search.ts` can
- * belong to any seeded country.
- *
- * Returns `undefined` when the map is empty so callers can pass that
- * straight to `courtWeightSql`'s `entries` parameter: an empty array
- * would short-circuit its `entries ?? LEGACY_COURT_TIERS` fallback,
- * silently disabling the legacy tiers instead of falling back to them.
+ * belong to any seeded country. An empty map flattens to an empty list,
+ * which renders as the default weight for every court.
  */
 export const flattenCourtWeightEntries = (
   map: CourtWeightMap,
-): CourtWeightEntry[] | undefined => {
-  if (flattenedEntriesCache.has(map)) {
-    return flattenedEntriesCache.get(map);
+): CourtWeightEntry[] => {
+  const flattened = flattenedEntriesCache.get(map);
+  if (flattened !== undefined) {
+    return flattened;
   }
 
   const entries = [...map.values()].flat().sort((a, b) => b.tier - a.tier);
-  const result = entries.length > 0 ? entries : undefined;
-  flattenedEntriesCache.set(map, result);
-  return result;
+  flattenedEntriesCache.set(map, entries);
+  return entries;
 };
 
 /**
@@ -171,5 +160,5 @@ export const flattenCourtWeightEntries = (
  * expression. See `flattenCourtWeightEntries`.
  */
 export const loadCourtWeightEntriesForSql = async (): Promise<
-  CourtWeightEntry[] | undefined
+  CourtWeightEntry[]
 > => flattenCourtWeightEntries(await loadCourtWeights());
