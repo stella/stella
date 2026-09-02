@@ -5,7 +5,11 @@ import { useNavigate } from "@tanstack/react-router";
 import { FileTextIcon, MessageSquareIcon, PanelRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { InspectorRailIconButton, InspectorRailTab } from "@stll/ui/inspector";
+import {
+  entityTabGlyph,
+  InspectorEntityTab,
+  InspectorRailIconButton,
+} from "@stll/ui/inspector";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
@@ -177,30 +181,19 @@ const inspectorDiagnosticState = (tabCount: number, minimized: boolean) => {
   return minimized ? "minimized" : "open";
 };
 
-/** Extract a short abbreviation from a filename (stem, not extension). */
-const getTabAbbrev = (label: string): string => {
-  const dot = label.lastIndexOf(".");
-  const stem = dot === -1 ? label : label.slice(0, dot);
-  return stem.slice(0, 3);
-};
-
 type FileTabIconProps = {
-  active: boolean;
-  label: string;
   fileName: string;
   mimeType: string | undefined;
 };
 
-/** Rail icon for any file-like tab: the mime glyph when the tab is the open one,
- * the filename abbreviation otherwise. Shared by workspace file tabs and skill
- * resources so every file reads the same way in the rail. */
-const FileTabIcon = ({
-  active,
-  fileName,
-  label,
-  mimeType,
-}: FileTabIconProps) => {
-  if (active && mimeType) {
+/**
+ * Rail icon for any file-like tab, shown while its `InspectorEntityTab` is
+ * active (`entityTabGlyph` covers the inactive glyph). Shared by workspace
+ * file tabs and skill resources so every file reads the same way in the
+ * rail.
+ */
+const FileTabIcon = ({ fileName, mimeType }: FileTabIconProps) => {
+  if (mimeType) {
     return (
       <DocumentIcon
         className="size-3.5"
@@ -209,27 +202,24 @@ const FileTabIcon = ({
       />
     );
   }
-  if (active) {
-    return <FileTextIcon className="size-3.5" />;
-  }
-  return (
-    <span className="text-[9px] leading-none font-semibold tracking-tight uppercase">
-      {getTabAbbrev(label)}
-    </span>
-  );
+  return <FileTextIcon className="size-3.5" />;
 };
 
 type VerticalTabIconProps = {
   tab: InspectorTab;
-  active: boolean;
   externalIconHref?: string | undefined;
 };
 
-const VerticalTabIcon = ({
-  tab,
-  active,
-  externalIconHref,
-}: VerticalTabIconProps) => {
+/**
+ * The icon `InspectorEntityTab` shows for this tab. For file-like kinds
+ * (see `tabGlyph`), that's only while active — `InspectorEntityTab` swaps
+ * to `entityTabGlyph`'s abbreviation otherwise, so this never has to
+ * branch on that itself. Every other kind has no glyph to swap to, so
+ * `InspectorEntityTab` keeps rendering this icon while inactive too
+ * (dimmed) — a registration's own rail icon is always asked for its
+ * `active` rendering here for the same reason.
+ */
+const VerticalTabIcon = ({ tab, externalIconHref }: VerticalTabIconProps) => {
   // Generic registry-backed kinds (registered by non-workspace
   // routes) delegate their rail icon to the registration so the
   // rail stays open to extension without growing this switch.
@@ -238,14 +228,14 @@ const VerticalTabIcon = ({
     if (registration === undefined) {
       return (
         <span className="text-[9px] leading-none font-semibold tracking-tight uppercase">
-          {getTabAbbrev(tab.label)}
+          {entityTabGlyph(tab.label)}
         </span>
       );
     }
     const RailIcon = registration.railIcon;
     return (
       <RailIcon
-        active={active}
+        active
         tab={{
           id: tab.id,
           label: tab.label,
@@ -285,24 +275,36 @@ const VerticalTabIcon = ({
   }
 
   if (tab.type === "skill-resource") {
-    return (
-      <FileTabIcon
-        active={active}
-        fileName={tab.label}
-        label={tab.label}
-        mimeType={tab.mimeType}
-      />
-    );
+    return <FileTabIcon fileName={tab.label} mimeType={tab.mimeType} />;
   }
 
-  return (
-    <FileTabIcon
-      active={active}
-      fileName={tab.fileName}
-      label={tab.label}
-      mimeType={tab.mimeType}
-    />
-  );
+  return <FileTabIcon fileName={tab.fileName} mimeType={tab.mimeType} />;
+};
+
+/**
+ * `InspectorEntityTab`'s inactive-state glyph, for the tab kinds that want
+ * one — regular file tabs, skill resources, and an unregistered generic
+ * view (a defensive fallback; should not happen in practice). Every other
+ * kind's icon is already a compact, recognisable identifier on its own (a
+ * status glyph, a colored dot, a logo, a registration's own rail icon), so
+ * omitting a glyph for them keeps that icon on screen — dimmed — instead of
+ * swapping to text.
+ */
+const tabGlyph = (tab: InspectorTab): string | undefined => {
+  if (isGenericInspectorTab(tab)) {
+    return getInspectorView(tab.viewType) === undefined
+      ? entityTabGlyph(tab.label)
+      : undefined;
+  }
+  if (
+    tab.type === "task" ||
+    tab.type === "chat" ||
+    tab.type === "matter" ||
+    tab.type === "external"
+  ) {
+    return undefined;
+  }
+  return entityTabGlyph(tab.label);
 };
 
 /**
@@ -379,7 +381,7 @@ const SuggestedReviveTabIcon = ({ tab }: { tab: InspectorTab }) => {
   }
   return (
     <span className="text-[9px] leading-none font-semibold tracking-tight uppercase">
-      {getTabAbbrev(tab.label)}
+      {entityTabGlyph(tab.label)}
     </span>
   );
 };
@@ -471,31 +473,16 @@ const VerticalTab = ({
 
   return (
     <>
-      <Tooltip
-        content={tooltipLabel}
-        render={
-          <InspectorRailTab
-            active={active}
-            ref={tabRef}
-            aria-label={tooltipLabel}
-            onAuxClick={(e) => {
-              if (e.button === 1) {
-                e.preventDefault();
-                onClose();
-              }
-            }}
-            onClick={containedEventHandler(onActivate)}
-            onContextMenu={containedEventHandler(contextMenu.openAt)}
-          />
-        }
-        side="left"
-      >
-        <VerticalTabIcon
-          active={active}
-          externalIconHref={externalIconHref}
-          tab={tab}
-        />
-      </Tooltip>
+      <InspectorEntityTab
+        active={active}
+        glyph={tabGlyph(tab)}
+        icon={<VerticalTabIcon externalIconHref={externalIconHref} tab={tab} />}
+        label={tooltipLabel}
+        onClose={onClose}
+        onContextMenu={containedEventHandler(contextMenu.openAt)}
+        onSelect={onActivate}
+        ref={tabRef}
+      />
       {contextMenu.element}
     </>
   );
