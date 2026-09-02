@@ -31,6 +31,7 @@ const property = (id: string): WorkspaceProperty => ({
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
   workspaceId: toSafeId<"workspace">("workspace-1"),
   status: "fresh",
+  kinds: null,
   content: { version: 1, type: "text" },
   tool: { version: 1, type: "manual-input" },
 });

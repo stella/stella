@@ -121,6 +121,11 @@ export type WorkspaceProperty = {
   createdAt: Date;
   workspaceId: WorkspaceId;
   status: "stale" | "fresh";
+  /**
+   * The entity kinds the property applies to; null means every kind. A view
+   * scoped to one kind offers only the properties that apply to it.
+   */
+  kinds: EntityKind[] | null;
   content:
     | {
         version: 1;

@@ -26,6 +26,7 @@ const property = (
   createdAt: new Date("2025-01-01T00:00:00.000Z"),
   workspaceId: toSafeId<"workspace">("workspace-1"),
   status: "fresh",
+  kinds: null,
   content: propertyContent(type),
   tool: { version: 1, type: "manual-input" },
 });

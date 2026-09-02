@@ -17,6 +17,7 @@ const baseProperty = (id: string, name: string) => ({
   createdAt: new Date("2026-01-01T00:00:00Z"),
   workspaceId: toSafeId<"workspace">("ws"),
   status: "fresh" as const,
+  kinds: null,
   content: { version: 1 as const, type: "text" as const },
 });
 

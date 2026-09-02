@@ -42,6 +42,7 @@ import type { EntityKind, WorkspaceView } from "@/lib/types";
 import {
   calculationKindsForProperty,
   isCalculableProperty,
+  propertyAppliesToKinds,
 } from "@/lib/workspaces/calculations";
 // -- Auto-scrolling board container with forgiving column drop --
 import { COLUMN_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
@@ -78,6 +79,7 @@ import {
   resolveWorkspaceKanbanSubgroup,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { useWorkspaceKanbanSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-schema";
+import { viewEntityKinds } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import {
   uploadFileEntitiesBatched,
   useBatchUploadLabels,
@@ -350,12 +352,17 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     t,
   ]);
 
+  // A view scoped to a kind (a task list, a message board) only ever shows
+  // that kind, so it offers totals only over the properties that kind
+  // carries; a document-only property would count nothing here.
+  const viewKinds = viewEntityKinds(view.layout.filters);
   const calculations: KanbanCalculations = {
     selections: view.layout.calculations,
     properties: properties
       .filter(
         (property) =>
           isCalculableProperty(property) &&
+          propertyAppliesToKinds(property, viewKinds) &&
           !hiddenProperties.includes(property.id),
       )
       .map((property) => ({

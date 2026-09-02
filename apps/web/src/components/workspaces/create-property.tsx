@@ -601,6 +601,7 @@ const PropertyComposerBody = ({
               name: trimmedName,
               createdAt: new Date(),
               status: "stale",
+              kinds: null,
               content: buildContent(contentType, options, effectiveFallback),
               tool: {
                 version: 1,

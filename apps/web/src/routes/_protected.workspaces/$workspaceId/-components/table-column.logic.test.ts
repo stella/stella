@@ -65,6 +65,7 @@ const aiProperty = (id: string): AIExtractionProperty => ({
   createdAt: new Date("2026-06-12T00:00:00.000Z"),
   workspaceId: toSafeId<"workspace">("workspace-1"),
   status: "fresh",
+  kinds: null,
   content: { version: 1, type: "text" },
   tool: {
     version: 1,
@@ -83,6 +84,7 @@ const manualProperty = (
   createdAt: new Date("2026-06-12T00:00:00.000Z"),
   workspaceId: toSafeId<"workspace">("workspace-1"),
   status: "fresh",
+  kinds: null,
   content,
   tool: { version: 1, type: "manual-input" },
 });

@@ -182,8 +182,14 @@ export const KanbanColumn = ({
   }, [entities.length, hasMore, isLoadingMore, onLoadMore]);
 
   const isDraggable = columnValue !== null && onReorderColumn !== undefined;
+  // The card target sits on the card body, not the column root: the column
+  // root already carries the column-reorder target below, and the element
+  // adapter keeps one target per element, so a second registration on the
+  // same node replaces the first and cards can no longer land (or highlight)
+  // there. Nested targets compose: a card drag matches the body, a column
+  // drag falls through to the root.
   const isEntityDragOver = useKanbanEntityDropTarget({
-    elementRef: columnRef,
+    elementRef: scrollRef,
     name: title,
     onDrop,
   });
