@@ -426,7 +426,7 @@ describe("Dependabot empty changeset CLI boundary", () => {
         ],
         fixture.root,
       ),
-    ).toThrow(/checked-out HEAD .* does not match/u);
+    ).toThrow(/Checked-out HEAD .* does not match/u);
   });
 
   test("refuses to overwrite an existing output file", () => {
