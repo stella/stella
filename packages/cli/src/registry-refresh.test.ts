@@ -220,6 +220,44 @@ describe("resolveCommandTree (S5.3)", () => {
     ]);
   });
 
+  test("a single-scope omission prunes the command without a notice", async () => {
+    const env = await makeCacheEnv();
+    await writeCache(env, {
+      // `save_document` needs only `documents_write`, so there is no local
+      // all-scopes preflight to keep reachable: the token cannot call it.
+      listings: [listing("list_matters")],
+      delta: { added: [], removed: [], changed: [] },
+      scopeOmittedTools: ["save_document"],
+    });
+
+    const { tree, notice } = await resolveCommandTree({
+      serverOrigin: ORIGIN,
+      env,
+    });
+
+    expect(tree).not.toBe(generatedRouteMap);
+    expect(curatedLeavesForTool(tree, "save_document")).toHaveLength(0);
+    // The registry itself did not diverge, so nothing to report.
+    expect(notice).toBeUndefined();
+  });
+
+  test("a compound-only scope omission keeps the baked tree", async () => {
+    const env = await makeCacheEnv();
+    await writeCache(env, {
+      listings: [listing("list_matters")],
+      delta: { added: [], removed: [], changed: [] },
+      scopeOmittedTools: ["save_filled_template"],
+    });
+
+    const { tree, notice } = await resolveCommandTree({
+      serverOrigin: ORIGIN,
+      env,
+    });
+
+    expect(tree).toBe(generatedRouteMap);
+    expect(notice).toBeUndefined();
+  });
+
   test("a feature-gated command stays in a diverged tree so the server can answer it", async () => {
     const env = await makeCacheEnv();
     await writeCache(env, {

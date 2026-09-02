@@ -56,15 +56,30 @@ const deriveMcpInputSchema = (
   }
 
   const { properties, ...objectSchema } = jsonSchema;
-  const projected =
-    properties === undefined
-      ? { ...objectSchema, type: "object" as const }
-      : { ...objectSchema, properties, type: "object" as const };
-  return withoutTrivialPropertyNames(projected);
+  const cleaned = withoutTrivialPropertyNames(objectSchema);
+  return properties === undefined
+    ? { ...cleaned, type: "object" }
+    : {
+        ...cleaned,
+        properties: withoutTrivialPropertyNamesInMap(properties),
+        type: "object",
+      };
 };
 
 const isSchemaRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * Keywords whose value maps names to schemas rather than being a schema. The
+ * map is walked by value so a property that happens to be named
+ * `propertyNames` is never mistaken for the keyword.
+ */
+const SCHEMA_MAP_KEYWORDS = new Set([
+  "$defs",
+  "definitions",
+  "patternProperties",
+  "properties",
+]);
 
 /**
  * `v.record(v.string(), ...)` projects `propertyNames: { type: "string" }`,
@@ -72,13 +87,9 @@ const isSchemaRecord = (value: unknown): value is Record<string, unknown> =>
  * sits on the CLI trust boundary's deny list, so it is dropped wherever it is
  * trivial; a non-trivial `propertyNames` (a pattern, an enum) is kept as-is.
  */
-const withoutTrivialPropertyNames = <T>(schema: T): T => {
-  if (Array.isArray(schema)) {
-    return schema.map(withoutTrivialPropertyNames) as T;
-  }
-  if (!isSchemaRecord(schema)) {
-    return schema;
-  }
+const withoutTrivialPropertyNames = (
+  schema: Record<string, unknown>,
+): Record<string, unknown> => {
   const { propertyNames, ...rest } = schema;
   const keep =
     isSchemaRecord(propertyNames) &&
@@ -86,12 +97,33 @@ const withoutTrivialPropertyNames = <T>(schema: T): T => {
       Object.keys(propertyNames).length === 1 &&
       propertyNames["type"] === "string"
     );
-  const entries = Object.entries(rest).map(([key, value]) => [
-    key,
-    withoutTrivialPropertyNames(value),
-  ]);
+  const entries = Object.entries(rest).map(
+    ([key, value]): [string, unknown] => [
+      key,
+      SCHEMA_MAP_KEYWORDS.has(key) && isSchemaRecord(value)
+        ? withoutTrivialPropertyNamesInMap(value)
+        : withoutTrivialPropertyNamesIn(value),
+    ],
+  );
   const cleaned = Object.fromEntries(entries);
-  return (keep ? { ...cleaned, propertyNames } : cleaned) as T;
+  return keep ? { ...cleaned, propertyNames } : cleaned;
+};
+
+const withoutTrivialPropertyNamesInMap = (
+  map: Record<string, unknown>,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(map).map(([key, value]): [string, unknown] => [
+      key,
+      withoutTrivialPropertyNamesIn(value),
+    ]),
+  );
+
+const withoutTrivialPropertyNamesIn = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(withoutTrivialPropertyNamesIn);
+  }
+  return isSchemaRecord(value) ? withoutTrivialPropertyNames(value) : value;
 };
 
 /**

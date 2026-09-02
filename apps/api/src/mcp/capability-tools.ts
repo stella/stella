@@ -1109,6 +1109,15 @@ const invokeArgIssues = (
   const input = args["input"];
   if (input !== undefined) {
     if (isRecord(input)) {
+      for (const key of Object.keys(input)) {
+        if (INVOKE_INPUT_PART_SET.has(key)) {
+          continue;
+        }
+        issues.push({
+          path: `input.${key}`,
+          message: `Unknown input part. Expected one of: ${INVOKE_INPUT_PARTS.join(", ")}`,
+        });
+      }
       for (const part of INVOKE_INPUT_PARTS) {
         const value = input[part];
         if (value !== undefined && !isRecord(value)) {

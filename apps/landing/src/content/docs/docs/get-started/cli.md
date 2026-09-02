@@ -22,7 +22,7 @@ stella auth login --server https://api.stll.app
 ```
 
 The login opens your browser for the standard sign-in and permission review.
-The first login needs `--server`, because no server address is built into the
+The first login needs `--server` because no server address is built into the
 CLI; it becomes the default afterwards. Credentials are stored per server, so
 `--server <url>` on any command (or the `STELLA_SERVER_URL` environment
 variable) switches to another one, self-hosted included.

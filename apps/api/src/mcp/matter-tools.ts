@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -735,8 +735,10 @@ const handleSaveContactTool: TypedMcpToolHandler<
     if (!hasEffectiveAuthority(context, { contact: ["create"] })) {
       return errorResult("Forbidden");
     }
-    // The schema guarantees type is present and a display name is derivable.
-    const type = input.type ?? "person";
+    const { type } = input;
+    if (type === undefined) {
+      return panic("save_contact create branch reached without type");
+    }
     const displayName = deriveContactDisplayName(input);
     const created = await Result.gen(() =>
       createContactHandler({

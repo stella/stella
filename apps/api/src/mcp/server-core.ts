@@ -382,12 +382,33 @@ const MCP_TRANSPORT_ACCEPT_RANGES = {
 
 const MCP_TRANSPORT_ACCEPT_HEADER = MCP_TRANSPORT_MEDIA_TYPES.join(", ");
 
+/**
+ * The media ranges a client accepts. A range carrying `q=0` is an explicit
+ * refusal (RFC 9110 §12.4.2): JSON followed by a wildcard at `q=0` covers
+ * JSON only.
+ */
+const acceptedMediaRanges = (accept: string): Set<string> => {
+  const ranges = new Set<string>();
+  for (const entry of accept.split(",")) {
+    const [range, ...parameters] = entry
+      .split(";")
+      .map((part) => part.trim().toLowerCase());
+    if (range === undefined || range.length === 0) {
+      continue;
+    }
+    const refused = parameters.some((parameter) => {
+      const [name, value] = parameter.split("=");
+      return name?.trim() === "q" && Number(value) === 0;
+    });
+    if (!refused) {
+      ranges.add(range);
+    }
+  }
+  return ranges;
+};
+
 const acceptsEveryTransportMediaType = (accept: string): boolean => {
-  const ranges = new Set(
-    accept
-      .split(",")
-      .map((entry) => entry.split(";").at(0)?.trim().toLowerCase()),
-  );
+  const ranges = acceptedMediaRanges(accept);
   return MCP_TRANSPORT_MEDIA_TYPES.every((mediaType) =>
     MCP_TRANSPORT_ACCEPT_RANGES[mediaType].some((range) => ranges.has(range)),
   );
@@ -416,6 +437,24 @@ type McpRequestFrame =
   | { request: Request; status: "within_limit" }
   | { status: "too_large" };
 
+type DeclaredBodyLength = "undeclared" | "within_limit" | "too_large";
+
+/**
+ * What `Content-Length` says about the frame, read from the header alone. A
+ * length we cannot read is a length we cannot honour: it is refused rather
+ * than falling through to an unmetered read.
+ */
+const declaredBodyLength = (request: Request): DeclaredBodyLength => {
+  const declaredLength = request.headers.get("content-length");
+  if (declaredLength === null) {
+    return "undeclared";
+  }
+  const length = Number(declaredLength);
+  return Number.isInteger(length) && length <= MCP_MAX_REQUEST_BODY_BYTES
+    ? "within_limit"
+    : "too_large";
+};
+
 /**
  * Refuse an oversized JSON-RPC frame before anything parses it. A declared
  * length is checked without touching the body; a chunked upload declares none,
@@ -425,22 +464,19 @@ type McpRequestFrame =
 const withCappedRequestBody = async (
   request: Request,
 ): Promise<McpRequestFrame> => {
-  const declaredLength = request.headers.get("content-length");
-  if (declaredLength !== null) {
-    const length = Number(declaredLength);
-    // A length we cannot read is a length we cannot honour: refuse it rather
-    // than fall through to an unmetered read.
-    return Number.isInteger(length) && length <= MCP_MAX_REQUEST_BODY_BYTES
-      ? { request, status: "within_limit" }
-      : { status: "too_large" };
+  const declared = declaredBodyLength(request);
+  if (declared === "too_large") {
+    return { status: "too_large" };
   }
-  if (request.body === null) {
+  if (declared === "within_limit" || request.body === null) {
     return { request, status: "within_limit" };
   }
 
+  // Bun types the stream's chunks as `any`; a request body is bytes.
+  const stream: ReadableStream<Uint8Array> = request.body;
   const chunks: Uint8Array[] = [];
   let total = 0;
-  for await (const chunk of request.body) {
+  for await (const chunk of stream) {
     total += chunk.length;
     if (total > MCP_MAX_REQUEST_BODY_BYTES) {
       // Leaving the loop cancels the stream: the rest of the upload is never
@@ -898,13 +934,13 @@ export const createMcpHttpRequestHandler = ({
       });
     }
 
-    const frame = await withCappedRequestBody(incomingRequest);
-    if (frame.status === "too_large") {
+    // A declared length is refused from the header alone, before the token
+    // costs a verification.
+    if (declaredBodyLength(incomingRequest) === "too_large") {
       return payloadTooLargeResponse();
     }
-    const request = withTransportAcceptHeader(frame.request);
 
-    const token = extractBearerToken(request);
+    const token = extractBearerToken(incomingRequest);
     if (!token) {
       return accessDeniedResponse({ denial: "missing_credentials", mode });
     }
@@ -915,13 +951,23 @@ export const createMcpHttpRequestHandler = ({
       // Refuse session termination only after the token is accepted, so an
       // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
       // drives OAuth discovery.
-      if (request.method === "DELETE") {
+      if (incomingRequest.method === "DELETE") {
         return withMcpCors(
           sessionOperationUnsupportedResponse(),
           session,
           mode,
         );
       }
+
+      // A chunked body is metered only for an accepted token: a caller
+      // without one is refused from the headers alone, so it cannot hold
+      // connections and buffers open by streaming a body that is discarded
+      // anyway.
+      const frame = await withCappedRequestBody(incomingRequest);
+      if (frame.status === "too_large") {
+        return withMcpCors(payloadTooLargeResponse(), session, mode);
+      }
+      const request = withTransportAcceptHeader(frame.request);
 
       const authInfo = {
         clientId: session.userId,

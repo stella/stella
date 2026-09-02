@@ -85,6 +85,17 @@ const loadBakedListings = async (): Promise<readonly RegistryToolListing[]> => {
   return listings;
 };
 
+/** A tool whose invocation needs its own scope plus at least one more. */
+const isCompoundTool = (name: string): boolean => {
+  const annotation = TOOL_ANNOTATIONS[name];
+  const additionalScopes = annotation?.additionalScopes;
+  return (
+    annotation?.scope !== undefined &&
+    additionalScopes !== undefined &&
+    additionalScopes.length > 0
+  );
+};
+
 /**
  * A `tools/list` response is a projection, not proof that a baked tool was
  * removed from the server. Restore a baked listing the response attested it
@@ -112,13 +123,7 @@ const retainAttestedOmittedListings = ({
 }): readonly RegistryToolListing[] => {
   const retainable = new Set(featureOmittedTools);
   for (const name of scopeOmittedTools ?? []) {
-    const annotation = TOOL_ANNOTATIONS[name];
-    const additionalScopes = annotation?.additionalScopes;
-    if (
-      annotation?.scope !== undefined &&
-      additionalScopes !== undefined &&
-      additionalScopes.length > 0
-    ) {
+    if (isCompoundTool(name)) {
       retainable.add(name);
     }
   }
@@ -167,9 +172,12 @@ const divergenceNotice = (delta: RegistryDelta): string => {
  * for that divergence. The notice reflects a persistent state (the server tree
  * differs from the built-in tree until the next refresh reconciles the cache),
  * so it is emitted per invocation while divergent rather than suppressed after
- * the first: this read path takes no network and writes no disk. Provenance is
- * pinned: a cache whose `serverOrigin` differs is ignored (rule 5), and a
- * cached tree that fails to build falls back to baked-in (rule 6).
+ * the first: this read path takes no network and writes no disk. A cache whose
+ * only divergence is a single-scope omission also builds from the listings, so
+ * a command this token cannot use is not exposed; it carries no notice, because
+ * the registry itself did not diverge. Provenance is pinned: a cache whose
+ * `serverOrigin` differs is ignored (rule 5), and a cached tree that fails to
+ * build falls back to baked-in (rule 6).
  */
 export const resolveCommandTree = async ({
   serverOrigin,
@@ -185,7 +193,10 @@ export const resolveCommandTree = async ({
   if (file === undefined || file.serverOrigin !== serverOrigin) {
     return { tree: generatedRouteMap };
   }
-  if (isDeltaEmpty(file.delta)) {
+  const prunedByScope = (file.scopeOmittedTools ?? []).some(
+    (name) => !isCompoundTool(name),
+  );
+  if (isDeltaEmpty(file.delta) && !prunedByScope) {
     return { tree: generatedRouteMap };
   }
   // Rebuild through the SAME shared builder codegen uses (curated tools from
@@ -213,7 +224,9 @@ export const resolveCommandTree = async ({
   if (Result.isError(built)) {
     return { tree: generatedRouteMap };
   }
-  return { tree: built.value, notice: divergenceNotice(file.delta) };
+  return isDeltaEmpty(file.delta)
+    ? { tree: built.value }
+    : { tree: built.value, notice: divergenceNotice(file.delta) };
 };
 
 /** The outcome of a cache-refresh attempt (spec S5.3/S5.5 + addendum nudge). */

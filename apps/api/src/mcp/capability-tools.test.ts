@@ -1647,6 +1647,23 @@ describe("invoke_capability argument shape validation", () => {
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
 
+  test("an unknown key inside input -> validation_error naming it", async () => {
+    // `readInvokeInput` keeps only body/params/query; a misspelt part would
+    // otherwise run the capability without the filter the agent asked for.
+    const result = await handleMcpToolCall({
+      args: { capability: "audit-logs.list", input: { queries: { limit: 1 } } },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("validation_error");
+    const issues = asTestRaw<{ path: string; message: string }[]>(error.issues);
+    expect(issues.find((i) => i.path === "input.queries")?.message).toContain(
+      "body, params, query",
+    );
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
   test("every unknown top-level argument is named (no silent drop)", async () => {
     const result = await handleMcpToolCall({
       args: {

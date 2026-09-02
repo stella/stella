@@ -1112,11 +1112,52 @@ describe("MCP transport conformance", () => {
   test("keeps 406 for an Accept that genuinely excludes the event stream", async () => {
     authenticateSession();
 
-    const response = await handleMcpHttpRequest(
-      toolsListRequest("application/json"),
+    const responses = await Promise.all(
+      ["application/json", "application/json, */*;q=0"].map(
+        async (accept) => await handleMcpHttpRequest(toolsListRequest(accept)),
+      ),
     );
 
-    expect(response.status).toBe(406);
+    expect(responses.map((response) => response.status)).toEqual([406, 406]);
+  });
+
+  test("reads no body before the token is accepted", async () => {
+    authenticateMcpRequestMock.mockRejectedValue(
+      new McpAuthenticationError({ message: "Token expired" }),
+    );
+    let pulls = 0;
+    // `start` fills the queue, so any pull is the handler reading the body.
+    const unreadBody = () =>
+      new ReadableStream<Uint8Array>({
+        start: (controller) => {
+          controller.enqueue(new TextEncoder().encode("{"));
+        },
+        pull: (controller) => {
+          pulls += 1;
+          controller.enqueue(new TextEncoder().encode("x"));
+        },
+      });
+    const chunkedRequest = (authorization?: string) =>
+      new Request("http://localhost/mcp", {
+        body: unreadBody(),
+        duplex: "half",
+        headers: {
+          accept: "application/json, text/event-stream",
+          "content-type": "application/json",
+          ...(authorization === undefined ? {} : { authorization }),
+        },
+        method: "POST",
+      });
+
+    const responses = await Promise.all(
+      [undefined, "Bearer expired"].map(
+        async (authorization) =>
+          await handleMcpHttpRequest(chunkedRequest(authorization)),
+      ),
+    );
+
+    expect(responses.map((response) => response.status)).toEqual([401, 401]);
+    expect(pulls).toBe(0);
   });
 
   test("advertises only the methods the transport serves on preflight", async () => {
@@ -1144,6 +1185,8 @@ describe("MCP transport conformance", () => {
         headers: {
           accept: "application/json, text/event-stream",
           authorization: "Bearer token",
+          // A constructed Request declares no length on its own.
+          "content-length": String(MCP_MAX_REQUEST_BODY_BYTES + 1),
           "content-type": "application/json",
         },
         method: "POST",
@@ -1157,7 +1200,7 @@ describe("MCP transport conformance", () => {
     expect(authenticateMcpRequestMock).not.toHaveBeenCalled();
   });
 
-  test("meters a chunked body that declares no length", async () => {
+  test("meters a chunked body that declares no length, once the token is accepted", async () => {
     authenticateSession();
 
     const response = await handleMcpHttpRequest(
@@ -1165,7 +1208,7 @@ describe("MCP transport conformance", () => {
     );
 
     expect(response.status).toBe(413);
-    expect(authenticateMcpRequestMock).not.toHaveBeenCalled();
+    expect(authenticateMcpRequestMock).toHaveBeenCalledTimes(1);
   });
 
   test("hands a chunked body within the cap to the transport intact", async () => {

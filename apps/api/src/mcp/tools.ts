@@ -75,7 +75,7 @@ export const findUndeclaredArguments = ({
 }):
   | { declared: readonly string[]; undeclared: readonly UndeclaredArgument[] }
   | undefined => {
-  if (inputSchema.additionalProperties === true) {
+  if (inputSchema["additionalProperties"] === true) {
     return undefined;
   }
   const { properties } = inputSchema;

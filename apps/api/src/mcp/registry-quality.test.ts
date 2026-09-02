@@ -404,7 +404,7 @@ describe("MCP registry input naming", () => {
     for (const tool of defaultTools) {
       collectNonSnakeCaseProperties(tool.inputSchema, tool.name, issues);
     }
-    expect(issues.sort()).toEqual(CAMEL_CASE_INPUT_PROPERTY_DEBT);
+    expect([...new Set(issues)].sort()).toEqual(CAMEL_CASE_INPUT_PROPERTY_DEBT);
   });
 
   // The other half of the same convention: inputs are snake_case, payloads are
@@ -556,7 +556,12 @@ const collectOpenObjectSchemas = (
 // beside ten `matter_id`s) is a correctness cost, not a style preference.
 const SNAKE_CASE_PROPERTY = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/u;
 
-/** Walks a JSON Schema and records the path of every non-snake_case property. */
+/**
+ * Walks every schema-bearing branch the CLI trust boundary admits
+ * (`registry-trust.ts`) and records the path of each non-snake_case property.
+ * Union branches share their parent's path, so one offending name is one
+ * entry however many branches carry it.
+ */
 const collectNonSnakeCaseProperties = (
   schema: unknown,
   path: string,
@@ -574,7 +579,26 @@ const collectNonSnakeCaseProperties = (
       collectNonSnakeCaseProperties(property, propertyPath, issues);
     }
   }
+  if (isRecord(schema["patternProperties"])) {
+    for (const property of Object.values(schema["patternProperties"])) {
+      collectNonSnakeCaseProperties(property, `${path}[*]`, issues);
+    }
+  }
+  collectNonSnakeCaseProperties(
+    schema["additionalProperties"],
+    `${path}[*]`,
+    issues,
+  );
   collectNonSnakeCaseProperties(schema["items"], `${path}[]`, issues);
+  for (const keyword of ["allOf", "anyOf", "oneOf"] as const) {
+    const branches = schema[keyword];
+    if (!Array.isArray(branches)) {
+      continue;
+    }
+    for (const branch of branches) {
+      collectNonSnakeCaseProperties(branch, path, issues);
+    }
+  }
 };
 
 const getInputProperties = (
