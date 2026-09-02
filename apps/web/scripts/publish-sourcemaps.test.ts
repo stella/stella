@@ -117,15 +117,42 @@ describe("source map removal", () => {
   });
 });
 
-describe("assertChunksInjected", () => {
-  test("counts injected chunks and names the ones the CLI skipped", async () => {
+describe("source-map injection coverage", () => {
+  test("rejects a client build with no mapped JavaScript chunks", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "stella-sourcemaps-empty-"));
+    const clientRoot = path.join(root, "client");
+    await mkdir(path.join(clientRoot, "assets"), { recursive: true });
+
+    let failure: unknown;
+    try {
+      await assertChunksInjected(clientRoot);
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure instanceof Error ? failure.message : "").toMatch(
+      /no mapped client chunks/u,
+    );
+  });
+
+  test("validates mapped chunks without rejecting emitted mapless assets", async () => {
     const root = await createDist();
     const clientRoot = path.join(root, "client");
     expect(await assertChunksInjected(clientRoot)).toBe(1);
 
     await writeFile(
-      path.join(clientRoot, "assets/vendor-XyZw5678.js"),
+      path.join(clientRoot, "assets/render-worker-XyZw5678.js"),
+      'console.log("worker");\n',
+    );
+    expect(await assertChunksInjected(clientRoot)).toBe(1);
+
+    await writeFile(
+      path.join(clientRoot, "assets/vendor-QrSt9012.js"),
       'console.log("vendor");\n',
+    );
+    await writeFile(
+      path.join(clientRoot, "assets/vendor-QrSt9012.js.map"),
+      "{}",
     );
     let failure: unknown;
     try {
@@ -135,7 +162,7 @@ describe("assertChunksInjected", () => {
     }
     expect(failure).toBeInstanceOf(Error);
     expect(failure instanceof Error ? failure.message : "").toMatch(
-      /vendor-XyZw5678\.js/u,
+      /vendor-QrSt9012\.js/u,
     );
   });
 });
