@@ -361,6 +361,38 @@ const apiPortableSafeIdBrandingImport = {
     "Brand ids through '@/api/lib/safe-id-boundaries', not the portable contract helper.",
 };
 
+// pragmatic-drag-and-drop's element adapter keeps exactly one live drop
+// target, and one draggable, per element behind a private WeakMap registry:
+// a second direct `dropTargetForElements`/`draggable` call on a node it is
+// already watching silently replaces the first, with no error anywhere.
+// That is exactly how a flat-column kanban card target once went dark, so
+// each surface that plugs into the adapter funnels registration through one
+// owner that can detect a same-element conflict instead of calling the
+// adapter directly. `monitorForElements` (no per-element registry) is not
+// restricted.
+const webPragmaticDragAdapterImport = {
+  name: "@atlaskit/pragmatic-drag-and-drop/element/adapter",
+  importNames: ["draggable", "dropTargetForElements"],
+  message:
+    "Register kanban element drag sources and drop targets through use-kanban-drop-targets.ts's attachElementDropTarget/draggable, not directly: pragmatic-drag-and-drop keeps only one live drop target per element, so a second direct registration silently replaces the first.",
+};
+
+const uiPragmaticDragAdapterImport = {
+  name: "@atlaskit/pragmatic-drag-and-drop/element/adapter",
+  importNames: ["draggable", "dropTargetForElements"],
+  message:
+    "Register kanban element drag sources and drop targets through kanban/drag-interactions.ts, not directly: pragmatic-drag-and-drop keeps only one live drop target per element, so a second direct registration silently replaces the first.",
+};
+
+// The adapter is a single published entry point with no public subpaths;
+// nothing should import a level deeper than the module the two bans above
+// already cover.
+const pragmaticDragAdapterDeepImportBan = {
+  group: ["@atlaskit/pragmatic-drag-and-drop/element/adapter/*"],
+  message:
+    "Import only '@atlaskit/pragmatic-drag-and-drop/element/adapter'; it has no public subpaths.",
+};
+
 export default defineConfig({
   extends: [core, react],
   rules: {
@@ -1783,7 +1815,31 @@ export default defineConfig({
       rules: {
         "no-restricted-imports": [
           "error",
-          { paths: [noZodImport], patterns: uiStandaloneImports },
+          {
+            paths: [noZodImport, uiPragmaticDragAdapterImport],
+            patterns: [
+              ...uiStandaloneImports,
+              pragmaticDragAdapterDeepImportBan,
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // The kanban package's drag-and-drop owner: the one module that may
+      // call the adapter's `draggable`/`dropTargetForElements` directly. The
+      // rest of the package's import restrictions still apply.
+      files: ["packages/ui/src/kanban/drag-interactions.ts"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [noZodImport],
+            patterns: [
+              ...uiStandaloneImports,
+              pragmaticDragAdapterDeepImportBan,
+            ],
+          },
         ],
       },
     },
@@ -1894,7 +1950,7 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport],
+            paths: [noZodImport, webPragmaticDragAdapterImport],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -1902,6 +1958,7 @@ export default defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              pragmaticDragAdapterDeepImportBan,
             ],
           },
         ],
@@ -1919,6 +1976,33 @@ export default defineConfig({
         "require-matter-affordance/require-matter-affordance": "error",
         "security-guards/no-unsanitized-href": "error",
         "stella-toast/stella-toast": "error",
+      },
+    },
+    {
+      // The kanban drag-and-drop owner: the one web module that may call the
+      // adapter's `draggable`/`dropTargetForElements` directly (it exports
+      // the conflict-guarded `attachElementDropTarget` every kanban drop
+      // target and the column draggable go through). Every other apps/web
+      // import restriction still applies, so it is restated here.
+      files: [
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts",
+      ],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [noZodImport],
+            patterns: [
+              {
+                group: webLocalApiImportGroup,
+                message: "Use '@/lib/api-contract' instead of '@/api/'.",
+              },
+              ...webCrossWorkspaceImports,
+              webDatePickerImport,
+              pragmaticDragAdapterDeepImportBan,
+            ],
+          },
+        ],
       },
     },
     {
@@ -1992,13 +2076,14 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport],
+            paths: [noZodImport, webPragmaticDragAdapterImport],
             patterns: [
               {
                 group: webLocalApiImportGroup,
                 message: "Use '@/lib/api-contract' instead of '@/api/'.",
               },
               ...webCrossWorkspaceImports,
+              pragmaticDragAdapterDeepImportBan,
             ],
           },
         ],
@@ -2015,6 +2100,7 @@ export default defineConfig({
           {
             paths: [
               noZodImport,
+              webPragmaticDragAdapterImport,
               {
                 name: "@tanstack/react-router",
                 importNames: ["getRouteApi", "useRouteContext"],
@@ -2029,6 +2115,7 @@ export default defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              pragmaticDragAdapterDeepImportBan,
             ],
           },
         ],
@@ -2044,7 +2131,7 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport],
+            paths: [noZodImport, webPragmaticDragAdapterImport],
             patterns: [
               {
                 group: webProtectedRouteImportGroup,
@@ -2057,6 +2144,7 @@ export default defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              pragmaticDragAdapterDeepImportBan,
             ],
           },
         ],
@@ -2083,6 +2171,7 @@ export default defineConfig({
           {
             paths: [
               noZodImport,
+              webPragmaticDragAdapterImport,
               {
                 name: "@/lib/api",
                 importNames: ["api"],
@@ -2102,6 +2191,7 @@ export default defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              pragmaticDragAdapterDeepImportBan,
             ],
           },
         ],
@@ -2120,6 +2210,7 @@ export default defineConfig({
           {
             paths: [
               noZodImport,
+              webPragmaticDragAdapterImport,
               {
                 name: "@/routes/-auth-context",
                 message:
@@ -2149,6 +2240,7 @@ export default defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              pragmaticDragAdapterDeepImportBan,
             ],
           },
         ],

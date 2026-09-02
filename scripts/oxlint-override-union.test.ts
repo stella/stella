@@ -72,6 +72,25 @@ const DELIBERATE_NARROWINGS = [
     reason:
       "Tests build handler context and owner-level DB handles directly; that is the fixture surface the production restrictions exist to keep out of handlers.",
   },
+  {
+    rule: "no-restricted-imports",
+    scope:
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/use-kanban-drop-targets.ts",
+    drops: [
+      "path:@atlaskit/pragmatic-drag-and-drop/element/adapter#draggable,dropTargetForElements",
+    ],
+    reason:
+      "This is the web kanban drag-and-drop owner: the one module that may call the adapter's draggable/dropTargetForElements directly, behind its conflict-guarded attachElementDropTarget.",
+  },
+  {
+    rule: "no-restricted-imports",
+    scope: "packages/ui/src/kanban/drag-interactions.ts",
+    drops: [
+      "path:@atlaskit/pragmatic-drag-and-drop/element/adapter#draggable,dropTargetForElements",
+    ],
+    reason:
+      "This is the @stll/ui kanban drag-and-drop owner: the one module that may call the adapter's draggable/dropTargetForElements directly.",
+  },
 ] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
