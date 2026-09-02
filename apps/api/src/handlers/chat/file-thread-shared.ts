@@ -5,7 +5,11 @@ import type { ReasoningEffort } from "@stll/ai-catalog";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDbError } from "@/api/db/safe-db";
-import { chatThreads, fileChatThreads } from "@/api/db/schema";
+import {
+  CHAT_THREAD_TITLE_MAX_LENGTH,
+  chatThreads,
+  fileChatThreads,
+} from "@/api/db/schema";
 import { estimateChatContextPromptTokens } from "@/api/handlers/chat/chat-prompt";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
 import type { ThreadContextUsage } from "@/api/handlers/chat/compaction";
@@ -245,13 +249,6 @@ export const loadResolvedThreadMessagePage = async ({
     context,
   };
 };
-
-/**
- * Legacy lookup: file chat threads were previously keyed directly by field
- * UUID (no `fileChatThreads` mapping row). Preserves those rows without
- * constructing a new branded ID from request input.
- */
-const CHAT_THREAD_TITLE_MAX_LENGTH = 255;
 
 export type FileThreadCreateResult =
   | {

@@ -6,13 +6,15 @@
  */
 
 import type { Transaction } from "@/api/db/root";
-import { chatThreads, templateChatThreads } from "@/api/db/schema";
+import {
+  CHAT_THREAD_TITLE_MAX_LENGTH,
+  chatThreads,
+  templateChatThreads,
+} from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-
-const CHAT_THREAD_TITLE_MAX_LENGTH = 255;
 
 export type TemplateThreadScope = {
   templateId: SafeId<"template">;
