@@ -8,11 +8,13 @@ import type {
   FolioToolCallResultFor,
 } from "@stll/folio-agents/tool-contract";
 
+import type { AutoApplySuggestChangesOutput } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
 import type {
   ChatBuiltinApprovalToolName,
   ChatTools,
 } from "@/api/handlers/chat/tools/chat-tools";
+import type { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { GeneratedDocumentActiveDraftContext } from "@/api/lib/chat/active-draft-context";
@@ -67,7 +69,9 @@ type RegisteredFolioAgentToolName = Extract<
 type FolioAgentChatUITools = {
   [TName in RegisteredFolioAgentToolName]: {
     input: FolioAgentToolInputByName[TName];
-    output: FolioToolCallResultFor<TName>;
+    output: TName extends typeof SUGGEST_CHANGES_TOOL_NAME
+      ? FolioToolCallResultFor<TName> | AutoApplySuggestChangesOutput
+      : FolioToolCallResultFor<TName>;
   };
 };
 
@@ -76,7 +80,9 @@ type FolioAgentChatUITools = {
  * TanStack's Standard Schema inference. Restore Folio's exact contract from
  * its exported name-indexed maps for only the Folio tools actually registered
  * in ChatTools; adding or removing a registered Folio name changes this map
- * automatically.
+ * automatically. `suggest_changes` has two registrations: the client-executed
+ * queue variant answers with Folio's result envelope, the server-executed
+ * apply variant with its own version-write outcome.
  */
 export type ChatUITools = Omit<
   SchemaInferredChatUITools,

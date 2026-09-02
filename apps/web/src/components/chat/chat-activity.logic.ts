@@ -31,7 +31,6 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   delete_time_entry: "mutation",
   describe_template: "research",
   discover_tools: "research",
-  edit_workspace_document: "artifact",
   "expand-chat-history": "research",
   fetch_url: "research",
   fill_template: "artifact",

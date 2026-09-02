@@ -639,10 +639,10 @@ describe("chat prompt builders", () => {
       workspaceId: WORKSPACE_ID,
     });
 
-    expect(prompt).toContain("edit_workspace_document");
+    expect(prompt).toContain("suggest_changes");
     expect(prompt).toContain("saves a new document version");
-    expect(prompt).toContain("baseVersionId");
-    expect(prompt).not.toContain("suggest_changes");
+    expect(prompt).toContain("documentVersion");
+    expect(prompt).not.toContain("baseVersionId");
     expect(prompt).not.toContain("ready to review in the panel");
   });
 
@@ -665,7 +665,6 @@ describe("chat prompt builders", () => {
       workspaceId: WORKSPACE_ID,
     });
 
-    expect(prompt).not.toContain("edit_workspace_document");
     expect(prompt).not.toContain("suggest_changes");
     expect(prompt).not.toContain("ACTIVE DOCX EDITING");
   });

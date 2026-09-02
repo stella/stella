@@ -31,7 +31,7 @@ describe("chat tool activity", () => {
 
   test("uses shaping only for artifact work", () => {
     for (const toolName of [
-      "edit_workspace_document",
+      "suggest_changes",
       "fill_template",
       "mcp__documents__draft_agreement",
     ]) {

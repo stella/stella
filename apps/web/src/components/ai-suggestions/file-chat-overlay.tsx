@@ -1941,7 +1941,16 @@ const FileChatOverlayInner = ({
       }
     },
   );
+  // Only once the stream is idle: a client-executed call is unresolved for
+  // good after the server finished the turn without answering it, whereas
+  // the server-executed `suggest_changes` apply variant sits in
+  // `input-complete` for a moment before its approval request arrives.
+  // Acting on that transient state would queue an approval-gated batch into
+  // the review panel and answer a call the server owns.
   useExternalSyncEffect(() => {
+    if (isGenerating) {
+      return;
+    }
     const message = messages.at(-1);
     if (!message || message.role !== "assistant") {
       return;
@@ -1963,7 +1972,7 @@ const FileChatOverlayInner = ({
         "file-chat-overlay.run-folio-agent-doc-tool-call",
       );
     }
-  }, [messages, runFolioAgentDocToolCall]);
+  }, [isGenerating, messages, runFolioAgentDocToolCall]);
 
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;

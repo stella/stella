@@ -10,12 +10,13 @@ import {
   pendingUploads,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import { markdownToStellaDocx } from "@/api/handlers/chat/tools/create-workspace-document-tools";
 import {
-  EDIT_WORKSPACE_DOCUMENT_TOOL_NAME,
-  createEditWorkspaceDocumentTools as createEditWorkspaceDocumentToolsWithDependencies,
-} from "@/api/handlers/chat/tools/edit-workspace-document-tools";
-import type { CreateEditWorkspaceDocumentToolsProps } from "@/api/handlers/chat/tools/edit-workspace-document-tools";
+  createAutoApplySuggestChangesTools as createAutoApplySuggestChangesToolsWithDependencies,
+  hasSuggestChangesApprovalResponse,
+} from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
+import type { CreateAutoApplySuggestChangesToolsProps } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
+import { markdownToStellaDocx } from "@/api/handlers/chat/tools/create-workspace-document-tools";
+import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createEntityVersionFromBuffer as createEntityVersionFromBufferWithDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
@@ -68,10 +69,10 @@ const createEntityVersionFromBuffer: typeof createEntityVersionFromBufferWithDep
       dependencies: createVersionDependencies,
     });
 
-const createEditWorkspaceDocumentTools = (
-  props: CreateEditWorkspaceDocumentToolsProps,
+const createAutoApplySuggestChangesTools = (
+  props: CreateAutoApplySuggestChangesToolsProps,
 ) =>
-  createEditWorkspaceDocumentToolsWithDependencies({
+  createAutoApplySuggestChangesToolsWithDependencies({
     ...props,
     createEntityVersionFromBuffer,
     getScanWarnings: getScanWarningsForTest,
@@ -324,24 +325,7 @@ const buildTx = ({
   return { tx, insertedTables, updatedTables };
 };
 
-const validateInput = async (input: unknown) => {
-  const { tx } = buildTx();
-  const { safeDb } = createScopedDbMock(tx);
-  const tool = createEditWorkspaceDocumentTools({
-    safeDb,
-    organizationId,
-    userId,
-    workspaceId,
-    entityId,
-    fileFieldId,
-    recordAuditEvent: async () => undefined,
-    docxEditRepresentation: "tracked-changes",
-    expectedCurrentVersionId: entityVersionId,
-  })[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME];
-  return await tool.inputSchema["~standard"].validate(input);
-};
-
-describe("createEditWorkspaceDocumentTools", () => {
+describe("createAutoApplySuggestChangesTools", () => {
   beforeEach(() => {
     fake = startFakeS3();
     processExtractionMock.mockClear();
@@ -389,10 +373,10 @@ describe("createEditWorkspaceDocumentTools", () => {
     expect(insertedTables).toEqual([]);
   });
 
-  test("registers a single server-executed edit_workspace_document tool", () => {
+  test("registers a single server-executed suggest_changes tool", () => {
     const { tx } = buildTx({ preferredName: "Jana Nováková" });
     const { safeDb } = createScopedDbMock(tx);
-    const tools = createEditWorkspaceDocumentTools({
+    const tools = createAutoApplySuggestChangesTools({
       safeDb,
       organizationId,
       userId,
@@ -404,74 +388,17 @@ describe("createEditWorkspaceDocumentTools", () => {
       expectedCurrentVersionId: entityVersionId,
     });
 
-    expect(Object.keys(tools)).toEqual([EDIT_WORKSPACE_DOCUMENT_TOOL_NAME]);
-    const tool = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME];
+    expect(Object.keys(tools)).toEqual([SUGGEST_CHANGES_TOOL_NAME]);
+    const tool = tools[SUGGEST_CHANGES_TOOL_NAME];
     expect(tool.needsApproval).toBeUndefined();
     expect(tool.execute).toBeDefined();
-  });
-
-  test("rejects unsupported operation keys instead of dropping their semantics", async () => {
-    const keys = ["precondition", "mode", "position", "typoKey"];
-    const results = await Promise.all(
-      keys.map(async (key) => ({
-        key,
-        result: await validateInput({
-          baseVersionId: entityVersionId,
-          version: 1,
-          operations: [
-            {
-              type: "deleteBlock",
-              blockId: "b-1",
-              [key]: key === "precondition" ? { blockTextHash: "fake" } : true,
-            },
-          ],
-        }),
-      })),
-    );
-    for (const { key, result } of results) {
-      expect(result.issues).toBeDefined();
-      expect(result.issues?.some((issue) => issue.path?.at(-1) === key)).toBe(
-        true,
-      );
-    }
-  });
-
-  test("keeps omitted operation ids deterministic across repeated validation", async () => {
-    const input = {
-      baseVersionId: entityVersionId,
-      version: 1 as const,
-      operations: [
-        {
-          type: "deleteBlock" as const,
-          blockId: "b-1",
-        },
-      ],
-    };
-
-    const first = await validateInput(input);
-    const second = await validateInput(input);
-
-    expect(first).toEqual(second);
-    expect(first).toEqual({ value: input });
-  });
-
-  test("rejects a tool call bound to a stale document version", async () => {
-    const result = await validateInput({
-      baseVersionId: newerEntityVersionId,
-      version: 1,
-      operations: [{ type: "deleteBlock", blockId: "b-1" }],
-    });
-
-    expect(result.issues).toEqual([
-      expect.objectContaining({ path: ["baseVersionId"] }),
-    ]);
   });
 
   test("returns a structured author_name_required outcome (no version written) when no author name is configured", async () => {
     const { tx } = buildTx({ preferredName: null, name: "   " });
     const { safeDb } = createScopedDbMock(tx);
     sourceDocx = await seedSourceDocx();
-    const tools = createEditWorkspaceDocumentTools({
+    const tools = createAutoApplySuggestChangesTools({
       safeDb,
       organizationId,
       userId,
@@ -482,16 +409,15 @@ describe("createEditWorkspaceDocumentTools", () => {
       docxEditRepresentation: "tracked-changes",
       expectedCurrentVersionId: entityVersionId,
     });
-    const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    const execute = tools[SUGGEST_CHANGES_TOOL_NAME].execute;
     if (!execute) {
-      throw new Error("edit_workspace_document must be server-executed");
+      throw new Error("suggest_changes must be server-executed here");
     }
 
     const block = await firstBlock(sourceDocx);
     const result = await execute(
       {
-        baseVersionId: entityVersionId,
-        version: 1,
+        documentVersion: entityVersionId,
         operations: [
           {
             type: "replaceInBlock",
@@ -520,7 +446,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     const { tx } = buildTx({ preferredName: null, name: "   " });
     const { safeDb } = createScopedDbMock(tx);
     sourceDocx = await seedSourceDocx();
-    const tools = createEditWorkspaceDocumentTools({
+    const tools = createAutoApplySuggestChangesTools({
       safeDb,
       organizationId,
       userId,
@@ -531,17 +457,16 @@ describe("createEditWorkspaceDocumentTools", () => {
       docxEditRepresentation: "direct",
       expectedCurrentVersionId: entityVersionId,
     });
-    const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    const execute = tools[SUGGEST_CHANGES_TOOL_NAME].execute;
     if (!execute) {
-      throw new Error("edit_workspace_document must be server-executed");
+      throw new Error("suggest_changes must be server-executed here");
     }
 
     const block = await firstBlock(sourceDocx);
     const results = await Promise.all([
       execute(
         {
-          baseVersionId: entityVersionId,
-          version: 1,
+          documentVersion: entityVersionId,
           operations: [
             {
               id: "comment-range",
@@ -562,8 +487,7 @@ describe("createEditWorkspaceDocumentTools", () => {
       ),
       execute(
         {
-          baseVersionId: entityVersionId,
-          version: 1,
+          documentVersion: entityVersionId,
           operations: [
             {
               id: "edit-comment",
@@ -605,7 +529,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     const { safeDb } = createScopedDbMock(tx);
     sourceDocx = await seedSourceDocx();
     const recordedAuditEvents: unknown[] = [];
-    const tools = createEditWorkspaceDocumentTools({
+    const tools = createAutoApplySuggestChangesTools({
       safeDb,
       organizationId,
       userId,
@@ -618,16 +542,15 @@ describe("createEditWorkspaceDocumentTools", () => {
       docxEditRepresentation: "tracked-changes",
       expectedCurrentVersionId: entityVersionId,
     });
-    const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    const execute = tools[SUGGEST_CHANGES_TOOL_NAME].execute;
     if (!execute) {
-      throw new Error("edit_workspace_document must be server-executed");
+      throw new Error("suggest_changes must be server-executed here");
     }
 
     const block = await firstBlock(sourceDocx);
     const result = await execute(
       {
-        baseVersionId: entityVersionId,
-        version: 1,
+        documentVersion: entityVersionId,
         operations: [
           {
             type: "replaceInBlock",
@@ -647,7 +570,7 @@ describe("createEditWorkspaceDocumentTools", () => {
       fieldId: expect.any(String),
       representation: "tracked-changes",
       replacedFieldId: fileFieldId,
-      applied: [{ id: expect.stringMatching(/^auto-/u) }],
+      applied: [{ id: expect.stringMatching(/^op-/u) }],
       skipped: [],
     });
     expect(result.fieldId).not.toBe(fileFieldId);
@@ -711,6 +634,56 @@ describe("createEditWorkspaceDocumentTools", () => {
     ]);
   });
 
+  test("tolerates a stray operation key and reports it as a normalization", async () => {
+    const { tx } = buildTx({ preferredName: "Jana Nováková" });
+    const { safeDb } = createScopedDbMock(tx);
+    sourceDocx = await seedSourceDocx();
+    const tools = createAutoApplySuggestChangesTools({
+      safeDb,
+      organizationId,
+      userId,
+      workspaceId,
+      entityId,
+      fileFieldId,
+      recordAuditEvent: async () => undefined,
+      docxEditRepresentation: "tracked-changes",
+      expectedCurrentVersionId: entityVersionId,
+    });
+    const execute = tools[SUGGEST_CHANGES_TOOL_NAME].execute;
+    if (!execute) {
+      throw new Error("suggest_changes must be server-executed here");
+    }
+
+    const block = await firstBlock(sourceDocx);
+    const result = await execute(
+      {
+        documentVersion: entityVersionId,
+        operations: [
+          {
+            id: "op-1",
+            type: "replaceInBlock",
+            blockId: block.id,
+            find: "quick",
+            replace: "slow",
+            typoKey: true,
+          },
+        ],
+      },
+      asTestRaw<Parameters<typeof execute>[1]>({}),
+    );
+
+    if (!result.success) {
+      throw new Error(`Expected success, got: ${result.message}`);
+    }
+    // Folio drops the key instead of failing the batch, and reports what it
+    // ignored so the next call carries the documented shape.
+    expect(result.applied).toEqual([{ id: "op-1" }]);
+    expect(result.normalizations).toContainEqual({
+      path: "operations[0].typoKey",
+      message: expect.stringContaining("typoKey"),
+    });
+  });
+
   test("rejects edited bytes that fail the security scan", async () => {
     fileScanResult = {
       verdict: "reject",
@@ -725,7 +698,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     const { tx, insertedTables } = buildTx({ preferredName: "Jana Nováková" });
     const { safeDb } = createScopedDbMock(tx);
     sourceDocx = await seedSourceDocx();
-    const tools = createEditWorkspaceDocumentTools({
+    const tools = createAutoApplySuggestChangesTools({
       safeDb,
       organizationId,
       userId,
@@ -736,9 +709,9 @@ describe("createEditWorkspaceDocumentTools", () => {
       docxEditRepresentation: "tracked-changes",
       expectedCurrentVersionId: entityVersionId,
     });
-    const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    const execute = tools[SUGGEST_CHANGES_TOOL_NAME].execute;
     if (!execute) {
-      throw new Error("edit_workspace_document must be server-executed");
+      throw new Error("suggest_changes must be server-executed here");
     }
 
     const block = await firstBlock(sourceDocx);
@@ -746,8 +719,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     try {
       await execute(
         {
-          baseVersionId: entityVersionId,
-          version: 1,
+          documentVersion: entityVersionId,
           operations: [
             {
               type: "replaceInBlock",
@@ -783,7 +755,7 @@ describe("createEditWorkspaceDocumentTools", () => {
       status: 500,
       times: 20,
     });
-    const tools = createEditWorkspaceDocumentTools({
+    const tools = createAutoApplySuggestChangesTools({
       safeDb,
       organizationId,
       userId,
@@ -794,17 +766,16 @@ describe("createEditWorkspaceDocumentTools", () => {
       docxEditRepresentation: "tracked-changes",
       expectedCurrentVersionId: entityVersionId,
     });
-    const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    const execute = tools[SUGGEST_CHANGES_TOOL_NAME].execute;
     if (!execute) {
-      throw new Error("edit_workspace_document must be server-executed");
+      throw new Error("suggest_changes must be server-executed here");
     }
     const block = await firstBlock(sourceDocx);
 
     const rejection = await Promise.resolve(
       execute(
         {
-          baseVersionId: entityVersionId,
-          version: 1,
+          documentVersion: entityVersionId,
           operations: [
             {
               id: "op-1",
@@ -843,7 +814,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     const { tx } = buildTx({ preferredName: null, name: "   " });
     const { safeDb } = createScopedDbMock(tx);
     sourceDocx = await seedSourceDocx();
-    const tools = createEditWorkspaceDocumentTools({
+    const tools = createAutoApplySuggestChangesTools({
       safeDb,
       organizationId,
       userId,
@@ -854,16 +825,15 @@ describe("createEditWorkspaceDocumentTools", () => {
       docxEditRepresentation: "direct",
       expectedCurrentVersionId: entityVersionId,
     });
-    const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    const execute = tools[SUGGEST_CHANGES_TOOL_NAME].execute;
     if (!execute) {
-      throw new Error("edit_workspace_document must be server-executed");
+      throw new Error("suggest_changes must be server-executed here");
     }
 
     const block = await firstBlock(sourceDocx);
     const result = await execute(
       {
-        baseVersionId: entityVersionId,
-        version: 1,
+        documentVersion: entityVersionId,
         operations: [
           {
             id: "op-1",
@@ -895,7 +865,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     const { tx } = buildTx({ preferredName: "Jana Nováková" });
     const { safeDb } = createScopedDbMock(tx);
     sourceDocx = await seedSourceDocx();
-    const tools = createEditWorkspaceDocumentTools({
+    const tools = createAutoApplySuggestChangesTools({
       safeDb,
       organizationId,
       userId,
@@ -906,17 +876,16 @@ describe("createEditWorkspaceDocumentTools", () => {
       docxEditRepresentation: "tracked-changes",
       expectedCurrentVersionId: entityVersionId,
     });
-    const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    const execute = tools[SUGGEST_CHANGES_TOOL_NAME].execute;
     if (!execute) {
-      throw new Error("edit_workspace_document must be server-executed");
+      throw new Error("suggest_changes must be server-executed here");
     }
 
     const block = await firstBlock(sourceDocx);
     const rejection = await Promise.resolve(
       execute(
         {
-          baseVersionId: entityVersionId,
-          version: 1,
+          documentVersion: entityVersionId,
           operations: [
             {
               id: "op-1",
@@ -937,8 +906,12 @@ describe("createEditWorkspaceDocumentTools", () => {
     );
 
     expect(rejection).toBeInstanceOf(Error);
-    expect(rejection instanceof Error ? rejection.message : "").toMatch(
-      /missingFind/u,
+    const skippedMessage = rejection instanceof Error ? rejection.message : "";
+    // Folio explains the skip in prose keyed by operation id, not as a
+    // machine code the model would have to decode.
+    expect(skippedMessage).toContain("No operations could be applied");
+    expect(skippedMessage).toContain(
+      "op-1: `find` was not found in this block",
     );
     expect(requestKeys("PUT")).toEqual([]);
   });
@@ -950,7 +923,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     });
     const { safeDb } = createScopedDbMock(tx);
     sourceDocx = await seedSourceDocx();
-    const tools = createEditWorkspaceDocumentTools({
+    const tools = createAutoApplySuggestChangesTools({
       safeDb,
       organizationId,
       userId,
@@ -961,17 +934,16 @@ describe("createEditWorkspaceDocumentTools", () => {
       docxEditRepresentation: "tracked-changes",
       expectedCurrentVersionId: entityVersionId,
     });
-    const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    const execute = tools[SUGGEST_CHANGES_TOOL_NAME].execute;
     if (!execute) {
-      throw new Error("edit_workspace_document must be server-executed");
+      throw new Error("suggest_changes must be server-executed here");
     }
     const block = await firstBlock(sourceDocx);
 
     const rejection = await Promise.resolve(
       execute(
         {
-          baseVersionId: entityVersionId,
-          version: 1,
+          documentVersion: entityVersionId,
           operations: [
             {
               id: "op-1",
@@ -1010,7 +982,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     const { safeDb } = createScopedDbMock(tx);
     sourceDocx = await seedSourceDocx();
     const recordedAuditEvents: unknown[] = [];
-    const tools = createEditWorkspaceDocumentTools({
+    const tools = createAutoApplySuggestChangesTools({
       safeDb,
       organizationId,
       userId,
@@ -1023,17 +995,16 @@ describe("createEditWorkspaceDocumentTools", () => {
       docxEditRepresentation: "tracked-changes",
       expectedCurrentVersionId: entityVersionId,
     });
-    const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    const execute = tools[SUGGEST_CHANGES_TOOL_NAME].execute;
     if (!execute) {
-      throw new Error("edit_workspace_document must be server-executed");
+      throw new Error("suggest_changes must be server-executed here");
     }
     const block = await firstBlock(sourceDocx);
 
     const rejection = await Promise.resolve(
       execute(
         {
-          baseVersionId: entityVersionId,
-          version: 1,
+          documentVersion: entityVersionId,
           operations: [
             {
               id: "op-1",
@@ -1065,14 +1036,11 @@ describe("createEditWorkspaceDocumentTools", () => {
     expect(requestKeys("DELETE")).toHaveLength(1);
   });
 
-  test("rejects an approved edit when the document changed after proposal", async () => {
-    const { tx } = buildTx({
-      loadedCurrentVersionId: newerEntityVersionId,
-      preferredName: "Jana Nováková",
-    });
+  test("rejects a tool call whose documentVersion is not the loaded version", async () => {
+    const { tx } = buildTx({ preferredName: "Jana Nováková" });
     const { safeDb } = createScopedDbMock(tx);
     sourceDocx = await seedSourceDocx();
-    const tools = createEditWorkspaceDocumentTools({
+    const tools = createAutoApplySuggestChangesTools({
       safeDb,
       organizationId,
       userId,
@@ -1083,16 +1051,71 @@ describe("createEditWorkspaceDocumentTools", () => {
       docxEditRepresentation: "tracked-changes",
       expectedCurrentVersionId: entityVersionId,
     });
-    const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    const execute = tools[SUGGEST_CHANGES_TOOL_NAME].execute;
     if (!execute) {
-      throw new Error("edit_workspace_document must be server-executed");
+      throw new Error("suggest_changes must be server-executed here");
+    }
+
+    const block = await firstBlock(sourceDocx);
+    const rejection = await Promise.resolve(
+      execute(
+        {
+          // A version the model never read the document at: folio's
+          // batch-level pin skips every operation before anything applies.
+          documentVersion: newerEntityVersionId,
+          operations: [
+            {
+              id: "op-1",
+              type: "replaceInBlock",
+              blockId: block.id,
+              find: "quick",
+              replace: "slow",
+            },
+          ],
+        },
+        asTestRaw<Parameters<typeof execute>[1]>({}),
+      ),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({ kind: "invalid-input" });
+    const message = rejection instanceof Error ? rejection.message : "";
+    expect(message).toContain("No operations could be applied");
+    expect(message).toContain(
+      "the document changed after these edits were proposed",
+    );
+    expect(requestKeys("PUT")).toEqual([]);
+  });
+
+  test("rejects an approved edit when the document changed after proposal", async () => {
+    const { tx } = buildTx({
+      loadedCurrentVersionId: newerEntityVersionId,
+      preferredName: "Jana Nováková",
+    });
+    const { safeDb } = createScopedDbMock(tx);
+    sourceDocx = await seedSourceDocx();
+    const tools = createAutoApplySuggestChangesTools({
+      safeDb,
+      organizationId,
+      userId,
+      workspaceId,
+      entityId,
+      fileFieldId,
+      recordAuditEvent: async () => undefined,
+      docxEditRepresentation: "tracked-changes",
+      expectedCurrentVersionId: entityVersionId,
+    });
+    const execute = tools[SUGGEST_CHANGES_TOOL_NAME].execute;
+    if (!execute) {
+      throw new Error("suggest_changes must be server-executed here");
     }
 
     const rejection = await Promise.resolve(
       execute(
         {
-          baseVersionId: entityVersionId,
-          version: 1,
+          documentVersion: entityVersionId,
           operations: [
             {
               id: "op-1",
@@ -1108,10 +1131,41 @@ describe("createEditWorkspaceDocumentTools", () => {
       (error: unknown) => error,
     );
 
-    expect(rejection).toBeInstanceOf(Error);
-    expect(rejection instanceof Error ? rejection.message : "").toMatch(
-      /document changed/iu,
+    expect(rejection).toMatchObject({ kind: "invalid-input" });
+    expect(rejection instanceof Error ? rejection.message : "").toContain(
+      "the document changed after these edits were proposed",
     );
     expect(requestKeys("PUT")).toEqual([]);
+  });
+});
+
+describe("hasSuggestChangesApprovalResponse", () => {
+  const part = (overrides: Record<string, unknown>) => ({
+    type: "tool-call",
+    name: SUGGEST_CHANGES_TOOL_NAME,
+    state: "approval-responded",
+    ...overrides,
+  });
+
+  test("detects an answered approval request on suggest_changes", () => {
+    expect(hasSuggestChangesApprovalResponse([part({})])).toBe(true);
+  });
+
+  test("ignores other states, other tools, and non-object parts", () => {
+    expect(
+      hasSuggestChangesApprovalResponse([
+        part({ state: "approval-requested" }),
+      ]),
+    ).toBe(false);
+    expect(
+      hasSuggestChangesApprovalResponse([part({ name: "add_comment" })]),
+    ).toBe(false);
+    expect(hasSuggestChangesApprovalResponse([part({ type: "text" })])).toBe(
+      false,
+    );
+    expect(
+      hasSuggestChangesApprovalResponse(["approval-responded", null]),
+    ).toBe(false);
+    expect(hasSuggestChangesApprovalResponse([])).toBe(false);
   });
 });

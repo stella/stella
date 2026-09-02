@@ -625,11 +625,11 @@ const TemplateStudioChatInner = ({
   //
   // `getEditApplyMode` is pinned to a literal "manual" -- never the
   // user's composer-wide edit-mode preference -- because Template Studio
-  // has no entity-backed active file for `edit_workspace_document` (the
-  // `auto` tool) to write a version against; `getChatTools` only keeps
-  // `suggest_changes` (the manual, client-executed tool this
-  // surface's suggestion stepper depends on) registered when
-  // `editApplyMode !== "auto"`. There is no edit-mode selector rendered on
+  // has no entity-backed active file for the automatic `suggest_changes`
+  // apply to write a version against; `getChatTools` only keeps the
+  // client-executed queue variant (which this surface's suggestion stepper
+  // depends on) registered when `editApplyMode !== "auto"`. There is no
+  // edit-mode selector rendered on
   // this surface (see `ChatComposerDock` below, no `endExtras`), so this
   // is the only place that value is ever decided here.
   const chatThreadContext = {

@@ -479,7 +479,7 @@ describe("isApprovalPart", () => {
 
 describe("tool approval grants", () => {
   test("keeps sensitive write approvals per call", () => {
-    expect(isApprovalOnceChatToolName("edit_workspace_document")).toBe(true);
+    expect(isApprovalOnceChatToolName("suggest_changes")).toBe(true);
     expect(isApprovalOnceChatToolName("manage_organization")).toBe(true);
     expect(isApprovalOnceChatToolName("save_clause")).toBe(false);
   });
@@ -496,8 +496,8 @@ describe("tool approval grants", () => {
       "delete_document",
       "delete_matter",
       "delete_time_entry",
-      "edit_workspace_document",
       "manage_organization",
+      "suggest_changes",
     ] as const) {
       expect(isApprovalOnceChatToolName(name)).toBe(true);
       expect(isNonPersistentGrantChatToolName(name)).toBe(false);

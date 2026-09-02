@@ -1115,9 +1115,9 @@ const getRetryableAssistantMessageId = (
 type ChatThreadMessagesProps = {
   /**
    * The active file's display name, when one is open (the DOCX/PDF file
-   * overlay). Threaded down to `ToolApprovalCard` so an
-   * `edit_workspace_document` approval can show which document the edits
-   * target; surfaces with no active file (main chat, Template Studio,
+   * overlay). Threaded down to `ToolApprovalCard` so a `suggest_changes`
+   * approval can show which document the edits target; surfaces with no
+   * active file (main chat, Template Studio,
    * inspector) omit it and the card falls back to a generic summary.
    */
   activeFileName?: string | undefined;

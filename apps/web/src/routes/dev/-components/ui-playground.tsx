@@ -1492,7 +1492,7 @@ function ToolActivityPlayground() {
         </div>
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
           <ChatActivityOrb state="shaping" />
-          <span>{t("chat.tool.edit_workspace_document")}</span>
+          <span>{t("chat.tool.suggest_changes")}</span>
         </div>
       </div>
       <ToolCallCard

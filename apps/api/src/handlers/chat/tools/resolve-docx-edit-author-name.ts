@@ -1,6 +1,7 @@
 /**
- * Resolve the acting user's DOCX tracked-changes author name for
- * `edit_workspace_document`. Mirrors `getWordEditAuthorName` in
+ * Resolve the acting user's DOCX tracked-changes author name for the
+ * server-executed `suggest_changes` apply variant. Mirrors
+ * `getWordEditAuthorName` in
  * `apps/web/src/routes/_protected.chat/-hooks/use-chat-user-context.ts`
  * exactly (preferred name first, falling back to the account name) --
  * that client-side helper is the canonical resolution the live editor

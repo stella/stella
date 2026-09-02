@@ -46,8 +46,8 @@ type ChatApprovalContextValue = {
   blockedApprovalTools?: ReadonlySet<ApprovalToolName> | undefined;
   /**
    * Regenerates the current turn after the user has just set a preferred
-   * name from `edit_workspace_document`'s "author name required" modal
-   * (see `EDIT_WORKSPACE_DOCUMENT_AUTHOR_NAME_REQUIRED_CODE` on the
+   * name from the server-executed `suggest_changes` variant's "author name
+   * required" modal (see `SUGGEST_CHANGES_AUTHOR_NAME_REQUIRED_CODE` on the
    * backend). Maps to `chat.reload()` (via `resendLatestMessage`) so the
    * model can re-issue the same tool call now that
    * `resolveDocxEditAuthorName` resolves. Optional: surfaces that never

@@ -115,7 +115,7 @@ type ChatEditModeSelectorProps = {
  * actually open (see `hasDocxEditSurface`/`docxEditable` in
  * `file-chat-overlay.tsx`) -- Template Studio never renders this and pins
  * `editApplyMode: "manual"` directly instead, since it has no entity-backed
- * active file for `edit_workspace_document` to target.
+ * active file for the automatic `suggest_changes` apply to target.
  */
 const ChatEditModeSelector = ({
   optionId,

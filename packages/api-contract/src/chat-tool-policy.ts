@@ -43,9 +43,6 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   // database path, so each call requires explicit mutation approval.
   create_workspace_document: CHAT_TOOL_POLICY_KIND.mutation,
   describe_template: CHAT_TOOL_POLICY_KIND.internal,
-  // Headless DOCX editing writes a new entity version without a separate
-  // suggestion-review step, so each call requires mutation approval.
-  edit_workspace_document: CHAT_TOOL_POLICY_KIND.mutation,
   // Discovery and the hardened sandbox runner expose only authorization-bound
   // read projections; neither performs a mutation itself.
   discover_tools: CHAT_TOOL_POLICY_KIND.internal,
@@ -64,10 +61,13 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   read_section: CHAT_TOOL_POLICY_KIND.internal,
   read_story: CHAT_TOOL_POLICY_KIND.internal,
   show_in_document: CHAT_TOOL_POLICY_KIND.internal,
-  // Queue-only on every chat surface: the client bridge parks the proposed
-  // operations for per-suggestion human review and never writes, so the
-  // meaningful gate is the Accept click, not a chat-level approval.
-  suggest_changes: CHAT_TOOL_POLICY_KIND.internal,
+  // The one DOCX mutation tool. In automatic apply mode the API executes it
+  // headlessly and writes a new entity version, so each call requires
+  // mutation approval. The manual registration is client-executed and
+  // queue-only (the bridge parks operations for per-suggestion review and
+  // never writes); the API relaxes that registration to `internal` because
+  // the Accept click is the meaningful human gate there.
+  suggest_changes: CHAT_TOOL_POLICY_KIND.mutation,
   // Folio comment operations write tracked comments, replies, or resolutions;
   // the client executes each only after per-call approval.
   add_comment: CHAT_TOOL_POLICY_KIND.mutation,
