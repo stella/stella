@@ -31,6 +31,51 @@ import { isRecord } from "@/api/lib/type-guards";
  *  fall back to its non-repeatable handling. */
 export type RepeatableMapped = boolean;
 
+/** The array container a repeatable dotted path resolves against: the
+ *  container's own path, the item-relative sub-path within each row, and the
+ *  row values exactly as submitted — unfiltered, so a caller decides for
+ *  itself how to treat a row that is not an object (skip it, as
+ *  {@link mapRepeatablePath}'s transform callers do, or treat it as invalid,
+ *  as a required-field check must). */
+export type RepeatableContainer = {
+  containerPath: string;
+  subPath: string;
+  rows: readonly unknown[];
+};
+
+/**
+ * Find the array container a dotted path resolves against in `values`: the
+ * shortest dotted prefix of `path` that resolves to an array (so a loop over
+ * a nested array — `{{#each deal.parties}}` for the field path
+ * `deal.parties.dob` — finds the `deal.parties` array, not the `deal`
+ * object; `resolvePath` cannot index into an array, so at most one prefix
+ * resolves to one). Returns `null` when `path` has no dot, or no prefix
+ * resolves to an array — the caller then falls back to its non-repeatable
+ * handling.
+ */
+export const findRepeatableContainer = (
+  values: Record<string, unknown>,
+  path: string,
+): RepeatableContainer | null => {
+  const segments = path.split(".");
+  if (segments.length < 2) {
+    return null;
+  }
+  for (let cut = 1; cut < segments.length; cut += 1) {
+    const containerPath = segments.slice(0, cut).join(".");
+    const container = resolvePath(containerPath, values);
+    if (!Array.isArray(container)) {
+      continue;
+    }
+    return {
+      containerPath,
+      subPath: segments.slice(cut).join("."),
+      rows: container,
+    };
+  }
+  return null;
+};
+
 /**
  * When `path` is a dotted path whose container segment resolves to an array
  * in `values`, run `mapRow` for each row and return true. Otherwise (the
@@ -55,35 +100,18 @@ export const mapRepeatablePath = (
     containerPath: string;
   }) => void,
 ): RepeatableMapped => {
-  const segments = path.split(".");
-  if (segments.length < 2) {
+  const found = findRepeatableContainer(values, path);
+  if (found === null) {
     return false;
   }
-
-  // The container is the shortest dotted prefix that resolves to an array, so a
-  // loop over a nested array — `{{#each deal.parties}}` for the field path
-  // `deal.parties.dob` — finds the `deal.parties` array, not the `deal` object.
-  // (`resolvePath` cannot index into an array, so at most one prefix resolves to
-  // an array; once found, deeper prefixes never do.) The remainder is the
-  // item-relative sub-path. Matches the `{{#each}}` array path the loop expander
-  // keys patch values under, so date / formula / composite / dependent values
-  // land where substitution reads them.
-  for (let cut = 1; cut < segments.length; cut += 1) {
-    const containerPath = segments.slice(0, cut).join(".");
-    const container = resolvePath(containerPath, values);
-    if (!Array.isArray(container)) {
+  const { containerPath, subPath, rows } = found;
+  for (const [index, row] of rows.entries()) {
+    if (!isRecord(row)) {
       continue;
     }
-    const subPath = segments.slice(cut).join(".");
-    for (const [index, row] of container.entries()) {
-      if (!isRecord(row)) {
-        continue;
-      }
-      mapRow({ row, subPath, index, containerPath });
-    }
-    return true;
+    mapRow({ row, subPath, index, containerPath });
   }
-  return false;
+  return true;
 };
 
 /** Read an item-relative sub-path (e.g. `signer.title`) within a row object,

@@ -264,6 +264,28 @@ describe("isMissingRequiredFieldValue", () => {
     expect(isMissingRequiredFieldValue({ field, values: {} })).toBe(true);
   });
 
+  test("flags a non-object row as missing a required loop item field", () => {
+    const field = { path: "persons.member", required: true };
+
+    // A non-object row can never supply an object field's value, so it must
+    // not silently pass validation the way mapRepeatablePath's transform
+    // callers (date/composite/formula/lookup steps) skip such a row for.
+    expect(
+      isMissingRequiredFieldValue({
+        field,
+        values: { persons: ["invalid"] },
+      }),
+    ).toBe(true);
+
+    // One good row plus one bad row still fails the check.
+    expect(
+      isMissingRequiredFieldValue({
+        field,
+        values: { persons: [{ member: "Alice" }, "invalid"] },
+      }),
+    ).toBe(true);
+  });
+
   test("does not check a required loop item field for a derived or AI-fillable row value", () => {
     expect(
       isMissingRequiredFieldValue({

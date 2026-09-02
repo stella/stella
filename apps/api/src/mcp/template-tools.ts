@@ -765,6 +765,9 @@ const describeMissingRequiredField = (field: MissingRequiredField): string => {
 const requiredFieldsRejectionResult = (
   missingFields: MissingRequiredField[],
 ): ReturnType<typeof structuredErrorResult> => {
+  // The preview keeps the summary `message` short; `issues` (below) still
+  // carries every missing field in full — an agent must be able to supply
+  // all of them in one retry, not just the first ten.
   const preview = missingFields.slice(0, 10);
   const omitted = missingFields.length - preview.length;
   const suffix = omitted > 0 ? ` (${omitted} more omitted)` : "";
@@ -773,7 +776,7 @@ const requiredFieldsRejectionResult = (
     message: `Missing required template values: ${preview
       .map((field) => field.label ?? field.path)
       .join(", ")}${suffix}`,
-    issues: preview.map((field) => ({
+    issues: missingFields.map((field) => ({
       path: `values.${field.path}`,
       message: describeMissingRequiredField(field),
     })),

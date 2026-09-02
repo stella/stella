@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import { fillByIdHandler } from "@/api/handlers/templates/fill-by-id";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { writeManifest } from "@/api/lib/docx/template-manifest";
@@ -11,7 +10,9 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-// fillByIdHandler backs `POST /templates/:templateId/fill`. Like fillHandler
+import { fillByIdLogic } from "./fill-by-id-logic";
+
+// fillByIdLogic backs `POST /templates/:templateId/fill`. Like fillHandler
 // (the raw-upload route), it used to run applyManifestFillSteps/fillTemplate
 // directly with no required-field check; it must apply the same shared gate
 // (collectMissingRequiredFields, policy "enforce") every other real fill does.
@@ -61,29 +62,28 @@ const requiredFieldManifest: TemplateManifest = {
   fields: [{ path: "governing_law", label: "Governing law", required: true }],
 };
 
-describe("fillByIdHandler required fields", () => {
-  test("rejects a fill omitting a required field", async () => {
+const stubDb = (fileName: string) =>
+  createScopedDbMock({
+    query: {
+      templates: {
+        findFirst: async () => ({ s3Key, fileName, languages: null }),
+      },
+      organizationSettings: { findFirst: async () => undefined },
+    },
+  });
+
+describe("fillByIdLogic required fields", () => {
+  test("rejects a fill omitting a required field, with the full structured detail", async () => {
     let buffer = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
     buffer = await writeManifest(buffer, requiredFieldManifest);
 
     const fakeS3 = startFakeS3();
     try {
       fakeS3.put("stella", s3Key, buffer);
-      const { safeDb, scopedDb } = createScopedDbMock({
-        query: {
-          templates: {
-            findFirst: async () => ({
-              s3Key,
-              fileName: "nda.docx",
-              languages: null,
-            }),
-          },
-          organizationSettings: { findFirst: async () => undefined },
-        },
-      });
+      const { safeDb, scopedDb } = stubDb("nda.docx");
 
       const result = await Result.gen(() =>
-        fillByIdHandler({
+        fillByIdLogic({
           safeDb,
           scopedDb,
           organizationId,
@@ -99,6 +99,17 @@ describe("fillByIdHandler required fields", () => {
       if (Result.isError(result)) {
         expect(HandlerError.is(result.error) && result.error.status).toBe(400);
         expect(result.error.message).toContain("Governing law");
+        // The message alone loses each field's input type/options; the
+        // structured detail must carry the full rejection so a client can
+        // render the right control per field and retry with all of them.
+        expect(result.error.requiredFields).toEqual([
+          {
+            path: "governing_law",
+            label: "Governing law",
+            inputType: "text",
+            options: null,
+          },
+        ]);
       }
     } finally {
       fakeS3.stop();
@@ -112,21 +123,10 @@ describe("fillByIdHandler required fields", () => {
     const fakeS3 = startFakeS3();
     try {
       fakeS3.put("stella", s3Key, buffer);
-      const { safeDb, scopedDb } = createScopedDbMock({
-        query: {
-          templates: {
-            findFirst: async () => ({
-              s3Key,
-              fileName: "nda.docx",
-              languages: null,
-            }),
-          },
-          organizationSettings: { findFirst: async () => undefined },
-        },
-      });
+      const { safeDb, scopedDb } = stubDb("nda.docx");
 
       const result = await Result.gen(() =>
-        fillByIdHandler({
+        fillByIdLogic({
           safeDb,
           scopedDb,
           organizationId,
@@ -163,21 +163,10 @@ describe("fillByIdHandler required fields", () => {
     const fakeS3 = startFakeS3();
     try {
       fakeS3.put("stella", s3Key, buffer);
-      const { safeDb, scopedDb } = createScopedDbMock({
-        query: {
-          templates: {
-            findFirst: async () => ({
-              s3Key,
-              fileName: "roster.docx",
-              languages: null,
-            }),
-          },
-          organizationSettings: { findFirst: async () => undefined },
-        },
-      });
+      const { safeDb, scopedDb } = stubDb("roster.docx");
 
       const result = await Result.gen(() =>
-        fillByIdHandler({
+        fillByIdLogic({
           safeDb,
           scopedDb,
           organizationId,
@@ -197,6 +186,46 @@ describe("fillByIdHandler required fields", () => {
       if (Result.isError(result)) {
         expect(HandlerError.is(result.error) && result.error.status).toBe(400);
         expect(result.error.message).toContain("Member");
+      }
+    } finally {
+      fakeS3.stop();
+    }
+  });
+
+  test("rejects when a required loop item field's row is not an object", async () => {
+    let buffer = await makeDocx(
+      WRAP(
+        [P("{{#each persons}}"), P("{{persons.member}}"), P("{{/each}}")].join(
+          "",
+        ),
+      ),
+    );
+    buffer = await writeManifest(buffer, {
+      version: 1,
+      fields: [{ path: "persons.member", label: "Member", required: true }],
+    });
+
+    const fakeS3 = startFakeS3();
+    try {
+      fakeS3.put("stella", s3Key, buffer);
+      const { safeDb, scopedDb } = stubDb("roster.docx");
+
+      const result = await Result.gen(() =>
+        fillByIdLogic({
+          safeDb,
+          scopedDb,
+          organizationId,
+          userId,
+          templateId,
+          body: { values: JSON.stringify({ persons: ["invalid"] }) },
+          query: {},
+          recordAuditEvent,
+        }),
+      );
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(HandlerError.is(result.error) && result.error.status).toBe(400);
       }
     } finally {
       fakeS3.stop();

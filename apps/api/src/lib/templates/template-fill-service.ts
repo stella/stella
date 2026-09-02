@@ -164,13 +164,22 @@ const collectDescribedArrayGroups = (
     if (itemFields === undefined) {
       return;
     }
-    // A primitive-item loop (itemFields === [{ path: "value" }]) is already
-    // addressed by its own array-typed field; only an object-item loop needs
-    // this grouping to convey its shape.
-    const isObjectItemLoop =
-      itemFields.length > 0 &&
-      !(itemFields.length === 1 && itemFields.at(0)?.path === "value");
-    if (field.kind === "array" && isObjectItemLoop) {
+    // A loop item field path of exactly "value" is genuinely ambiguous from
+    // discovered marker text alone: it is the primitive-loop convention
+    // (`{{#each tags}}{{tags.value}}{{/each}}`, values.tags an array of
+    // scalars) AND the marker an object-item loop produces when its one
+    // declared property happens to be literally named "value"
+    // (`{{#each entries}}{{entries.value}}{{/each}}`, values.entries an
+    // array of `{ value }` objects) — both compile to the identical
+    // itemFields shape. Suppressing this group on that heuristic hid the
+    // latter, real case from `arrays` entirely; the fill engine accepts
+    // either shape for a bare `.value` marker (see `buildItemContext` in
+    // block-directives.ts, which merges an object row's properties into the
+    // same context a primitive row's synthesized `.value` uses), so listing
+    // every item-field loop here — never guessing which convention a
+    // template intends — costs nothing but a redundant hint on the
+    // primitive-loop case.
+    if (field.kind === "array" && itemFields.length > 0) {
       groups.push({
         path,
         itemFieldPaths: itemFields.map((itemField) => itemField.path),

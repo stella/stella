@@ -32,6 +32,7 @@ import type {
   HandlerErrorClaim,
   HandlerErrorCode,
   HandlerErrorConfirmationDetail,
+  HandlerErrorMissingRequiredField,
   HandlerErrorStatusCode,
 } from "@/api/lib/errors/tagged-errors";
 import {
@@ -472,6 +473,9 @@ type SafeErrorBody = {
   claim_token?: string;
   claim_token_expires?: string;
   post_claim_scopes?: string[];
+  /** Every required field a rejected fill was missing, in full (see
+   *  HandlerErrorMissingRequiredField). Optional everywhere. */
+  requiredFields?: HandlerErrorMissingRequiredField[];
 };
 
 // The conditional form is intentional: it keeps status unions distributive so
@@ -1071,6 +1075,7 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   ...(error.error ? { error: error.error } : {}),
   ...(error.claim ? { claim: error.claim } : {}),
   ...error.stepUp,
+  ...(error.requiredFields ? { requiredFields: error.requiredFields } : {}),
 });
 
 export const createSafeRootHandler = <

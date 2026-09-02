@@ -2,7 +2,8 @@
  * List the clause slots a template fills, each with its resolved `ClauseBody`,
  * so the fill form can show the clauses that will be inserted and offer a
  * per-fill AI adjustment before they are merged into the document. Mirrors the
- * slot discovery + resolution that {@link fillByIdHandler} runs server-side.
+ * slot discovery + resolution that `fillByIdLogic`
+ * (`lib/templates/fill-by-id-logic.ts`) runs server-side.
  */
 
 import { Result } from "better-result";

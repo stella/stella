@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
@@ -45,7 +46,10 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
 
 const extractTexts = async (buffer: Buffer): Promise<string[]> => {
   const zip = await JSZip.loadAsync(buffer);
-  const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
+  const documentXmlFile =
+    zip.file("word/document.xml") ??
+    panic("fixture DOCX is missing word/document.xml");
+  const xml = await documentXmlFile.async("string");
   return [...xml.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/gu)].map(
     (match) => match[1] ?? "",
   );
@@ -340,6 +344,43 @@ describe("describeStoredTemplate array shape", () => {
       expect(result.fields.map((field) => field.path).toSorted()).toEqual([
         "deliverables.due_date",
         "deliverables.name",
+      ]);
+    } finally {
+      fakeS3.stop();
+    }
+  });
+
+  test("includes an object-item loop whose sole item field happens to be named `value`", async () => {
+    // {{entries.value}} is genuinely ambiguous from marker text alone: it is
+    // both the primitive-loop convention (values.entries an array of
+    // scalars) and what an object-item loop over `{ value }` rows discovers
+    // (values.entries an array of objects). Suppressing this group entirely
+    // would hide the latter, real case from a caller; it must stay listed.
+    let buffer = await makeDocx(
+      WRAP(
+        [P("{{#each entries}}"), P("{{entries.value}}"), P("{{/each}}")].join(
+          "",
+        ),
+      ),
+    );
+    buffer = await writeManifest(buffer, {
+      version: 1,
+      fields: [{ path: "entries.value", label: "Value", inputType: "text" }],
+    });
+
+    const fakeS3 = startFakeS3();
+    try {
+      fakeS3.put("stella", s3Key, buffer);
+      const result = await describeStoredTemplate({
+        templateId,
+        scopedDb: stubDescribeScopedDb(),
+      });
+
+      if ("error" in result) {
+        throw new Error(`unexpected error: ${result.error}`);
+      }
+      expect(result.arrays).toEqual([
+        { path: "entries", itemFieldPaths: ["value"] },
       ]);
     } finally {
       fakeS3.stop();

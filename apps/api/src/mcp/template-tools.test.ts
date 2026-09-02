@@ -854,6 +854,39 @@ describe("MCP template tools", () => {
     expect(recordTemplateFillMock).not.toHaveBeenCalled();
   });
 
+  test("fill_template lists every missing required field in issues, not just the message preview", async () => {
+    const missingFields = Array.from({ length: 12 }, (_unused, index) => ({
+      path: `field_${index}`,
+      label: `Field ${index}`,
+      inputType: "text",
+      options: null,
+    }));
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      requiredFieldsRejection: missingFields,
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: "t1", values: {} },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    expect(result.isError).toBe(true);
+    const envelope = validationEnvelope(result);
+    // The summary message previews only the first ten (readability); the
+    // machine-readable issues list must still carry all twelve so an agent
+    // can supply every missing value in one retry.
+    expect(envelope["message"]).toContain("2 more omitted");
+    expect(envelope["issues"]).toHaveLength(12);
+    expect(envelope["issues"]).toEqual(
+      expect.arrayContaining(
+        missingFields.map((field) =>
+          expect.objectContaining({ path: `values.${field.path}` }),
+        ),
+      ),
+    );
+  });
+
   test("fill_template permits intentional unused values only with an explicit override", async () => {
     fillStoredTemplateWithTextMock.mockResolvedValue({
       templateName: "Lease",

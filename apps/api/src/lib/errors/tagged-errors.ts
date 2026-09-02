@@ -78,6 +78,22 @@ export type HandlerErrorStepUp = {
   post_claim_scopes: string[];
 };
 
+/**
+ * One required template field a fill rejected for being omitted or left
+ * empty. Structurally mirrors `MissingRequiredField`
+ * (`lib/templates/template-optional-defaults.ts`) rather than importing it,
+ * so this foundational error module carries no dependency on that
+ * feature-specific one; every fill route that populates
+ * {@link HandlerErrorProps.requiredFields} passes that same shape through
+ * unchanged.
+ */
+export type HandlerErrorMissingRequiredField = {
+  path: string;
+  label: string | null;
+  inputType: string;
+  options: string[] | null;
+};
+
 export type HandlerErrorProps<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
 > = {
@@ -98,6 +114,10 @@ export type HandlerErrorProps<
   cause?: unknown;
   usage?: HandlerErrorUsageDetail | undefined;
   confirmation?: HandlerErrorConfirmationDetail | undefined;
+  /** Every required field a rejected fill was missing, in full (path, label,
+   *  input type, options) — not reduced to a message — so a client can
+   *  render the right control per field and retry with all of them at once. */
+  requiredFields?: HandlerErrorMissingRequiredField[] | undefined;
 };
 
 // TaggedError(...) cannot reference the class type parameter in the base
@@ -113,6 +133,7 @@ export class HandlerError<
   declare error?: string | undefined;
   declare claim?: HandlerErrorClaim | undefined;
   declare stepUp?: HandlerErrorStepUp | undefined;
+  declare requiredFields?: HandlerErrorMissingRequiredField[] | undefined;
 
   constructor(props: HandlerErrorProps<TStatus>) {
     super(props);
@@ -123,6 +144,7 @@ export class HandlerError<
     this.error = props.error;
     this.claim = props.claim;
     this.stepUp = props.stepUp;
+    this.requiredFields = props.requiredFields;
   }
 }
 

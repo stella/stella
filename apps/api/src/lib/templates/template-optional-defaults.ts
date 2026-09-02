@@ -1,9 +1,10 @@
 import { resolvePath } from "@stll/template-conditions";
 
 import {
-  mapRepeatablePath,
+  findRepeatableContainer,
   readRowSubPath,
 } from "@/api/lib/docx/repeatable-paths";
+import { isRecord } from "@/api/lib/type-guards";
 
 type TemplateFieldRequiredness = {
   aiPrompt?: string | undefined;
@@ -90,10 +91,15 @@ const isMissingRequiredValue = (value: unknown): boolean => {
  *
  * A dotted path whose container resolves to an array (a `{{#each}}` loop item
  * field, e.g. `persons.member` against `{ persons: [{ member: "..." }] }`) is
- * checked per row via {@link mapRepeatablePath}: `resolvePath` alone cannot
- * index into the array and would report every such field as always missing.
- * A loop with no rows has nothing to omit, so it is never flagged; a required
- * item field is missing only when a row that exists leaves it empty.
+ * checked per row via {@link findRepeatableContainer}: `resolvePath` alone
+ * cannot index into the array and would report every such field as always
+ * missing. A loop with no rows has nothing to omit, so it is never flagged; a
+ * required item field is missing when a row that exists leaves it empty, or
+ * when a row is not an object at all (e.g. `persons: ["invalid"]`) — a
+ * non-object row can never supply an object field's value, unlike
+ * `mapRepeatablePath`'s per-row transform callers (date/composite/
+ * formula/lookup steps), which skip such a row for the fill's own unmatched
+ * diagnostics rather than failing the whole fill over it.
  */
 export const isMissingRequiredFieldValue = ({
   field,
@@ -110,18 +116,13 @@ export const isMissingRequiredFieldValue = ({
     return false;
   }
 
-  let missingInRow = false;
-  const isRepeatable = mapRepeatablePath(
-    values,
-    field.path,
-    ({ row, subPath }) => {
-      if (isMissingRequiredValue(readRowSubPath(row, subPath))) {
-        missingInRow = true;
-      }
-    },
-  );
-  if (isRepeatable) {
-    return missingInRow;
+  const container = findRepeatableContainer(values, field.path);
+  if (container !== null) {
+    return container.rows.some(
+      (row) =>
+        !isRecord(row) ||
+        isMissingRequiredValue(readRowSubPath(row, container.subPath)),
+    );
   }
 
   return isMissingRequiredValue(resolvePath(field.path, values));

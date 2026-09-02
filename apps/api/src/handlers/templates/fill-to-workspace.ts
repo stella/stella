@@ -244,6 +244,10 @@ const fillTemplateToWorkspace = createSafeHandler(
         new HandlerError({
           status: 400,
           message: `Missing required template values: ${names.join(", ")}`,
+          // The message alone loses each field's input type/options; carry
+          // the full rejection so a client can render the right control per
+          // field and retry with all of them at once.
+          requiredFields: filled.requiredFieldsRejection,
         }),
       );
     }

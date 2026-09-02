@@ -2,14 +2,15 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import { fillPreviewHandler } from "@/api/handlers/templates/fill-preview";
 import { toSafeId } from "@/api/lib/branded-types";
 import { writeManifest } from "@/api/lib/docx/template-manifest";
 import type { TemplateManifest } from "@/api/lib/docx/types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-// fillPreviewHandler backs the live "as you type" fill-preview route: values
+import { fillPreviewLogic } from "./fill-preview-logic";
+
+// fillPreviewLogic backs the live "as you type" fill-preview route: values
 // are typically still in progress, so it is the one deliberate exception to
 // the required-fields gate every other real fill route enforces. That
 // exception must be explicit (policy: "allow-partial"), not the route simply
@@ -68,7 +69,7 @@ const stubDb = () =>
     },
   });
 
-describe("fillPreviewHandler required fields (allow-partial)", () => {
+describe("fillPreviewLogic required fields (allow-partial)", () => {
   test("never rejects a preview omitting a required field", async () => {
     let buffer = await makeDocx(WRAP(P("Governed by {{governing_law}} law.")));
     buffer = await writeManifest(buffer, requiredFieldManifest);
@@ -79,7 +80,7 @@ describe("fillPreviewHandler required fields (allow-partial)", () => {
       const { safeDb, scopedDb } = stubDb();
 
       const result = await Result.gen(() =>
-        fillPreviewHandler({
+        fillPreviewLogic({
           safeDb,
           scopedDb,
           organizationId,
@@ -110,7 +111,7 @@ describe("fillPreviewHandler required fields (allow-partial)", () => {
       const { safeDb, scopedDb } = stubDb();
 
       const result = await Result.gen(() =>
-        fillPreviewHandler({
+        fillPreviewLogic({
           safeDb,
           scopedDb,
           organizationId,
