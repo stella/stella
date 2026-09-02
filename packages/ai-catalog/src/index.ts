@@ -223,6 +223,7 @@ export const BYOK_MODEL_OPTIONS = {
   ],
   anthropic: [
     "claude-sonnet-5",
+    "claude-fable-5-1",
     "claude-fable-5",
     "claude-opus-5",
     "claude-opus-4-8",
@@ -332,6 +333,10 @@ export const MODEL_DISPLAY_METADATA = {
   },
   "claude-sonnet-5": {
     displayName: "Claude Sonnet 5",
+    iconProvider: "anthropic",
+  },
+  "claude-fable-5-1": {
+    displayName: "Claude Fable 5.1",
     iconProvider: "anthropic",
   },
   "claude-fable-5": {
@@ -637,6 +642,7 @@ export const ANTHROPIC_ADAPTIVE_THINKING_MODELS = [
   "claude-opus-4-7",
   "claude-opus-4-8",
   "claude-fable-5",
+  "claude-fable-5-1",
 ] as const;
 
 /**
@@ -1135,6 +1141,12 @@ export const MODEL_RATES = {
     outputPerMTok: 5_000_000,
     cachedInputPerMTok: 100_000,
   },
+  "claude-fable-5-1": {
+    kind: "flat",
+    inputPerMTok: 1_000_000,
+    outputPerMTok: 5_000_000,
+    cachedInputPerMTok: 25_000,
+  },
   "mistral-small-latest": {
     kind: "flat",
     inputPerMTok: 15_000,
@@ -1289,7 +1301,8 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gpt-5.6": 922_000,
   "gpt-5.6-luna": 922_000,
   "gpt-5.6-terra": 922_000,
-  // Anthropic Claude: 200K through Claude 4; Sonnet 5 and Opus 5 expose 1M.
+  // Anthropic Claude: 200K through Claude 4; Sonnet 5, Opus 5, and Fable 5.1
+  // expose 1M.
   "claude-haiku-4-5-20251001": 200_000,
   "claude-sonnet-4-6": 200_000,
   "claude-sonnet-5": 1_000_000,
@@ -1298,6 +1311,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "claude-opus-4-8": 200_000,
   "claude-opus-5": 1_000_000,
   "claude-fable-5": 200_000,
+  "claude-fable-5-1": 1_000_000,
   // Mistral: 128K across the offered text/vision models.
   "mistral-small-latest": 128_000,
   "mistral-large-latest": 128_000,
