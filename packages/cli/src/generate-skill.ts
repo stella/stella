@@ -7,7 +7,7 @@
 // from the command surface the CLI actually dispatches.
 
 import { CLI_DEFAULT_SCOPES } from "./auth/constants.js";
-import { flagBrief } from "./flag-help.js";
+import { flagKindFact } from "./flag-help.js";
 import { CAPABILITY_NAMESPACE } from "./generate-capability-tree.js";
 import {
   generateRouteMap,
@@ -16,6 +16,7 @@ import {
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "./generated/document-version-upload-transport.js";
 import { exitCodeEntries } from "./mcp-constants.js";
 import type {
+  FlagSpec,
   LeafCommandSpec,
   RegistryToolListing,
   RouteNode,
@@ -117,26 +118,68 @@ const renderCommandTable = (rows: readonly CommandRow[]): string => {
 };
 
 /**
- * One curated command's flags as a bullet block: the command line, then one
- * indented bullet per flag rendered through the SAME `flagBrief` derivation
- * `--help` uses, so the skill's documented flags can never drift from what
- * `--help` actually prints for that command.
+ * Global flags every command carries (`buildLeafFlags` in `build-cli-tree.ts`)
+ * and that "Conventions every agent must know" already documents once. A
+ * tool-derived `FlagSpec` can never actually collide with one of these
+ * (`generate-route-map.ts` throws on the collision at codegen time), so this
+ * filter is a defensive no-op today; it stays so a per-command line can never
+ * silently repeat a convention flag if that invariant ever changes.
+ */
+const CONVENTION_FLAGS: ReadonlySet<string> = new Set([
+  "--output",
+  "--cursor",
+  "--limit",
+  "--all",
+  "--yes",
+  "--input",
+]);
+
+/** An optional flag's compact token: its name, plus enum values in parens. */
+const optionalFlagToken = (flag: FlagSpec): string =>
+  flag.enum === undefined ? flag.flag : `${flag.flag} (${flag.enum.join("|")})`;
+
+/**
+ * A required flag's full line: name, description, type/enum (via the SAME
+ * `flagKindFact` derivation `--help` uses, so it can never drift). The
+ * required/optional word is dropped: every flag documented here IS required
+ * (an optional flag never reaches this branch), so repeating it would only
+ * cost space.
+ */
+const requiredFlagLine = (flag: FlagSpec): string => {
+  const facts = flag.repeatable
+    ? `${flagKindFact(flag)}, repeatable`
+    : flagKindFact(flag);
+  const description =
+    flag.description === undefined ? "" : ` — ${oneLine(flag.description)}`;
+  return `\`${flag.flag}\`${description} (${facts})`;
+};
+
+/**
+ * One curated command's flags as a bullet block. A required flag keeps a full
+ * line; optional flags collapse to one names-only line (enum values kept, in
+ * parens) so the skill stays small enough to load into every agent's context
+ * — `--help` remains the source for an optional flag's full description.
  */
 const commandFlagsBlock = (spec: LeafCommandSpec): string => {
   const command = `stella ${spec.commandPath.join(" ")}`;
-  if (spec.flags.length === 0) {
+  const flags = spec.flags.filter((flag) => !CONVENTION_FLAGS.has(flag.flag));
+  if (flags.length === 0) {
     const hint =
       spec.inputOnly.length > 0
         ? `no flags; pass \`--input\` with ${spec.inputOnly.join(", ")}`
         : "no arguments";
     return `- \`${command}\` — ${hint}`;
   }
-  return [
+  const required = flags.filter((flag) => flag.required);
+  const optional = flags.filter((flag) => !flag.required);
+  const lines = [
     `- \`${command}\``,
-    ...spec.flags.map(
-      (flag) => `  - \`${flag.flag}\` — ${oneLine(flagBrief(flag))}`,
-    ),
-  ].join("\n");
+    ...required.map((flag) => `  - ${requiredFlagLine(flag)}`),
+  ];
+  if (optional.length > 0) {
+    lines.push(`  - optional: ${optional.map(optionalFlagToken).join(", ")}`);
+  }
+  return lines.join("\n");
 };
 
 const renderCommandFlagsSection = (
@@ -145,12 +188,12 @@ const renderCommandFlagsSection = (
   [
     "## Command flags",
     "",
-    "Every curated command's flags, same order as the table above. Each flag",
-    "line is `--flag — description (required|optional, type)`; an enum lists its",
-    "values and a repeatable flag is passed once per value. `stella <command>",
-    "--help` prints the identical facts plus a full JSON `--input` example.",
+    "Required: `--flag — description (type)`. Optional: one `optional: --a,",
+    "--b (enum1|enum2)` line, names only (`--help` has full descriptions).",
+    "Global flags (output/cursor/limit/all/yes/input; see Conventions above)",
+    "are omitted here.",
     "",
-    leaves.map((spec) => commandFlagsBlock(spec)).join("\n\n"),
+    leaves.map((spec) => commandFlagsBlock(spec)).join("\n"),
   ].join("\n");
 
 const renderExitCodeTable = (): string =>

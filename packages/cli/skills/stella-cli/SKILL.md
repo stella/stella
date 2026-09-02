@@ -130,275 +130,126 @@ requires (request it at `stella auth login --scopes`).
 
 ## Command flags
 
-Every curated command's flags, same order as the table above. Each flag
-line is `--flag — description (required|optional, type)`; an enum lists its
-values and a repeatable flag is passed once per value. `stella <command>
---help` prints the identical facts plus a full JSON `--input` example.
+Required: `--flag — description (type)`. Optional: one `optional: --a,
+--b (enum1|enum2)` line, names only (`--help` has full descriptions).
+Global flags (output/cursor/limit/all/yes/input; see Conventions above)
+are omitted here.
 
 - `stella audit-log list`
-  - `--matter-id` — Only entries scoped to this matter/workspace (optional, string)
-  - `--action` — Only entries with this audit action (optional, string)
-  - `--resource-type` — Only entries about this resource type (optional, string)
-  - `--resource-id` — Only entries about this resource id; requires resource_type (optional, string)
-  - `--user-id` — Only entries whose actor is this user (optional, string)
-  - `--from` — Only entries created on or after this ISO date-time (optional, string)
-  - `--to` — Only entries created on or before this ISO date-time (optional, string)
-
+  - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --from, --to
 - `stella capability describe`
-  - `--capability` — Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (required, string)
-
+  - `--capability` — Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (string)
 - `stella capability invoke`
-  - `--capability` — Capability id to invoke, as returned by list_capabilities. (required, string)
-  - `--validate-only` — When true, validate the input against the capability schema and return without executing. (optional, boolean)
-
+  - `--capability` — Capability id to invoke, as returned by list_capabilities. (string)
+  - optional: --validate-only
 - `stella capability list`
-  - `--domain` — Filter to one capability domain: the id prefix before the first dot (e.g. "time-entries", "invoices"). (optional, string)
-  - `--access` — Filter by access level. (optional, enum: all, read, write)
-
+  - optional: --domain, --access (all|read|write)
 - `stella case-law read`
-  - `--decision-id` — Case-law decision ID (required, string)
-
+  - `--decision-id` — Case-law decision ID (string)
 - `stella case-law search`
-  - `--query` — Search query (required, string)
-  - `--court` — Filter by court name (optional, string)
-  - `--country` — Filter by country code (optional, string)
-  - `--language` — Filter by language code (optional, string)
-  - `--decision-type` — Filter by decision type (optional, string)
-  - `--source-id` — Filter by source ID (optional, string)
-  - `--date-from` — Filter decisions from this ISO date (YYYY-MM-DD) (optional, string)
-  - `--date-to` — Filter decisions up to this ISO date (YYYY-MM-DD) (optional, string)
-
+  - `--query` — Search query (string)
+  - optional: --court, --country, --language, --decision-type, --source-id, --date-from, --date-to
 - `stella clause delete`
-  - `--clause-id` — Clause id to delete (required, string)
-
+  - `--clause-id` — Clause id to delete (string)
 - `stella clause list`
-  - `--clause-id` — Clause id to read in detail; omit to list (optional, string)
-  - `--version-id` — With clause_id, return this version's body instead of the current clause (optional, string)
-  - `--category-id` — List only clauses filed under this category (list mode) (optional, string)
-  - `--query` — Filter clauses by a text query over title and body (list mode) (optional, string)
-  - `--include-categories` — Also return the organization's clause categories (list mode) (optional, boolean)
-
+  - optional: --clause-id, --version-id, --category-id, --query, --include-categories
 - `stella clause save`
-  - `--clause-id` — Clause id to update; omit to create (optional, string)
-  - `--title` — Clause title; required when creating (optional, string)
-  - `--category-id` — Category id to file the clause under; pass null to clear (optional, nullable-string)
-  - `--language` — BCP-47 language tag for the clause; pass null to clear (optional, nullable-string)
-  - `--description` — Short clause description; pass null to clear (optional, nullable-string)
-  - `--usage-notes` — Guidance on when to use the clause; pass null to clear (optional, nullable-string)
-  - `--snapshot-version` — When updating, also append a version snapshot of the body (optional, boolean)
-
+  - optional: --clause-id, --title, --category-id, --language, --description, --usage-notes, --snapshot-version
 - `stella contact delete`
-  - `--contact-id` — Contact ID to delete (required, string)
-
+  - `--contact-id` — Contact ID to delete (string)
 - `stella contact list`
-  - `--query` — Search contact display names (optional, string)
-  - `--type` — Contact kind (optional, enum: person, organization)
-
+  - optional: --query, --type (person|organization)
 - `stella contact lookup-registry`
-  - `--registry` — Business register to query (required, enum: ares, brreg, companies-house, denue, edgar, gcis, krs, orsr, prh, recherche-entreprises, vies)
-  - `--query` — Canonical identifier (e.g. company number, VAT number) or company name (required, string)
-
+  - `--registry` — Business register to query (enum: ares, brreg, companies-house, denue, edgar, gcis, krs, orsr, prh, recherche-entreprises, vies)
+  - `--query` — Canonical identifier (e.g. company number, VAT number) or company name (string)
 - `stella contact read`
-  - `--contact-id` — Contact ID (required, string)
-
+  - `--contact-id` — Contact ID (string)
 - `stella contact save`
-  - `--contact-id` — Contact ID to update; omit to create (optional, string)
-  - `--type` — Contact kind; required when creating (optional, enum: person, organization)
-  - `--display-name` — Display name; when creating it defaults to first + last name (person) or organization name (organization); non-empty when updating (optional, string)
-  - `--first-name` — First name; pass null to clear (optional, nullable-string)
-  - `--last-name` — Last name; pass null to clear (optional, nullable-string)
-  - `--organization-name` — Organization name; pass null to clear (optional, nullable-string)
-  - `--notes` — Free-text notes; pass null to clear (optional, nullable-string)
-
+  - optional: --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes
 - `stella document content`
-  - `--entity-id` — Entity ID (required, string)
-
+  - `--entity-id` — Entity ID (string)
 - `stella document delete`
-  - `--entity-id` — Document entity ID to delete (required, string)
-  - `--version-id` — Delete only this version instead of the whole document (optional, string)
-
+  - `--entity-id` — Document entity ID to delete (string)
+  - optional: --version-id
 - `stella document field set`
-  - `--entity-id` — Document entity ID whose cell to set (required, string)
-  - `--property-id` — Property ID, as returned by list_properties (required, string)
-
+  - `--entity-id` — Document entity ID whose cell to set (string)
+  - `--property-id` — Property ID, as returned by list_properties (string)
 - `stella document list`
-  - `--matter-id` — Matter/workspace ID to list documents in (required, string)
-  - `--mode` — 'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected. (optional, enum: flat, children)
-  - `--parent-id` — Folder entity ID whose direct children to list. Only valid in children mode; supplying it selects children mode when mode is omitted and is rejected together with mode 'flat'. (optional, string)
-
+  - `--matter-id` — Matter/workspace ID to list documents in (string)
+  - optional: --mode (flat|children), --parent-id
 - `stella document properties list`
-  - `--matter-id` — Matter/workspace ID to list properties for (required, string)
-
+  - `--matter-id` — Matter/workspace ID to list properties for (string)
 - `stella document read`
-  - `--entity-id` — Document entity ID (required, string)
-  - `--version-id` — Return this version's metadata and field values instead of the current version (optional, string)
-  - `--compare-with-version-id` — With version_id, return a plain-text line diff of this version (base) against version_id (target) (optional, string)
-  - `--include-versions` — Also return the document's version history (optional, boolean)
-  - `--versions-cursor` — Opaque cursor from a previous call to fetch the next page of version history (optional, string)
-
+  - `--entity-id` — Document entity ID (string)
+  - optional: --version-id, --compare-with-version-id, --include-versions, --versions-cursor
 - `stella document save`
-  - `--entity-id` — Document entity ID to update; omit to create (optional, string)
-  - `--matter-id` — Matter/workspace ID to create the entity in; required when creating (optional, string)
-  - `--name` — Display name: required when creating, or the new name when renaming (optional, string)
-  - `--parent-id` — Folder entity ID: to place the new entity inside when creating, or to move the document into when updating (optional, string)
-  - `--kind` — Entity kind to create; defaults to 'document'. Only valid when creating. (optional, enum: document, folder)
-  - `--move-to-root` — Move the document to the matter root (no parent folder). Only valid when updating. (optional, boolean)
-  - `--version-id` — Version ID to annotate; required when setting label or description. Only valid when updating. (optional, string)
-  - `--label` — New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged (optional, nullable-string)
-  - `--description` — New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged (optional, nullable-string)
-
+  - optional: --entity-id, --matter-id, --name, --parent-id, --kind (document|folder), --move-to-root, --version-id, --label, --description
 - `stella feedback send`
-  - `--kind` — Feedback category: bug, feature_request, docs, or other (required, enum: bug, feature_request, docs, other)
-  - `--title` — Short one-line summary of the issue; no tenant data, ids, or secrets (required, string)
-  - `--body` — Markdown details: reproduction steps, expected vs actual behavior, environment. Never include tenant data, client or matter names, ids, or secrets; they are redacted server-side. (required, string)
-  - `--channel` — Delivery channel. github returns a prefilled issue URL the human submits under their own GitHub account. (optional, enum: github)
-
+  - `--kind` — Feedback category: bug, feature_request, docs, or other (enum: bug, feature_request, docs, other)
+  - `--title` — Short one-line summary of the issue; no tenant data, ids, or secrets (string)
+  - `--body` — Markdown details: reproduction steps, expected vs actual behavior, environment. Never include tenant data, client or matter names, ids, or secrets; they are redacted server-side. (string)
+  - optional: --channel (github)
 - `stella invoice list`
-  - `--matter-id` — Matter/workspace ID to list invoices in; required unless invoice_id is given (optional, string)
-  - `--invoice-id` — Invoice ID to read in detail (optional, string)
-
+  - optional: --matter-id, --invoice-id
 - `stella legislation search`
-  - `--query` — Free-text search over consolidated legislation (optional, string)
-  - `--title` — Filter search results by title text (optional, string)
-  - `--department-code` — Filter search results by department code (optional, string)
-  - `--legal-range-code` — Filter search results by legal-range code (law rank) (optional, string)
-  - `--matter-code` — Filter search results by subject-matter code (optional, string)
-  - `--date-from` — Only laws published on or after this date (YYYYMMDD) (optional, string)
-  - `--date-to` — Only laws published on or before this date (YYYYMMDD) (optional, string)
-  - `--law-id` — BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search (optional, string)
-  - `--block-id` — With law_id, return this text block's content instead of the whole law (optional, string)
-  - `--relation-type` — With law_id, list related laws of this relation kind instead of the law body (optional, enum: modifies, modifiedBy, derogates, derogatedBy, all)
-  - `--full-text` — With law_id (no block_id/relation_type), include the consolidated full text (optional, boolean)
-
+  - optional: --query, --title, --department-code, --legal-range-code, --matter-code, --date-from, --date-to, --law-id, --block-id, --relation-type (modifies|modifiedBy|derogates|derogatedBy|all), --full-text
 - `stella matter delete`
-  - `--matter-id` — Matter/workspace ID to delete (required, string)
-
+  - `--matter-id` — Matter/workspace ID to delete (string)
 - `stella matter link-contact`
-  - `--matter-id` — Matter/workspace ID (required, string)
-  - `--contact-id` — Contact ID: with role to link the contact, or alone to unlink it from the matter (optional, string)
-  - `--role` — Party role for the linked contact; provide it only when linking (optional, enum: opposing_party, opposing_counsel, co_counsel, witness, expert_witness, third_party, judge, mediator, other)
-  - `--workspace-contact-id` — Existing matter-contact link ID to remove, from list_matters (optional, string)
-
+  - `--matter-id` — Matter/workspace ID (string)
+  - optional: --contact-id, --role (opposing_party|opposing_counsel|co_counsel|witness|expert_witness|third_party|judge|mediator|other), --workspace-contact-id
 - `stella matter list`
-  - `--matter-id` — Matter/workspace ID to return a single matter's overview; omit to list matters (optional, string)
-  - `--status` — Filter by matter status (list mode) (optional, enum: active, all)
-
+  - optional: --matter-id, --status (active|all)
 - `stella matter save`
-  - `--matter-id` — Matter/workspace ID to update; omit to create a new matter (optional, string)
-  - `--name` — Matter name; required when creating (optional, string)
-  - `--client-id` — Contact ID to attach in the client role. Only valid when creating a matter. (optional, string)
-  - `--reference` — Matter reference (file number). Only valid when updating. (optional, string)
-  - `--billing-reference` — Billing reference; pass null to clear. Only valid when updating. (optional, nullable-string)
-  - `--status` — Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating. (optional, enum: active, archived)
-
+  - optional: --matter-id, --name, --client-id, --reference, --billing-reference, --status (active|archived)
 - `stella organization add-member`
-  - `--matter-id` — Matter/workspace id for add_member and remove_member (required, string)
-  - `--user-id` — User id to add or remove for the member actions (required, string)
-
+  - `--matter-id` — Matter/workspace id for add_member and remove_member (string)
+  - `--user-id` — User id to add or remove for the member actions (string)
 - `stella organization remove-member`
-  - `--matter-id` — Matter/workspace id for add_member and remove_member (required, string)
-  - `--user-id` — User id to add or remove for the member actions (required, string)
-
+  - `--matter-id` — Matter/workspace id for add_member and remove_member (string)
+  - `--user-id` — User id to add or remove for the member actions (string)
 - `stella organization set-jurisdictions` — no flags; pass `--input` with jurisdictions
-
 - `stella organization update-settings`
-  - `--matter-number-pattern` — Matter-number pattern (update_org_settings); send with matter_number_padding (optional, string)
-  - `--matter-number-padding` — Matter-number zero-padding width (update_org_settings); send with matter_number_pattern (optional, int 1..6)
-  - `--prompt-caching-enabled` — Toggle AI prompt caching for the organization (update_org_settings) (optional, boolean)
-  - `--document-processing-mode` — Set automatic PDF searchable-text extraction for the organization (update_org_settings) (optional, enum: off, searchable-text)
-
+  - optional: --matter-number-pattern, --matter-number-padding, --prompt-caching-enabled, --document-processing-mode (off|searchable-text)
 - `stella playbook list`
-  - `--playbook-id` — Playbook id to read in detail; omit to list playbooks (optional, string)
-
+  - optional: --playbook-id
 - `stella playbook run`
-  - `--matter-id` — Matter/workspace id to run the playbook over (required, string)
-  - `--playbook-id` — Playbook id to run (required, string)
-
+  - `--matter-id` — Matter/workspace id to run the playbook over (string)
+  - `--playbook-id` — Playbook id to run (string)
 - `stella rate resolve`
-  - `--matter-id` — Matter/workspace ID to resolve the rate in (required, string)
-  - `--user-id` — User ID to resolve the rate for (required, string)
-  - `--date` — Date to resolve the rate on (ISO YYYY-MM-DD) (required, string)
-
+  - `--matter-id` — Matter/workspace ID to resolve the rate in (string)
+  - `--user-id` — User ID to resolve the rate for (string)
+  - `--date` — Date to resolve the rate on (ISO YYYY-MM-DD) (string)
 - `stella search matters`
-  - `--query` — Search query (required, string)
-
+  - `--query` — Search query (string)
 - `stella task list`
-  - `--matter-id` — Matter/workspace ID to list tasks in; required unless task_id is given (optional, string)
-  - `--task-id` — Task entity ID to read in detail (optional, string)
-  - `--date-from` — List only tasks due on or after this ISO date (YYYY-MM-DD) (optional, string)
-  - `--date-to` — List only tasks due on or before this ISO date (YYYY-MM-DD) (optional, string)
-  - `--status` — List only tasks with this status (optional, string)
-
+  - optional: --matter-id, --task-id, --date-from, --date-to, --status
 - `stella task save`
-  - `--task-id` — Task entity ID to update; omit to create (optional, string)
-  - `--matter-id` — Matter/workspace ID to create the task in; required when creating (optional, string)
-  - `--name` — Task name; required when creating (optional, string)
-  - `--status` — Task status (e.g. open, in_progress, done) (optional, string)
-  - `--priority` — Task priority (e.g. none, low, medium, high) (optional, string)
-  - `--item-type` — What the List item represents (optional, enum: task, fact, issue, requirement, event)
-  - `--list-id` — List ID to create the item in (creating only) (optional, string)
-  - `--list-section-id` — Section of list_id to create the item under (creating only) (optional, string)
-  - `--list-description` — List item description; pass null to clear (optional, nullable-string)
-  - `--due-date` — Due date (ISO YYYY-MM-DD); pass null to clear (optional, nullable-string)
-  - `--workflow-reason` — Reason for a governed status or deadline change (optional, string)
-  - `--add-assignee-user-id` — User ID to assign to the task (must be a workspace member) (optional, string)
-  - `--remove-assignee-user-id` — User ID to unassign from the task (optional, string)
-  - `--link-entity-id` — Entity ID to link to the task (document, folder, or another task) (optional, string)
-  - `--unlink-link-id` — Entity-link ID to remove (optional, string)
-
+  - optional: --task-id, --matter-id, --name, --status, --priority, --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
 - `stella template fill`
-  - `--template-id` — Template id, as returned by list_templates (required, string)
-  - `--allow-unused-values` — Allow value keys that do not match template fields. Defaults to false so misspelled field paths fail loudly. (optional, boolean)
-  - `--completion-mode` — Require every placeholder by default; use allow_partial only for an intentionally incomplete document. (optional, enum: require_complete, allow_partial)
-
+  - `--template-id` — Template id, as returned by list_templates (string)
+  - optional: --allow-unused-values, --completion-mode (require_complete|allow_partial)
 - `stella template list`
-  - `--template-id` — Template id to describe its fields in detail; omit to list templates (optional, string)
-
+  - optional: --template-id
 - `stella template save`
-  - `--template-id` — Template to configure; omit when creating (optional, string)
-  - `--name` — Display name; required when creating (optional, string)
-  - `--docx-base64` — Base64 DOCX bytes; required when creating (optional, string)
-
+  - optional: --template-id, --name, --docx-base64
 - `stella template save-filled new-document`
-  - `--template-id` — Template id, as returned by list_templates (required, string)
-  - `--matter-id` — Matter/workspace receiving the filled DOCX (required, string)
-  - `--idempotency-key` — Unique retry key for this save operation; reuse it only to recover the same timed-out request (required, string)
-  - `--parent-id` — Folder entity id for a new document; valid only for create_document (optional, string)
-  - `--name` — Optional DOCX file name; defaults to the template file name (optional, string)
-
+  - `--template-id` — Template id, as returned by list_templates (string)
+  - `--matter-id` — Matter/workspace receiving the filled DOCX (string)
+  - `--idempotency-key` — Unique retry key for this save operation; reuse it only to recover the same timed-out request (string)
+  - optional: --parent-id, --name
 - `stella template save-filled new-version`
-  - `--template-id` — Template id, as returned by list_templates (required, string)
-  - `--matter-id` — Matter/workspace receiving the filled DOCX (required, string)
-  - `--idempotency-key` — Unique retry key for this save operation; reuse it only to recover the same timed-out request (required, string)
-  - `--entity-id` — Existing document entity id; required only for create_version (required, string)
-  - `--name` — Optional DOCX file name; defaults to the template file name (optional, string)
-
+  - `--template-id` — Template id, as returned by list_templates (string)
+  - `--matter-id` — Matter/workspace receiving the filled DOCX (string)
+  - `--idempotency-key` — Unique retry key for this save operation; reuse it only to recover the same timed-out request (string)
+  - `--entity-id` — Existing document entity id; required only for create_version (string)
+  - optional: --name
 - `stella time-entry delete`
-  - `--time-entry-id` — Time entry ID to delete or write off (required, string)
-
+  - `--time-entry-id` — Time entry ID to delete or write off (string)
 - `stella time-entry list`
-  - `--matter-id` — Matter/workspace ID to list time entries in; required unless time_entry_id is given (optional, string)
-  - `--time-entry-id` — Time entry ID to read in detail (optional, string)
-  - `--entity-id` — List only entries logged against this entity (document, folder, or task the time is billed to) (optional, string)
-  - `--user-id` — List only entries recorded by this user (optional, string)
-  - `--date-from` — List only entries worked on or after this ISO date (YYYY-MM-DD) (optional, string)
-  - `--date-to` — List only entries worked on or before this ISO date (YYYY-MM-DD) (optional, string)
-  - `--status` — List only entries with this status (optional, enum: draft, approved, billed, written_off)
-
+  - optional: --matter-id, --time-entry-id, --entity-id, --user-id, --date-from, --date-to, --status (draft|approved|billed|written_off)
 - `stella time-entry save`
-  - `--time-entry-id` — Time entry ID to update; omit to create (optional, string)
-  - `--matter-id` — Matter/workspace ID to create the entry in; required when creating (optional, string)
-  - `--entity-id` — Optional work item context (document, folder, or task). When updating, moves the entry to a different entity in the same matter; pass null to clear. (optional, nullable-string)
-  - `--date-worked` — Date the work was done (ISO YYYY-MM-DD); required when creating (optional, string)
-  - `--timezone-id` — IANA time zone the date_worked is interpreted in (e.g. Europe/Prague); required when creating or changing date_worked (optional, string)
-  - `--duration-minutes` — Minutes worked (whole minutes); required when creating (optional, int 1..inf)
-  - `--narrative` — Description of the work; required when creating (optional, string)
-  - `--invoice-narrative` — Client-facing narrative shown on the invoice; pass null to clear. Only valid when updating. (optional, nullable-string)
-  - `--billable` — Whether the entry is billable to the client (optional, boolean)
-  - `--no-charge` — Whether the entry is recorded but not charged. Only valid when updating. (optional, boolean)
-  - `--task-code` — UTBMS/LEDES task code; pass null to clear (optional, nullable-string)
-  - `--activity-code` — UTBMS/LEDES activity code; pass null to clear (optional, nullable-string)
-
+  - optional: --time-entry-id, --matter-id, --entity-id, --date-worked, --timezone-id, --duration-minutes, --narrative, --invoice-narrative, --billable, --no-charge, --task-code, --activity-code
 - `stella usage get` — no arguments
 
 ## Exit codes

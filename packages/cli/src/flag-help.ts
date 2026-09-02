@@ -6,7 +6,14 @@
 
 import type { FlagSpec } from "./route-types.js";
 
-const flagKindFact = (spec: FlagSpec): string => {
+/**
+ * The type/enum/range fact alone, with no required/optional token: `string`,
+ * `enum: draft, sent`, `int 1..100`. Exposed separately from
+ * `mechanicalFlagFacts` for a context (the generated skill's required-flag
+ * lines) where required-ness is already conveyed structurally and repeating
+ * the word would only cost space.
+ */
+export const flagKindFact = (spec: FlagSpec): string => {
   if (spec.enum) {
     return `${spec.kind}: ${spec.enum.join(", ")}`;
   }
