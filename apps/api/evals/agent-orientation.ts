@@ -417,12 +417,12 @@ const TASKS: readonly Task[] = [
       "List every document and folder in workspace ws_acme_2024, the top level.",
     mcp: {
       toolName: "list_documents",
-      checkArgs: (args) => field(args, "matter_id", "ws_acme_2024"),
+      checkArgs: (args) => field(args, "workspace_id", "ws_acme_2024"),
     },
     cli: {
       kind: "command",
       path: ["document", "list"],
-      flags: { "matter-id": "ws_acme_2024" },
+      flags: { "workspace-id": "ws_acme_2024" },
     },
   },
   {
@@ -467,14 +467,14 @@ const TASKS: readonly Task[] = [
     mcp: {
       toolName: "run_playbook",
       checkArgs: (args) => [
-        ...field(args, "matter_id", "mat_17"),
+        ...field(args, "workspace_id", "mat_17"),
         ...field(args, "playbook_id", "pb_diligence_v2"),
       ],
     },
     cli: {
       kind: "command",
       path: ["playbook", "run"],
-      flags: { "matter-id": "mat_17", "playbook-id": "pb_diligence_v2" },
+      flags: { "workspace-id": "mat_17", "playbook-id": "pb_diligence_v2" },
     },
   },
   {
@@ -584,7 +584,7 @@ const TASKS: readonly Task[] = [
       path: ["upload"],
       flags: {
         file: "./contract-v2.docx",
-        "matter-id": "ws_acme_2024",
+        "workspace-id": "ws_acme_2024",
         "entity-id": "doc_42",
       },
     },

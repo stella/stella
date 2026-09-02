@@ -15,6 +15,10 @@ import {
   bindApprovedMcpAuditContext,
   type McpRequestContext,
 } from "@/api/mcp/context";
+import {
+  applyDeprecatedInputAliases,
+  deprecatedInputAliasConflictMessage,
+} from "@/api/mcp/deprecated-input-aliases";
 import { finalizeToolEgress } from "@/api/mcp/egress";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import {
@@ -216,8 +220,31 @@ export const handleMcpToolCall = async ({
     );
   }
 
-  const unknownArgs = findUndeclaredArguments({
+  // Deprecated input names are rewritten onto their canonical field before the
+  // unknown-key backstop, so a caller still sending the old name reaches the
+  // handler while the advertised schema names only the canonical field.
+  const aliased = applyDeprecatedInputAliases({
     args,
+    inputSchema: staticTool.inputSchema,
+  });
+  if (aliased.status === "conflict") {
+    const names = aliased.conflicts.map((entry) => entry.alias);
+    return serializeToolResult(
+      structuredErrorResult({
+        code: "validation_error",
+        message: `Conflicting values for ${names.join(", ")} and their replacements`,
+        issues: aliased.conflicts.map((entry) => ({
+          path: entry.alias,
+          message: deprecatedInputAliasConflictMessage(entry),
+        })),
+        hint: `Send only ${aliased.conflicts.map((entry) => `'${entry.canonical}'`).join(", ")}.`,
+      }),
+    );
+  }
+  const toolArgs = aliased.args;
+
+  const unknownArgs = findUndeclaredArguments({
+    args: toolArgs,
     inputSchema: staticTool.inputSchema,
   });
   if (unknownArgs) {
@@ -241,7 +268,7 @@ export const handleMcpToolCall = async ({
   // without the confirmation.
   if (
     staticTool.annotations.destructiveHint === true &&
-    args["confirm"] !== true
+    toolArgs["confirm"] !== true
   ) {
     return serializeToolResult(
       structuredErrorResult({
@@ -273,7 +300,10 @@ export const handleMcpToolCall = async ({
     // before windowing; this transport boundary then serializes. Both steps run
     // inside this try so an anonymization or windowing failure is captured like
     // any handler failure.
-    const response = await handler({ args, context: executionContext });
+    const response = await handler({
+      args: toolArgs,
+      context: executionContext,
+    });
     return serializeToolResult(
       await finalizeToolEgress(
         {

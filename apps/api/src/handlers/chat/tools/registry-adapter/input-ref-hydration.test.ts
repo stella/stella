@@ -46,7 +46,7 @@ describe("registry tool input ref hydration", () => {
     const matterRef = registry.toMatterRef(workspaceId);
     const input = {
       decisionId: matterRef,
-      matter_id: matterRef,
+      workspace_id: matterRef,
       nested: { title: matterRef },
     };
 
@@ -58,7 +58,7 @@ describe("registry tool input ref hydration", () => {
       }),
     ).toEqual({
       decisionId: matterRef,
-      matter_id: workspaceId,
+      workspace_id: workspaceId,
       nested: { title: matterRef },
     });
   });
@@ -109,7 +109,7 @@ describe("registry tool input ref hydration", () => {
   test("round-trips a persisted tool input back to its resolved ids", () => {
     const registry = createChatRefRegistry();
     const persistedInput = {
-      matter_id: WS_UUID,
+      workspace_id: WS_UUID,
       task_id: TASK_UUID,
       name: "respond to outside counsel",
     };
@@ -123,7 +123,7 @@ describe("registry tool input ref hydration", () => {
 
     // The model-facing call carries refs again, never the tenant ids.
     expect(hydrated).toEqual({
-      matter_id: "mat_1",
+      workspace_id: "mat_1",
       task_id: "ent_1",
       name: "respond to outside counsel",
     });
@@ -148,12 +148,12 @@ describe("registry tool input ref hydration", () => {
 
     expect(
       hydrateRegistryToolInputRefs({
-        input: { matter_id: WS_UUID },
+        input: { workspace_id: WS_UUID },
         inputState: PERSISTED_REF_INPUT_STATE,
         refRegistry: registry,
         toolName: "save_task",
       }),
-    ).toEqual({ matter_id: existingRef });
+    ).toEqual({ workspace_id: existingRef });
   });
 
   test("leaves a call with no declared input refs untouched", () => {
@@ -176,12 +176,12 @@ describe("registry tool input ref hydration", () => {
 
     expect(
       hydrateRegistryToolInputRefs({
-        input: { matter_id: ref, name: "draft" },
+        input: { workspace_id: ref, name: "draft" },
         inputState: LEGACY_REF_INPUT_STATE,
         refRegistry: registry,
         toolName: "save_task",
       }),
-    ).toEqual({ matter_id: ref, name: "draft" });
+    ).toEqual({ workspace_id: ref, name: "draft" });
   });
 
   test("hydrates a versioned persisted ID that looks like a ref", () => {
@@ -190,25 +190,25 @@ describe("registry tool input ref hydration", () => {
     const tokenShapedId = toSafeId<"workspace">("mat_1");
 
     const hydrated = hydrateRegistryToolInputRefs({
-      input: { matter_id: tokenShapedId },
+      input: { workspace_id: tokenShapedId },
       inputState: PERSISTED_REF_INPUT_STATE,
       refRegistry: registry,
       toolName: "save_task",
     });
 
-    expect(hydrated).toEqual({ matter_id: "mat_2" });
+    expect(hydrated).toEqual({ workspace_id: "mat_2" });
     expect(
       dehydrateRefs({
         args: asArgs(hydrated),
         inputRefs: SAVE_TASK_INPUT_REFS,
         refRegistry: registry,
       }).unwrap().args,
-    ).toEqual({ matter_id: tokenShapedId });
+    ).toEqual({ workspace_id: tokenShapedId });
   });
 
   test("preserves an unresolved ref as unresolved across v2 replay", () => {
     const unresolvedInputRefs: ChatUnresolvedInputRefContext[] = [];
-    const input = { matter_id: "mat_999", name: "draft" };
+    const input = { workspace_id: "mat_999", name: "draft" };
     const persistedInput = resolveRegistryToolInputRefs({
       input,
       onRefUnresolved: (unresolved) => {
@@ -225,7 +225,7 @@ describe("registry tool input ref hydration", () => {
     expect(unresolvedInputRefs).toEqual([
       {
         kind: "matter",
-        param: "matter_id",
+        param: "workspace_id",
         ref: "mat_999",
         toolCallId: "tool-1",
       },

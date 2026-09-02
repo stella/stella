@@ -630,11 +630,12 @@ export const generatedRouteMap: RouteNode = {
             toolName: "list_documents",
             flags: [
               {
-                flag: "--matter-id",
-                prop: "matter_id",
+                flag: "--workspace-id",
+                prop: "workspace_id",
                 kind: "string",
                 repeatable: false,
-                description: "Matter/workspace ID to list documents in",
+                description:
+                  "Workspace ID to list documents in. Deprecated input alias: matter_id.",
                 required: true,
               },
               {
@@ -644,7 +645,7 @@ export const generatedRouteMap: RouteNode = {
                 enum: ["flat", "children"],
                 repeatable: false,
                 description:
-                  "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected.",
+                  "'flat' lists every document and folder in the workspace; 'children' lists only the direct children of parent_id (or the workspace root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected.",
                 required: false,
               },
               {
@@ -665,19 +666,20 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
-              required: ["matter_id"],
+              required: ["workspace_id"],
               additionalProperties: false,
               properties: {
-                matter_id: {
+                workspace_id: {
                   type: "string",
                   minLength: 1,
-                  description: "Matter/workspace ID to list documents in",
+                  description:
+                    "Workspace ID to list documents in. Deprecated input alias: matter_id.",
                 },
                 mode: {
                   enum: ["flat", "children"],
                   type: "string",
                   description:
-                    "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected.",
+                    "'flat' lists every document and folder in the workspace; 'children' lists only the direct children of parent_id (or the workspace root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected.",
                 },
                 parent_id: {
                   type: "string",
@@ -807,12 +809,12 @@ export const generatedRouteMap: RouteNode = {
                 required: false,
               },
               {
-                flag: "--matter-id",
-                prop: "matter_id",
+                flag: "--workspace-id",
+                prop: "workspace_id",
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Matter/workspace ID to create the entity in; required when creating",
+                  "Workspace ID to create the entity in; required when creating. Deprecated input alias: matter_id.",
                 required: false,
               },
               {
@@ -895,11 +897,11 @@ export const generatedRouteMap: RouteNode = {
                   minLength: 1,
                   description: "Document entity ID to update; omit to create",
                 },
-                matter_id: {
+                workspace_id: {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Matter/workspace ID to create the entity in; required when creating",
+                    "Workspace ID to create the entity in; required when creating. Deprecated input alias: matter_id.",
                 },
                 name: {
                   type: "string",
@@ -1027,11 +1029,12 @@ export const generatedRouteMap: RouteNode = {
                 toolName: "list_properties",
                 flags: [
                   {
-                    flag: "--matter-id",
-                    prop: "matter_id",
+                    flag: "--workspace-id",
+                    prop: "workspace_id",
                     kind: "string",
                     repeatable: false,
-                    description: "Matter/workspace ID to list properties for",
+                    description:
+                      "Workspace ID to list properties for. Deprecated input alias: matter_id.",
                     required: true,
                   },
                 ],
@@ -1043,13 +1046,14 @@ export const generatedRouteMap: RouteNode = {
                 scope: "read",
                 inputSchema: {
                   type: "object",
-                  required: ["matter_id"],
+                  required: ["workspace_id"],
                   additionalProperties: false,
                   properties: {
-                    matter_id: {
+                    workspace_id: {
                       type: "string",
                       minLength: 1,
-                      description: "Matter/workspace ID to list properties for",
+                      description:
+                        "Workspace ID to list properties for. Deprecated input alias: matter_id.",
                     },
                     limit: {
                       type: "integer",
@@ -1916,12 +1920,12 @@ export const generatedRouteMap: RouteNode = {
             },
             flags: [
               {
-                flag: "--matter-id",
-                prop: "matter_id",
+                flag: "--workspace-id",
+                prop: "workspace_id",
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Matter/workspace id for add_member and remove_member",
+                  "Workspace id for add_member and remove_member. Deprecated input alias: matter_id.",
                 required: true,
               },
               {
@@ -1948,11 +1952,11 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   description: "Administrative action to perform",
                 },
-                matter_id: {
+                workspace_id: {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Matter/workspace id for add_member and remove_member",
+                    "Workspace id for add_member and remove_member. Deprecated input alias: matter_id.",
                 },
                 user_id: {
                   type: "string",
@@ -2004,12 +2008,12 @@ export const generatedRouteMap: RouteNode = {
             },
             flags: [
               {
-                flag: "--matter-id",
-                prop: "matter_id",
+                flag: "--workspace-id",
+                prop: "workspace_id",
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Matter/workspace id for add_member and remove_member",
+                  "Workspace id for add_member and remove_member. Deprecated input alias: matter_id.",
                 required: true,
               },
               {
@@ -2036,11 +2040,11 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   description: "Administrative action to perform",
                 },
-                matter_id: {
+                workspace_id: {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Matter/workspace id for add_member and remove_member",
+                    "Workspace id for add_member and remove_member. Deprecated input alias: matter_id.",
                 },
                 user_id: {
                   type: "string",
@@ -2146,11 +2150,11 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   description: "Administrative action to perform",
                 },
-                matter_id: {
+                workspace_id: {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Matter/workspace id for add_member and remove_member",
+                    "Workspace id for add_member and remove_member. Deprecated input alias: matter_id.",
                 },
                 user_id: {
                   type: "string",
@@ -2328,11 +2332,12 @@ export const generatedRouteMap: RouteNode = {
                     required: true,
                   },
                   {
-                    flag: "--matter-id",
-                    prop: "matter_id",
+                    flag: "--workspace-id",
+                    prop: "workspace_id",
                     kind: "string",
                     repeatable: false,
-                    description: "Matter/workspace receiving the filled DOCX",
+                    description:
+                      "Workspace receiving the filled DOCX. Deprecated input alias: matter_id.",
                     required: true,
                   },
                   {
@@ -2382,9 +2387,10 @@ export const generatedRouteMap: RouteNode = {
                       type: "string",
                       description: "Template id, as returned by list_templates",
                     },
-                    matter_id: {
+                    workspace_id: {
                       type: "string",
-                      description: "Matter/workspace receiving the filled DOCX",
+                      description:
+                        "Workspace receiving the filled DOCX. Deprecated input alias: matter_id.",
                     },
                     entity_id: {
                       type: "string",
@@ -2417,7 +2423,7 @@ export const generatedRouteMap: RouteNode = {
                   required: [
                     "action",
                     "template_id",
-                    "matter_id",
+                    "workspace_id",
                     "idempotency_key",
                     "values",
                   ],
@@ -2443,11 +2449,12 @@ export const generatedRouteMap: RouteNode = {
                     required: true,
                   },
                   {
-                    flag: "--matter-id",
-                    prop: "matter_id",
+                    flag: "--workspace-id",
+                    prop: "workspace_id",
                     kind: "string",
                     repeatable: false,
-                    description: "Matter/workspace receiving the filled DOCX",
+                    description:
+                      "Workspace receiving the filled DOCX. Deprecated input alias: matter_id.",
                     required: true,
                   },
                   {
@@ -2497,9 +2504,10 @@ export const generatedRouteMap: RouteNode = {
                       type: "string",
                       description: "Template id, as returned by list_templates",
                     },
-                    matter_id: {
+                    workspace_id: {
                       type: "string",
-                      description: "Matter/workspace receiving the filled DOCX",
+                      description:
+                        "Workspace receiving the filled DOCX. Deprecated input alias: matter_id.",
                     },
                     entity_id: {
                       type: "string",
@@ -2532,7 +2540,7 @@ export const generatedRouteMap: RouteNode = {
                   required: [
                     "action",
                     "template_id",
-                    "matter_id",
+                    "workspace_id",
                     "idempotency_key",
                     "values",
                   ],
@@ -2964,12 +2972,12 @@ export const generatedRouteMap: RouteNode = {
             toolName: "list_tasks",
             flags: [
               {
-                flag: "--matter-id",
-                prop: "matter_id",
+                flag: "--workspace-id",
+                prop: "workspace_id",
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Matter/workspace ID to list tasks in; required unless task_id is given",
+                  "Workspace ID to list tasks in; required unless task_id is given. Deprecated input alias: matter_id.",
                 required: false,
               },
               {
@@ -3018,11 +3026,11 @@ export const generatedRouteMap: RouteNode = {
               required: [],
               additionalProperties: false,
               properties: {
-                matter_id: {
+                workspace_id: {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Matter/workspace ID to list tasks in; required unless task_id is given",
+                    "Workspace ID to list tasks in; required unless task_id is given. Deprecated input alias: matter_id.",
                 },
                 task_id: {
                   type: "string",
@@ -3080,12 +3088,12 @@ export const generatedRouteMap: RouteNode = {
                 required: false,
               },
               {
-                flag: "--matter-id",
-                prop: "matter_id",
+                flag: "--workspace-id",
+                prop: "workspace_id",
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Matter/workspace ID to create the task in; required when creating",
+                  "Workspace ID to create the task in; required when creating. Deprecated input alias: matter_id.",
                 required: false,
               },
               {
@@ -3212,11 +3220,11 @@ export const generatedRouteMap: RouteNode = {
                   minLength: 1,
                   description: "Task entity ID to update; omit to create",
                 },
-                matter_id: {
+                workspace_id: {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Matter/workspace ID to create the task in; required when creating",
+                    "Workspace ID to create the task in; required when creating. Deprecated input alias: matter_id.",
                 },
                 name: {
                   type: "string",
@@ -3764,11 +3772,12 @@ export const generatedRouteMap: RouteNode = {
             toolName: "run_playbook",
             flags: [
               {
-                flag: "--matter-id",
-                prop: "matter_id",
+                flag: "--workspace-id",
+                prop: "workspace_id",
                 kind: "string",
                 repeatable: false,
-                description: "Matter/workspace id to run the playbook over",
+                description:
+                  "Workspace id to run the playbook over. Deprecated input alias: matter_id.",
                 required: true,
               },
               {
@@ -3787,13 +3796,14 @@ export const generatedRouteMap: RouteNode = {
             scope: "knowledge_write",
             inputSchema: {
               type: "object",
-              required: ["matter_id", "playbook_id"],
+              required: ["workspace_id", "playbook_id"],
               additionalProperties: false,
               properties: {
-                matter_id: {
+                workspace_id: {
                   type: "string",
                   minLength: 1,
-                  description: "Matter/workspace id to run the playbook over",
+                  description:
+                    "Workspace id to run the playbook over. Deprecated input alias: matter_id.",
                 },
                 playbook_id: {
                   type: "string",
@@ -3816,12 +3826,12 @@ export const generatedRouteMap: RouteNode = {
             toolName: "list_time_entries",
             flags: [
               {
-                flag: "--matter-id",
-                prop: "matter_id",
+                flag: "--workspace-id",
+                prop: "workspace_id",
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Matter/workspace ID to list time entries in; required unless time_entry_id is given",
+                  "Workspace ID to list time entries in; required unless time_entry_id is given. Deprecated input alias: matter_id.",
                 required: false,
               },
               {
@@ -3888,11 +3898,11 @@ export const generatedRouteMap: RouteNode = {
               required: [],
               additionalProperties: false,
               properties: {
-                matter_id: {
+                workspace_id: {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Matter/workspace ID to list time entries in; required unless time_entry_id is given",
+                    "Workspace ID to list time entries in; required unless time_entry_id is given. Deprecated input alias: matter_id.",
                 },
                 time_entry_id: {
                   type: "string",
@@ -3960,12 +3970,12 @@ export const generatedRouteMap: RouteNode = {
                 required: false,
               },
               {
-                flag: "--matter-id",
-                prop: "matter_id",
+                flag: "--workspace-id",
+                prop: "workspace_id",
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Matter/workspace ID to create the entry in; required when creating",
+                  "Workspace ID to create the entry in; required when creating. Deprecated input alias: matter_id.",
                 required: false,
               },
               {
@@ -4071,11 +4081,11 @@ export const generatedRouteMap: RouteNode = {
                   minLength: 1,
                   description: "Time entry ID to update; omit to create",
                 },
-                matter_id: {
+                workspace_id: {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Matter/workspace ID to create the entry in; required when creating",
+                    "Workspace ID to create the entry in; required when creating. Deprecated input alias: matter_id.",
                 },
                 entity_id: {
                   anyOf: [
@@ -4218,11 +4228,12 @@ export const generatedRouteMap: RouteNode = {
             toolName: "resolve_rate",
             flags: [
               {
-                flag: "--matter-id",
-                prop: "matter_id",
+                flag: "--workspace-id",
+                prop: "workspace_id",
                 kind: "string",
                 repeatable: false,
-                description: "Matter/workspace ID to resolve the rate in",
+                description:
+                  "Workspace ID to resolve the rate in. Deprecated input alias: matter_id.",
                 required: true,
               },
               {
@@ -4249,13 +4260,14 @@ export const generatedRouteMap: RouteNode = {
             scope: "read",
             inputSchema: {
               type: "object",
-              required: ["matter_id", "user_id", "date"],
+              required: ["workspace_id", "user_id", "date"],
               additionalProperties: false,
               properties: {
-                matter_id: {
+                workspace_id: {
                   type: "string",
                   minLength: 1,
-                  description: "Matter/workspace ID to resolve the rate in",
+                  description:
+                    "Workspace ID to resolve the rate in. Deprecated input alias: matter_id.",
                 },
                 user_id: {
                   type: "string",
@@ -4284,12 +4296,12 @@ export const generatedRouteMap: RouteNode = {
             toolName: "list_invoices",
             flags: [
               {
-                flag: "--matter-id",
-                prop: "matter_id",
+                flag: "--workspace-id",
+                prop: "workspace_id",
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Matter/workspace ID to list invoices in; required unless invoice_id is given",
+                  "Workspace ID to list invoices in; required unless invoice_id is given. Deprecated input alias: matter_id.",
                 required: false,
               },
               {
@@ -4312,11 +4324,11 @@ export const generatedRouteMap: RouteNode = {
               required: [],
               additionalProperties: false,
               properties: {
-                matter_id: {
+                workspace_id: {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Matter/workspace ID to list invoices in; required unless invoice_id is given",
+                    "Workspace ID to list invoices in; required unless invoice_id is given. Deprecated input alias: matter_id.",
                 },
                 invoice_id: {
                   type: "string",
@@ -4588,11 +4600,12 @@ export const generatedRouteMap: RouteNode = {
             toolName: "list_audit_log",
             flags: [
               {
-                flag: "--matter-id",
-                prop: "matter_id",
+                flag: "--workspace-id",
+                prop: "workspace_id",
                 kind: "string",
                 repeatable: false,
-                description: "Only entries scoped to this matter/workspace",
+                description:
+                  "Only entries scoped to this workspace. Deprecated input alias: matter_id.",
                 required: false,
               },
               {
@@ -4658,10 +4671,11 @@ export const generatedRouteMap: RouteNode = {
               required: [],
               additionalProperties: false,
               properties: {
-                matter_id: {
+                workspace_id: {
                   type: "string",
                   minLength: 1,
-                  description: "Only entries scoped to this matter/workspace",
+                  description:
+                    "Only entries scoped to this workspace. Deprecated input alias: matter_id.",
                 },
                 action: {
                   type: "string",

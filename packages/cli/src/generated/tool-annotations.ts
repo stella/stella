@@ -78,19 +78,24 @@ export const generatedToolAnnotations: Readonly<
           command: "new-document",
           include: [
             "template_id",
-            "matter_id",
+            "workspace_id",
             "idempotency_key",
             "parent_id",
             "name",
             "values",
           ],
-          required: ["template_id", "matter_id", "idempotency_key", "values"],
+          required: [
+            "template_id",
+            "workspace_id",
+            "idempotency_key",
+            "values",
+          ],
         },
         create_version: {
           command: "new-version",
           include: [
             "template_id",
-            "matter_id",
+            "workspace_id",
             "idempotency_key",
             "entity_id",
             "name",
@@ -98,7 +103,7 @@ export const generatedToolAnnotations: Readonly<
           ],
           required: [
             "template_id",
-            "matter_id",
+            "workspace_id",
             "entity_id",
             "idempotency_key",
             "values",
@@ -257,14 +262,14 @@ export const generatedToolAnnotations: Readonly<
       subcommands: {
         add_member: {
           command: "add-member",
-          include: ["matter_id", "user_id"],
-          required: ["matter_id", "user_id"],
+          include: ["workspace_id", "user_id"],
+          required: ["workspace_id", "user_id"],
         },
         remove_member: {
           command: "remove-member",
           destructive: true,
-          include: ["matter_id", "user_id"],
-          required: ["matter_id", "user_id"],
+          include: ["workspace_id", "user_id"],
+          required: ["workspace_id", "user_id"],
         },
         update_org_settings: {
           command: "update-settings",

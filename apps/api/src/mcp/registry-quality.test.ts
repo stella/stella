@@ -77,9 +77,13 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // three keyword classes reproduces the previous payload byte for byte, so no
 // description, enum or property grew; the default surface still fits its
 // ceiling unchanged.
+// anonymized bumped 23_403 -> 23_557, exactly the measured growth from naming
+// the scoping input `workspace_id` and stating its deprecated `matter_id` alias
+// in one clause per field. The alias clause comes back out when the
+// deprecation window closes.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
   default: 70_000,
-  anonymized: 23_403,
+  anonymized: 23_557,
 };
 
 // Longest description measured after plan 047: save_template at 724 chars
@@ -542,8 +546,9 @@ const collectOpenObjectSchemas = (
 
 // Advertised input property names: lowercase words joined by single
 // underscores. The name is the one part of a tool contract an agent has to
-// reproduce exactly, so a camelCase outlier (or a synonym like `workspace_id`
-// beside ten `matter_id`s) is a correctness cost, not a style preference.
+// reproduce exactly, so a camelCase outlier (or a synonym for a name the rest
+// of the surface already settled) is a correctness cost, not a style
+// preference. `input-vocabulary.test.ts` guards the scoping name specifically.
 const SNAKE_CASE_PROPERTY = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/u;
 
 /**

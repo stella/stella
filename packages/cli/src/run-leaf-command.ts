@@ -386,7 +386,7 @@ export const parseInputObject = async ({
   // Parse only: schema validation runs on the COMPOSED args (after value flags
   // overlay their paths), never on the raw `--input` alone. Validating here would
   // reject a `--input` that legitimately omits a required flag-backed path (e.g.
-  // a `matter_id` supplied by `--matter-id`), defeating the compose semantics.
+  // a `workspace_id` supplied by `--workspace-id`), defeating the compose semantics.
   return parsed.value;
 };
 

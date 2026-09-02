@@ -60,7 +60,7 @@ type UploadFlags = CommonFlagValues & {
   readonly name: string | undefined;
   readonly parentId: string | undefined;
   readonly propertyId: string | undefined;
-  readonly matterId: string;
+  readonly workspaceId: string;
 };
 
 const renderNestedFailure = ({
@@ -103,7 +103,7 @@ const renderNestedFailure = ({
  */
 export const uploadSpecificFlags: {
   readonly file: RequiredStringFlagSpec;
-  readonly matterId: RequiredStringFlagSpec;
+  readonly workspaceId: RequiredStringFlagSpec;
   readonly propertyId: OptionalStringFlagSpec;
   readonly parentId: OptionalStringFlagSpec;
   readonly entityId: OptionalStringFlagSpec;
@@ -115,8 +115,8 @@ export const uploadSpecificFlags: {
     kind: "parsed",
     parse: parseString,
   },
-  matterId: {
-    brief: "Matter id that will own the document",
+  workspaceId: {
+    brief: "Workspace id that will own the document",
     kind: "parsed",
     parse: parseString,
   },
@@ -200,7 +200,7 @@ export const uploadCommand: Command<Context> = buildCommand<
         filePath: flags.file,
         mimeType: flags.mimeType,
         name: flags.name,
-        workspaceId: flags.matterId,
+        workspaceId: flags.workspaceId,
         ...(flags.entityId === undefined
           ? {
               target: "new_document" as const,
@@ -232,7 +232,7 @@ export const uploadCommand: Command<Context> = buildCommand<
     }
     renderNestedFailure({ context: this, failure: uploaded.error.failure });
     writers.stderr(
-      `hint: retry finalization with '${formatCapabilityCommand("uploads.update")} --workspace-id ${flags.matterId} --upload-id ${uploaded.error.uploadId}'\n`,
+      `hint: retry finalization with '${formatCapabilityCommand("uploads.update")} --workspace-id ${flags.workspaceId} --upload-id ${uploaded.error.uploadId}'\n`,
     );
   },
   parameters: {

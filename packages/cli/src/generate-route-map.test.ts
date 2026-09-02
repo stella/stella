@@ -176,8 +176,8 @@ describe("generateRouteMap: discriminator split (S2)", () => {
 
   test("per-subcommand flag sets and required sets match the table", () => {
     expect(add?.flags.map((f) => f.flag).sort()).toEqual([
-      "--matter-id",
       "--user-id",
+      "--workspace-id",
     ]);
     expect(add?.flags.every((f) => f.required)).toBe(true);
     expect(settings?.flags.map((f) => f.flag).sort()).toEqual([
@@ -478,7 +478,7 @@ describe("generateRouteMap: Phase 4 domains (S1/S3)", () => {
 
   test("run_playbook required[] props become required flags", () => {
     const run = findLeaf(tree, ["playbook", "run"]);
-    expect(flagFor(run ?? errorSpec(), "--matter-id")?.required).toBe(true);
+    expect(flagFor(run ?? errorSpec(), "--workspace-id")?.required).toBe(true);
     expect(flagFor(run ?? errorSpec(), "--playbook-id")?.required).toBe(true);
   });
 });
