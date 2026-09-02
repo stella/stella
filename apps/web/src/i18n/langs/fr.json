@@ -2391,6 +2391,7 @@
     },
     "openChat": "Ouvrir la conversation",
     "reopenTab": "Rouvrir {name}",
+    "resizePane": "Redimensionner le volet",
     "review": {
       "actionNeeded": "Action requise",
       "addComment": "Ajouter comme commentaire",

@@ -2391,6 +2391,7 @@
     },
     "openChat": "Ava vestlus",
     "reopenTab": "Ava {name} uuesti",
+    "resizePane": "Muuda paneeli suurust",
     "review": {
       "actionNeeded": "Vajab tegutsemist",
       "addComment": "Lisa kommentaarina",

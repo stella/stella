@@ -2391,6 +2391,7 @@
     },
     "openChat": "Chat öffnen",
     "reopenTab": "{name} erneut öffnen",
+    "resizePane": "Bereich in der Größe ändern",
     "review": {
       "actionNeeded": "Handlungsbedarf",
       "addComment": "Als Kommentar hinzufügen",

@@ -2391,6 +2391,7 @@
     },
     "openChat": "فتح المحادثة",
     "reopenTab": "إعادة فتح {name}",
+    "resizePane": "تغيير حجم اللوحة",
     "review": {
       "actionNeeded": "تحتاج إلى إجراء",
       "addComment": "إضافة كتعليق",
