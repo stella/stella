@@ -150,10 +150,13 @@ export const Route = createFileRoute("/law/cases/")({
         ? undefined
         : toCaseLawCountryParam(localeDefault));
 
+    // Only a request that names nothing goes home; a jurisdiction alone is
+    // the browse slice the home's country links and the crawler follow.
     if (
       search.q === undefined &&
       search.court === undefined &&
-      search.year === undefined
+      search.year === undefined &&
+      search.country === undefined
     ) {
       throw redirect({ to: "/law", search: { country }, replace: true });
     }

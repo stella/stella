@@ -637,7 +637,7 @@ describe("public-law reader role", () => {
           readNonRedistributableCaseLawSourceIdsQuery.publicLawSharedQuery,
         );
 
-        await readCaseLawCorpusStatusQuery(tx);
+        await readCaseLawCorpusStatusQuery(tx, { excludedSourceIds: [] });
         exercised.add(readCaseLawCorpusStatusQuery.publicLawSharedQuery);
 
         await readNonRedistributableLegislationSourceIdsQuery(tx);

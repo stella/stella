@@ -78,7 +78,11 @@ export const LawEntryBox = ({
             maxLength={maxLength}
             onChange={(event) => onQueryChange(event.currentTarget.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
                 event.preventDefault();
                 onSubmit();
               }

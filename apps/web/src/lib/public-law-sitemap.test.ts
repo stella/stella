@@ -188,7 +188,7 @@ describe("public law sitemap", () => {
     });
 
     expect(xml).toContain("<loc>http://localhost:3000/law</loc>");
-    expect(xml).toContain("http://localhost:3000/law/cases");
+    expect(xml).not.toContain("http://localhost:3000/law/cases");
     expect(xml).not.toContain("workspace");
     expect(xml).not.toContain("organization");
     expect(xml).not.toContain("matter");
@@ -522,7 +522,7 @@ describe("public law sitemap", () => {
     expect(indexXml).toContain(
       "<loc>http://localhost:3000/sitemaps/law.xml</loc>",
     );
-    expect(staticXml).toContain("http://localhost:3000/law/cases");
+    expect(staticXml).not.toContain("http://localhost:3000/law/cases");
     expect(robots).toBe("User-agent: *\nDisallow: /\n");
   });
 

@@ -287,9 +287,9 @@ export const createPublicLawStaticSitemapXml = ({
 `;
   }
 
-  // The home is the entry point; the results screen stays crawlable because
-  // the home's browse links point into it.
-  const entries = (["/law", "/law/cases"] as const).map((path) =>
+  // The home is the entry point; the results screen is reached through the
+  // browse links, since an unfiltered request redirects to the home.
+  const entries = (["/law"] as const).map((path) =>
     createPublicLawCanonicalUrl(path),
   );
 
