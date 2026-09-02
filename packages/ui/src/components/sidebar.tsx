@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, use, useId, useState } from "react";
+import type { CSSProperties } from "react";
 
 import { panic } from "better-result";
 import { cva } from "class-variance-authority";
@@ -54,6 +55,22 @@ const DEFAULT_SIDEBAR_OPEN = true;
 const DEFAULT_TOGGLE_LABEL = "Toggle Sidebar";
 const DEFAULT_MOBILE_TITLE = "Sidebar";
 const DEFAULT_MOBILE_DESCRIPTION = "Displays the mobile sidebar.";
+
+/**
+ * React's `CSSProperties` has no key for a custom property, so the variables
+ * the shell sets are named here, on a local style type, rather than through
+ * a module augmentation: an augmentation only holds inside the program that
+ * declares it, and a consumer compiling this file from source (a workspace
+ * package, a host on the source export) would lose it.
+ */
+type SidebarStyle = CSSProperties & {
+  "--sidebar-width"?: string;
+  "--sidebar-width-icon"?: string;
+};
+
+type SidebarSkeletonStyle = CSSProperties & {
+  "--skeleton-width"?: string;
+};
 
 const skeletonWidthFromId = (id: string): string => {
   let hash = 0;
@@ -153,6 +170,12 @@ const SidebarProvider = ({
     toggleSidebar,
   };
 
+  const wrapperStyle: SidebarStyle = {
+    "--sidebar-width": SIDEBAR_WIDTH,
+    "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
+    ...style,
+  };
+
   return (
     <SidebarContext value={contextValue}>
       <div
@@ -161,11 +184,7 @@ const SidebarProvider = ({
           className,
         )}
         data-slot="sidebar-wrapper"
-        style={{
-          "--sidebar-width": SIDEBAR_WIDTH,
-          "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
-          ...style,
-        }}
+        style={wrapperStyle}
         {...props}
       >
         {children}
@@ -221,6 +240,9 @@ const Sidebar = ({
   }
 
   if (isMobile) {
+    const mobileStyle: SidebarStyle = {
+      "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
+    };
     return (
       <Sheet onOpenChange={setOpenMobile} open={openMobile} {...props}>
         <SheetPopup
@@ -229,9 +251,7 @@ const Sidebar = ({
           data-sidebar="sidebar"
           data-slot="sidebar"
           side={side === "left" ? "inline-start" : "inline-end"}
-          style={{
-            "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-          }}
+          style={mobileStyle}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>{mobileTitle}</SheetTitle>
@@ -558,6 +578,9 @@ const sidebarMenuButtonVariants = cva(
         default: "h-8 text-sm",
         sm: "h-7 text-xs",
         lg: "h-12 text-sm",
+        /** A 44px target in both states, for a sidebar that stands in for
+         * the application rail on touch and hybrid devices. */
+        rail: "h-11 text-sm group-data-[collapsible=icon]:size-11! group-data-[collapsible=icon]:justify-center",
       },
     },
     defaultVariants: {
@@ -674,7 +697,9 @@ const SidebarMenuSkeleton = ({
   showIcon?: boolean;
 }) => {
   const skeletonId = useId();
-  const width = skeletonWidthFromId(skeletonId);
+  const textStyle: SidebarSkeletonStyle = {
+    "--skeleton-width": skeletonWidthFromId(skeletonId),
+  };
 
   return (
     <div
@@ -692,9 +717,7 @@ const SidebarMenuSkeleton = ({
       <Skeleton
         className="h-4 max-w-(--skeleton-width) flex-1"
         data-sidebar="menu-skeleton-text"
-        style={{
-          "--skeleton-width": width,
-        }}
+        style={textStyle}
       />
     </div>
   );

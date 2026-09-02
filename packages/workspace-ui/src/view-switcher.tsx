@@ -12,6 +12,7 @@ import {
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 
+import { TOOLBAR_ROW_HEIGHT } from "@stll/ui/inspector";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 import { cn } from "@stll/ui/utils";
 
@@ -129,7 +130,12 @@ export const WorkspaceViewSwitcher = <View extends WorkspaceViewSwitcherItem>({
 
   return (
     <div
-      className="flex min-w-0 flex-1 items-center gap-1 px-2"
+      // The strip is one toolbar row, the same height as the top bar above
+      // it and a kanban column header below it, whatever the tabs render.
+      className={cn(
+        "flex min-w-0 flex-1 items-center gap-1 px-2",
+        TOOLBAR_ROW_HEIGHT,
+      )}
       dir={direction}
     >
       <div className="min-w-0 flex-1" ref={setStripContainer}>
