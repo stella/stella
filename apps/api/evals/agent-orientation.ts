@@ -415,8 +415,13 @@ const TASKS: readonly Task[] = [
   },
   {
     id: "upload-document-version",
+    // The host attached the file, so the direct upload tool applies; the
+    // picker is only for hosts that cannot pass a file reference.
     request:
-      "Upload the local file ./contract-v2.docx as a new version of document doc_42.",
+      "The host attached contract-v2.docx (file_id file_9f2, download_url " +
+      "https://files.example.test/9f2, mime_type application/vnd.openxmlformats-" +
+      "officedocument.wordprocessingml.document). Upload it as a new version of " +
+      "document doc_42.",
     mcp: {
       toolName: "upload_document_version",
       checkArgs: (args) => [
