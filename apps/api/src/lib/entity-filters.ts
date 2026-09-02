@@ -7,11 +7,13 @@ import {
   type CompareNode,
   type ConditionNode,
   type ConditionValue,
+  type FoldHandlers,
   type GroupNode,
   type Operand,
   type PredicateNode,
   type RefOperand,
   evaluateCondition,
+  foldCondition,
   pruneIncomplete,
 } from "@stll/conditions";
 
@@ -671,38 +673,29 @@ const compilePredicate = (node: PredicateNode): SQL | null => {
 
 // -- Group nodes --
 
-const compileGroup = (node: GroupNode): SQL | null => {
-  const children: SQL[] = [];
-  for (const child of node.children) {
-    const compiled = compileNode(child);
-    if (compiled) {
-      children.push(compiled);
-    }
-  }
-  if (children.length === 0) {
-    return null;
-  }
-
-  const combined =
-    node.combinator === "and" ? and(...children) : or(...children);
-  if (!combined) {
-    return null;
-  }
-  return node.negated ? not(combined) : combined;
-};
-
-const compileNode = (node: ConditionNode): SQL | null => {
-  switch (node.type) {
-    case "group":
-      return compileGroup(node);
-    case "compare":
-      return compileCompare(node);
-    case "predicate":
-      return compilePredicate(node);
-    default:
+/**
+ * The structural fold rule (see `@stll/conditions`'s `foldCondition`): a leaf
+ * compiles via `compileCompare`/`compilePredicate`, and a group combines its
+ * already-dropped-of-`null` children with `and`/`or` then `not` when negated.
+ * A group left with no surviving children never reaches `group` at all — the
+ * fold drops it before this callback runs, matching the old `compileGroup`'s
+ * `children.length === 0` guard.
+ */
+const conditionFoldHandlers: FoldHandlers<SQL> = {
+  leaf: (node) =>
+    node.type === "compare" ? compileCompare(node) : compilePredicate(node),
+  group: (node, children) => {
+    const combined =
+      node.combinator === "and" ? and(...children) : or(...children);
+    if (!combined) {
       return null;
-  }
+    }
+    return node.negated ? not(combined) : combined;
+  },
 };
+
+const compileNode = (node: ConditionNode): SQL | null =>
+  foldCondition(node, conditionFoldHandlers);
 
 /**
  * Compiles the implicit-AND filter array into SQL WHERE conditions
