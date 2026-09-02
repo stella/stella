@@ -1,5 +1,15 @@
 # @stll/ui
 
+## 0.18.0
+
+### Minor Changes
+
+- [#2829](https://github.com/stella/stella/pull/2829) [`6fb442a`](https://github.com/stella/stella/commit/6fb442ad7da2a21f7540e06029086bd04ee559a8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the `chip` Button size (a 28px pill at every breakpoint, for chip rows beside a composer) and the `scrollbar-none` utility (a scroll container with no scrollbar and no reserved track). Remove the `scrollbar-hover` utility, which had no remaining consumer.
+
+### Patch Changes
+
+- [#2832](https://github.com/stella/stella/pull/2832) [`af89254`](https://github.com/stella/stella/commit/af89254e3173eec3551f027f12fe1490624670b5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A kanban band folded from its caption no longer peeks straight back open under the resting pointer, and a peeked band stays open while the pointer moves between its caption and its columns instead of folding and reopening on every crossing.
+
 ## 0.17.1
 
 ### Patch Changes

@@ -1,5 +1,28 @@
 # @stll/cli
 
+## 0.9.0
+
+### Minor Changes
+
+- [#2759](https://github.com/stella/stella/pull/2759) [`700b43d`](https://github.com/stella/stella/commit/700b43d923d29a4c3025dc16ffbf2e390a08b82a) Thanks [@shanehobson](https://github.com/shanehobson)! - Expose the chat thread fork endpoint. `POST /chat/threads/:threadId/fork` copies
+  a thread's history up to a chosen message into a new thread, so the route map
+  and capability catalog now carry it.
+
+### Patch Changes
+
+- [#2799](https://github.com/stella/stella/pull/2799) [`9572668`](https://github.com/stella/stella/commit/95726685abcd668540f3b499aed9b5b31c133476) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The generated agent skill (`stella-cli/SKILL.md`) now documents every curated
+  command's flags (name, required/optional, type, one-line description) and adds
+  a "When no curated command fits" section: the live capability domain list, two
+  worked `stella capability <domain> <action>` examples, and a note that
+  `--input` JSON keys follow the schema's own casing (snake_case for curated
+  tools, camelCase for capability commands) rather than a guessable convention.
+  It also states that the CLI cannot upload a binary file (a new document
+  version), which needs an MCP-connected client or the web app instead.
+
+- [#2831](https://github.com/stella/stella/pull/2831) [`1526d76`](https://github.com/stella/stella/commit/1526d7634ac8ff39ec8cdd7081ff2a39a403bedd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The capability catalog lists the task assignee move operation, which reassigns a task from one person to another in a single request.
+
+- [#2801](https://github.com/stella/stella/pull/2801) [`440d293`](https://github.com/stella/stella/commit/440d293cf213ef78c9e19378dd9bda3deed7f7b8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Regenerate template tool descriptions (`list_templates`, `fill_template`, `save_filled_template`) for the required-fields fill rejection and `arrays` shape hint.
+
 ## 0.8.0
 
 ### Minor Changes

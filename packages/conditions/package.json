@@ -1,6 +1,6 @@
 {
   "name": "@stll/conditions",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A generic boolean/predicate condition engine: schema, evaluate, walk.",
   "keywords": [
     "ast",
