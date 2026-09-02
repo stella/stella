@@ -14,7 +14,6 @@ import {
   type ExtractionRunScope,
   fields,
   justifications,
-  properties,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
@@ -36,6 +35,7 @@ import {
 import { extractionRunStore } from "@/api/lib/extraction-runs/root-store";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
+import { markPropertiesFresh } from "@/api/lib/properties/property-status";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import {
   createBullMqConnection,
@@ -2023,17 +2023,13 @@ const finishWorkflow = async (
     // plan. Properties created mid-workflow are not in the snapshot —
     // they stay stale and trigger an automatic follow-up run below.
     try {
-      await scopedDb((tx) =>
-        tx
-          .update(properties)
-          .set({ status: "fresh" })
-          .where(
-            and(
-              eq(properties.workspaceId, workspaceId),
-              inArray(properties.id, planPropertyIds),
-            ),
-          ),
-      );
+      await scopedDb(async (tx) => {
+        await markPropertiesFresh({
+          tx,
+          workspaceId,
+          propertyIds: planPropertyIds,
+        });
+      });
     } catch (error: unknown) {
       captureError(error, { workspaceId });
     }

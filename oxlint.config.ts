@@ -194,6 +194,12 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-unbranded-ownership-id-param.fixture.ts", [
     "no-unbranded-ownership-id-param/no-unbranded-ownership-id-param",
   ]),
+  fixtureRuleOverride("no-direct-property-table-write.fixture.ts", [
+    "no-direct-property-table-write/no-direct-property-table-write",
+  ]),
+  fixtureRuleOverride("no-condition-combinator-outside-conditions.fixture.ts", [
+    "no-condition-combinator-outside-conditions/no-condition-combinator-outside-conditions",
+  ]),
   fixtureRuleOverride("no-unjustified-double-assertion.fixture.ts", [
     "no-unjustified-double-assertion/no-unjustified-double-assertion",
   ]),
@@ -504,6 +510,9 @@ export default defineConfig({
     "require-timestamp-id-cursor-codec/require-timestamp-id-cursor-codec":
       "error",
     "no-direct-audit-log-insert/no-direct-audit-log-insert": "error",
+    "no-direct-property-table-write/no-direct-property-table-write": "error",
+    "no-condition-combinator-outside-conditions/no-condition-combinator-outside-conditions":
+      "error",
     "no-direct-buffer-cleanup-intent-delete/no-direct-buffer-cleanup-intent-delete":
       "error",
     "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status":
@@ -826,6 +835,8 @@ export default defineConfig({
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
+    "./.oxlint-plugins/no-direct-property-table-write.ts",
+    "./.oxlint-plugins/no-condition-combinator-outside-conditions.ts",
     "./.oxlint-plugins/no-direct-buffer-cleanup-intent-delete.ts",
     "./.oxlint-plugins/require-buffer-cleanup-intent-status.ts",
     "./.oxlint-plugins/no-unvalidated-json-domain-cast.ts",
