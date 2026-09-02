@@ -2982,6 +2982,8 @@
     }
   },
   "lawHome": {
+    "databaseStatus": "{count} záznamov · aktualizované {date}",
+    "databaseUpToDate": "Aktuálne",
     "enteringIntoForce": "Čoskoro nadobudne účinnosť",
     "inForceFrom": "Účinné od {date}",
     "prompt": "Čo hľadáte?",

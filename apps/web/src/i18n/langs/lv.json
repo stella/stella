@@ -2982,6 +2982,8 @@
     }
   },
   "lawHome": {
+    "databaseStatus": "{count} ieraksti · atjaunināts {date}",
+    "databaseUpToDate": "Aktuāls",
     "enteringIntoForce": "Drīzumā stāsies spēkā",
     "inForceFrom": "Stājas spēkā {date}",
     "prompt": "Ko jūs meklējat?",

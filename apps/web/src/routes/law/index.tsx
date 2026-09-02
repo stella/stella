@@ -14,6 +14,7 @@ import {
 import {
   ActivityIcon,
   BookOpenIcon,
+  GlobeIcon,
   HistoryIcon,
   ScaleIcon,
   SearchIcon,
@@ -21,6 +22,7 @@ import {
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { ComposerPicker } from "@stll/ui/composer";
 import {
   LANDING_ROW_CLASS,
   LANDING_SECTION_HEADING_CLASS,
@@ -33,7 +35,6 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
-import { PublicLawCountrySelect } from "@/components/public-law-search";
 import {
   CASE_LAW_ALL_COUNTRIES,
   caseLawCountryRegion,
@@ -79,6 +80,7 @@ import {
   lawHomeDescriptor,
   statuteCountryOf,
 } from "@/routes/law/-law-home/jurisdictions";
+import { LawDatabaseStatus } from "@/routes/law/-law-home/law-database-status";
 import { LawEntryBox } from "@/routes/law/-law-home/law-entry-box";
 import {
   PLACEHOLDER_RECENT_SEARCHES,
@@ -86,8 +88,8 @@ import {
 } from "@/routes/law/-law-home/law-home-placeholders";
 import {
   type LawHomeScope,
-  LawScopeTabs,
-} from "@/routes/law/-law-home/law-scope-tabs";
+  LawScopePicker,
+} from "@/routes/law/-law-home/law-scope-picker";
 
 /** What the box accepts, and therefore what the results route may receive. */
 const MAX_QUERY_LENGTH = 256;
@@ -407,16 +409,10 @@ function LawHome() {
             onSubmit={() => detached(runEntry(queryInput), "law-home.submit")}
             pickers={
               <>
-                <PublicLawCountrySelect
-                  countries={[
-                    { label: t("common.all"), value: CASE_LAW_ALL_COUNTRIES },
-                    ...pillJurisdictions(facets.country).map((code) => ({
-                      label: countryName(code),
-                      value: toCaseLawCountryParam(code),
-                    })),
-                  ]}
-                  country={countryParam}
-                  onCountryChange={(next) => {
+                <ComposerPicker
+                  ariaLabel={t("common.country")}
+                  icon={<GlobeIcon />}
+                  onChange={(next) => {
                     detached(
                       routeNavigate({
                         replace: true,
@@ -425,9 +421,16 @@ function LawHome() {
                       "law-home.switch-country",
                     );
                   }}
-                  variant="picker"
+                  options={[
+                    { label: t("common.all"), value: CASE_LAW_ALL_COUNTRIES },
+                    ...pillJurisdictions(facets.country).map((code) => ({
+                      label: countryName(code),
+                      value: toCaseLawCountryParam(code),
+                    })),
+                  ]}
+                  value={countryParam}
                 />
-                <LawScopeTabs
+                <LawScopePicker
                   corpora={corpora}
                   onScopeChange={setRequestedScope}
                   scope={activeScope}
@@ -437,6 +440,7 @@ function LawHome() {
             placeholder={t("lawHome.searchPlaceholder")}
             query={queryInput}
             searchLabel={t("lawHome.searchLabel")}
+            status={<LawDatabaseStatus />}
           />
         </>
       }

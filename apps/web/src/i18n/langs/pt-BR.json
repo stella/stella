@@ -2982,6 +2982,8 @@
     }
   },
   "lawHome": {
+    "databaseStatus": "{count} registros · atualizado em {date}",
+    "databaseUpToDate": "Atualizado",
     "enteringIntoForce": "Entrada em vigor em breve",
     "inForceFrom": "Em vigor a partir de {date}",
     "prompt": "O que você procura?",

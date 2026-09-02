@@ -17,6 +17,16 @@ export const PLACEHOLDER_RECENT_SEARCHES: readonly PlaceholderRecentSearch[] = [
   { query: "ECLI:CZ:NS:2012:23.CDO.1572.2012.1", when: "minulý týden" },
 ];
 
+export type PlaceholderDatabaseStatus = {
+  entries: number;
+  updatedAt: string;
+};
+
+export const PLACEHOLDER_DATABASE_STATUS: PlaceholderDatabaseStatus = {
+  entries: 3_841_072,
+  updatedAt: "2026-09-02T15:45:00Z",
+};
+
 export type PlaceholderSignal = {
   title: string;
   meta: string;

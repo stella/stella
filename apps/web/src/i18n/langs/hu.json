@@ -2982,6 +2982,8 @@
     }
   },
   "lawHome": {
+    "databaseStatus": "{count} bejegyzés · frissítve {date}",
+    "databaseUpToDate": "Naprakész",
     "enteringIntoForce": "Hamarosan hatályba lép",
     "inForceFrom": "Hatálybalépés: {date}",
     "prompt": "Mit keres?",

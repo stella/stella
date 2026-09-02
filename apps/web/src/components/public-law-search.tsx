@@ -3,8 +3,6 @@ import { MessageSquareTextIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { COMPOSER_PICKER_TRIGGER_CLASS } from "@stll/ui/composer";
-import { CONTROL_SIZE } from "@stll/ui/control-size";
 import { Input } from "@stll/ui/input";
 import {
   Select,
@@ -13,7 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
-import { cn } from "@stll/ui/utils";
 
 import { openPublicLawChat } from "@/components/public-law-ask";
 import { usePublicSignInRequest } from "@/components/public-sign-in-request";
@@ -98,17 +95,13 @@ export const PublicLawSearch = ({
 type PublicLawCountrySelectProps = Pick<
   PublicLawSearchProps,
   "countries" | "country" | "onCountryChange"
-> & {
-  /** `picker` sits in the status row under a composer box, as the chat's pickers do. */
-  variant?: "outline" | "picker";
-};
+>;
 
 /** The jurisdiction pill: one value, the route's, in the route's own form. */
-export const PublicLawCountrySelect = ({
+const PublicLawCountrySelect = ({
   countries,
   country,
   onCountryChange,
-  variant = "outline",
 }: PublicLawCountrySelectProps) => {
   const t = useTranslations();
 
@@ -121,18 +114,7 @@ export const PublicLawCountrySelect = ({
       }}
       value={country}
     >
-      <SelectTrigger
-        aria-label={t("common.country")}
-        className={cn(
-          variant === "picker"
-            ? [
-                COMPOSER_PICKER_TRIGGER_CLASS,
-                "h-auto min-h-0 w-auto border-0 bg-transparent px-1.5 py-0.5 shadow-none before:hidden sm:min-h-0 [&_svg:not([class*='size-'])]:size-3",
-              ]
-            : "w-40",
-        )}
-        size={variant === "picker" ? CONTROL_SIZE.sm : CONTROL_SIZE.default}
-      >
+      <SelectTrigger aria-label={t("common.country")} className="w-40">
         <SelectValue placeholder={t("common.country")} />
       </SelectTrigger>
       <SelectPopup>

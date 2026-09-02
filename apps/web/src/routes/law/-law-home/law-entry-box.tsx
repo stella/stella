@@ -23,8 +23,10 @@ import { PublicLawAskInChat } from "@/components/public-law-search";
 type LawEntryBoxProps = {
   /** The chat prompt for the current entry; null hides the chat button. */
   askPrompt: (query: string) => string | null;
-  /** The pickers in the status row under the box: scope, jurisdiction. */
+  /** The pickers in the status row under the box: jurisdiction, scope. */
   pickers: ReactNode;
+  /** The row's end slot, where the chat keeps its meter: the corpus's status. */
+  status: ReactNode;
   maxLength: number;
   onQueryChange: (value: string) => void;
   onSubmit: () => void;
@@ -48,6 +50,7 @@ export const LawEntryBox = ({
   placeholder,
   query,
   searchLabel,
+  status,
 }: LawEntryBoxProps) => {
   const trimmed = query.trim();
   const prompt = trimmed.length > 0 ? askPrompt(trimmed) : null;
@@ -108,6 +111,7 @@ export const LawEntryBox = ({
         </div>
       </form>
       <ComposerStatusRow
+        end={status}
         start={<div className="flex min-w-0 items-center gap-1">{pickers}</div>}
       />
     </div>

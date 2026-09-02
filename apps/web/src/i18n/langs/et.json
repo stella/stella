@@ -2982,6 +2982,8 @@
     }
   },
   "lawHome": {
+    "databaseStatus": "{count} kirjet · uuendatud {date}",
+    "databaseUpToDate": "Ajakohane",
     "enteringIntoForce": "Peagi jõustuv",
     "inForceFrom": "Jõustub {date}",
     "prompt": "Mida otsite?",

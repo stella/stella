@@ -1,7 +1,7 @@
+import { ListFilterIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { COMPOSER_PICKER_TRIGGER_CLASS } from "@stll/ui/composer";
-import { cn } from "@stll/ui/utils";
+import { ComposerPicker } from "@stll/ui/composer";
 
 import type { TranslationKey } from "@/i18n/types";
 import type { LawScope } from "@/routes/law/-law-home/jurisdictions";
@@ -15,10 +15,10 @@ const SCOPE_LABEL_KEYS = {
   statutes: "statutes.title",
 } as const satisfies Record<LawHomeScope, TranslationKey>;
 
-/** Legislation before case law, as the tabs read left to right. */
+/** Legislation before case law, as the choices read top to bottom. */
 const SCOPE_ORDER = ["statutes", "decisions"] as const;
 
-type LawScopeTabsProps = {
+type LawScopePickerProps = {
   /** The corpora this jurisdiction is covered by; a lacking one is not offered. */
   corpora: readonly LawScope[];
   onScopeChange: (scope: LawHomeScope) => void;
@@ -26,17 +26,17 @@ type LawScopeTabsProps = {
 };
 
 /**
- * Which corpus an entry is meant for, as pickers in the status row under
+ * Which corpus an entry is meant for, as a picker in the status row under
  * the box. The box reads identifiers from both grammars under `all`, so the
  * choice only matters for words and for an identifier both grammars would
  * claim. A jurisdiction the corpus covers on one side only has nothing to
- * choose between, and gets no pickers.
+ * choose between, and gets no picker.
  */
-export const LawScopeTabs = ({
+export const LawScopePicker = ({
   corpora,
   onScopeChange,
   scope,
-}: LawScopeTabsProps) => {
+}: LawScopePickerProps) => {
   const t = useTranslations();
 
   if (corpora.length < 2) {
@@ -49,28 +49,15 @@ export const LawScopeTabs = ({
   ];
 
   return (
-    <div
-      aria-label={t("lawHome.scopeLabel")}
-      className="flex items-center gap-0.5"
-      role="group"
-    >
-      {scopes.map((option) => {
-        const isActive = option === scope;
-        return (
-          <button
-            aria-pressed={isActive}
-            className={cn(
-              COMPOSER_PICKER_TRIGGER_CLASS,
-              isActive && "text-foreground bg-accent",
-            )}
-            key={option}
-            onClick={() => onScopeChange(option)}
-            type="button"
-          >
-            {t(SCOPE_LABEL_KEYS[option])}
-          </button>
-        );
-      })}
-    </div>
+    <ComposerPicker
+      ariaLabel={t("lawHome.scopeLabel")}
+      icon={<ListFilterIcon />}
+      onChange={onScopeChange}
+      options={scopes.map((option) => ({
+        label: t(SCOPE_LABEL_KEYS[option]),
+        value: option,
+      }))}
+      value={scope}
+    />
   );
 };

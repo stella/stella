@@ -2,7 +2,16 @@
 
 import type { ReactNode } from "react";
 
+import { ChevronDownIcon } from "lucide-react";
+
 import { cn } from "../lib/utils";
+import {
+  Menu,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuTrigger,
+} from "./menu";
 
 /**
  * The tokens every composer box shares: the chat hero, the chat follow-up
@@ -129,5 +138,67 @@ export const ComposerStatusRow = ({
       {start}
       {end !== undefined && <div className="ms-auto">{end}</div>}
     </div>
+  );
+};
+
+export type ComposerPickerOption<Value extends string> = {
+  label: string;
+  value: Value;
+};
+
+type ComposerPickerProps<Value extends string> = {
+  /** The accessible name of the choice, e.g. "Jurisdiction". */
+  ariaLabel: string;
+  /** The glyph before the current choice, sized `size-3` by the trigger. */
+  icon: ReactNode;
+  onChange: (value: Value) => void;
+  options: readonly ComposerPickerOption<Value>[];
+  value: Value;
+};
+
+/**
+ * One choice among a few in the status row under a composer box: the
+ * trigger the chat's matter picker renders, with a radio menu behind it.
+ * Every picker under a box renders through this so the row reads as one
+ * kind of control.
+ */
+export const ComposerPicker = <Value extends string>({
+  ariaLabel,
+  icon,
+  onChange,
+  options,
+  value,
+}: ComposerPickerProps<Value>) => {
+  const current = options.find((option) => option.value === value);
+
+  return (
+    <Menu>
+      <MenuTrigger
+        aria-label={ariaLabel}
+        className={COMPOSER_PICKER_TRIGGER_CLASS}
+      >
+        <span className="flex size-3 shrink-0 items-center justify-center [&>svg]:size-3">
+          {icon}
+        </span>
+        <span className="truncate">{current?.label ?? value}</span>
+        <ChevronDownIcon
+          aria-hidden="true"
+          className="size-3 shrink-0 opacity-70"
+        />
+      </MenuTrigger>
+      <MenuPopup align="start" sideOffset={6}>
+        <MenuRadioGroup value={value}>
+          {options.map((option) => (
+            <MenuRadioItem
+              key={option.value}
+              onClick={() => onChange(option.value)}
+              value={option.value}
+            >
+              {option.label}
+            </MenuRadioItem>
+          ))}
+        </MenuRadioGroup>
+      </MenuPopup>
+    </Menu>
   );
 };

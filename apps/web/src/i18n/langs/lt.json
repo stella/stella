@@ -2982,6 +2982,8 @@
     }
   },
   "lawHome": {
+    "databaseStatus": "{count} įrašų · atnaujinta {date}",
+    "databaseUpToDate": "Atnaujinta",
     "enteringIntoForce": "Netrukus įsigalios",
     "inForceFrom": "Įsigalioja {date}",
     "prompt": "Ko ieškote?",

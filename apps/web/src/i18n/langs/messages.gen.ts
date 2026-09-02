@@ -2985,6 +2985,8 @@ type Messages = {
     };
   };
   "lawHome": {
+    "databaseStatus": "{count} entries · updated {date}";
+    "databaseUpToDate": "Up to date";
     "enteringIntoForce": "Entering into force";
     "inForceFrom": "In force from {date}";
     "prompt": "What are you looking for?";

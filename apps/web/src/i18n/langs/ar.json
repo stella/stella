@@ -2982,6 +2982,8 @@
     }
   },
   "lawHome": {
+    "databaseStatus": "{count} سجلًا · حُدّثت {date}",
+    "databaseUpToDate": "محدّثة",
     "enteringIntoForce": "يدخل حيز النفاذ قريبًا",
     "inForceFrom": "نافذ اعتبارًا من {date}",
     "prompt": "عمّ تبحث؟",
