@@ -43,6 +43,10 @@ import { formatDate } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import {
+  DESCRIBE_TEMPLATE_DESCRIPTION,
+  FILL_TEMPLATE_DESCRIPTION,
+} from "@/api/handlers/chat/tools/template-tools";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { extractText } from "@/api/lib/docx/extract-text";
@@ -70,21 +74,6 @@ const DEFAULT_RUNS = 1;
 const MAX_OUTPUT_TOKENS = 3000;
 const MAX_ITERATIONS = 6;
 const MODEL_REQUEST_TIMEOUT_MS = 180_000;
-
-// Copied verbatim from `apps/api/src/handlers/chat/tools/template-tools.ts`
-// (not exported as a standalone constant there) so the model sees the exact
-// wording production registers.
-const DESCRIBE_TEMPLATE_DESCRIPTION =
-  "Describe a template's fillable fields (with any named conditions and " +
-  "computed fields) so you know what values to provide before filling " +
-  "it. Pass the template id from list_templates.";
-const FILL_TEMPLATE_DESCRIPTION =
-  "Fill a template with values and return the assembled document text. " +
-  "Call describe_template first to learn the field paths. 'values' maps " +
-  'each field path to its value, e.g. {"tenant.name": "ACME Sp. z o.o.", ' +
-  '"signing_date": "2026-06-08"}. Fields configured as AI-fillable are ' +
-  "drafted automatically when you omit them. Returns the rendered text " +
-  "plus any placeholders left unfilled.";
 
 const DESCRIBE_TEMPLATE_TOOL_NAME = "describe_template" as const;
 const FILL_TEMPLATE_TOOL_NAME = "fill_template" as const;
@@ -608,12 +597,17 @@ const buildTasks = async (): Promise<EvalTask[]> => {
         if (!text.toLowerCase().includes("rekonstrukce")) {
           missing.push("typ_dila value");
         }
-        if (
-          values["termin"] === "2027-06-30" &&
-          expectedTermin !== null &&
-          !text.includes(expectedTermin)
-        ) {
-          missing.push(`termin rendered as "${expectedTermin}"`);
+        if (values["termin"] !== undefined) {
+          if (values["termin"] !== "2027-06-30") {
+            missing.push(
+              `termin value ${JSON.stringify(values["termin"])} does not match the completion date 2027-06-30`,
+            );
+          } else if (
+            expectedTermin !== null &&
+            !text.includes(expectedTermin)
+          ) {
+            missing.push(`termin rendered as "${expectedTermin}"`);
+          }
         }
         return missing;
       },
@@ -682,7 +676,7 @@ const buildTasks = async (): Promise<EvalTask[]> => {
         }
         return errors;
       },
-      checkWrongValues: (text, values) => {
+      checkWrongValues: (text) => {
         const missing: string[] = [];
         if (!text.includes("Riverside Logistics")) {
           missing.push("client name");
@@ -701,11 +695,11 @@ const buildTasks = async (): Promise<EvalTask[]> => {
             missing.push(date);
           }
         }
-        if (
-          values["rush_fee_applies"] === true &&
-          !text.toLowerCase().includes("rush fee")
-        ) {
-          missing.push("rush fee clause (rush_fee_applies was true)");
+        // The prompt states the rush fee applies, so the clause is required
+        // regardless of what the model submitted for rush_fee_applies (an
+        // omitted or falsely-`false` value must still be reported as wrong).
+        if (!text.toLowerCase().includes("rush fee")) {
+          missing.push("rush fee clause (prompt states the rush fee applies)");
         }
         return missing;
       },
@@ -864,6 +858,7 @@ const scoreRun = (
   task: EvalTask,
   turn: ModelTurn,
   fillCalls: readonly FillCall[],
+  trace: readonly ToolTrace[],
 ): RunScore => {
   const base = {
     calls: fillCalls.length,
@@ -915,7 +910,15 @@ const scoreRun = (
   const requiredMissing = task.requiredPaths.filter(
     (path) => !hasValue(last.values, path),
   );
+  const skippedDescribe = !trace.some(
+    (call) => call.name === DESCRIBE_TEMPLATE_TOOL_NAME,
+  );
   const typeErrors = task.checkTypeErrors(last.values);
+  if (skippedDescribe) {
+    typeErrors.push(
+      "filled without calling describe_template first, instead of learning the field contract",
+    );
+  }
   const wrongValues = task.checkWrongValues(last.result.text, last.values);
   const leftover = last.result.text.includes("{{");
   const outcome: RunScore["outcome"] =
@@ -961,8 +964,8 @@ const runTask = async ({
   task: EvalTask;
   repeat: number;
 }): Promise<EvalRun> => {
-  const { turn, fillCalls } = await runModelTurn({ model, task });
-  const score = scoreRun(task, turn, fillCalls);
+  const { turn, trace, fillCalls } = await runModelTurn({ model, task });
+  const score = scoreRun(task, turn, fillCalls, trace);
   const last = fillCalls.at(-1);
   return {
     modelId,

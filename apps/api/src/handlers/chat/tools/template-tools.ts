@@ -29,6 +29,20 @@ const FILL_TEMPLATE_TOOL_NAME = "fill_template" as const;
 export const SUGGEST_TEMPLATE_FIELDS_TOOL_NAME =
   "suggest_template_fields" as const;
 
+// Exported so the fill_template eval can register the exact wording
+// production sends, instead of a copy that can drift from it.
+export const DESCRIBE_TEMPLATE_DESCRIPTION =
+  "Describe a template's fillable fields (with any named conditions and " +
+  "computed fields) so you know what values to provide before filling " +
+  "it. Pass the template id from list_templates.";
+export const FILL_TEMPLATE_DESCRIPTION =
+  "Fill a template with values and return the assembled document text. " +
+  "Call describe_template first to learn the field paths. 'values' maps " +
+  'each field path to its value, e.g. {"tenant.name": "ACME Sp. z o.o.", ' +
+  '"signing_date": "2026-06-08"}. Fields configured as AI-fillable are ' +
+  "drafted automatically when you omit them. Returns the rendered text " +
+  "plus any placeholders left unfilled.";
+
 type CreateTemplateToolsArgs = {
   scopedDb: ScopedDb;
   /** Org-scoped DB used to meter the nested AI-field generation steps. */
@@ -164,10 +178,7 @@ export const createTemplateTools = ({
 
     [DESCRIBE_TEMPLATE_TOOL_NAME]: toolDefinition({
       name: DESCRIBE_TEMPLATE_TOOL_NAME,
-      description:
-        "Describe a template's fillable fields (with any named conditions and " +
-        "computed fields) so you know what values to provide before filling " +
-        "it. Pass the template id from list_templates.",
+      description: DESCRIBE_TEMPLATE_DESCRIPTION,
       inputSchema: toTanStackToolSchema(
         v.strictObject({
           templateId: v.pipe(
@@ -186,13 +197,7 @@ export const createTemplateTools = ({
 
     [FILL_TEMPLATE_TOOL_NAME]: toolDefinition({
       name: FILL_TEMPLATE_TOOL_NAME,
-      description:
-        "Fill a template with values and return the assembled document text. " +
-        "Call describe_template first to learn the field paths. 'values' maps " +
-        'each field path to its value, e.g. {"tenant.name": "ACME Sp. z o.o.", ' +
-        '"signing_date": "2026-06-08"}. Fields configured as AI-fillable are ' +
-        "drafted automatically when you omit them. Returns the rendered text " +
-        "plus any placeholders left unfilled.",
+      description: FILL_TEMPLATE_DESCRIPTION,
       inputSchema: toTanStackToolSchema(
         v.strictObject({
           templateId: v.pipe(
