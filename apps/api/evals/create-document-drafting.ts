@@ -24,7 +24,7 @@
  *
  * Usage (from apps/api):
  *   bun run eval:create-document
- *   bun run eval:create-document -- --models openai::gpt-5.4-mini,anthropic::claude-sonnet-5
+ *   bun run eval:create-document -- --models gpt-5.4-mini,anthropic::claude-sonnet-5
  *   bun run eval:create-document -- --runs 3 --task en-nda --json out.json --sources-dir out/sources
  *
  * Model ids use `provider::modelId` or a bare id resolved through the
@@ -53,9 +53,10 @@ import {
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
 
-// Provider-bound so the defaults resolve the same way whatever the instance's
-// default provider is.
-const DEFAULT_MODELS = ["openai::gpt-5.4-nano", "anthropic::claude-sonnet-5"];
+// A bare id resolves through whichever configured provider rates it (GPT
+// models may come from OpenAI or OpenRouter); Claude ids are pinned to
+// Anthropic so a non-Anthropic default provider cannot claim them.
+const DEFAULT_MODELS = ["gpt-5.4-nano", "anthropic::claude-sonnet-5"];
 const DEFAULT_RUNS = 1;
 const MAX_OUTPUT_TOKENS = 6000;
 // A whole draft can take a minute on a slow model; a stalled provider must
@@ -214,8 +215,13 @@ const runModelTurn = async (
     scopeKey: null,
   });
   const start = performance.now();
+  const abortController = new AbortController();
+  const abortTimer = setTimeout(
+    () => abortController.abort(),
+    MODEL_REQUEST_TIMEOUT_MS,
+  );
   const stream = chat({
-    abortSignal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS),
+    abortController,
     adapter: model.adapter,
     messages: [{ role: "user", content: prompt }],
     // The tool is client-executed in production; here nobody answers it, so
@@ -263,6 +269,7 @@ const runModelTurn = async (
       usage = tokenUsageFromRunFinishedChunk(chunk) ?? null;
     }
   }
+  clearTimeout(abortTimer);
   const latencyMs = Math.round(performance.now() - start);
 
   const firstCallId = [...argumentTexts.keys(), ...parsedInputs.keys()].at(0);
