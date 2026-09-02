@@ -34,6 +34,11 @@ type ViewTemplatesResponse =
   WebApiRoutes["view-templates"][":workspaceId"]["get"]["response"][200];
 
 export type GlobalSearchHit = SearchResponse["hits"][number];
+// The wire shape of one property list item, straight off the Eden response.
+// `WorkspaceProperty` in `@/lib/types` derives from this so a column the API
+// starts or stops projecting shows up there as a type error instead of
+// silently drifting.
+export type WorkspacePropertyWire = PropertiesResponse[number];
 export type PropertyContent = PropertiesResponse[number]["content"];
 export type PropertyContentType = PropertyContent["type"];
 export type OptionColor = Extract<
