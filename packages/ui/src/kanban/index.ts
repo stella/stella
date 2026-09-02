@@ -12,6 +12,8 @@ export type { KanbanCardFieldSelection } from "./card-properties";
 export { selectKanbanCardFieldIds } from "./card-properties";
 export type { KanbanCardShellProps } from "./card-shell";
 export { KanbanCardShell } from "./card-shell";
+export type { KanbanCellActionProps } from "./cell-action";
+export { KanbanCellAction } from "./cell-action";
 export type { KanbanColumnHeaderProps } from "./column-header";
 export { KanbanColumnHeader } from "./column-header";
 export type {

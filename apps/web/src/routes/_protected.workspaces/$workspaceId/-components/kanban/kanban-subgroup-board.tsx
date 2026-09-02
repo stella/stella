@@ -1,12 +1,13 @@
 import { useRef, useState } from "react";
 
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
-import { GripVerticalIcon, PlusIcon, Rows3Icon } from "lucide-react";
+import { GripVerticalIcon, Rows3Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import {
   KANBAN_VIRTUAL_CELL_PAGINATION,
+  KanbanCellAction,
   KanbanColumnHeader,
   KanbanSubgroupBoard as KanbanSubgroupLayout,
   KanbanVirtualCell,
@@ -267,15 +268,12 @@ const CreateTaskButton = ({
   const t = useTranslations();
 
   return (
-    <Button
-      className="text-muted-foreground hover:text-foreground min-h-11 w-full justify-start gap-1.5"
+    <KanbanCellAction
       disabled={disabled}
       onClick={() => onCreate(columnValue, laneValue)}
-      variant="ghost"
     >
-      <PlusIcon className="size-3.5" />
       {t("tasks.newTask")}
-    </Button>
+    </KanbanCellAction>
   );
 };
 
