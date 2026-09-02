@@ -53,6 +53,7 @@ import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
 import { ShortcutEchoHud } from "@/components/shortcut-echo-hud";
 import {
   SidebarProvider,
+  SidebarToggleHotkey,
   SidebarTrigger,
   useSidebar,
   useSidebarInlineSize,
@@ -376,6 +377,7 @@ function ProtectedComponent() {
   return (
     <AuthenticatedUserProvider user={analyticsUser}>
       <SidebarProvider forceCollapsed={forceSidebarCollapsed}>
+        <SidebarToggleHotkey />
         <ChatMentionProviders>
           <AIAvailabilityProvider>
             <ChatEditorProvider>
