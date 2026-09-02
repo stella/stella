@@ -17,6 +17,7 @@ import type { StructuredOutputTarget } from "@/api/lib/structured-output-budget"
 import { structuredOutputWireJsonSchema } from "@/api/lib/tanstack-ai-generate";
 import { buildBatchSchema } from "@/api/lib/workflow/ai-prompts";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
+import type { JustificationFilenames } from "@/api/lib/workflow/parse-justifications";
 
 // Anthropic accepted a 6-property text batch and rejected a 7-property one, so
 // no chunk may ever exceed six. See STRUCTURED_OUTPUT_BUDGETS.
@@ -93,9 +94,16 @@ const propertiesArbitrary = fc
   )
   .map((kinds) => kinds.map(propertyForKind));
 
-const FILENAMES = [
-  { kind: "pdf-bates", simplified: "F0" },
-] as const satisfies Parameters<typeof buildBatchSchema>[1];
+// One citable PDF source, so the batch carries the fuller justification
+// schema a real extraction sends rather than the empty-citation variant.
+const FILENAMES: JustificationFilenames = [
+  {
+    kind: "pdf-bates",
+    original: "services-agreement.pdf",
+    simplified: "F0",
+    fileFieldId: toSafeId<"field">("file_field_0"),
+  },
+];
 
 const wireSchemaFor = (
   provider: TanStackAIProvider,
