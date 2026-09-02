@@ -42,7 +42,7 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -264,6 +264,7 @@ const ClipboardCard = ({
   sourceVisual,
 }: ClipboardCardProps) => {
   const t = useTranslations("clipboard");
+  const format = useFormatter();
   const cancelNameEditRef = useRef(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(item.name ?? "");
@@ -275,6 +276,10 @@ const ClipboardCard = ({
   }).format(age.value);
   const relativeTime =
     age.type === "lessThan" ? `<${formattedAge}` : formattedAge;
+  const copiedAtLabel = format.dateTime(new Date(item.copiedAt), {
+    dateStyle: "full",
+    timeStyle: "medium",
+  });
   const sourceAppName = item.sourceApp?.name ?? null;
   const sourceTintIndex = clipboardSourceTintIndex(
     item.sourceApp?.identifier ?? sourceAppName,
@@ -468,6 +473,7 @@ const ClipboardCard = ({
         <time
           className="text-muted-foreground shrink-0 text-xs tabular-nums"
           dateTime={item.copiedAt}
+          title={copiedAtLabel}
         >
           {relativeTime}
         </time>
