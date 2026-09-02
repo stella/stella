@@ -3,11 +3,11 @@
 // credential usable without forcing a full re-login.
 //
 // `@better-auth/oauth-provider` gates refresh-token issuance on the
-// `offline_access` scope, which the stella server grants and
-// `CLI_DEFAULT_SCOPES` requests by default. A credential can still lack a
-// `refreshToken` (explicit `--scopes` without `offline_access`, or an older
-// self-hosted server that does not grant it); it then simply expires after
-// `ACCESS_TOKEN_EXPIRES_IN` and the next command asks for a re-login.
+// `offline_access` scope, which the CLI requests on every login
+// (`CLI_IDENTITY_SCOPES`, not selectable via `--scopes`). A credential can
+// still lack a `refreshToken` when the server does not grant that scope; it
+// then simply expires after `ACCESS_TOKEN_EXPIRES_IN` and the next command
+// asks for a re-login.
 
 import { Result } from "better-result";
 

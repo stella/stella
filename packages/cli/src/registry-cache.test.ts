@@ -98,7 +98,7 @@ describe("readCacheFile / writeCacheFile roundtrip", () => {
     expect(read?.lastNudgedVersion).toBe("0.2.0");
   });
 
-  test("preserves authenticated scope evidence across a roundtrip", async () => {
+  test("preserves authenticated omission evidence across a roundtrip", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "stella-cache-"));
     tempDirs.push(dir);
     const filePath = path.join(dir, "scopes.json");
@@ -107,11 +107,24 @@ describe("readCacheFile / writeCacheFile roundtrip", () => {
       cacheFile({
         grantedScopes: ["stella:read", "stella:search"],
         scopeOmittedTools: ["save_filled_template"],
+        featureOmittedTools: ["search_decisions"],
       }),
     );
     const read = await readCacheFile(filePath);
     expect(read?.grantedScopes).toEqual(["stella:read", "stella:search"]);
     expect(read?.scopeOmittedTools).toEqual(["save_filled_template"]);
+    expect(read?.featureOmittedTools).toEqual(["search_decisions"]);
+  });
+
+  test("a malformed omission attestation drops the whole file (fail closed)", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "stella-cache-"));
+    tempDirs.push(dir);
+    const filePath = path.join(dir, "omitted.json");
+    await Bun.write(
+      filePath,
+      JSON.stringify({ ...cacheFile(), featureOmittedTools: [1] }),
+    );
+    expect(await readCacheFile(filePath)).toBeUndefined();
   });
 
   test("a missing file reads as undefined", async () => {
@@ -167,7 +180,11 @@ describe("isCacheStale (TTL)", () => {
 describe("computeDelta / isDeltaEmpty (S5.3)", () => {
   test("identical registries produce an empty delta", () => {
     const baked = [listing("a"), listing("b")];
-    const delta = computeDelta(baked, [listing("a"), listing("b")]);
+    const delta = computeDelta({
+      baked,
+      fetched: [listing("a"), listing("b")],
+      omittedTools: [],
+    });
     expect(isDeltaEmpty(delta)).toBe(true);
   });
 
@@ -177,11 +194,34 @@ describe("computeDelta / isDeltaEmpty (S5.3)", () => {
       listing("a", { x: { type: "integer" } }), // schema changed
       listing("added_tool"),
     ];
-    const delta = computeDelta(baked, fetched);
+    const delta = computeDelta({ baked, fetched, omittedTools: [] });
     expect(delta.added).toEqual(["added_tool"]);
     expect(delta.removed).toEqual(["gone"]);
     expect(delta.changed).toEqual(["a"]);
     expect(isDeltaEmpty(delta)).toBe(false);
+  });
+
+  test("a server-attested omission is not a removal", () => {
+    // The projection a feature-gated deployment serves: the tool is absent from
+    // tools/list, and the response says why. Counting it as removed would leave
+    // a delta that no later refresh can reconcile.
+    const baked = [listing("a"), listing("gated"), listing("unscoped")];
+    const delta = computeDelta({
+      baked,
+      fetched: [listing("a")],
+      omittedTools: ["gated", "unscoped"],
+    });
+    expect(delta).toEqual({ added: [], removed: [], changed: [] });
+    expect(isDeltaEmpty(delta)).toBe(true);
+  });
+
+  test("an unattested absence is still a removal", () => {
+    const delta = computeDelta({
+      baked: [listing("a"), listing("gone")],
+      fetched: [listing("a")],
+      omittedTools: ["other_tool"],
+    });
+    expect(delta.removed).toEqual(["gone"]);
   });
 
   test("key re-ordering in a schema is not a change", () => {
@@ -205,6 +245,8 @@ describe("computeDelta / isDeltaEmpty (S5.3)", () => {
         },
       },
     ];
-    expect(isDeltaEmpty(computeDelta(baked, fetched))).toBe(true);
+    expect(
+      isDeltaEmpty(computeDelta({ baked, fetched, omittedTools: [] })),
+    ).toBe(true);
   });
 });

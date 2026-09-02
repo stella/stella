@@ -15,6 +15,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -288,14 +289,15 @@ describe("MCP template tools", () => {
     expect(definition?.scope).toBe("stella:templates_anonymized");
   });
 
-  test("save_template's description points to the marker reference resource", async () => {
+  test("save_template's description names the marker reference resource URI", async () => {
     const saveTemplate = await getMcpToolDefinition(
       "save_template",
       createContext(),
     );
-    expect(saveTemplate?.description).toContain(
-      "template-markers reference resource",
-    );
+    // The grammar itself stays in the resource: the description carries only
+    // the tool contract plus the URI an agent can read it from.
+    expect(saveTemplate?.description).toContain(TEMPLATE_MARKER_REFERENCE_URI);
+    expect(saveTemplate?.description).not.toContain("{{@clause:");
   });
 
   test("list_templates returns the org's templates", async () => {

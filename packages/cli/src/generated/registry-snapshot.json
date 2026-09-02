@@ -207,7 +207,7 @@
   },
   {
     "cli": {
-      "command": ["search", "read"],
+      "command": ["document", "content"],
       "scope": "read",
       "windowedText": true
     },
@@ -755,7 +755,7 @@
       "scope": "templates"
     },
     "name": "save_template",
-    "description": "Create a document template from a DOCX, or configure an existing template's fields. To create, pass docx_base64 (base64-encoded .docx / Office Open XML bytes, max ~10 MB decoded) and a name; the {{field}} markers in the file become the template's fillable fields, and you can pass fields to configure them in the same call. To configure an existing template, pass template_id with fields and no docx_base64; only the manifest changes, the document's {{markers}} stay untouched. Each fields entry's path must match a {{marker}} in the template. Read the marker grammar from the template-markers reference resource when unsure. Returns the template id and field count when creating, or the updated field list when configuring.",
+    "description": "Create a document template from a DOCX, or configure an existing template's fields. To create, pass docx_base64 (base64-encoded .docx / Office Open XML bytes, max ~10 MB decoded) and a name; the {{field}} markers in the file become the template's fillable fields, and you can pass fields to configure them in the same call. To configure an existing template, pass template_id with fields and no docx_base64; only the manifest changes, the document's {{markers}} stay untouched. Each fields entry's path must match a {{marker}} in the template. Read stella://reference/template-markers before authoring a DOCX. Returns the template id and field count when creating, or the updated field list when configuring.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -1583,7 +1583,7 @@
       "scope": "matters_write"
     },
     "name": "save_contact",
-    "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type and display_name required); pass contact_id to update. String fields other than display_name accept null to clear them.",
+    "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type required, plus display_name or the name parts it is derived from); pass contact_id to update. String fields other than display_name accept null to clear them.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1598,7 +1598,7 @@
         },
         "display_name": {
           "type": "string",
-          "description": "Display name; required when creating, non-empty when updating",
+          "description": "Display name; when creating it defaults to first + last name (person) or organization name (organization); non-empty when updating",
           "maxLength": 512
         },
         "first_name": {
@@ -2472,13 +2472,13 @@
       "itemsKey": "items"
     },
     "name": "list_audit_log",
-    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, workspace, timestamp, and change detail. Filter by workspace_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, workspace, timestamp, and change detail. Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
     "inputSchema": {
       "type": "object",
       "required": [],
       "additionalProperties": false,
       "properties": {
-        "workspace_id": {
+        "matter_id": {
           "type": "string",
           "minLength": 1,
           "description": "Only entries scoped to this matter/workspace"
@@ -2688,6 +2688,7 @@
     },
     "annotations": {
       "title": "List capabilities",
+      "readOnlyHint": true,
       "openWorldHint": false
     }
   },
@@ -2711,6 +2712,7 @@
     },
     "annotations": {
       "title": "Describe capability",
+      "readOnlyHint": true,
       "openWorldHint": false
     }
   },
@@ -2721,7 +2723,7 @@
       "confirmPassthrough": true
     },
     "name": "invoke_capability",
-    "description": "Invoke one capability by id (from list_capabilities/describe_capability). Pass its input under { body, params, query }; workspace-scoped capabilities take the target workspace as input.params.workspaceId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validateOnly: true to check input without running it; destructive capabilities require confirm: true after human approval.",
+    "description": "Invoke one capability by id (from list_capabilities/describe_capability). Pass its input under input: { body, params, query } (no other top-level argument is accepted); workspace-scoped capabilities take the target workspace as input.params.workspaceId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validate_only: true to check input without running it; destructive capabilities require confirm: true after human approval.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2751,7 +2753,7 @@
           },
           "additionalProperties": false
         },
-        "validateOnly": {
+        "validate_only": {
           "type": "boolean",
           "description": "When true, validate the input against the capability schema and return without executing."
         },

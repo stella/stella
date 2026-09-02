@@ -10,7 +10,10 @@ import { envBase } from "@/api/env-base";
 import documentUploadAppHtml from "@/api/mcp/apps/document-upload/generated/app.html.txt" with { type: "text" };
 import type { McpMode } from "@/api/mcp/constants";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
-import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
+import {
+  buildMarkerReference,
+  TEMPLATE_MARKER_REFERENCE_URI,
+} from "@/api/mcp/template-marker-reference";
 
 /**
  * MCP resources are static, no-argument documents (the textbook fit for a
@@ -38,7 +41,6 @@ type StaticResource = {
   resourceMeta?: () => Record<string, unknown>;
 };
 
-const TEMPLATE_MARKER_REFERENCE_URI = "stella://reference/template-markers";
 const PRODUCT_IDENTITY_URI = "stella://about";
 
 export const STELLA_PRODUCT_IDENTITY = {

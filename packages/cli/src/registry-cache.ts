@@ -15,10 +15,10 @@ import path from "node:path";
 
 import type { RegistryToolListing } from "./route-types.js";
 
-// Cache schema version; a bump invalidates every existing cache file. Version 3
-// invalidates listings captured before the save_filled_template command and
-// scope-evidence fields existed.
-export const CACHE_SCHEMA_VERSION = 3;
+// Cache schema version; a bump invalidates every existing cache file. Version 4
+// invalidates deltas computed before feature-omission evidence existed, which
+// counted a deployment-gated tool as removed on every refresh.
+export const CACHE_SCHEMA_VERSION = 4;
 /** Default time-to-live before a cached listing is refetched (spec S5.3). */
 export const DEFAULT_TTL_SECONDS = 86_400;
 
@@ -42,6 +42,8 @@ export type RegistryCacheFile = {
   grantedScopes?: readonly string[];
   /** Tool names the server attested were omitted solely for missing scope. */
   scopeOmittedTools?: readonly string[];
+  /** Tool names the server attested are gated off in this deployment. */
+  featureOmittedTools?: readonly string[];
   /** The latest CLI version we last nudged about (update-nudge anti-nag key). */
   lastNudgedVersion?: string;
 };
@@ -110,13 +112,27 @@ const stableStringify = (value: unknown): string => {
  * Diff fetched listings against the baked-in listings (spec S5.3): a tool is
  * `changed` when its `inputSchema` shape (which drives generated flags, incl.
  * `required[]`) differs. Descriptions and annotations do not count as changes.
+ *
+ * `omittedTools` carries the server's own attestation of what this projection
+ * left out (missing scope, deployment feature flag). An attested name is not a
+ * removal: the tool still exists on the server, so counting it would leave a
+ * delta that no refresh can ever reconcile. The argument is required precisely
+ * so no call site can diff against a projection without stating its omissions;
+ * a server that attests nothing passes an empty list and keeps plain-diff
+ * behaviour.
  */
-export const computeDelta = (
-  baked: readonly RegistryToolListing[],
-  fetched: readonly RegistryToolListing[],
-): RegistryDelta => {
+export const computeDelta = ({
+  baked,
+  fetched,
+  omittedTools,
+}: {
+  baked: readonly RegistryToolListing[];
+  fetched: readonly RegistryToolListing[];
+  omittedTools: readonly string[];
+}): RegistryDelta => {
   const bakedByName = new Map(baked.map((tool) => [tool.name, tool]));
   const fetchedByName = new Map(fetched.map((tool) => [tool.name, tool]));
+  const attestedOmissions = new Set(omittedTools);
 
   const added: string[] = [];
   const removed: string[] = [];
@@ -128,7 +144,7 @@ export const computeDelta = (
     }
   }
   for (const tool of baked) {
-    if (!fetchedByName.has(tool.name)) {
+    if (!fetchedByName.has(tool.name) && !attestedOmissions.has(tool.name)) {
       removed.push(tool.name);
     }
   }
@@ -206,6 +222,33 @@ const parseDelta = (value: unknown): RegistryDelta | undefined => {
 };
 
 /**
+ * An optional string-array field: absent (the server attested nothing), present,
+ * or malformed. A malformed one drops the whole file, so a locally tampered
+ * cache cannot pass a partly-validated field through to the runtime tree.
+ */
+type OptionalNames =
+  | { status: "absent" }
+  | { status: "invalid" }
+  | { status: "present"; names: readonly string[] };
+
+const parseOptionalNames = (value: unknown): OptionalNames => {
+  if (value === undefined) {
+    return { status: "absent" };
+  }
+  if (!Array.isArray(value)) {
+    return { status: "invalid" };
+  }
+  const names: string[] = [];
+  for (const name of value) {
+    if (typeof name !== "string") {
+      return { status: "invalid" };
+    }
+    names.push(name);
+  }
+  return { status: "present", names };
+};
+
+/**
  * Read and shape-validate the cache file for an origin. A missing, corrupt, or
  * wrong-version file returns `undefined` (the caller falls back to baked-in).
  */
@@ -240,19 +283,13 @@ export const readCacheFile = async (
   ) {
     return undefined;
   }
-  const rawGrantedScopes = value["grantedScopes"];
+  const grantedScopes = parseOptionalNames(value["grantedScopes"]);
+  const scopeOmittedTools = parseOptionalNames(value["scopeOmittedTools"]);
+  const featureOmittedTools = parseOptionalNames(value["featureOmittedTools"]);
   if (
-    rawGrantedScopes !== undefined &&
-    (!Array.isArray(rawGrantedScopes) ||
-      !rawGrantedScopes.every((scope) => typeof scope === "string"))
-  ) {
-    return undefined;
-  }
-  const rawScopeOmittedTools = value["scopeOmittedTools"];
-  if (
-    rawScopeOmittedTools !== undefined &&
-    (!Array.isArray(rawScopeOmittedTools) ||
-      !rawScopeOmittedTools.every((name) => typeof name === "string"))
+    grantedScopes.status === "invalid" ||
+    scopeOmittedTools.status === "invalid" ||
+    featureOmittedTools.status === "invalid"
   ) {
     return undefined;
   }
@@ -265,12 +302,15 @@ export const readCacheFile = async (
     toolsListHash,
     listings,
     delta,
-    ...(rawGrantedScopes === undefined
-      ? {}
-      : { grantedScopes: rawGrantedScopes }),
-    ...(rawScopeOmittedTools === undefined
-      ? {}
-      : { scopeOmittedTools: rawScopeOmittedTools }),
+    ...(grantedScopes.status === "present"
+      ? { grantedScopes: grantedScopes.names }
+      : {}),
+    ...(scopeOmittedTools.status === "present"
+      ? { scopeOmittedTools: scopeOmittedTools.names }
+      : {}),
+    ...(featureOmittedTools.status === "present"
+      ? { featureOmittedTools: featureOmittedTools.names }
+      : {}),
     ...(typeof lastNudgedVersion === "string" ? { lastNudgedVersion } : {}),
   };
 };

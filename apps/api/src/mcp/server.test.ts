@@ -18,6 +18,8 @@ import { panic } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
+  MCP_ALL_RESOURCE_SCOPES,
+  MCP_MAX_REQUEST_BODY_BYTES,
   MCP_STATELESS_ALLOW_HEADER,
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_VERSION,
@@ -29,8 +31,14 @@ import {
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
-import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
-import { DOCUMENTS_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import {
+  createMcpHttpRequestHandler,
+  mcpOmittedToolNamesByReason,
+} from "@/api/mcp/server-core";
+import {
+  DOCUMENTS_MCP_TOOL_DEFINITIONS,
+  listStaticMcpToolDefinitions,
+} from "@/api/mcp/static-tool-definitions";
 import type { ToolScope } from "@/api/mcp/tool-types";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 
@@ -149,6 +157,12 @@ type McpJsonResponse<TResult> = {
   result: TResult;
 };
 
+type McpJsonRpcError = {
+  error: { code: number; message: string };
+  id: null;
+  jsonrpc: "2.0";
+};
+
 describe("handleMcpHttpRequest", () => {
   beforeEach(() => {
     authenticateMcpRequestMock.mockReset();
@@ -185,7 +199,11 @@ describe("handleMcpHttpRequest", () => {
     );
 
     expect(response.status).toBe(401);
-    expect(await response.text()).toBe("Invalid or expired token");
+    expect(await readTestJson<McpJsonRpcError>(response)).toEqual({
+      error: { code: -32_001, message: "Invalid or expired token" },
+      id: null,
+      jsonrpc: "2.0",
+    });
     expect(captureErrorMock).not.toHaveBeenCalled();
   });
 
@@ -210,7 +228,11 @@ describe("handleMcpHttpRequest", () => {
     const response = await handleMcpHttpRequest(mcpRequest);
 
     expect(response.status).toBe(403);
-    expect(await response.text()).toBe("Forbidden");
+    expect(await readTestJson<McpJsonRpcError>(response)).toEqual({
+      error: { code: -32_001, message: "Forbidden" },
+      id: null,
+      jsonrpc: "2.0",
+    });
     expect(resolveMcpSessionContextMock).toHaveBeenCalledWith(
       {
         organizationId: "org_1",
@@ -683,6 +705,8 @@ describe("handleMcpHttpRequest", () => {
     expect(response.headers.get("x-stella-scope-omitted-tools")).toBe(
       "save_filled_template",
     );
+    // Tests run as a dev deployment, where every feature-gated tool is served.
+    expect(response.headers.get("x-stella-feature-omitted-tools")).toBe("");
   });
 
   test("rejects tool calls missing the required scope before dynamic resolution", async () => {
@@ -983,5 +1007,231 @@ describe("handleMcpHttpRequest", () => {
         text: "marker grammar body",
       },
     ]);
+  });
+});
+
+describe("MCP transport conformance", () => {
+  beforeEach(() => {
+    authenticateMcpRequestMock.mockReset();
+    captureErrorMock.mockReset();
+    listMcpToolsMock.mockReset();
+    listMcpToolsMock.mockImplementation(async () => []);
+    resolveMcpSessionContextMock.mockReset();
+  });
+
+  const authenticateSession = () => {
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+  };
+
+  const TOOLS_LIST_BODY = JSON.stringify({
+    id: 1,
+    jsonrpc: "2.0",
+    method: "tools/list",
+  });
+
+  const toolsListRequest = (accept?: string) =>
+    new Request("http://localhost/mcp", {
+      body: TOOLS_LIST_BODY,
+      headers: {
+        authorization: "Bearer token",
+        "content-type": "application/json",
+        ...(accept === undefined ? {} : { accept }),
+      },
+      method: "POST",
+    });
+
+  /** A streamed body arrives without `content-length`, exactly as chunked. */
+  const chunkedMcpRequest = (body: string) =>
+    new Request("http://localhost/mcp", {
+      body: new ReadableStream<Uint8Array>({
+        start: (controller) => {
+          controller.enqueue(new TextEncoder().encode(body));
+          controller.close();
+        },
+      }),
+      duplex: "half",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: "Bearer token",
+        "content-type": "application/json",
+      },
+      method: "POST",
+    });
+
+  test("answers an unauthenticated probe with a JSON-RPC envelope, not a bare string", async () => {
+    const response = await handleMcpHttpRequest(
+      new Request("http://localhost/mcp", { method: "POST" }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(await readTestJson<McpJsonRpcError>(response)).toEqual({
+      error: { code: -32_001, message: "Missing Authorization header" },
+      id: null,
+      jsonrpc: "2.0",
+    });
+    // RFC 6750 §3.1: nothing was presented, so nothing was rejected.
+    const challenge = response.headers.get("WWW-Authenticate") ?? "";
+    expect(challenge).toContain("resource_metadata=");
+    expect(challenge).not.toContain("error=");
+  });
+
+  test("names the RFC 6750 error code once a presented token is rejected", async () => {
+    authenticateMcpRequestMock.mockRejectedValue(
+      new McpAuthenticationError({ message: "Token expired" }),
+    );
+
+    const response = await handleMcpHttpRequest(toolsListRequest());
+    const challenge = response.headers.get("WWW-Authenticate") ?? "";
+
+    expect(response.status).toBe(401);
+    expect(challenge).toContain('error="invalid_token"');
+    expect(challenge).toContain("error_description=");
+    expect(challenge).toContain("resource_metadata=");
+  });
+
+  test("serves a POST whose Accept covers both media types through a wildcard", async () => {
+    authenticateSession();
+
+    const responses = await Promise.all(
+      ["*/*", "application/*, text/*", "*/*;q=0.8", undefined].map(
+        async (accept) => await handleMcpHttpRequest(toolsListRequest(accept)),
+      ),
+    );
+
+    expect(responses.map((response) => response.status)).toEqual([
+      200, 200, 200, 200,
+    ]);
+  });
+
+  test("keeps 406 for an Accept that genuinely excludes the event stream", async () => {
+    authenticateSession();
+
+    const response = await handleMcpHttpRequest(
+      toolsListRequest("application/json"),
+    );
+
+    expect(response.status).toBe(406);
+  });
+
+  test("advertises only the methods the transport serves on preflight", async () => {
+    const response = await handleMcpHttpRequest(
+      new Request("http://localhost/mcp", { method: "OPTIONS" }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("Allow")).toBe(MCP_STATELESS_ALLOW_HEADER);
+    expect(response.headers.get("Access-Control-Allow-Methods")).toBe(
+      MCP_STATELESS_ALLOW_HEADER,
+    );
+    // `Allow-Origin: *` together with credentials is refused by every browser,
+    // and this endpoint reads bearer tokens, never cookies.
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(response.headers.get("Access-Control-Allow-Credentials")).toBeNull();
+  });
+
+  test("refuses an oversized declared body before authenticating or parsing", async () => {
+    authenticateSession();
+
+    const response = await handleMcpHttpRequest(
+      new Request("http://localhost/mcp", {
+        body: "x".repeat(MCP_MAX_REQUEST_BODY_BYTES + 1),
+        headers: {
+          accept: "application/json, text/event-stream",
+          authorization: "Bearer token",
+          "content-type": "application/json",
+        },
+        method: "POST",
+      }),
+    );
+    const body = await readTestJson<McpJsonRpcError>(response);
+
+    expect(response.status).toBe(413);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(body.error.code).toBe(-32_000);
+    expect(authenticateMcpRequestMock).not.toHaveBeenCalled();
+  });
+
+  test("meters a chunked body that declares no length", async () => {
+    authenticateSession();
+
+    const response = await handleMcpHttpRequest(
+      chunkedMcpRequest("x".repeat(MCP_MAX_REQUEST_BODY_BYTES + 1)),
+    );
+
+    expect(response.status).toBe(413);
+    expect(authenticateMcpRequestMock).not.toHaveBeenCalled();
+  });
+
+  test("hands a chunked body within the cap to the transport intact", async () => {
+    authenticateSession();
+    listMcpToolsMock.mockResolvedValue([
+      {
+        description: "List matters",
+        inputSchema: { properties: {}, type: "object" },
+        name: "list_matters",
+      },
+    ]);
+
+    const response = await handleMcpHttpRequest(
+      chunkedMcpRequest(TOOLS_LIST_BODY),
+    );
+    const body =
+      await readTestJson<McpJsonResponse<{ tools: McpTool[] }>>(response);
+
+    expect(response.status).toBe(200);
+    expect(body.result.tools.at(0)?.name).toBe("list_matters");
+  });
+});
+
+// The reason split is exercised through its injected feature gate: mocking
+// `env` for the whole module graph would bleed across files in this process.
+describe("mcpOmittedToolNamesByReason", () => {
+  test("attests feature-gated tools while their deployment flag is off", () => {
+    const omitted = mcpOmittedToolNamesByReason({
+      grantedScopes: MCP_ALL_RESOURCE_SCOPES,
+      isFeatureEnabled: (feature) => feature !== "FEATURE_PUBLIC_LAW",
+      mode: "default",
+    });
+    const gated = listStaticMcpToolDefinitions("default")
+      .filter((definition) => definition.feature === "FEATURE_PUBLIC_LAW")
+      .map((definition) => definition.name);
+
+    expect(gated.length).toBeGreaterThan(0);
+    expect(omitted.feature).toEqual([...gated].sort());
+    // A fully granted token omits nothing for scope, so the feature evidence is
+    // the complete explanation for what the projection dropped.
+    expect(omitted.scope).toEqual([]);
+  });
+
+  test("attests each omitted tool under exactly one reason", () => {
+    const omitted = mcpOmittedToolNamesByReason({
+      grantedScopes: ["stella:read"],
+      isFeatureEnabled: (feature) => feature !== "FEATURE_TIME_BILLING",
+      mode: "default",
+    });
+
+    expect(omitted.feature.length).toBeGreaterThan(0);
+    expect(omitted.scope).toContain("save_filled_template");
+    // A tool gated off in this deployment is absent for every caller, so the
+    // feature reason wins and no name is attested twice.
+    expect(
+      omitted.feature.filter((name) => omitted.scope.includes(name)),
+    ).toEqual([]);
+  });
+
+  test("a fully served deployment with all grants attests no omission", () => {
+    expect(
+      mcpOmittedToolNamesByReason({
+        grantedScopes: MCP_ALL_RESOURCE_SCOPES,
+        isFeatureEnabled: () => true,
+        mode: "default",
+      }),
+    ).toEqual({ feature: [], scope: [] });
   });
 });

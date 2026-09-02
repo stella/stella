@@ -216,7 +216,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     expect(tty.exitCode()).toBeUndefined();
   });
 
-  test("--dry-run adds validateOnly: true", async () => {
+  test("--dry-run adds validate_only: true", async () => {
     const server = startServer({ kind: "echo" });
     const spec = capSpec({
       capabilityId: "a.b",
@@ -233,7 +233,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
       spec,
     });
     server.stop();
-    expect(lastInvoke(server.calls)["validateOnly"]).toBe(true);
+    expect(lastInvoke(server.calls)["validate_only"]).toBe(true);
   });
 
   test("a missing required flag is exit 2 with no server call", async () => {

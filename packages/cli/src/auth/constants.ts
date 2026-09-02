@@ -49,19 +49,31 @@ export const LOOPBACK_REDIRECT_PATH = "/callback";
 export const LOOPBACK_REDIRECT_URI: string = `http://127.0.0.1${LOOPBACK_REDIRECT_PATH}`;
 
 /**
- * Default scopes requested when `stella auth login` is run without
- * `--scopes`. Includes `offline_access` so the stored credential carries a
- * refresh token; without it the access token dies after 15 minutes and
- * every command would demand a fresh browser login.
+ * Identity scopes every `stella auth login` requests, whatever `--scopes`
+ * says. `offline_access` is what makes the provider issue a refresh token;
+ * without it the access token dies after 15 minutes and every command would
+ * demand a fresh browser login, and `openid` is what makes it issue the
+ * `id_token` the CLI decodes for `whoami`. `--scopes` therefore selects
+ * resource scopes only (see `auth/scopes.ts`).
  */
-export const CLI_DEFAULT_SCOPES = [
+export const CLI_IDENTITY_SCOPES = [
   "openid",
   "profile",
   "email",
   "offline_access",
+] as const;
+
+/** Resource scopes requested when `stella auth login` runs without `--scopes`. */
+export const CLI_DEFAULT_RESOURCE_SCOPES = [
   "stella:read",
   "stella:search",
 ] as const;
+
+/** Everything a default `stella auth login` asks for. */
+export const CLI_DEFAULT_SCOPES: readonly string[] = [
+  ...CLI_IDENTITY_SCOPES,
+  ...CLI_DEFAULT_RESOURCE_SCOPES,
+];
 
 /** Minimum scopes needed for the default CLI login to be useful. */
 export const CLI_REQUIRED_SCOPES = ["openid", "stella:read"] as const;

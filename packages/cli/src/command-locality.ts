@@ -11,7 +11,7 @@
  * other top-level command (the generated domain routes plus `reference`)
  * consumes the command tree and therefore benefits from a fresh cache.
  */
-export const LOCAL_COMMAND_ROUTES: ReadonlySet<string> = new Set([
+const LOCAL_COMMAND_ROUTES: ReadonlySet<string> = new Set([
   "auth",
   "compatibility",
   "tools",

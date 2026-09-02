@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { createMcpRoute } from "@/api/handlers/mcp/routes-core";
+import {
+  createMcpRoute,
+  handleMcpPreflightRequest,
+} from "@/api/handlers/mcp/routes-core";
 import {
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_ANONYMIZED_HTTP_PATH,
@@ -8,6 +11,7 @@ import {
   MCP_DOCUMENTS_DISCOVERY_PATH,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
+  MCP_STATELESS_ALLOW_HEADER,
   ROOT_MCP_DISCOVERY_PATH,
   STELLA_API_CONTRACT,
   STELLA_CLI_MAXIMUM_VERSION,
@@ -204,6 +208,56 @@ describe("MCP protected resource discovery routes", () => {
       { method: "POST", mode: "documents" },
       { method: "DELETE", mode: "documents" },
     ]);
+  });
+
+  test("owns the preflight for every MCP path ahead of the global CORS layer", async () => {
+    const transportPreflight = handleMcpPreflightRequest(
+      new Request(`http://localhost${MCP_HTTP_PATH}`, { method: "OPTIONS" }),
+      { headers: { "access-control-allow-credentials": "true" } },
+    );
+    const discoveryPreflight = handleMcpPreflightRequest(
+      new Request(`http://localhost${MCP_DISCOVERY_PATH}`, {
+        method: "OPTIONS",
+      }),
+      { headers: {} },
+    );
+
+    expect(transportPreflight?.status).toBe(204);
+    expect(
+      transportPreflight?.headers.get("Access-Control-Allow-Methods"),
+    ).toBe(MCP_STATELESS_ALLOW_HEADER);
+    expect(transportPreflight?.headers.get("Allow")).toBe(
+      MCP_STATELESS_ALLOW_HEADER,
+    );
+    expect(discoveryPreflight?.headers.get("Allow")).toBe("GET, OPTIONS");
+  });
+
+  test("drops the global credentialed CORS default on MCP responses", () => {
+    // A browser refuses `Allow-Origin: *` with credentials, and this endpoint
+    // authenticates with a bearer token rather than cookies.
+    const set = { headers: { "access-control-allow-credentials": "true" } };
+
+    handleMcpPreflightRequest(
+      new Request(`http://localhost${MCP_HTTP_PATH}`, { method: "OPTIONS" }),
+      set,
+    );
+
+    expect(set.headers).toEqual({});
+  });
+
+  test("leaves preflight for a non-MCP path to the global CORS layer", () => {
+    expect(
+      handleMcpPreflightRequest(
+        new Request("http://localhost/matters", { method: "OPTIONS" }),
+        { headers: {} },
+      ),
+    ).toBeUndefined();
+    expect(
+      handleMcpPreflightRequest(
+        new Request(`http://localhost${MCP_HTTP_PATH}`, { method: "POST" }),
+        { headers: {} },
+      ),
+    ).toBeUndefined();
   });
 
   test("rejects unsupported MCP HTTP methods before transport handling", async () => {

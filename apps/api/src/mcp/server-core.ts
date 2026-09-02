@@ -17,12 +17,16 @@ import { panic } from "better-result";
 import { detached } from "@/api/lib/detached";
 import { isMcpSession, type McpSession } from "@/api/mcp/auth";
 import {
+  MCP_MAX_REQUEST_BODY_BYTES,
   MCP_NOTIFICATION_KEEP_ALIVE_MS,
   MCP_STATELESS_ALLOW_HEADER,
+  MCP_TOOL_OMISSION_REASONS,
   type McpMode,
+  type McpToolOmissionReason,
+  STELLA_MCP_OMITTED_TOOLS_HEADER_BY_REASON,
   STELLA_MCP_ORGANIZATION_HEADER,
-  STELLA_MCP_SCOPE_OMITTED_TOOLS_HEADER,
   STELLA_MCP_SCOPES_HEADER,
+  STELLA_API_CONTRACT,
 } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
@@ -34,10 +38,16 @@ import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import { getMcpInstructions } from "@/api/mcp/instructions";
 import {
   createMcpCorsHeaders,
+  createMcpPreflightHeaders,
   getMcpWwwAuthenticateHeader,
+  type McpChallengeError,
 } from "@/api/mcp/metadata";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
-import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
+import type {
+  McpToolDefinition,
+  McpToolFeatureFlag,
+  ToolScope,
+} from "@/api/mcp/tool-types";
 import {
   closestToolNames,
   MCP_INTERNAL_ERROR_HINT,
@@ -147,7 +157,10 @@ type McpServerDependencies = {
   ) => Promise<McpRequestContext>;
 };
 
-const MCP_SERVER_VERSION = "0.1.0";
+// Derived from the public API contract rather than hand-bumped: a client that
+// logs `serverInfo.version` then sees the same protocol/revision the CLI
+// negotiates against in discovery, and the value cannot go stale on its own.
+const MCP_SERVER_VERSION = `${STELLA_API_CONTRACT.protocol}.${STELLA_API_CONTRACT.revision}`;
 const getMcpServerName = (mode: McpMode) => {
   if (mode === "anonymized") {
     return "stella (anonymized)";
@@ -168,20 +181,47 @@ const extractBearerToken = (request: Request): string | undefined => {
   return token.length > 0 ? token : undefined;
 };
 
-const scopeOmittedCompoundToolNames = (
-  session: McpSession,
-  mode: McpMode,
-): readonly string[] =>
-  listStaticMcpToolDefinitions(mode)
-    .filter(
-      (definition) =>
-        definition.additionalScopes !== undefined &&
-        definition.additionalScopes.length > 0 &&
-        isMcpToolFeatureEnabled(definition.feature) &&
-        !session.scopes.includes(definition.scope),
-    )
-    .map((definition) => definition.name)
-    .sort();
+/**
+ * Every static tool this authenticated `tools/list` projection leaves out,
+ * grouped by the one reason that explains it. Computed in a single place so a
+ * client can diff its baked-in registry against the projection without reading
+ * an unstated omission as a removal it can never reconcile.
+ *
+ * `feature` wins over `scope`: a tool gated off in this deployment is absent
+ * for every caller, whatever the token grants. `scope` names only compound
+ * tools, whose local all-scopes preflight the CLI keeps reachable; single-scope
+ * tools follow the projection and need no evidence.
+ *
+ * `isFeatureEnabled` is injected so the reason split can be exercised with a
+ * flag off without perturbing `env` for the whole module graph.
+ */
+export const mcpOmittedToolNamesByReason = ({
+  grantedScopes,
+  isFeatureEnabled = isMcpToolFeatureEnabled,
+  mode,
+}: {
+  grantedScopes: readonly string[];
+  isFeatureEnabled?: (feature: McpToolFeatureFlag | undefined) => boolean;
+  mode: McpMode;
+}): Record<McpToolOmissionReason, readonly string[]> => {
+  const feature: string[] = [];
+  const scope: string[] = [];
+  for (const definition of listStaticMcpToolDefinitions(mode)) {
+    if (!isFeatureEnabled(definition.feature)) {
+      feature.push(definition.name);
+      continue;
+    }
+    const { additionalScopes } = definition;
+    if (
+      additionalScopes !== undefined &&
+      additionalScopes.length > 0 &&
+      !grantedScopes.includes(definition.scope)
+    ) {
+      scope.push(definition.name);
+    }
+  }
+  return { feature: feature.sort(), scope: scope.sort() };
+};
 
 const withMcpCors = (
   response: Response,
@@ -200,10 +240,16 @@ const withMcpCors = (
   if (session) {
     headers.set(STELLA_MCP_ORGANIZATION_HEADER, session.organizationId);
     headers.set(STELLA_MCP_SCOPES_HEADER, session.scopes.join(" "));
-    headers.set(
-      STELLA_MCP_SCOPE_OMITTED_TOOLS_HEADER,
-      scopeOmittedCompoundToolNames(session, mode).join(" "),
-    );
+    const omitted = mcpOmittedToolNamesByReason({
+      grantedScopes: session.scopes,
+      mode,
+    });
+    for (const reason of MCP_TOOL_OMISSION_REASONS) {
+      headers.set(
+        STELLA_MCP_OMITTED_TOOLS_HEADER_BY_REASON[reason],
+        omitted[reason].join(" "),
+      );
+    }
   }
   return new Response(response.body, {
     headers,
@@ -212,20 +258,84 @@ const withMcpCors = (
   });
 };
 
-const accessDeniedResponse = ({
+/** Transport-level refusal (the SDK reserves -32000..-32099 for these). */
+const MCP_TRANSPORT_ERROR_CODE = -32_000;
+/** Refused for want of usable credentials, in either direction (401/403). */
+const MCP_ACCESS_DENIED_ERROR_CODE = -32_001;
+
+/**
+ * Every refusal this endpoint serves answers in the JSON-RPC envelope a client
+ * already parses. A bare string body forces a caller to branch on status codes
+ * before it can read the reason, and a body with no `Content-Type` is served as
+ * `application/octet-stream`.
+ */
+const mcpJsonRpcErrorResponse = ({
+  code,
+  headers,
   message,
-  mode,
   status,
 }: {
+  code: number;
+  headers: Headers;
   message: string;
-  mode: McpMode;
-  status: 401 | 403;
+  status: number;
 }) => {
-  const headers = createMcpCorsHeaders();
-  headers.set("WWW-Authenticate", getMcpWwwAuthenticateHeader(mode));
+  headers.set("Content-Type", "application/json");
 
-  return new Response(message, {
+  return new Response(
+    JSON.stringify({ error: { code, message }, id: null, jsonrpc: "2.0" }),
+    { headers, status },
+  );
+};
+
+/**
+ * Why access was denied, and how each denial presents on the wire. RFC 6750
+ * §3.1: only a presented-and-rejected token carries an `error` code, so a probe
+ * that sent nothing is not told its credentials were refused.
+ */
+const MCP_ACCESS_DENIALS = {
+  missing_credentials: {
+    challengeError: "none",
+    message: "Missing Authorization header",
+    status: 401,
+  },
+  invalid_token: {
+    challengeError: "invalid_token",
+    message: "Invalid or expired token",
+    status: 401,
+  },
+  // A valid token whose subject cannot reach this organization: no scope grant
+  // or re-consent fixes it, so the challenge states no recoverable error.
+  organization_forbidden: {
+    challengeError: "none",
+    message: "Forbidden",
+    status: 403,
+  },
+} as const satisfies Record<
+  string,
+  { challengeError: McpChallengeError; message: string; status: 401 | 403 }
+>;
+
+type McpAccessDenial = keyof typeof MCP_ACCESS_DENIALS;
+
+const accessDeniedResponse = ({
+  denial,
+  mode,
+}: {
+  denial: McpAccessDenial;
+  mode: McpMode;
+}) => {
+  const { challengeError, message, status } = MCP_ACCESS_DENIALS[denial];
+  const headers = createMcpCorsHeaders();
+  headers.set(
+    "WWW-Authenticate",
+    getMcpWwwAuthenticateHeader({ error: challengeError, mode }),
+  );
+
+  return mcpJsonRpcErrorResponse({
+    code: MCP_ACCESS_DENIED_ERROR_CODE,
     headers,
+    message,
     status,
   });
 };
@@ -233,19 +343,129 @@ const accessDeniedResponse = ({
 const sessionOperationUnsupportedResponse = () => {
   const headers = createMcpCorsHeaders();
   headers.set("Allow", MCP_STATELESS_ALLOW_HEADER);
-  headers.set("Content-Type", "application/json");
 
-  return new Response(
-    JSON.stringify({
-      error: {
-        code: -32_000,
-        message: "Method Not Allowed: this endpoint serves no session.",
-      },
-      id: null,
-      jsonrpc: "2.0",
-    }),
-    { headers, status: 405 },
+  return mcpJsonRpcErrorResponse({
+    code: MCP_TRANSPORT_ERROR_CODE,
+    headers,
+    message: "Method Not Allowed: this endpoint serves no session.",
+    status: 405,
+  });
+};
+
+const payloadTooLargeResponse = () =>
+  mcpJsonRpcErrorResponse({
+    code: MCP_TRANSPORT_ERROR_CODE,
+    headers: createMcpCorsHeaders(),
+    message: `Payload Too Large: a request body may not exceed ${MCP_MAX_REQUEST_BODY_BYTES} bytes.`,
+    status: 413,
+  });
+
+/**
+ * The vendored transport requires both media types to appear literally in
+ * `Accept` and answers 406 otherwise, so it refuses the fully wildcard range
+ * (what curl and most HTTP libraries send, and what an absent header means per
+ * RFC 9110 §12.5.1) even though it accepts both media types. Every media
+ * range that covers each type is spelled out rather than pattern-matched, so a
+ * new range is a decision instead of a regex accident.
+ */
+const MCP_TRANSPORT_MEDIA_TYPES = [
+  "application/json",
+  "text/event-stream",
+] as const;
+
+type McpTransportMediaType = (typeof MCP_TRANSPORT_MEDIA_TYPES)[number];
+
+const MCP_TRANSPORT_ACCEPT_RANGES = {
+  "application/json": ["application/json", "application/*", "*/*"],
+  "text/event-stream": ["text/event-stream", "text/*", "*/*"],
+} as const satisfies Record<McpTransportMediaType, readonly string[]>;
+
+const MCP_TRANSPORT_ACCEPT_HEADER = MCP_TRANSPORT_MEDIA_TYPES.join(", ");
+
+const acceptsEveryTransportMediaType = (accept: string): boolean => {
+  const ranges = new Set(
+    accept
+      .split(",")
+      .map((entry) => entry.split(";").at(0)?.trim().toLowerCase()),
   );
+  return MCP_TRANSPORT_MEDIA_TYPES.every((mediaType) =>
+    MCP_TRANSPORT_ACCEPT_RANGES[mediaType].some((range) => ranges.has(range)),
+  );
+};
+
+/**
+ * Normalize a satisfying `Accept` to the literal pair the transport tests for,
+ * and leave a genuinely narrow one untouched so the transport still owns the
+ * 406 and its message.
+ */
+const withTransportAcceptHeader = (request: Request): Request => {
+  const accept = request.headers.get("accept");
+  if (accept === MCP_TRANSPORT_ACCEPT_HEADER) {
+    return request;
+  }
+  if (accept !== null && !acceptsEveryTransportMediaType(accept)) {
+    return request;
+  }
+
+  const headers = new Headers(request.headers);
+  headers.set("accept", MCP_TRANSPORT_ACCEPT_HEADER);
+  return new Request(request, { headers });
+};
+
+type McpRequestFrame =
+  | { request: Request; status: "within_limit" }
+  | { status: "too_large" };
+
+/**
+ * Refuse an oversized JSON-RPC frame before anything parses it. A declared
+ * length is checked without touching the body; a chunked upload declares none,
+ * so its stream is metered and abandoned at the cap rather than buffered
+ * wholesale, and the bytes already read are handed on as the request body.
+ */
+const withCappedRequestBody = async (
+  request: Request,
+): Promise<McpRequestFrame> => {
+  const declaredLength = request.headers.get("content-length");
+  if (declaredLength !== null) {
+    const length = Number(declaredLength);
+    // A length we cannot read is a length we cannot honour: refuse it rather
+    // than fall through to an unmetered read.
+    return Number.isInteger(length) && length <= MCP_MAX_REQUEST_BODY_BYTES
+      ? { request, status: "within_limit" }
+      : { status: "too_large" };
+  }
+  if (request.body === null) {
+    return { request, status: "within_limit" };
+  }
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for await (const chunk of request.body) {
+    total += chunk.length;
+    if (total > MCP_MAX_REQUEST_BODY_BYTES) {
+      // Leaving the loop cancels the stream: the rest of the upload is never
+      // read into this process.
+      return { status: "too_large" };
+    }
+    chunks.push(chunk);
+  }
+
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  return {
+    request: new Request(request.url, {
+      body,
+      headers: request.headers,
+      method: request.method,
+      signal: request.signal,
+    }),
+    status: "within_limit",
+  };
 };
 
 /**
@@ -296,8 +516,10 @@ const retryableServerErrorResponse = () => {
   const headers = createMcpCorsHeaders();
   headers.set("Retry-After", String(MCP_RETRY_AFTER_SECONDS));
 
-  return new Response("Service temporarily unavailable", {
+  return mcpJsonRpcErrorResponse({
+    code: MCP_TRANSPORT_ERROR_CODE,
     headers,
+    message: "Service temporarily unavailable",
     status: 503,
   });
 };
@@ -663,26 +885,28 @@ export const createMcpHttpRequestHandler = ({
   };
 
   return async (
-    request: Request,
+    incomingRequest: Request,
     {
       clientIp = null,
       mode = "default",
     }: { clientIp?: string | null; mode?: McpMode } = {},
   ): Promise<Response> => {
-    if (request.method === "OPTIONS") {
+    if (incomingRequest.method === "OPTIONS") {
       return new Response(null, {
-        headers: createMcpCorsHeaders(),
+        headers: createMcpPreflightHeaders(),
         status: 204,
       });
     }
 
+    const frame = await withCappedRequestBody(incomingRequest);
+    if (frame.status === "too_large") {
+      return payloadTooLargeResponse();
+    }
+    const request = withTransportAcceptHeader(frame.request);
+
     const token = extractBearerToken(request);
     if (!token) {
-      return accessDeniedResponse({
-        message: "Missing Authorization header",
-        mode,
-        status: 401,
-      });
+      return accessDeniedResponse({ denial: "missing_credentials", mode });
     }
 
     try {
@@ -725,11 +949,7 @@ export const createMcpHttpRequestHandler = ({
       return withMcpCors(response, session, mode);
     } catch (error) {
       if (error instanceof McpOrganizationAccessError) {
-        return accessDeniedResponse({
-          message: "Forbidden",
-          mode,
-          status: 403,
-        });
+        return accessDeniedResponse({ denial: "organization_forbidden", mode });
       }
 
       // Only a genuine token rejection gets a 401 + `WWW-Authenticate`. Anything
@@ -739,11 +959,7 @@ export const createMcpHttpRequestHandler = ({
       // a retryable 5xx so the client backs off instead of dropping into a
       // re-consent loop.
       if (error instanceof McpAuthenticationError) {
-        return accessDeniedResponse({
-          message: "Invalid or expired token",
-          mode,
-          status: 401,
-        });
+        return accessDeniedResponse({ denial: "invalid_token", mode });
       }
 
       captureError(error, {

@@ -28,6 +28,20 @@ describe("stella CLI shell", () => {
     expect(result.stdout.toString()).toContain("Stella command-line client");
   });
 
+  test("--help documents the exit-code contract", () => {
+    const result = Bun.spawnSync({
+      cmd: ["bun", CLI_ENTRYPOINT, "--help"],
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+
+    const stdout = result.stdout.toString();
+    expect(stdout).toContain("Exit codes:");
+    expect(stdout).toContain(" 2  usage or input validation error");
+    expect(stdout).toContain(" 5  feature disabled for this organization");
+    expect(stdout).toContain("10  conflict with current state");
+  });
+
   test("tools list enumerates the generated command tree", () => {
     const result = Bun.spawnSync({
       cmd: ["bun", CLI_ENTRYPOINT, "tools", "list"],

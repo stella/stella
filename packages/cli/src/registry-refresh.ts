@@ -41,6 +41,7 @@ import {
   writeCacheFile,
   type CacheEnv,
   type RegistryCacheFile,
+  type RegistryDelta,
 } from "./registry-cache.js";
 import { validateFetchedToolsList } from "./registry-trust.js";
 import type { RegistryToolListing, RouteNode } from "./route-types.js";
@@ -85,45 +86,79 @@ const loadBakedListings = async (): Promise<readonly RegistryToolListing[]> => {
 };
 
 /**
- * A scoped `tools/list` response is an authorization projection, not proof that
- * a baked tool was removed from the server. Keep a baked compound tool in the
- * runtime tree only when the authenticated response explicitly names that tool
- * as omitted for missing scope, so its local all-scopes preflight remains
- * reachable. Grants alone are insufficient: an older server may lack the tool
- * entirely while still echoing the same limited grants.
- * Single-scope tools follow the live projection; unknown live tools survive.
+ * A `tools/list` response is a projection, not proof that a baked tool was
+ * removed from the server. Restore a baked listing the response attested it
+ * omitted, so the command stays in the tree and the server answers the call:
+ * - `feature`: gated off in this deployment, so invoking it returns the
+ *   server's `feature_disabled` with its real message instead of the CLI
+ *   claiming the command does not exist.
+ * - `scope`: only compound tools, whose local all-scopes preflight must stay
+ *   reachable. Single-scope tools follow the live projection.
+ *
+ * Attestation is required: grants alone are insufficient, because an older
+ * server may lack the tool entirely while echoing the same limited grants.
+ * Unknown live tools survive either way.
  */
-const retainBakedCompoundListings = ({
+const retainAttestedOmittedListings = ({
   fetched,
   baked,
+  featureOmittedTools,
   scopeOmittedTools,
 }: {
   fetched: readonly RegistryToolListing[];
   baked: readonly RegistryToolListing[];
+  featureOmittedTools: readonly string[] | undefined;
   scopeOmittedTools: readonly string[] | undefined;
 }): readonly RegistryToolListing[] => {
-  if (scopeOmittedTools === undefined) {
+  const retainable = new Set(featureOmittedTools);
+  for (const name of scopeOmittedTools ?? []) {
+    const annotation = TOOL_ANNOTATIONS[name];
+    const additionalScopes = annotation?.additionalScopes;
+    if (
+      annotation?.scope !== undefined &&
+      additionalScopes !== undefined &&
+      additionalScopes.length > 0
+    ) {
+      retainable.add(name);
+    }
+  }
+  if (retainable.size === 0) {
     return fetched;
   }
   const names = new Set(fetched.map((listing) => listing.name));
-  const omittedForScope = new Set(scopeOmittedTools);
-  const retained = baked.filter((listing) => {
-    const annotation = TOOL_ANNOTATIONS[listing.name];
-    const additionalScopes = annotation?.additionalScopes;
-    return (
-      !names.has(listing.name) &&
-      annotation?.scope !== undefined &&
-      additionalScopes !== undefined &&
-      additionalScopes.length > 0 &&
-      omittedForScope.has(listing.name)
-    );
-  });
+  const retained = baked.filter(
+    (listing) => !names.has(listing.name) && retainable.has(listing.name),
+  );
   return retained.length === 0 ? fetched : [...fetched, ...retained];
 };
 
-/** The one-line stderr notice for a diverged registry (spec S5.3). */
-const divergenceNotice = (file: RegistryCacheFile): string =>
-  `server registry differs (+${file.delta.added.length} −${file.delta.removed.length} ~${file.delta.changed.length}); see 'stella tools list'\n`;
+/** How many diverged tool names the notice spells out before summarizing. */
+const NOTICE_TOOL_NAME_LIMIT = 8;
+
+const formatNoticeToolNames = (names: readonly string[]): string => {
+  const shown = names.slice(0, NOTICE_TOOL_NAME_LIMIT).join(", ");
+  const overflow = names.length - NOTICE_TOOL_NAME_LIMIT;
+  return overflow > 0 ? `${shown} +${overflow} more` : shown;
+};
+
+/**
+ * The one-line stderr notice for a diverged registry (spec S5.3). It names the
+ * tools: counts alone leave no way to tell which command changed, and no
+ * command prints the delta.
+ */
+const divergenceNotice = (delta: RegistryDelta): string => {
+  const segments: string[] = [];
+  for (const [label, names] of [
+    ["added", delta.added],
+    ["removed", delta.removed],
+    ["changed", delta.changed],
+  ] as const) {
+    if (names.length > 0) {
+      segments.push(`${label} ${formatNoticeToolNames(names)}`);
+    }
+  }
+  return `server registry differs: ${segments.join("; ")}\n`;
+};
 
 /**
  * Pick the command tree for this invocation without any network (spec S5.3).
@@ -161,9 +196,10 @@ export const resolveCommandTree = async ({
   if (entries === null) {
     return { tree: generatedRouteMap };
   }
-  const listings = retainBakedCompoundListings({
+  const listings = retainAttestedOmittedListings({
     fetched: file.listings,
     baked: await loadBakedListings(),
+    featureOmittedTools: file.featureOmittedTools,
     scopeOmittedTools: file.scopeOmittedTools,
   });
   const built = Result.try(
@@ -177,7 +213,7 @@ export const resolveCommandTree = async ({
   if (Result.isError(built)) {
     return { tree: generatedRouteMap };
   }
-  return { tree: built.value, notice: divergenceNotice(file) };
+  return { tree: built.value, notice: divergenceNotice(file.delta) };
 };
 
 /** The outcome of a cache-refresh attempt (spec S5.3/S5.5 + addendum nudge). */
@@ -256,7 +292,17 @@ export const refreshRegistryCache = async ({
   }
 
   const baked = bakedListings ?? (await loadBakedListings());
-  const delta = computeDelta(baked, trust.listings);
+  // Every omission the server attested, whatever the reason. Diffing against a
+  // projection without them counts a tool the server still owns as removed, and
+  // the delta then never reconciles: the notice fires on every invocation.
+  const delta = computeDelta({
+    baked,
+    fetched: trust.listings,
+    omittedTools: [
+      ...(raw.value.scopeOmittedTools ?? []),
+      ...(raw.value.featureOmittedTools ?? []),
+    ],
+  });
 
   // Resolve the update channel from npm, the publication source of truth. The
   // server still supplies only its independently-owned minimum-version policy.
@@ -282,6 +328,9 @@ export const refreshRegistryCache = async ({
     ...(raw.value.scopeOmittedTools === undefined
       ? {}
       : { scopeOmittedTools: raw.value.scopeOmittedTools }),
+    ...(raw.value.featureOmittedTools === undefined
+      ? {}
+      : { featureOmittedTools: raw.value.featureOmittedTools }),
     ...(lastNudgedVersion === undefined ? {} : { lastNudgedVersion }),
   };
   await writeCacheFile(filePath, file);

@@ -1,7 +1,10 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { PassThrough } from "node:stream";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
+import { CLI_IDENTITY_SCOPES } from "./auth/constants.js";
+import { parseScopesFlag } from "./auth/scopes.js";
 import type { Context } from "./context.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import type { FlagSpec, LeafCommandSpec } from "./route-types.js";
@@ -16,6 +19,7 @@ import {
   requestIdLine,
   reservedFlagUsageError,
   runLeafCommand,
+  scopePreflightFailure,
 } from "./run-leaf-command.js";
 
 const specWith = (flags: readonly FlagSpec[]): LeafCommandSpec => ({
@@ -619,5 +623,47 @@ describe("request-id receipt helpers", () => {
     expect(
       readRequestReceipt({ meta: { requestId: ANSI_ID } }),
     ).toBeUndefined();
+  });
+});
+
+describe("scopePreflightFailure: the hint must survive a re-parse", () => {
+  const segment = (value: object): string =>
+    Buffer.from(JSON.stringify(value)).toString("base64url");
+
+  const tokenGranting = (scope: string): string =>
+    `${segment({ alg: "none", typ: "JWT" })}.${segment({
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      scope,
+      sub: "user-1",
+    })}.sig`;
+
+  // The hint used to echo every granted scope, identity scopes included, so
+  // following it re-ran login without `offline_access` and left the session
+  // with no refresh token. `--scopes` now takes resource scopes only, and the
+  // hint has to be a command that flag actually accepts.
+  test("emits resource scopes only, and parseScopesFlag accepts them", () => {
+    const failure = scopePreflightFailure({
+      additionalScopes: ["templates"],
+      scope: "documents_write",
+      token: tokenGranting(
+        "openid profile email offline_access stella:read stella:documents_write",
+      ),
+    });
+
+    expect(failure).toBeDefined();
+    const scopesArgument =
+      failure?.loginCommand.split(" --scopes ").at(1) ?? "";
+    expect(scopesArgument).toBe(
+      "stella:read,stella:documents_write,stella:templates",
+    );
+
+    const reparsed = parseScopesFlag(scopesArgument);
+    expect(Result.isOk(reparsed)).toBe(true);
+    if (Result.isOk(reparsed)) {
+      expect(reparsed.value).toContain("stella:templates");
+      for (const identityScope of CLI_IDENTITY_SCOPES) {
+        expect(reparsed.value).not.toContain(identityScope);
+      }
+    }
   });
 });

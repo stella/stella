@@ -45,7 +45,7 @@ const currentVersionProjectionFilter = sql`
 type RawRow = Record<string, unknown>;
 type SearchDatabase = Pick<typeof rootDb, "execute">;
 
-const mapHitRow = (row: RawRow): SearchHit => ({
+export const mapHitRow = (row: RawRow): SearchHit => ({
   entityId: String(row["entity_id"]),
   workspaceId: String(row["workspace_id"]),
   workspaceName: String(row["workspace_name"]),
@@ -53,7 +53,7 @@ const mapHitRow = (row: RawRow): SearchHit => ({
   title: String(row["title"]),
   headline:
     typeof row["headline"] === "string" && row["headline"].length > 0
-      ? escapeAndHighlight(JSON.stringify(row["headline"]))
+      ? escapeAndHighlight(row["headline"])
       : null,
   updatedAt:
     row["updated_at"] instanceof Date

@@ -17,8 +17,8 @@ const toolsListBody = JSON.stringify({
   result: { tools: [] },
 });
 
-describe("fetchToolsListRaw authenticated scope evidence", () => {
-  test("returns effective scopes and exact scope-omitted tools attested by the server", async () => {
+describe("fetchToolsListRaw authenticated omission evidence", () => {
+  test("returns effective scopes and the exact omitted tools attested per reason", async () => {
     const authorizationHeaders: (string | null)[] = [];
     let initializeVersion: string | undefined;
     const methods: string[] = [];
@@ -47,6 +47,8 @@ describe("fetchToolsListRaw authenticated scope evidence", () => {
               "Content-Type": "application/json",
               "x-stella-scopes": "stella:read stella:search",
               "x-stella-scope-omitted-tools": "save_filled_template",
+              "x-stella-feature-omitted-tools":
+                "list_time_entries search_case_law",
             },
           })
         );
@@ -67,6 +69,10 @@ describe("fetchToolsListRaw authenticated scope evidence", () => {
         ]);
         expect(result.value.scopeOmittedTools).toEqual([
           "save_filled_template",
+        ]);
+        expect(result.value.featureOmittedTools).toEqual([
+          "list_time_entries",
+          "search_case_law",
         ]);
         expect(methods).toEqual([
           "initialize",
@@ -111,6 +117,7 @@ describe("fetchToolsListRaw authenticated scope evidence", () => {
       if (Result.isOk(result)) {
         expect(result.value.grantedScopes).toBeUndefined();
         expect(result.value.scopeOmittedTools).toBeUndefined();
+        expect(result.value.featureOmittedTools).toBeUndefined();
       }
     } finally {
       void server.stop(true);

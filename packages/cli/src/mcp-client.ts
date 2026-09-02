@@ -33,7 +33,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** One text content block of a `CallToolResult`. */
-export type ToolResultContent = { type: string; text: string };
+type ToolResultContent = { type: string; text: string };
 
 /** The `tools/call` result envelope (a success envelope even when isError). */
 export type CallToolResult = {
@@ -41,18 +41,10 @@ export type CallToolResult = {
   isError?: boolean;
 };
 
-/** One tool as returned by `tools/list` (the four wire fields). */
-export type ListedTool = {
-  name: string;
-  description?: string;
-  inputSchema: Record<string, unknown>;
-  annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean };
-};
-
 export type ListToolsResult = { tools: readonly unknown[] };
 
 /** One `content` block of a `resources/read` result. */
-export type ResourceContent = {
+type ResourceContent = {
   uri?: string;
   mimeType?: string;
   text?: string;
@@ -258,7 +250,7 @@ export const listTools = async ({
   return Result.ok({ tools: result.value.value.tools });
 };
 
-/** The raw `tools/list` body plus server policy and scope-evidence headers. */
+/** The raw `tools/list` body plus server policy and omission-evidence headers. */
 export type RawToolsList = {
   rawBody: string;
   cliMinimum?: string;
@@ -266,6 +258,8 @@ export type RawToolsList = {
   grantedScopes?: readonly string[];
   /** Tool names the server attests were omitted solely for missing scope. */
   scopeOmittedTools?: readonly string[];
+  /** Tool names the server attests are gated off in this deployment. */
+  featureOmittedTools?: readonly string[];
 };
 
 /**
@@ -328,12 +322,19 @@ export const fetchToolsListRaw = async ({
     out.grantedScopes =
       scopesHeader.length > 0 ? scopesHeader.split(/\s+/u) : [];
   }
-  const omittedToolsHeader = evidence.headers.get(
+  const scopeOmitted = readAttestedToolNames(
+    evidence.headers,
     STELLA_SCOPE_OMITTED_TOOLS_HEADER,
   );
-  if (omittedToolsHeader !== null) {
-    out.scopeOmittedTools =
-      omittedToolsHeader.length > 0 ? omittedToolsHeader.split(/\s+/u) : [];
+  if (scopeOmitted !== undefined) {
+    out.scopeOmittedTools = scopeOmitted;
+  }
+  const featureOmitted = readAttestedToolNames(
+    evidence.headers,
+    STELLA_FEATURE_OMITTED_TOOLS_HEADER,
+  );
+  if (featureOmitted !== undefined) {
+    out.featureOmittedTools = featureOmitted;
   }
   return Result.ok(out);
 };
@@ -341,7 +342,22 @@ export const fetchToolsListRaw = async ({
 /** Response headers the server echoes the authenticated session's identity on. */
 const STELLA_ORGANIZATION_HEADER = "x-stella-organization";
 const STELLA_SCOPES_HEADER = "x-stella-scopes";
+// One header per omission reason. Absent means the server attests nothing (a
+// self-hosted deployment older than the evidence contract); present-but-empty
+// means it attests that nothing was omitted for that reason.
 const STELLA_SCOPE_OMITTED_TOOLS_HEADER = "x-stella-scope-omitted-tools";
+const STELLA_FEATURE_OMITTED_TOOLS_HEADER = "x-stella-feature-omitted-tools";
+
+const readAttestedToolNames = (
+  headers: Headers,
+  header: string,
+): readonly string[] | undefined => {
+  const raw = headers.get(header);
+  if (raw === null) {
+    return undefined;
+  }
+  return raw.length > 0 ? raw.split(/\s+/u) : [];
+};
 
 /** The org + granted scopes a credential resolves to, per the server. */
 export type MachineIdentity = {

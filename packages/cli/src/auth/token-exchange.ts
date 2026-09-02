@@ -13,6 +13,8 @@ import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
 export type TokenResponse = {
   readonly access_token: string;
   readonly expires_in: number;
+  /** Issued when `openid` was granted; carries the email/name the access token lacks. */
+  readonly id_token?: string | undefined;
   readonly refresh_token?: string | undefined;
   readonly scope?: string | undefined;
   readonly token_type: string;
@@ -21,6 +23,7 @@ export type TokenResponse = {
 const tokenResponseSchema = v.object({
   access_token: v.string(),
   expires_in: v.number(),
+  id_token: v.optional(v.string()),
   refresh_token: v.optional(v.string()),
   scope: v.optional(v.string()),
   token_type: v.string(),

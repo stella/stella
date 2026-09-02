@@ -1,8 +1,11 @@
+import type { Application, Command } from "@stricli/core";
 import { describe, expect, test } from "bun:test";
 
-import { buildFlag } from "./build-cli-tree.js";
+import { buildApp, buildFlag } from "./build-cli-tree.js";
+import type { Context } from "./context.js";
 import { flagKey } from "./flag-name.js";
 import { generatedRouteMap } from "./generated/route-map.js";
+import { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
 import type { FlagSpec, RouteNode } from "./route-types.js";
 
 const flagSpec = (overrides: Partial<FlagSpec>): FlagSpec => ({
@@ -67,6 +70,59 @@ const generatedFlags = (node: RouteNode): FlagSpec[] => {
   }
   return Object.values(node.children).flatMap(generatedFlags);
 };
+
+describe("flag help facts", () => {
+  const briefOf = (spec: FlagSpec): unknown =>
+    (buildFlag(spec) as Record<string, unknown>)["brief"];
+
+  test("facts read as one clause, never as a nested bracket", () => {
+    expect(
+      briefOf(flagSpec({ description: "Document entity ID", required: true })),
+    ).toBe("Document entity ID (required, string)");
+    expect(briefOf(flagSpec({ kind: "enum", enum: ["a", "b"] }))).toBe(
+      "(optional, enum: a, b)",
+    );
+    expect(
+      briefOf(flagSpec({ kind: "int", min: 1, max: 100, repeatable: true })),
+    ).toBe("(optional, int 1..100, repeatable)");
+  });
+});
+
+/**
+ * `--server` is a global concern, so it must exist on EVERY command the CLI
+ * dispatches: generated tool leaves, capability leaves, resource leaves, and
+ * the hand-written commands alike. Walking the assembled route tree is what
+ * keeps a new command surface from silently rejecting `--server` again.
+ */
+describe("every command accepts --server", () => {
+  type Target = Application<Context>["root"];
+
+  // stricli's `kind` discriminators are non-exported unique symbols, so a
+  // routing target is narrowed by the accessor only a route map has.
+  const isRouteMap = (
+    target: Target,
+  ): target is Exclude<Target, Command<Context>> => "getAllEntries" in target;
+
+  const missingServerFlag = (
+    target: Target,
+    path: readonly string[],
+  ): readonly string[] => {
+    if (!isRouteMap(target)) {
+      return target.usesFlag(RESERVED_FLAG_KEYS.server, "allow-kebab-for-camel")
+        ? []
+        : [path.join(" ")];
+    }
+    return target
+      .getAllEntries()
+      .flatMap((entry) =>
+        missingServerFlag(entry.target, [...path, entry.name.original]),
+      );
+  };
+
+  test("no leaf of the assembled tree is missing it", () => {
+    expect(missingServerFlag(buildApp(generatedRouteMap).root, [])).toEqual([]);
+  });
+});
 
 describe("generated flag parser conformance", () => {
   test("every generated long flag has a Stricli-supported key", () => {

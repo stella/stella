@@ -37,7 +37,7 @@ export const generatedToolAnnotations: Readonly<
     itemsKey: "results",
   },
   read_content_across_matters: {
-    command: ["search", "read"],
+    command: ["document", "content"],
     scope: "read",
     windowedText: true,
   },

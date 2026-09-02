@@ -28,6 +28,7 @@ import { pgFtsProvider } from "@/api/lib/search/pg-fts-provider";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
 import {
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
@@ -1116,7 +1117,9 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionId: "dec_123",
           decisionType: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
-          headline: "Relevant <mark>holding</mark>",
+          // The handler builds the headline for the web UI; the MCP snippet
+          // must come back as plain text.
+          headline: "Relevant <mark>holding</mark> on &quot;smlouva&quot;",
           language: "cs",
           languageAlternates: [
             {
@@ -1194,7 +1197,7 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionType: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           language: "cs",
-          snippet: "Relevant <mark>holding</mark>",
+          snippet: 'Relevant holding on "smlouva"',
           sourceUrl: "https://example.test/decision",
         },
       ],
@@ -1252,7 +1255,7 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionType: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           language: "cs",
-          snippet: "Relevant <mark>holding</mark>",
+          snippet: "Relevant holding",
           sourceUrl: "https://example.test/decision",
         },
       ],
@@ -3697,6 +3700,75 @@ describe("OpenAI-compatible MCP tools", () => {
     expectValidationMessage(result, "type is required to create a contact");
   });
 
+  test("save_contact rejects a create with no name to display", async () => {
+    const result = await handleMcpToolCall({
+      args: { type: "person", notes: "met at conference" },
+      context: createContext(),
+      toolName: "save_contact",
+    });
+
+    expectValidationMessage(
+      result,
+      "display_name is required to create a contact, or first_name/last_name (person) or organization_name (organization) to derive it from",
+    );
+  });
+
+  describe("deriveContactDisplayName", () => {
+    test("prefers an explicit display name", () => {
+      expect(
+        deriveContactDisplayName({
+          display_name: " Acme Corp ",
+          first_name: "Jan",
+          type: "person",
+        }),
+      ).toBe("Acme Corp");
+    });
+
+    test("derives a person from first and last name", () => {
+      expect(
+        deriveContactDisplayName({
+          first_name: " Jan ",
+          last_name: " Novák ",
+          type: "person",
+        }),
+      ).toBe("Jan Novák");
+    });
+
+    test("derives a person from whichever name part is present", () => {
+      expect(
+        deriveContactDisplayName({ last_name: "Novák", type: "person" }),
+      ).toBe("Novák");
+    });
+
+    test("derives an organization from its organization name", () => {
+      expect(
+        deriveContactDisplayName({
+          organization_name: "Acme s.r.o.",
+          type: "organization",
+        }),
+      ).toBe("Acme s.r.o.");
+    });
+
+    test("falls back across kinds rather than yielding no name", () => {
+      expect(
+        deriveContactDisplayName({
+          organization_name: "Acme s.r.o.",
+          type: "person",
+        }),
+      ).toBe("Acme s.r.o.");
+    });
+
+    test("yields an empty name when no part carries one", () => {
+      expect(
+        deriveContactDisplayName({
+          first_name: "  ",
+          organization_name: null,
+          type: "person",
+        }),
+      ).toBe("");
+    });
+  });
+
   test("list_contacts returns internal directory IDs from the shared query", async () => {
     const contact = {
       id: "contact_1",
@@ -4054,6 +4126,7 @@ describe("OpenAI-compatible MCP tools", () => {
           text: JSON.stringify({ taskId: "task_1", updated: true }),
         },
       ],
+      structuredContent: { taskId: "task_1", updated: true },
     });
     expect(workflowUpdates).toEqual([
       expect.objectContaining({ status: WORK_OBLIGATION_STATUS.COMPLETED }),

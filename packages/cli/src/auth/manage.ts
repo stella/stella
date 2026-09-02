@@ -56,6 +56,8 @@ export type WhoamiInfo = {
   readonly serverUrl: string;
   readonly orgId: string;
   readonly orgLabel: string | undefined;
+  readonly email: string | undefined;
+  readonly name: string | undefined;
   readonly scope: string;
   readonly expiresAt: number;
   readonly isExpired: boolean;
@@ -76,7 +78,9 @@ export const whoami = async (
 
   return Result.ok({
     claims: decodeAccessTokenClaims(credential.accessToken),
+    email: credential.email,
     expiresAt: credential.expiresAt,
+    name: credential.name,
     hasRefreshToken: Boolean(credential.refreshToken),
     isExpired: credential.expiresAt <= Date.now(),
     orgId: credential.orgId,

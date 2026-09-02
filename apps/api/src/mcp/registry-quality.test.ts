@@ -214,6 +214,19 @@ describe("MCP registry access coherence", () => {
     }
   });
 
+  test('every access: "read" tool carries readOnlyHint', () => {
+    // The converse of the check above, and the reason it matters: a client that
+    // auto-approves read-only tools prompts for a read tool that omits the hint.
+    for (const tool of defaultTools) {
+      if (tool.access === "read") {
+        expect(
+          tool.annotations.readOnlyHint,
+          `Tool ${tool.name} is access: "read" but omits readOnlyHint`,
+        ).toBe(true);
+      }
+    }
+  });
+
   test('destructiveHint tools are always access: "write"', () => {
     for (const tool of defaultTools) {
       if (tool.annotations.destructiveHint) {
@@ -334,6 +347,48 @@ describe("MCP registry annotation coherence", () => {
   });
 });
 
+/**
+ * Advertised input property names. The anonymized surface is a projection of
+ * the same definitions, so checking the default surface covers both.
+ *
+ * The nested paths below are the remaining camelCase debt: object and array
+ * payloads that mirror internal document/field models (`knowledge-tools.ts`,
+ * `stella-tools.ts`, `template-tools.ts`). The set is exact, so a new
+ * camelCase name fails here and fixing one of these requires shrinking the
+ * constant. Every TOP-LEVEL name (the surface an agent types) must already be
+ * snake_case: none is listed, so any drift there fails immediately.
+ */
+const CAMEL_CASE_INPUT_PROPERTY_DEBT = [
+  "save_clause.body[].directiveExpression",
+  "save_clause.body[].directiveKind",
+  "save_clause.body[].isDirective",
+  "save_clause.body[].listKind",
+  "save_clause.body[].listLevel",
+  "save_template.fields[].aiAdapt",
+  "save_template.fields[].aiPrompt",
+  "save_template.fields[].aiSeesDocument",
+  "save_template.fields[].dateFormat",
+  "save_template.fields[].inputType",
+  "save_template.fields[].optionsFrom",
+  "save_template.fields[].parts[].inputType",
+  "save_template.fields[].validation.maxItems",
+  "save_template.fields[].validation.maxLength",
+  "save_template.fields[].validation.minItems",
+  "save_template.fields[].validation.minLength",
+  "set_practice_jurisdictions.jurisdictions[].countryCode",
+  "set_practice_jurisdictions.jurisdictions[].isPrimary",
+];
+
+describe("MCP registry input naming", () => {
+  test("input property names are snake_case, bar the recorded debt", () => {
+    const issues: string[] = [];
+    for (const tool of defaultTools) {
+      collectNonSnakeCaseProperties(tool.inputSchema, tool.name, issues);
+    }
+    expect(issues.sort()).toEqual(CAMEL_CASE_INPUT_PROPERTY_DEBT);
+  });
+});
+
 describe("MCP static tool-set coherence", () => {
   test("each static tool set binds exactly one handler per advertised definition", () => {
     for (const toolSet of DEFAULT_MCP_TOOL_SETS) {
@@ -414,6 +469,33 @@ const collectUndescribedProperties = (
     }
   }
   collectUndescribedProperties(schema["items"], `${path}[]`, issues);
+};
+
+// Advertised input property names: lowercase words joined by single
+// underscores. The name is the one part of a tool contract an agent has to
+// reproduce exactly, so a camelCase outlier (or a synonym like `workspace_id`
+// beside ten `matter_id`s) is a correctness cost, not a style preference.
+const SNAKE_CASE_PROPERTY = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/u;
+
+/** Walks a JSON Schema and records the path of every non-snake_case property. */
+const collectNonSnakeCaseProperties = (
+  schema: unknown,
+  path: string,
+  issues: string[],
+): void => {
+  if (!isRecord(schema)) {
+    return;
+  }
+  if (isRecord(schema["properties"])) {
+    for (const [key, property] of Object.entries(schema["properties"])) {
+      const propertyPath = `${path}.${key}`;
+      if (!SNAKE_CASE_PROPERTY.test(key)) {
+        issues.push(propertyPath);
+      }
+      collectNonSnakeCaseProperties(property, propertyPath, issues);
+    }
+  }
+  collectNonSnakeCaseProperties(schema["items"], `${path}[]`, issues);
 };
 
 const getInputProperties = (

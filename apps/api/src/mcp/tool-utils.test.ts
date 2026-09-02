@@ -23,6 +23,7 @@ import {
   serializeToolResult,
   slugifyCaseLawPathSegment,
   structuredErrorResult,
+  toPlainTextSnippet,
   validationErrorResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
@@ -431,6 +432,64 @@ describe("serializeToolResult", () => {
     expect(() =>
       serializeToolResult({ status: "success", data: undefined }),
     ).toThrow("Internal tool success data must be JSON-serializable");
+  });
+
+  test("mirrors an object payload into structuredContent, text unchanged", () => {
+    const data = { matterId: "ws_1", updated: true };
+    const result = serializeToolResult({ status: "success", data });
+
+    expect(result.content).toEqual([
+      { type: "text", text: JSON.stringify(data) },
+    ]);
+    expect(result.structuredContent).toEqual(data);
+  });
+
+  test("keeps a handler's own structuredContent alongside its prose text", () => {
+    const data = { entityId: "doc_1" };
+    const result = serializeToolResult({
+      status: "success",
+      data,
+      mcp: { primaryText: "Choose a file.", structuredContent: data },
+    });
+
+    expect(result.content).toEqual([{ type: "text", text: "Choose a file." }]);
+    expect(result.structuredContent).toEqual(data);
+  });
+
+  test("omits structuredContent for a non-object payload", () => {
+    const result = serializeToolResult({ status: "success", data: [1, 2] });
+
+    expect(result.content).toEqual([{ type: "text", text: "[1,2]" }]);
+    expect(result.structuredContent).toBeUndefined();
+  });
+
+  test("omits structuredContent for an error envelope", () => {
+    const result = serializeToolResult(
+      structuredErrorResult({ code: "not_found", message: "gone" }),
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+  });
+});
+
+describe("toPlainTextSnippet", () => {
+  test("strips highlight markup and decodes entities from a search headline", () => {
+    expect(
+      toPlainTextSnippet(
+        "&quot;<mark>smlouva</mark> (1)(4).docx&quot; &amp; annexes",
+      ),
+    ).toBe('"smlouva (1)(4).docx" & annexes');
+  });
+
+  test("keeps an escaped literal tag as text", () => {
+    expect(toPlainTextSnippet("&lt;mark&gt; and &amp;lt; stay literal")).toBe(
+      "<mark> and &lt; stay literal",
+    );
+  });
+
+  test("passes a missing headline through", () => {
+    expect(toPlainTextSnippet(null)).toBeNull();
   });
 });
 

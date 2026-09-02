@@ -363,44 +363,6 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
-        read: {
-          kind: "leaf",
-          spec: {
-            commandPath: ["search", "read"],
-            toolName: "read_content_across_matters",
-            flags: [
-              {
-                flag: "--entity-id",
-                prop: "entity_id",
-                kind: "string",
-                repeatable: false,
-                description: "Entity ID",
-                required: true,
-              },
-            ],
-            inputOnly: [],
-            paginated: true,
-            windowedText: true,
-            destructive: false,
-            scope: "read",
-            inputSchema: {
-              type: "object",
-              properties: {
-                entity_id: {
-                  type: "string",
-                  description: "Entity ID",
-                },
-                cursor: {
-                  type: "string",
-                  description:
-                    "Opaque cursor from a previous call to read the next window of text",
-                  maxLength: 512,
-                },
-              },
-              required: ["entity_id"],
-            },
-          },
-        },
       },
     },
     "case-law": {
@@ -586,6 +548,540 @@ export const generatedRouteMap: RouteNode = {
         },
       },
     },
+    document: {
+      kind: "route",
+      children: {
+        content: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["document", "content"],
+            toolName: "read_content_across_matters",
+            flags: [
+              {
+                flag: "--entity-id",
+                prop: "entity_id",
+                kind: "string",
+                repeatable: false,
+                description: "Entity ID",
+                required: true,
+              },
+            ],
+            inputOnly: [],
+            paginated: true,
+            windowedText: true,
+            destructive: false,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              properties: {
+                entity_id: {
+                  type: "string",
+                  description: "Entity ID",
+                },
+                cursor: {
+                  type: "string",
+                  description:
+                    "Opaque cursor from a previous call to read the next window of text",
+                  maxLength: 512,
+                },
+              },
+              required: ["entity_id"],
+            },
+          },
+        },
+        list: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["document", "list"],
+            toolName: "list_documents",
+            flags: [
+              {
+                flag: "--matter-id",
+                prop: "matter_id",
+                kind: "string",
+                repeatable: false,
+                description: "Matter/workspace ID to list documents in",
+                required: true,
+              },
+              {
+                flag: "--mode",
+                prop: "mode",
+                kind: "enum",
+                enum: ["flat", "children"],
+                repeatable: false,
+                description:
+                  "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected.",
+                required: false,
+              },
+              {
+                flag: "--parent-id",
+                prop: "parent_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Folder entity ID whose direct children to list. Only valid in children mode; supplying it selects children mode when mode is omitted and is rejected together with mode 'flat'.",
+                required: false,
+              },
+            ],
+            inputOnly: [],
+            paginated: true,
+            windowedText: false,
+            itemsKey: "documents",
+            destructive: false,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              properties: {
+                matter_id: {
+                  type: "string",
+                  description: "Matter/workspace ID to list documents in",
+                },
+                mode: {
+                  type: "string",
+                  enum: ["flat", "children"],
+                  description:
+                    "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected.",
+                },
+                parent_id: {
+                  type: "string",
+                  description:
+                    "Folder entity ID whose direct children to list. Only valid in children mode; supplying it selects children mode when mode is omitted and is rejected together with mode 'flat'.",
+                },
+                limit: {
+                  type: "integer",
+                  description: "Max entities to return",
+                  minimum: 1,
+                  maximum: 100,
+                },
+                cursor: {
+                  type: "string",
+                  description:
+                    "Opaque cursor from a previous list_documents call to fetch the next page",
+                  maxLength: 512,
+                },
+              },
+              required: ["matter_id"],
+            },
+          },
+        },
+        read: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["document", "read"],
+            toolName: "read_document",
+            flags: [
+              {
+                flag: "--entity-id",
+                prop: "entity_id",
+                kind: "string",
+                repeatable: false,
+                description: "Document entity ID",
+                required: true,
+              },
+              {
+                flag: "--version-id",
+                prop: "version_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Return this version's metadata and field values instead of the current version",
+                required: false,
+              },
+              {
+                flag: "--compare-with-version-id",
+                prop: "compare_with_version_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "With version_id, return a plain-text line diff of this version (base) against version_id (target)",
+                required: false,
+              },
+              {
+                flag: "--include-versions",
+                prop: "include_versions",
+                kind: "boolean",
+                repeatable: false,
+                description: "Also return the document's version history",
+                required: false,
+              },
+              {
+                flag: "--versions-cursor",
+                prop: "versions_cursor",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Opaque cursor from a previous call to fetch the next page of version history",
+                required: false,
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            windowedText: false,
+            destructive: false,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              properties: {
+                entity_id: {
+                  type: "string",
+                  description: "Document entity ID",
+                },
+                version_id: {
+                  type: "string",
+                  description:
+                    "Return this version's metadata and field values instead of the current version",
+                },
+                compare_with_version_id: {
+                  type: "string",
+                  description:
+                    "With version_id, return a plain-text line diff of this version (base) against version_id (target)",
+                },
+                include_versions: {
+                  type: "boolean",
+                  description: "Also return the document's version history",
+                },
+                versions_cursor: {
+                  type: "string",
+                  description:
+                    "Opaque cursor from a previous call to fetch the next page of version history",
+                  maxLength: 512,
+                },
+              },
+              required: ["entity_id"],
+            },
+          },
+        },
+        save: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["document", "save"],
+            toolName: "save_document",
+            flags: [
+              {
+                flag: "--entity-id",
+                prop: "entity_id",
+                kind: "string",
+                repeatable: false,
+                description: "Document entity ID to update; omit to create",
+                required: false,
+              },
+              {
+                flag: "--matter-id",
+                prop: "matter_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Matter/workspace ID to create the entity in; required when creating",
+                required: false,
+              },
+              {
+                flag: "--name",
+                prop: "name",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Display name: required when creating, or the new name when renaming",
+                required: false,
+              },
+              {
+                flag: "--parent-id",
+                prop: "parent_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Folder entity ID: to place the new entity inside when creating, or to move the document into when updating",
+                required: false,
+              },
+              {
+                flag: "--kind",
+                prop: "kind",
+                kind: "enum",
+                enum: ["document", "folder"],
+                repeatable: false,
+                description:
+                  "Entity kind to create; defaults to 'document'. Only valid when creating.",
+                required: false,
+              },
+              {
+                flag: "--move-to-root",
+                prop: "move_to_root",
+                kind: "boolean",
+                repeatable: false,
+                description:
+                  "Move the document to the matter root (no parent folder). Only valid when updating.",
+                required: false,
+              },
+              {
+                flag: "--version-id",
+                prop: "version_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Version ID to annotate; required when setting label or description. Only valid when updating.",
+                required: false,
+              },
+              {
+                flag: "--label",
+                prop: "label",
+                kind: "nullable-string",
+                repeatable: false,
+                description:
+                  "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
+                required: false,
+              },
+              {
+                flag: "--description",
+                prop: "description",
+                kind: "nullable-string",
+                repeatable: false,
+                description:
+                  "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
+                required: false,
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            windowedText: false,
+            destructive: false,
+            scope: "documents_write",
+            inputSchema: {
+              type: "object",
+              properties: {
+                entity_id: {
+                  type: "string",
+                  description: "Document entity ID to update; omit to create",
+                },
+                matter_id: {
+                  type: "string",
+                  description:
+                    "Matter/workspace ID to create the entity in; required when creating",
+                },
+                name: {
+                  type: "string",
+                  description:
+                    "Display name: required when creating, or the new name when renaming",
+                  maxLength: 255,
+                },
+                parent_id: {
+                  type: "string",
+                  description:
+                    "Folder entity ID: to place the new entity inside when creating, or to move the document into when updating",
+                },
+                kind: {
+                  type: "string",
+                  enum: ["document", "folder"],
+                  description:
+                    "Entity kind to create; defaults to 'document'. Only valid when creating.",
+                },
+                move_to_root: {
+                  type: "boolean",
+                  description:
+                    "Move the document to the matter root (no parent folder). Only valid when updating.",
+                },
+                version_id: {
+                  type: "string",
+                  description:
+                    "Version ID to annotate; required when setting label or description. Only valid when updating.",
+                },
+                label: {
+                  type: ["string", "null"],
+                  description:
+                    "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
+                  maxLength: 128,
+                },
+                description: {
+                  type: ["string", "null"],
+                  description:
+                    "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
+                  maxLength: 1024,
+                },
+              },
+            },
+          },
+        },
+        delete: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["document", "delete"],
+            toolName: "delete_document",
+            flags: [
+              {
+                flag: "--entity-id",
+                prop: "entity_id",
+                kind: "string",
+                repeatable: false,
+                description: "Document entity ID to delete",
+                required: true,
+              },
+              {
+                flag: "--version-id",
+                prop: "version_id",
+                kind: "string",
+                repeatable: false,
+                description:
+                  "Delete only this version instead of the whole document",
+                required: false,
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            windowedText: false,
+            destructive: true,
+            scope: "documents_write",
+            inputSchema: {
+              type: "object",
+              properties: {
+                entity_id: {
+                  type: "string",
+                  description: "Document entity ID to delete",
+                },
+                version_id: {
+                  type: "string",
+                  description:
+                    "Delete only this version instead of the whole document",
+                },
+                confirm: {
+                  type: "boolean",
+                  description:
+                    "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion.",
+                },
+              },
+              required: ["entity_id"],
+            },
+          },
+        },
+        properties: {
+          kind: "route",
+          children: {
+            list: {
+              kind: "leaf",
+              spec: {
+                commandPath: ["document", "properties", "list"],
+                toolName: "list_properties",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matter_id",
+                    kind: "string",
+                    repeatable: false,
+                    description: "Matter/workspace ID to list properties for",
+                    required: true,
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                windowedText: false,
+                itemsKey: "properties",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    matter_id: {
+                      type: "string",
+                      description: "Matter/workspace ID to list properties for",
+                    },
+                    limit: {
+                      type: "integer",
+                      description: "Max properties to return",
+                      minimum: 1,
+                      maximum: 100,
+                    },
+                    cursor: {
+                      type: "string",
+                      description:
+                        "Opaque cursor from a previous list_properties call to fetch the next page",
+                      maxLength: 512,
+                    },
+                  },
+                  required: ["matter_id"],
+                },
+              },
+            },
+          },
+        },
+        field: {
+          kind: "route",
+          children: {
+            set: {
+              kind: "leaf",
+              spec: {
+                commandPath: ["document", "field", "set"],
+                toolName: "set_field_value",
+                flags: [
+                  {
+                    flag: "--entity-id",
+                    prop: "entity_id",
+                    kind: "string",
+                    repeatable: false,
+                    description: "Document entity ID whose cell to set",
+                    required: true,
+                  },
+                  {
+                    flag: "--property-id",
+                    prop: "property_id",
+                    kind: "string",
+                    repeatable: false,
+                    description: "Property ID, as returned by list_properties",
+                    required: true,
+                  },
+                ],
+                inputOnly: ["content"],
+                paginated: false,
+                windowedText: false,
+                destructive: false,
+                scope: "documents_write",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    entity_id: {
+                      type: "string",
+                      description: "Document entity ID whose cell to set",
+                    },
+                    property_id: {
+                      type: "string",
+                      description:
+                        "Property ID, as returned by list_properties",
+                    },
+                    content: {
+                      type: "object",
+                      description:
+                        "The value to set; 'type' must match the property.",
+                      properties: {
+                        type: {
+                          type: "string",
+                          enum: [
+                            "text",
+                            "single-select",
+                            "multi-select",
+                            "date",
+                            "int",
+                          ],
+                          description:
+                            "Value type; must match the property's value type",
+                        },
+                        value: {
+                          description:
+                            "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell.",
+                        },
+                        currency: {
+                          type: "string",
+                          description:
+                            "For int values only: 3-letter ISO currency code, or null",
+                          maxLength: 3,
+                        },
+                      },
+                      required: ["type", "value"],
+                    },
+                  },
+                  required: ["entity_id", "property_id", "content"],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     contact: {
       kind: "route",
       children: {
@@ -708,7 +1204,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Display name; required when creating, non-empty when updating",
+                  "Display name; when creating it defaults to first + last name (person) or organization name (organization); non-empty when updating",
                 required: false,
               },
               {
@@ -764,7 +1260,7 @@ export const generatedRouteMap: RouteNode = {
                 display_name: {
                   type: "string",
                   description:
-                    "Display name; required when creating, non-empty when updating",
+                    "Display name; when creating it defaults to first + last name (person) or organization name (organization); non-empty when updating",
                   maxLength: 512,
                 },
                 first_name: {
@@ -2250,502 +2746,6 @@ export const generatedRouteMap: RouteNode = {
         },
       },
     },
-    document: {
-      kind: "route",
-      children: {
-        list: {
-          kind: "leaf",
-          spec: {
-            commandPath: ["document", "list"],
-            toolName: "list_documents",
-            flags: [
-              {
-                flag: "--matter-id",
-                prop: "matter_id",
-                kind: "string",
-                repeatable: false,
-                description: "Matter/workspace ID to list documents in",
-                required: true,
-              },
-              {
-                flag: "--mode",
-                prop: "mode",
-                kind: "enum",
-                enum: ["flat", "children"],
-                repeatable: false,
-                description:
-                  "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected.",
-                required: false,
-              },
-              {
-                flag: "--parent-id",
-                prop: "parent_id",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Folder entity ID whose direct children to list. Only valid in children mode; supplying it selects children mode when mode is omitted and is rejected together with mode 'flat'.",
-                required: false,
-              },
-            ],
-            inputOnly: [],
-            paginated: true,
-            windowedText: false,
-            itemsKey: "documents",
-            destructive: false,
-            scope: "read",
-            inputSchema: {
-              type: "object",
-              properties: {
-                matter_id: {
-                  type: "string",
-                  description: "Matter/workspace ID to list documents in",
-                },
-                mode: {
-                  type: "string",
-                  enum: ["flat", "children"],
-                  description:
-                    "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected.",
-                },
-                parent_id: {
-                  type: "string",
-                  description:
-                    "Folder entity ID whose direct children to list. Only valid in children mode; supplying it selects children mode when mode is omitted and is rejected together with mode 'flat'.",
-                },
-                limit: {
-                  type: "integer",
-                  description: "Max entities to return",
-                  minimum: 1,
-                  maximum: 100,
-                },
-                cursor: {
-                  type: "string",
-                  description:
-                    "Opaque cursor from a previous list_documents call to fetch the next page",
-                  maxLength: 512,
-                },
-              },
-              required: ["matter_id"],
-            },
-          },
-        },
-        read: {
-          kind: "leaf",
-          spec: {
-            commandPath: ["document", "read"],
-            toolName: "read_document",
-            flags: [
-              {
-                flag: "--entity-id",
-                prop: "entity_id",
-                kind: "string",
-                repeatable: false,
-                description: "Document entity ID",
-                required: true,
-              },
-              {
-                flag: "--version-id",
-                prop: "version_id",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Return this version's metadata and field values instead of the current version",
-                required: false,
-              },
-              {
-                flag: "--compare-with-version-id",
-                prop: "compare_with_version_id",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "With version_id, return a plain-text line diff of this version (base) against version_id (target)",
-                required: false,
-              },
-              {
-                flag: "--include-versions",
-                prop: "include_versions",
-                kind: "boolean",
-                repeatable: false,
-                description: "Also return the document's version history",
-                required: false,
-              },
-              {
-                flag: "--versions-cursor",
-                prop: "versions_cursor",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Opaque cursor from a previous call to fetch the next page of version history",
-                required: false,
-              },
-            ],
-            inputOnly: [],
-            paginated: false,
-            windowedText: false,
-            destructive: false,
-            scope: "read",
-            inputSchema: {
-              type: "object",
-              properties: {
-                entity_id: {
-                  type: "string",
-                  description: "Document entity ID",
-                },
-                version_id: {
-                  type: "string",
-                  description:
-                    "Return this version's metadata and field values instead of the current version",
-                },
-                compare_with_version_id: {
-                  type: "string",
-                  description:
-                    "With version_id, return a plain-text line diff of this version (base) against version_id (target)",
-                },
-                include_versions: {
-                  type: "boolean",
-                  description: "Also return the document's version history",
-                },
-                versions_cursor: {
-                  type: "string",
-                  description:
-                    "Opaque cursor from a previous call to fetch the next page of version history",
-                  maxLength: 512,
-                },
-              },
-              required: ["entity_id"],
-            },
-          },
-        },
-        save: {
-          kind: "leaf",
-          spec: {
-            commandPath: ["document", "save"],
-            toolName: "save_document",
-            flags: [
-              {
-                flag: "--entity-id",
-                prop: "entity_id",
-                kind: "string",
-                repeatable: false,
-                description: "Document entity ID to update; omit to create",
-                required: false,
-              },
-              {
-                flag: "--matter-id",
-                prop: "matter_id",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Matter/workspace ID to create the entity in; required when creating",
-                required: false,
-              },
-              {
-                flag: "--name",
-                prop: "name",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Display name: required when creating, or the new name when renaming",
-                required: false,
-              },
-              {
-                flag: "--parent-id",
-                prop: "parent_id",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Folder entity ID: to place the new entity inside when creating, or to move the document into when updating",
-                required: false,
-              },
-              {
-                flag: "--kind",
-                prop: "kind",
-                kind: "enum",
-                enum: ["document", "folder"],
-                repeatable: false,
-                description:
-                  "Entity kind to create; defaults to 'document'. Only valid when creating.",
-                required: false,
-              },
-              {
-                flag: "--move-to-root",
-                prop: "move_to_root",
-                kind: "boolean",
-                repeatable: false,
-                description:
-                  "Move the document to the matter root (no parent folder). Only valid when updating.",
-                required: false,
-              },
-              {
-                flag: "--version-id",
-                prop: "version_id",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Version ID to annotate; required when setting label or description. Only valid when updating.",
-                required: false,
-              },
-              {
-                flag: "--label",
-                prop: "label",
-                kind: "nullable-string",
-                repeatable: false,
-                description:
-                  "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
-                required: false,
-              },
-              {
-                flag: "--description",
-                prop: "description",
-                kind: "nullable-string",
-                repeatable: false,
-                description:
-                  "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
-                required: false,
-              },
-            ],
-            inputOnly: [],
-            paginated: false,
-            windowedText: false,
-            destructive: false,
-            scope: "documents_write",
-            inputSchema: {
-              type: "object",
-              properties: {
-                entity_id: {
-                  type: "string",
-                  description: "Document entity ID to update; omit to create",
-                },
-                matter_id: {
-                  type: "string",
-                  description:
-                    "Matter/workspace ID to create the entity in; required when creating",
-                },
-                name: {
-                  type: "string",
-                  description:
-                    "Display name: required when creating, or the new name when renaming",
-                  maxLength: 255,
-                },
-                parent_id: {
-                  type: "string",
-                  description:
-                    "Folder entity ID: to place the new entity inside when creating, or to move the document into when updating",
-                },
-                kind: {
-                  type: "string",
-                  enum: ["document", "folder"],
-                  description:
-                    "Entity kind to create; defaults to 'document'. Only valid when creating.",
-                },
-                move_to_root: {
-                  type: "boolean",
-                  description:
-                    "Move the document to the matter root (no parent folder). Only valid when updating.",
-                },
-                version_id: {
-                  type: "string",
-                  description:
-                    "Version ID to annotate; required when setting label or description. Only valid when updating.",
-                },
-                label: {
-                  type: ["string", "null"],
-                  description:
-                    "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
-                  maxLength: 128,
-                },
-                description: {
-                  type: ["string", "null"],
-                  description:
-                    "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
-                  maxLength: 1024,
-                },
-              },
-            },
-          },
-        },
-        delete: {
-          kind: "leaf",
-          spec: {
-            commandPath: ["document", "delete"],
-            toolName: "delete_document",
-            flags: [
-              {
-                flag: "--entity-id",
-                prop: "entity_id",
-                kind: "string",
-                repeatable: false,
-                description: "Document entity ID to delete",
-                required: true,
-              },
-              {
-                flag: "--version-id",
-                prop: "version_id",
-                kind: "string",
-                repeatable: false,
-                description:
-                  "Delete only this version instead of the whole document",
-                required: false,
-              },
-            ],
-            inputOnly: [],
-            paginated: false,
-            windowedText: false,
-            destructive: true,
-            scope: "documents_write",
-            inputSchema: {
-              type: "object",
-              properties: {
-                entity_id: {
-                  type: "string",
-                  description: "Document entity ID to delete",
-                },
-                version_id: {
-                  type: "string",
-                  description:
-                    "Delete only this version instead of the whole document",
-                },
-                confirm: {
-                  type: "boolean",
-                  description:
-                    "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion.",
-                },
-              },
-              required: ["entity_id"],
-            },
-          },
-        },
-        properties: {
-          kind: "route",
-          children: {
-            list: {
-              kind: "leaf",
-              spec: {
-                commandPath: ["document", "properties", "list"],
-                toolName: "list_properties",
-                flags: [
-                  {
-                    flag: "--matter-id",
-                    prop: "matter_id",
-                    kind: "string",
-                    repeatable: false,
-                    description: "Matter/workspace ID to list properties for",
-                    required: true,
-                  },
-                ],
-                inputOnly: [],
-                paginated: true,
-                windowedText: false,
-                itemsKey: "properties",
-                destructive: false,
-                scope: "read",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    matter_id: {
-                      type: "string",
-                      description: "Matter/workspace ID to list properties for",
-                    },
-                    limit: {
-                      type: "integer",
-                      description: "Max properties to return",
-                      minimum: 1,
-                      maximum: 100,
-                    },
-                    cursor: {
-                      type: "string",
-                      description:
-                        "Opaque cursor from a previous list_properties call to fetch the next page",
-                      maxLength: 512,
-                    },
-                  },
-                  required: ["matter_id"],
-                },
-              },
-            },
-          },
-        },
-        field: {
-          kind: "route",
-          children: {
-            set: {
-              kind: "leaf",
-              spec: {
-                commandPath: ["document", "field", "set"],
-                toolName: "set_field_value",
-                flags: [
-                  {
-                    flag: "--entity-id",
-                    prop: "entity_id",
-                    kind: "string",
-                    repeatable: false,
-                    description: "Document entity ID whose cell to set",
-                    required: true,
-                  },
-                  {
-                    flag: "--property-id",
-                    prop: "property_id",
-                    kind: "string",
-                    repeatable: false,
-                    description: "Property ID, as returned by list_properties",
-                    required: true,
-                  },
-                ],
-                inputOnly: ["content"],
-                paginated: false,
-                windowedText: false,
-                destructive: false,
-                scope: "documents_write",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    entity_id: {
-                      type: "string",
-                      description: "Document entity ID whose cell to set",
-                    },
-                    property_id: {
-                      type: "string",
-                      description:
-                        "Property ID, as returned by list_properties",
-                    },
-                    content: {
-                      type: "object",
-                      description:
-                        "The value to set; 'type' must match the property.",
-                      properties: {
-                        type: {
-                          type: "string",
-                          enum: [
-                            "text",
-                            "single-select",
-                            "multi-select",
-                            "date",
-                            "int",
-                          ],
-                          description:
-                            "Value type; must match the property's value type",
-                        },
-                        value: {
-                          description:
-                            "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell.",
-                        },
-                        currency: {
-                          type: "string",
-                          description:
-                            "For int values only: 3-letter ISO currency code, or null",
-                          maxLength: 3,
-                        },
-                      },
-                      required: ["type", "value"],
-                    },
-                  },
-                  required: ["entity_id", "property_id", "content"],
-                },
-              },
-            },
-          },
-        },
-      },
-    },
     task: {
       kind: "route",
       children: {
@@ -4183,8 +4183,8 @@ export const generatedRouteMap: RouteNode = {
             toolName: "list_audit_log",
             flags: [
               {
-                flag: "--workspace-id",
-                prop: "workspace_id",
+                flag: "--matter-id",
+                prop: "matter_id",
                 kind: "string",
                 repeatable: false,
                 description: "Only entries scoped to this matter/workspace",
@@ -4253,7 +4253,7 @@ export const generatedRouteMap: RouteNode = {
               required: [],
               additionalProperties: false,
               properties: {
-                workspace_id: {
+                matter_id: {
                   type: "string",
                   minLength: 1,
                   description: "Only entries scoped to this matter/workspace",
@@ -4512,7 +4512,7 @@ export const generatedRouteMap: RouteNode = {
               },
               {
                 flag: "--validate-only",
-                prop: "validateOnly",
+                prop: "validate_only",
                 kind: "boolean",
                 repeatable: false,
                 description:
@@ -4560,7 +4560,7 @@ export const generatedRouteMap: RouteNode = {
                   },
                   additionalProperties: false,
                 },
-                validateOnly: {
+                validate_only: {
                   type: "boolean",
                   description:
                     "When true, validate the input against the capability schema and return without executing.",

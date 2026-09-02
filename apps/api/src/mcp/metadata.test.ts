@@ -15,7 +15,9 @@ import {
 } from "@/api/mcp/constants";
 import {
   createMcpCorsHeaders,
+  createMcpDiscoveryPreflightHeaders,
   createMcpMetadataHeaders,
+  createMcpPreflightHeaders,
   getMcpProtectedResourceMetadata,
   getMcpWwwAuthenticateHeader,
 } from "@/api/mcp/metadata";
@@ -82,7 +84,7 @@ describe("MCP protected resource metadata", () => {
       "Authorization, Content-Type, MCP-Protocol-Version",
     );
     expect(headers.get("Access-Control-Expose-Headers")).toBe(
-      "WWW-Authenticate, x-stella-api-contract-version, x-stella-cli-minimum, x-stella-organization, x-stella-scopes, x-stella-scope-omitted-tools, x-request-id",
+      "WWW-Authenticate, x-stella-api-contract-version, x-stella-cli-minimum, x-stella-organization, x-stella-scopes, x-stella-scope-omitted-tools, x-stella-feature-omitted-tools, x-request-id",
     );
     expect(headers.get("x-stella-api-contract-version")).toBe("1");
     expect(headers.get("x-stella-cli-minimum")).toBe(
@@ -105,6 +107,27 @@ describe("MCP protected resource metadata", () => {
     expect(headers.get("x-stella-cli-latest")).toBeNull();
   });
 
+  test("owns the transport preflight it advertises", () => {
+    const headers = createMcpPreflightHeaders();
+
+    expect(headers.get("Allow")).toBe(MCP_STATELESS_ALLOW_HEADER);
+    expect(headers.get("Access-Control-Allow-Methods")).toBe(
+      MCP_STATELESS_ALLOW_HEADER,
+    );
+    // A bearer-only endpoint answered with `Allow-Origin: *` must never claim
+    // to accept credentials: browsers refuse the pairing outright.
+    expect(headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(headers.get("Access-Control-Allow-Credentials")).toBeNull();
+  });
+
+  test("owns the discovery preflight it advertises", () => {
+    const headers = createMcpDiscoveryPreflightHeaders();
+
+    expect(headers.get("Allow")).toBe("GET, OPTIONS");
+    expect(headers.get("Access-Control-Allow-Methods")).toBe("GET, OPTIONS");
+    expect(headers.get("Access-Control-Allow-Credentials")).toBeNull();
+  });
+
   test("points WWW-Authenticate at the path-specific protected resource metadata URL", () => {
     expect(getMcpWwwAuthenticateHeader()).toBe(
       `Bearer resource_metadata="${getMcpProtectedResourceMetadataUrl()}"`,
@@ -112,8 +135,22 @@ describe("MCP protected resource metadata", () => {
   });
 
   test("points anonymized WWW-Authenticate at the anonymized metadata URL", () => {
-    expect(getMcpWwwAuthenticateHeader("anonymized")).toBe(
+    expect(getMcpWwwAuthenticateHeader({ mode: "anonymized" })).toBe(
       `Bearer resource_metadata="${getMcpProtectedResourceMetadataUrl("anonymized")}"`,
+    );
+  });
+
+  test("reports a rejected token with the RFC 6750 error code", () => {
+    expect(getMcpWwwAuthenticateHeader({ error: "invalid_token" })).toBe(
+      `Bearer error="invalid_token", error_description="The access token is expired, revoked, or not valid for this resource", resource_metadata="${getMcpProtectedResourceMetadataUrl()}"`,
+    );
+  });
+
+  test("omits the error code when the request presented no credentials", () => {
+    // RFC 6750 §3.1: a client that sent nothing must not read the challenge as
+    // a rejection of credentials it never presented.
+    expect(getMcpWwwAuthenticateHeader({ error: "none" })).not.toContain(
+      "error=",
     );
   });
 });

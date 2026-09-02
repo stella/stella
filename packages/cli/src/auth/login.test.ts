@@ -12,11 +12,12 @@ import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 
-import { LOGIN_TIMEOUT_MS } from "./constants.js";
+import { CLI_IDENTITY_SCOPES, LOGIN_TIMEOUT_MS } from "./constants.js";
 import { readCredentialFile } from "./credential-store.js";
 import { login } from "./login.js";
 import type { LoginBoundaries } from "./login.js";
 import { startLoopbackListener } from "./loopback-listener.js";
+import { resolveServerUrl } from "./server-resolution.js";
 
 // `login()` is the orchestrator: it wires PKCE + discovery + registration +
 // (loopback | manual) callback + token exchange + credential persistence. The
@@ -84,6 +85,12 @@ const okTokenResponse = (): Response =>
     JSON.stringify({
       access_token: jwtWithOrg("org-42"),
       expires_in: 900,
+      // The access token carries no email/name; the id_token does.
+      id_token: makeJwt({
+        email: "person@example.com",
+        name: "A Person",
+        sub: "user-1",
+      }),
       refresh_token: "refresh-abc",
       scope: "openid stella:read offline_access",
       token_type: "Bearer",
@@ -170,8 +177,8 @@ const baseOptions = (configDir: string, serverFlag: string) => ({
   configDir,
   orgHint: undefined,
   registrationScopes: ["openid", "stella:read"] as const,
-  requestedScopes: ["openid", "stella:read", "offline_access"] as const,
   requiredScopes: ["openid", "stella:read"] as const,
+  resourceScopes: ["stella:read"] as const,
   serverFlag,
 });
 
@@ -226,8 +233,73 @@ describe("login orchestration", () => {
       expect(credential?.refreshToken).toBe("refresh-abc");
       expect(credential?.scope).toContain("stella:read");
       expect(credential?.clientId).toBe("cli-client-1");
+      // Account identity decoded from the id_token, which is the only place
+      // the email and name arrive (the access token has neither).
+      expect(credential?.email).toBe("person@example.com");
+      expect(credential?.name).toBe("A Person");
       // The server's default org is set so `--org`-less commands resolve.
       expect(persisted.defaultOrgByServer[provider.url]).toBe("org-42");
+    } finally {
+      provider.close();
+    }
+  });
+
+  // Regression: login persisted the credential but never the default server,
+  // so every later command (whoami included) failed with "No server
+  // configured" unless `--server` was repeated on each one.
+  test("persists the server as the default so later commands resolve it without --server", async () => {
+    const provider = startProvider();
+    onBrowserOpen = driveCallback();
+
+    try {
+      const result = await login(
+        makeProcess(),
+        baseOptions(configDir, provider.url),
+        boundaries,
+      );
+      expect(Result.isOk(result)).toBe(true);
+
+      const resolved = await resolveServerUrl({
+        configDir,
+        flagValue: undefined,
+        env: { STELLA_SERVER_URL: undefined },
+      });
+      expect(Result.isOk(resolved)).toBe(true);
+      if (Result.isOk(resolved)) {
+        expect(resolved.value).toBe(provider.url);
+      }
+    } finally {
+      provider.close();
+    }
+  });
+
+  // `--scopes` names resource scopes only; the identity set is the CLI's own
+  // and must reach the authorization request whatever the caller asked for,
+  // or the server issues no refresh token and no id_token.
+  test("always requests the identity scopes alongside the resource scopes", async () => {
+    const provider = startProvider();
+    let requestedScope = "";
+    onBrowserOpen = async (authorizeUrl) => {
+      requestedScope = new URL(authorizeUrl).searchParams.get("scope") ?? "";
+      await driveCallback()(authorizeUrl);
+    };
+
+    try {
+      const result = await login(
+        makeProcess(),
+        {
+          ...baseOptions(configDir, provider.url),
+          resourceScopes: ["stella:read"],
+        },
+        boundaries,
+      );
+      expect(Result.isOk(result)).toBe(true);
+
+      const scopes = requestedScope.split(" ");
+      for (const identityScope of CLI_IDENTITY_SCOPES) {
+        expect(scopes).toContain(identityScope);
+      }
+      expect(scopes).toContain("stella:read");
     } finally {
       provider.close();
     }

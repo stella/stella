@@ -12,6 +12,14 @@ import { type DirectiveKind, DIRECTIVE_KINDS } from "@stll/template-conditions";
  * user-facing), but the inventory it documents is derived, never duplicated.
  */
 
+/**
+ * Canonical URI of the marker-grammar resource. Owned here with the text it
+ * addresses, so the resource registry and the tool descriptions that point
+ * agents at it cannot drift apart.
+ */
+export const TEMPLATE_MARKER_REFERENCE_URI =
+  "stella://reference/template-markers";
+
 type DirectiveDoc = {
   /** Short label shown as the bullet heading. */
   title: string;

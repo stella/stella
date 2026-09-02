@@ -318,15 +318,18 @@ export const MATTER_TOOL_DEFINITIONS = [
     description:
       "Create or update a contact (a person or organization in the address " +
       "book, shared across the whole organization). Omit contact_id to create " +
-      "(type and display_name required); pass contact_id to update. String " +
-      "fields other than display_name accept null to clear them.",
+      "(type required, plus display_name or the name parts it is derived " +
+      "from); pass contact_id to update. String fields other than " +
+      "display_name accept null to clear them.",
     inputSchema: {
       type: "object",
       properties: {
         contact_id: stringProp("Contact ID to update; omit to create"),
         type: enumProp("Contact kind; required when creating", CONTACT_TYPES),
         display_name: stringProp(
-          "Display name; required when creating, non-empty when updating",
+          "Display name; when creating it defaults to first + last name " +
+            "(person) or organization name (organization); non-empty when " +
+            "updating",
           { maxLength: 512 },
         ),
         first_name: nullableStringProp("First name; pass null to clear", {
@@ -856,6 +859,43 @@ const handleListContactsTool: TypedMcpToolHandler<
 
 // --- save_contact -------------------------------------------------------
 
+type ContactNameParts = {
+  display_name?: string | undefined;
+  first_name?: string | null | undefined;
+  last_name?: string | null | undefined;
+  organization_name?: string | null | undefined;
+  type?: (typeof CONTACT_TYPES)[number] | undefined;
+};
+
+/**
+ * Display name a create should persist. An explicit `display_name` wins;
+ * otherwise it is derived from the name parts the caller did supply (a person
+ * from first + last, an organization from its organization name, each falling
+ * back to the other). "" means the create carries no name at all, which the
+ * schema rejects.
+ */
+export const deriveContactDisplayName = ({
+  display_name,
+  first_name,
+  last_name,
+  organization_name,
+  type,
+}: ContactNameParts): string => {
+  const explicit = display_name?.trim() ?? "";
+  if (explicit.length > 0) {
+    return explicit;
+  }
+  const personName = [first_name, last_name]
+    .map((part) => part?.trim() ?? "")
+    .filter((part) => part.length > 0)
+    .join(" ");
+  const organizationName = organization_name?.trim() ?? "";
+
+  return type === "organization"
+    ? organizationName || personName
+    : personName || organizationName;
+};
+
 const saveContactArgsSchema = v.pipe(
   v.strictObject({
     contact_id: v.optional(v.pipe(v.string(), v.minLength(1))),
@@ -870,7 +910,7 @@ const saveContactArgsSchema = v.pipe(
     ),
     notes: v.optional(v.nullable(v.string())),
   }),
-  // Creating (no contact_id) requires type and display_name.
+  // Creating (no contact_id) requires type and a name to display.
   v.forward(
     v.partialCheck(
       [["contact_id"], ["type"]],
@@ -881,10 +921,18 @@ const saveContactArgsSchema = v.pipe(
   ),
   v.forward(
     v.partialCheck(
-      [["contact_id"], ["display_name"]],
-      ({ contact_id, display_name }) =>
-        contact_id !== undefined || display_name !== undefined,
-      "display_name is required to create a contact",
+      [
+        ["contact_id"],
+        ["type"],
+        ["display_name"],
+        ["first_name"],
+        ["last_name"],
+        ["organization_name"],
+      ],
+      (input) =>
+        input.contact_id !== undefined ||
+        deriveContactDisplayName(input).length > 0,
+      "display_name is required to create a contact, or first_name/last_name (person) or organization_name (organization) to derive it from",
     ),
     ["display_name"],
   ),
@@ -925,9 +973,9 @@ const handleSaveContactTool: TypedMcpToolHandler<
     if (!hasEffectiveAuthority(context, { contact: ["create"] })) {
       return errorResult("Forbidden");
     }
-    // The schema guarantees type and display_name are present on create.
+    // The schema guarantees type is present and a display name is derivable.
     const type = input.type ?? "person";
-    const displayName = input.display_name ?? "";
+    const displayName = deriveContactDisplayName(input);
     const created = await Result.gen(() =>
       createContactHandler({
         safeDb: context.safeDb,

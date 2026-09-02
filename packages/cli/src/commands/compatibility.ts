@@ -2,14 +2,16 @@ import { buildCommand, buildRouteMap } from "@stricli/core";
 import type { RouteMap } from "@stricli/core";
 import { Result } from "better-result";
 
+import { resolveServerUrl } from "../auth/server-resolution.js";
 import {
   checkServerCompatibility,
   type CompatibilityReport,
 } from "../compatibility.js";
 import type { Context } from "../context.js";
+import { buildServerFlag } from "../output-flags.js";
 
 type CheckFlags = {
-  readonly server: string;
+  readonly server: string | undefined;
 };
 
 const checkCommand = buildCommand<CheckFlags, [], Context>({
@@ -19,7 +21,17 @@ const checkCommand = buildCommand<CheckFlags, [], Context>({
       "Checks the public MCP protocol revision, required capabilities, and the packaged CLI's full resource-scope surface. Older servers fall back to their legacy CLI version range. This command does not require authentication.",
   },
   func: async function func(this: Context, flags) {
-    const result = await checkServerCompatibility(flags.server);
+    // Unauthenticated, so it resolves its own origin rather than reading the
+    // context's: same precedence as every other command (flag > env var >
+    // signed-in default), instead of demanding an explicit `--server`.
+    const serverUrl = await resolveServerUrl({
+      configDir: this.configDir,
+      flagValue: flags.server,
+    });
+    if (Result.isError(serverUrl)) {
+      return new Error(serverUrl.error.message);
+    }
+    const result = await checkServerCompatibility(serverUrl.value);
     if (Result.isError(result)) {
       return new Error(result.error.message);
     }
@@ -30,15 +42,7 @@ const checkCommand = buildCommand<CheckFlags, [], Context>({
     );
     return undefined;
   },
-  parameters: {
-    flags: {
-      server: {
-        brief: "Stella API origin to verify",
-        kind: "parsed",
-        parse: (input: string) => input,
-      },
-    },
-  },
+  parameters: { flags: buildServerFlag() },
 });
 
 const describeContract = (report: CompatibilityReport): string => {

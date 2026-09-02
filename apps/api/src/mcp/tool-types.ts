@@ -112,29 +112,40 @@ export const MCP_TOOL_ACCESS_LEVELS = ["read", "write"] as const;
 
 export type McpToolAccess = (typeof MCP_TOOL_ACCESS_LEVELS)[number];
 
-export type McpToolDefinition = {
+type McpToolAnnotations = NonNullable<McpTool["annotations"]> & {
+  title: string;
+};
+
+/**
+ * `access` and `readOnlyHint` are one fact stated twice (the registry's
+ * structural signal and the MCP client hint), so the type binds them: a
+ * `read` tool must carry `readOnlyHint: true` and a `write` tool cannot. A
+ * definition that says one thing to the code-mode projection and another to
+ * clients is unrepresentable rather than caught by a test.
+ */
+type McpToolAccessBranch =
+  | {
+      access: "read";
+      annotations: McpToolAnnotations & { readOnlyHint: true };
+    }
+  | {
+      access: "write";
+      annotations: McpToolAnnotations & { readOnlyHint?: false | undefined };
+    };
+
+export type McpToolDefinition = McpToolAccessBranch & {
   /**
    * Host-extension metadata served verbatim through `tools/list`. Keep it on
    * the canonical definition so MCP Apps and host-specific transports cannot
    * grow a second registry beside the in-app chat and CLI projections.
    */
   _meta?: McpTool["_meta"];
-  access: McpToolAccess;
   /**
    * Extra grants required in addition to the primary `scope`. Discovery and
    * dispatch both enforce this list centrally, so compound operations cannot
    * be advertised or called with only one half of their consent contract.
    */
   additionalScopes?: readonly ToolScope[];
-  /**
-   * MCP client-hint annotations. Required, and `title` is required within it
-   * (no default), so a new tool cannot land without a human-readable display
-   * name; clients render `title` in tool listings and consent prompts where
-   * the `verb_noun` wire name would read poorly. The behavioural hints stay
-   * optional; the registry-quality suite enforces their coherence and the
-   * title style.
-   */
-  annotations: NonNullable<McpTool["annotations"]> & { title: string };
   anonymized: McpAnonymizedPolicy;
   description: string;
   /**

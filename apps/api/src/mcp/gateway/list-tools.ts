@@ -21,7 +21,6 @@ import {
 } from "@/api/mcp/static-tool-definitions";
 import type {
   McpAnonymizedPolicy,
-  McpToolAccess,
   McpToolDefinition,
   McpToolFeatureFlag,
   McpToolInputSchema,
@@ -57,9 +56,22 @@ const DYNAMIC_GATEWAY_ANONYMIZED = {
  * the chat code-mode projection) that assumes `"read"` means safe-to-run
  * without confirmation.
  */
-const externalMcpToolAccess = (
-  readOnlyHint: boolean | undefined,
-): McpToolAccess => (readOnlyHint === true ? "read" : "write");
+const externalMcpToolAccess = ({
+  readOnlyHint,
+  title,
+}: {
+  readOnlyHint: boolean | undefined;
+  title: string;
+}): Pick<McpToolDefinition, "access" | "annotations"> =>
+  readOnlyHint === true
+    ? { access: "read", annotations: { title, readOnlyHint: true } }
+    : {
+        access: "write",
+        annotations: {
+          title,
+          ...(readOnlyHint === undefined ? {} : { readOnlyHint }),
+        },
+      };
 
 const LOOKUP_BUSINESS_REGISTRY_TOOL_NAME = "lookup_business_registry";
 
@@ -155,16 +167,14 @@ export const listGatewayMcpToolDefinitions = async ({
 
   if (hasGrantedScope(scopes, "stella:external_mcps")) {
     for (const tool of await listGatewayExternalMcpTools({ context })) {
-      const { readOnlyHint } = tool.cachedTool;
       definitions.push({
-        access: externalMcpToolAccess(readOnlyHint),
-        annotations: {
+        ...externalMcpToolAccess({
+          readOnlyHint: tool.cachedTool.readOnlyHint,
           title: externalToolTitle({
             connectorDisplayName: tool.connectorDisplayName,
             rawName: tool.cachedTool.rawName,
           }),
-          ...(readOnlyHint === undefined ? {} : { readOnlyHint }),
-        },
+        }),
         anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
         description: externalToolDescription({
           connectorDisplayName: tool.connectorDisplayName,
@@ -230,16 +240,13 @@ export const getGatewayMcpToolDefinition = async ({
     }
 
     return {
-      access: externalMcpToolAccess(externalTool.cachedTool.readOnlyHint),
-      annotations: {
+      ...externalMcpToolAccess({
+        readOnlyHint: externalTool.cachedTool.readOnlyHint,
         title: externalToolTitle({
           connectorDisplayName: externalTool.connectorDisplayName,
           rawName: externalTool.cachedTool.rawName,
         }),
-        ...(externalTool.cachedTool.readOnlyHint === undefined
-          ? {}
-          : { readOnlyHint: externalTool.cachedTool.readOnlyHint }),
-      },
+      }),
       anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
       description: externalToolDescription({
         connectorDisplayName: externalTool.connectorDisplayName,

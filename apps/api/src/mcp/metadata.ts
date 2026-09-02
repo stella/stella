@@ -6,6 +6,7 @@ import {
   getMcpProtectedResourceMetadataUrl,
   getMcpResourceUrl,
   MCP_ALLOWED_HEADERS,
+  MCP_DISCOVERY_ALLOW_HEADER,
   MCP_EXPOSE_HEADERS,
   MCP_STATELESS_ALLOW_HEADER,
   STELLA_API_CONTRACT,
@@ -19,7 +20,7 @@ import {
 export const createMcpMetadataHeaders = () =>
   new Headers({
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Methods": MCP_DISCOVERY_ALLOW_HEADER,
     "Access-Control-Allow-Headers": MCP_ALLOWED_HEADERS.join(", "),
     "Access-Control-Expose-Headers": MCP_EXPOSE_HEADERS.join(", "),
     "Cache-Control": "public, max-age=300",
@@ -37,6 +38,26 @@ export const createMcpCorsHeaders = () =>
     [STELLA_MCP_API_CONTRACT_HEADER]: String(STELLA_MCP_API_CONTRACT_VERSION),
     [STELLA_CLI_MINIMUM_HEADER]: STELLA_CLI_MINIMUM_VERSION,
   });
+
+/**
+ * The endpoint answers its own preflight (the global CORS layer is bypassed for
+ * MCP paths), so `Allow` and `Access-Control-Allow-Methods` state the same
+ * method set the transport actually serves. No
+ * `Access-Control-Allow-Credentials`: this endpoint is bearer-authenticated and
+ * never reads cookies, and a browser rejects credentialed requests answered
+ * with `Access-Control-Allow-Origin: *`.
+ */
+export const createMcpPreflightHeaders = () => {
+  const headers = createMcpCorsHeaders();
+  headers.set("Allow", MCP_STATELESS_ALLOW_HEADER);
+  return headers;
+};
+
+export const createMcpDiscoveryPreflightHeaders = () => {
+  const headers = createMcpMetadataHeaders();
+  headers.set("Allow", MCP_DISCOVERY_ALLOW_HEADER);
+  return headers;
+};
 
 // User-facing identifiers (auth.md PRM) shown to a person during the agent
 // claim ceremony. The logo is served from the web app's public assets.
@@ -69,5 +90,25 @@ export const getMcpProtectedResourceMetadata = (mode: McpMode = "default") => ({
   },
 });
 
-export const getMcpWwwAuthenticateHeader = (mode: McpMode = "default") =>
-  `Bearer resource_metadata="${getMcpProtectedResourceMetadataUrl(mode)}"`;
+/**
+ * RFC 6750 §3.1 `error` code carried by the challenge. `none` is the omission
+ * the RFC requires when the request presented no credentials at all: a client
+ * must read that challenge as "authenticate", not as "your token was refused".
+ * It is also what a valid token denied for a non-credential reason gets, since
+ * no re-authorization the client can perform would change the outcome.
+ */
+const MCP_CHALLENGE_ERRORS = ["none", "invalid_token"] as const;
+export type McpChallengeError = (typeof MCP_CHALLENGE_ERRORS)[number];
+
+/** Auth params preceding `resource_metadata`; each non-empty one ends in its separator. */
+const CHALLENGE_ERROR_PARAMS = {
+  none: "",
+  invalid_token:
+    'error="invalid_token", error_description="The access token is expired, revoked, or not valid for this resource", ',
+} as const satisfies Record<McpChallengeError, string>;
+
+export const getMcpWwwAuthenticateHeader = ({
+  error = "none",
+  mode = "default",
+}: { error?: McpChallengeError; mode?: McpMode } = {}) =>
+  `Bearer ${CHALLENGE_ERROR_PARAMS[error]}resource_metadata="${getMcpProtectedResourceMetadataUrl(mode)}"`;

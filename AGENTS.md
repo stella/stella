@@ -58,6 +58,11 @@ details unless they are already public in the repository.
   supported. When none exist, prefer a clean migration or cutover; aliases, dual
   reads/writes, and staged paths add permanent complexity. When compatibility is
   required, document its boundary and removal condition.
+- No forward-compatibility placeholders either: never ship a flag, option, field,
+  or export that is accepted but has no effect "for later" (a `--keychain` that
+  always falls back, a `setDefault` helper nothing calls). Add it in the PR that
+  wires it end to end; until then it only teaches callers a lie. Dead-export
+  checks (knip) enforce this where they are enrolled; enroll new packages.
 - Prefer explicit over implicit; when a backend endpoint accepts a discriminator
   (e.g., `?type=document|file`), thread it through the full stack (URL params,
   component props) instead of hardcoding a default on the frontend

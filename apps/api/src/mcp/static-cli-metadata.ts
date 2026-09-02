@@ -117,8 +117,10 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       scope: "search",
       itemsKey: "hits",
     },
+    // A document's text belongs under the `document` group: callers looking for
+    // it start from `stella document ...`, not from the search group.
     read_content_across_matters: {
-      command: ["search", "read"],
+      command: ["document", "content"],
       scope: "read",
       windowedText: true,
     },

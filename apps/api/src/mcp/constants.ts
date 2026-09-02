@@ -63,6 +63,16 @@ export { MCP_ANONYMIZED_HTTP_PATH, MCP_DOCUMENTS_HTTP_PATH, MCP_HTTP_PATH };
  */
 export const MCP_STATELESS_ALLOW_HEADER = "OPTIONS, GET, POST";
 
+/** What the protected-resource discovery documents serve. */
+export const MCP_DISCOVERY_ALLOW_HEADER = "GET, OPTIONS";
+
+/**
+ * Frame cap for a JSON-RPC request body, refused before anything parses it.
+ * Every legitimate tool call fits far below this: document bytes travel out of
+ * band through presigned uploads, never inside a tool argument.
+ */
+export const MCP_MAX_REQUEST_BODY_BYTES = 512 * 1024;
+
 /**
  * The first frame on an otherwise idle notification stream. Keep this well
  * below edge/request deadlines: the canary derives its fetch timeout from the
@@ -118,12 +128,23 @@ export const STELLA_CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
 // that caller's own org and grants, not a disclosure to anyone else.
 export const STELLA_MCP_ORGANIZATION_HEADER = "x-stella-organization";
 export const STELLA_MCP_SCOPES_HEADER = "x-stella-scopes";
-// Exact static tool names that this authenticated tools/list projection omitted
-// solely because the token lacks the tool's primary scope. This is deliberately
-// per-tool evidence: a grants-only header cannot distinguish a scoped omission
-// from a tool that an older server does not implement at all.
-export const STELLA_MCP_SCOPE_OMITTED_TOOLS_HEADER =
-  "x-stella-scope-omitted-tools";
+
+/**
+ * Why an authenticated tools/list projection left a static tool out. A client
+ * diffs its baked-in registry against that projection, so an omission the
+ * server does not state reads as a removal and never reconciles. Closed set:
+ * every omission is attested under exactly one reason.
+ */
+export const MCP_TOOL_OMISSION_REASONS = ["scope", "feature"] as const;
+export type McpToolOmissionReason = (typeof MCP_TOOL_OMISSION_REASONS)[number];
+
+// One response header per reason, carrying the exact omitted tool names. This
+// is deliberately per-tool evidence: a grants-only (or flags-only) header
+// cannot distinguish an omission from a tool an older server never implemented.
+export const STELLA_MCP_OMITTED_TOOLS_HEADER_BY_REASON = {
+  scope: "x-stella-scope-omitted-tools",
+  feature: "x-stella-feature-omitted-tools",
+} as const satisfies Record<McpToolOmissionReason, string>;
 
 export const MCP_EXPOSE_HEADERS = [
   "WWW-Authenticate",
@@ -131,7 +152,9 @@ export const MCP_EXPOSE_HEADERS = [
   STELLA_CLI_MINIMUM_HEADER,
   STELLA_MCP_ORGANIZATION_HEADER,
   STELLA_MCP_SCOPES_HEADER,
-  STELLA_MCP_SCOPE_OMITTED_TOOLS_HEADER,
+  ...MCP_TOOL_OMISSION_REASONS.map(
+    (reason) => STELLA_MCP_OMITTED_TOOLS_HEADER_BY_REASON[reason],
+  ),
   // The per-request receipt (also on the global CORS exposeHeaders list):
   // browser-based MCP clients correlate a failed/successful call with server
   // logs the same way REST callers do.

@@ -89,7 +89,7 @@ const MANAGE_ORG_ACTIONS = [
 
 const listAuditLogArgsSchema = v.pipe(
   v.strictObject({
-    workspace_id: v.optional(
+    matter_id: v.optional(
       v.pipe(
         v.string(),
         v.minLength(1),
@@ -182,7 +182,7 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Read the organization's audit trail (compliance view). Returns audit " +
     "entries newest first, each with its action, resource type and id, actor " +
-    "user id, workspace, timestamp, and change detail. Filter by workspace_id, " +
+    "user id, workspace, timestamp, and change detail. Filter by matter_id, " +
     "action, resource_type (with optional resource_id), user_id, and a " +
     "created-at range (from/to, ISO date-time). Paginate with limit and " +
     "cursor. Requires organization audit-log access.",
@@ -580,9 +580,9 @@ const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
   const input = parsed.output;
 
   const filter: AuditLogFilter = {
-    ...(input.workspace_id === undefined
+    ...(input.matter_id === undefined
       ? {}
-      : { workspaceId: brandPersistedWorkspaceId(input.workspace_id) }),
+      : { workspaceId: brandPersistedWorkspaceId(input.matter_id) }),
     ...(input.action === undefined ? {} : { action: input.action }),
     ...(input.resource_type === undefined
       ? {}

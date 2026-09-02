@@ -5,7 +5,8 @@ import type { RouteMap } from "@stricli/core";
 import { Result } from "better-result";
 
 import {
-  CLI_DEFAULT_SCOPES,
+  CLI_DEFAULT_RESOURCE_SCOPES,
+  CLI_IDENTITY_SCOPES,
   CLI_KNOWN_SCOPES,
   CLI_REQUIRED_SCOPES,
 } from "../auth/constants.js";
@@ -28,7 +29,6 @@ const requiredStringFlag = (brief: string) =>
 const formatDate = (epochMs: number): string => new Date(epochMs).toISOString();
 
 type LoginFlags = {
-  readonly keychain: boolean;
   readonly org: string | undefined;
   readonly scopes: string | undefined;
   readonly server: string | undefined;
@@ -51,29 +51,25 @@ const loginCommand = buildCommand<LoginFlags, [], Context>({
       "Opens the stella sign-in page in your default browser and waits for the redirect on an ephemeral localhost port. If the browser can't reach this machine (SSH/remote/headless), paste the redirected URL or the bare authorization code back into the prompt instead.",
   },
   func: async function func(this: Context, flags) {
-    let requestedScopes: readonly string[] = CLI_DEFAULT_SCOPES;
+    let resourceScopes: readonly string[] = CLI_DEFAULT_RESOURCE_SCOPES;
     let requiredScopes: readonly string[] = CLI_REQUIRED_SCOPES;
+    // `--scopes` replaces the resource set only (the identity set is
+    // `login`'s), and everything it names must be available.
     if (flags.scopes) {
       const parsedScopes = parseScopesFlag(flags.scopes);
       if (Result.isError(parsedScopes)) {
         return new Error(parsedScopes.error.message);
       }
-      requestedScopes = parsedScopes.value;
+      resourceScopes = parsedScopes.value;
       requiredScopes = parsedScopes.value;
-    }
-
-    if (!flags.keychain) {
-      this.process.stdout.write(
-        "Note: --no-keychain has no effect yet; credentials are always stored at ~/.config/stella/credentials.json (mode 0600). OS keychain support is a follow-up.\n",
-      );
     }
 
     const result = await login(this.process, {
       configDir: this.configDir,
       orgHint: flags.org,
       registrationScopes: CLI_KNOWN_SCOPES,
-      requestedScopes,
       requiredScopes,
+      resourceScopes,
       serverFlag: flags.server,
     });
 
@@ -81,30 +77,28 @@ const loginCommand = buildCommand<LoginFlags, [], Context>({
       return new Error(result.error.message);
     }
 
-    const refreshNote = result.value.hasRefreshToken
-      ? ""
-      : "No refresh token was issued (the server has not enabled offline_access yet); re-run `stella auth login` once this token expires.\n";
     const lines = [
       `Signed in to ${result.value.serverUrl} (org ${result.value.orgId}).`,
       `Granted scopes: ${result.value.grantedScopes}`,
       `Access token expires: ${formatDate(result.value.expiresAt)}`,
     ];
-    this.process.stdout.write(`${lines.join("\n")}\n${refreshNote}`);
+    this.process.stdout.write(`${lines.join("\n")}\n`);
+    // `offline_access` is requested on every login, so the only way to get
+    // here is a server that did not issue a refresh token for it.
+    if (!result.value.hasRefreshToken) {
+      this.process.stderr.write(
+        "The server issued no refresh token; re-run `stella auth login` once this token expires.\n",
+      );
+    }
     return undefined;
   },
   parameters: {
     flags: {
-      keychain: {
-        brief:
-          "Use the OS keychain for storage (currently always falls back to the XDG credentials file; see --help)",
-        default: true,
-        kind: "boolean",
-      },
       org: stringFlag(
         "Organization slug to select in the browser when prompted (label only, not enforced server-side; see --help)",
       ),
       scopes: stringFlag(
-        `Comma-separated OAuth scopes to request (default: ${CLI_DEFAULT_SCOPES.join(",")})`,
+        `Comma-separated stella: resource scopes to request (default: ${CLI_DEFAULT_RESOURCE_SCOPES.join(",")}); the identity scopes ${CLI_IDENTITY_SCOPES.join(",")} are always requested`,
       ),
       server: stringFlag("Stella API origin to sign in to"),
     },
@@ -172,8 +166,15 @@ export const runWhoami = async ({
   }
 
   const info = result.value;
+  // Account identity comes from the login `id_token`; the org stays an id
+  // because no cheap endpoint resolves it to a name (see `auth/jwt.ts`).
+  const account =
+    info.email && info.name
+      ? `${info.email} (${info.name})`
+      : (info.email ?? info.name);
   const lines = [
     `Server: ${info.serverUrl}`,
+    ...(account ? [`Account: ${account}`] : []),
     `Organization: ${info.orgLabel ? `${info.orgLabel} (${info.orgId})` : info.orgId}`,
     `Scopes: ${info.scope}`,
     `Expires: ${formatDate(info.expiresAt)}${info.isExpired ? " (expired)" : ""}`,

@@ -60,6 +60,7 @@ import {
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 import {
   claimTemplatePersistenceRequest,
   fingerprintTemplatePersistenceRequest,
@@ -392,8 +393,8 @@ const SAVE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     "pass fields to configure them in the same call. To configure an existing " +
     "template, pass template_id with fields and no docx_base64; only the " +
     "manifest changes, the document's {{markers}} stay untouched. Each fields " +
-    "entry's path must match a {{marker}} in the template. Read the marker " +
-    "grammar from the template-markers reference resource when unsure. " +
+    "entry's path must match a {{marker}} in the template. Read " +
+    `${TEMPLATE_MARKER_REFERENCE_URI} before authoring a DOCX. ` +
     "Returns the template id and field count when creating, or the updated " +
     "field list when configuring.",
   inputSchema: saveTemplateArgsSchema,

@@ -9,12 +9,6 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
-import { defaultConfigDir, resolveConfigDir } from "./config-dir.js";
-import type { ConfigPathOverrides } from "./config-dir.js";
-
-export { defaultConfigDir, resolveConfigDir };
-export type { ConfigPathOverrides };
-
 // Hand-written rather than `v.InferOutput<typeof schema>`: this package
 // builds with `isolatedDeclarations` (it is a publishable `@stll` package),
 // which requires every module-scope binding reachable from an exported
@@ -80,14 +74,6 @@ export const writeCliConfig = async (
     configFilePath(configDir),
     `${JSON.stringify(config, null, 2)}\n`,
   );
-};
-
-export const setDefaultServerUrl = async (
-  configDir: string,
-  serverUrl: string,
-): Promise<void> => {
-  const config = await readCliConfig(configDir);
-  await writeCliConfig(configDir, { ...config, defaultServerUrl: serverUrl });
 };
 
 export const getRegisteredClient = async (

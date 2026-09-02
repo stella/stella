@@ -103,6 +103,7 @@ import {
   stringProp,
   structuredErrorResult,
   toolDataResult,
+  toPlainTextSnippet,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -1139,7 +1140,9 @@ const handleSearchAcrossMattersTool: TypedMcpToolHandler<
     workspaceName: hit.workspaceName,
     name: hit.title,
     kind: hit.kind,
-    headline: hit.headline,
+    // The provider builds the headline for the web UI (HTML-escaped, matches
+    // wrapped in <mark>); MCP callers get it as plain text.
+    headline: toPlainTextSnippet(hit.headline),
   }));
 
   // Hits span multiple matters; each anonymizes under its own workspace scope.
@@ -1763,7 +1766,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
         decisionType: hit.decisionType,
         ecli: hit.ecli,
         language: hit.language,
-        snippet: hit.headline,
+        snippet: toPlainTextSnippet(hit.headline),
         sourceUrl: hit.sourceUrl,
       };
     }),
