@@ -21,6 +21,7 @@ import {
 } from "@/api/mcp/static-tool-definitions";
 import type {
   McpAnonymizedPolicy,
+  McpToolAccessBranch,
   McpToolDefinition,
   McpToolFeatureFlag,
   McpToolInputSchema,
@@ -62,7 +63,7 @@ const externalMcpToolAccess = ({
 }: {
   readOnlyHint: boolean | undefined;
   title: string;
-}): Pick<McpToolDefinition, "access" | "annotations"> =>
+}): McpToolAccessBranch =>
   readOnlyHint === true
     ? { access: "read", annotations: { title, readOnlyHint: true } }
     : {

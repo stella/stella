@@ -235,7 +235,12 @@ describe("MCP protected resource discovery routes", () => {
   test("drops the global credentialed CORS default on MCP responses", () => {
     // A browser refuses `Allow-Origin: *` with credentials, and this endpoint
     // authenticates with a bearer token rather than cookies.
-    const set = { headers: { "access-control-allow-credentials": "true" } };
+    // Typed as the route's own header bag: `dropCredentialedCors` replaces it
+    // wholesale, so a literal's narrow inferred shape cannot describe the
+    // emptied result.
+    const set: { headers: Record<string, string> } = {
+      headers: { "access-control-allow-credentials": "true" },
+    };
 
     handleMcpPreflightRequest(
       new Request(`http://localhost${MCP_HTTP_PATH}`, { method: "OPTIONS" }),

@@ -55,7 +55,7 @@ const definitionWithSchema = (
   inputSchema: McpToolDefinition["inputSchema"],
 ): McpToolDefinition => ({
   access: "read",
-  annotations: { title: "Test tool" },
+  annotations: { title: "Test tool", readOnlyHint: true },
   anonymized: { exposure: "passthrough" },
   description: "Test schema conversion",
   inputSchema,

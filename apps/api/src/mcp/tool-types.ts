@@ -123,7 +123,7 @@ type McpToolAnnotations = NonNullable<McpTool["annotations"]> & {
  * definition that says one thing to the code-mode projection and another to
  * clients is unrepresentable rather than caught by a test.
  */
-type McpToolAccessBranch =
+export type McpToolAccessBranch =
   | {
       access: "read";
       annotations: McpToolAnnotations & { readOnlyHint: true };
