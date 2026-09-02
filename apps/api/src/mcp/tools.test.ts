@@ -30,6 +30,7 @@ import type { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
 import {
+  findUndeclaredArguments,
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
   handleMcpToolCall,
@@ -742,16 +743,19 @@ describe("OpenAI-compatible MCP tools", () => {
         query: {
           type: "string",
           description: "Search query",
+          minLength: 1,
           maxLength: 500,
         },
         cursor: {
           type: "string",
           description:
             "Opaque cursor from a previous search call to fetch the next page",
+          minLength: 1,
           maxLength: 512,
         },
       },
       required: ["query"],
+      additionalProperties: false,
     });
   });
 
@@ -766,6 +770,7 @@ describe("OpenAI-compatible MCP tools", () => {
         query: {
           type: "string",
           description: "Search query",
+          minLength: 1,
           maxLength: 500,
         },
         limit: {
@@ -816,6 +821,7 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       },
       required: ["query"],
+      additionalProperties: false,
     });
   });
 
@@ -4521,5 +4527,87 @@ describe("OpenAI-compatible MCP tools", () => {
       message: "This capability is not available on the documents MCP surface",
       hint: "Use one of the upload lifecycle operations exposed by the document upload panel.",
     });
+  });
+});
+
+/**
+ * The dispatch-level unknown-key backstop. Every curated tool derives its
+ * advertised schema from the `v.strictObject` its handler parses, so this guard
+ * is redundant for them by construction; it exists so a tool that ever bypasses
+ * that path still cannot silently swallow a typo. Exercised against fabricated
+ * schemas, which is the case the registry itself cannot produce.
+ */
+describe("undeclared-argument backstop", () => {
+  const fakeToolSchema = {
+    type: "object",
+    properties: {
+      matter_id: { type: "string", description: "Matter ID" },
+      limit: { type: "integer", description: "Max rows" },
+    },
+    required: ["matter_id"],
+    additionalProperties: false,
+  } as const;
+
+  test("accepts exactly the declared keys", () => {
+    expect(
+      findUndeclaredArguments({
+        args: { matter_id: "ws_1", limit: 10 },
+        inputSchema: fakeToolSchema,
+      }),
+    ).toBeUndefined();
+  });
+
+  test("names every undeclared key, with a did-you-mean for case/underscore slips", () => {
+    expect(
+      findUndeclaredArguments({
+        args: { matter_id: "ws_1", matterId: "ws_1", bogus: 1 },
+        inputSchema: fakeToolSchema,
+      }),
+    ).toEqual({
+      declared: ["matter_id", "limit"],
+      undeclared: [
+        { key: "matterId", suggestion: "matter_id" },
+        { key: "bogus", suggestion: undefined },
+      ],
+    });
+  });
+
+  test("a no-property schema declares nothing, so any key is undeclared", () => {
+    expect(
+      findUndeclaredArguments({
+        args: { anything: true },
+        inputSchema: { type: "object" },
+      }),
+    ).toEqual({
+      declared: [],
+      undeclared: [{ key: "anything", suggestion: undefined }],
+    });
+  });
+
+  test("an explicitly open schema keeps its open contract", () => {
+    expect(
+      findUndeclaredArguments({
+        args: { passthrough: true },
+        inputSchema: { type: "object", additionalProperties: true },
+      }),
+    ).toBeUndefined();
+  });
+
+  test("dispatch rejects an undeclared key before the handler runs", async () => {
+    const result = await handleMcpToolCall({
+      args: { matterId: "ws_1" },
+      context: createContext(),
+      toolName: "list_matters",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["message"]).toBe("Unknown parameter: matterId");
+    expect(error["issues"]).toEqual([
+      {
+        path: "matterId",
+        message: "Unknown parameter: matterId (did you mean matter_id?)",
+      },
+    ]);
   });
 });

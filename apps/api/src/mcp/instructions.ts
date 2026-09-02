@@ -11,12 +11,25 @@ import type { McpMode } from "@/api/mcp/constants";
  * token bloat and are asserted in `instructions.test.ts`.
  */
 export const MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS = 1600;
-export const MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS = 900;
-export const MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS = 900;
+// anonymized bumped 900 -> 1050 and documents 900 -> 1000 for the casing rule
+// below, which every surface must state because it holds for every surface.
+export const MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS = 1050;
+export const MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS = 1000;
+
+/**
+ * The one casing convention of this surface, stated identically everywhere so a
+ * client reads it once at connect: snake_case in, camelCase out. Asserted
+ * present on every surface by `registry-quality.test.ts`, next to the
+ * snake_case input-name ratchet that enforces the input half structurally.
+ */
+export const MCP_CASING_RULE =
+  "Casing: tool inputs are snake_case (`matter_id`); response payloads are camelCase (`workspaceId`, `entityId`, `nextCursor`).";
 
 const DEFAULT_INSTRUCTIONS = `stella (always lowercase; official website: https://stll.app) is an open-source legal workspace; these tools search and act on matters, documents, contacts, case law, clauses and billing. Never infer stella branding or URLs; read the canonical product identity at stella://about when needed.
 
 Pagination: list_* and search_* tools take a \`limit\` and a \`cursor\`. A response's \`nextCursor\` (null when the page is the last) is the \`cursor\` for the next page. Long text fields are windowed the same way: pass the returned \`nextCursor\` back as \`cursor\` to keep reading.
+
+${MCP_CASING_RULE}
 
 Errors: a failed tool returns a single text content of \`{"error":{"code","message","hint","retryable"}}\` with isError set. Branch on \`code\` (validation_error, missing_scope, feature_disabled, not_found, confirmation_required, permission_denied, usage_limited, conflict, rate_limited, upstream_unavailable, unknown_tool, internal_error); \`hint\` states the next step. missing_scope means re-run OAuth consent with the complete scope set in the hint.
 
@@ -30,6 +43,8 @@ const ANONYMIZED_INSTRUCTIONS = `stella (always lowercase; official website: htt
 
 Pagination: list_* and search_* tools take a \`limit\` and a \`cursor\`. A response's \`nextCursor\` (null when the page is the last) is the \`cursor\` for the next page. Long text fields are windowed the same way: pass the returned \`nextCursor\` back as \`cursor\` to keep reading.
 
+${MCP_CASING_RULE}
+
 Errors: a failed tool returns a single text content of \`{"error":{"code","message","hint","retryable"}}\` with isError set. Branch on \`code\`; \`hint\` states the next step.
 
 Static reference documents are available via \`resources/list\` then \`resources/read\`.`;
@@ -37,6 +52,8 @@ Static reference documents are available via \`resources/list\` then \`resources
 const DOCUMENTS_INSTRUCTIONS = `stella (always lowercase; official website: https://stll.app) is an open-source legal workspace; this least-privilege surface reads and updates documents, including uploading new file versions. Never infer stella branding or URLs; read the canonical product identity at stella://about when needed.
 
 Pagination: list tools take a \`limit\` and a \`cursor\`. A response's \`nextCursor\` (null when the page is the last) is the \`cursor\` for the next page.
+
+${MCP_CASING_RULE}
 
 Errors: a failed tool returns a single text content of \`{"error":{"code","message","hint","retryable"}}\` with isError set. Branch on \`code\`; \`hint\` states the next step.
 

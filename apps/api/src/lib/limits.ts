@@ -603,6 +603,12 @@ export const API_RATE_LIMITS = {
   skillSource: { duration: 60_000, max: 10 },
   /** File uploads: 500 req/min (separate budget). */
   upload: { duration: 60_000, max: 500 },
+  /** MCP transport paths: 600 req/min per credential (bearer digest, IP
+   *  fallback). An agent turn is a handful of JSON-RPC calls, so this never
+   *  throttles normal use; it bounds a runaway loop or a stolen credential.
+   *  Discovery and preflight stay outside it: both are static and must
+   *  answer a client that has not authenticated yet. */
+  mcpTransport: { duration: 60_000, max: 600 },
   /** Folio collaborative-edit token endpoints: 30 req/min per IP.
    *  Each authorize/refresh/snapshot call runs a multi-table join
    *  against unauthenticated input, so the budget is intentionally

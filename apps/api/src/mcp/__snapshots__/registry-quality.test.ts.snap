@@ -14,21 +14,24 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false,
       "properties": {
         "query": {
           "type": "string",
-          "description": "Search query",
-          "maxLength": 500
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Search query"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous search call to fetch the next page",
-          "maxLength": 512
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous search call to fetch the next page"
         }
-      },
-      "required": [
-        "query"
-      ]
+      }
     }
   },
   {
@@ -43,20 +46,23 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "id": {
           "type": "string",
+          "minLength": 1,
           "description": "Document/entity ID"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous fetch call to read the next window of text",
-          "maxLength": 512
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous fetch call to read the next window of text"
         }
-      },
-      "required": [
-        "id"
-      ]
+      }
     }
   },
   {
@@ -71,29 +77,33 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to return a single matter's overview; omit to list matters"
         },
         "status": {
-          "type": "string",
           "enum": [
             "active",
             "all"
           ],
+          "type": "string",
           "description": "Filter by matter status (list mode)"
         },
         "limit": {
           "type": "integer",
-          "description": "Max matters to return (list mode)",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max matters to return (list mode)"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_matters call to fetch the next page",
-          "maxLength": 512
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_matters call to fetch the next page"
         }
       }
     }
@@ -110,27 +120,30 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false,
       "properties": {
         "query": {
           "type": "string",
-          "description": "Search query",
-          "maxLength": 500
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Search query"
         },
         "limit": {
           "type": "integer",
-          "description": "Max results to return",
           "minimum": 1,
-          "maximum": 20
+          "maximum": 20,
+          "description": "Max results to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous search_across_matters call to fetch the next page",
-          "maxLength": 512
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous search_across_matters call to fetch the next page"
         }
-      },
-      "required": [
-        "query"
-      ]
+      }
     }
   },
   {
@@ -146,62 +159,64 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false,
       "properties": {
         "query": {
           "type": "string",
-          "description": "Search query",
-          "maxLength": 500
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Search query"
         },
         "limit": {
           "type": "integer",
-          "description": "Max results to return",
           "minimum": 1,
-          "maximum": 20
+          "maximum": 20,
+          "description": "Max results to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous search_case_law call",
-          "maxLength": 128
+          "maxLength": 128,
+          "description": "Opaque cursor from a previous search_case_law call"
         },
         "court": {
           "type": "string",
-          "description": "Filter by court name",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Filter by court name"
         },
         "country": {
           "type": "string",
-          "description": "Filter by country code",
-          "maxLength": 3
+          "maxLength": 3,
+          "description": "Filter by country code"
         },
         "language": {
           "type": "string",
-          "description": "Filter by language code",
-          "maxLength": 8
+          "maxLength": 8,
+          "description": "Filter by language code"
         },
         "decision_type": {
           "type": "string",
-          "description": "Filter by decision type",
-          "maxLength": 128
+          "maxLength": 128,
+          "description": "Filter by decision type"
         },
         "source_id": {
           "type": "string",
-          "description": "Filter by source ID",
-          "maxLength": 36
+          "maxLength": 36,
+          "description": "Filter by source ID"
         },
         "date_from": {
           "type": "string",
-          "description": "Filter decisions from this ISO date (YYYY-MM-DD)",
-          "maxLength": 10
+          "maxLength": 10,
+          "description": "Filter decisions from this ISO date (YYYY-MM-DD)"
         },
         "date_to": {
           "type": "string",
-          "description": "Filter decisions up to this ISO date (YYYY-MM-DD)",
-          "maxLength": 10
+          "maxLength": 10,
+          "description": "Filter decisions up to this ISO date (YYYY-MM-DD)"
         }
-      },
-      "required": [
-        "query"
-      ]
+      }
     }
   },
   {
@@ -216,20 +231,23 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "entity_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "entity_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Entity ID"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous call to read the next window of text",
-          "maxLength": 512
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous call to read the next window of text"
         }
-      },
-      "required": [
-        "entity_id"
-      ]
+      }
     }
   },
   {
@@ -245,20 +263,23 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "decision_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "decision_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Case-law decision ID"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous call to read the next window of decision text and citations",
-          "maxLength": 512
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous call to read the next window of decision text and citations"
         }
-      },
-      "required": [
-        "decision_id"
-      ]
+      }
     }
   },
   {
@@ -273,15 +294,17 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "contact_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "contact_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Contact ID"
         }
-      },
-      "required": [
-        "contact_id"
-      ]
+      }
     }
   },
   {
@@ -296,18 +319,17 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "jurisdictions"
+      ],
+      "additionalProperties": false,
       "properties": {
         "jurisdictions": {
           "type": "array",
-          "description": "Practice jurisdictions for this organization. countryCode is an ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary to true.",
-          "minItems": 1,
-          "maxItems": 12,
           "items": {
             "type": "object",
             "properties": {
               "countryCode": {
-                "type": "string",
-                "description": "ISO 3166-1 alpha-2 country code",
                 "enum": [
                   "AD",
                   "AE",
@@ -559,7 +581,9 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   "ZA",
                   "ZM",
                   "ZW"
-                ]
+                ],
+                "type": "string",
+                "description": "ISO 3166-1 alpha-2 country code"
               },
               "isPrimary": {
                 "type": "boolean",
@@ -569,20 +593,21 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "required": [
               "countryCode",
               "isPrimary"
-            ]
-          }
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 12,
+          "description": "Practice jurisdictions for this organization. countryCode is an ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary to true."
         }
-      },
-      "required": [
-        "jurisdictions"
-      ]
+      }
     }
   },
   {
     "name": "list_templates",
     "scope": "stella:templates",
     "access": "read",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration (path, label, inputType, required, hint, options, optionsFrom, aiPrompt / aiAdapt, date format, composite parts, registry-lookup formats) plus its named conditions and formula fields; feed the same shape to save_template to update it. \`required\` controls form validation; omitted optional scalar placeholders render blank.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape save_template's fields overlay takes (see stella://reference/template-fields), plus its named conditions and formula fields. Omitted optional scalar placeholders render blank.",
     "annotations": {
       "title": "List templates",
       "readOnlyHint": true,
@@ -600,7 +625,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "description": "Opaque cursor from a previous list_templates call to fetch the next page",
           "maxLength": 512
         }
-      }
+      },
+      "additionalProperties": false
     }
   },
   {
@@ -642,7 +668,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "required": [
         "template_id",
         "values"
-      ]
+      ],
+      "additionalProperties": false
     }
   },
   {
@@ -707,14 +734,15 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "matter_id",
         "idempotency_key",
         "values"
-      ]
+      ],
+      "additionalProperties": false
     }
   },
   {
     "name": "save_template",
     "scope": "stella:templates",
     "access": "write",
-    "description": "Create a document template from a DOCX, or configure an existing template's fields. To create, pass docx_base64 (base64-encoded .docx / Office Open XML bytes, max ~10 MB decoded) and a name; the {{field}} markers in the file become the template's fillable fields, and you can pass fields to configure them in the same call. To configure an existing template, pass template_id with fields and no docx_base64; only the manifest changes, the document's {{markers}} stay untouched. Each fields entry's path must match a {{marker}} in the template. Read stella://reference/template-markers before authoring a DOCX. Returns the template id and field count when creating, or the updated field list when configuring.",
+    "description": "Create a document template from a DOCX, or configure an existing template's fields. To create, pass docx_base64 (base64-encoded .docx / Office Open XML bytes, max ~10 MB decoded) and a name; the {{field}} markers in the file become the template's fillable fields, and fields can configure them in the same call. To configure an existing template, pass template_id with fields and no docx_base64; only the manifest changes, the document's {{markers}} stay untouched. Read stella://reference/template-markers before authoring a DOCX and stella://reference/template-fields before configuring fields. Returns the template id and field count when creating, or the updated field list when configuring.",
     "annotations": {
       "title": "Save template",
       "idempotentHint": false,
@@ -728,19 +756,19 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "template_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Existing template id to configure; omit when creating a template"
+          "description": "Template to configure; omit when creating"
         },
         "name": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Template display name; required when creating"
+          "description": "Display name; required when creating"
         },
         "docx_base64": {
           "type": "string",
           "minLength": 1,
           "maxLength": 69905068,
-          "description": "Base64-encoded DOCX bytes; required when creating, omit when configuring"
+          "description": "Base64 DOCX bytes; required when creating"
         },
         "fields": {
           "type": "array",
@@ -749,15 +777,15 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "properties": {
               "path": {
                 "type": "string",
-                "description": "Field path; must match a {{marker}} in the template"
+                "description": "Field path; must match a {{marker}}"
               },
               "label": {
                 "type": "string",
-                "description": "Human-readable field label"
+                "description": "Field label"
               },
               "hint": {
                 "type": "string",
-                "description": "Short fill guidance shown to the person filling the field"
+                "description": "Fill hint for the person filling"
               },
               "inputType": {
                 "enum": [
@@ -775,14 +803,14 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                 "items": {
                   "type": "string"
                 },
-                "description": "Allowed values when inputType is 'select'"
+                "description": "Allowed values for a select field"
               },
               "validation": {
                 "type": "object",
                 "properties": {
                   "required": {
                     "type": "boolean",
-                    "description": "Whether a value is required"
+                    "description": "Value is required"
                   },
                   "minLength": {
                     "type": "number",
@@ -802,7 +830,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   },
                   "pattern": {
                     "type": "string",
-                    "description": "Regex matched against the complete value"
+                    "description": "Regex for the whole value"
                   },
                   "minItems": {
                     "type": "number",
@@ -819,19 +847,19 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               },
               "required": {
                 "type": "boolean",
-                "description": "Whether a value is required"
+                "description": "Value is required"
               },
               "aiPrompt": {
                 "type": "string",
-                "description": "Who-fills = AI: instruction the model uses to draft the value at fill time"
+                "description": "Who fills = AI: drafting instruction"
               },
               "aiAdapt": {
                 "type": "boolean",
-                "description": "Who-fills = Person+AI: the entered value is a stub AI rewrites per occurrence"
+                "description": "Who fills = person + AI"
               },
               "aiSeesDocument": {
                 "type": "boolean",
-                "description": "Include the rendered document in this AI field's prompt"
+                "description": "AI field also sees the document"
               },
               "parts": {
                 "type": "array",
@@ -840,11 +868,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   "properties": {
                     "key": {
                       "type": "string",
-                      "description": "Part key referenced by the field format"
+                      "description": "Part key used in format"
                     },
                     "label": {
                       "type": "string",
-                      "description": "Human-readable part label"
+                      "description": "Part label"
                     },
                     "inputType": {
                       "enum": [
@@ -852,7 +880,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                         "select"
                       ],
                       "type": "string",
-                      "description": "Part input control type"
+                      "description": "Part input control"
                     },
                     "options": {
                       "type": "array",
@@ -863,7 +891,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     },
                     "pattern": {
                       "type": "string",
-                      "description": "Regex matched against the complete part value"
+                      "description": "Regex for the whole part value"
                     }
                   },
                   "required": [
@@ -873,15 +901,15 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   "additionalProperties": false
                 },
                 "minItems": 1,
-                "description": "Composite field parts joined by format"
+                "description": "Composite field parts"
               },
               "format": {
                 "type": "string",
-                "description": "Join template over composite part keys, e.g. '{{title}} {{name}}'"
+                "description": "Join template over the part keys"
               },
               "optionsFrom": {
                 "type": "string",
-                "description": "Dependent select: path of another field whose values supply the options"
+                "description": "Dependent select: source field path"
               },
               "lookup": {
                 "type": "object",
@@ -910,12 +938,12 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                       "properties": {
                         "key": {
                           "type": "string",
-                          "description": "Marker segment after the path: {{path.key}}"
+                          "description": "Format key, addressed as {{path.key}}"
                         },
                         "template": {
                           "type": "string",
                           "maxLength": 2000,
-                          "description": "[token]-substituted rendering of the registry hit"
+                          "description": "[token] rendering of the registry hit"
                         }
                       },
                       "required": [
@@ -926,7 +954,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     },
                     "minItems": 1,
                     "maxItems": 10,
-                    "description": "Named output renderings; the first is the default for the bare marker"
+                    "description": "Named renderings; the first is the default"
                   }
                 },
                 "required": [
@@ -934,7 +962,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   "formats"
                 ],
                 "additionalProperties": false,
-                "description": "Who-fills = business-registry lookup"
+                "description": "Who fills = business-registry lookup"
               },
               "source": {
                 "anyOf": [
@@ -1107,22 +1135,22 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     "additionalProperties": false
                   }
                 ],
-                "description": "Matter or contact data resolved server-side"
+                "description": "Who fills = matter or contact data"
               },
               "formula": {
                 "type": "string",
-                "description": "Arithmetic expression derived from other fields"
+                "description": "Arithmetic over other fields"
               },
               "condition": {
                 "type": "string",
-                "description": "Boolean rule expression referenced by a {{#if field_path}} marker"
+                "description": "Boolean rule for an {{#if}} marker"
               },
               "dateFormat": {
                 "type": "object",
                 "properties": {
                   "locale": {
                     "type": "string",
-                    "description": "BCP-47 language tag, e.g. 'cs', 'de', 'pl'"
+                    "description": "BCP-47 language tag"
                   },
                   "style": {
                     "enum": [
@@ -1140,7 +1168,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   "style"
                 ],
                 "additionalProperties": false,
-                "description": "Locale-aware date rendering for a date field"
+                "description": "Date rendering config"
               }
             },
             "required": [
@@ -1148,7 +1176,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             ],
             "additionalProperties": false
           },
-          "description": "Strict field configuration overlay; each path must match a template marker"
+          "description": "Field configuration overlay; see stella://reference/template-fields"
         }
       }
     }
@@ -1165,38 +1193,41 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "matter_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to list documents in"
         },
         "mode": {
-          "type": "string",
           "enum": [
             "flat",
             "children"
           ],
+          "type": "string",
           "description": "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected."
         },
         "parent_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Folder entity ID whose direct children to list. Only valid in children mode; supplying it selects children mode when mode is omitted and is rejected together with mode 'flat'."
         },
         "limit": {
           "type": "integer",
-          "description": "Max entities to return",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max entities to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_documents call to fetch the next page",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_documents call to fetch the next page"
         }
-      },
-      "required": [
-        "matter_id"
-      ]
+      }
     }
   },
   {
@@ -1211,17 +1242,24 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "entity_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "entity_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Document entity ID"
         },
         "version_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Return this version's metadata and field values instead of the current version"
         },
         "compare_with_version_id": {
           "type": "string",
+          "minLength": 1,
           "description": "With version_id, return a plain-text line diff of this version (base) against version_id (target)"
         },
         "include_versions": {
@@ -1230,13 +1268,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "versions_cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous call to fetch the next page of version history",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous call to fetch the next page of version history"
         }
-      },
-      "required": [
-        "entity_id"
-      ]
+      }
     }
   },
   {
@@ -1251,30 +1286,36 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "entity_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Document entity ID to update; omit to create"
         },
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to create the entity in; required when creating"
         },
         "name": {
           "type": "string",
-          "description": "Display name: required when creating, or the new name when renaming",
-          "maxLength": 255
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Display name: required when creating, or the new name when renaming"
         },
         "parent_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Folder entity ID: to place the new entity inside when creating, or to move the document into when updating"
         },
         "kind": {
-          "type": "string",
           "enum": [
             "document",
             "folder"
           ],
+          "type": "string",
           "description": "Entity kind to create; defaults to 'document'. Only valid when creating."
         },
         "move_to_root": {
@@ -1283,23 +1324,34 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "version_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Version ID to annotate; required when setting label or description. Only valid when updating."
         },
         "label": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
           ],
-          "description": "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
-          "maxLength": 128
+          "description": "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged"
         },
         "description": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            {
+              "type": "null"
+            }
           ],
-          "description": "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
-          "maxLength": 1024
+          "description": "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged"
         }
       }
     }
@@ -1395,23 +1447,26 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "entity_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "entity_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Document entity ID to delete"
         },
         "version_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Delete only this version instead of the whole document"
         },
         "confirm": {
           "type": "boolean",
           "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
-      },
-      "required": [
-        "entity_id"
-      ]
+      }
     }
   },
   {
@@ -1426,26 +1481,28 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "matter_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to list properties for"
         },
         "limit": {
           "type": "integer",
-          "description": "Max properties to return",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max properties to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_properties call to fetch the next page",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_properties call to fetch the next page"
         }
-      },
-      "required": [
-        "matter_id"
-      ]
+      }
     }
   },
   {
@@ -1460,50 +1517,151 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
-      "properties": {
-        "entity_id": {
-          "type": "string",
-          "description": "Document entity ID whose cell to set"
-        },
-        "property_id": {
-          "type": "string",
-          "description": "Property ID, as returned by list_properties"
-        },
-        "content": {
-          "type": "object",
-          "description": "The value to set; 'type' must match the property.",
-          "properties": {
-            "type": {
-              "type": "string",
-              "enum": [
-                "text",
-                "single-select",
-                "multi-select",
-                "date",
-                "int"
-              ],
-              "description": "Value type; must match the property's value type"
-            },
-            "value": {
-              "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
-            },
-            "currency": {
-              "type": "string",
-              "description": "For int values only: 3-letter ISO currency code, or null",
-              "maxLength": 3
-            }
-          },
-          "required": [
-            "type",
-            "value"
-          ]
-        }
-      },
       "required": [
         "entity_id",
         "property_id",
         "content"
-      ]
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Document entity ID whose cell to set"
+        },
+        "property_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Property ID, as returned by list_properties"
+        },
+        "content": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "text",
+                  "description": "Value type; must match the property's value type"
+                },
+                "value": {
+                  "type": "string",
+                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "single-select",
+                  "description": "Value type; must match the property's value type"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "multi-select",
+                  "description": "Value type; must match the property's value type"
+                },
+                "value": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "date",
+                  "description": "Value type; must match the property's value type"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "int",
+                  "description": "Value type; must match the property's value type"
+                },
+                "value": {
+                  "type": "integer",
+                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                },
+                "currency": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 3,
+                      "maxLength": 3
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "For int values only: 3-letter ISO currency code, or null"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "The value to set; 'type' must match the property."
+        }
+      }
     }
   },
   {
@@ -1518,39 +1676,49 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to update; omit to create a new matter"
         },
         "name": {
           "type": "string",
-          "description": "Matter name; required when creating",
-          "maxLength": 256
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Matter name; required when creating"
         },
         "client_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Contact ID to attach in the client role. Only valid when creating a matter."
         },
         "reference": {
           "type": "string",
-          "description": "Matter reference (file number). Only valid when updating.",
-          "maxLength": 64
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Matter reference (file number). Only valid when updating."
         },
         "billing_reference": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
           ],
-          "description": "Billing reference; pass null to clear. Only valid when updating.",
-          "maxLength": 128
+          "description": "Billing reference; pass null to clear. Only valid when updating."
         },
         "status": {
-          "type": "string",
           "enum": [
             "active",
             "archived"
           ],
+          "type": "string",
           "description": "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating."
         }
       }
@@ -1569,19 +1737,21 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "matter_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to delete"
         },
         "confirm": {
           "type": "boolean",
           "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
-      },
-      "required": [
-        "matter_id"
-      ]
+      }
     }
   },
   {
@@ -1596,18 +1766,20 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "q": {
           "type": "string",
-          "description": "Search contact display names",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Search contact display names"
         },
         "type": {
-          "type": "string",
           "enum": [
             "person",
             "organization"
           ],
+          "type": "string",
           "description": "Contact kind"
         },
         "cursor": {
@@ -1616,12 +1788,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "limit": {
           "type": "integer",
-          "description": "Maximum contacts to return",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Maximum contacts to return"
         }
-      },
-      "additionalProperties": false
+      }
     }
   },
   {
@@ -1636,52 +1807,72 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "contact_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Contact ID to update; omit to create"
         },
         "type": {
-          "type": "string",
           "enum": [
             "person",
             "organization"
           ],
+          "type": "string",
           "description": "Contact kind; required when creating"
         },
         "display_name": {
           "type": "string",
-          "description": "Display name; when creating it defaults to first + last name (person) or organization name (organization); non-empty when updating",
-          "maxLength": 512
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Display name; when creating it defaults to first + last name (person) or organization name (organization); non-empty when updating"
         },
         "first_name": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
           ],
-          "description": "First name; pass null to clear",
-          "maxLength": 256
+          "description": "First name; pass null to clear"
         },
         "last_name": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
           ],
-          "description": "Last name; pass null to clear",
-          "maxLength": 256
+          "description": "Last name; pass null to clear"
         },
         "organization_name": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
           ],
-          "description": "Organization name; pass null to clear",
-          "maxLength": 512
+          "description": "Organization name; pass null to clear"
         },
         "notes": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
           ],
           "description": "Free-text notes; pass null to clear"
         }
@@ -1701,19 +1892,21 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "contact_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "contact_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Contact ID to delete"
         },
         "confirm": {
           "type": "boolean",
           "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
-      },
-      "required": [
-        "contact_id"
-      ]
+      }
     }
   },
   {
@@ -1728,9 +1921,13 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "registry",
+        "query"
+      ],
+      "additionalProperties": false,
       "properties": {
         "registry": {
-          "type": "string",
           "enum": [
             "ares",
             "brreg",
@@ -1744,18 +1941,16 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "recherche-entreprises",
             "vies"
           ],
+          "type": "string",
           "description": "Business register to query"
         },
         "query": {
           "type": "string",
-          "description": "Canonical identifier (e.g. company number, VAT number) or company name",
-          "maxLength": 256
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Canonical identifier (e.g. company number, VAT number) or company name"
         }
-      },
-      "required": [
-        "registry",
-        "query"
-      ]
+      }
     }
   },
   {
@@ -1770,40 +1965,47 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to list tasks in; required unless task_id is given"
         },
         "task_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Task entity ID to read in detail"
         },
         "date_from": {
           "type": "string",
-          "description": "List only tasks due on or after this ISO date (YYYY-MM-DD)",
-          "maxLength": 10
+          "format": "date",
+          "maxLength": 10,
+          "description": "List only tasks due on or after this ISO date (YYYY-MM-DD)"
         },
         "date_to": {
           "type": "string",
-          "description": "List only tasks due on or before this ISO date (YYYY-MM-DD)",
-          "maxLength": 10
+          "format": "date",
+          "maxLength": 10,
+          "description": "List only tasks due on or before this ISO date (YYYY-MM-DD)"
         },
         "status": {
           "type": "string",
-          "description": "List only tasks with this status",
-          "maxLength": 32
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "List only tasks with this status"
         },
         "limit": {
           "type": "integer",
-          "description": "Max tasks to return",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max tasks to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_tasks call to fetch the next page",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_tasks call to fetch the next page"
         }
       }
     }
@@ -1820,32 +2022,38 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "task_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Task entity ID to update; omit to create"
         },
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to create the task in; required when creating"
         },
         "name": {
           "type": "string",
-          "description": "Task name; required when creating",
-          "maxLength": 255
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Task name; required when creating"
         },
         "status": {
           "type": "string",
-          "description": "Task status (e.g. open, in_progress, done)",
-          "maxLength": 32
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "Task status (e.g. open, in_progress, done)"
         },
         "priority": {
           "type": "string",
-          "description": "Task priority (e.g. none, low, medium, high)",
-          "maxLength": 16
+          "minLength": 1,
+          "maxLength": 16,
+          "description": "Task priority (e.g. none, low, medium, high)"
         },
         "item_type": {
-          "type": "string",
           "enum": [
             "task",
             "fact",
@@ -1853,35 +2061,68 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "requirement",
             "event"
           ],
+          "type": "string",
           "description": "What the List item represents"
         },
-        "due_date": {
-          "type": [
-            "string",
-            "null"
+        "list_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "List ID to create the item in (creating only)"
+        },
+        "list_section_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Section of list_id to create the item under (creating only)"
+        },
+        "list_description": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 10000
+            },
+            {
+              "type": "null"
+            }
           ],
-          "description": "Due date (ISO YYYY-MM-DD); pass null to clear",
-          "maxLength": 10
+          "description": "List item description; pass null to clear"
+        },
+        "due_date": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "maxLength": 10
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Due date (ISO YYYY-MM-DD); pass null to clear"
         },
         "workflow_reason": {
           "type": "string",
-          "description": "Reason for a governed status or deadline change",
-          "maxLength": 1000
+          "minLength": 1,
+          "maxLength": 1000,
+          "description": "Reason for a governed status or deadline change"
         },
         "add_assignee_user_id": {
           "type": "string",
+          "minLength": 1,
           "description": "User ID to assign to the task (must be a workspace member)"
         },
         "remove_assignee_user_id": {
           "type": "string",
+          "minLength": 1,
           "description": "User ID to unassign from the task"
         },
         "link_entity_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Entity ID to link to the task (document, folder, or another task)"
         },
         "unlink_link_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Entity-link ID to remove"
         }
       }
@@ -1899,17 +2140,22 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "matter_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID"
         },
         "contact_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Contact ID: with role to link the contact, or alone to unlink it from the matter"
         },
         "role": {
-          "type": "string",
           "enum": [
             "opposing_party",
             "opposing_counsel",
@@ -1921,16 +2167,15 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "mediator",
             "other"
           ],
+          "type": "string",
           "description": "Party role for the linked contact; provide it only when linking"
         },
         "workspace_contact_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Existing matter-contact link ID to remove, from list_matters"
         }
-      },
-      "required": [
-        "matter_id"
-      ]
+      }
     }
   },
   {
@@ -1945,21 +2190,27 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "clause_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Clause id to read in detail; omit to list"
         },
         "version_id": {
           "type": "string",
+          "minLength": 1,
           "description": "With clause_id, return this version's body instead of the current clause"
         },
         "category_id": {
           "type": "string",
+          "minLength": 1,
           "description": "List only clauses filed under this category (list mode)"
         },
         "query": {
           "type": "string",
+          "minLength": 1,
           "description": "Filter clauses by a text query over title and body (list mode)"
         },
         "include_categories": {
@@ -1968,14 +2219,14 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "limit": {
           "type": "integer",
-          "description": "Max clauses to return",
           "minimum": 1,
-          "maximum": 200
+          "maximum": 200,
+          "description": "Max clauses to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_clauses call to fetch the next page",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_clauses call to fetch the next page"
         }
       }
     }
@@ -1992,19 +2243,22 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "clause_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Clause id to update; omit to create"
         },
         "title": {
           "type": "string",
-          "description": "Clause title; required when creating",
-          "maxLength": 256
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Clause title; required when creating"
         },
         "body": {
           "type": "array",
-          "description": "Ordered clause body paragraphs; required when creating. Each paragraph carries text and optional formatting.",
           "items": {
             "type": "object",
             "properties": {
@@ -2022,7 +2276,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               },
               "runs": {
                 "type": "array",
-                "description": "Optional inline formatting runs whose text concatenates to the paragraph",
                 "items": {
                   "type": "object",
                   "properties": {
@@ -2041,15 +2294,17 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   },
                   "required": [
                     "text"
-                  ]
-                }
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Optional inline formatting runs whose text concatenates to the paragraph"
               },
               "listKind": {
-                "type": "string",
                 "enum": [
                   "bullet",
                   "ordered"
                 ],
+                "type": "string",
                 "description": "List item kind when the paragraph is a list item"
               },
               "listLevel": {
@@ -2061,7 +2316,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                 "description": "Whether the paragraph is a template directive marker"
               },
               "directiveKind": {
-                "type": "string",
                 "enum": [
                   "if",
                   "elseif",
@@ -2070,6 +2324,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   "each",
                   "endeach"
                 ],
+                "type": "string",
                 "description": "Directive kind when isDirective is set"
               },
               "directiveExpression": {
@@ -2079,47 +2334,72 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             },
             "required": [
               "text"
-            ]
-          }
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "description": "Ordered clause body paragraphs; required when creating. Each paragraph carries text and optional formatting."
         },
         "category_id": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
           ],
           "description": "Category id to file the clause under; pass null to clear"
         },
         "language": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 10
+            },
+            {
+              "type": "null"
+            }
           ],
-          "description": "BCP-47 language tag for the clause; pass null to clear",
-          "maxLength": 10
+          "description": "BCP-47 language tag for the clause; pass null to clear"
         },
         "description": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2000
+            },
+            {
+              "type": "null"
+            }
           ],
-          "description": "Short clause description; pass null to clear",
-          "maxLength": 2000
+          "description": "Short clause description; pass null to clear"
         },
         "usage_notes": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2000
+            },
+            {
+              "type": "null"
+            }
           ],
-          "description": "Guidance on when to use the clause; pass null to clear",
-          "maxLength": 2000
+          "description": "Guidance on when to use the clause; pass null to clear"
         },
         "metadata": {
-          "type": [
-            "object",
-            "null"
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            {
+              "type": "null"
+            }
           ],
-          "description": "Free-form metadata object; pass null to clear",
-          "additionalProperties": true
+          "description": "Free-form metadata object; pass null to clear"
         },
         "snapshot_version": {
           "type": "boolean",
@@ -2141,19 +2421,21 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "clause_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "clause_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Clause id to delete"
         },
         "confirm": {
           "type": "boolean",
           "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
-      },
-      "required": [
-        "clause_id"
-      ]
+      }
     }
   },
   {
@@ -2168,21 +2450,24 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "playbook_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Playbook id to read in detail; omit to list playbooks"
         },
         "limit": {
           "type": "integer",
-          "description": "Max playbooks to return",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max playbooks to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_playbooks call to fetch the next page",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_playbooks call to fetch the next page"
         }
       }
     }
@@ -2199,20 +2484,23 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "matter_id",
+        "playbook_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace id to run the playbook over"
         },
         "playbook_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Playbook id to run"
         }
-      },
-      "required": [
-        "matter_id",
-        "playbook_id"
-      ]
+      }
     }
   },
   {
@@ -2228,53 +2516,61 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to list time entries in; required unless time_entry_id is given"
         },
         "time_entry_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Time entry ID to read in detail"
         },
         "entity_id": {
           "type": "string",
+          "minLength": 1,
           "description": "List only entries logged against this entity (document, folder, or task the time is billed to)"
         },
         "user_id": {
           "type": "string",
+          "minLength": 1,
           "description": "List only entries recorded by this user"
         },
         "date_from": {
           "type": "string",
-          "description": "List only entries worked on or after this ISO date (YYYY-MM-DD)",
-          "maxLength": 10
+          "format": "date",
+          "maxLength": 10,
+          "description": "List only entries worked on or after this ISO date (YYYY-MM-DD)"
         },
         "date_to": {
           "type": "string",
-          "description": "List only entries worked on or before this ISO date (YYYY-MM-DD)",
-          "maxLength": 10
+          "format": "date",
+          "maxLength": 10,
+          "description": "List only entries worked on or before this ISO date (YYYY-MM-DD)"
         },
         "status": {
-          "type": "string",
           "enum": [
             "draft",
             "approved",
             "billed",
             "written_off"
           ],
+          "type": "string",
           "description": "List only entries with this status"
         },
         "limit": {
           "type": "integer",
-          "description": "Max entries to return",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max entries to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_time_entries call to fetch the next page",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_time_entries call to fetch the next page"
         }
       }
     }
@@ -2292,49 +2588,65 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "time_entry_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Time entry ID to update; omit to create"
         },
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to create the entry in; required when creating"
         },
         "entity_id": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
           ],
           "description": "Optional work item context (document, folder, or task). When updating, moves the entry to a different entity in the same matter; pass null to clear."
         },
         "date_worked": {
           "type": "string",
-          "description": "Date the work was done (ISO YYYY-MM-DD); required when creating",
-          "maxLength": 10
+          "format": "date",
+          "maxLength": 10,
+          "description": "Date the work was done (ISO YYYY-MM-DD); required when creating"
         },
         "timezone_id": {
           "type": "string",
-          "description": "IANA time zone the date_worked is interpreted in (e.g. Europe/Prague); required when creating or changing date_worked",
-          "maxLength": 64
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "IANA time zone the date_worked is interpreted in (e.g. Europe/Prague); required when creating or changing date_worked"
         },
         "duration_minutes": {
           "type": "integer",
-          "description": "Minutes worked (whole minutes); required when creating",
-          "minimum": 1
+          "minimum": 1,
+          "description": "Minutes worked (whole minutes); required when creating"
         },
         "narrative": {
           "type": "string",
-          "description": "Description of the work; required when creating",
-          "maxLength": 10000
+          "minLength": 1,
+          "maxLength": 10000,
+          "description": "Description of the work; required when creating"
         },
         "invoice_narrative": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 10000
+            },
+            {
+              "type": "null"
+            }
           ],
-          "description": "Client-facing narrative shown on the invoice; pass null to clear. Only valid when updating.",
-          "maxLength": 10000
+          "description": "Client-facing narrative shown on the invoice; pass null to clear. Only valid when updating."
         },
         "billable": {
           "type": "boolean",
@@ -2345,20 +2657,28 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "description": "Whether the entry is recorded but not charged. Only valid when updating."
         },
         "task_code": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 20
+            },
+            {
+              "type": "null"
+            }
           ],
-          "description": "UTBMS/LEDES task code; pass null to clear",
-          "maxLength": 20
+          "description": "UTBMS/LEDES task code; pass null to clear"
         },
         "activity_code": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 20
+            },
+            {
+              "type": "null"
+            }
           ],
-          "description": "UTBMS/LEDES activity code; pass null to clear",
-          "maxLength": 20
+          "description": "UTBMS/LEDES activity code; pass null to clear"
         }
       }
     }
@@ -2377,19 +2697,21 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "time_entry_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "time_entry_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Time entry ID to delete or write off"
         },
         "confirm": {
           "type": "boolean",
           "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
-      },
-      "required": [
-        "time_entry_id"
-      ]
+      }
     }
   },
   {
@@ -2405,26 +2727,30 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
-      "properties": {
-        "matter_id": {
-          "type": "string",
-          "description": "Matter/workspace ID to resolve the rate in"
-        },
-        "user_id": {
-          "type": "string",
-          "description": "User ID to resolve the rate for"
-        },
-        "date": {
-          "type": "string",
-          "description": "Date to resolve the rate on (ISO YYYY-MM-DD)",
-          "maxLength": 10
-        }
-      },
       "required": [
         "matter_id",
         "user_id",
         "date"
-      ]
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Matter/workspace ID to resolve the rate in"
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "User ID to resolve the rate for"
+        },
+        "date": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Date to resolve the rate on (ISO YYYY-MM-DD)"
+        }
+      }
     }
   },
   {
@@ -2440,25 +2766,29 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to list invoices in; required unless invoice_id is given"
         },
         "invoice_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Invoice ID to read in detail"
         },
         "limit": {
           "type": "integer",
-          "description": "Max invoices to return",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max invoices to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_invoices call to fetch the next page",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_invoices call to fetch the next page"
         }
       }
     }
@@ -2476,6 +2806,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {}
     }
   },
@@ -2492,52 +2824,59 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "query": {
           "type": "string",
-          "description": "Free-text search over consolidated legislation",
-          "maxLength": 256
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Free-text search over consolidated legislation"
         },
         "title": {
           "type": "string",
-          "description": "Filter search results by title text",
-          "maxLength": 256
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Filter search results by title text"
         },
         "department_code": {
           "type": "string",
-          "description": "Filter search results by department code",
-          "maxLength": 32
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "Filter search results by department code"
         },
         "legal_range_code": {
           "type": "string",
-          "description": "Filter search results by legal-range code (law rank)",
-          "maxLength": 32
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "Filter search results by legal-range code (law rank)"
         },
         "matter_code": {
           "type": "string",
-          "description": "Filter search results by subject-matter code",
-          "maxLength": 32
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "Filter search results by subject-matter code"
         },
         "date_from": {
           "type": "string",
-          "description": "Only laws published on or after this date (YYYYMMDD)",
-          "maxLength": 8
+          "maxLength": 8,
+          "description": "Only laws published on or after this date (YYYYMMDD)"
         },
         "date_to": {
           "type": "string",
-          "description": "Only laws published on or before this date (YYYYMMDD)",
-          "maxLength": 8
+          "maxLength": 8,
+          "description": "Only laws published on or before this date (YYYYMMDD)"
         },
         "limit": {
           "type": "integer",
-          "description": "Max search results to return",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max search results to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous search_legislation call for the next page",
-          "maxLength": 5
+          "maxLength": 5,
+          "description": "Opaque cursor from a previous search_legislation call for the next page"
         },
         "law_id": {
           "type": "string",
@@ -2545,11 +2884,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "block_id": {
           "type": "string",
-          "description": "With law_id, return this text block's content instead of the whole law",
-          "maxLength": 128
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "With law_id, return this text block's content instead of the whole law"
         },
         "relation_type": {
-          "type": "string",
           "enum": [
             "modifies",
             "modifiedBy",
@@ -2557,6 +2896,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "derogatedBy",
             "all"
           ],
+          "type": "string",
           "description": "With law_id, list related laws of this relation kind instead of the law body"
         },
         "full_text": {
@@ -2643,55 +2983,59 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "action"
+      ],
+      "additionalProperties": false,
       "properties": {
         "action": {
-          "type": "string",
           "enum": [
             "add_member",
             "remove_member",
             "update_org_settings"
           ],
+          "type": "string",
           "description": "Administrative action to perform"
         },
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace id for add_member and remove_member"
         },
         "user_id": {
           "type": "string",
+          "minLength": 1,
           "description": "User id to add or remove for the member actions"
         },
         "matter_number_pattern": {
           "type": "string",
-          "description": "Matter-number pattern (update_org_settings); send with matter_number_padding",
-          "maxLength": 128
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Matter-number pattern (update_org_settings); send with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
-          "description": "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern",
           "minimum": 1,
-          "maximum": 6
+          "maximum": 6,
+          "description": "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern"
         },
         "prompt_caching_enabled": {
           "type": "boolean",
           "description": "Toggle AI prompt caching for the organization (update_org_settings)"
         },
         "document_processing_mode": {
-          "type": "string",
           "enum": [
             "off",
             "searchable-text"
           ],
+          "type": "string",
           "description": "Set automatic PDF searchable-text extraction for the organization (update_org_settings)"
         },
         "confirm": {
           "type": "boolean",
           "description": "Required for the remove_member action: must be true to remove a member (an irreversible action). Set it only after a human user has approved the removal; ignored by the other actions."
         }
-      },
-      "required": [
-        "action"
-      ]
+      }
     }
   },
   {
@@ -2706,40 +3050,44 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "kind",
+        "title",
+        "body"
+      ],
+      "additionalProperties": false,
       "properties": {
         "kind": {
-          "type": "string",
           "enum": [
             "bug",
             "feature_request",
             "docs",
             "other"
           ],
+          "type": "string",
           "description": "Feedback category: bug, feature_request, docs, or other"
         },
         "title": {
           "type": "string",
-          "description": "Short one-line summary of the issue; no tenant data, ids, or secrets",
-          "maxLength": 200
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Short one-line summary of the issue; no tenant data, ids, or secrets"
         },
         "body": {
           "type": "string",
-          "description": "Markdown details: reproduction steps, expected vs actual behavior, environment. Never include tenant data, client or matter names, ids, or secrets; they are redacted server-side.",
-          "maxLength": 8000
+          "minLength": 1,
+          "maxLength": 8000,
+          "description": "Markdown details: reproduction steps, expected vs actual behavior, environment. Never include tenant data, client or matter names, ids, or secrets; they are redacted server-side."
         },
         "channel": {
-          "type": "string",
           "enum": [
             "github"
           ],
-          "description": "Delivery channel. github returns a prefilled issue URL the human submits under their own GitHub account."
+          "type": "string",
+          "description": "Delivery channel. github returns a prefilled issue URL the human submits under their own GitHub account.",
+          "default": "github"
         }
-      },
-      "required": [
-        "kind",
-        "title",
-        "body"
-      ]
+      }
     }
   },
   {
@@ -2877,21 +3225,24 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false,
       "properties": {
         "query": {
           "type": "string",
-          "description": "Search query",
-          "maxLength": 500
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Search query"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous search call to fetch the next page",
-          "maxLength": 512
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous search call to fetch the next page"
         }
-      },
-      "required": [
-        "query"
-      ]
+      }
     }
   },
   {
@@ -2906,20 +3257,23 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "id": {
           "type": "string",
+          "minLength": 1,
           "description": "Document/entity ID"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous fetch call to read the next window of text",
-          "maxLength": 512
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous fetch call to read the next window of text"
         }
-      },
-      "required": [
-        "id"
-      ]
+      }
     }
   },
   {
@@ -2934,29 +3288,33 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to return a single matter's overview; omit to list matters"
         },
         "status": {
-          "type": "string",
           "enum": [
             "active",
             "all"
           ],
+          "type": "string",
           "description": "Filter by matter status (list mode)"
         },
         "limit": {
           "type": "integer",
-          "description": "Max matters to return (list mode)",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max matters to return (list mode)"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_matters call to fetch the next page",
-          "maxLength": 512
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_matters call to fetch the next page"
         }
       }
     }
@@ -2973,27 +3331,30 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false,
       "properties": {
         "query": {
           "type": "string",
-          "description": "Search query",
-          "maxLength": 500
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Search query"
         },
         "limit": {
           "type": "integer",
-          "description": "Max results to return",
           "minimum": 1,
-          "maximum": 20
+          "maximum": 20,
+          "description": "Max results to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous search_across_matters call to fetch the next page",
-          "maxLength": 512
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous search_across_matters call to fetch the next page"
         }
-      },
-      "required": [
-        "query"
-      ]
+      }
     }
   },
   {
@@ -3009,62 +3370,64 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false,
       "properties": {
         "query": {
           "type": "string",
-          "description": "Search query",
-          "maxLength": 500
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Search query"
         },
         "limit": {
           "type": "integer",
-          "description": "Max results to return",
           "minimum": 1,
-          "maximum": 20
+          "maximum": 20,
+          "description": "Max results to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous search_case_law call",
-          "maxLength": 128
+          "maxLength": 128,
+          "description": "Opaque cursor from a previous search_case_law call"
         },
         "court": {
           "type": "string",
-          "description": "Filter by court name",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Filter by court name"
         },
         "country": {
           "type": "string",
-          "description": "Filter by country code",
-          "maxLength": 3
+          "maxLength": 3,
+          "description": "Filter by country code"
         },
         "language": {
           "type": "string",
-          "description": "Filter by language code",
-          "maxLength": 8
+          "maxLength": 8,
+          "description": "Filter by language code"
         },
         "decision_type": {
           "type": "string",
-          "description": "Filter by decision type",
-          "maxLength": 128
+          "maxLength": 128,
+          "description": "Filter by decision type"
         },
         "source_id": {
           "type": "string",
-          "description": "Filter by source ID",
-          "maxLength": 36
+          "maxLength": 36,
+          "description": "Filter by source ID"
         },
         "date_from": {
           "type": "string",
-          "description": "Filter decisions from this ISO date (YYYY-MM-DD)",
-          "maxLength": 10
+          "maxLength": 10,
+          "description": "Filter decisions from this ISO date (YYYY-MM-DD)"
         },
         "date_to": {
           "type": "string",
-          "description": "Filter decisions up to this ISO date (YYYY-MM-DD)",
-          "maxLength": 10
+          "maxLength": 10,
+          "description": "Filter decisions up to this ISO date (YYYY-MM-DD)"
         }
-      },
-      "required": [
-        "query"
-      ]
+      }
     }
   },
   {
@@ -3079,20 +3442,23 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "entity_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "entity_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Entity ID"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous call to read the next window of text",
-          "maxLength": 512
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous call to read the next window of text"
         }
-      },
-      "required": [
-        "entity_id"
-      ]
+      }
     }
   },
   {
@@ -3108,20 +3474,23 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "decision_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "decision_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Case-law decision ID"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous call to read the next window of decision text and citations",
-          "maxLength": 512
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous call to read the next window of decision text and citations"
         }
-      },
-      "required": [
-        "decision_id"
-      ]
+      }
     }
   },
   {
@@ -3136,22 +3505,24 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "contact_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "contact_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Contact ID"
         }
-      },
-      "required": [
-        "contact_id"
-      ]
+      }
     }
   },
   {
     "name": "list_templates",
     "scope": "stella:templates_anonymized",
     "access": "read",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration (path, label, inputType, required, hint, options, optionsFrom, aiPrompt / aiAdapt, date format, composite parts, registry-lookup formats) plus its named conditions and formula fields; feed the same shape to save_template to update it. \`required\` controls form validation; omitted optional scalar placeholders render blank.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape save_template's fields overlay takes (see stella://reference/template-fields), plus its named conditions and formula fields. Omitted optional scalar placeholders render blank.",
     "annotations": {
       "title": "List templates",
       "readOnlyHint": true,
@@ -3169,7 +3540,8 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "description": "Opaque cursor from a previous list_templates call to fetch the next page",
           "maxLength": 512
         }
-      }
+      },
+      "additionalProperties": false
     }
   },
   {
@@ -3184,38 +3556,41 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "matter_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to list documents in"
         },
         "mode": {
-          "type": "string",
           "enum": [
             "flat",
             "children"
           ],
+          "type": "string",
           "description": "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected."
         },
         "parent_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Folder entity ID whose direct children to list. Only valid in children mode; supplying it selects children mode when mode is omitted and is rejected together with mode 'flat'."
         },
         "limit": {
           "type": "integer",
-          "description": "Max entities to return",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max entities to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_documents call to fetch the next page",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_documents call to fetch the next page"
         }
-      },
-      "required": [
-        "matter_id"
-      ]
+      }
     }
   },
   {
@@ -3230,17 +3605,24 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "entity_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "entity_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Document entity ID"
         },
         "version_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Return this version's metadata and field values instead of the current version"
         },
         "compare_with_version_id": {
           "type": "string",
+          "minLength": 1,
           "description": "With version_id, return a plain-text line diff of this version (base) against version_id (target)"
         },
         "include_versions": {
@@ -3249,13 +3631,10 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "versions_cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous call to fetch the next page of version history",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous call to fetch the next page of version history"
         }
-      },
-      "required": [
-        "entity_id"
-      ]
+      }
     }
   },
   {
@@ -3270,26 +3649,28 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "matter_id"
+      ],
+      "additionalProperties": false,
       "properties": {
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to list properties for"
         },
         "limit": {
           "type": "integer",
-          "description": "Max properties to return",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max properties to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_properties call to fetch the next page",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_properties call to fetch the next page"
         }
-      },
-      "required": [
-        "matter_id"
-      ]
+      }
     }
   },
   {
@@ -3304,9 +3685,13 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [
+        "registry",
+        "query"
+      ],
+      "additionalProperties": false,
       "properties": {
         "registry": {
-          "type": "string",
           "enum": [
             "ares",
             "brreg",
@@ -3320,18 +3705,16 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
             "recherche-entreprises",
             "vies"
           ],
+          "type": "string",
           "description": "Business register to query"
         },
         "query": {
           "type": "string",
-          "description": "Canonical identifier (e.g. company number, VAT number) or company name",
-          "maxLength": 256
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Canonical identifier (e.g. company number, VAT number) or company name"
         }
-      },
-      "required": [
-        "registry",
-        "query"
-      ]
+      }
     }
   },
   {
@@ -3346,40 +3729,47 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to list tasks in; required unless task_id is given"
         },
         "task_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Task entity ID to read in detail"
         },
         "date_from": {
           "type": "string",
-          "description": "List only tasks due on or after this ISO date (YYYY-MM-DD)",
-          "maxLength": 10
+          "format": "date",
+          "maxLength": 10,
+          "description": "List only tasks due on or after this ISO date (YYYY-MM-DD)"
         },
         "date_to": {
           "type": "string",
-          "description": "List only tasks due on or before this ISO date (YYYY-MM-DD)",
-          "maxLength": 10
+          "format": "date",
+          "maxLength": 10,
+          "description": "List only tasks due on or before this ISO date (YYYY-MM-DD)"
         },
         "status": {
           "type": "string",
-          "description": "List only tasks with this status",
-          "maxLength": 32
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "List only tasks with this status"
         },
         "limit": {
           "type": "integer",
-          "description": "Max tasks to return",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max tasks to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_tasks call to fetch the next page",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_tasks call to fetch the next page"
         }
       }
     }
@@ -3396,21 +3786,27 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "clause_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Clause id to read in detail; omit to list"
         },
         "version_id": {
           "type": "string",
+          "minLength": 1,
           "description": "With clause_id, return this version's body instead of the current clause"
         },
         "category_id": {
           "type": "string",
+          "minLength": 1,
           "description": "List only clauses filed under this category (list mode)"
         },
         "query": {
           "type": "string",
+          "minLength": 1,
           "description": "Filter clauses by a text query over title and body (list mode)"
         },
         "include_categories": {
@@ -3419,14 +3815,14 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "limit": {
           "type": "integer",
-          "description": "Max clauses to return",
           "minimum": 1,
-          "maximum": 200
+          "maximum": 200,
+          "description": "Max clauses to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_clauses call to fetch the next page",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_clauses call to fetch the next page"
         }
       }
     }
@@ -3443,21 +3839,24 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "playbook_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Playbook id to read in detail; omit to list playbooks"
         },
         "limit": {
           "type": "integer",
-          "description": "Max playbooks to return",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max playbooks to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_playbooks call to fetch the next page",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_playbooks call to fetch the next page"
         }
       }
     }
@@ -3475,53 +3874,61 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to list time entries in; required unless time_entry_id is given"
         },
         "time_entry_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Time entry ID to read in detail"
         },
         "entity_id": {
           "type": "string",
+          "minLength": 1,
           "description": "List only entries logged against this entity (document, folder, or task the time is billed to)"
         },
         "user_id": {
           "type": "string",
+          "minLength": 1,
           "description": "List only entries recorded by this user"
         },
         "date_from": {
           "type": "string",
-          "description": "List only entries worked on or after this ISO date (YYYY-MM-DD)",
-          "maxLength": 10
+          "format": "date",
+          "maxLength": 10,
+          "description": "List only entries worked on or after this ISO date (YYYY-MM-DD)"
         },
         "date_to": {
           "type": "string",
-          "description": "List only entries worked on or before this ISO date (YYYY-MM-DD)",
-          "maxLength": 10
+          "format": "date",
+          "maxLength": 10,
+          "description": "List only entries worked on or before this ISO date (YYYY-MM-DD)"
         },
         "status": {
-          "type": "string",
           "enum": [
             "draft",
             "approved",
             "billed",
             "written_off"
           ],
+          "type": "string",
           "description": "List only entries with this status"
         },
         "limit": {
           "type": "integer",
-          "description": "Max entries to return",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max entries to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_time_entries call to fetch the next page",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_time_entries call to fetch the next page"
         }
       }
     }
@@ -3539,26 +3946,30 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
-      "properties": {
-        "matter_id": {
-          "type": "string",
-          "description": "Matter/workspace ID to resolve the rate in"
-        },
-        "user_id": {
-          "type": "string",
-          "description": "User ID to resolve the rate for"
-        },
-        "date": {
-          "type": "string",
-          "description": "Date to resolve the rate on (ISO YYYY-MM-DD)",
-          "maxLength": 10
-        }
-      },
       "required": [
         "matter_id",
         "user_id",
         "date"
-      ]
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Matter/workspace ID to resolve the rate in"
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "User ID to resolve the rate for"
+        },
+        "date": {
+          "type": "string",
+          "format": "date",
+          "maxLength": 10,
+          "description": "Date to resolve the rate on (ISO YYYY-MM-DD)"
+        }
+      }
     }
   },
   {
@@ -3574,25 +3985,29 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "matter_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Matter/workspace ID to list invoices in; required unless invoice_id is given"
         },
         "invoice_id": {
           "type": "string",
+          "minLength": 1,
           "description": "Invoice ID to read in detail"
         },
         "limit": {
           "type": "integer",
-          "description": "Max invoices to return",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max invoices to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous list_invoices call to fetch the next page",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Opaque cursor from a previous list_invoices call to fetch the next page"
         }
       }
     }
@@ -3610,6 +4025,8 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {}
     }
   },
@@ -3626,52 +4043,59 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     },
     "inputSchema": {
       "type": "object",
+      "required": [],
+      "additionalProperties": false,
       "properties": {
         "query": {
           "type": "string",
-          "description": "Free-text search over consolidated legislation",
-          "maxLength": 256
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Free-text search over consolidated legislation"
         },
         "title": {
           "type": "string",
-          "description": "Filter search results by title text",
-          "maxLength": 256
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Filter search results by title text"
         },
         "department_code": {
           "type": "string",
-          "description": "Filter search results by department code",
-          "maxLength": 32
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "Filter search results by department code"
         },
         "legal_range_code": {
           "type": "string",
-          "description": "Filter search results by legal-range code (law rank)",
-          "maxLength": 32
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "Filter search results by legal-range code (law rank)"
         },
         "matter_code": {
           "type": "string",
-          "description": "Filter search results by subject-matter code",
-          "maxLength": 32
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "Filter search results by subject-matter code"
         },
         "date_from": {
           "type": "string",
-          "description": "Only laws published on or after this date (YYYYMMDD)",
-          "maxLength": 8
+          "maxLength": 8,
+          "description": "Only laws published on or after this date (YYYYMMDD)"
         },
         "date_to": {
           "type": "string",
-          "description": "Only laws published on or before this date (YYYYMMDD)",
-          "maxLength": 8
+          "maxLength": 8,
+          "description": "Only laws published on or before this date (YYYYMMDD)"
         },
         "limit": {
           "type": "integer",
-          "description": "Max search results to return",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max search results to return"
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous search_legislation call for the next page",
-          "maxLength": 5
+          "maxLength": 5,
+          "description": "Opaque cursor from a previous search_legislation call for the next page"
         },
         "law_id": {
           "type": "string",
@@ -3679,11 +4103,11 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "block_id": {
           "type": "string",
-          "description": "With law_id, return this text block's content instead of the whole law",
-          "maxLength": 128
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "With law_id, return this text block's content instead of the whole law"
         },
         "relation_type": {
-          "type": "string",
           "enum": [
             "modifies",
             "modifiedBy",
@@ -3691,6 +4115,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
             "derogatedBy",
             "all"
           ],
+          "type": "string",
           "description": "With law_id, list related laws of this relation kind instead of the law body"
         },
         "full_text": {

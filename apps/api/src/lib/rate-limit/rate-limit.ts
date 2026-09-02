@@ -34,9 +34,17 @@ export type RateLimitGenerator = (
   server: RequestIpServer | null,
 ) => MaybePromise<string>;
 
+/**
+ * Body served with a 429. A string goes out as `text/plain`; an object is
+ * serialized as JSON, so a route whose clients parse every response into a
+ * protocol envelope (JSON-RPC) can answer in that envelope instead of prose.
+ */
+export type RateLimitErrorResponse = string | object;
+
 export type RateLimitOptions = {
   context: RateLimitContext;
   duration: number;
+  errorResponse?: RateLimitErrorResponse;
   generator: RateLimitGenerator;
   max: number;
   skip?: (request: Request) => MaybePromise<boolean>;
@@ -212,6 +220,7 @@ const isEarlyFailureStatus = (statusCode: number): boolean =>
 export const rateLimit = ({
   context,
   duration,
+  errorResponse = DEFAULT_RATE_LIMIT_ERROR_RESPONSE,
   generator,
   max,
   skip = () => false,
@@ -234,7 +243,7 @@ export const rateLimit = ({
     request: Request;
     server: RequestIpServer | null;
     set: RateLimitResponseSet;
-  }): Promise<string | undefined> => {
+  }): Promise<RateLimitErrorResponse | undefined> => {
     if (await skip(request)) {
       requestState.set(request, { type: "skipped" });
       return undefined;
@@ -264,7 +273,7 @@ export const rateLimit = ({
     if (exceeded) {
       requestState.set(request, { type: "limited" });
       set.status = 429;
-      return DEFAULT_RATE_LIMIT_ERROR_RESPONSE;
+      return errorResponse;
     }
 
     requestState.set(
@@ -352,10 +361,16 @@ export const rateLimit = ({
           for (const [name, value] of Object.entries(set.headers)) {
             headers.set(name, String(value));
           }
-          return new Response(rateLimitResponse, {
-            headers,
-            status: 429,
-          });
+          // This branch builds the Response itself, so it owns the
+          // content-type Elysia would otherwise derive from the return value.
+          const isJson = typeof rateLimitResponse !== "string";
+          if (isJson) {
+            headers.set("content-type", "application/json");
+          }
+          return new Response(
+            isJson ? JSON.stringify(rateLimitResponse) : rateLimitResponse,
+            { headers, status: 429 },
+          );
         }
       }
       return undefined;

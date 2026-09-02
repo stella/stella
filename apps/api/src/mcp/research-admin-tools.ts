@@ -46,13 +46,9 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
-  confirmProp,
   ensureActiveWorkspace,
-  enumProp,
   errorResult,
   internalFailureResult,
-  intProp,
-  stringProp,
   structuredErrorResult,
   toolDataResult,
   validationErrorResult,
@@ -201,166 +197,120 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   scope: "stella:admin_read",
 });
 
-export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
-  {
-    annotations: {
-      title: "Search legislation",
-      readOnlyHint: true,
-      openWorldHint: true,
-    },
-    description:
-      "Search and read Spanish consolidated legislation from the BOE. In " +
-      "search mode, pass query (free text) and/or filters (title, " +
-      "department_code, legal_range_code, matter_code, date_from/date_to as " +
-      "YYYYMMDD); at least one filter is required. In read mode, pass law_id " +
-      "(e.g. BOE-A-1889-4763) to return the law with its block structure; add " +
-      "full_text to include the consolidated text, block_id to return one " +
-      "text block, or relation_type to list related laws instead. Returns " +
-      "public statutory data.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        query: stringProp("Free-text search over consolidated legislation", {
-          maxLength: 256,
-        }),
-        title: stringProp("Filter search results by title text", {
-          maxLength: 256,
-        }),
-        department_code: stringProp(
-          "Filter search results by department code",
-          {
-            maxLength: 32,
-          },
-        ),
-        legal_range_code: stringProp(
-          "Filter search results by legal-range code (law rank)",
-          { maxLength: 32 },
-        ),
-        matter_code: stringProp(
-          "Filter search results by subject-matter code",
-          {
-            maxLength: 32,
-          },
-        ),
-        date_from: stringProp(
-          "Only laws published on or after this date (YYYYMMDD)",
-          { maxLength: 8 },
-        ),
-        date_to: stringProp(
-          "Only laws published on or before this date (YYYYMMDD)",
-          { maxLength: 8 },
-        ),
-        limit: intProp("Max search results to return", { min: 1, max: 100 }),
-        cursor: stringProp(
-          "Opaque cursor from a previous search_legislation call for the next page",
-          { maxLength: 5 },
-        ),
-        law_id: stringProp(
-          "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search",
-        ),
-        block_id: stringProp(
-          "With law_id, return this text block's content instead of the whole law",
-          { maxLength: 128 },
-        ),
-        relation_type: enumProp(
-          "With law_id, list related laws of this relation kind instead of the law body",
-          RELATION_TYPE_VALUES,
-        ),
-        full_text: {
-          type: "boolean",
-          description:
-            "With law_id (no block_id/relation_type), include the consolidated full text",
-        },
-      },
-    },
-    access: "read",
-    anonymized: { exposure: "passthrough" },
-    feature: "FEATURE_PUBLIC_LAW",
-    name: "search_legislation",
-    scope: "stella:read",
-  },
-  LIST_AUDIT_LOG_TOOL_DEFINITION,
-  {
-    description:
-      "Manage organization members and non-secret settings. Member actions " +
-      "require matter_id and user_id. update_org_settings controls matter " +
-      "numbering, prompt caching, and document processing. Manage provider " +
-      "secrets in the dashboard.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        action: enumProp(
-          "Administrative action to perform",
-          MANAGE_ORG_ACTIONS,
-        ),
-        matter_id: stringProp(
-          "Matter/workspace id for add_member and remove_member",
-        ),
-        user_id: stringProp("User id to add or remove for the member actions"),
-        matter_number_pattern: stringProp(
-          "Matter-number pattern (update_org_settings); send with matter_number_padding",
-          { maxLength: 128 },
-        ),
-        matter_number_padding: intProp(
-          "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern",
-          { min: 1, max: 6 },
-        ),
-        prompt_caching_enabled: {
-          type: "boolean",
-          description:
-            "Toggle AI prompt caching for the organization (update_org_settings)",
-        },
-        document_processing_mode: enumProp(
-          "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
-          DOCUMENT_PROCESSING_MODES,
-        ),
-        confirm: confirmProp(
-          "Required for the remove_member action: must be true to remove a " +
-            "member (an irreversible action). Set it only after a human user " +
-            "has approved the removal; ignored by the other actions.",
-        ),
-      },
-      required: ["action"],
-    },
-    annotations: {
-      title: "Manage organization",
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-    access: "write",
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "manage_organization",
-    scope: "stella:admin_write",
-  },
-] as const satisfies readonly McpToolDefinition[];
-
 // --- search_legislation -------------------------------------------------
 
 const searchLegislationArgsSchema = v.pipe(
   v.strictObject({
-    query: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
-    title: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
+    query: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(256),
+        v.description("Free-text search over consolidated legislation"),
+      ),
+    ),
+    title: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(256),
+        v.description("Filter search results by title text"),
+      ),
+    ),
     department_code: v.optional(
-      v.pipe(v.string(), v.minLength(1), v.maxLength(32)),
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(32),
+        v.description("Filter search results by department code"),
+      ),
     ),
     legal_range_code: v.optional(
-      v.pipe(v.string(), v.minLength(1), v.maxLength(32)),
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(32),
+        v.description("Filter search results by legal-range code (law rank)"),
+      ),
     ),
     matter_code: v.optional(
-      v.pipe(v.string(), v.minLength(1), v.maxLength(32)),
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(32),
+        v.description("Filter search results by subject-matter code"),
+      ),
     ),
-    date_from: v.optional(v.pipe(v.string(), v.regex(BOE_DATE))),
-    date_to: v.optional(v.pipe(v.string(), v.regex(BOE_DATE))),
+    date_from: v.optional(
+      v.pipe(
+        v.string(),
+        v.regex(BOE_DATE),
+        v.maxLength(8),
+        v.description("Only laws published on or after this date (YYYYMMDD)"),
+      ),
+    ),
+    date_to: v.optional(
+      v.pipe(
+        v.string(),
+        v.regex(BOE_DATE),
+        v.maxLength(8),
+        v.description("Only laws published on or before this date (YYYYMMDD)"),
+      ),
+    ),
     limit: v.optional(
-      v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100)),
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(100),
+        v.description("Max search results to return"),
+      ),
     ),
     cursor: v.optional(
-      v.pipe(v.string(), v.regex(BOE_OFFSET_CURSOR), v.maxLength(5)),
+      v.pipe(
+        v.string(),
+        v.regex(BOE_OFFSET_CURSOR),
+        v.maxLength(5),
+        v.description(
+          "Opaque cursor from a previous search_legislation call for the next page",
+        ),
+      ),
     ),
-    law_id: v.optional(v.pipe(v.string(), v.regex(BOE_LAW_ID))),
-    block_id: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
-    relation_type: v.optional(v.picklist(RELATION_TYPE_VALUES)),
-    full_text: v.optional(v.boolean()),
+    law_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.regex(BOE_LAW_ID),
+        v.description(
+          "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search",
+        ),
+      ),
+    ),
+    block_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(128),
+        v.description(
+          "With law_id, return this text block's content instead of the whole law",
+        ),
+      ),
+    ),
+    relation_type: v.optional(
+      v.pipe(
+        v.picklist(RELATION_TYPE_VALUES),
+        v.description(
+          "With law_id, list related laws of this relation kind instead of the law body",
+        ),
+      ),
+    ),
+    full_text: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "With law_id (no block_id/relation_type), include the consolidated full text",
+        ),
+      ),
+    ),
   }),
   // block_id, relation_type, and full_text all read a specific law.
   v.forward(
@@ -455,6 +405,34 @@ const searchLegislationArgsSchema = v.pipe(
     "Provide law_id to read a law, or at least one search filter",
   ),
 );
+
+const SEARCH_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
+  annotations: {
+    title: "Search legislation",
+    readOnlyHint: true,
+    openWorldHint: true,
+  },
+  description:
+    "Search and read Spanish consolidated legislation from the BOE. In " +
+    "search mode, pass query (free text) and/or filters (title, " +
+    "department_code, legal_range_code, matter_code, date_from/date_to as " +
+    "YYYYMMDD); at least one filter is required. In read mode, pass law_id " +
+    "(e.g. BOE-A-1889-4763) to return the law with its block structure; add " +
+    "full_text to include the consolidated text, block_id to return one " +
+    "text block, or relation_type to list related laws instead. Returns " +
+    "public statutory data.",
+  inputSchema: searchLegislationArgsSchema,
+  jsonSchemaProjectionWaiver: {
+    ignoreActions: ["regex", "partial_check"],
+    reason:
+      "BOE date/id/cursor patterns and the law_id read/search mode rules remain authoritative in the runtime schema; the wire schema only advertises type and length bounds.",
+  },
+  access: "read",
+  anonymized: { exposure: "passthrough" },
+  feature: "FEATURE_PUBLIC_LAW",
+  name: "search_legislation",
+  scope: "stella:read",
+});
 
 const handleSearchLegislationTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_LEGISLATION_PROJECTION>
@@ -627,21 +605,74 @@ const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
 
 const manageOrganizationArgsSchema = v.pipe(
   v.strictObject({
-    action: v.picklist(MANAGE_ORG_ACTIONS),
-    matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-    user_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    action: v.pipe(
+      v.picklist(MANAGE_ORG_ACTIONS),
+      v.description("Administrative action to perform"),
+    ),
+    matter_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("Matter/workspace id for add_member and remove_member"),
+      ),
+    ),
+    user_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.description("User id to add or remove for the member actions"),
+      ),
+    ),
     matter_number_pattern: v.optional(
-      v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(128),
+        v.description(
+          "Matter-number pattern (update_org_settings); send with matter_number_padding",
+        ),
+      ),
     ),
     matter_number_padding: v.optional(
-      v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(6)),
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(6),
+        v.description(
+          "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern",
+        ),
+      ),
     ),
-    prompt_caching_enabled: v.optional(v.boolean()),
-    document_processing_mode: v.optional(v.picklist(DOCUMENT_PROCESSING_MODES)),
+    prompt_caching_enabled: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "Toggle AI prompt caching for the organization (update_org_settings)",
+        ),
+      ),
+    ),
+    document_processing_mode: v.optional(
+      v.pipe(
+        v.picklist(DOCUMENT_PROCESSING_MODES),
+        v.description(
+          "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
+        ),
+      ),
+    ),
     // The CLI's --yes flow injects `confirm: true` for the destructive
     // remove_member subcommand; the strictObject would otherwise reject it.
     // Other actions accept but ignore it.
-    confirm: v.optional(v.boolean()),
+    confirm: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "Required for the remove_member action: must be true to remove a " +
+            "member (an irreversible action). Set it only after a human user " +
+            "has approved the removal; ignored by the other actions.",
+        ),
+      ),
+    ),
   }),
   // Member actions need a matter and a user.
   v.forward(
@@ -713,6 +744,29 @@ const manageOrganizationArgsSchema = v.pipe(
     "matter_number_pattern and matter_number_padding must be sent together",
   ),
 );
+
+const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
+  description:
+    "Manage organization members and non-secret settings. Member actions " +
+    "require matter_id and user_id. update_org_settings controls matter " +
+    "numbering, prompt caching, and document processing. Manage provider " +
+    "secrets in the dashboard.",
+  inputSchema: manageOrganizationArgsSchema,
+  jsonSchemaProjectionWaiver: {
+    ignoreActions: ["partial_check"],
+    reason:
+      "The action-conditional field requirements (member vs. settings fields, matter_number_pattern/padding pairing) remain authoritative in the runtime schema.",
+  },
+  annotations: {
+    title: "Manage organization",
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  access: "write",
+  anonymized: { exposure: "excluded", reason: "write" },
+  name: "manage_organization",
+  scope: "stella:admin_write",
+});
 
 const handleAddMember = async ({
   context,
@@ -859,6 +913,12 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
     updated.value satisfies ManageOrganizationSettingsPayload,
   );
 };
+
+export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
+  SEARCH_LEGISLATION_TOOL_DEFINITION,
+  LIST_AUDIT_LOG_TOOL_DEFINITION,
+  MANAGE_ORGANIZATION_TOOL_DEFINITION,
+] as const satisfies readonly McpToolDefinition[];
 
 export const RESEARCH_ADMIN_TOOL_HANDLERS = {
   search_legislation: handleSearchLegislationTool,

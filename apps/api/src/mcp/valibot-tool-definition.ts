@@ -56,9 +56,42 @@ const deriveMcpInputSchema = (
   }
 
   const { properties, ...objectSchema } = jsonSchema;
-  return properties === undefined
-    ? { ...objectSchema, type: "object" }
-    : { ...objectSchema, properties, type: "object" };
+  const projected =
+    properties === undefined
+      ? { ...objectSchema, type: "object" as const }
+      : { ...objectSchema, properties, type: "object" as const };
+  return withoutTrivialPropertyNames(projected);
+};
+
+const isSchemaRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * `v.record(v.string(), ...)` projects `propertyNames: { type: "string" }`,
+ * which every JSON object satisfies. The keyword says nothing to a caller and
+ * sits on the CLI trust boundary's deny list, so it is dropped wherever it is
+ * trivial; a non-trivial `propertyNames` (a pattern, an enum) is kept as-is.
+ */
+const withoutTrivialPropertyNames = <T>(schema: T): T => {
+  if (Array.isArray(schema)) {
+    return schema.map(withoutTrivialPropertyNames) as T;
+  }
+  if (!isSchemaRecord(schema)) {
+    return schema;
+  }
+  const { propertyNames, ...rest } = schema;
+  const keep =
+    isSchemaRecord(propertyNames) &&
+    !(
+      Object.keys(propertyNames).length === 1 &&
+      propertyNames["type"] === "string"
+    );
+  const entries = Object.entries(rest).map(([key, value]) => [
+    key,
+    withoutTrivialPropertyNames(value),
+  ]);
+  const cleaned = Object.fromEntries(entries);
+  return (keep ? { ...cleaned, propertyNames } : cleaned) as T;
 };
 
 /**

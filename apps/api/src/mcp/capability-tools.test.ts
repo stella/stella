@@ -1640,8 +1640,9 @@ describe("invoke_capability argument shape validation", () => {
     expect(error.code).toBe("validation_error");
     const issues = asTestRaw<{ path: string; message: string }[]>(error.issues);
     expect(issues.find((i) => i.path === "query")?.message).toContain(
-      "input.query",
+      "Unknown parameter: query",
     );
+    expect(error.hint).toContain("input");
     // Refused before any dispatch: nothing ran with the dropped filter.
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });

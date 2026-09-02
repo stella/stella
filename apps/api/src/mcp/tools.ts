@@ -30,6 +30,7 @@ import {
 import type {
   McpToolDefinition,
   McpToolHandler,
+  McpToolInputSchema,
   ToolScope,
 } from "@/api/mcp/tool-types";
 import {
@@ -45,6 +46,55 @@ const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>(
 const DOCUMENTS_MCP_CAPABILITY_IDS: ReadonlySet<string> = new Set(
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
 );
+
+/**
+ * Central unknown-key backstop for static tools. Every curated tool derives its
+ * advertised schema from a `v.strictObject` validator, so its handler already
+ * rejects a key the schema does not declare; this repeats the check at dispatch
+ * against the schema the client was actually shown, so a tool that ever bypasses
+ * that path cannot silently swallow a typo. Top-level only: a nested payload is
+ * the owning schema's business, and a schema that opts into `additionalProperties:
+ * true` keeps its open contract.
+ */
+export type UndeclaredArgument = {
+  key: string;
+  /** A declared key that differs only by case or underscores, if any. */
+  suggestion: string | undefined;
+};
+
+/** `matterId` and `matter_id` collapse to the same token; so do `validateOnly` and `validate_only`. */
+const argumentNameToken = (name: string): string =>
+  name.toLowerCase().replaceAll("_", "");
+
+export const findUndeclaredArguments = ({
+  args,
+  inputSchema,
+}: {
+  args: Record<string, unknown>;
+  inputSchema: McpToolInputSchema;
+}):
+  | { declared: readonly string[]; undeclared: readonly UndeclaredArgument[] }
+  | undefined => {
+  if (inputSchema.additionalProperties === true) {
+    return undefined;
+  }
+  const { properties } = inputSchema;
+  const declared = properties === undefined ? [] : Object.keys(properties);
+  const undeclared = Object.keys(args)
+    .filter((candidate) => !declared.includes(candidate))
+    .map((key) => ({
+      key,
+      suggestion: declared.find(
+        (name) => argumentNameToken(name) === argumentNameToken(key),
+      ),
+    }));
+  return undeclared.length === 0 ? undefined : { declared, undeclared };
+};
+
+const undeclaredArgumentMessage = ({ key, suggestion }: UndeclaredArgument) =>
+  suggestion === undefined
+    ? `Unknown parameter: ${key}`
+    : `Unknown parameter: ${key} (did you mean ${suggestion}?)`;
 
 export const isDocumentsMcpCapabilityAllowed = (
   args: Record<string, unknown>,
@@ -162,6 +212,25 @@ export const handleMcpToolCall = async ({
         code: "feature_disabled",
         message: "This feature is not enabled on this deployment",
         hint: "This deployment or organization has this feature turned off; it cannot be enabled from the client.",
+      }),
+    );
+  }
+
+  const unknownArgs = findUndeclaredArguments({
+    args,
+    inputSchema: staticTool.inputSchema,
+  });
+  if (unknownArgs) {
+    const keys = unknownArgs.undeclared.map((entry) => entry.key);
+    return serializeToolResult(
+      structuredErrorResult({
+        code: "validation_error",
+        message: `Unknown parameter${keys.length === 1 ? "" : "s"}: ${keys.join(", ")}`,
+        issues: unknownArgs.undeclared.map((entry) => ({
+          path: entry.key,
+          message: undeclaredArgumentMessage(entry),
+        })),
+        hint: `Remove ${keys.map((key) => `'${key}'`).join(", ")}. ${toolName} accepts only: ${unknownArgs.declared.join(", ")}.`,
       }),
     );
   }

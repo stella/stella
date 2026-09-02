@@ -786,6 +786,9 @@ const stringExample = (schema: JsonSchema): string => {
   if (format === "date-time") {
     return "2026-01-01T00:00:00.000Z";
   }
+  if (format === "uuid") {
+    return "00000000-0000-4000-8000-000000000000";
+  }
   if (format === "integer") {
     const minimum = schema["minimum"];
     return String(typeof minimum === "number" ? minimum : 0);

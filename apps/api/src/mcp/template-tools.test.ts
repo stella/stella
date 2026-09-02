@@ -14,7 +14,9 @@ import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { CONTACT_FIELDS } from "@/api/lib/template-binding/binding-sources";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -59,6 +61,51 @@ const parseToolPayload = (
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** One property of the advertised `fields` overlay item schema. */
+const fieldOverlayProperty = (schema: unknown, property: string): unknown => {
+  const properties = isRecord(schema) ? schema["properties"] : undefined;
+  const fields = isRecord(properties) ? properties["fields"] : undefined;
+  const items = isRecord(fields) ? fields["items"] : undefined;
+  const itemProperties = isRecord(items) ? items["properties"] : undefined;
+  return isRecord(itemProperties) ? itemProperties[property] : undefined;
+};
+
+/** The `field` enum of one `source` union branch. */
+const fieldEnum = (branch: unknown): unknown => {
+  const properties = isRecord(branch) ? branch["properties"] : undefined;
+  const field = isRecord(properties) ? properties["field"] : undefined;
+  return isRecord(field) ? field["enum"] : undefined;
+};
+
+/** Walks an advertised schema and records the path of every object level (at
+ *  any depth, including array items and union branches) that does not close
+ *  its property set. */
+const collectOpenObjectPaths = (
+  schema: unknown,
+  path: string,
+  open: string[],
+): void => {
+  if (!isRecord(schema)) {
+    return;
+  }
+  if (schema["type"] === "object" && schema["additionalProperties"] !== false) {
+    open.push(path);
+  }
+  const properties = schema["properties"];
+  if (isRecord(properties)) {
+    for (const [key, property] of Object.entries(properties)) {
+      collectOpenObjectPaths(property, `${path}.${key}`, open);
+    }
+  }
+  collectOpenObjectPaths(schema["items"], `${path}[]`, open);
+  const branches = schema["anyOf"];
+  if (Array.isArray(branches)) {
+    for (const [index, branch] of branches.entries()) {
+      collectOpenObjectPaths(branch, `${path}|${index}`, open);
+    }
+  }
+};
 
 // The parsed `error` object of a structured `{ error: { code, message,
 // issues? } }` validation envelope.
@@ -289,15 +336,71 @@ describe("MCP template tools", () => {
     expect(definition?.scope).toBe("stella:templates_anonymized");
   });
 
-  test("save_template's description names the marker reference resource URI", async () => {
+  test("save_template's description names both reference resource URIs", async () => {
     const saveTemplate = await getMcpToolDefinition(
       "save_template",
       createContext(),
     );
-    // The grammar itself stays in the resource: the description carries only
-    // the tool contract plus the URI an agent can read it from.
+    // The grammar and the per-property field guidance stay in the resources:
+    // the description carries only the tool contract plus the URIs an agent
+    // can read them from.
     expect(saveTemplate?.description).toContain(TEMPLATE_MARKER_REFERENCE_URI);
+    expect(saveTemplate?.description).toContain(TEMPLATE_FIELD_REFERENCE_URI);
     expect(saveTemplate?.description).not.toContain("{{@clause:");
+  });
+
+  test("list_templates' description points at the field reference instead of listing its keys", async () => {
+    const listTemplates = await getMcpToolDefinition(
+      "list_templates",
+      createContext(),
+    );
+    expect(listTemplates?.description).toContain(TEMPLATE_FIELD_REFERENCE_URI);
+    expect(listTemplates?.description).not.toContain("optionsFrom");
+  });
+
+  test("save_template advertises the fields overlay pointing at the resource", async () => {
+    const saveTemplate = await getMcpToolDefinition(
+      "save_template",
+      createContext(),
+    );
+    const fields = saveTemplate?.inputSchema.properties?.["fields"];
+    expect(isRecord(fields) ? fields["description"] : undefined).toContain(
+      TEMPLATE_FIELD_REFERENCE_URI,
+    );
+  });
+
+  test("save_template keeps the full source union and every contact field key", async () => {
+    const saveTemplate = await getMcpToolDefinition(
+      "save_template",
+      createContext(),
+    );
+    const source = fieldOverlayProperty(saveTemplate?.inputSchema, "source");
+    const branches = isRecord(source) ? source["anyOf"] : undefined;
+    expect(Array.isArray(branches) ? branches.length : 0).toBe(5);
+    // Moving the prose out must not narrow what the schema accepts: the
+    // contact branch still enumerates every built-in contact field key.
+    const contactBranch = Array.isArray(branches) ? branches.at(0) : undefined;
+    expect(fieldEnum(contactBranch)).toEqual([...CONTACT_FIELDS]);
+  });
+
+  test("every template tool schema closes its objects, bar the free-form value maps", async () => {
+    const openPaths: string[] = [];
+    for (const name of [
+      "list_templates",
+      "fill_template",
+      "save_filled_template",
+      "save_template",
+    ]) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential per-tool assertion; keeps the failing tool name obvious in test output
+      const tool = await getMcpToolDefinition(name, createContext());
+      collectOpenObjectPaths(tool?.inputSchema, name, openPaths);
+    }
+    // The two exceptions are the documented path-to-value maps, whose keys are
+    // the template's own field paths.
+    expect(openPaths.sort()).toEqual([
+      "fill_template.values",
+      "save_filled_template.values",
+    ]);
   });
 
   test("list_templates returns the org's templates", async () => {

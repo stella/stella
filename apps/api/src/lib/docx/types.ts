@@ -290,11 +290,11 @@ const fieldPathSchema = (description: string) =>
   );
 
 export const fieldPartSchema = v.strictObject({
-  key: fieldPathSchema("Part key referenced by the field format"),
-  label: v.optional(describedString("Human-readable part label")),
+  key: fieldPathSchema("Part key used in format"),
+  label: v.optional(describedString("Part label")),
   inputType: v.pipe(
     v.picklist(["text", "select"]),
-    v.description("Part input control type"),
+    v.description("Part input control"),
   ),
   options: v.optional(
     v.pipe(
@@ -302,21 +302,19 @@ export const fieldPartSchema = v.strictObject({
       v.description("Allowed values for a select part"),
     ),
   ),
-  pattern: v.optional(
-    describedString("Regex matched against the complete part value"),
-  ),
+  pattern: v.optional(describedString("Regex for the whole part value")),
 });
 
 export const fieldLookupFormatSchema = v.strictObject({
   key: v.pipe(
     v.string(),
     v.check(isLookupFormatKey, "Invalid lookup format key"),
-    v.description("Marker segment after the path: {{path.key}}"),
+    v.description("Format key, addressed as {{path.key}}"),
   ),
   template: v.pipe(
     v.string(),
     v.maxLength(LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH),
-    v.description("[token]-substituted rendering of the registry hit"),
+    v.description("[token] rendering of the registry hit"),
   ),
 });
 
@@ -330,12 +328,10 @@ export const fieldLookupSchema = v.pipe(
       v.array(fieldLookupFormatSchema),
       v.minLength(1),
       v.maxLength(LOOKUP_FORMATS_MAX),
-      v.description(
-        "Named output renderings; the first is the default for the bare marker",
-      ),
+      v.description("Named renderings; the first is the default"),
     ),
   }),
-  v.description("Who-fills = business-registry lookup"),
+  v.description("Who fills = business-registry lookup"),
 );
 
 export const fieldDateFormatSchema = v.pipe(
@@ -343,20 +339,20 @@ export const fieldDateFormatSchema = v.pipe(
     locale: v.pipe(
       v.string(),
       v.check(isPlausibleLocale, "Invalid BCP-47 locale"),
-      v.description("BCP-47 language tag, e.g. 'cs', 'de', 'pl'"),
+      v.description("BCP-47 language tag"),
     ),
     style: v.pipe(
       v.picklist(DATE_FORMAT_STYLES),
       v.description("Date rendering style"),
     ),
   }),
-  v.description("Locale-aware date rendering for a date field"),
+  v.description("Date rendering config"),
 );
 
 export const fieldValidationSchema = v.pipe(
   v.strictObject({
     required: v.optional(
-      v.pipe(v.boolean(), v.description("Whether a value is required")),
+      v.pipe(v.boolean(), v.description("Value is required")),
     ),
     minLength: v.optional(
       v.pipe(v.number(), v.finite(), v.description("Minimum string length")),
@@ -370,9 +366,7 @@ export const fieldValidationSchema = v.pipe(
     max: v.optional(
       v.pipe(v.number(), v.finite(), v.description("Maximum numeric value")),
     ),
-    pattern: v.optional(
-      describedString("Regex matched against the complete value"),
-    ),
+    pattern: v.optional(describedString("Regex for the whole value")),
     minItems: v.optional(
       v.pipe(v.number(), v.finite(), v.description("Minimum repeated items")),
     ),
@@ -441,77 +435,54 @@ const activeDerivedSourceModes = ({
 const hasCompatibleDerivedSources = (fields: DerivedSourceFields): boolean =>
   activeDerivedSourceModes(fields).length <= 1;
 
-const FIELD_SOURCE_DESCRIPTION = "Matter or contact data resolved server-side";
+const FIELD_SOURCE_DESCRIPTION = "Who fills = matter or contact data";
 
+/**
+ * Every description below is advertised in `save_template`'s `inputSchema`,
+ * which each MCP client downloads on connect, so they stay one short line that
+ * names the property's role. The per-property guidance (examples, who fills a
+ * field, the binding kinds and their keys) lives in the `template-fields`
+ * reference resource — see `mcp/template-field-reference.ts`.
+ */
 const fieldMetaObjectSchema = v.strictObject({
-  path: fieldPathSchema("Field path; must match a {{marker}} in the template"),
-  label: v.optional(describedString("Human-readable field label")),
-  hint: v.optional(
-    describedString(
-      "Short fill guidance shown to the person filling the field",
-    ),
-  ),
+  path: fieldPathSchema("Field path; must match a {{marker}}"),
+  label: v.optional(describedString("Field label")),
+  hint: v.optional(describedString("Fill hint for the person filling")),
   inputType: v.optional(
     v.pipe(v.picklist(INPUT_TYPES), v.description("Input control type")),
   ),
   options: v.optional(
     v.pipe(
       v.array(v.string()),
-      v.description("Allowed values when inputType is 'select'"),
+      v.description("Allowed values for a select field"),
     ),
   ),
   validation: v.optional(fieldValidationSchema),
-  required: v.optional(
-    v.pipe(v.boolean(), v.description("Whether a value is required")),
-  ),
-  aiPrompt: v.optional(
-    describedString(
-      "Who-fills = AI: instruction the model uses to draft the value at fill time",
-    ),
-  ),
+  required: v.optional(v.pipe(v.boolean(), v.description("Value is required"))),
+  aiPrompt: v.optional(describedString("Who fills = AI: drafting instruction")),
   aiAdapt: v.optional(
-    v.pipe(
-      v.boolean(),
-      v.description(
-        "Who-fills = Person+AI: the entered value is a stub AI rewrites per occurrence",
-      ),
-    ),
+    v.pipe(v.boolean(), v.description("Who fills = person + AI")),
   ),
   aiSeesDocument: v.optional(
-    v.pipe(
-      v.boolean(),
-      v.description("Include the rendered document in this AI field's prompt"),
-    ),
+    v.pipe(v.boolean(), v.description("AI field also sees the document")),
   ),
   parts: v.optional(
     v.pipe(
       v.array(fieldPartSchema),
       v.minLength(1),
-      v.description("Composite field parts joined by format"),
+      v.description("Composite field parts"),
     ),
   ),
-  format: v.optional(
-    describedString(
-      "Join template over composite part keys, e.g. '{{title}} {{name}}'",
-    ),
-  ),
+  format: v.optional(describedString("Join template over the part keys")),
   optionsFrom: v.optional(
-    fieldPathSchema(
-      "Dependent select: path of another field whose values supply the options",
-    ),
+    fieldPathSchema("Dependent select: source field path"),
   ),
   lookup: v.optional(fieldLookupSchema),
   source: v.optional(
     v.pipe(fieldSourceSchema, v.description(FIELD_SOURCE_DESCRIPTION)),
   ),
-  formula: v.optional(
-    describedString("Arithmetic expression derived from other fields"),
-  ),
-  condition: v.optional(
-    describedString(
-      "Boolean rule expression referenced by a {{#if field_path}} marker",
-    ),
-  ),
+  formula: v.optional(describedString("Arithmetic over other fields")),
+  condition: v.optional(describedString("Boolean rule for an {{#if}} marker")),
   conditionAst: v.optional(
     v.pipe(
       conditionNodeSchema,

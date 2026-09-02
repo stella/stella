@@ -48,10 +48,31 @@ const hasAnyKeyword = (
 ): boolean => keywords.some((keyword) => Object.hasOwn(schema, keyword));
 
 const STRING_ASSERTION_KEYWORDS = [
+  "format",
   "minLength",
   "maxLength",
   "pattern",
 ] as const;
+
+/**
+ * The `format` values the executor asserts. JSON Schema treats `format` as an
+ * annotation unless a validator opts in, so an unknown format is ignored rather
+ * than failed: the server remains the authority for anything not listed here.
+ */
+const KNOWN_STRING_FORMATS = {
+  date: (value: string) =>
+    /^\d{4}-\d{2}-\d{2}$/u.test(value) && !Number.isNaN(Date.parse(value)),
+  "date-time": (value: string) => !Number.isNaN(Date.parse(value)),
+  uuid: (value: string) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(
+      value,
+    ),
+} as const satisfies Record<string, (value: string) => boolean>;
+
+const isKnownStringFormat = (
+  format: string,
+): format is keyof typeof KNOWN_STRING_FORMATS =>
+  Object.hasOwn(KNOWN_STRING_FORMATS, format);
 const NUMBER_ASSERTION_KEYWORDS = ["minimum", "maximum"] as const;
 const ARRAY_ASSERTION_KEYWORDS = ["minItems", "maxItems", "items"] as const;
 
@@ -265,6 +286,14 @@ const validateString = (
     if (!compiled.regex.test(value)) {
       return fail(path, `string does not match pattern ${pattern}`);
     }
+  }
+  const format = schema["format"];
+  if (
+    typeof format === "string" &&
+    isKnownStringFormat(format) &&
+    !KNOWN_STRING_FORMATS[format](value)
+  ) {
+    return fail(path, `string is not a valid ${format}`);
   }
   return ok;
 };

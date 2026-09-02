@@ -85,6 +85,9 @@ const SUPPORTED_SCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
   "enum",
   "examples",
   "flags",
+  // Annotation-only per JSON Schema; the executor checks the formats it knows
+  // (`date`, `date-time`, `uuid`) and ignores the rest, see json-schema-validate.
+  "format",
   "items",
   "maxItems",
   "maxLength",

@@ -7,12 +7,8 @@ import type {
   McpToolHandler,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
-import {
-  enumProp,
-  stringProp,
-  toolDataResult,
-  validationErrorResult,
-} from "@/api/mcp/tool-utils";
+import { toolDataResult, validationErrorResult } from "@/api/mcp/tool-utils";
+import { defineValibotMcpTool } from "@/api/mcp/valibot-tool-definition";
 
 const FEEDBACK_KINDS = ["bug", "feature_request", "docs", "other"] as const;
 type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
@@ -34,8 +30,44 @@ const GITHUB_BODY_TRUNCATION_MARKER =
 const HIGH_SURROGATE_START = 55_296;
 const HIGH_SURROGATE_END = 56_319;
 
+const feedbackArgsSchema = v.strictObject({
+  kind: v.pipe(
+    v.picklist(FEEDBACK_KINDS),
+    v.description("Feedback category: bug, feature_request, docs, or other"),
+  ),
+  title: v.pipe(
+    v.string(),
+    v.trim(),
+    v.minLength(1),
+    v.maxLength(MAX_FEEDBACK_TITLE_CHARS),
+    v.description(
+      "Short one-line summary of the issue; no tenant data, ids, or secrets",
+    ),
+  ),
+  body: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(MAX_FEEDBACK_BODY_CHARS),
+    v.description(
+      "Markdown details: reproduction steps, expected vs actual behavior, " +
+        "environment. Never include tenant data, client or matter names, " +
+        "ids, or secrets; they are redacted server-side.",
+    ),
+  ),
+  channel: v.optional(
+    v.pipe(
+      v.picklist(FEEDBACK_CHANNELS),
+      v.description(
+        "Delivery channel. github returns a prefilled issue URL the human " +
+          "submits under their own GitHub account.",
+      ),
+    ),
+    "github",
+  ),
+});
+
 export const FEEDBACK_TOOL_DEFINITIONS = [
-  {
+  defineValibotMcpTool({
     description:
       "File a bug, feature request, or docs issue with the stella maintainers. " +
       "Requires explicit human approval; the tool never publishes anything on " +
@@ -45,30 +77,11 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
       "URLs, IPs are redacted). Never include tenant data, client or matter " +
       "names, ids, or secrets; describe the problem, reproduction steps, and " +
       "expected vs actual result.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        kind: enumProp(
-          "Feedback category: bug, feature_request, docs, or other",
-          FEEDBACK_KINDS,
-        ),
-        title: stringProp(
-          "Short one-line summary of the issue; no tenant data, ids, or secrets",
-          { maxLength: MAX_FEEDBACK_TITLE_CHARS },
-        ),
-        body: stringProp(
-          "Markdown details: reproduction steps, expected vs actual behavior, " +
-            "environment. Never include tenant data, client or matter names, " +
-            "ids, or secrets; they are redacted server-side.",
-          { maxLength: MAX_FEEDBACK_BODY_CHARS },
-        ),
-        channel: enumProp(
-          "Delivery channel. github returns a prefilled issue URL the human " +
-            "submits under their own GitHub account.",
-          FEEDBACK_CHANNELS,
-        ),
-      },
-      required: ["kind", "title", "body"],
+    inputSchema: feedbackArgsSchema,
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["trim"],
+      reason:
+        "Trimming is server-side normalization, not a constraint a client can express.",
     },
     annotations: {
       title: "Send feedback",
@@ -79,24 +92,8 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
     anonymized: { exposure: "excluded", reason: "write" },
     name: "send_feedback",
     scope: "stella:feedback",
-  },
+  }),
 ] as const satisfies readonly McpToolDefinition[];
-
-const feedbackArgsSchema = v.strictObject({
-  kind: v.picklist(FEEDBACK_KINDS),
-  title: v.pipe(
-    v.string(),
-    v.trim(),
-    v.minLength(1),
-    v.maxLength(MAX_FEEDBACK_TITLE_CHARS),
-  ),
-  body: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(MAX_FEEDBACK_BODY_CHARS),
-  ),
-  channel: v.optional(v.picklist(FEEDBACK_CHANNELS), "github"),
-});
 
 /**
  * Sanitized body plus a provenance footer. No user/org identifiers appear

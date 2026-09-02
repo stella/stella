@@ -591,7 +591,8 @@ export const isToolErrorResult = (
   "status" in value &&
   value.status === "error";
 
-const MAX_CURSOR_LENGTH = 512;
+/** Wire cap on an opaque pagination cursor, shared with the tool schemas. */
+export const MAX_CURSOR_LENGTH = 512;
 
 export const parseOptionalCursor = ({
   args,

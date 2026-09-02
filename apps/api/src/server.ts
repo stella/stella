@@ -56,6 +56,7 @@ import { handleMcpAppSandboxRequest } from "@/api/handlers/mcp-app-sandbox/route
 import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { handleMcpPreflightRequest } from "@/api/handlers/mcp/routes-core";
+import { createMcpTransportRateLimitOptions } from "@/api/handlers/mcp/transport-rate-limit";
 import { meRoute } from "@/api/handlers/me/routes";
 import { memoriesRoute } from "@/api/handlers/memories/routes";
 import { notificationsRoute } from "@/api/handlers/notifications/routes";
@@ -569,7 +570,14 @@ const api = new Elysia()
   .use(wellKnownRoute)
   .use(verifyRoute)
   .use(hostedUsageWebhookRoute)
-  .use(mcpRoute)
+  .use(
+    // The MCP transport paths sit at the root, outside the shared `/v1`
+    // budget, and one agent loop can otherwise issue unbounded JSON-RPC calls.
+    // The limiter's own `skip` keeps discovery and preflight unmetered.
+    new Elysia()
+      .use(rateLimit(createMcpTransportRateLimitOptions()))
+      .use(mcpRoute),
+  )
   .use(aiAutocompleteRoute)
   .use(feedbackPublicRoute)
   .use(memoriesRoute)

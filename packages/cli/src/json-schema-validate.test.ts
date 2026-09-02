@@ -580,3 +580,35 @@ describe("validateAgainstSchema (interpreted, no codegen)", () => {
     ).toBe(true);
   });
 });
+
+describe("format", () => {
+  const schema = {
+    type: "object",
+    properties: {
+      day: { type: "string", format: "date" },
+      id: { type: "string", format: "uuid" },
+      tag: { type: "string", format: "custom-annotation" },
+    },
+  } as const;
+
+  test("known formats are asserted", () => {
+    expect(validateAgainstSchema(schema, { day: "2026-09-02" }).valid).toBe(
+      true,
+    );
+    const bad = validateAgainstSchema(schema, { day: "2026-13-40" });
+    expect(bad.valid).toBe(false);
+    expect(bad.valid ? "" : bad.message).toBe("string is not a valid date");
+    expect(validateAgainstSchema(schema, { id: "not-a-uuid" }).valid).toBe(
+      false,
+    );
+    expect(
+      validateAgainstSchema(schema, {
+        id: "019fdc9d-203b-7000-868c-cf9de759a129",
+      }).valid,
+    ).toBe(true);
+  });
+
+  test("an unknown format is an annotation, not an assertion", () => {
+    expect(validateAgainstSchema(schema, { tag: "anything" }).valid).toBe(true);
+  });
+});

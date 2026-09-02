@@ -128,11 +128,9 @@ const NON_DIRECTIVE_RULES = [
     title: "Markers vs. field configuration",
     detail:
       "Markers decide only WHICH values are fillable. How each field behaves " +
-      "is set as a separate field configuration, never inside the DOCX: " +
-      "input type, select options, dependent options, date format, composite " +
-      "parts, hint, required, and who fills the field — a person (default), AI " +
-      "(aiPrompt), Person+AI (aiAdapt), a formula, or a company-register " +
-      "lookup. Configure fields over MCP via save_template's `fields` overlay.",
+      "(input type, options, validation, who fills it) is a separate field " +
+      "configuration, never inside the DOCX: pass it as save_template's " +
+      "`fields` overlay, documented in the template-fields reference resource.",
   },
 ] as const;
 

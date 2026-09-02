@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
+import { MCP_CASING_RULE, MCP_INSTRUCTIONS } from "@/api/mcp/instructions";
 import {
   ANONYMIZED_MCP_TOOL_DEFINITIONS,
   DEFAULT_MCP_TOOL_DEFINITIONS,
@@ -69,9 +70,16 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // canonical strict field-configuration contract instead of a loose object
 // approximation: measured 63_213 chars. The new ceiling retains roughly 10%
 // review headroom without weakening the provider-visible schema.
+// anonymized bumped 22_000 -> 23_403, exactly the measured growth from deriving
+// every advertised schema from its runtime validator: +609 chars of
+// `additionalProperties`, +682 of `minLength`/`format` bounds the handlers
+// already enforced, +112 of explicit empty `required` lists. Stripping those
+// three keyword classes reproduces the previous payload byte for byte, so no
+// description, enum or property grew; the default surface still fits its
+// ceiling unchanged.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
   default: 70_000,
-  anonymized: 22_000,
+  anonymized: 23_403,
 };
 
 // Longest description measured after plan 047: save_template at 724 chars
@@ -166,6 +174,17 @@ describe.each([...SURFACES])(
         collectUndescribedProperties(tool.inputSchema, tool.name, issues);
       }
       expect(issues).toEqual([]);
+    });
+
+    test("every advertised object schema states its unknown-key policy", () => {
+      const issues: string[] = [];
+      for (const tool of definitions) {
+        collectOpenObjectSchemas(tool.inputSchema, tool.name, issues);
+      }
+      expect(
+        issues,
+        `These advertised object schemas leave additionalProperties undeclared, so a client cannot tell whether a typo errors or is ignored: ${issues.join(", ")}. Derive the schema from the v.strictObject its handler parses (defineValibotMcpTool) for additionalProperties: false, or declare additionalProperties: true explicitly for a map whose keys are caller data.`,
+      ).toEqual([]);
     });
 
     test("list_* and search_* tools accept a cursor; limit implies cursor", () => {
@@ -387,6 +406,18 @@ describe("MCP registry input naming", () => {
     }
     expect(issues.sort()).toEqual(CAMEL_CASE_INPUT_PROPERTY_DEBT);
   });
+
+  // The other half of the same convention: inputs are snake_case, payloads are
+  // camelCase. Property names are enforced structurally above; the payload half
+  // cannot be, so every surface states the rule at connect time instead.
+  test("every surface states the casing rule at connect time", () => {
+    for (const [mode, instructions] of Object.entries(MCP_INSTRUCTIONS)) {
+      expect(
+        instructions,
+        `The ${mode} instructions must state the snake_case-in/camelCase-out rule`,
+      ).toContain(MCP_CASING_RULE);
+    }
+  });
 });
 
 describe("MCP static tool-set coherence", () => {
@@ -469,6 +500,54 @@ const collectUndescribedProperties = (
     }
   }
   collectUndescribedProperties(schema["items"], `${path}[]`, issues);
+};
+
+/**
+ * Walks a JSON Schema and records the path of every object schema that leaves
+ * unknown keys UNDECLARED. A client must be able to predict, from the
+ * advertised schema alone, whether a typo is rejected or swallowed; silence is
+ * the one answer it cannot act on. Three declarations are honest:
+ * `additionalProperties: false` (the default for a curated tool),
+ * `additionalProperties: { ... }` (a constrained map: every key validated), and
+ * an explicit `additionalProperties: true` for an open map whose keys are
+ * caller data, such as a template's field-path -> value map.
+ */
+const collectOpenObjectSchemas = (
+  schema: unknown,
+  path: string,
+  issues: string[],
+): void => {
+  if (!isRecord(schema)) {
+    return;
+  }
+  const isObjectSchema =
+    schema["type"] === "object" || isRecord(schema["properties"]);
+  const additionalProperties = schema["additionalProperties"];
+  const declaresUnknownKeyPolicy =
+    additionalProperties === false ||
+    additionalProperties === true ||
+    isRecord(additionalProperties);
+  if (isObjectSchema && !declaresUnknownKeyPolicy) {
+    issues.push(path);
+  }
+  if (isRecord(schema["properties"])) {
+    for (const [key, property] of Object.entries(schema["properties"])) {
+      collectOpenObjectSchemas(property, `${path}.${key}`, issues);
+    }
+  }
+  collectOpenObjectSchemas(schema["items"], `${path}[]`, issues);
+  for (const keyword of ["anyOf", "allOf", "oneOf"]) {
+    const branches = schema[keyword];
+    if (Array.isArray(branches)) {
+      for (const [index, branch] of branches.entries()) {
+        collectOpenObjectSchemas(
+          branch,
+          `${path}<${keyword}[${index}]>`,
+          issues,
+        );
+      }
+    }
+  }
 };
 
 // Advertised input property names: lowercase words joined by single

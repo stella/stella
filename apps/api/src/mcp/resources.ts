@@ -11,6 +11,10 @@ import documentUploadAppHtml from "@/api/mcp/apps/document-upload/generated/app.
 import type { McpMode } from "@/api/mcp/constants";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import {
+  buildFieldReference,
+  TEMPLATE_FIELD_REFERENCE_URI,
+} from "@/api/mcp/template-field-reference";
+import {
   buildMarkerReference,
   TEMPLATE_MARKER_REFERENCE_URI,
 } from "@/api/mcp/template-marker-reference";
@@ -81,6 +85,19 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     mimeType: "text/markdown",
     listed: true,
     read: buildMarkerReference,
+  },
+  {
+    uri: TEMPLATE_FIELD_REFERENCE_URI,
+    name: "template-fields",
+    title: "Template field configuration",
+    description:
+      "How save_template's fields overlay configures each template field: " +
+      "input types, validation, composite parts, registry lookups, contact " +
+      "and matter bindings, and who fills the field. Read this before " +
+      "passing fields.",
+    mimeType: "text/markdown",
+    listed: true,
+    read: buildFieldReference,
   },
   {
     uri: DOCUMENT_UPLOAD_APP_RESOURCE_URI,
