@@ -1,5 +1,17 @@
 # @stll/ui
 
+## 0.19.0
+
+### Minor Changes
+
+- [#2837](https://github.com/stella/stella/pull/2837) [`df70e4e`](https://github.com/stella/stella/commit/df70e4ee1031c6488686ffe82594e3cb026c5193) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the `composer` module (the composer box tokens, `ComposerStatusRow`, `ComposerPicker`, and the send-button and picker-trigger classes) and the `landing` module (`LandingLayout`, `LandingGreeting`, `LandingSection` and its rows), so every home screen and composer surface renders one shell instead of copying its classes.
+
+### Patch Changes
+
+- [#2840](https://github.com/stella/stella/pull/2840) [`b08e83e`](https://github.com/stella/stella/commit/b08e83e935a5078f2b5a771a72c5a8c13750e3d9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A folded kanban band peeks open only while a card is being dragged over it: a plain hover, a column reorder drag, or any other native drag passing over the board no longer opens it, and a board that drives its own drag-and-drop (for example dnd-kit) can now report its drag directly to open the peek instead of relying on native drag events.
+
+- [#2842](https://github.com/stella/stella/pull/2842) [`d751a9c`](https://github.com/stella/stella/commit/d751a9c92ae4f3a6d746b4141e4fe178d49bbfca) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The kanban column header takes the shared chrome row height so column tops align with the rows above them.
+
 ## 0.18.0
 
 ### Minor Changes
