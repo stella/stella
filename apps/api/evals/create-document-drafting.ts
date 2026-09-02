@@ -24,7 +24,7 @@
  *
  * Usage (from apps/api):
  *   bun run eval:create-document
- *   bun run eval:create-document -- --models claude-haiku-4-5-20251001,claude-sonnet-5
+ *   bun run eval:create-document -- --models openai::gpt-5.4-mini,anthropic::claude-sonnet-5
  *   bun run eval:create-document -- --runs 3 --task en-nda --json out.json --sources-dir out/sources
  *
  * Model ids use `provider::modelId` or a bare id resolved through the
@@ -53,9 +53,14 @@ import {
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
 
-const DEFAULT_MODELS = ["claude-haiku-4-5-20251001", "claude-sonnet-5"];
+// Provider-bound so the defaults resolve the same way whatever the instance's
+// default provider is.
+const DEFAULT_MODELS = ["openai::gpt-5.4-nano", "anthropic::claude-sonnet-5"];
 const DEFAULT_RUNS = 1;
 const MAX_OUTPUT_TOKENS = 6000;
+// A whole draft can take a minute on a slow model; a stalled provider must
+// not hang the run.
+const MODEL_REQUEST_TIMEOUT_MS = 180_000;
 
 const SYSTEM_PROMPT =
   "You are stella, a drafting assistant for lawyers. When the user asks for " +
@@ -210,6 +215,7 @@ const runModelTurn = async (
   });
   const start = performance.now();
   const stream = chat({
+    abortSignal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS),
     adapter: model.adapter,
     messages: [{ role: "user", content: prompt }],
     // The tool is client-executed in production; here nobody answers it, so
@@ -478,13 +484,20 @@ const runTask = async ({
     usage: turn.usage,
     finalText: turn.finalText,
   };
+  // A run error wins even after partial tool-call arguments: the payload is
+  // not what the model would have sent had the stream completed.
+  if (turn.error !== null) {
+    return {
+      ...base,
+      score: noCallScore("error", [turn.error]),
+      documentName: null,
+      source: turn.call?.argumentText ?? null,
+    };
+  }
   if (turn.call === null) {
     return {
       ...base,
-      score:
-        turn.error === null
-          ? noCallScore("no-call")
-          : noCallScore("error", [turn.error]),
+      score: noCallScore("no-call"),
       documentName: null,
       source: null,
     };
