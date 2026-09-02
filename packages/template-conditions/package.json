@@ -1,6 +1,6 @@
 {
   "name": "@stll/template-conditions",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A document-template marker and condition engine: {{...}} marker grammar, parse, compute, serialize, field values.",
   "keywords": [
     "condition",

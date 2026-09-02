@@ -1,5 +1,12 @@
 # @stll/template-conditions
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [[`45b076c`](https://github.com/stella/stella/commit/45b076ca5ea2c97b1534e7ee2493b0272064194b), [`67baa75`](https://github.com/stella/stella/commit/67baa75ca462fdb72ef9709e7dd3c7752a03411f)]:
+  - @stll/conditions@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes

@@ -1,5 +1,13 @@
 # @stll/conditions
 
+## 0.3.0
+
+### Minor Changes
+
+- [#2827](https://github.com/stella/stella/pull/2827) [`45b076c`](https://github.com/stella/stella/commit/45b076ca5ea2c97b1534e7ee2493b0272064194b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export `isEffectiveLeaf`, a pure structural check for whether a `compare`/`predicate` leaf compiles to a real restriction or to nothing, so every consumer that reads which leaves a filter tree keeps agrees on the same rule.
+
+- [#2819](https://github.com/stella/stella/pull/2819) [`67baa75`](https://github.com/stella/stella/commit/67baa75ca462fdb72ef9709e7dd3c7752a03411f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export `foldCondition`/`foldConditions`, a generic fold over the condition tree that owns the drop rule for a group with no surviving children, so every consumer that reads which nodes a filter compiles to agrees on the same structural semantics.
+
 ## 0.2.0
 
 ### Minor Changes
