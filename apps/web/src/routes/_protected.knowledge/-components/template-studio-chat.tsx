@@ -57,6 +57,7 @@ import type {
 } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { COMPOSER_TEXT_CLASS } from "@stll/ui/composer";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -83,7 +84,6 @@ import type {
   PersistedChatMessage,
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
-import { COMPOSER_TEXT_CLASS } from "@/components/chat/composer-control-style";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { isInputType } from "@/components/templates/template-field-manifest";
 import {

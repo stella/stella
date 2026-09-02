@@ -3,6 +3,7 @@ import { MessageSquareTextIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { COMPOSER_PICKER_TRIGGER_CLASS } from "@stll/ui/composer";
 import { CONTROL_SIZE } from "@stll/ui/control-size";
 import { Input } from "@stll/ui/input";
 import {
@@ -98,8 +99,8 @@ type PublicLawCountrySelectProps = Pick<
   PublicLawSearchProps,
   "countries" | "country" | "onCountryChange"
 > & {
-  /** `ghost` sits inside another control's row, the way the chat's pickers do. */
-  variant?: "outline" | "ghost";
+  /** `picker` sits in the status row under a composer box, as the chat's pickers do. */
+  variant?: "outline" | "picker";
 };
 
 /** The jurisdiction pill: one value, the route's, in the route's own form. */
@@ -123,11 +124,14 @@ export const PublicLawCountrySelect = ({
       <SelectTrigger
         aria-label={t("common.country")}
         className={cn(
-          "w-40",
-          variant === "ghost" &&
-            "text-muted-foreground hover:text-foreground min-h-7 w-auto min-w-0 border-transparent bg-transparent shadow-none before:shadow-none sm:min-h-7",
+          variant === "picker"
+            ? [
+                COMPOSER_PICKER_TRIGGER_CLASS,
+                "h-auto min-h-0 w-auto border-0 bg-transparent px-1.5 py-0.5 shadow-none before:hidden sm:min-h-0 [&_svg:not([class*='size-'])]:size-3",
+              ]
+            : "w-40",
         )}
-        size={variant === "ghost" ? CONTROL_SIZE.sm : CONTROL_SIZE.default}
+        size={variant === "picker" ? CONTROL_SIZE.sm : CONTROL_SIZE.default}
       >
         <SelectValue placeholder={t("common.country")} />
       </SelectTrigger>

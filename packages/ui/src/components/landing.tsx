@@ -1,12 +1,77 @@
+"use client";
+
 import type { ReactElement, ReactNode } from "react";
 
-import { BidiText } from "@stll/ui/bidi-text";
-import { cn } from "@stll/ui/utils";
+import { cn } from "../lib/utils";
+import { BidiText } from "./bidi-text";
+import { ScrollArea } from "./scroll-area";
 
 /**
- * The columns under a home's box: the chat home and the law home share one
- * geometry, so a reader who has learned one has learned the other.
+ * A home screen's one shape: a greeting and a box in the upper fold, three
+ * columns of what the reader reaches from it below. The chat home and the
+ * law home render from these, so a reader who has learned one has learned
+ * the other, and the two cannot drift apart.
  */
+
+type LandingLayoutProps = {
+  /** Header-slot actions that belong to the page rather than the fold. */
+  actions?: ReactNode | undefined;
+  /** The greeting and the box; centred in the upper fold. */
+  hero: ReactNode;
+  /** The columns; take the rest of the height and own any overflow. */
+  children: ReactNode;
+};
+
+export const LandingLayout = ({
+  actions,
+  hero,
+  children,
+}: LandingLayoutProps) => (
+  <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
+    {actions}
+    {/* The landing folds against its own width, not the viewport's: a side
+        pane can leave this column far narrower than a viewport breakpoint
+        would suggest. */}
+    <div className="@container flex min-h-0 flex-1 flex-col items-center overflow-hidden px-4">
+      {/* The box may grow past the preferred fold height; keep every one
+          of its controls reachable without making the whole page scroll. */}
+      <ScrollArea
+        className="min-h-72 w-full max-w-2xl shrink basis-[22rem]"
+        scrollFade
+      >
+        <div className="flex min-h-full w-full flex-col items-center justify-center gap-8">
+          {hero}
+        </div>
+      </ScrollArea>
+      {/* Keep the box stable while this secondary region owns any overflow
+          on short or narrow viewports. One shared viewport avoids competing
+          scroll traps between the columns. */}
+      <ScrollArea className="min-h-0 w-full flex-1" scrollFade>
+        <div className="grid w-full gap-8 pb-16 @2xl:grid-cols-3">
+          {children}
+        </div>
+      </ScrollArea>
+    </div>
+  </div>
+);
+
+type LandingGreetingProps = {
+  /** The mark in the tile: the product mark, or the section's icon. */
+  icon: ReactNode;
+  /** The one line under the tile, as the page's heading. */
+  children: ReactNode;
+};
+
+export const LandingGreeting = ({ icon, children }: LandingGreetingProps) => (
+  <div className="flex w-full flex-col items-center gap-4 text-center">
+    <div className="border-border bg-background text-foreground flex size-12 items-center justify-center rounded-lg border shadow-sm">
+      {icon}
+    </div>
+    <h1 className="text-foreground max-w-md text-center text-lg font-medium">
+      {children}
+    </h1>
+  </div>
+);
 
 /** A column's heading: an icon and an uppercase label, as a link or a trigger. */
 export const LANDING_SECTION_HEADING_CLASS =

@@ -21,6 +21,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { COMPOSER_CONTROL_BUTTON_SIZE } from "@stll/ui/composer";
 import {
   Menu,
   MenuCheckboxItem,
@@ -55,7 +56,6 @@ import {
   ChatModelOptionsMenu,
   type ComposerModelsMenuProps,
 } from "@/components/chat/chat-model-options-menu";
-import { COMPOSER_CONTROL_BUTTON_SIZE } from "@/components/chat/composer-control-style";
 import {
   COMPOSER_MENU_SHORTCUT,
   resolveComposerMenuShortcut,

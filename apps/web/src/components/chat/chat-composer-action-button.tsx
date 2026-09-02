@@ -8,9 +8,12 @@ import {
   type ChatComposerActionState,
 } from "@stll/chat/composer";
 import { Button } from "@stll/ui/button";
+import {
+  COMPOSER_CONTROL_BUTTON_SIZE,
+  COMPOSER_SEND_BUTTON_CLASS,
+} from "@stll/ui/composer";
 import { cn } from "@stll/ui/utils";
 
-import { COMPOSER_CONTROL_BUTTON_SIZE } from "@/components/chat/composer-control-style";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 
@@ -81,7 +84,7 @@ export const ChatComposerActionButton = (
         // `size-7` pins the circle to the ComposerPlusMenu trigger's
         // diameter at every breakpoint (`icon-sm` alone is 32px below
         // `sm`), so a composer row's two round ends always match.
-        "bg-foreground text-background hover:bg-foreground/90 size-7 shrink-0 rounded-full",
+        COMPOSER_SEND_BUTTON_CLASS,
         className,
         !enabled && "opacity-50",
       )}

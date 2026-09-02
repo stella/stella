@@ -1,6 +1,6 @@
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
+import { COMPOSER_PICKER_TRIGGER_CLASS } from "@stll/ui/composer";
 import { cn } from "@stll/ui/utils";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -26,10 +26,11 @@ type LawScopeTabsProps = {
 };
 
 /**
- * Which corpus an entry is meant for. The box reads identifiers from both
- * grammars under `all`, so the choice only matters for words and for an
- * identifier both grammars would claim. A jurisdiction the corpus covers on
- * one side only has nothing to choose between, and gets no tabs.
+ * Which corpus an entry is meant for, as pickers in the status row under
+ * the box. The box reads identifiers from both grammars under `all`, so the
+ * choice only matters for words and for an identifier both grammars would
+ * claim. A jurisdiction the corpus covers on one side only has nothing to
+ * choose between, and gets no pickers.
  */
 export const LawScopeTabs = ({
   corpora,
@@ -50,27 +51,24 @@ export const LawScopeTabs = ({
   return (
     <div
       aria-label={t("lawHome.scopeLabel")}
-      className="border-border/70 bg-muted/30 inline-flex items-center gap-0.5 rounded-md border p-0.5"
+      className="flex items-center gap-0.5"
       role="group"
     >
       {scopes.map((option) => {
         const isActive = option === scope;
         return (
-          <Button
+          <button
             aria-pressed={isActive}
             className={cn(
-              "text-muted-foreground h-7 rounded-[4px] px-2.5 text-xs",
-              isActive &&
-                "bg-background text-foreground ring-border/80 hover:bg-background hover:text-foreground shadow-xs ring-1",
+              COMPOSER_PICKER_TRIGGER_CLASS,
+              isActive && "text-foreground bg-accent",
             )}
             key={option}
             onClick={() => onScopeChange(option)}
-            size="sm"
             type="button"
-            variant="ghost"
           >
             {t(SCOPE_LABEL_KEYS[option])}
-          </Button>
+          </button>
         );
       })}
     </div>
