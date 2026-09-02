@@ -243,13 +243,30 @@ export const KanbanColumn = ({
     onChangeColor?.(value);
   };
 
+  // Drag-over emphasis reads the column's own colour when it has one, so the
+  // frame that says "drop here" carries the same identity as the swatch
+  // instead of a generic highlight; a colourless column keeps that generic
+  // highlight unchanged.
+  const isColumnActive = isFileDragOver || isEntityDragOver;
+  const restingBackground = colorBg
+    ? `color-mix(in srgb, ${colorBg} 50%, transparent)`
+    : undefined;
+  const activeAccentBackground =
+    isColumnActive && color
+      ? `color-mix(in srgb, ${color} 22%, var(--background))`
+      : undefined;
+  const activeAccentRing =
+    isColumnActive && color
+      ? `0 0 0 2px color-mix(in srgb, ${color} 55%, transparent)`
+      : undefined;
+  const columnBackground = activeAccentBackground ?? restingBackground;
+
   return (
     <div
       className={cn(
         "group/column relative flex w-[300px] max-w-[320px] min-w-[280px] shrink-0 flex-col rounded-lg transition-[opacity,background-color,outline-color]",
         !colorBg && "bg-muted/50",
-        (isFileDragOver || isEntityDragOver) &&
-          "bg-primary/5 ring-primary/50 ring-2",
+        isColumnActive && !color && "bg-primary/5 ring-primary/50 ring-2",
         isDragging && "opacity-40",
       )}
       // A stable hook for the card drag-over state that does not depend on
@@ -257,9 +274,14 @@ export const KanbanColumn = ({
       data-drag-over={isEntityDragOver ? "true" : "false"}
       ref={columnRef}
       style={
-        colorBg
+        columnBackground || activeAccentRing
           ? {
-              backgroundColor: `color-mix(in srgb, ${colorBg} 50%, transparent)`,
+              ...(columnBackground
+                ? { backgroundColor: columnBackground }
+                : undefined),
+              ...(activeAccentRing
+                ? { boxShadow: activeAccentRing }
+                : undefined),
             }
           : undefined
       }
