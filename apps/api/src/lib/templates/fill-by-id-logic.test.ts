@@ -96,21 +96,26 @@ describe("fillByIdLogic required fields", () => {
       );
 
       expect(Result.isError(result)).toBe(true);
-      if (Result.isError(result)) {
-        expect(HandlerError.is(result.error) && result.error.status).toBe(400);
-        expect(result.error.message).toContain("Governing law");
-        // The message alone loses each field's input type/options; the
-        // structured detail must carry the full rejection so a client can
-        // render the right control per field and retry with all of them.
-        expect(result.error.requiredFields).toEqual([
-          {
-            path: "governing_law",
-            label: "Governing law",
-            inputType: "text",
-            options: null,
-          },
-        ]);
+      if (!Result.isError(result)) {
+        throw new TypeError("Expected the fill to be rejected");
       }
+      expect(HandlerError.is(result.error)).toBe(true);
+      if (!HandlerError.is(result.error)) {
+        throw new TypeError("Expected a HandlerError rejection");
+      }
+      expect(result.error.status).toBe(400);
+      expect(result.error.message).toContain("Governing law");
+      // The message alone loses each field's input type/options; the
+      // structured detail must carry the full rejection so a client can
+      // render the right control per field and retry with all of them.
+      expect(result.error.requiredFields).toEqual([
+        {
+          path: "governing_law",
+          label: "Governing law",
+          inputType: "text",
+          options: null,
+        },
+      ]);
     } finally {
       fakeS3.stop();
     }

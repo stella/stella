@@ -3,7 +3,6 @@ import { t } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { templateFills } from "@/api/db/schema";
-import { isTemplateOutputValid } from "@/api/handlers/templates/validate-template-output";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -33,6 +32,7 @@ import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { containsNull } from "@/api/lib/templates/template-data";
 import { assertTemplateFillUsage } from "@/api/lib/templates/template-fill-usage";
 import { collectMissingRequiredFields } from "@/api/lib/templates/template-optional-defaults";
+import { isTemplateOutputValid } from "@/api/lib/templates/validate-template-output";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
