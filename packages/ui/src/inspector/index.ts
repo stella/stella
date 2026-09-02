@@ -31,6 +31,8 @@ export {
   InspectorTitle,
 } from "./chrome";
 export { InspectorDock } from "./dock";
+export { entityTabGlyph, InspectorEntityTab } from "./entity-tab";
+export { InspectorFacetBar } from "./facet-bar";
 export {
   InspectorTab,
   InspectorTabList,
