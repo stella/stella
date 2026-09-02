@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.1.5
+
+### Patch Changes
+
+- [#2775](https://github.com/stella/stella/pull/2775) [`adf4b33`](https://github.com/stella/stella/commit/adf4b33d155ab13aecb35cdf8c8a444850214afb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer Claude Fable 5.1 with its upstream rates, 1M context window, and generated capabilities.
+
 ## 0.1.4
 
 ### Patch Changes

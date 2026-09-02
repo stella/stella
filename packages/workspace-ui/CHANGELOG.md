@@ -1,5 +1,13 @@
 # @stll/workspace-ui
 
+## 0.6.3
+
+### Patch Changes
+
+- [#2706](https://github.com/stella/stella/pull/2706) [`6dd0e90`](https://github.com/stella/stella/commit/6dd0e90c14e0fc39d15783c78a605b61f1e8a8ba) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update TanStack Table to 9.2.3, preserving filter metadata and parent-first flattened rows for hierarchical tables.
+- Updated dependencies [[`0aeaa0f`](https://github.com/stella/stella/commit/0aeaa0f1fab5c562d153dce4338e2c039afb86b6)]:
+  - @stll/ui@0.16.1
+
 ## 0.6.2
 
 ### Patch Changes
