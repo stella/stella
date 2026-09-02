@@ -57,7 +57,7 @@
     "@better-auth/api-key": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
     "@elysia/cors": "^1.4.2",
-    "@firecrawl/anydoc": "0.2.3",
+    "@firecrawl/anydoc": "0.2.4",
     "@google/genai": "^2.19.0",
     "@hyzyla/pdfium": "2.1.13",
     "@jitl/quickjs-wasmfile-release-asyncify": "0.32.0",
