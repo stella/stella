@@ -24,8 +24,34 @@ import {
 
 const parseString = (input: string): string => input;
 
-const optionalStringFlag = (brief: string) =>
-  ({ brief, kind: "parsed", optional: true, parse: parseString }) as const;
+/**
+ * The exact shape stricli's `ParsedFlagParameter` wants for a required vs. an
+ * optional string flag (`kind: "parsed"` literal, `optional` literal or
+ * absent). Written out by hand — rather than left for `buildCommand` to
+ * infer through `as const` — because `uploadSpecificFlags` below is exported,
+ * and an exported const's initializer must carry an explicit type under
+ * `isolatedDeclarations`; `optionalStringFlag`'s call sites feed straight
+ * into it, so its return type needs the same treatment.
+ */
+type RequiredStringFlagSpec = {
+  readonly brief: string;
+  readonly kind: "parsed";
+  readonly parse: (input: string) => string;
+};
+
+type OptionalStringFlagSpec = {
+  readonly brief: string;
+  readonly kind: "parsed";
+  readonly optional: true;
+  readonly parse: (input: string) => string;
+};
+
+const optionalStringFlag = (brief: string): OptionalStringFlagSpec => ({
+  brief,
+  kind: "parsed",
+  optional: true,
+  parse: parseString,
+});
 
 type UploadFlags = CommonFlagValues & {
   readonly entityId: string | undefined;
@@ -75,7 +101,15 @@ const renderNestedFailure = ({
  * instead of hand-typed prose that could silently drift from it. A flag here
  * is required unless it carries `optional: true` (see `optionalStringFlag`).
  */
-export const uploadSpecificFlags = {
+export const uploadSpecificFlags: {
+  readonly file: RequiredStringFlagSpec;
+  readonly matterId: RequiredStringFlagSpec;
+  readonly propertyId: OptionalStringFlagSpec;
+  readonly parentId: OptionalStringFlagSpec;
+  readonly entityId: OptionalStringFlagSpec;
+  readonly name: OptionalStringFlagSpec;
+  readonly mimeType: OptionalStringFlagSpec;
+} = {
   file: {
     brief: "Local file path to upload",
     kind: "parsed",
@@ -99,7 +133,7 @@ export const uploadSpecificFlags = {
   mimeType: optionalStringFlag(
     "MIME type override; by default it is inferred from the standard extension database",
   ),
-} as const;
+};
 
 export const uploadCommand: Command<Context> = buildCommand<
   UploadFlags,
