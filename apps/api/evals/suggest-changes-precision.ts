@@ -416,41 +416,48 @@ const runModelTurn = async ({
     () => abortController.abort(),
     MODEL_REQUEST_TIMEOUT_MS,
   );
-  const stream = chat({
-    abortController,
-    adapter: model.adapter,
-    messages: [{ role: "user", content: request }],
-    agentLoopStrategy: maxIterations(MAX_ITERATIONS),
-    ...systemPromptsPatch({ caching, model, system }),
-    modelOptions: mergeGenerationOptions({
-      caching,
-      model,
-      maxOutputTokens: MAX_OUTPUT_TOKENS,
-      serviceTier: "standard",
-      temperature: 0,
-    }),
-    tools,
-  });
-
   let finalText = "";
   let usage: TokenUsage | null = null;
-  let error: string | null = null;
-  for await (const chunk of stream) {
-    if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
-      finalText += chunk.delta;
-      continue;
+  let turnError: string | null = null;
+  // `chat()` or its stream can reject mid-turn (adapter error, dropped
+  // connection); this boundary must still report an "error" turn and
+  // always clear the abort timer.
+  try {
+    const stream = chat({
+      abortController,
+      adapter: model.adapter,
+      messages: [{ role: "user", content: request }],
+      agentLoopStrategy: maxIterations(MAX_ITERATIONS),
+      ...systemPromptsPatch({ caching, model, system }),
+      modelOptions: mergeGenerationOptions({
+        caching,
+        model,
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
+        serviceTier: "standard",
+        temperature: 0,
+      }),
+      tools,
+    });
+    for await (const chunk of stream) {
+      if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
+        finalText += chunk.delta;
+        continue;
+      }
+      if (chunk.type === EventType.RUN_ERROR) {
+        turnError = chunk.message;
+        continue;
+      }
+      if (chunk.type === EventType.RUN_FINISHED) {
+        usage = tokenUsageFromRunFinishedChunk(chunk) ?? null;
+      }
     }
-    if (chunk.type === EventType.RUN_ERROR) {
-      error = chunk.message;
-      continue;
-    }
-    if (chunk.type === EventType.RUN_FINISHED) {
-      usage = tokenUsageFromRunFinishedChunk(chunk) ?? null;
-    }
+  } catch (error: unknown) {
+    turnError = error instanceof Error ? error.message : String(error);
+  } finally {
+    clearTimeout(abortTimer);
   }
-  clearTimeout(abortTimer);
   return {
-    error,
+    error: turnError,
     finalText,
     latencyMs: Math.round(performance.now() - start),
     usage,
