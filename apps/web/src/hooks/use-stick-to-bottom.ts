@@ -108,6 +108,14 @@ export const useStickToBottom = () => {
     }
 
     scrollElementRef.current = el;
+    // The escape state belongs to the scroll element, not the provider. The
+    // provider outlives a thread switch (the chat page keeps one instance
+    // across `/chat/$threadId` navigations, and its composer reads this
+    // context), so a freshly mounted viewport must start pinned; otherwise
+    // a scroll-up in the previous thread would carry over and the new
+    // transcript would land wherever the old scroll offset happened to be.
+    userScrolledUp.current = false;
+    programmaticScroll.current = false;
     let lastScrollTop = el.scrollTop;
 
     const onScroll = () => {

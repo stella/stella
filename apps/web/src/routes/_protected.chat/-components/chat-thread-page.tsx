@@ -646,7 +646,14 @@ export const ChatThreadPage = ({
           */}
             <ChatForkedFromBanner forkProvenance={data.forkProvenance} />
             <ChatThreadScrollSurface containerRef={pageContainerRef}>
-              <Conversation className="@container isolate min-h-0">
+              {/* Keyed per thread so the viewport remounts and lands pinned
+                to the bottom on every thread switch (a fork lands here from
+                a scrolled-up source thread). The scroll provider above stays
+                mounted: the composer block reads its context. */}
+              <Conversation
+                className="@container isolate min-h-0"
+                key={threadRef.threadId}
+              >
                 <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-[calc(var(--composer-block-h,7rem)+1.5rem)]">
                   {messages.length === 0 && !isGenerating && !error ? (
                     <div className="m-auto w-full max-w-md px-4">
@@ -687,7 +694,6 @@ export const ChatThreadPage = ({
                       <ChatThreadRecap
                         activeOrganizationId={activeOrganizationId}
                         isGenerating={isGenerating}
-                        key={threadRef.threadId}
                         lastActivityAt={data.lastActivityAt}
                         lastMessageId={messages.at(-1)?.id ?? null}
                         lastMessageRole={messages.at(-1)?.role ?? null}
