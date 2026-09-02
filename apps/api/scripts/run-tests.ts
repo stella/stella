@@ -22,7 +22,10 @@ import {
 import { partitionRunnerArguments, selectTestPaths } from "./test-path-filters";
 
 const PROPERTY_FLAG = "--property";
-const TEST_FILE_GLOB = "src/**/*.test.{ts,tsx}";
+// `evals/` carries only its own colocated unit tests (e.g.
+// `evals/lib/model-turn.test.ts`), never the eval scripts themselves, which
+// call paid models and run on demand.
+const TEST_FILE_GLOB = "{src,evals}/**/*.test.{ts,tsx}";
 // Non-test helper modules live here; some install a module mock at import.
 const TEST_HELPER_GLOB = "src/tests/**/*.ts";
 const MODULE_MOCK_PATTERN = /\bmock\.module\s*\(/u;

@@ -52,7 +52,8 @@ import {
   systemPromptsPatch,
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
-import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
+
+import { runEvalModelTurn } from "./lib/model-turn";
 
 // A bare id resolves through whichever configured provider rates it (GPT
 // models may come from OpenAI or OpenRouter); Claude ids are pinned to
@@ -410,58 +411,32 @@ const runModelTurn = async ({
     scopeKey: null,
   });
   const system = `${SYSTEM_PROMPT}\nEditable DOCX blocks:\n\`\`\`json\n${renderEditableBlocks(snapshot)}\n\`\`\``;
-  const start = performance.now();
-  const abortController = new AbortController();
-  const abortTimer = setTimeout(
-    () => abortController.abort(),
-    MODEL_REQUEST_TIMEOUT_MS,
-  );
   let finalText = "";
-  let usage: TokenUsage | null = null;
-  let turnError: string | null = null;
-  // `chat()` or its stream can reject mid-turn (adapter error, dropped
-  // connection); this boundary must still report an "error" turn and
-  // always clear the abort timer.
-  try {
-    const stream = chat({
-      abortController,
-      adapter: model.adapter,
-      messages: [{ role: "user", content: request }],
-      agentLoopStrategy: maxIterations(MAX_ITERATIONS),
-      ...systemPromptsPatch({ caching, model, system }),
-      modelOptions: mergeGenerationOptions({
-        caching,
-        model,
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
-        serviceTier: "standard",
-        temperature: 0,
+  const { error, latencyMs, usage } = await runEvalModelTurn({
+    timeoutMs: MODEL_REQUEST_TIMEOUT_MS,
+    chat: (abortController) =>
+      chat({
+        abortController,
+        adapter: model.adapter,
+        messages: [{ role: "user", content: request }],
+        agentLoopStrategy: maxIterations(MAX_ITERATIONS),
+        ...systemPromptsPatch({ caching, model, system }),
+        modelOptions: mergeGenerationOptions({
+          caching,
+          model,
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
+          serviceTier: "standard",
+          temperature: 0,
+        }),
+        tools,
       }),
-      tools,
-    });
-    for await (const chunk of stream) {
+    onChunk: (chunk) => {
       if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
         finalText += chunk.delta;
-        continue;
       }
-      if (chunk.type === EventType.RUN_ERROR) {
-        turnError = chunk.message;
-        continue;
-      }
-      if (chunk.type === EventType.RUN_FINISHED) {
-        usage = tokenUsageFromRunFinishedChunk(chunk) ?? null;
-      }
-    }
-  } catch (error: unknown) {
-    turnError = error instanceof Error ? error.message : String(error);
-  } finally {
-    clearTimeout(abortTimer);
-  }
-  return {
-    error: turnError,
-    finalText,
-    latencyMs: Math.round(performance.now() - start),
-    usage,
-  };
+    },
+  });
+  return { error, finalText, latencyMs, usage };
 };
 
 type SuggestChangesFacts = {
