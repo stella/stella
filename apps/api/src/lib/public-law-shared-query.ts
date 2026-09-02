@@ -7,6 +7,8 @@ export const PUBLIC_LAW_SHARED_QUERY = {
   caseLawDocumentContext: "case-law.document-context",
   caseLawLanguageAlternates: "case-law.language-alternates",
   caseLawNonRedistributableSources: "case-law.non-redistributable-sources",
+  legislationNonRedistributableSources:
+    "legislation.non-redistributable-sources",
 } as const;
 
 export type PublicLawSharedQuery =

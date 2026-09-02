@@ -23,6 +23,7 @@
 
 import { DAY_IN_MS } from "@stll/time";
 
+import { courtWeightFromMap } from "@/api/handlers/case-law/court-weights";
 import type {
   CourtWeightEntry,
   CourtWeightMap,
@@ -36,79 +37,20 @@ import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
 /** Average (Julian) year, used for citation-age decay. A duration. */
 const MS_PER_YEAR = 365.25 * DAY_IN_MS;
 
-// -- Legacy fallback tiers -----------------------------------------------
-
-/**
- * Hardcoded fallback used when the database table has not
- * been seeded yet. Prefer `loadCourtWeights()` in production.
- */
-const LEGACY_COURT_TIERS: CourtWeightEntry[] = [
-  {
-    weight: 4,
-    tier: 4,
-    tierLabel: "constitutional",
-    pattern: /ústavní soud|ústavný súd/iu,
-  },
-  {
-    weight: 3,
-    tier: 3,
-    tierLabel: "supreme",
-    pattern: /nejvyšší|najvyšší/iu,
-  },
-  {
-    weight: 2,
-    tier: 2,
-    tierLabel: "regional",
-    pattern: /vrchní soud|krajský soud|městský soud|krajský súd/iu,
-  },
-];
-
 const DEFAULT_WEIGHT = 1;
 
 // -- Court weight lookup -------------------------------------------------
 
 /**
- * Return the authority weight for a court name.
- *
- * When `weightMap` is provided, uses the database-driven
- * weights. Otherwise falls back to the legacy hardcoded list.
+ * The authority weight of a court name under the seeded weights: the given
+ * country's entries first, then any country's, else the default. The map is
+ * the database's; there is no built-in list to fall back to.
  */
 export const courtWeight = (
   court: string,
-  weightMap?: CourtWeightMap,
+  weightMap: CourtWeightMap,
   country?: string,
-): number => {
-  if (weightMap) {
-    // Check country-specific entries first.
-    if (country) {
-      const entries = weightMap.get(country);
-      if (entries) {
-        for (const e of entries) {
-          if (e.pattern.test(court)) {
-            return e.weight;
-          }
-        }
-      }
-    }
-    // Fallback: check all countries.
-    for (const entries of weightMap.values()) {
-      for (const e of entries) {
-        if (e.pattern.test(court)) {
-          return e.weight;
-        }
-      }
-    }
-    return DEFAULT_WEIGHT;
-  }
-
-  // Legacy path (no map loaded).
-  for (const tier of LEGACY_COURT_TIERS) {
-    if (tier.pattern.test(court)) {
-      return tier.weight;
-    }
-  }
-  return DEFAULT_WEIGHT;
-};
+): number => courtWeightFromMap(weightMap, court, country).weight;
 
 // -- Recency decay -------------------------------------------------------
 
@@ -169,8 +111,8 @@ export type CitationInput = {
  */
 export const weightedCitationSum = (
   citations: CitationInput[],
-  now: Date = new Date(),
-  weightMap?: CourtWeightMap,
+  now: Date,
+  weightMap: CourtWeightMap,
 ): number => {
   let sum = 0;
   for (const c of citations) {
@@ -191,8 +133,8 @@ export const weightedCitationSum = (
  */
 export const citationScore = (
   citations: CitationInput[],
-  now: Date = new Date(),
-  weightMap?: CourtWeightMap,
+  now: Date,
+  weightMap: CourtWeightMap,
 ): number => Math.log(1 + weightedCitationSum(citations, now, weightMap));
 
 // -- SQL fragments -------------------------------------------------------
@@ -215,18 +157,15 @@ export const polarityWeightSql = (polarityColumn: string): string => {
 };
 
 /**
- * Build a SQL CASE expression for court weights.
- *
- * When `entries` is provided, generates from database-driven
- * weights. Otherwise uses the legacy hardcoded list.
+ * The SQL CASE expression for court weights, rendered from the seeded
+ * entries (highest tier first, so the first matching branch is the rank).
+ * No entries renders a bare `ELSE`: every court weighs the default.
  */
 export const courtWeightSql = (
   courtColumn: string,
-  entries?: CourtWeightEntry[],
+  entries: readonly CourtWeightEntry[],
 ): string => {
-  const source = entries ?? LEGACY_COURT_TIERS;
-
-  const cases = source
+  const cases = entries
     .map((e) => {
       const src = e.pattern.source.replace(/'/gu, "''");
       return `WHEN ${courtColumn} ~* '${src}' THEN ${e.weight}`;

@@ -94,7 +94,7 @@ export type CitationContributionOptions = {
   aliases: CitationContributionAliases;
   /** The instant the batch is evaluated at. */
   now: SQL;
-  courtWeightEntries?: CourtWeightEntry[] | undefined;
+  courtWeightEntries: readonly CourtWeightEntry[];
 };
 
 /**
@@ -187,7 +187,7 @@ export type CitationAuthorityBatchOptions = {
    * needs no cursor and resumes wherever it was interrupted.
    */
   window: CitationAuthoritySweepWindow;
-  courtWeightEntries?: CourtWeightEntry[] | undefined;
+  courtWeightEntries: readonly CourtWeightEntry[];
   /** Defaults to `citationContributionWeight`. */
   contributionWeight?: CitationContributionWeight | undefined;
 };

@@ -17,6 +17,10 @@ import {
   readProvisionHistoryHandler,
 } from "@/api/handlers/legislation/provision-history";
 import {
+  legislationShelfQuerySchema,
+  readLegislationShelfHandler,
+} from "@/api/handlers/legislation/shelf";
+import {
   listStatuteVersionsHandler,
   listStatuteVersionsParamsSchema,
   listStatuteVersionsQuerySchema,
@@ -34,6 +38,23 @@ const listStatutes = createSafePublicHandler(
     const response = yield* Result.await(
       Result.tryPromise(
         async () => await listStatutesHandler(query, legislationPublicReadDb),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const readLegislationShelf = createSafePublicHandler(
+  {
+    mcp: { type: "internal", reason: "public_indexing" },
+    query: legislationShelfQuerySchema,
+  },
+  async function* ({ query }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readLegislationShelfHandler(query, legislationPublicReadDb),
       ),
     );
 
@@ -140,6 +161,10 @@ export const publicLegislationRoute = new Elysia({
   })
   .get("/statutes", listStatutes.handler, {
     query: listStatutes.config.query,
+  })
+  // Ahead of `/statutes/:documentId` for the same reason as `by-eli` below.
+  .get("/statutes/shelf", readLegislationShelf.handler, {
+    query: readLegislationShelf.config.query,
   })
   // Ahead of `/statutes/:documentId`, or the literal segment would be read as
   // a document id and rejected by the UUID schema.

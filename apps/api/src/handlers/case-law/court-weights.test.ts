@@ -69,17 +69,16 @@ describe("courtWeightFromMap", () => {
 });
 
 describe("flattenCourtWeightEntries", () => {
-  test("empty map → undefined (preserves courtWeightSql's legacy fallback)", () => {
-    expect(flattenCourtWeightEntries(new Map())).toBeUndefined();
+  test("empty map → no entries", () => {
+    expect(flattenCourtWeightEntries(new Map())).toEqual([]);
   });
 
   test("flattens entries across every country, sorted by tier descending", () => {
     const flattened = flattenCourtWeightEntries(buildMap());
-    expect(flattened).toBeDefined();
     expect(flattened).toHaveLength(3);
-    expect(flattened?.map((e) => e.tier)).toEqual([4, 3, 3]);
+    expect(flattened.map((e) => e.tier)).toEqual([4, 3, 3]);
     // Both country's entries are present, not just the first country's.
-    expect(flattened?.map((e) => e.tierLabel)).toContain("constitutional");
-    expect(flattened?.filter((e) => e.tierLabel === "supreme")).toHaveLength(2);
+    expect(flattened.map((e) => e.tierLabel)).toContain("constitutional");
+    expect(flattened.filter((e) => e.tierLabel === "supreme")).toHaveLength(2);
   });
 });

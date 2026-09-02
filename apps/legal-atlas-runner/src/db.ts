@@ -131,9 +131,7 @@ export const createCaseLawSource = async (
  * `withTimeout` budget: a reaped root-pool connection rejects instead of
  * hanging the citation-authority recompute loop forever.
  */
-export const loadCourtWeightEntries = async (): Promise<
-  CourtWeightEntry[] | undefined
-> =>
+export const loadCourtWeightEntries = async (): Promise<CourtWeightEntry[]> =>
   await withTimeout(loadCourtWeightEntriesForSql, {
     label: "court-weight-entries-lookup",
     timeoutMs: rootQueryTimeoutMs,

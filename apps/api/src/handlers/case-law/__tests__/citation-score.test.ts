@@ -8,56 +8,47 @@ import {
   recencyFactor,
   weightedCitationSum,
 } from "@/api/handlers/case-law/citation-score";
+import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
+import { flattenCourtWeightEntries } from "@/api/handlers/case-law/court-weights";
 import {
   POLARITIES,
   POLARITY,
   POLARITY_AUTHORITY_WEIGHT,
 } from "@/api/handlers/case-law/polarity/consts";
 
+/** The seeded weights, as production reads them from the migrated table. */
+const SEED_MAP = courtWeightMapFromSeed();
+
 describe("courtWeight", () => {
-  test("constitutional court → tier 4", () => {
-    expect(courtWeight("Ústavní soud")).toBe(4);
+  test("constitutional courts carry the seeded top weight", () => {
+    expect(courtWeight("Ústavní soud", SEED_MAP, "CZE")).toBe(10);
+    expect(courtWeight("Ústavný súd SR", SEED_MAP, "SVK")).toBe(10);
   });
 
-  test("slovak constitutional court → tier 4", () => {
-    expect(courtWeight("Ústavný súd SR")).toBe(4);
+  test("supreme courts, including the administrative one, share a weight", () => {
+    expect(courtWeight("Nejvyšší soud", SEED_MAP, "CZE")).toBe(8);
+    expect(courtWeight("Nejvyšší správní soud", SEED_MAP, "CZE")).toBe(8);
+    expect(courtWeight("Najvyšší súd SR", SEED_MAP, "SVK")).toBe(8);
   });
 
-  test("supreme court → tier 3", () => {
-    expect(courtWeight("Nejvyšší soud")).toBe(3);
+  test("regional, municipal and high courts share the regional weight", () => {
+    expect(courtWeight("Krajský soud v Brně", SEED_MAP, "CZE")).toBe(4);
+    expect(courtWeight("Městský soud v Praze", SEED_MAP, "CZE")).toBe(4);
+    expect(courtWeight("Vrchní soud v Praze", SEED_MAP, "CZE")).toBe(4);
   });
 
-  test("supreme admin court → tier 3", () => {
-    expect(courtWeight("Nejvyšší správní soud")).toBe(3);
+  test("district and unknown courts weigh the default", () => {
+    expect(courtWeight("Okresní soud v Ostravě", SEED_MAP, "CZE")).toBe(1);
+    expect(courtWeight("Random Court", SEED_MAP)).toBe(1);
   });
 
-  test("slovak supreme court → tier 3", () => {
-    expect(courtWeight("Najvyšší súd SR")).toBe(3);
-  });
-
-  test("regional court → tier 2", () => {
-    expect(courtWeight("Krajský soud v Brně")).toBe(2);
-  });
-
-  test("municipal court → tier 2", () => {
-    expect(courtWeight("Městský soud v Praze")).toBe(2);
-  });
-
-  test("high court → tier 2", () => {
-    expect(courtWeight("Vrchní soud v Praze")).toBe(2);
-  });
-
-  test("district court → tier 1 (default)", () => {
-    expect(courtWeight("Okresní soud v Ostravě")).toBe(1);
-  });
-
-  test("unknown court → tier 1 (default)", () => {
-    expect(courtWeight("Random Court")).toBe(1);
+  test("a court name is matched across jurisdictions when no country is given", () => {
+    expect(courtWeight("Sąd Najwyższy", SEED_MAP)).toBe(8);
   });
 
   test("case insensitive matching", () => {
-    expect(courtWeight("ÚSTAVNÍ SOUD")).toBe(4);
-    expect(courtWeight("nejvyšší soud")).toBe(3);
+    expect(courtWeight("ÚSTAVNÍ SOUD", SEED_MAP, "CZE")).toBe(10);
+    expect(courtWeight("nejvyšší soud", SEED_MAP, "CZE")).toBe(8);
   });
 });
 
@@ -100,7 +91,7 @@ describe("weightedCitationSum", () => {
   const now = new Date("2025-01-01");
 
   test("empty citations → 0", () => {
-    expect(weightedCitationSum([], now)).toBe(0);
+    expect(weightedCitationSum([], now, SEED_MAP)).toBe(0);
   });
 
   test("single recent supreme citation", () => {
@@ -112,9 +103,10 @@ describe("weightedCitationSum", () => {
         },
       ],
       now,
+      SEED_MAP,
     );
-    // courtWeight=3, recency≈1 → ~3
-    expect(sum).toBeCloseTo(3, 0);
+    // courtWeight=8, recency≈1 → ~8
+    expect(sum).toBeCloseTo(8, 0);
   });
 
   test("accumulates multiple citations", () => {
@@ -130,9 +122,10 @@ describe("weightedCitationSum", () => {
         },
       ],
       now,
+      SEED_MAP,
     );
-    // 3*1 + 2*0.5 = 4
-    expect(sum).toBeCloseTo(4, 0);
+    // 8*1 + 4*0.5 = 10
+    expect(sum).toBeCloseTo(10, 0);
   });
 });
 
@@ -140,7 +133,7 @@ describe("citationScore", () => {
   const now = new Date("2025-01-01");
 
   test("no citations → 0", () => {
-    expect(citationScore([], now)).toBe(0);
+    expect(citationScore([], now, SEED_MAP)).toBe(0);
   });
 
   test("positive with citations", () => {
@@ -152,6 +145,7 @@ describe("citationScore", () => {
         },
       ],
       now,
+      SEED_MAP,
     );
     expect(score).toBeGreaterThan(0);
   });
@@ -163,8 +157,8 @@ describe("citationScore", () => {
         citingDate: "2024-06-01",
       }));
 
-    const ten = citationScore(makeCitations(10), now);
-    const hundred = citationScore(makeCitations(100), now);
+    const ten = citationScore(makeCitations(10), now, SEED_MAP);
+    const hundred = citationScore(makeCitations(100), now, SEED_MAP);
 
     expect(hundred).toBeGreaterThan(ten);
     expect(hundred / ten).toBeLessThan(4);
@@ -180,6 +174,7 @@ describe("citationScore", () => {
         citingDate: "2024-11-01",
       })),
       now,
+      SEED_MAP,
     );
 
     const stale = citationScore(
@@ -188,6 +183,7 @@ describe("citationScore", () => {
         citingDate: "2005-01-01",
       })),
       now,
+      SEED_MAP,
     );
 
     expect(stillCited).toBeGreaterThan(stale);
@@ -217,14 +213,14 @@ describe("citationScore", () => {
       (a, b) => a + b,
       0,
     );
-    expect(weightedCitationSum(landmarkCitations, now)).toBeCloseTo(
+    expect(weightedCitationSum(landmarkCitations, now, SEED_MAP)).toBeCloseTo(
       10 * harmonic,
       1,
     );
-    expect(weightedCitationSum(recentCitations, now)).toBe(8);
+    expect(weightedCitationSum(recentCitations, now, SEED_MAP)).toBe(8);
 
-    const landmark = citationScore(landmarkCitations, now);
-    const recent = citationScore(recentCitations, now);
+    const landmark = citationScore(landmarkCitations, now, SEED_MAP);
+    const recent = citationScore(recentCitations, now, SEED_MAP);
 
     expect(landmark).toBeCloseTo(Math.log(1 + 10 * harmonic), 3);
     expect(recent).toBeCloseTo(Math.log(9), 12);
@@ -238,15 +234,27 @@ describe("citationScore", () => {
     const withDecisionAgeDivisor = (sum: number, yearsOld: number): number =>
       Math.log(1 + sum / Math.max(yearsOld, 1));
     expect(
-      withDecisionAgeDivisor(weightedCitationSum(landmarkCitations, now), 20),
+      withDecisionAgeDivisor(
+        weightedCitationSum(landmarkCitations, now, SEED_MAP),
+        20,
+      ),
     ).toBeCloseTo(1.03, 2);
     expect(
-      withDecisionAgeDivisor(weightedCitationSum(recentCitations, now), 2),
+      withDecisionAgeDivisor(
+        weightedCitationSum(recentCitations, now, SEED_MAP),
+        2,
+      ),
     ).toBeCloseTo(1.61, 2);
     expect(
-      withDecisionAgeDivisor(weightedCitationSum(landmarkCitations, now), 20),
+      withDecisionAgeDivisor(
+        weightedCitationSum(landmarkCitations, now, SEED_MAP),
+        20,
+      ),
     ).toBeLessThan(
-      withDecisionAgeDivisor(weightedCitationSum(recentCitations, now), 2),
+      withDecisionAgeDivisor(
+        weightedCitationSum(recentCitations, now, SEED_MAP),
+        2,
+      ),
     );
   });
 });
@@ -262,30 +270,36 @@ describe("polarity weighting", () => {
     const followed = weightedCitationSum(
       [citation, { ...citation, polarity: POLARITY.POSITIVE }],
       now,
+      SEED_MAP,
     );
     const overruled = weightedCitationSum(
       [citation, { ...citation, polarity: POLARITY.NEGATIVE }],
       now,
+      SEED_MAP,
     );
 
     // The two sets differ in one citation's polarity and nothing else, so the
     // gap is that citation's whole contribution: court weight times decay.
-    const contribution = weightedCitationSum([citation], now);
+    const contribution = weightedCitationSum([citation], now, SEED_MAP);
     expect(followed - overruled).toBeCloseTo(contribution, 12);
     expect(overruled).toBeCloseTo(contribution, 12);
     expect(
-      citationScore([{ ...citation, polarity: POLARITY.NEGATIVE }], now),
+      citationScore(
+        [{ ...citation, polarity: POLARITY.NEGATIVE }],
+        now,
+        SEED_MAP,
+      ),
     ).toBe(0);
   });
 
   test("an unclassified citation weighs the same as a classified neutral one", () => {
     // The corpus is mostly unclassified; scoring null below `neutral` would
     // rank classification coverage instead of case law.
-    const unclassified = weightedCitationSum([citation], now);
+    const unclassified = weightedCitationSum([citation], now, SEED_MAP);
     for (const polarity of POLARITIES) {
       if (polarity !== POLARITY.NEGATIVE) {
         expect(
-          weightedCitationSum([{ ...citation, polarity }], now),
+          weightedCitationSum([{ ...citation, polarity }], now, SEED_MAP),
         ).toBeCloseTo(unclassified, 12);
       }
     }
@@ -318,24 +332,19 @@ describe("polarityWeightSql", () => {
 // ASCII-safe fragments (weights, structure) rather than matching the
 // escaped accented text verbatim.
 describe("courtWeightSql", () => {
-  test("with no entries, falls back to the legacy hardcoded tiers (3 CZ/SK patterns)", () => {
-    const generated = courtWeightSql("citing_d.court");
-    expect(generated.match(/WHEN citing_d\.court ~\*/gu)).toHaveLength(3);
-    expect(generated).toContain("THEN 4");
-    expect(generated).toContain("THEN 3");
-    expect(generated).toContain("THEN 2");
+  test("renders one branch per seeded entry, highest tier first", () => {
+    const entries = flattenCourtWeightEntries(SEED_MAP);
+    const generated = courtWeightSql("citing_d.court", entries);
+    expect(generated.match(/WHEN citing_d\.court ~\*/gu)).toHaveLength(
+      entries.length,
+    );
+    expect(generated.indexOf("THEN 10")).toBeLessThan(
+      generated.indexOf("THEN 4"),
+    );
     expect(generated).toContain("ELSE 1 END");
   });
 
-  test("with explicit undefined entries, falls back to the legacy tiers", () => {
-    // Mirrors what callers pass when the DB-seeded table is empty
-    // (loadCourtWeightEntriesForSql() resolves to undefined, not []).
-    const withUndefined = courtWeightSql("citing_d.court", undefined);
-    const withOmitted = courtWeightSql("citing_d.court");
-    expect(withUndefined).toBe(withOmitted);
-  });
-
-  test("with DB-seeded entries, generates from those instead of the legacy tiers", () => {
+  test("generates from the given entries alone", () => {
     const generated = courtWeightSql("citing_d.court", [
       {
         pattern: /verfassungsgerichtshof/iu,
@@ -356,17 +365,13 @@ describe("courtWeightSql", () => {
     expect(generated).toContain("oberster gerichtshof");
     expect(generated).toContain("THEN 8");
     expect(generated.match(/WHEN citing_d\.court ~\*/gu)).toHaveLength(2);
-    // The legacy CZ/SK-only tiers must not leak in alongside the seeded
-    // entries (legacy tier 2's ASCII-safe fragment is distinctive).
+    // Nothing but the given entries: no other jurisdiction's pattern leaks in.
     expect(generated).not.toContain("krajsk");
     expect(generated).toContain("ELSE 1 END");
   });
 
-  test("an empty entries array does NOT fall back (documents the footgun that callers must avoid)", () => {
-    // courtWeightSql only falls back on `undefined`/omitted entries; an
-    // empty array is passed through verbatim. Callers that load from the
-    // DB must convert an empty result to `undefined`
-    // (see court-weights.test.ts: flattenCourtWeightEntries).
+  test("no entries renders the default weight for every court", () => {
+    // An unmigrated table: nothing to rank by, and nothing to fall back to.
     const generated = courtWeightSql("citing_d.court", []);
     expect(generated).toBe("CASE \n      ELSE 1 END");
   });

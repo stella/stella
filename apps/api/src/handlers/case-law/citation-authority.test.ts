@@ -18,6 +18,8 @@ import {
   citationScore,
   type CitationInput,
 } from "@/api/handlers/case-law/citation-score";
+import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
+import { flattenCourtWeightEntries } from "@/api/handlers/case-law/court-weights";
 import type { CourtWeightEntry } from "@/api/handlers/case-law/court-weights";
 import { POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -63,6 +65,10 @@ const regionalCitingId = createSafeId<"caseLawDecision">();
 const overrulingCitingId = createSafeId<"caseLawDecision">();
 const orphanId = createSafeId<"caseLawDecision">();
 
+/** The seeded weights, as the migrated table gives them to production. */
+const SEED_MAP = courtWeightMapFromSeed();
+const SEED_ENTRIES = flattenCourtWeightEntries(SEED_MAP);
+
 type SweepOptions = {
   now?: Date;
   courtWeightEntries?: CourtWeightEntry[];
@@ -93,9 +99,7 @@ const sweep = async (
           ...(options.contributionWeight
             ? { contributionWeight: options.contributionWeight }
             : {}),
-          ...(options.courtWeightEntries
-            ? { courtWeightEntries: options.courtWeightEntries }
-            : {}),
+          courtWeightEntries: options.courtWeightEntries ?? SEED_ENTRIES,
         }),
     );
     if (batch.recomputed === 0) {
@@ -247,7 +251,7 @@ const snapshot = async (): Promise<
     .orderBy(caseLawDecisions.id);
 
 test("materialized authority equals citationScore() at the same instant", async () => {
-  const expected = citationScore([...CITED_CITATIONS], NOW);
+  const expected = citationScore([...CITED_CITATIONS], NOW, SEED_MAP);
 
   // Not vacuous: the negative treatment is a citation the sum has to drop.
   // Ignoring polarity would score the same fixture higher, so a SQL twin that
@@ -258,6 +262,7 @@ test("materialized authority equals citationScore() at the same instant", async 
       citingDate,
     })),
     NOW,
+    SEED_MAP,
   );
   expect(ignoringPolarity).toBeGreaterThan(expected);
 
@@ -276,15 +281,17 @@ test("a decision with no incoming citations has zero authority", async () => {
 });
 
 test("a more authoritative citing court yields higher authority", async () => {
-  // Same single citation, supreme (weight 3) vs regional (weight 2),
+  // Same single citation, supreme (weight 8) vs regional (weight 4),
   // controlling for date so only court weight differs.
   const supreme = citationScore(
     [{ citingCourt: "Nejvyšší soud", citingDate: "2024-01-01" }],
     NOW,
+    SEED_MAP,
   );
   const regional = citationScore(
     [{ citingCourt: "Krajský soud", citingDate: "2024-01-01" }],
     NOW,
+    SEED_MAP,
   );
   expect(supreme).toBeGreaterThan(regional);
 });
@@ -367,6 +374,7 @@ test("a resumed sweep skips what the interrupted one finished", async () => {
       await recomputeCitationAuthorityBatch(tx, {
         limit: 2,
         window: { type: "pinned", at: NOW },
+        courtWeightEntries: SEED_ENTRIES,
       }),
   );
   expect(interrupted.recomputed).toBe(2);
@@ -393,6 +401,7 @@ test("a rolling window converges even when the host clock runs ahead", async () 
         await recomputeCitationAuthorityBatch(tx, {
           limit: 1000,
           window: { type: "olderThan", ms: 60_000 },
+          courtWeightEntries: SEED_ENTRIES,
         }),
     );
     turnsTaken = turn;
@@ -451,7 +460,7 @@ test("the contribution weight is a seam the aggregate reads through", async () =
   await markAllDue();
   await sweep(1000, { contributionWeight: doubled });
 
-  const expected = citationScore([...CITED_CITATIONS], NOW);
+  const expected = citationScore([...CITED_CITATIONS], NOW, SEED_MAP);
   // score = ln(1 + sum), so doubling the sum is ln(1 + 2*(e^score - 1)).
   expect(await authorityOf(citedId)).toBeCloseTo(
     Math.log(1 + 2 * (Math.E ** expected - 1)),
@@ -519,13 +528,14 @@ test("courtWeightEntries option drives the SQL instead of the legacy tiers", asy
     ),
     9,
   );
-  // Sanity check: under the legacy fallback this citing court matches no
+  // Sanity check: under the seeded weights this citing court matches no
   // pattern (DEFAULT_WEIGHT=1), which differs from the custom weight (7)
   // enough that the assertion above cannot pass by coincidence.
   expect(await authorityOf(customCitedId)).not.toBeCloseTo(
     citationScore(
       [{ citingCourt: "Custom Seeded Court", citingDate: "2025-01-01" }],
       NOW,
+      SEED_MAP,
     ),
     2,
   );
