@@ -175,6 +175,58 @@ describe("view entity kinds", () => {
       ]),
     ).toEqual(["task"]);
   });
+
+  test("a dropped group inside an or does not widen its siblings", () => {
+    // The query compiler discards the empty group and keeps the task
+    // restriction, so the view can only return tasks.
+    expect(
+      viewEntityKinds([
+        {
+          type: "group",
+          combinator: "or",
+          children: [
+            {
+              type: "predicate",
+              operand: { type: "kind" },
+              op: "in",
+              value: ["task"],
+            },
+            { type: "group", combinator: "or", children: [] },
+          ],
+        },
+      ]),
+    ).toEqual(["task"]);
+  });
+
+  test("a group whose children are all dropped is dropped itself", () => {
+    expect(
+      viewEntityKinds([
+        {
+          type: "group",
+          combinator: "and",
+          children: [
+            { type: "group", combinator: "or", children: [] },
+            { type: "group", combinator: "and", negated: true, children: [] },
+          ],
+        },
+      ]),
+    ).toBeNull();
+    expect(
+      viewEntityKinds([
+        {
+          type: "predicate",
+          operand: { type: "kind" },
+          op: "in",
+          value: ["message"],
+        },
+        {
+          type: "group",
+          combinator: "or",
+          children: [{ type: "group", combinator: "or", children: [] }],
+        },
+      ]),
+    ).toEqual(["message"]);
+  });
 });
 
 describe("List view detection", () => {
