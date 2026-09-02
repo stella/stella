@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
+import { seededCourtWeightEntries } from "@/api/handlers/case-law/court-weight-seed";
 import { selectShelfCourts } from "@/api/handlers/case-law/decisions/shelf-courts";
 
-const seed = courtWeightMapFromSeed();
-const entriesFor = (country: string) => seed.get(country) ?? [];
+const entriesFor = seededCourtWeightEntries;
 
 describe("selectShelfCourts", () => {
   test("ranks apex courts above the busiest court and drops the rest", () => {

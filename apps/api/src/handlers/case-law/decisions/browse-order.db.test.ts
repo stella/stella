@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
+import { seededCourtWeightEntries } from "@/api/handlers/case-law/court-weight-seed";
 import { readLatestDecisionsByCourt } from "@/api/handlers/case-law/decisions/latest";
 import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
 import { readShelfCourts } from "@/api/handlers/case-law/decisions/shelf-courts";
@@ -257,7 +257,7 @@ test(
     const courts = await readShelfCourts({
       caseLawDb,
       country: "SVK",
-      entries: courtWeightMapFromSeed().get("SVK") ?? [],
+      entries: seededCourtWeightEntries("SVK"),
     });
     // Six district judgments outnumber the one supreme judgment; rank wins.
     expect(courts).toEqual([

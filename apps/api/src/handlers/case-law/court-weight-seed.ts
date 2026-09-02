@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type {
   CourtWeightEntry,
   CourtWeightMap,
@@ -155,6 +157,17 @@ export const courtWeightMapFromSeed = (): CourtWeightMap => {
   return map;
 };
 
+/**
+ * One jurisdiction's seeded entries, highest tier first. A jurisdiction the
+ * seed does not declare is a programming error here, never an empty rank: a
+ * caller handed no entries would exercise the unseeded path by accident.
+ */
+export const seededCourtWeightEntries = (
+  country: string,
+): readonly CourtWeightEntry[] =>
+  courtWeightMapFromSeed().get(country) ??
+  panic(`court weight seed declares no jurisdiction ${country}`);
+
 /** Every seeded entry across jurisdictions, highest tier first. */
 export const courtWeightEntriesFromSeed = (): CourtWeightEntry[] =>
   [...courtWeightMapFromSeed().values()]
@@ -163,26 +176,43 @@ export const courtWeightEntriesFromSeed = (): CourtWeightEntry[] =>
 
 const sqlLiteral = (value: string): string => `'${value.replace(/'/gu, "''")}'`;
 
+const SEED_COLUMNS =
+  '"country", "court_pattern", "tier", "tier_label", "weight"';
+
 /**
- * The `INSERT` the seed migration carries, rendered from the list above so
- * the two cannot drift: the migration file is compared to this text.
+ * The statements the seed migration carries, rendered from the list above
+ * so the two cannot drift: the migration file is compared to this text.
+ * The declaration is the table's only writer, so a row an older seed left
+ * at another rank is brought to the declared one before the missing rows
+ * are added; both statements read the VALUES list, never a table.
  */
-export const courtWeightSeedInsertSql = (): string => {
-  const values = COURT_WEIGHT_SEED.map(
-    (row) =>
-      `  (${sqlLiteral(row.country)}, ${sqlLiteral(row.courtPattern)}, ${String(row.tier)}, ${sqlLiteral(row.tierLabel)}, ${String(row.weight)})`,
-  ).join(",\n");
+export const courtWeightSeedSql = (): string => {
+  const values = [
+    "(VALUES",
+    COURT_WEIGHT_SEED.map(
+      (row) =>
+        `  (${sqlLiteral(row.country)}, ${sqlLiteral(row.courtPattern)}, ${String(row.tier)}, ${sqlLiteral(row.tierLabel)}, ${String(row.weight)})`,
+    ).join(",\n"),
+    `) AS v (${SEED_COLUMNS})`,
+  ].join("\n");
+  const update = [
+    'UPDATE "case_law_court_weights" w',
+    'SET "tier" = v.tier, "tier_label" = v.tier_label, "weight" = v.weight',
+    `FROM ${values}`,
+    'WHERE w."country" = v.country AND w."court_pattern" = v.court_pattern',
+    '  AND (w."tier", w."tier_label", w."weight") IS DISTINCT FROM (v.tier, v.tier_label, v.weight);',
+  ].join("\n");
   // The arbiter is a unique index, not a named constraint, so the rows that
   // already exist are skipped by an anti-join rather than ON CONFLICT.
-  return [
-    'INSERT INTO "case_law_court_weights" ("id", "country", "court_pattern", "tier", "tier_label", "weight")',
+  const insert = [
+    "-- stella-migration-safety: reviewed insert-select - the source relation is a fourteen-row VALUES list, not a table, so the statement is bounded and instant; rollback deletes the same (country, court_pattern) keys",
+    `INSERT INTO "case_law_court_weights" ("id", ${SEED_COLUMNS})`,
     "SELECT gen_random_uuid(), v.country, v.court_pattern, v.tier, v.tier_label, v.weight",
-    "FROM (VALUES",
-    values,
-    ') AS v ("country", "court_pattern", "tier", "tier_label", "weight")',
+    `FROM ${values}`,
     "WHERE NOT EXISTS (",
     '  SELECT 1 FROM "case_law_court_weights" w',
     '  WHERE w."country" = v.country AND w."court_pattern" = v.court_pattern',
     ");",
   ].join("\n");
+  return [update, "--> statement-breakpoint", insert].join("\n");
 };

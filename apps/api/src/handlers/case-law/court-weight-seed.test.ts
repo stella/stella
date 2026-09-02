@@ -5,7 +5,8 @@ import {
   COURT_WEIGHT_SEED,
   courtWeightEntriesFromSeed,
   courtWeightMapFromSeed,
-  courtWeightSeedInsertSql,
+  courtWeightSeedSql,
+  seededCourtWeightEntries,
 } from "@/api/handlers/case-law/court-weight-seed";
 
 const MIGRATION = nodePath.resolve(
@@ -16,7 +17,7 @@ const MIGRATION = nodePath.resolve(
 describe("court weight seed", () => {
   test("the seed migration is the rendering of the declaration", async () => {
     const migration = await Bun.file(MIGRATION).text();
-    expect(migration.trimEnd().endsWith(courtWeightSeedInsertSql())).toBe(true);
+    expect(migration.trimEnd().endsWith(courtWeightSeedSql())).toBe(true);
   });
 
   test("every jurisdiction declares a constitutional and a supreme rank", () => {
@@ -61,9 +62,8 @@ describe("court weight seed", () => {
       ["EU", "Court of Justice", "constitutional"],
       ["EU", "General Court", "supreme"],
     ];
-    const map = courtWeightMapFromSeed();
     for (const [country, court, label] of stored) {
-      const entry = (map.get(country) ?? []).find((candidate) =>
+      const entry = seededCourtWeightEntries(country).find((candidate) =>
         candidate.pattern.test(court),
       );
       expect([country, court, entry?.tierLabel]).toEqual([
