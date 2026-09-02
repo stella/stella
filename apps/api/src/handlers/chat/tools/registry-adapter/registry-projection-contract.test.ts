@@ -1369,6 +1369,7 @@ const CONTRACT_CORPUS = {
           ],
           conditions: [],
           computed: [],
+          arrays: [],
         } satisfies DescribeTemplateResult);
       },
       expectRefPaths: [],

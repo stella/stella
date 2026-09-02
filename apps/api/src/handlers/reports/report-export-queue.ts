@@ -63,6 +63,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
+import type { MissingRequiredField } from "@/api/lib/templates/template-fill-service";
 import {
   fillStoredTemplateDocx,
   fillTemplateDocx,
@@ -470,6 +471,18 @@ const runExport = async ({
     await markExportFailedRow(actor, filled.error);
     return;
   }
+  if ("requiredFieldsRejection" in filled) {
+    // A report template declares a required field the report data never
+    // supplies — a template-authoring bug, not a user-correctable input.
+    const names = filled.requiredFieldsRejection.map(
+      (field) => field.label ?? field.path,
+    );
+    await markExportFailedRow(
+      actor,
+      `Report template is missing required values: ${names.join(", ")}`,
+    );
+    return;
+  }
 
   const delivery = await buildReportDelivery({
     docxBuffer: filled.buffer,
@@ -540,6 +553,7 @@ const runExport = async ({
 type FillReportResult =
   | { templateName: string; fileName: string; buffer: Buffer }
   | { error: string }
+  | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: unknown };
 
 const fillReport = async ({

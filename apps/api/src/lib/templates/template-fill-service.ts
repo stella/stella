@@ -38,6 +38,7 @@ import {
 import { resolveClauseSlots } from "@/api/lib/docx/resolve-clause-slots";
 import { readManifest } from "@/api/lib/docx/template-manifest";
 import type {
+  DiscoveredField,
   FieldDateFormat,
   FieldPart,
   InputType,
@@ -55,6 +56,7 @@ import {
 } from "./template-input-contract";
 import {
   applyOmittedOptionalPlaceholderDefaults,
+  isMissingRequiredFieldValue,
   isTemplateFieldRequired,
 } from "./template-optional-defaults";
 // Data a template is filled with: open-ended field-path → value map (paths come
@@ -70,9 +72,19 @@ type TemplateInputRejection = {
   keys: string[];
 };
 
+/** One required field the caller omitted (or left empty), returned instead of
+ *  either inventing a value or silently leaving the marker unfilled. */
+export type MissingRequiredField = {
+  path: string;
+  label: string | null;
+  inputType: InputType;
+  options: string[] | null;
+};
+
 type FillRejection<TUsageRejection> =
   | { error: string }
   | { inputRejection: TemplateInputRejection }
+  | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: TUsageRejection };
 
 const loadTemplate = async (
@@ -126,12 +138,63 @@ type DescribedField = {
   format: string | null;
 };
 
+/**
+ * A `{{#each path}}` loop discovered in the document: `path` in `values` must
+ * be an array of objects, one per `itemFieldPaths` entry, not a flat dotted
+ * key. Manifest fields for the loop's contents (e.g. `deliverables.name`,
+ * `deliverables.due_date`) still appear in `fields` individually — this group
+ * is what tells a caller those paths are array items rather than top-level
+ * scalars. Absent for a bare `{{#each}}` of primitive values (already
+ * addressed by its own array-typed field).
+ */
+type DescribedArrayGroup = {
+  path: string;
+  itemFieldPaths: string[];
+};
+
+/** Walk discovered fields (from {@link discoverTemplate}) for every
+ *  `{{#each}}` loop over object items, regardless of whether the template
+ *  also carries a manifest — manifest fields never declare the array root
+ *  itself, only its dotted item paths, so this is the only source for the
+ *  array shape. */
+const collectDescribedArrayGroups = (
+  fields: readonly DiscoveredField[],
+): DescribedArrayGroup[] => {
+  const groups: DescribedArrayGroup[] = [];
+
+  const visit = (field: DiscoveredField, parentPath: string): void => {
+    const path = parentPath === "" ? field.path : `${parentPath}.${field.path}`;
+    const itemFields = field.itemFields ?? [];
+    // A primitive-item loop (itemFields === [{ path: "value" }]) is already
+    // addressed by its own array-typed field; only an object-item loop needs
+    // this grouping to convey its shape.
+    const isObjectItemLoop =
+      itemFields.length > 0 &&
+      !(itemFields.length === 1 && itemFields.at(0)?.path === "value");
+    if (field.kind === "array" && isObjectItemLoop) {
+      groups.push({
+        path,
+        itemFieldPaths: itemFields.map((itemField) => itemField.path),
+      });
+    }
+    for (const itemField of itemFields) {
+      visit(itemField, path);
+    }
+  };
+
+  for (const field of fields) {
+    visit(field, "");
+  }
+  return groups;
+};
+
 export type DescribeTemplateResult =
   | {
       name: string;
       fields: DescribedField[];
       conditions: { name: string; expression: string }[];
       computed: { name: string; expression: string }[];
+      arrays: DescribedArrayGroup[];
     }
   | { error: string };
 
@@ -147,7 +210,11 @@ export const describeStoredTemplate = async ({
     return { error: "Template not found." };
   }
 
-  const manifest = await readManifest(loaded.buffer);
+  const [manifest, discovered] = await Promise.all([
+    readManifest(loaded.buffer),
+    discoverTemplate(loaded.buffer),
+  ]);
+  const arrays = collectDescribedArrayGroups(discovered.fields);
   if (manifest) {
     // Formula fields are derived at fill time, never user-submitted, so they
     // are reported as computed values rather than fillable fields. A boolean
@@ -155,6 +222,7 @@ export const describeStoredTemplate = async ({
     // reported in `conditions`, not as a fillable field.
     return {
       name: loaded.name,
+      arrays,
       fields: manifest.fields
         .filter(isFillableTemplateInputField)
         .map((field) => ({
@@ -193,9 +261,9 @@ export const describeStoredTemplate = async ({
   }
 
   // No manifest (a raw upload): fall back to discovered field paths.
-  const discovered = await discoverTemplate(loaded.buffer);
   return {
     name: loaded.name,
+    arrays,
     fields: discovered.fields.map((field) => ({
       path: field.path,
       label: null,
@@ -369,6 +437,25 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 
   let record: FillValues = { ...values };
 
+  // Reject before any clause/AI/lookup work runs: a required, user-entered
+  // field (not AI-fillable, not formula/condition/source-derived) that is
+  // absent or empty must never be silently invented or left as a raw
+  // `{{marker}}` in the output. Ask the caller for exactly these fields
+  // instead of guessing.
+  if (manifest) {
+    const missingRequiredFields: MissingRequiredField[] = manifest.fields
+      .filter((field) => isMissingRequiredFieldValue({ field, values: record }))
+      .map((field) => ({
+        path: field.path,
+        label: field.label ?? null,
+        inputType: field.inputType ?? "text",
+        options: field.options ?? null,
+      }));
+    if (missingRequiredFields.length > 0) {
+      return { requiredFieldsRejection: missingRequiredFields };
+    }
+  }
+
   const slots =
     templateId !== undefined ? await discoverClauseSlots(loaded.buffer) : [];
   if (templateId !== undefined && slots.length > 0) {
@@ -519,7 +606,12 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 
 export const fillTemplateDocx = async <TRejection = never>(
   options: FillDocxOptions<TRejection>,
-): Promise<FilledDocx | { error: string } | { usageRejection: TRejection }> => {
+): Promise<
+  | FilledDocx
+  | { error: string }
+  | { requiredFieldsRejection: MissingRequiredField[] }
+  | { usageRejection: TRejection }
+> => {
   const filled = await fillTemplateDocxWithPolicy({
     ...options,
     unusedValuePolicy: "allow",
@@ -555,7 +647,10 @@ export const fillStoredTemplateDocx = async <TRejection = never>({
   assertUsageAvailable,
   workspaceId,
 }: FillServiceOptions<TRejection>): Promise<
-  FilledDocx | { error: string } | { usageRejection: TRejection }
+  | FilledDocx
+  | { error: string }
+  | { requiredFieldsRejection: MissingRequiredField[] }
+  | { usageRejection: TRejection }
 > => {
   const loaded = await loadTemplate(templateId, scopedDb);
   if (!loaded) {
@@ -578,7 +673,8 @@ export const fillStoredTemplateDocx = async <TRejection = never>({
 
 export type FillTemplateResult =
   | { text: string; unmatchedPlaceholders: string[]; unusedValues: string[] }
-  | { error: string };
+  | { error: string }
+  | { requiredFieldsRejection: MissingRequiredField[] };
 
 /**
  * Fill result that carries both the rendered DOCX bytes and the assembled
@@ -622,9 +718,13 @@ const withExtractedText = async (
 
 export const fillStoredTemplateWithText = async <TRejection = never>(
   options: FillServiceOptions<TRejection>,
-): Promise<FillTemplateWithDocxResult | { usageRejection: TRejection }> => {
+): Promise<
+  | FillTemplateWithDocxResult
+  | { requiredFieldsRejection: MissingRequiredField[] }
+  | { usageRejection: TRejection }
+> => {
   const filled = await fillStoredTemplateDocx(options);
-  if ("usageRejection" in filled) {
+  if ("usageRejection" in filled || "requiredFieldsRejection" in filled) {
     return filled;
   }
   if ("error" in filled) {
@@ -639,6 +739,7 @@ export const fillStoredTemplateWithTextStrict = async <TRejection = never>(
 ): Promise<
   | FillTemplateWithDocxResult
   | { inputRejection: TemplateInputRejection }
+  | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: TRejection }
 > => {
   const loaded = await loadTemplate(options.templateId, options.scopedDb);
@@ -649,7 +750,11 @@ export const fillStoredTemplateWithTextStrict = async <TRejection = never>(
     ...options,
     source: { ...loaded, templateId: options.templateId },
   });
-  if ("usageRejection" in filled || "inputRejection" in filled) {
+  if (
+    "usageRejection" in filled ||
+    "inputRejection" in filled ||
+    "requiredFieldsRejection" in filled
+  ) {
     return filled;
   }
   if ("error" in filled) {
@@ -667,6 +772,9 @@ export const fillStoredTemplate = async (
     // Unreachable: this caller does not pass `assertUsageAvailable`, so the
     // service never returns a usage rejection (TRejection is `never`).
     panic("fillStoredTemplate received an unexpected usage rejection");
+  }
+  if ("requiredFieldsRejection" in filled) {
+    return filled;
   }
   if ("error" in filled) {
     return filled;

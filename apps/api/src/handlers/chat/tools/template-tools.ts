@@ -34,13 +34,22 @@ export const SUGGEST_TEMPLATE_FIELDS_TOOL_NAME =
 export const DESCRIBE_TEMPLATE_DESCRIPTION =
   "Describe a template's fillable fields (with any named conditions and " +
   "computed fields) so you know what values to provide before filling " +
-  "it. Pass the template id from list_templates.";
+  "it. Each field's 'required' flag marks values fill_template rejects " +
+  "when omitted (unless the field is AI-fillable); 'arrays' lists any " +
+  "{{#each}} loops, so a path grouped there is an array of objects in " +
+  "'values', not a dotted key. Pass the template id from list_templates.";
 export const FILL_TEMPLATE_DESCRIPTION =
   "Fill a template with values and return the assembled document text. " +
-  "Call describe_template first to learn the field paths. 'values' maps " +
-  'each field path to its value, e.g. {"tenant.name": "ACME Sp. z o.o.", ' +
-  '"signing_date": "2026-06-08"}. Fields configured as AI-fillable are ' +
-  "drafted automatically when you omit them. Returns the rendered text " +
+  "Call describe_template first to learn the field paths and which are " +
+  "required; when a manifest field is grouped under 'arrays' there, " +
+  "submit its array root as a list of objects (one per item), not " +
+  "dotted keys. 'values' maps each field path to its value, e.g. " +
+  '{"tenant.name": "ACME Sp. z o.o.", "signing_date": "2026-06-08"}. ' +
+  "Fields configured as AI-fillable are drafted automatically when you " +
+  "omit them. A required field that is not AI-fillable must be provided: " +
+  "omitting or emptying it rejects the fill with the exact missing " +
+  "fields instead of guessing a value or leaving a placeholder unfilled " +
+  "— ask the user for those values and retry. Returns the rendered text " +
   "plus any placeholders left unfilled.";
 
 type CreateTemplateToolsArgs = {
@@ -221,6 +230,15 @@ export const createTemplateTools = ({
         decideAiCondition,
         adaptAiValue,
       });
+      if ("requiredFieldsRejection" in result) {
+        // A required, non-AI-fillable field was omitted or empty: reject
+        // instead of inventing a value or leaving a raw {{marker}} in the
+        // document, and name exactly which fields are still needed.
+        return {
+          error: "missing_required_fields",
+          missingFields: result.requiredFieldsRejection,
+        };
+      }
       if (!("error" in result)) {
         // Record the execution (fill row + EXECUTE audit) like the REST fill
         // routes, so agent-driven fills appear in the audit trail.

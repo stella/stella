@@ -517,6 +517,7 @@ describe("MCP template tools", () => {
       ],
       conditions: [{ name: "isCorp", expression: "type == 'corp'" }],
       computed: [{ name: "total", expression: "rent * 12" }],
+      arrays: [{ path: "deliverables", itemFieldPaths: ["name", "due_date"] }],
     });
 
     const result = await handleMcpToolCall({
@@ -544,6 +545,9 @@ describe("MCP template tools", () => {
         }),
       ],
       computed: [{ name: "total", expression: "rent * 12" }],
+      // A `{{#each}}` loop over object items is surfaced separately from the
+      // flat `fields` list so a caller knows to submit it as an array.
+      arrays: [{ path: "deliverables", itemFieldPaths: ["name", "due_date"] }],
     });
   });
 
@@ -819,6 +823,37 @@ describe("MCP template tools", () => {
     expect(recordTemplateFillMock).not.toHaveBeenCalled();
   });
 
+  test("fill_template rejects a fill omitting a required, non-AI-fillable field", async () => {
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      requiredFieldsRejection: [
+        {
+          path: "governing_law",
+          label: "Governing law",
+          inputType: "select",
+          options: ["Czech", "Slovak"],
+        },
+      ],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: "t1", values: { "tenant.name": "ACME" } },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(validationEnvelope(result)).toEqual(
+      expect.objectContaining({
+        code: "validation_error",
+        message: "Missing required template values: Governing law",
+        issues: [expect.objectContaining({ path: "values.governing_law" })],
+      }),
+    );
+    // Never audited: the fill never ran (rejected before any clause/AI/lookup
+    // work), so there is nothing to record.
+    expect(recordTemplateFillMock).not.toHaveBeenCalled();
+  });
+
   test("fill_template permits intentional unused values only with an explicit override", async () => {
     fillStoredTemplateWithTextMock.mockResolvedValue({
       templateName: "Lease",
@@ -944,6 +979,41 @@ describe("MCP template tools", () => {
       unusedValues: ["unused"],
     });
     expect(JSON.stringify(parseToolPayload(result))).not.toContain("base64");
+  });
+
+  test("save_filled_template rejects a fill omitting a required, non-AI-fillable field", async () => {
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      requiredFieldsRejection: [
+        {
+          path: "governing_law",
+          label: null,
+          inputType: "text",
+          options: null,
+        },
+      ],
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: TEMPLATE_ID,
+        matter_id: "ws_1",
+        idempotency_key: "create-document-missing-required",
+        values: { "tenant.name": "ACME" },
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(validationEnvelope(result)).toEqual(
+      expect.objectContaining({
+        code: "validation_error",
+        message: "Missing required template values: governing_law",
+      }),
+    );
+    expect(createEntityFromBufferMock).not.toHaveBeenCalled();
+    expect(releaseTemplatePersistenceClaimMock).toHaveBeenCalled();
   });
 
   test("save_filled_template does not persist after its caller disconnects", async () => {

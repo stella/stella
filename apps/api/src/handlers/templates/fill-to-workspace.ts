@@ -236,6 +236,18 @@ const fillTemplateToWorkspace = createSafeHandler(
       );
     }
 
+    if ("requiredFieldsRejection" in filled) {
+      const names = filled.requiredFieldsRejection.map(
+        (field) => field.label ?? field.path,
+      );
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `Missing required template values: ${names.join(", ")}`,
+        }),
+      );
+    }
+
     const fileName = resolveDocumentFileName(body.name, filled.fileName);
 
     const created = yield* Result.await(

@@ -5,6 +5,7 @@ import { propertyConfig } from "@stll/property-testing";
 
 import {
   applyOmittedOptionalPlaceholderDefaults,
+  isMissingRequiredFieldValue,
   isTemplateFieldRequired,
 } from "./template-optional-defaults";
 
@@ -102,5 +103,95 @@ describe("optional template placeholder defaults", () => {
         values: {},
       }),
     ).toEqual({ defaultedPaths: [], values: {} });
+  });
+});
+
+describe("isMissingRequiredFieldValue", () => {
+  test("flags a required, user-entered field that is absent or empty", () => {
+    expect(
+      isMissingRequiredFieldValue({
+        field: { path: "governing_law", required: true },
+        values: {},
+      }),
+    ).toBe(true);
+    expect(
+      isMissingRequiredFieldValue({
+        field: { path: "governing_law", required: true },
+        values: { governing_law: "" },
+      }),
+    ).toBe(true);
+  });
+
+  test("does not flag a required field once a non-empty value is present", () => {
+    expect(
+      isMissingRequiredFieldValue({
+        field: { path: "governing_law", required: true },
+        values: { governing_law: "Czech" },
+      }),
+    ).toBe(false);
+  });
+
+  test("does not flag an omitted, non-required field", () => {
+    expect(
+      isMissingRequiredFieldValue({
+        field: { path: "optional_note", required: false },
+        values: {},
+      }),
+    ).toBe(false);
+  });
+
+  test("does not flag a required field the fill boundary resolves on its own: AI-fillable, formula, condition, or source", () => {
+    const derivedRequiredFields = [
+      { path: "ai", required: true, aiPrompt: "Draft the scope." },
+      { path: "formula", required: true, formula: "subtotal * tax" },
+      { path: "condition", required: true, condition: "amount > 0" },
+      {
+        path: "conditionAst",
+        required: true,
+        conditionAst: { type: "literal" },
+      },
+      {
+        path: "source",
+        required: true,
+        source: { kind: "matter", field: "reference" },
+      },
+    ];
+
+    for (const field of derivedRequiredFields) {
+      expect(isMissingRequiredFieldValue({ field, values: {} })).toBe(false);
+    }
+  });
+
+  test("property: matches required && user-entered && !aiFillable && (absent || empty)", () => {
+    fc.assert(
+      fc.property(
+        fieldPath,
+        fc.boolean(),
+        fc.boolean(),
+        fc.boolean(),
+        // undefined = the key is omitted from `values` entirely.
+        fc.option(fc.string(), { nil: undefined }),
+        (path, required, isDerived, isAiFillable, value) => {
+          const field = {
+            path,
+            required,
+            source: isDerived
+              ? { kind: "matter", field: "reference" }
+              : undefined,
+            aiPrompt: isAiFillable ? "Draft it." : undefined,
+          };
+          const values = value === undefined ? {} : { [path]: value };
+
+          const expected =
+            required &&
+            !isDerived &&
+            !isAiFillable &&
+            (value === undefined || value === "");
+
+          expect(isMissingRequiredFieldValue({ field, values })).toBe(expected);
+        },
+      ),
+      propertyConfig(),
+    );
   });
 });

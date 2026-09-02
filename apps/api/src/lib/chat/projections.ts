@@ -1536,6 +1536,17 @@ export const TEMPLATE_DESCRIBE_PROJECTION = v.strictObject({
   computed: v.array(
     v.strictObject({ name: v.string(), expression: v.string() }),
   ),
+  // Every {{#each}} loop over object items: `path` belongs in `values` as an
+  // array of objects (one per `itemFieldPaths` entry), not a flat dotted key.
+  // Manifest field entries for the loop's own contents still appear in
+  // `fields` above; this is only the array-shape annotation `fields` cannot
+  // carry on its own.
+  arrays: v.array(
+    v.strictObject({
+      path: v.string(),
+      itemFieldPaths: v.array(v.string()),
+    }),
+  ),
 });
 
 /**

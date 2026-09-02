@@ -1,6 +1,7 @@
 import { resolvePath } from "@stll/template-conditions";
 
 type TemplateFieldRequiredness = {
+  aiPrompt?: string | undefined;
   condition?: unknown;
   conditionAst?: unknown;
   formula?: unknown;
@@ -30,6 +31,37 @@ const isUserEnteredField = (field: TemplateFieldRequiredness): boolean =>
   field.condition === undefined &&
   field.conditionAst === undefined &&
   field.source === undefined;
+
+const isAiFillableField = (field: TemplateFieldRequiredness): boolean =>
+  field.aiPrompt !== undefined && field.aiPrompt !== "";
+
+/**
+ * A required field the fill boundary must reject rather than silently fill or
+ * leave blank: declared `required`, entered directly by the person filling
+ * (not formula/condition/source-derived, which resolve on their own), not
+ * AI-fillable (an omitted `aiPrompt` field is drafted, not missing), and
+ * absent or empty in the submitted values. Prevents the two invention-by-
+ * omission failure modes — a model fabricating a value it was never given, or
+ * silently leaving a `{{marker}}` unfilled — for exactly the fields where
+ * only the user can supply the answer.
+ */
+export const isMissingRequiredFieldValue = ({
+  field,
+  values,
+}: {
+  field: TemplateFieldRequiredness;
+  values: Record<string, unknown>;
+}): boolean => {
+  if (
+    !isTemplateFieldRequired(field) ||
+    !isUserEnteredField(field) ||
+    isAiFillableField(field)
+  ) {
+    return false;
+  }
+  const value = resolvePath(field.path, values);
+  return value === undefined || value === "";
+};
 
 /**
  * Give omitted optional scalar placeholders their form-equivalent empty value.
