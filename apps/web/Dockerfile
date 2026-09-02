@@ -100,6 +100,12 @@ ARG VITE_GUIDES_ENABLED=false
 ARG VITE_SELFHOST=true
 ARG VITE_TERMS_URL
 ARG VITE_WORKFLOWS_ENABLED
+# Source-map publication is an explicit build argument, not a side effect of
+# the `posthog_cli_api_key` secret: secrets are outside the layer cache key,
+# so only a plain argument keeps a cached no-publish layer from standing in
+# for a publishing build. The project id names the error-tracker project.
+ARG POSTHOG_SOURCEMAP_PUBLISH=false
+ARG POSTHOG_SOURCEMAP_PROJECT_ID
 ENV NODE_ENV=production
 ENV STELLA_VERSION=${STELLA_VERSION}
 ENV STELLA_COMMIT_SHA=${STELLA_COMMIT_SHA}
@@ -147,6 +153,16 @@ RUN VITE_API_URL="${PUBLIC_API_URL}" \
     VITE_TERMS_URL="${VITE_TERMS_URL}" \
     VITE_WORKFLOWS_ENABLED="${VITE_WORKFLOWS_ENABLED}" \
     bun --filter @stll/web build
+# Publish the hidden client source maps to the error tracker when the build
+# opts in (the chunks are injected with ids the tracker matches at capture
+# time), then drop every map so none reaches the runtime image. A build that
+# does not opt in still drops the maps.
+RUN --mount=type=secret,id=posthog_cli_api_key \
+    POSTHOG_SOURCEMAP_PUBLISH="${POSTHOG_SOURCEMAP_PUBLISH}" \
+    POSTHOG_CLI_API_KEY="$(cat /run/secrets/posthog_cli_api_key 2>/dev/null || true)" \
+    POSTHOG_CLI_HOST="${PUBLIC_POSTHOG_UI_HOST}" \
+    POSTHOG_CLI_PROJECT_ID="${POSTHOG_SOURCEMAP_PROJECT_ID}" \
+    bun apps/web/scripts/publish-sourcemaps.ts
 # Stage the workspace packages reached by externalized runtime dependencies
 # (closure derived from bun.lock) in their published dist shape. The runner
 # overlays this tree so it never resolves TypeScript source. Restore the

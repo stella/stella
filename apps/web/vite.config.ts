@@ -363,6 +363,10 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       target: "es2025",
+      // Maps are emitted for the image build to publish to the error tracker
+      // and are removed before the runtime stage; `hidden` keeps the served
+      // chunks free of a `sourceMappingURL` that browsers would request.
+      sourcemap: "hidden",
       rolldownOptions: {
         output: {
           manualChunks: (id) => {

@@ -568,6 +568,8 @@ jobs:
           release-sha: ${{ needs.resolve.outputs.release_sha }}
           target-environment: ${{ steps.target.outputs.environment }}
           posthog-key: ${{ secrets.VITE_POSTHOG_KEY }}
+          posthog-cli-api-key: ${{ secrets.POSTHOG_CLI_API_KEY }}
+          posthog-project-id: ${{ vars.POSTHOG_PROJECT_ID }}
           source-path: .release-source
           tooling-path: .workflow-source
 
