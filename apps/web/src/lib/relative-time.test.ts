@@ -9,13 +9,14 @@ import {
   test,
 } from "bun:test";
 
-import { useI18nStore } from "@/i18n/i18n-store";
+import { getFormatter, useI18nStore } from "@/i18n/i18n-store";
 
 import {
   formatContextualTimestamp,
   formatFullTimestamp,
   formatRelativeTime,
   getRelativeTimeFormatter,
+  MEDIUM_DATE_SHORT_TIME_FORMAT,
 } from "./relative-time";
 
 const NOW = new Date("2026-01-15T12:00:00.000Z");
@@ -135,13 +136,20 @@ describe("contextual timestamps", () => {
   });
 
   test("includes the date for a timestamp from another day", () => {
+    const date = new Date("2026-01-14T13:45:00.000Z");
+    let usedTodayLabel = false;
+
     expect(
       formatContextualTimestamp({
-        date: new Date("2026-01-14T13:45:00.000Z"),
+        date,
         now: NOW,
-        today: (time) => `Today, ${time}`,
+        today: () => {
+          usedTodayLabel = true;
+          return "Today";
+        },
       }),
-    ).toBe("Jan 14, 2026 at 1:45 PM");
+    ).toBe(getFormatter().dateTime(date, MEDIUM_DATE_SHORT_TIME_FORMAT));
+    expect(usedTodayLabel).toBe(false);
   });
 
   test("returns an empty string for an invalid date", () => {
