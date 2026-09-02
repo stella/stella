@@ -1035,6 +1035,14 @@ jobs:
           bun test scripts/check-migration-order.test.ts
           bun test scripts/merge-bar.test.ts
 
+      # Self-test the dead-columns reference matcher: a regression here
+      # would either silently stop flagging genuinely unreferenced columns
+      # or start flagging live ones, in both cases undermining the
+      # check:dead-columns gate in the code-quality job.
+      - name: Test dead-columns reference matching
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/check-dead-columns.test.ts
+
       # Fail PRs that change the desktop bridge surface without
       # bumping BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs.
       # See scripts/check-bridge-version.sh for rationale.
@@ -1102,6 +1110,9 @@ jobs:
             exit 0
           fi
           bun run code-check:affected -- --base "origin/$BASE_REF"
+
+      - name: Dead columns
+        run: bun run check:dead-columns
 
       - name: Result consumption
         env:

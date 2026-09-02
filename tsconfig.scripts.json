@@ -3,9 +3,21 @@
   "compilerOptions": {
     "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.scripts.json",
     "paths": {
-      "@/api/*": ["./apps/api/src/*"]
+      "@/api/*": ["./apps/api/src/*"],
+      // scripts/check-dead-columns.ts loads apps/api/src/db/schema at
+      // runtime for introspection, and its trailing type re-exports reach
+      // into apps/api/src/handlers/**. Mirror the pieces of
+      // apps/api/tsconfig.json that graph needs so it resolves the same way
+      // it does inside the API's own project: the path mapping this package
+      // needs (its own package.json isn't resolvable under Bundler
+      // resolution), and JSX for one handler-adjacent module that renders an
+      // email template.
+      "@stll/infosoud": ["./packages/infosoud/src/index.ts"]
     },
-    "types": ["bun-types"]
+    "types": ["bun-types"],
+    "jsx": "react-jsx"
   },
-  "include": ["scripts/**/*.ts"]
+  // "types" is the shared ambient-module root (asset imports like *.docx and
+  // *.wasm) that the same schema-import graph also reaches.
+  "include": ["scripts/**/*.ts", "types"]
 }
