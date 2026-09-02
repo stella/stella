@@ -804,6 +804,51 @@ describe("TanStack AI text generation", () => {
     expect(caught).toMatchObject({ status: 502 });
   });
 
+  test("rejects a cancelled run instead of returning its truncated text", async () => {
+    capturedChatOptions.length = 0;
+    const controller = new AbortController();
+    nextChatResult = createCancelledTextStream(["half an ans"], controller);
+
+    const caught = await generateTextForTestModel({
+      abortSignal: controller.signal,
+      caching: noCaching,
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: "Rewrite it.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toMatchObject({ status: 502 });
+  });
+
+  test("keeps the output of a run that finished before the cancellation", async () => {
+    capturedChatOptions.length = 0;
+    const controller = new AbortController();
+    nextChatResult = createCancelledTextStream(
+      ["a whole answer"],
+      controller,
+      "stop",
+    );
+
+    const output = await generateTextForTestModel({
+      abortSignal: controller.signal,
+      caching: noCaching,
+      organizationId: null,
+      orgAIConfig: null,
+      prompt: "Rewrite it.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+    });
+
+    expect(output).toBe("a whole answer");
+  });
+
   test("collects text through the error-aware streaming boundary", async () => {
     capturedChatOptions.length = 0;
     nextChatResult = createTextStream(["hello", " world"]);
@@ -1040,6 +1085,19 @@ const createTextStream = async function* (
       finishReason,
     };
   }
+};
+
+// The chat loop's cancellation shape: it breaks out of the provider stream on
+// the next chunk, so the deltas already collected stand, no `RUN_FINISHED`
+// follows, and nothing is thrown. Pass a finish reason to model the run
+// reporting completion before the signal fires.
+const createCancelledTextStream = async function* (
+  deltas: string[],
+  controller: AbortController,
+  finishReason?: "stop" | "length",
+) {
+  yield* createTextStream(deltas, finishReason);
+  controller.abort();
 };
 
 const createRunErrorStream = async function* ({

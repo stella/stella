@@ -175,6 +175,19 @@ export const generateTanStackTextForRole = async (
     output += delta;
   }
 
+  // A cancelled run leaves the chat loop through a plain `break` on the next
+  // chunk: no `RUN_FINISHED`, nothing thrown. Whether a cancellation instead
+  // surfaces as an adapter rejection races the provider stream, so without
+  // this the same cancellation is sometimes an error and sometimes a truncated
+  // answer the caller cannot tell from a whole one. A reported finish reason
+  // separates the two: that run completed before the signal fired.
+  if (state.finishReason === null && options.abortSignal?.aborted === true) {
+    throw new HandlerError({
+      status: 502,
+      message: "AI generation was cancelled",
+    });
+  }
+
   if (
     options.finishPolicy === "require-complete" &&
     state.finishReason !== "stop"
