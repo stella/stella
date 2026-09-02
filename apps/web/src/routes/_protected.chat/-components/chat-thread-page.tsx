@@ -738,7 +738,11 @@ export const ChatThreadPage = ({
                 className="absolute inset-x-0 bottom-0 z-20 mx-auto w-full max-w-5xl px-4"
                 ref={composerBlockRef}
               >
+                {/* `px-2` mirrors the tray's `p-2` so the first chip starts on
+                  the composer box's leading edge; `pb-0` because the tray
+                  padding alone separates the chips from the box here. */}
                 <SuggestedFollowupChips
+                  className="px-2 pb-0"
                   onSelect={(prompt) => {
                     controller.setContent(prompt);
                     detached(

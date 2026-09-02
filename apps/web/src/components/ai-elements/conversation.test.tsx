@@ -43,12 +43,12 @@ test("keeps the inline scroll action outside the suggested-followups group", () 
   const suggestedGroupIndex = html.indexOf(
     `aria-label="${messages.chat.suggestedFollowupsLabel}"`,
   );
+  // The group holds only buttons and spans, so its first closing `</div>`
+  // is the group's own.
+  const suggestedGroupEnd = html.indexOf("</div>", suggestedGroupIndex);
 
-  expect(scrollActionIndex).toBeGreaterThan(-1);
-  expect(suggestedGroupIndex).toBeGreaterThan(scrollActionIndex);
-  expect(html.slice(suggestedGroupIndex)).not.toContain(
-    'aria-label="التمرير إلى الأسفل"',
-  );
+  expect(suggestedGroupIndex).toBeGreaterThan(-1);
+  expect(scrollActionIndex).toBeGreaterThan(suggestedGroupEnd);
 });
 
 test("reserves the inline scroll slot while the action is hidden", () => {

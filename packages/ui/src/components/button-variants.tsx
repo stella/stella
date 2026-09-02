@@ -20,6 +20,11 @@ export const buttonVariants = cva(
     },
     variants: {
       size: {
+        // Pill chip beside a composer: pinned to the composer's round
+        // controls (28px at every breakpoint) so a chip row and the control
+        // row below it share one scale. Text stays `text-xs` at every
+        // breakpoint for the same reason.
+        chip: "h-7 gap-1.5 rounded-full px-2.5 text-xs before:rounded-full sm:text-xs",
         default: "h-9 px-[calc(--spacing(3)-1px)] sm:h-8",
         icon: "size-9 sm:size-8",
         "icon-lg": "size-10 sm:size-9",

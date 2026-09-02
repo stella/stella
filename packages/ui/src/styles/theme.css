@@ -1200,36 +1200,15 @@
   }
 }
 
-/* Horizontal prompt rows stay visually quiet until the pointer confirms that
- * the clipped content is relevant. The track keeps a stable thin gutter so
- * revealing the thumb does not shift the chips. */
-@utility scrollbar-hover {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
+/* A scroll container with no scrollbar and no reserved track. For strips
+ * whose overflow is signalled another way (an edge fade, a visible partial
+ * item): a hover-revealed scrollbar would still reserve its track only when
+ * the content overflows, so the strip's height would depend on its content. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 
   &::-webkit-scrollbar {
-    width: 0.5rem;
-    height: 0.5rem;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    border-radius: 9999px;
-    background-color: transparent;
-  }
-
-  &:hover {
-    scrollbar-color: var(--color-border) transparent;
-  }
-
-  &:hover::-webkit-scrollbar-thumb {
-    background-color: var(--color-border);
-  }
-
-  &:hover::-webkit-scrollbar-thumb:hover {
-    background-color: var(--color-muted-foreground);
+    display: none;
   }
 }

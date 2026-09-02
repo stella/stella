@@ -130,6 +130,18 @@ type ConversationScrollButtonProps = ConversationScrollButtonBaseProps &
       }
   );
 
+/**
+ * Whether the scroll-to-bottom action shows. Exported so a row that overlays
+ * the inline action can reserve its footprint under the same rule.
+ */
+export const isScrollActionVisible = ({
+  isAtBottom,
+  isScrollable,
+}: {
+  isAtBottom: boolean;
+  isScrollable: boolean;
+}) => isScrollable && !isAtBottom;
+
 export const ConversationScrollButton = ({
   className,
   placement = "floating",
@@ -139,7 +151,7 @@ export const ConversationScrollButton = ({
   const t = useTranslations();
   const { isAtBottom, isScrollable, scrollToBottom } =
     useStickToBottomContext();
-  const isVisible = isScrollable && !isAtBottom;
+  const isVisible = isScrollActionVisible({ isAtBottom, isScrollable });
 
   if (!isVisible && placement === "floating") {
     return null;
@@ -174,16 +186,20 @@ export const ConversationScrollButton = ({
     </Button>
   );
 
-  return placement === "inline" ? (
+  if (placement !== "inline") {
+    return button;
+  }
+
+  // `size-7` matches the suggested-action chips beside it. `className` lands
+  // on the slot, not the button: the caller positions the slot in its row.
+  return (
     <SuggestedActionSurface
       aria-hidden={!isVisible || undefined}
-      className={cn("size-8 shrink-0", !isVisible && "invisible")}
+      className={cn("size-7 shrink-0", !isVisible && "invisible", className)}
       surface={surface}
     >
       {isVisible && button}
     </SuggestedActionSurface>
-  ) : (
-    button
   );
 };
 

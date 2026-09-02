@@ -56,10 +56,8 @@ import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
-import {
-  COMPOSER_COMPACT_CONTROL_SLOT_CLASS,
-  COMPOSER_COMPACT_TEXT_CELL_CLASS,
-} from "@/components/chat/composer-control-style";
+import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
+import { COMPOSER_COMPACT_TEXT_CELL_CLASS } from "@/components/chat/composer-control-style";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
@@ -904,13 +902,13 @@ const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
       {/* Same control slot the live send button uses, so the placeholder
           stays pixel-identical; the disabled action button renders the
           canonical Send look without re-copying its styling. */}
-      <span className={COMPOSER_COMPACT_CONTROL_SLOT_CLASS}>
+      <ComposerControlSlot>
         <ChatComposerActionButton
           canSend={false}
           isGenerating={false}
           onSend={noop}
         />
-      </span>
+      </ComposerControlSlot>
     </PromptBarShell>
   );
 };

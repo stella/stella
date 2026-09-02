@@ -19,6 +19,7 @@ import { ChatComposerActionButton } from "@/components/chat/chat-composer-action
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { ChatPromptImproveButton } from "@/components/chat/chat-prompt-improve-button";
+import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import {
   COMPOSER_BOX_ANONYMIZED_CLASS,
   COMPOSER_BOX_CLASS,
@@ -202,6 +203,9 @@ export const ChatInputSurface = ({
   };
 
   const isBlank = isEmpty && attachments.length === 0;
+  // Compact rows seat every control in the shared slot so it centres on the
+  // text line; the large variant lays its controls out in a plain action row.
+  const ControlGroup = variant === "compact" ? ComposerControlSlot : "div";
 
   return (
     // Outer wrapper carries caller positioning (`className`) and the slim
@@ -285,7 +289,7 @@ export const ChatInputSurface = ({
                   : COMPOSER_LARGE_ACTION_ROW_CLASS,
               )}
             >
-              <div
+              <ControlGroup
                 className={cn(
                   COMPOSER_LEADING_GROUP_CLASS,
                   variant === "compact"
@@ -322,7 +326,7 @@ export const ChatInputSurface = ({
                       : undefined
                   }
                 />
-              </div>
+              </ControlGroup>
               <input
                 accept={fileInputAccept}
                 className="hidden"
@@ -332,7 +336,7 @@ export const ChatInputSurface = ({
                 ref={fileInputRef}
                 type="file"
               />
-              <div
+              <ControlGroup
                 className={cn(
                   "flex items-center gap-0.5",
                   variant === "compact" && "col-start-3 row-start-1 self-end",
@@ -357,7 +361,7 @@ export const ChatInputSurface = ({
                   }}
                   onStop={onStop}
                 />
-              </div>
+              </ControlGroup>
             </div>
           </div>
         </div>
