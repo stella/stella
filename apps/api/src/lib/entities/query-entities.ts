@@ -1107,7 +1107,7 @@ const queryEntitiesGenerator = async function* ({
         propertyId: entry.propertyId,
         metadata: enrichCellMetadata(entry.metadata, cellMetadataActorMap),
       })),
-      assignees: assigneesByEntityId.get(entity.id) ?? [],
+      assignees: arrayOrEmpty(assigneesByEntityId.get(entity.id)),
     });
   }
 
