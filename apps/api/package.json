@@ -33,6 +33,7 @@
     "eval:suggest-changes": "NODE_ENV=development bun --env-file=.env evals/suggest-changes-precision.ts",
     "eval:template-fill": "NODE_ENV=development bun --env-file=.env evals/template-fill.ts",
     "eval:extraction": "NODE_ENV=development bun --env-file=.env evals/extraction.ts",
+    "eval:agent-orientation": "NODE_ENV=development bun --env-file=.env evals/agent-orientation.ts",
     "db:migrate": "bun run --env-file=.env src/db/migrate.ts",
     "db:audit-better-auth": "bun run --env-file=.env src/scripts/better-auth-migration-audit.ts",
     "db:derive-better-auth-microsoft-identities": "bun run --env-file=.env src/scripts/better-auth-microsoft-identity-map.ts",
