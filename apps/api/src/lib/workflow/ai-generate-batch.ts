@@ -349,15 +349,28 @@ export const generateWorkflowData = async ({
     });
   };
 
-  const merged: WorkflowDataOutput = {};
-  for (const chunkProperties of chunks.value) {
-    // oxlint-disable-next-line no-await-in-loop -- chunks share one prompt prefix, so running them in order caches it once instead of paying for it per chunk, and the first failure stops the batch
+  // Recursion rather than a loop because the chunks must run strictly in
+  // order, and only one at a time: the first chunk writes the shared prompt
+  // prefix into the provider's cache and the rest read it, so overlapping
+  // them would pay for that prefix once per chunk. Answers from earlier
+  // chunks accumulate into `merged`; the first failure ends the batch.
+  const chunkBatches = chunks.value;
+  const runFromChunk = async (
+    index: number,
+    merged: WorkflowDataOutput,
+  ): Promise<Result<WorkflowDataOutput, WorkflowIntegrationError>> => {
+    const chunkProperties = chunkBatches.at(index);
+    if (chunkProperties === undefined) {
+      return Result.ok(merged);
+    }
+
     const chunkOutput = await runChunk(chunkProperties);
     if (Result.isError(chunkOutput)) {
       return chunkOutput;
     }
     Object.assign(merged, chunkOutput.value);
-  }
+    return await runFromChunk(index + 1, merged);
+  };
 
-  return Result.ok(merged);
+  return await runFromChunk(0, {});
 };

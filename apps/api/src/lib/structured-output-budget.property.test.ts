@@ -19,8 +19,11 @@ import { buildBatchSchema } from "@/api/lib/workflow/ai-prompts";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import type { JustificationFilenames } from "@/api/lib/workflow/parse-justifications";
 
-// Anthropic accepted a 6-property text batch and rejected a 7-property one, so
-// no chunk may ever exceed six. See STRUCTURED_OUTPUT_BUDGETS.
+// A ceiling, not the expected chunk size: six is the largest batch Anthropic
+// was ever measured to compile, so a chunk above it would be one the provider
+// has already rejected. How many properties actually fit depends on the schema
+// each one projects to (four, for the shape `buildBatchSchema` emits today),
+// which is why the budget itself is stated in bytes rather than a count.
 const ANTHROPIC_MAX_PROPERTIES_PER_CHUNK = 6;
 
 const OPTION_VALUES = [
