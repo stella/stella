@@ -62,6 +62,19 @@ import type {
   McpToolInputSchema,
 } from "@/api/mcp/tool-types";
 
+import {
+  RESERVED_FLAGS,
+  TOOL_ANNOTATIONS,
+} from "../../../packages/cli/src/annotations";
+import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
+import { uploadCommand } from "../../../packages/cli/src/commands/upload";
+import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
+import { kebabCase } from "../../../packages/cli/src/generate-route-map";
+import type {
+  RegistryToolListing,
+  RouteNode,
+} from "../../../packages/cli/src/route-types";
+
 // A bare id resolves through whichever configured provider rates it (GPT
 // models may come from OpenAI or OpenRouter); Claude ids are pinned to
 // Anthropic so a non-Anthropic default provider cannot claim them.
@@ -84,6 +97,131 @@ const SKILL_PATH = path.join(
   "../../../packages/cli/skills/stella-cli/SKILL.md",
 );
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+// --- CLI schema (for scoring, not the model's system prompt) -------------
+
+// The SAME generated route tree the shipped CLI dispatches against: the
+// committed registry snapshot + capability catalog, run through the CLI's
+// own `buildCliRouteTree`. Scoring a parsed command against this (instead of
+// only the task's hand-picked expected flags) catches unknown flags, wrong
+// casing, and required flags a task forgot to assert on.
+const REGISTRY_SNAPSHOT_PATH = path.join(
+  import.meta.dir,
+  "../../../packages/cli/src/generated/registry-snapshot.json",
+);
+const CAPABILITY_CATALOG_PATH = path.join(
+  import.meta.dir,
+  "../../../packages/cli/capability-catalog.json",
+);
+
+/**
+ * Project raw JSON into `RegistryToolListing[]`, guard by guard (no cast):
+ * the snapshot is committed, trusted data, but its shape still comes from
+ * `unknown` JSON, not a validated domain value. Mirrors
+ * `loadBakedListings` in `packages/cli/src/registry-refresh.ts`.
+ */
+const parseRegistryListings = (raw: unknown): RegistryToolListing[] => {
+  if (!Array.isArray(raw)) {
+    return panic(
+      "agent-orientation eval: registry-snapshot.json is not an array",
+    );
+  }
+  const listings: RegistryToolListing[] = [];
+  for (const entry of raw) {
+    if (!isRecord(entry)) {
+      continue;
+    }
+    const name = entry["name"];
+    const description = entry["description"];
+    const inputSchema = entry["inputSchema"];
+    if (typeof name === "string" && isRecord(inputSchema)) {
+      listings.push({
+        name,
+        description: typeof description === "string" ? description : "",
+        inputSchema,
+      });
+    }
+  }
+  return listings;
+};
+
+const buildCliSchemaTree = (): RouteNode => {
+  const listings = parseRegistryListings(
+    JSON.parse(readFileSync(REGISTRY_SNAPSHOT_PATH, "utf-8")),
+  );
+  const catalogRaw: unknown = JSON.parse(
+    readFileSync(CAPABILITY_CATALOG_PATH, "utf-8"),
+  );
+  const entries = parseCapabilityCatalog(catalogRaw);
+  if (entries === null) {
+    return panic(
+      "agent-orientation eval: capability-catalog.json failed parseCapabilityCatalog",
+    );
+  }
+  return buildCliRouteTree({
+    listings,
+    annotations: TOOL_ANNOTATIONS,
+    entries,
+  }).tree;
+};
+
+const CLI_SCHEMA_TREE = buildCliSchemaTree();
+
+/** Global flags stricli accepts on every command, bare names (no leading dash). */
+const GLOBAL_FLAG_NAMES: ReadonlySet<string> = new Set(
+  [...RESERVED_FLAGS].map((flag) => flag.replace(/^-+/u, "")),
+);
+
+/** Route-tree lookup for `commandPath`, or `null` when it doesn't resolve to a node. */
+const walkRouteNode = (
+  tree: RouteNode,
+  commandPath: readonly string[],
+): RouteNode | null => {
+  let node: RouteNode = tree;
+  for (const segment of commandPath) {
+    if (node.kind !== "route") {
+      return null;
+    }
+    const child = node.children[segment];
+    if (child === undefined) {
+      return null;
+    }
+    node = child;
+  }
+  return node;
+};
+
+type LeafFlagSpec = { flag: string; required: boolean };
+
+// `stella upload` is hand-wired outside the generated route tree
+// (registered directly in build-cli-tree.ts), so it never reaches
+// `buildCliRouteTree`. Its flags are read from the real shipped command
+// definition instead of a hand-copied mirror, so this cannot drift from it.
+const uploadFlagSpecs = (): readonly LeafFlagSpec[] =>
+  Object.entries(uploadCommand.parameters.flags ?? {}).map(([prop, spec]) => ({
+    flag: kebabCase(prop),
+    required: spec.optional !== true,
+  }));
+
+/** The known flags (name + required) for a resolved command path, or `null`. */
+const leafFlagSpecsForPath = (
+  commandPath: readonly string[],
+): readonly LeafFlagSpec[] | null => {
+  if (commandPath.at(0) === "upload") {
+    return uploadFlagSpecs();
+  }
+  const node = walkRouteNode(CLI_SCHEMA_TREE, commandPath);
+  if (node === null || node.kind === "route") {
+    return null;
+  }
+  return node.spec.flags.map((spec) => ({
+    flag: spec.flag.replace(/^--/u, ""),
+    required: spec.required,
+  }));
+};
+
 const CLI_INSTRUCTION =
   "Answer with exactly one shell command in a single fenced code block " +
   "(```sh ... ```) and nothing else. If no command in the skill above can " +
@@ -93,9 +231,6 @@ const CLI_INSTRUCTION =
 const MCP_SYSTEM_PROMPT = getMcpInstructions("default");
 
 // --- arg checking -----------------------------------------------------------
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 type ValibotBackedToolDefinition = McpToolDefinition & {
   inputSchemaSource: v.GenericSchema;
@@ -264,6 +399,13 @@ type CliTaskSpec = CliExpectedCommand | CliExpectedDeclined;
 type Task = {
   id: string;
   request: string;
+  /**
+   * Overrides `request` on the CLI surface, for a task whose two surfaces
+   * take genuinely different inputs (the MCP file-reference tools vs. the
+   * CLI's local-path `stella upload`). Absent for every other task, where
+   * both surfaces see the same prompt.
+   */
+  cliRequest?: string;
   mcp: McpTaskSpec;
   cli: CliTaskSpec;
 };
@@ -422,6 +564,14 @@ const TASKS: readonly Task[] = [
       "https://files.example.test/9f2, mime_type application/vnd.openxmlformats-" +
       "officedocument.wordprocessingml.document). Upload it as a new version of " +
       "document doc_42.",
+    // The CLI has no host-file-reference concept: `stella upload` is a
+    // hand-wired local-bytes command (packages/cli/src/commands/upload.ts,
+    // registered outside the generated route tree) that reads a path off
+    // disk, so its prompt gives a local path instead of the MCP surface's
+    // file_id/download_url reference.
+    cliRequest:
+      "The file to upload is at ./contract-v2.docx, in matter ws_acme_2024. " +
+      "Upload it as a new version of document doc_42.",
     mcp: {
       toolName: "upload_document_version",
       checkArgs: (args) => [
@@ -429,11 +579,15 @@ const TASKS: readonly Task[] = [
         ...(args["file"] === undefined ? ["file: expected a value"] : []),
       ],
     },
-    // The CLI's generated command tree excludes upload_document_version:
-    // its hand-wired local-bytes command is not part of the generated skill
-    // surface. Correct behavior on this surface is to decline, not invent
-    // a command.
-    cli: { kind: "declined" },
+    cli: {
+      kind: "command",
+      path: ["upload"],
+      flags: {
+        file: "./contract-v2.docx",
+        "matter-id": "ws_acme_2024",
+        "entity-id": "doc_42",
+      },
+    },
   },
 ] as const;
 
@@ -558,33 +712,75 @@ const runModelTurn = async ({
   const argumentTexts = new Map<string, string>();
   const parsedInputs = new Map<string, unknown>();
   for await (const chunk of stream) {
-    if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
-      finalText += chunk.delta;
-      continue;
-    }
-    if (chunk.type === EventType.TOOL_CALL_ARGS) {
-      argumentTexts.set(
-        chunk.toolCallId,
-        (argumentTexts.get(chunk.toolCallId) ?? "") + chunk.delta,
-      );
-      continue;
-    }
-    if (chunk.type === EventType.TOOL_CALL_START) {
-      toolNames.set(chunk.toolCallId, chunk.toolCallName);
-      continue;
-    }
-    if (chunk.type === EventType.TOOL_CALL_END) {
-      if (chunk.input !== undefined) {
-        parsedInputs.set(chunk.toolCallId, chunk.input);
+    // Exhaustive over ChatStream's real chunk union (`AGUIEvent`, 22
+    // members — narrower than the full `EventType` enum, which also
+    // declares deprecated/unused values this stream never emits) instead
+    // of an if-chain: a renamed or newly added chunk type fails
+    // typechecking at the `satisfies never` default instead of being
+    // silently ignored, which for THIS eval would misclassify a run as
+    // no-call/pass instead of failing loudly.
+    //
+    // TOOL_CALL_START, TOOL_CALL_END, and CUSTOM carry a plain string
+    // literal `type` (not the `EventType` enum member) by design — see
+    // `ToolCallStartEvent`/`ToolCallEndEvent`/`CustomEvent` in
+    // `@tanstack/ai`'s types — so those three cases match on the literal
+    // string instead of the enum member.
+    switch (chunk.type) {
+      case EventType.TEXT_MESSAGE_CONTENT: {
+        finalText += chunk.delta;
+        break;
       }
-      continue;
-    }
-    if (chunk.type === EventType.RUN_ERROR) {
-      error = chunk.message;
-      continue;
-    }
-    if (chunk.type === EventType.RUN_FINISHED) {
-      usage = tokenUsageFromRunFinishedChunk(chunk) ?? null;
+      case EventType.TOOL_CALL_ARGS: {
+        argumentTexts.set(
+          chunk.toolCallId,
+          (argumentTexts.get(chunk.toolCallId) ?? "") + chunk.delta,
+        );
+        break;
+      }
+      case "TOOL_CALL_START": {
+        toolNames.set(chunk.toolCallId, chunk.toolCallName);
+        break;
+      }
+      case "TOOL_CALL_END": {
+        if (chunk.input !== undefined) {
+          parsedInputs.set(chunk.toolCallId, chunk.input);
+        }
+        break;
+      }
+      case EventType.RUN_ERROR: {
+        error = chunk.message;
+        break;
+      }
+      case EventType.RUN_FINISHED: {
+        usage = tokenUsageFromRunFinishedChunk(chunk) ?? null;
+        break;
+      }
+      // Every other chunk type carries nothing this eval scores on: only
+      // the first tool call's name/args/input and the final text/usage/error
+      // matter here. Listed explicitly (not folded into an implicit
+      // default) so the ignored set is visible in the diff whenever it grows.
+      case EventType.TEXT_MESSAGE_START:
+      case EventType.TEXT_MESSAGE_END:
+      case EventType.TOOL_CALL_RESULT:
+      case EventType.STATE_SNAPSHOT:
+      case EventType.STATE_DELTA:
+      case EventType.MESSAGES_SNAPSHOT:
+      case "CUSTOM":
+      case EventType.RUN_STARTED:
+      case EventType.STEP_STARTED:
+      case EventType.STEP_FINISHED:
+      case EventType.REASONING_START:
+      case EventType.REASONING_MESSAGE_START:
+      case EventType.REASONING_MESSAGE_CONTENT:
+      case EventType.REASONING_MESSAGE_END:
+      case EventType.REASONING_ENCRYPTED_VALUE:
+      case EventType.REASONING_END: {
+        break;
+      }
+      default: {
+        chunk satisfies never;
+        break;
+      }
     }
   }
   clearTimeout(abortTimer);
@@ -682,13 +878,16 @@ const tokenizeCommand = (command: string): string[] => {
 type ParsedCliCommand = {
   path: string[];
   flags: Map<string, string | null>;
+  /** Whether the reply actually invoked the `stella` executable. */
+  startsWithStella: boolean;
 };
 
 const parseCliCommand = (command: string): ParsedCliCommand => {
   const tokens = tokenizeCommand(command);
+  const startsWithStella = tokens[0] === "stella";
   const commandPath: string[] = [];
   const flags = new Map<string, string | null>();
-  let index = tokens[0] === "stella" ? 1 : 0;
+  let index = startsWithStella ? 1 : 0;
   while (index < tokens.length) {
     const token = tokens[index];
     if (token === undefined) {
@@ -714,7 +913,7 @@ const parseCliCommand = (command: string): ParsedCliCommand => {
     commandPath.push(token);
     index += 1;
   }
-  return { path: commandPath, flags };
+  return { path: commandPath, flags, startsWithStella };
 };
 
 const DECLINED_PATTERN =
@@ -904,6 +1103,15 @@ const scoreCliRun = ({
     return { outcome: "no-call", toolOrCommand: "-", issues: [] };
   }
   const parsed = parseCliCommand(commandLine);
+  if (!parsed.startsWithStella) {
+    return {
+      outcome: "bad-args",
+      toolOrCommand: parsed.path.join(" ") || "<unknown>",
+      issues: [
+        'expected the command to start with "stella" (the CLI executable)',
+      ],
+    };
+  }
   const expected = task.cli;
   // The command path is the leading tokens; anything after it is a
   // positional argument (the CLI takes none, only `--flags`), so it is a
@@ -921,6 +1129,26 @@ const scoreCliRun = ({
   const issues: string[] = parsed.path
     .slice(expected.path.length)
     .map((token) => `unexpected positional argument "${token}"`);
+  // Validate the FULL command against the generated CLI schema (not just
+  // the task's hand-picked expected flags): an unknown flag, wrong casing,
+  // or a required flag the task forgot to assert on all surface here.
+  const leafFlagSpecs = leafFlagSpecsForPath(expected.path);
+  if (leafFlagSpecs !== null) {
+    const knownFlagNames = new Set([
+      ...leafFlagSpecs.map((spec) => spec.flag),
+      ...GLOBAL_FLAG_NAMES,
+    ]);
+    for (const flagName of parsed.flags.keys()) {
+      if (!knownFlagNames.has(flagName)) {
+        issues.push(`unknown flag --${flagName}`);
+      }
+    }
+    for (const spec of leafFlagSpecs) {
+      if (spec.required && resolveFlagValue(parsed, spec.flag) === undefined) {
+        issues.push(`missing required --${spec.flag}`);
+      }
+    }
+  }
   for (const [flagName, expectedValue] of Object.entries(expected.flags)) {
     const actual = resolveFlagValue(parsed, flagName);
     if (actual !== expectedValue) {
@@ -993,7 +1221,7 @@ const runCliTask = async ({
   const turn = await runModelTurn({
     model,
     system: `${skill}\n\n${CLI_INSTRUCTION}`,
-    request: task.request,
+    request: task.cliRequest ?? task.request,
     tools: [],
   });
   const score = scoreCliRun({ task, turn });
