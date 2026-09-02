@@ -17,6 +17,7 @@ import { remapNodePropertyIds } from "@/api/lib/conditions/ast-utils";
 import { LIMITS } from "@/api/lib/limits";
 import { createDefaultTool } from "@/api/lib/properties/create-schema";
 import { deletePlaybookColumns } from "@/api/lib/properties/delete-playbook-columns";
+import { propertyKindsForTool } from "@/api/lib/properties/property-kinds";
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
 import type {
   PlaybookScope,
@@ -384,6 +385,7 @@ export const materializePlaybookRun = async ({
       name: position.issue,
       content: ask.content,
       tool: askTool,
+      kinds: propertyKindsForTool(askTool),
       status: askTool.type === "ai-model" ? "stale" : "fresh",
       playbookSourceId: position.sourceId,
       playbookDefinitionId: playbookId,
@@ -429,18 +431,20 @@ export const materializePlaybookRun = async ({
     }
     verdictPropertyIds.push(verdictId);
 
+    const verdictTool = buildVerdictTool({
+      askPropertyId: askId,
+      sourceId: gradedPosition.sourceId,
+      rule: gradedPositionRule(gradedPosition),
+      severity: gradedPosition.severity,
+      tiers: resolveTiers(gradedPosition, clauseSnapshots),
+    });
     verdictRows.push({
       id: verdictId,
       workspaceId,
       name: `${position.issue} (verdict)`.slice(0, 256),
       content: buildVerdictContent(),
-      tool: buildVerdictTool({
-        askPropertyId: askId,
-        sourceId: gradedPosition.sourceId,
-        rule: gradedPositionRule(gradedPosition),
-        severity: gradedPosition.severity,
-        tiers: resolveTiers(gradedPosition, clauseSnapshots),
-      }),
+      tool: verdictTool,
+      kinds: propertyKindsForTool(verdictTool),
       status: "stale",
       playbookSourceId: position.sourceId,
       playbookDefinitionId: playbookId,
@@ -484,6 +488,7 @@ export const materializePlaybookRun = async ({
           name: sql`excluded.name`,
           content: sql`excluded.content`,
           tool: sql`excluded.tool`,
+          kinds: sql`excluded.kinds`,
           status: sql`excluded.status`,
           playbookDefinitionId: sql`excluded.playbook_definition_id`,
         },
