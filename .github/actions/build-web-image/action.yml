@@ -14,6 +14,14 @@ inputs:
   posthog-key:
     description: Browser-visible PostHog project key required for official Stella builds; passed separately so it is never committed.
     required: true
+  posthog-cli-api-key:
+    description: PostHog personal API key with error-tracking write scope; when set, the build publishes the client source maps. Empty skips the upload.
+    required: false
+    default: ""
+  posthog-project-id:
+    description: Numeric PostHog project id that receives the source maps; required whenever posthog-cli-api-key is set.
+    required: false
+    default: ""
   source-path:
     description: Checkout containing the exact source commit to build.
     required: false
@@ -144,8 +152,11 @@ runs:
         tags: ghcr.io/${{ github.repository_owner }}/stella-web:candidate-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.target-environment }}
         cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/stella-web:buildcache-${{ inputs.target-environment }}
         cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/stella-web:buildcache-${{ inputs.target-environment }},mode=max
+        secrets: |
+          posthog_cli_api_key=${{ inputs.posthog-cli-api-key }}
         build-args: |
           STELLA_VERSION=${{ steps.args.outputs.version }}
           STELLA_COMMIT_SHA=${{ inputs.release-sha }}
+          POSTHOG_SOURCEMAP_PROJECT_ID=${{ inputs.posthog-project-id }}
           ${{ steps.args.outputs.values }}
           ${{ steps.args.outputs.posthog-name }}=${{ inputs.posthog-key }}
