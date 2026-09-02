@@ -87,6 +87,14 @@ const FORKED_THREAD_COLUMNS = {
  */
 const FORK_INSERT_BATCH_SIZE = 200;
 
+/**
+ * Attachment copies in flight at once. A prefix has no upper bound and each
+ * attachment costs up to two CopyObject calls (object plus thumbnail), so an
+ * unbounded fan-out on a long thread is one burst against storage that a
+ * single throttled request can fail after every other copy was paid for.
+ */
+const FORK_COPY_CONCURRENCY = 16;
+
 /** The columns a fork's copy of one attachment is rebuilt from. */
 type SourceUserFileRow = {
   extractedText: string | null;
@@ -542,12 +550,24 @@ export const createForkThread = ({
         title: source.title,
       });
       const copiedS3Keys: string[] = [];
-      const copyResults = await Promise.all(
-        sourceFiles.map(
-          async (file) =>
-            await copyUserFileObjects({ copiedS3Keys, file, userId: user.id }),
-        ),
-      );
+      const copyResults: Result<UserFileCopyOutcome, HandlerError<500>>[] = [];
+      await consumeInBatches({
+        batchSize: FORK_COPY_CONCURRENCY,
+        consume: async (batch) => {
+          const results = await Promise.all(
+            batch.map(
+              async (file) =>
+                await copyUserFileObjects({
+                  copiedS3Keys,
+                  file,
+                  userId: user.id,
+                }),
+            ),
+          );
+          copyResults.push(...results);
+        },
+        items: sourceFiles,
+      });
       const copies: UserFileCopy[] = [];
       const missingObjectFileIds: SafeId<"userFile">[] = [];
       const missingThumbnailFileIds: SafeId<"userFile">[] = [];
