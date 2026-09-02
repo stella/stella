@@ -204,8 +204,29 @@ describe("entity query field selection", () => {
         fieldIds: ["due", "status"],
         excludedKinds: ["folder", "task"],
         previewableForAi: false,
+        includeAssignees: false,
       },
     ]);
+  });
+
+  test("keeps includeAssignees in the window cache identity", () => {
+    const withAssignees = entitiesKeys.window({
+      workspaceId: "workspace-1",
+      filters: [],
+      sorts: [],
+      includeAssignees: true,
+    });
+    const withoutAssignees = entitiesKeys.window({
+      workspaceId: "workspace-1",
+      filters: [],
+      sorts: [],
+    });
+
+    expect(withAssignees).not.toEqual(withoutAssignees);
+    expect(withAssignees.at(-1)).toMatchObject({ includeAssignees: true });
+    expect(withoutAssignees.at(-1)).toMatchObject({
+      includeAssignees: false,
+    });
   });
 
   test("keeps filesystem tree cache identity independent from page state", () => {

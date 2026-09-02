@@ -43,6 +43,7 @@ import {
   timeEntryTeamSummaryOptions,
 } from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { windowIncludesAssignees } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
@@ -242,6 +243,10 @@ export const Route = createFileRoute(
           limit: DEFAULT_ENTITY_WINDOW_SIZE,
           fieldMode,
           fieldIds,
+          // Same derivation the kanban board's own window query uses, so a
+          // preloaded assignee-subgroup board's request matches this
+          // preload's cache key and never discards it for a refetch.
+          includeAssignees: windowIncludesAssignees(activeView),
         }),
       );
       return;

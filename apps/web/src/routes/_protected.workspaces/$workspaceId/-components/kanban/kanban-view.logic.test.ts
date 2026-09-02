@@ -9,7 +9,11 @@ import type { KanbanBoardColumn, KanbanBoardLane } from "@stll/ui/kanban";
 
 import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
 import { toSafeId } from "@/lib/safe-id";
-import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
+import type {
+  WorkspaceEntity,
+  WorkspaceProperty,
+  WorkspaceView,
+} from "@/lib/types";
 
 import {
   buildKanbanAssigneeMatrix,
@@ -20,6 +24,7 @@ import {
   resolveWorkspaceKanbanGrouping,
   resolveWorkspaceKanbanGroupValue,
   resolveWorkspaceKanbanSubgroup,
+  windowIncludesAssignees,
   workspaceKanbanSchema,
 } from "./kanban-view.logic";
 
@@ -588,5 +593,105 @@ describe("kanban assignee subgroup", () => {
     // The row still carries both original assignees until the mutation
     // runs; this only proves the intent never reaches for the first one.
     expect(row.assignees.map((a) => a.userId)).toEqual(["user-1", "user-2"]);
+  });
+
+  test("a non-task row can never move between assignee lanes, even when writable", () => {
+    const definition = assigneeSubgroupDefinition();
+    const document = entity("doc-1", "document");
+
+    expect(
+      canMoveCardToSubgroupLane({
+        subgroup: definition,
+        entity: document,
+        targetLaneValue: "workspace-user:user-9",
+      }),
+    ).toBe(false);
+  });
+
+  test("a non-task row is placed in no lane of the assignee matrix, not even Unassigned", () => {
+    const task = entity("task-1", "task");
+    task.status = "open";
+    task.assignees = [{ userId: "user-1", name: "Anna", image: null }];
+    const document = entity("doc-1", "document");
+    document.status = "open";
+
+    const subgroup = resolveWorkspaceKanbanDynamicSubgroup(
+      assigneeSubgroupDefinition(),
+      [task, document],
+    );
+    const matrix = buildKanbanAssigneeMatrix({
+      group: groupingFor(getInternalPropertyId("status")),
+      assigneeSubgroup: subgroup,
+      rows: [task, document],
+      uncategorizedLabel: "Unassigned",
+    });
+
+    const rowIds = matrix.cells.flatMap((cell) =>
+      cell.rows.map((row) => row.entityId),
+    );
+    expect(rowIds).toEqual([toSafeId<"entity">("task-1")]);
+    expect(rowIds).not.toContain(toSafeId<"entity">("doc-1"));
+    // The non-task row is dropped before the board's deduplicated
+    // scoped-row list is built too, not just the per-lane cells.
+    expect(matrix.rows.map((row) => row.entityId)).toEqual([
+      toSafeId<"entity">("task-1"),
+    ]);
+  });
+});
+
+describe("windowIncludesAssignees", () => {
+  const kanbanView = (subgroupByPropertyId?: string): WorkspaceView => ({
+    version: 1,
+    id: "view-1",
+    name: "Board",
+    position: 0,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    layout: {
+      version: 1,
+      type: "kanban",
+      filters: [],
+      sorts: [],
+      hiddenProperties: [],
+      calculations: [],
+      ...(subgroupByPropertyId !== undefined && { subgroupByPropertyId }),
+    },
+  });
+
+  test("true when the persisted sub-group is the assignee sub-group", () => {
+    expect(
+      windowIncludesAssignees(kanbanView(getInternalPropertyId("assignee"))),
+    ).toBe(true);
+  });
+
+  test("false when the sub-group is unset", () => {
+    expect(windowIncludesAssignees(kanbanView())).toBe(false);
+  });
+
+  test("false when the sub-group is a real property, not assignee", () => {
+    expect(windowIncludesAssignees(kanbanView("status-property-id"))).toBe(
+      false,
+    );
+  });
+
+  test("false for a non-kanban view even if it carries a matching field", () => {
+    const view: WorkspaceView = {
+      version: 1,
+      id: "view-2",
+      name: "Table",
+      position: 0,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      layout: {
+        version: 1,
+        type: "table",
+        filters: [],
+        sorts: [],
+        hiddenProperties: [],
+        calculations: [],
+        columnOrder: [],
+        columnPinning: [],
+      },
+    };
+
+    expect(windowIncludesAssignees(view)).toBe(false);
   });
 });

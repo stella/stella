@@ -42,6 +42,19 @@ export const viewEntityKinds = (
 };
 
 /**
+ * Whether a view's filters provably restrict it to the `task` kind alone.
+ * The kanban board's assignee sub-group is offered only then: server paging
+ * and counts for that sub-group do not support a board that also admits
+ * documents or folders (see kanban-view.logic.ts's `assigneeGroup`).
+ */
+export const admitsOnlyTaskKind = (
+  filters: readonly ConditionNode[],
+): boolean => {
+  const kinds = viewEntityKinds(filters);
+  return kinds?.length === 1 && kinds[0] === "task";
+};
+
+/**
  * What a node contributes to the kinds a view admits. Unlike the fold's
  * generic drop rule (a `null` result), a *compiling* predicate or compare
  * other than `kind in […]` never reports "dropped" — it still restricts SQL

@@ -4,6 +4,7 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import addAssignee from "@/api/handlers/tasks/assignees-add";
 import removeAssignee from "@/api/handlers/tasks/assignees-remove";
+import moveAssignee from "@/api/handlers/tasks/assignees/move";
 import calendarTasks from "@/api/handlers/tasks/calendar";
 import createTask from "@/api/handlers/tasks/create";
 import createEntityLink from "@/api/handlers/tasks/entity-links-create";
@@ -59,6 +60,11 @@ export const tasksRoute = new Elysia({
     body: removeAssignee.config.body,
     resourceSetUpdated: taskRealtimeUpdates,
     permissions: removeAssignee.config.permissions,
+  })
+  .post("/assignees/move", moveAssignee.handler, {
+    body: moveAssignee.config.body,
+    resourceSetUpdated: taskRealtimeUpdates,
+    permissions: moveAssignee.config.permissions,
   })
   .post("/links", createEntityLink.handler, {
     body: createEntityLink.config.body,

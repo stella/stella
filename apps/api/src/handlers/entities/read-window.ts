@@ -45,6 +45,9 @@ const readEntitiesWindowBodySchema = t.Object({
     }),
   ),
   previewableForAi: t.Optional(t.Boolean()),
+  // Off by default; the kanban assignee sub-group is the one caller that
+  // needs each task's assignees, so it is the one caller that sets this.
+  includeAssignees: t.Optional(t.Boolean()),
 });
 
 const config = {
@@ -83,6 +86,7 @@ const readEntitiesWindow = createSafeHandler(
         fieldIds: arrayOrEmpty(body.fieldIds),
         excludedKinds: arrayOrEmpty(body.excludedKinds),
         previewableForAi: body.previewableForAi ?? false,
+        includeAssignees: body.includeAssignees ?? false,
       }),
     );
 

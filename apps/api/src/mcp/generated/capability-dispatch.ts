@@ -751,6 +751,9 @@ export const CAPABILITY_DISPATCH = {
   "tasks.assignees-remove": {
     load: async () => await import("@/api/handlers/tasks/assignees-remove"),
   },
+  "tasks.assignees.move": {
+    load: async () => await import("@/api/handlers/tasks/assignees/move"),
+  },
   "tasks.calendar": {
     load: async () => await import("@/api/handlers/tasks/calendar"),
   },

@@ -166,6 +166,11 @@ type QueryEntitiesProps = {
   excludedKinds?: EntityKind[];
   previewableForAi?: boolean;
   extraConditions?: SQL[];
+  // Off by default: the assignees join runs for every caller of
+  // queryEntities, most of which never render an assignee. Only the callers
+  // that actually need the fan-out (the kanban assignee sub-group's window
+  // request) opt in.
+  includeAssignees?: boolean;
 };
 
 const organizationMemberIdsSubquery = (
@@ -679,6 +684,7 @@ const queryEntitiesGenerator = async function* ({
   excludedKinds = [],
   previewableForAi = false,
   extraConditions = [],
+  includeAssignees = false,
 }: QueryEntitiesProps) {
   const workspaceCondition = eq(entities.workspaceId, workspaceId);
   const filterConditions = buildFilterConditions(filters);
@@ -947,23 +953,25 @@ const queryEntitiesGenerator = async function* ({
           .limit(pageIds.length)
       );
     }),
-    safeDb((tx) =>
-      tx
-        .select({
-          entityId: taskAssignees.entityId,
-          userId: taskAssignees.userId,
-          // Same fallback as the Author column: Better Auth allows an empty
-          // `name`, so passwordless email signups need the email fallback
-          // to avoid a blank assignee label.
-          name: sql<
-            string | null
-          >`coalesce(nullif(trim(${user.name}), ''), ${user.email})`,
-          image: user.image,
-        })
-        .from(taskAssignees)
-        .innerJoin(user, eq(taskAssignees.userId, user.id))
-        .where(inArray(taskAssignees.entityId, pageIds)),
-    ),
+    includeAssignees
+      ? safeDb((tx) =>
+          tx
+            .select({
+              entityId: taskAssignees.entityId,
+              userId: taskAssignees.userId,
+              // Same fallback as the Author column: Better Auth allows an
+              // empty `name`, so passwordless email signups need the email
+              // fallback to avoid a blank assignee label.
+              name: sql<
+                string | null
+              >`coalesce(nullif(trim(${user.name}), ''), ${user.email})`,
+              image: user.image,
+            })
+            .from(taskAssignees)
+            .innerJoin(user, eq(taskAssignees.userId, user.id))
+            .where(inArray(taskAssignees.entityId, pageIds)),
+        )
+      : Promise.resolve(Result.ok([])),
   ]);
 
   const entityRows = yield* entityRowsResult;

@@ -41,7 +41,11 @@ import { resolveOptionColor } from "@/components/workspaces/property-utils";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import type { OptionColor } from "@/lib/api-contract";
 import { compareByLocale } from "@/lib/collation";
-import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
+import type {
+  WorkspaceEntity,
+  WorkspaceProperty,
+  WorkspaceView,
+} from "@/lib/types";
 
 export type WorkspaceKanbanSchema = KanbanSchema<
   WorkspaceEntity,
@@ -195,6 +199,21 @@ export const resolveWorkspaceKanbanSubgroup = (
       configuredSubgroupBy === groupByPropertyId ? "" : configuredSubgroupBy,
     schema,
   });
+
+/**
+ * Whether a kanban view's persisted sub-group is the assignee sub-group,
+ * from the layout alone — no property schema needed. Assignee is a
+ * reserved built-in sub-group id (see `assigneeGroup` above) that always
+ * resolves the same way regardless of the workspace's properties, so a
+ * direct comparison against the persisted `subgroupByPropertyId` agrees
+ * with what `resolveWorkspaceKanbanSubgroup` would resolve to. Both the
+ * kanban board's own window request and the route loader's preload derive
+ * `includeAssignees` from this one function, so a preloaded fetch and the
+ * component's own request can never disagree and force a refetch.
+ */
+export const windowIncludesAssignees = (view: WorkspaceView): boolean =>
+  view.layout.type === "kanban" &&
+  view.layout.subgroupByPropertyId === getInternalPropertyId("assignee");
 
 const personGroupValue = (content: {
   userId: string | null;
@@ -398,7 +417,14 @@ export const canMoveCardToSubgroupLane = ({
     subgroup.type === "built-in" &&
     subgroup.group.id === getInternalPropertyId("assignee")
   ) {
-    return !entity.readOnly;
+    // The assignee sub-group is offered only on a view provably restricted to
+    // tasks (view-toolbar.tsx's `allowAssigneeGrouping`), and the underlying
+    // assignees-add/assignees-remove/assignees-move endpoints only ever
+    // accept a task entity. A persisted or hand-edited layout could still
+    // hand this branch a non-task row (the view's filters changed after the
+    // layout was saved); refuse the move rather than let it reach those
+    // task-only endpoints.
+    return entity.kind === "task" && !entity.readOnly;
   }
   return resolveWorkspaceKanbanGroupValue(subgroup, entity) === targetLaneValue;
 };
@@ -431,7 +457,13 @@ export type BuildKanbanAssigneeMatrixParams = {
  * reads; the top-level `rows` field stays the board's deduplicated scoped
  * rows (one entry per row, exactly what `buildKanbanBoardMatrix` means by
  * it), since nothing reads that top-level list for a per-lane total — a
- * row's repeated appearances only ever live inside `cell.rows`.
+ * row's repeated appearances only ever live inside `cell.rows`. Assignee
+ * lanes are task-only (mirrors `canMoveCardToSubgroupLane` above), so a
+ * non-task row — reachable only from a persisted or hand-edited layout that
+ * no longer restricts the view to tasks — is filtered out of `scopedRows`
+ * before either `cell.rows` or the top-level `rows` is built: it has no
+ * valid lane, not even Unassigned, and must not surface anywhere a drag
+ * could reach the task-only assignee endpoints.
  */
 export const buildKanbanAssigneeMatrix = ({
   group,
@@ -479,7 +511,9 @@ export const buildKanbanAssigneeMatrix = ({
     }
   }
 
-  const scopedRows = selectKanbanRows(rows, group);
+  const scopedRows = selectKanbanRows(rows, group).filter(
+    (row) => row.kind === "task",
+  );
   for (const row of scopedRows) {
     const columnValue = normalizeToGroupValue(
       columnGroups,

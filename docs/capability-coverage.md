@@ -367,6 +367,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | --------------------------- | ------------------ | -------------------- | ------- | ------------------------ |
 | `tasks.assignees-add`       | write              | stella:matters_write | —       | covered by `save_task`   |
 | `tasks.assignees-remove`    | write, destructive | stella:matters_write | —       | covered by `save_task`   |
+| `tasks.assignees.move`      | write              | stella:matters_write | —       | covered by `save_task`   |
 | `tasks.calendar`            | read               | stella:read          | —       | covered by `list_tasks`  |
 | `tasks.create`              | write              | stella:matters_write | —       | curated tool `save_task` |
 | `tasks.entity-links-create` | write              | stella:matters_write | —       | covered by `save_task`   |
