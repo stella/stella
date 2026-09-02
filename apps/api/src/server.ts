@@ -127,8 +127,8 @@ import { initDocumentDeadlineScoutWorker } from "@/api/lib/document-deadline-sco
 import { initDocumentReviewRunWorker } from "@/api/lib/document-review/run-queue";
 import { initDocumentTranslationRunWorker } from "@/api/lib/document-translation/run-queue";
 import { initEntityDeletionCleanupWorker } from "@/api/lib/entity-deletion-cleanup-queue";
+import { elysiaErrorAnswer } from "@/api/lib/errors/elysia-error";
 import { httpError } from "@/api/lib/errors/http-error";
-import { isResponseValidationError } from "@/api/lib/errors/response-validation";
 import { errorFingerprint, errorTag } from "@/api/lib/errors/utils";
 import { initFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
 import { initFlowRunWorker } from "@/api/lib/flows/flow-run-worker";
@@ -184,12 +184,6 @@ const SESSION_ID_MAX_LENGTH = 64;
 const SESSION_ID_PATTERN = /^[\w-]+$/u;
 const S3_REFRESH_CHECK_INTERVAL_MS = 60_000;
 const WORKER_SHUTDOWN_TIMEOUT_MS = 10_000;
-
-const STATUS_BY_ELYSIA_CODE: Partial<Record<string, number>> = {
-  VALIDATION: 422,
-  NOT_FOUND: 404,
-  PARSE: 400,
-};
 
 const getApiPort = () => {
   const rawPort = env.STELLA_API_PORT ?? env.PORT;
@@ -412,7 +406,10 @@ const api = new Elysia()
 
     const path = getRequestPath(request);
     const reqCtx = getRequestContext(request);
-    const statusCode = STATUS_BY_ELYSIA_CODE[code] ?? 500;
+    const { status: statusCode, message: errorMessage } = elysiaErrorAnswer(
+      code,
+      error,
+    );
 
     if (shouldLogRequest(path)) {
       const durationMs = reqCtx ? performance.now() - reqCtx.startTime : 0;
@@ -455,10 +452,7 @@ const api = new Elysia()
     // with one issue per scanner probe and schema mismatch. A response-schema
     // violation shares the VALIDATION code but is the handler's own fault, so
     // it stays captured along with every other code.
-    if (
-      STATUS_BY_ELYSIA_CODE[code] === undefined ||
-      isResponseValidationError(error)
-    ) {
+    if (statusCode >= 500) {
       captureRequestError(error, {
         request,
         context: {
@@ -473,16 +467,7 @@ const api = new Elysia()
     // Elysia's default would serialize error.message, which
     // may contain DB internals, file names, or document content.
     set.status = statusCode;
-    if (code === "VALIDATION") {
-      return httpError("Invalid request");
-    }
-    if (code === "NOT_FOUND") {
-      return httpError("Not found");
-    }
-    if (code === "PARSE") {
-      return httpError("Malformed request");
-    }
-    return httpError("Internal server error");
+    return httpError(errorMessage);
   })
   .onAfterHandle(async ({ request, responseValue, route, set }) => {
     delete set.headers["X-Powered-By"];
