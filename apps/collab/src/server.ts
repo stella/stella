@@ -300,7 +300,6 @@ export const createCollabServer = async (
           awaitInitialSyncTimeout: REDIS_INITIAL_SYNC_TIMEOUT_MS,
           createClient: () =>
             new RedisClient(
-              options.redisUrl,
               collabRedisConnectionOptions(
                 options.redisUrl,
                 options.redisTlsRejectUnauthorized,
