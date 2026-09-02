@@ -1695,7 +1695,11 @@ const runCatalogModelProbe = async ({
   provider,
   signal,
 }: RunCatalogModelProbeOptions): Promise<void> => {
-  const config = createCanaryConfig({ apiKey, provider, rotatedModelId: modelId });
+  const config = createCanaryConfig({
+    apiKey,
+    provider,
+    rotatedModelId: modelId,
+  });
   const model = resolveTanStackTextModel({
     organizationId: null,
     orgAIConfig: config,
