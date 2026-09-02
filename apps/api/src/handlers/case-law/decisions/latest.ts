@@ -3,8 +3,12 @@ import { sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import { readBrowseFacets } from "@/api/handlers/case-law/decisions/facets";
 import { decisionDateSortKeySql } from "@/api/handlers/case-law/decisions/list";
+import {
+  loadShelfCourtEntries,
+  readShelfCourts,
+  type ShelfCourt,
+} from "@/api/handlers/case-law/decisions/shelf-courts";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
   decisionHeadnoteSql,
@@ -23,9 +27,10 @@ import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
 /**
- * The browse page's shelf when nothing has been typed: the newest decisions
- * of the jurisdiction's largest courts, a few per court. Whole-corpus and
- * slow-moving, so it is cached the way the facets are.
+ * The entry shelf when nothing has been typed: the newest decisions of the
+ * jurisdiction's apex courts (by declared rank, see `shelf-courts.ts`), a few
+ * per court. Whole-corpus and slow-moving, so it is cached the way the facets
+ * are.
  */
 
 export const listLatestDecisionsQuerySchema = t.Object({
@@ -51,6 +56,8 @@ export type LatestDecision = {
 
 export type LatestDecisionsByCourt = {
   court: string;
+  /** The seeded rank label the court matched (`constitutional`, `supreme`). */
+  tierLabel: string;
   decisions: LatestDecision[];
 };
 
@@ -100,8 +107,8 @@ const requiredString = (row: Record<string, unknown>, key: string): string => {
 type ReadLatestDecisionsByCourtOptions = {
   caseLawDb: CaseLawPublicReadDb;
   country: string;
-  /** Shelf order; the corpus's largest courts first. */
-  courts: readonly string[];
+  /** Shelf order; highest-ranked court first. */
+  courts: readonly ShelfCourt[];
 };
 
 /**
@@ -135,7 +142,7 @@ export const readLatestDecisionsByCourt = async ({
           d.decision_type,
           d.citation_count,
           ${decisionHeadnoteSql(sql.raw("d.metadata"))} AS headnote
-        FROM jsonb_array_elements_text(${JSON.stringify(courts)}::text::jsonb)
+        FROM jsonb_array_elements_text(${JSON.stringify(courts.map((shelf) => shelf.court))}::text::jsonb)
           WITH ORDINALITY AS shelf(court, ordinality)
         CROSS JOIN LATERAL (
           -- Named columns, never a wildcard: the public reader role sees only
@@ -196,7 +203,7 @@ export const readLatestDecisionsByCourt = async ({
     });
 
   const byCourt = new Map<string, LatestDecision[]>(
-    courts.map((court) => [court, []]),
+    courts.map((shelf) => [shelf.court, []]),
   );
   for (const row of rows) {
     const court = requiredString(row, "court");
@@ -224,11 +231,11 @@ export const readLatestDecisionsByCourt = async ({
     });
   }
 
-  return courts.flatMap((court) => {
+  return courts.flatMap(({ court, tierLabel }) => {
     const decisions = byCourt.get(court);
     return decisions === undefined || decisions.length === 0
       ? []
-      : [{ court, decisions }];
+      : [{ court, tierLabel, decisions }];
   });
 };
 
@@ -246,20 +253,19 @@ const loadLatestDecisions = async ({
 > =>
   await Result.tryPromise({
     try: async () => {
-      // The shelf's courts are the jurisdiction's largest, which the facets
-      // already count (and cache).
-      const facets = await readBrowseFacets(country);
-      const courts = facets.court
-        .slice(0, LIMITS.caseLawLatestCourts)
-        .map((bucket) => bucket.value);
-      return {
+      const courts = await readShelfCourts({
+        caseLawDb,
         country,
-        courts: await readLatestDecisionsByCourt({
-          caseLawDb,
-          country,
-          courts,
-        }),
-      };
+        entries: await loadShelfCourtEntries(country),
+      });
+      const groups = await readLatestDecisionsByCourt({
+        caseLawDb,
+        country,
+        courts,
+      });
+      // The statement above dropped every candidate without public rows, so
+      // the cap counts only courts a reader will see.
+      return { country, courts: groups.slice(0, LIMITS.caseLawLatestCourts) };
     },
     catch: (cause) =>
       new LatestDecisionsError({

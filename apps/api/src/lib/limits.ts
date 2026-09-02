@@ -431,6 +431,10 @@ export const LIMITS = {
   caseLawLatestPerCourt: 5,
   legislationListPageSizeDefault: 20,
   legislationListPageSizeMax: 100,
+  /** Rows per list on the law home's legislation shelf. */
+  legislationShelfPerList: 5,
+  /** Days either side of today the legislation shelf looks at. */
+  legislationShelfWindowDays: 30,
   /** Consolidated versions of one work returned per page. */
   legislationVersionsPageSizeDefault: 50,
   legislationVersionsPageSizeMax: 200,

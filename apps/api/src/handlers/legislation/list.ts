@@ -125,7 +125,11 @@ const decodeListCursor = (cursor: string): ListCursor | null => {
  * later validity window. An anti-join rather than `DISTINCT ON` so the query
  * stays flat and Postgres can stop at the page limit.
  */
-const isCurrentVersionOfWork = sql`NOT EXISTS (
+/**
+ * The one in-force consolidation of a Work the listing shows: no later
+ * in-force window of the same `(source, eli, language)` exists.
+ */
+export const isCurrentVersionOfWork = sql`NOT EXISTS (
   SELECT 1
   FROM legislation_documents AS newer
   WHERE newer.source_id = ${legislationDocuments.sourceId}

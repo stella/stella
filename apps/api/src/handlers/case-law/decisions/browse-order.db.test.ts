@@ -3,8 +3,10 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import { readLatestDecisionsByCourt } from "@/api/handlers/case-law/decisions/latest";
 import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
+import { readShelfCourts } from "@/api/handlers/case-law/decisions/shelf-courts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -29,6 +31,7 @@ const sourceId = createSafeId<"caseLawSource">();
 type Seed = {
   caseNumber: string;
   court: string;
+  country?: string;
   createdAt: Date;
   decisionDate: string | null;
   language: string;
@@ -71,6 +74,26 @@ const seeds: Seed[] = [
     language,
     languageGroupKey: "ECLI:EU:C:2014:317",
   })),
+  // A second jurisdiction whose busiest court is a district court: six newer
+  // district judgments against one supreme judgment.
+  ...Array.from({ length: 6 }, (_, i) => ({
+    caseNumber: `${i + 1} C ${i + 1}/2025`,
+    court: "Okresný súd Bratislava I",
+    country: "SVK",
+    createdAt: day(40 + i),
+    decisionDate: `2025-02-${String(i + 1).padStart(2, "0")}`,
+    language: "sk",
+    languageGroupKey: null,
+  })),
+  {
+    caseNumber: "1 Cdo 9/2024",
+    court: "Najvyšší súd Slovenskej republiky",
+    country: "SVK",
+    createdAt: day(50),
+    decisionDate: "2024-12-01",
+    language: "sk",
+    languageGroupKey: null,
+  },
 ];
 
 let client: PGlite;
@@ -103,7 +126,7 @@ beforeAll(async () => {
       sourceId,
       caseNumber: seed.caseNumber,
       court: seed.court,
-      country: "CZE",
+      country: seed.country ?? "CZE",
       language: seed.language,
       languageGroupKey: seed.languageGroupKey,
       decisionDate: seed.decisionDate,
@@ -123,7 +146,7 @@ const walk = async (limit: number) => {
   for (let page = 0; page < 20; page += 1) {
     // oxlint-disable-next-line no-await-in-loop -- each page depends on the previous cursor
     const result = await listDecisionsHandler(
-      { limit, ...(cursor === undefined ? {} : { cursor }) },
+      { country: "CZE", limit, ...(cursor === undefined ? {} : { cursor }) },
       caseLawDb,
     );
     if (!("items" in result)) {
@@ -198,12 +221,16 @@ test(
     const shelf = await readLatestDecisionsByCourt({
       caseLawDb,
       country: "CZE",
-      courts: ["Nejvyšší soud", "Court of Justice", "No such court"],
+      courts: [
+        { court: "Nejvyšší soud", tierLabel: "supreme" },
+        { court: "Court of Justice", tierLabel: "constitutional" },
+        { court: "No such court", tierLabel: "supreme" },
+      ],
     });
     // A court without decisions is left off the shelf, not shown empty.
-    expect(shelf.map((group) => group.court)).toEqual([
-      "Nejvyšší soud",
-      "Court of Justice",
+    expect(shelf.map((group) => [group.court, group.tierLabel])).toEqual([
+      ["Nejvyšší soud", "supreme"],
+      ["Court of Justice", "constitutional"],
     ]);
     const byCourt = new Map(
       shelf.map((group) => [group.court, group.decisions]),
@@ -220,6 +247,30 @@ test(
     ]);
     expect(cjeu).toHaveLength(1);
     expect(cjeu?.[0]?.languageAlternates).toHaveLength(3);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "the shelf's courts are the jurisdiction's apex courts, not its busiest",
+  async () => {
+    const courts = await readShelfCourts({
+      caseLawDb,
+      country: "SVK",
+      entries: courtWeightMapFromSeed().get("SVK") ?? [],
+    });
+    // Six district judgments outnumber the one supreme judgment; rank wins.
+    expect(courts).toEqual([
+      { court: "Najvyšší súd Slovenskej republiky", tierLabel: "supreme" },
+    ]);
+    const shelf = await readLatestDecisionsByCourt({
+      caseLawDb,
+      country: "SVK",
+      courts,
+    });
+    expect(
+      shelf.map((group) => group.decisions.map((d) => d.caseNumber)),
+    ).toEqual([["1 Cdo 9/2024"]]);
   },
   DB_TEST_TIMEOUT_MS,
 );
