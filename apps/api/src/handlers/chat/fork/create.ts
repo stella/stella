@@ -29,8 +29,8 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { chunked } from "@/api/lib/chunked";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { consumeInBatches } from "@/api/lib/destructive-effect-chunks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
@@ -618,55 +618,62 @@ export const createForkThread = ({
           workspaceId: forkWorkspaceId,
         });
 
-        for (const batch of chunked(copies, FORK_INSERT_BATCH_SIZE)) {
-          // audit: skip — the attachment copies belong to the CHAT_THREAD create
-          // event recorded below, which names the fork they were made for.
-          // oxlint-disable-next-line no-await-in-loop, no-db-await-in-loop/no-db-await-in-loop -- one statement per batch is the point: the row set has no upper bound and a single INSERT cannot exceed the bind-parameter cap; the batches share this transaction, so nothing is gained by overlapping them
-          await tx.insert(userFiles).values(
-            batch.map((copy) => ({
-              extractedText: copy.source.extractedText,
-              fileName: copy.source.fileName,
-              id: copy.newFileId,
-              mimeType: copy.source.mimeType,
-              placeholder: copy.source.placeholder,
-              s3Key: copy.copiedS3Key,
-              scanWarnings: copy.source.scanWarnings,
-              sha256Hex: copy.source.sha256Hex,
-              sizeBytes: copy.source.sizeBytes,
-              threadId: newThreadId,
-              thumbnailFileId: copy.copiedThumbnailFileId,
-              userId: user.id,
-            })),
-          );
-        }
+        await consumeInBatches({
+          batchSize: FORK_INSERT_BATCH_SIZE,
+          consume: async (batch) => {
+            // audit: skip — the attachment copies belong to the CHAT_THREAD
+            // create event recorded below, which names the fork they were
+            // made for.
+            await tx.insert(userFiles).values(
+              batch.map((copy) => ({
+                extractedText: copy.source.extractedText,
+                fileName: copy.source.fileName,
+                id: copy.newFileId,
+                mimeType: copy.source.mimeType,
+                placeholder: copy.source.placeholder,
+                s3Key: copy.copiedS3Key,
+                scanWarnings: copy.source.scanWarnings,
+                sha256Hex: copy.source.sha256Hex,
+                sizeBytes: copy.source.sizeBytes,
+                threadId: newThreadId,
+                thumbnailFileId: copy.copiedThumbnailFileId,
+                userId: user.id,
+              })),
+            );
+          },
+          items: copies,
+        });
 
-        for (const batch of chunked(prefix, FORK_INSERT_BATCH_SIZE)) {
-          // audit: skip — copied history belongs to the CHAT_THREAD create event
-          // recorded below.
-          // oxlint-disable-next-line no-await-in-loop, no-db-await-in-loop/no-db-await-in-loop -- one statement per batch keeps an unbounded prefix under the bind-parameter cap; see the attachment loop above
-          await tx.insert(chatMessages).values(
-            batch.map(({ message, row }) => ({
-              // Timestamps are preserved: keyset ordering, recap and
-              // compaction all read (createdAt, id), so a re-stamped copy
-              // would reorder the fork against its own history.
-              createdAt: row.createdAt,
-              content: toPersistedChatMessageContentV3({
-                data: message.parts.map((part) =>
-                  remapChatAttachmentPart(part, copiedFileIds),
-                ),
-                ...(message.metadata === undefined
-                  ? {}
-                  : { metadata: message.metadata }),
-              }),
-              id: createSafeId<"chatMessage">(),
-              memoryExtractionEligible: row.memoryExtractionEligible,
-              role: row.role,
-              threadId: newThreadId,
-              userId: user.id,
-              workspaceId: row.workspaceId,
-            })),
-          );
-        }
+        await consumeInBatches({
+          batchSize: FORK_INSERT_BATCH_SIZE,
+          consume: async (batch) => {
+            // audit: skip — copied history belongs to the CHAT_THREAD create
+            // event recorded below.
+            await tx.insert(chatMessages).values(
+              batch.map(({ message, row }) => ({
+                // Timestamps are preserved: keyset ordering, recap and
+                // compaction all read (createdAt, id), so a re-stamped copy
+                // would reorder the fork against its own history.
+                createdAt: row.createdAt,
+                content: toPersistedChatMessageContentV3({
+                  data: message.parts.map((part) =>
+                    remapChatAttachmentPart(part, copiedFileIds),
+                  ),
+                  ...(message.metadata === undefined
+                    ? {}
+                    : { metadata: message.metadata }),
+                }),
+                id: createSafeId<"chatMessage">(),
+                memoryExtractionEligible: row.memoryExtractionEligible,
+                role: row.role,
+                threadId: newThreadId,
+                userId: user.id,
+                workspaceId: row.workspaceId,
+              })),
+            );
+          },
+          items: prefix,
+        });
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,
