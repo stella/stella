@@ -624,6 +624,54 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
     expect(stats.generated).toBe(catalog.length - suppressed);
   });
 
+  test("no committed input schema carries a transport coercion union", async () => {
+    // Elysia compiles `t.Integer` and friends to a string|scalar union with
+    // the bounds hoisted above it. The catalog embeds the advertised
+    // projection, which flattens that to the scalar; a union surviving here
+    // would give the generated command an opaque `--input` where the MCP
+    // surface advertises a bounded flag.
+    const catalog: { id: string; inputSchema: unknown }[] = await Bun.file(
+      new URL("../capability-catalog.json", import.meta.url),
+    ).json();
+    const coercionFormats = new Set(["integer", "numeric", "boolean"]);
+    const offenders: string[] = [];
+    const walk = (node: unknown, path: string): void => {
+      if (Array.isArray(node)) {
+        for (const [index, item] of node.entries()) {
+          walk(item, `${path}[${index}]`);
+        }
+        return;
+      }
+      if (typeof node !== "object" || node === null) {
+        return;
+      }
+      const record: Record<string, unknown> = { ...node };
+      const branches = record["anyOf"];
+      if (
+        Array.isArray(branches) &&
+        branches.some(
+          (branch) =>
+            typeof branch === "object" &&
+            branch !== null &&
+            "format" in branch &&
+            typeof branch.format === "string" &&
+            coercionFormats.has(branch.format) &&
+            "type" in branch &&
+            branch.type === "string",
+        )
+      ) {
+        offenders.push(path);
+      }
+      for (const [key, value] of Object.entries(record)) {
+        walk(value, `${path}.${key}`);
+      }
+    };
+    for (const capability of catalog) {
+      walk(capability.inputSchema, capability.id);
+    }
+    expect(offenders).toEqual([]);
+  });
+
   test("every committed entry declares a transport", async () => {
     // `transport` is total on the wire. A snapshot entry without it would be
     // read as a plain JSON capability by anything less strict than

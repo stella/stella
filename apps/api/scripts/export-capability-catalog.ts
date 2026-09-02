@@ -34,6 +34,7 @@
 // env at module load), so run under `bun --env-file=apps/api/.env`. Wired into
 // `bun run verify` and CI next to the CLI registry-snapshot drift guard.
 
+import { KindGuard } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
@@ -54,6 +55,7 @@ import {
   isTransportInvocable,
   transportFileResponse,
 } from "../src/lib/capability-transport";
+import { advertisedSchema } from "../src/mcp/advertised-schema";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import type { McpToolDefinition } from "../src/mcp/tool-types";
 import {
@@ -500,16 +502,25 @@ const buildInputSchema = (
 ): CapabilityInputSchema => {
   const inputSchema: CapabilityInputSchema = {};
   if ("body" in config) {
-    inputSchema.body = config["body"];
+    inputSchema.body = advertisedPart(config["body"]);
   }
   if ("params" in config) {
-    inputSchema.params = config["params"];
+    inputSchema.params = advertisedPart(config["params"]);
   }
   if ("query" in config) {
-    inputSchema.query = config["query"];
+    inputSchema.query = advertisedPart(config["query"]);
   }
   return inputSchema;
 };
+
+/**
+ * The catalog carries the same projection `describe_capability` advertises
+ * (coercion unions flattened to their scalar), so the CLI's generated flags
+ * and the MCP surface enforce one contract. A part that is not a TypeBox
+ * schema is left as the handler declared it.
+ */
+const advertisedPart = (part: unknown): unknown =>
+  KindGuard.IsSchema(part) ? advertisedSchema(part) : part;
 
 /**
  * The handler config's tool-level `description`. A non-string or empty value is
