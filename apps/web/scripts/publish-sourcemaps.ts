@@ -121,17 +121,20 @@ export const removeSourcemaps = async (root: string): Promise<number> => {
   return files.length;
 };
 
-/** Every client chunk must carry the injected id, or the upload was partial. */
+/** Every mapped client chunk must carry the injected id, or the upload was partial. */
 export const assertChunksInjected = async (
   clientRoot: string,
 ): Promise<number> => {
   const missing: string[] = [];
   let count = 0;
-  for await (const file of new Bun.Glob("assets/*.js").scan({
+  // PostHog only injects JavaScript/source-map pairs. Vite may also copy
+  // prebuilt JavaScript assets that have no map and cannot be uploaded.
+  for await (const mapFile of new Bun.Glob("assets/*.js.map").scan({
     absolute: true,
     cwd: clientRoot,
   })) {
     count += 1;
+    const file = mapFile.slice(0, -".map".length);
     const source = await readFile(file, "utf-8");
     if (!source.includes(CHUNK_ID_MARKER)) {
       missing.push(path.relative(clientRoot, file));
