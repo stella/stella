@@ -206,11 +206,17 @@ const buildStubScopedDb = (): ScopedDb => {
 };
 
 type FillCall = {
+  templateId: string;
   values: Record<string, unknown>;
   result:
     | { text: string; unmatchedPlaceholders: string[]; unusedValues: string[] }
     | { error: string };
 };
+
+// Matches the "Template not found." message `describeStoredTemplate` and
+// `fillStoredTemplate` return for an unknown id, so a model that hallucinates
+// a templateId sees the same rejection production would give it.
+const TEMPLATE_NOT_FOUND = { error: "Template not found." } as const;
 
 type ToolTrace = { name: string; input: unknown };
 
@@ -248,6 +254,9 @@ const createFixtureTools = ({
     ),
   }).server(async ({ templateId }) => {
     trace.push({ name: DESCRIBE_TEMPLATE_TOOL_NAME, input: { templateId } });
+    if (templateId !== fixture.templateId) {
+      return await Promise.resolve(TEMPLATE_NOT_FOUND);
+    }
     return await Promise.resolve(
       describeManifest(fixture.name, fixture.manifest),
     );
@@ -268,8 +277,15 @@ const createFixtureTools = ({
         ),
       }),
     ),
-  }).server(async ({ values }) => {
-    trace.push({ name: FILL_TEMPLATE_TOOL_NAME, input: { values } });
+  }).server(async ({ templateId, values }) => {
+    trace.push({
+      name: FILL_TEMPLATE_TOOL_NAME,
+      input: { templateId, values },
+    });
+    if (templateId !== fixture.templateId) {
+      fillCalls.push({ templateId, values, result: TEMPLATE_NOT_FOUND });
+      return TEMPLATE_NOT_FOUND;
+    }
     const filled = await fillTemplateDocx({
       source,
       values,
@@ -285,7 +301,7 @@ const createFixtureTools = ({
     }
     if ("error" in filled) {
       const result = { error: filled.error };
-      fillCalls.push({ values, result });
+      fillCalls.push({ templateId, values, result });
       return result;
     }
     const { paragraphs } = await extractText(filled.buffer);
@@ -297,7 +313,7 @@ const createFixtureTools = ({
       unmatchedPlaceholders: filled.unmatchedPlaceholders,
       unusedValues: filled.unusedValues,
     };
-    fillCalls.push({ values, result });
+    fillCalls.push({ templateId, values, result });
     return result;
   });
 
@@ -436,6 +452,15 @@ const SOW_PARAGRAPHS = [
   P("- {{deliverables.name}} (due {{deliverables.due_date}})"),
   P("{{/each}}"),
   P("{{#if rush_fee_applies}}A rush fee applies to this engagement.{{/if}}"),
+];
+
+// Kept as name/date pairs (not two flat lists) so scoring can check each
+// deliverable against its own due date instead of independent membership,
+// which would still pass a model that swaps two dates.
+const SOW_DELIVERABLES: readonly { name: string; dueDate: string }[] = [
+  { name: "Site survey", dueDate: "2026-10-01" },
+  { name: "Equipment install", dueDate: "2026-10-15" },
+  { name: "Final handover", dueDate: "2026-11-01" },
 ];
 
 const isIsoDate = (value: unknown): value is string =>
@@ -681,18 +706,14 @@ const buildTasks = async (): Promise<EvalTask[]> => {
         if (!text.includes("Riverside Logistics")) {
           missing.push("client name");
         }
-        for (const fact of [
-          "Site survey",
-          "Equipment install",
-          "Final handover",
-        ]) {
-          if (!text.includes(fact)) {
-            missing.push(fact);
-          }
-        }
-        for (const date of ["2026-10-01", "2026-10-15", "2026-11-01"]) {
-          if (!text.includes(date)) {
-            missing.push(date);
+        // Check each deliverable together with its own due date (the
+        // rendered "- name (due date)" pair), not as two independent lists:
+        // independent membership checks would still pass a model that
+        // renders every name and date but swaps which date goes with which
+        // deliverable.
+        for (const { name, dueDate } of SOW_DELIVERABLES) {
+          if (!text.includes(`${name} (due ${dueDate})`)) {
+            missing.push(`${name} due ${dueDate}`);
           }
         }
         // The prompt states the rush fee applies, so the clause is required
@@ -790,42 +811,50 @@ const runModelTurn = async ({
     () => abortController.abort(),
     MODEL_REQUEST_TIMEOUT_MS,
   );
-  const stream = chat({
-    abortController,
-    adapter: model.adapter,
-    messages: [{ role: "user", content: task.prompt }],
-    agentLoopStrategy: maxIterations(MAX_ITERATIONS),
-    ...systemPromptsPatch({ caching, model, system }),
-    modelOptions: mergeGenerationOptions({
-      caching,
-      model,
-      maxOutputTokens: MAX_OUTPUT_TOKENS,
-      serviceTier: "standard",
-      temperature: 0,
-    }),
-    tools,
-  });
-
   let finalText = "";
   let usage: TokenUsage | null = null;
-  let error: string | null = null;
-  for await (const chunk of stream) {
-    if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
-      finalText += chunk.delta;
-      continue;
+  let turnError: string | null = null;
+  // `chat()` or the stream it returns can reject mid-turn (adapter error,
+  // dropped connection); a try/finally here is the boundary that must still
+  // report an `EvalRun` with an "error" score and always clear the abort
+  // timer, matching how the other evals' model turns are structured.
+  try {
+    const stream = chat({
+      abortController,
+      adapter: model.adapter,
+      messages: [{ role: "user", content: task.prompt }],
+      agentLoopStrategy: maxIterations(MAX_ITERATIONS),
+      ...systemPromptsPatch({ caching, model, system }),
+      modelOptions: mergeGenerationOptions({
+        caching,
+        model,
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
+        serviceTier: "standard",
+        temperature: 0,
+      }),
+      tools,
+    });
+    for await (const chunk of stream) {
+      if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
+        finalText += chunk.delta;
+        continue;
+      }
+      if (chunk.type === EventType.RUN_ERROR) {
+        turnError = chunk.message;
+        continue;
+      }
+      if (chunk.type === EventType.RUN_FINISHED) {
+        usage = tokenUsageFromRunFinishedChunk(chunk) ?? null;
+      }
     }
-    if (chunk.type === EventType.RUN_ERROR) {
-      error = chunk.message;
-      continue;
-    }
-    if (chunk.type === EventType.RUN_FINISHED) {
-      usage = tokenUsageFromRunFinishedChunk(chunk) ?? null;
-    }
+  } catch (error: unknown) {
+    turnError = error instanceof Error ? error.message : String(error);
+  } finally {
+    clearTimeout(abortTimer);
   }
-  clearTimeout(abortTimer);
   return {
     turn: {
-      error,
+      error: turnError,
       finalText,
       latencyMs: Math.round(performance.now() - start),
       usage,
@@ -897,8 +926,26 @@ const scoreRun = (
   if (fillCalls.length === 0) {
     return { ...base, outcome: "no-call" };
   }
+  if (fillCalls.length > 1) {
+    return {
+      ...base,
+      outcome: "fail",
+      typeErrors: [
+        `fill_template called ${String(fillCalls.length)} times, expected exactly one`,
+      ],
+    };
+  }
   const last =
-    fillCalls.at(-1) ?? panic("fillCalls non-empty but at(-1) missing");
+    fillCalls.at(0) ?? panic("fillCalls non-empty but at(0) missing");
+  if (last.templateId !== task.fixture.templateId) {
+    return {
+      ...base,
+      outcome: "fail",
+      typeErrors: [
+        `fill_template called with templateId "${last.templateId}" instead of "${task.fixture.templateId}"`,
+      ],
+    };
+  }
   if ("error" in last.result) {
     return {
       ...base,
@@ -910,9 +957,18 @@ const scoreRun = (
   const requiredMissing = task.requiredPaths.filter(
     (path) => !hasValue(last.values, path),
   );
-  const skippedDescribe = !trace.some(
+  // `describe_template` must precede the fill call, not merely appear
+  // somewhere in the trace: a model that fills first and describes
+  // afterward never learned the field contract before acting.
+  const fillTraceIndex = trace.findIndex(
+    (call) => call.name === FILL_TEMPLATE_TOOL_NAME,
+  );
+  const describeTraceIndex = trace.findIndex(
     (call) => call.name === DESCRIBE_TEMPLATE_TOOL_NAME,
   );
+  const skippedDescribe =
+    describeTraceIndex === -1 ||
+    (fillTraceIndex !== -1 && describeTraceIndex > fillTraceIndex);
   const typeErrors = task.checkTypeErrors(last.values);
   if (skippedDescribe) {
     typeErrors.push(
