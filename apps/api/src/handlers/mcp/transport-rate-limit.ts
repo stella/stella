@@ -12,6 +12,7 @@ import {
 } from "@/api/mcp/constants";
 
 const MCP_TRANSPORT_RATE_LIMIT_SCOPE = "mcp-transport";
+const MCP_TRANSPORT_ADDRESS_RATE_LIMIT_SCOPE = "mcp-transport-address";
 
 const MCP_TRANSPORT_PATHS: ReadonlySet<string> = new Set([
   MCP_ANONYMIZED_HTTP_PATH,
@@ -49,14 +50,31 @@ export const mcpTransportRateLimitKey: RateLimitGenerator = (
     ? authorization.slice(BEARER_SCHEME.length).trim()
     : "";
   if (token.length === 0) {
-    const clientIp = resolveClientIp(request, server);
-    return clientIp
-      ? `${MCP_TRANSPORT_RATE_LIMIT_SCOPE}:ip:${clientIp}`
-      : MCP_TRANSPORT_RATE_LIMIT_SCOPE;
+    return addressKey(MCP_TRANSPORT_RATE_LIMIT_SCOPE, request, server);
   }
   const digest = new Bun.CryptoHasher("sha256").update(token).digest("hex");
   return `${MCP_TRANSPORT_RATE_LIMIT_SCOPE}:token:${digest}`;
 };
+
+const addressKey = (
+  scope: string,
+  request: Request,
+  server: Parameters<RateLimitGenerator>[1],
+): string => {
+  const clientIp = resolveClientIp(request, server);
+  return clientIp ? `${scope}:ip:${clientIp}` : scope;
+};
+
+/**
+ * The credential bucket alone does not bound a caller who invents a new
+ * bearer value per request: every value opens a fresh bucket, and every
+ * request still costs a token verification. The address bucket sits in front
+ * of it so that rotation is charged to the one thing the caller cannot rotate.
+ */
+export const mcpTransportAddressRateLimitKey: RateLimitGenerator = (
+  request,
+  server,
+) => addressKey(MCP_TRANSPORT_ADDRESS_RATE_LIMIT_SCOPE, request, server);
 
 /**
  * A throttled call answers in the protocol's own error envelope: an MCP client
@@ -87,6 +105,12 @@ export const MCP_TRANSPORT_RATE_LIMIT_POLICY = {
   skip: (request: Request) => !isMcpTransportRateLimitedRequest(request),
 } as const satisfies Omit<RateLimitOptions, "context" | "generator">;
 
+export const MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY = {
+  ...MCP_TRANSPORT_RATE_LIMIT_POLICY,
+  duration: API_RATE_LIMITS.mcpTransportAddress.duration,
+  max: API_RATE_LIMITS.mcpTransportAddress.max,
+} as const satisfies Omit<RateLimitOptions, "context" | "generator">;
+
 export const createMcpTransportRateLimitOptions = () =>
   ({
     ...MCP_TRANSPORT_RATE_LIMIT_POLICY,
@@ -94,5 +118,15 @@ export const createMcpTransportRateLimitOptions = () =>
       counterKeyGenerator: mcpTransportRateLimitKey,
       failurePolicy: "fail_open_local",
       scope: MCP_TRANSPORT_RATE_LIMIT_SCOPE,
+    }),
+  }) as const satisfies RateLimitOptions;
+
+export const createMcpTransportAddressRateLimitOptions = () =>
+  ({
+    ...MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY,
+    ...createRedisRateLimit({
+      counterKeyGenerator: mcpTransportAddressRateLimitKey,
+      failurePolicy: "fail_open_local",
+      scope: MCP_TRANSPORT_ADDRESS_RATE_LIMIT_SCOPE,
     }),
   }) as const satisfies RateLimitOptions;

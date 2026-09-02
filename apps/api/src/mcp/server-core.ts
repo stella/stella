@@ -382,36 +382,46 @@ const MCP_TRANSPORT_ACCEPT_RANGES = {
 
 const MCP_TRANSPORT_ACCEPT_HEADER = MCP_TRANSPORT_MEDIA_TYPES.join(", ");
 
+type MediaRangeDisposition = "accepted" | "refused";
+
 /**
- * The media ranges a client accepts. A range carrying `q=0` is an explicit
- * refusal (RFC 9110 §12.4.2): JSON followed by a wildcard at `q=0` covers
- * JSON only.
+ * Every media range the header names, with `q=0` recorded as an explicit
+ * refusal (RFC 9110 §12.4.2). A range named twice keeps its first entry.
  */
-const acceptedMediaRanges = (accept: string): Set<string> => {
-  const ranges = new Set<string>();
+const mediaRangeDispositions = (
+  accept: string,
+): Map<string, MediaRangeDisposition> => {
+  const dispositions = new Map<string, MediaRangeDisposition>();
   for (const entry of accept.split(",")) {
     const [range, ...parameters] = entry
       .split(";")
       .map((part) => part.trim().toLowerCase());
-    if (range === undefined || range.length === 0) {
+    if (range === undefined || range.length === 0 || dispositions.has(range)) {
       continue;
     }
     const refused = parameters.some((parameter) => {
       const [name, value] = parameter.split("=");
       return name?.trim() === "q" && Number(value) === 0;
     });
-    if (!refused) {
-      ranges.add(range);
-    }
+    dispositions.set(range, refused ? "refused" : "accepted");
   }
-  return ranges;
+  return dispositions;
 };
 
+/**
+ * The most specific range covering a media type decides for it (RFC 9110
+ * §12.5.1): JSON at `q=0` beside an accepted wildcard still refuses JSON,
+ * and accepted JSON beside a refused wildcard still accepts it. The per-type
+ * range lists are ordered most specific first.
+ */
 const acceptsEveryTransportMediaType = (accept: string): boolean => {
-  const ranges = acceptedMediaRanges(accept);
-  return MCP_TRANSPORT_MEDIA_TYPES.every((mediaType) =>
-    MCP_TRANSPORT_ACCEPT_RANGES[mediaType].some((range) => ranges.has(range)),
-  );
+  const dispositions = mediaRangeDispositions(accept);
+  return MCP_TRANSPORT_MEDIA_TYPES.every((mediaType) => {
+    const decisive = MCP_TRANSPORT_ACCEPT_RANGES[mediaType].find((range) =>
+      dispositions.has(range),
+    );
+    return decisive !== undefined && dispositions.get(decisive) === "accepted";
+  });
 };
 
 /**

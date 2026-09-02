@@ -535,6 +535,16 @@ const collectOpenObjectSchemas = (
       collectOpenObjectSchemas(property, `${path}.${key}`, issues);
     }
   }
+  if (isRecord(schema["patternProperties"])) {
+    for (const property of Object.values(schema["patternProperties"])) {
+      collectOpenObjectSchemas(property, `${path}[*]`, issues);
+    }
+  }
+  collectOpenObjectSchemas(
+    schema["additionalProperties"],
+    `${path}[*]`,
+    issues,
+  );
   collectOpenObjectSchemas(schema["items"], `${path}[]`, issues);
   for (const keyword of ["anyOf", "allOf", "oneOf"]) {
     const branches = schema[keyword];

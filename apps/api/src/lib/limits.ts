@@ -609,6 +609,12 @@ export const API_RATE_LIMITS = {
    *  Discovery and preflight stay outside it: both are static and must
    *  answer a client that has not authenticated yet. */
   mcpTransport: { duration: 60_000, max: 600 },
+  /** MCP transport paths: 3000 req/min per client address, checked before
+   *  the per-credential budget. The credential bucket cannot bound a caller
+   *  that rotates invented bearer values (each is a fresh bucket, and each
+   *  costs a token verification); the address bucket does. It is wide enough
+   *  that a NAT full of agents fits under it. */
+  mcpTransportAddress: { duration: 60_000, max: 3000 },
   /** Folio collaborative-edit token endpoints: 30 req/min per IP.
    *  Each authorize/refresh/snapshot call runs a multi-table join
    *  against unauthenticated input, so the budget is intentionally

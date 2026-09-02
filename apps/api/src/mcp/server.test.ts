@@ -1113,12 +1113,19 @@ describe("MCP transport conformance", () => {
     authenticateSession();
 
     const responses = await Promise.all(
-      ["application/json", "application/json, */*;q=0"].map(
+      [
+        "application/json",
+        "application/json, */*;q=0",
+        // The specific refusal outranks the wildcard that would cover it.
+        "application/json;q=0, */*",
+      ].map(
         async (accept) => await handleMcpHttpRequest(toolsListRequest(accept)),
       ),
     );
 
-    expect(responses.map((response) => response.status)).toEqual([406, 406]);
+    expect(responses.map((response) => response.status)).toEqual([
+      406, 406, 406,
+    ]);
   });
 
   test("reads no body before the token is accepted", async () => {

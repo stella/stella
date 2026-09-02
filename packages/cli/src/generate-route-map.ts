@@ -167,6 +167,15 @@ const unwrapNullableUnion = (schema: PropSchema): PropSchema => {
     return schema;
   }
   const { anyOf: _anyOf, ...outer } = schema;
+  // An assertion the wrapper states as well (a hoisted `minimum`, an `enum`)
+  // would be overwritten by the branch's; such a union stays a union rather
+  // than losing the stricter of the two.
+  const overridesOuter = Object.keys(valueBranch).some(
+    (key) => key !== "type" && Object.hasOwn(outer, key),
+  );
+  if (overridesOuter) {
+    return schema;
+  }
   return { ...outer, ...valueBranch, type: [...valueTypes, "null"] };
 };
 

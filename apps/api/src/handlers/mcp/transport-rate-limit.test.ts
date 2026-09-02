@@ -5,7 +5,9 @@ import { createMcpRoute } from "@/api/handlers/mcp/routes-core";
 import {
   isMcpTransportRateLimitedRequest,
   MCP_RATE_LIMIT_JSON_RPC_ERROR,
+  MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY,
   MCP_TRANSPORT_RATE_LIMIT_POLICY,
+  mcpTransportAddressRateLimitKey,
   mcpTransportRateLimitKey,
 } from "@/api/handlers/mcp/transport-rate-limit";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
@@ -48,8 +50,22 @@ const transportRequest = ({
  * production wires up. The Redis binding wraps this same generator with a
  * per-request refund token, which the in-memory context does not parse.
  */
-const createLimitedApp = ({ max }: { max: number }) =>
+const createLimitedApp = ({
+  max,
+  addressMax = max * 10,
+}: {
+  max: number;
+  addressMax?: number;
+}) =>
   new Elysia()
+    .use(
+      rateLimit({
+        ...MCP_TRANSPORT_ADDRESS_RATE_LIMIT_POLICY,
+        context: new InMemoryRateLimitContext(),
+        generator: mcpTransportAddressRateLimitKey,
+        max: addressMax,
+      }),
+    )
     .use(
       rateLimit({
         ...MCP_TRANSPORT_RATE_LIMIT_POLICY,
@@ -115,6 +131,29 @@ describe("mcpTransportRateLimitKey", () => {
     expect(second).toBe(first);
   });
 
+  test("the address key ignores the credential and follows the peer", async () => {
+    const server = ipServer("203.0.113.7");
+    const [first, second, elsewhere] = await Promise.all([
+      mcpTransportAddressRateLimitKey(
+        transportRequest({ token: TOKEN }),
+        server,
+      ),
+      mcpTransportAddressRateLimitKey(
+        transportRequest({ token: "stella_at_other_value" }),
+        server,
+      ),
+      mcpTransportAddressRateLimitKey(
+        transportRequest({ token: TOKEN }),
+        ipServer("198.51.100.4"),
+      ),
+    ]);
+
+    expect(first).toBe("mcp-transport-address:ip:203.0.113.7");
+    expect(second).toBe(first);
+    expect(elsewhere).not.toBe(first);
+    expect(first).not.toContain(TOKEN);
+  });
+
   test("separates distinct credentials and falls back to the client address", async () => {
     const server = ipServer("203.0.113.7");
     const tokenKey = await mcpTransportRateLimitKey(
@@ -158,6 +197,23 @@ describe("MCP transport rate limit", () => {
     );
     expect(limited.headers.get("content-type")).toContain("application/json");
     expect(await limited.json()).toEqual(MCP_RATE_LIMIT_JSON_RPC_ERROR);
+  });
+
+  test("charges rotated bearer values to the address budget", async () => {
+    const app = createLimitedApp({ max: 100, addressMax: 2 });
+
+    const responses: number[] = [];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- the limiter counts requests, so they must be sequential
+      const response = await app.handle(
+        transportRequest({ token: `stella_at_invented_${attempt}` }),
+      );
+      responses.push(response.status);
+    }
+
+    // Each invented credential is a fresh credential bucket; the address
+    // bucket (one peer under `handle`) still refuses the third call.
+    expect(responses).toEqual([200, 200, 429]);
   });
 
   test("gives each credential its own bucket", async () => {

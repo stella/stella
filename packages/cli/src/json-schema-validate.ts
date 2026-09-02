@@ -62,7 +62,12 @@ const STRING_ASSERTION_KEYWORDS = [
 const KNOWN_STRING_FORMATS = {
   date: (value: string) =>
     /^\d{4}-\d{2}-\d{2}$/u.test(value) && !Number.isNaN(Date.parse(value)),
-  "date-time": (value: string) => !Number.isNaN(Date.parse(value)),
+  // RFC 3339 §5.6: full date, `T`, full time, and an offset; `Date.parse`
+  // alone also admits a bare date or a local time.
+  "date-time": (value: string) =>
+    /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$/u.test(
+      value,
+    ) && !Number.isNaN(Date.parse(value)),
   uuid: (value: string) =>
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(
       value,
