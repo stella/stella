@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ReactElement, ReactNode } from "react";
+import type { DragEvent, ReactElement, ReactNode } from "react";
 
 import { ChevronDownIcon } from "lucide-react";
 
@@ -145,8 +145,8 @@ export type KanbanSubgroupBoardProps<TRow> = {
  * Columns that carry band metadata render under a one-line band caption and
  * can be collapsed as a run: the band folds into one narrow slot in every
  * row, whose cells stay reachable (a host renders its drop target in them),
- * and peeks open while a pointer rests on it, so a drag can still land on a
- * specific column inside. Every row is laid out span by span with the same
+ * and peeks open while a dragged card rests on it, so a drag can still land
+ * on a specific column inside; a plain hover never opens it. Every row is laid out span by span with the same
  * widths, which is what keeps captions, headers, counts, and cells aligned
  * in every state; the caption line never grows past its own height, so a
  * folded band costs no vertical space.
@@ -183,6 +183,17 @@ export const KanbanSubgroupBoard = <TRow,>({
     createBandPeekController({ onChange: setPeekingBandId }),
   );
   useEffect(() => () => peek.dispose(), [peek]);
+  // A drop or a cancelled drag ends the peek wherever the card was; the
+  // open band may never see a leave for it.
+  useEffect(() => {
+    const end = () => peek.dragEnded();
+    window.addEventListener("dragend", end);
+    window.addEventListener("drop", end);
+    return () => {
+      window.removeEventListener("dragend", end);
+      window.removeEventListener("drop", end);
+    };
+  }, [peek]);
 
   const { cellsByLaneValue, countByColumnValue, ungroupedCells } =
     useMemo(() => {
@@ -360,11 +371,17 @@ export const KanbanSubgroupBoard = <TRow,>({
             className="flex gap-3"
             data-kanban-band={band?.id}
             key={spanKey(span)}
-            onPointerEnter={
-              band === null ? undefined : () => peek.openPointerEnter(band.id)
+            onDragEnter={
+              band === null ? undefined : () => peek.openDragEnter(band.id)
             }
-            onPointerLeave={
-              band === null ? undefined : () => peek.openPointerLeave(band.id)
+            onDragLeave={
+              band === null
+                ? undefined
+                : (event) => {
+                    if (leavesElement(event)) {
+                      peek.openDragLeave(band.id);
+                    }
+                  }
             }
           >
             {span.columns.map((column) => (
@@ -506,8 +523,12 @@ export const KanbanSubgroupBoard = <TRow,>({
                     data-kanban-band={band.id}
                     key={spanKey(span)}
                     style={{ width: `${String(spanWidth(span))}px` }}
-                    onPointerEnter={() => peek.openPointerEnter(band.id)}
-                    onPointerLeave={() => peek.openPointerLeave(band.id)}
+                    onDragEnter={() => peek.openDragEnter(band.id)}
+                    onDragLeave={(event) => {
+                      if (leavesElement(event)) {
+                        peek.openDragLeave(band.id);
+                      }
+                    }}
                   >
                     {bandHeader(band, span)}
                   </div>
@@ -640,6 +661,16 @@ export const KanbanSubgroupBoard = <TRow,>({
   );
 };
 
+/**
+ * Whether a drag-leave event actually leaves `currentTarget` rather than
+ * moving between its descendants, which fire leave/enter pairs of their own.
+ */
+const leavesElement = (event: DragEvent<HTMLElement>): boolean =>
+  !(
+    event.relatedTarget instanceof Node &&
+    event.currentTarget.contains(event.relatedTarget)
+  );
+
 type FoldedBandSlotProps = {
   band: KanbanColumnBand;
   children: ReactNode;
@@ -648,9 +679,9 @@ type FoldedBandSlotProps = {
 };
 
 /**
- * The narrow slot a folded band occupies in a row. Its pointer events go to
- * the board's peek controller, which decides when a resting pointer peeks
- * the band open and keeps a slot that appeared under the pointer folded.
+ * The narrow slot a folded band occupies in a row. Its drag events go to
+ * the board's peek controller, which decides when a resting drag peeks the
+ * band open and keeps a slot that appeared under the pointer folded.
  */
 const FoldedBandSlot = ({
   band,
@@ -666,8 +697,12 @@ const FoldedBandSlot = ({
       className={className}
       data-kanban-band={band.id}
       data-kanban-band-collapsed=""
-      onPointerMove={() => peek.slotPointerMove(band.id)}
-      onPointerLeave={() => peek.slotPointerLeave(band.id)}
+      onDragOver={() => peek.slotDragOver(band.id)}
+      onDragLeave={(event) => {
+        if (leavesElement(event)) {
+          peek.slotDragLeave(band.id);
+        }
+      }}
     >
       {children}
     </div>

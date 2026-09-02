@@ -1,26 +1,27 @@
 /**
- * The peek a collapsed band opens while a pointer rests on its folded slot,
- * as a state machine with an injectable scheduler so its timing rules can be
- * tested without a DOM.
+ * The peek a collapsed band opens while a dragged card rests on its folded
+ * slot, as a state machine with an injectable scheduler so its timing rules
+ * can be tested without a DOM. A plain hover never peeks: the peek exists so
+ * a drag can still land on a specific column inside a folded band, and the
+ * board only feeds the controller drag events.
  *
- * Two rules keep a peek from fighting the pointer:
+ * Two rules keep a peek from fighting the drag:
  *
- *  - A slot that appeared under the pointer does not peek. Folding a band
- *    from its caption leaves the new slot right under the cursor; the first
- *    movement there must not reopen what was just closed. The band is
- *    suppressed until the pointer leaves the slot once.
- *  - A peek ends only after the pointer has left every part of the open
- *    band for a short linger. The band renders as separate elements (its
- *    caption, then its columns in each lane), so moving from the caption
- *    down into a column crosses an element boundary; without the linger the
- *    band would fold under the pointer and the slot would peek it straight
- *    back open.
+ *  - A slot that appeared under the dragged card does not peek. Folding a
+ *    band from its caption leaves the new slot right under the cursor; the
+ *    band is suppressed until the pointer leaves the slot once.
+ *  - A peek ends only after the drag has left every part of the open band
+ *    for a short linger. The band renders as separate elements (its caption,
+ *    then its columns in each lane), so moving from the caption down into a
+ *    column crosses an element boundary; without the linger the band would
+ *    fold under the card and the slot would peek it straight back open.
+ *  - The end of the drag, wherever it lands, ends the peek at once.
  */
 
-/** How long a pointer rests on a folded slot before the band peeks open. */
+/** How long a dragged card rests on a folded slot before the band peeks open. */
 export const KANBAN_BAND_PEEK_DELAY_MS = 400;
 
-/** How long the pointer may be outside an open band before the peek ends. */
+/** How long the drag may be outside an open band before the peek ends. */
 export const KANBAN_BAND_PEEK_LINGER_MS = 150;
 
 /** Runs `callback` after `ms`; the returned function cancels it. */
@@ -44,14 +45,16 @@ export type BandPeekControllerOptions = {
 };
 
 export type BandPeekController = {
-  /** The pointer moved inside a band's folded slot. */
-  slotPointerMove: (bandId: string) => void;
-  /** The pointer left a band's folded slot. */
-  slotPointerLeave: (bandId: string) => void;
-  /** The pointer entered a part of a band that is rendered open. */
-  openPointerEnter: (bandId: string) => void;
-  /** The pointer left a part of a band that is rendered open. */
-  openPointerLeave: (bandId: string) => void;
+  /** A dragged card moved over a band's folded slot. */
+  slotDragOver: (bandId: string) => void;
+  /** The drag left a band's folded slot. */
+  slotDragLeave: (bandId: string) => void;
+  /** The drag entered a part of a band that is rendered open. */
+  openDragEnter: (bandId: string) => void;
+  /** The drag left a part of a band that is rendered open. */
+  openDragLeave: (bandId: string) => void;
+  /** The drag ended (dropped or cancelled), wherever it was. */
+  dragEnded: () => void;
   /**
    * The band was folded by a pointer on its caption, so its slot now sits
    * under the pointer; it must not peek until the pointer leaves the slot.
@@ -118,7 +121,7 @@ export const createBandPeekController = ({
   };
 
   return {
-    slotPointerMove: (bandId) => {
+    slotDragOver: (bandId) => {
       if (
         suppressedBandId === bandId ||
         peekingBandId === bandId ||
@@ -135,7 +138,7 @@ export const createBandPeekController = ({
         setPeeking(bandId);
       }, delayMs);
     },
-    slotPointerLeave: (bandId) => {
+    slotDragLeave: (bandId) => {
       if (openingBandId === bandId) {
         clearOpenTimer();
       }
@@ -143,12 +146,12 @@ export const createBandPeekController = ({
         suppressedBandId = null;
       }
     },
-    openPointerEnter: (bandId) => {
+    openDragEnter: (bandId) => {
       if (peekingBandId === bandId) {
         clearEndTimer();
       }
     },
-    openPointerLeave: (bandId) => {
+    openDragLeave: (bandId) => {
       if (peekingBandId !== bandId || cancelEnd !== null) {
         return;
       }
@@ -181,6 +184,11 @@ export const createBandPeekController = ({
       if (suppressedBandId === bandId) {
         suppressedBandId = null;
       }
+    },
+    dragEnded: () => {
+      clearOpenTimer();
+      clearEndTimer();
+      setPeeking(null);
     },
     dispose: () => {
       clearOpenTimer();
