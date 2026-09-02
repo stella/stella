@@ -1176,7 +1176,7 @@ const buildActiveFilePrompt = ({
       ? buildActiveDocxEditPrompt(activeFile, toolAvailability)
       : "",
     `Do NOT call matter-wide retrieval (\`external_list_documents\`) for these open-ended questions — the user does not want answers synthesised from other files in the matter. The chat history is always available; reference earlier turns directly without re-fetching.`,
-    `Widen the scope to the rest of the matter ONLY when the user explicitly asks (e.g., "compare with the other contracts", "search across the matter", or names another document). When that happens, call \`external_list_documents\` scoped to \`matter_id: "${matterRef}"\` to find the other files, then read each with \`external_read_content_across_matters\`. \`external_search_across_matters\` has no matter filter and searches every matter you can access — do not use it for "the rest of this matter" follow-ups; it is only appropriate if the user explicitly asks to search beyond this matter.`,
+    `Widen the scope to the rest of the matter ONLY when the user explicitly asks (e.g., "compare with the other contracts", "search across the matter", or names another document). When that happens, call \`external_list_documents\` scoped to \`workspace_id: "${matterRef}"\` to find the other files, then read each with \`external_read_content_across_matters\`. \`external_search_across_matters\` has no matter filter and searches every matter you can access — do not use it for "the rest of this matter" follow-ups; it is only appropriate if the user explicitly asks to search beyond this matter.`,
   ]
     .filter((section) => section.length > 0)
     .join("\n");

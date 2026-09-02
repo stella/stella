@@ -2581,7 +2581,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("list_documents rejects flat mode combined with parent_id", async () => {
     const result = await handleMcpToolCall({
-      args: { matter_id: "ws_1", mode: "flat", parent_id: "entity_folder" },
+      args: { workspace_id: "ws_1", mode: "flat", parent_id: "entity_folder" },
       context: createContext(),
       toolName: "list_documents",
     });
@@ -2591,9 +2591,9 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("list_documents surfaces a field-level issue with a dot-path", async () => {
     const result = await handleMcpToolCall({
-      // matter_id must be a string; a number fails the field validator, so the
+      // workspace_id must be a string; a number fails the field validator, so the
       // envelope carries a structured issue pinpointing the offending field.
-      args: { matter_id: 123 },
+      args: { workspace_id: 123 },
       context: createContext(),
       toolName: "list_documents",
     });
@@ -2601,7 +2601,7 @@ describe("OpenAI-compatible MCP tools", () => {
     const error = validationEnvelope(result);
     expect(error["code"]).toBe("validation_error");
     expect(error["issues"]).toEqual([
-      { path: "matter_id", message: expect.any(String) },
+      { path: "workspace_id", message: expect.any(String) },
     ]);
   });
 
@@ -3385,7 +3385,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("list_properties declares how file and scalar properties are written", async () => {
     const result = await handleMcpToolCall({
-      args: { matter_id: "ws_1" },
+      args: { workspace_id: "ws_1" },
       context: createContext({
         scopedDb: createScopedDb([
           {
@@ -3490,16 +3490,16 @@ describe("OpenAI-compatible MCP tools", () => {
     expectValidationMessage(result, "label and description require version_id");
   });
 
-  test("save_document rejects matter_id (a create field) alongside entity_id", async () => {
+  test("save_document rejects workspace_id (a create field) alongside entity_id", async () => {
     const result = await handleMcpToolCall({
-      args: { entity_id: "entity_1", matter_id: "ws_1", name: "Renamed" },
+      args: { entity_id: "entity_1", workspace_id: "ws_1", name: "Renamed" },
       context: createContext(),
       toolName: "save_document",
     });
 
     expectValidationMessage(
       result,
-      "matter_id applies only when creating; omit it when updating a document",
+      "workspace_id applies only when creating; omit it when updating a document",
     );
   });
 
@@ -3816,14 +3816,17 @@ describe("OpenAI-compatible MCP tools", () => {
     ]);
   });
 
-  test("save_task rejects a create with no matter_id", async () => {
+  test("save_task rejects a create with no workspace_id", async () => {
     const result = await handleMcpToolCall({
       args: { name: "Draft motion" },
       context: createContext(),
       toolName: "save_task",
     });
 
-    expectValidationMessage(result, "matter_id is required to create a task");
+    expectValidationMessage(
+      result,
+      "workspace_id is required to create a task",
+    );
   });
 
   // list_tasks (detail) and save_task confine themselves to entities of kind
@@ -3880,27 +3883,29 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  // save_task ignored matter_id on update, so a mismatched pair silently
+  // save_task ignored workspace_id on update, so a mismatched pair silently
   // updated a task under the wrong matter. The handler now rejects it.
-  test("save_task rejects a task whose matter_id does not match", async () => {
+  test("save_task rejects a task whose workspace_id does not match", async () => {
     const result = await handleMcpToolCall({
-      args: { task_id: "task_1", matter_id: "ws_2", name: "Renamed" },
+      args: { task_id: "task_1", workspace_id: "ws_2", name: "Renamed" },
       context: createContext({ scopedDb: createTaskKindScopedDb("task") }),
       toolName: "save_task",
     });
 
     expect(result).toEqual({
-      content: [{ type: "text", text: "task_id does not belong to matter_id" }],
+      content: [
+        { type: "text", text: "task_id does not belong to workspace_id" },
+      ],
       isError: true,
     });
   });
 
   // list_tasks detail resolved by task_id alone, so a task_id paired with a
-  // different accessible matter_id leaked a task from the wrong matter. The
+  // different accessible workspace_id leaked a task from the wrong matter. The
   // detail branch now enforces the same pairing check as save_task.
-  test("list_tasks detail rejects a task whose matter_id does not match", async () => {
+  test("list_tasks detail rejects a task whose workspace_id does not match", async () => {
     const result = await handleMcpToolCall({
-      args: { task_id: "task_1", matter_id: "ws_2" },
+      args: { task_id: "task_1", workspace_id: "ws_2" },
       context: createContext({
         accessibleWorkspaceIds: ["ws_1", "ws_2"],
         scopedDb: createTaskKindScopedDb("task"),
@@ -3909,7 +3914,9 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(result).toEqual({
-      content: [{ type: "text", text: "task_id does not belong to matter_id" }],
+      content: [
+        { type: "text", text: "task_id does not belong to workspace_id" },
+      ],
       isError: true,
     });
   });
@@ -4206,7 +4213,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { matter_id: "ws_1" },
+      args: { workspace_id: "ws_1" },
       context: createContext({
         scopedDb: createSelectListScopedDb([
           {
@@ -4255,7 +4262,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     const result = await handleMcpToolCall({
-      args: { matter_id: "ws_1" },
+      args: { workspace_id: "ws_1" },
       context: createContext({
         scopedDb: createSelectListScopedDb([
           {
@@ -4390,7 +4397,7 @@ describe("OpenAI-compatible MCP tools", () => {
         const recordAuditEvent = createRecordAuditEventMock();
         const result = await handleMcpToolCall({
           args: {
-            matter_id: "ws_1",
+            workspace_id: "ws_1",
             entity_id: "entity_1",
             date_worked: "2026-02-01",
             timezone_id: "Europe/Prague",
@@ -4607,6 +4614,38 @@ describe("undeclared-argument backstop", () => {
       {
         path: "matterId",
         message: "Unknown parameter: matterId (did you mean matter_id?)",
+      },
+    ]);
+  });
+
+  test("dispatch rewrites the deprecated matter_id alias onto workspace_id", async () => {
+    // The rewrite runs before the unknown-key backstop, so the old name is not
+    // rejected as a typo: the call reaches the handler, which answers on the
+    // workspace it names.
+    const result = await handleMcpToolCall({
+      args: { matter_id: "ws_missing" },
+      context: createContext(),
+      toolName: "list_documents",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["message"]).toBe("Matter not found or not accessible");
+  });
+
+  test("dispatch refuses the alias and its replacement with different values", async () => {
+    const result = await handleMcpToolCall({
+      args: { matter_id: "ws_1", workspace_id: "ws_2" },
+      context: createContext(),
+      toolName: "list_documents",
+    });
+
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["issues"]).toEqual([
+      {
+        path: "matter_id",
+        message:
+          "matter_id is a deprecated alias for workspace_id; they were supplied with different values",
       },
     ]);
   });

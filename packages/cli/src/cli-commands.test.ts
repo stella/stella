@@ -296,7 +296,7 @@ describe("one-command document upload", () => {
     const result = await runCli({
       args: [
         "upload",
-        "--matter-id",
+        "--workspace-id",
         "workspace-1",
         "--file",
         filePath,
@@ -347,7 +347,7 @@ describe("one-command document upload", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("--file");
-    expect(result.stdout).toContain("--matter-id");
+    expect(result.stdout).toContain("--workspace-id");
     expect(result.stdout).toContain("--json");
     expect(result.stdout).toContain("computes its SHA-256 checksum");
     expect(server.requests).toHaveLength(0);
@@ -380,7 +380,7 @@ describe("one-command document upload", () => {
     const result = await runCli({
       args: [
         "upload",
-        "--matter-id",
+        "--workspace-id",
         "workspace-1",
         "--file",
         filePath,
@@ -1083,8 +1083,8 @@ describe("template persistence discriminator split", () => {
         "new-version",
         "--template-id",
         "template_1",
-        "--matter-id",
-        "matter_1",
+        "--workspace-id",
+        "workspace_1",
         "--entity-id",
         "entity_1",
         "--idempotency-key",
@@ -1116,8 +1116,8 @@ describe("template persistence discriminator split", () => {
         "new-version",
         "--template-id",
         "template_1",
-        "--matter-id",
-        "matter_1",
+        "--workspace-id",
+        "workspace_1",
         "--entity-id",
         "entity_1",
         "--idempotency-key",
@@ -1135,7 +1135,7 @@ describe("template persistence discriminator split", () => {
     expect(server.requests.at(0)?.params.arguments).toEqual({
       action: "create_version",
       template_id: "template_1",
-      matter_id: "matter_1",
+      workspace_id: "workspace_1",
       entity_id: "entity_1",
       idempotency_key: "retry_1",
       values: { "tenant.name": "ACME" },
@@ -1150,8 +1150,8 @@ describe("organization discriminator split (S2/Phase 4)", () => {
       args: [
         "organization",
         "add-member",
-        "--matter-id",
-        "m1",
+        "--workspace-id",
+        "w1",
         "--user-id",
         "u1",
       ],
@@ -1163,7 +1163,7 @@ describe("organization discriminator split (S2/Phase 4)", () => {
     expect(server.requests.at(0)?.params.name).toBe("manage_organization");
     expect(server.requests.at(0)?.params.arguments).toEqual({
       action: "add_member",
-      matter_id: "m1",
+      workspace_id: "w1",
       user_id: "u1",
     });
   });
@@ -1174,8 +1174,8 @@ describe("organization discriminator split (S2/Phase 4)", () => {
       args: [
         "organization",
         "remove-member",
-        "--matter-id",
-        "m1",
+        "--workspace-id",
+        "w1",
         "--user-id",
         "u1",
       ],
@@ -1421,8 +1421,8 @@ describe("destructive confirm injection (S4)", () => {
       args: [
         "organization",
         "remove-member",
-        "--matter-id",
-        "m1",
+        "--workspace-id",
+        "w1",
         "--user-id",
         "u1",
         "--yes",
@@ -1435,7 +1435,7 @@ describe("destructive confirm injection (S4)", () => {
     expect(server.requests.at(0)?.params.name).toBe("manage_organization");
     expect(server.requests.at(0)?.params.arguments).toEqual({
       action: "remove_member",
-      matter_id: "m1",
+      workspace_id: "w1",
       user_id: "u1",
       confirm: true,
     });

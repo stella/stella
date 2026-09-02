@@ -13,6 +13,7 @@ import { text as readStreamText } from "node:stream/consumers";
 import { decodeAccessTokenClaims } from "./auth/jwt.js";
 import { RESOURCE_SCOPE_PREFIX } from "./auth/scopes.js";
 import type { Context } from "./context.js";
+import { applyDeprecatedInputAliases } from "./deprecated-input-aliases.js";
 import { flagKey } from "./flag-name.js";
 import { validateAgainstSchema } from "./json-schema-validate.js";
 import {
@@ -386,7 +387,7 @@ export const parseInputObject = async ({
   // Parse only: schema validation runs on the COMPOSED args (after value flags
   // overlay their paths), never on the raw `--input` alone. Validating here would
   // reject a `--input` that legitimately omits a required flag-backed path (e.g.
-  // a `matter_id` supplied by `--matter-id`), defeating the compose semantics.
+  // a `workspace_id` supplied by `--workspace-id`), defeating the compose semantics.
   return parsed.value;
 };
 
@@ -1089,7 +1090,25 @@ export const runLeafCommand = async ({
     setExit(context, EXIT_CODES.validation);
     return;
   }
-  const built = await buildArgsFromFlags(spec, flags, argsBase);
+
+  // A deprecated input name reaches the CLI only through `--input` (no flag is
+  // generated for it), and both the required-flag check and local schema
+  // validation read the baked schema, which names the replacement. Rewrite the
+  // JSON base before either runs, so the alias each field description
+  // advertises is honored here exactly as it is on the server.
+  const aliased = applyDeprecatedInputAliases({
+    args: argsBase,
+    inputSchema: spec.inputSchema,
+  });
+  if (aliased.status === "conflict") {
+    writers.stderr(
+      `--input invalid at ${aliased.alias}: deprecated alias for ${aliased.canonical}; they were supplied with different values\n`,
+    );
+    setExit(context, EXIT_CODES.validation);
+    return;
+  }
+
+  const built = await buildArgsFromFlags(spec, flags, aliased.args);
   if (!built.ok) {
     writers.stderr(`${built.message}\n`);
     setExit(context, EXIT_CODES.validation);

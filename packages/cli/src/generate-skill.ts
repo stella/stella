@@ -323,7 +323,7 @@ const renderCapabilitySection = (summary: CapabilitySkillSummary): string => {
     ...exampleLines,
     "- **`--input` casing is not uniform; never guess it.** A curated command's",
     "  `--input` JSON (the table and flags above) uses the MCP tool schema's own",
-    "  keys, snake_case (`matter_id`, `contact_id`). A capability command's",
+    "  keys, snake_case (`workspace_id`, `contact_id`). A capability command's",
     "  `--input` JSON uses the handler schema's own keys, camelCase (`fieldId`,",
     "  `workspaceId`). Run `stella <command> --help` or `stella capability describe",
     "  <id>` and copy the field paths it prints.",
@@ -339,7 +339,7 @@ const isOptionalUploadFlag = (flag: UploadFlagEntry): boolean =>
 const uploadFlagName = (key: string): string => `--${kebabCase(key)}`;
 
 /** `stella upload`'s required flags, in invocation order (spec upload-note). */
-const REQUIRED_UPLOAD_KEYS = ["file", "matterId"] as const;
+const REQUIRED_UPLOAD_KEYS = ["file", "workspaceId"] as const;
 
 /**
  * Documents the real `stella upload` invocation, including uploading a new
