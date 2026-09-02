@@ -723,6 +723,28 @@ export const insertCapabilities = ({
 };
 
 /**
+ * The sorted, deduped domain segments actually present under the merged
+ * tree's `capability` namespace. Route-kind children only: `capability
+ * list`/`describe`/`invoke` are curated leaves living beside the domains
+ * (from their own tool annotations), not domains themselves. The skill
+ * documents this list so an agent choosing `stella capability <domain>
+ * <action>` never has to guess a domain name.
+ */
+export const capabilityDomainsOf = (tree: RouteNode): readonly string[] => {
+  if (tree.kind !== "route") {
+    return [];
+  }
+  const namespace = tree.children[CAPABILITY_NAMESPACE];
+  if (namespace?.kind !== "route") {
+    return [];
+  }
+  return Object.entries(namespace.children)
+    .filter(([, node]) => node.kind === "route")
+    .map(([domain]) => domain)
+    .toSorted((a, b) => a.localeCompare(b, "en"));
+};
+
+/**
  * THE full-tree builder: curated route map + capability merge, in one shared
  * function so build-time codegen and the runtime registry-refresh path (a
  * cached `tools/list` with a non-empty delta) produce structurally identical

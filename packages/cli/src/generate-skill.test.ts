@@ -12,7 +12,10 @@ const snapshotUrl = new URL(
 const listings: readonly RegistryToolListing[] =
   await Bun.file(snapshotUrl).json();
 
-const CAPABILITY = { commandCount: 2 } as const;
+const CAPABILITY = {
+  commandCount: 2,
+  domains: ["entities", "workspaces"],
+} as const;
 
 describe("generateCliSkill (TanStack Intent)", () => {
   test("is deterministic across calls and input clones", () => {

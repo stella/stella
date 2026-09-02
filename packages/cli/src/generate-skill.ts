@@ -7,8 +7,13 @@
 // from the command surface the CLI actually dispatches.
 
 import { CLI_DEFAULT_SCOPES } from "./auth/constants.js";
+import { flagBrief } from "./flag-help.js";
 import { CAPABILITY_NAMESPACE } from "./generate-capability-tree.js";
-import { generateRouteMap } from "./generate-route-map.js";
+import {
+  generateRouteMap,
+  RouteGenerationError,
+} from "./generate-route-map.js";
+import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "./generated/document-version-upload-transport.js";
 import { exitCodeEntries } from "./mcp-constants.js";
 import type {
   LeafCommandSpec,
@@ -16,6 +21,8 @@ import type {
   RouteNode,
   ToolAnnotation,
 } from "./route-types.js";
+
+const oneLine = (text: string): string => text.replace(/\s+/gu, " ").trim();
 
 /**
  * The skill's leaf name. Intent requires `skills/<name>/SKILL.md` where the
@@ -63,10 +70,26 @@ const notesFor = (spec: LeafCommandSpec): string => {
   return parts.join("; ");
 };
 
-const commandRows = (tree: RouteNode): readonly CommandRow[] => {
+/**
+ * Every curated leaf, sorted for determinism independent of
+ * registry/annotation iteration order. Explicit locale keeps the ordering
+ * byte-identical across machines; the drift guard diffs the emitted SKILL.md
+ * against a committed snapshot. Both the command table and the per-command
+ * flag section below walk this SAME list, so they can never fall out of sync
+ * with each other.
+ */
+const sortedLeaves = (tree: RouteNode): readonly LeafCommandSpec[] => {
   const leaves: LeafCommandSpec[] = [];
   collectLeaves(tree, leaves);
-  const rows = leaves.map((spec) => {
+  return leaves.toSorted((a, b) =>
+    a.commandPath.join(" ").localeCompare(b.commandPath.join(" "), "en"),
+  );
+};
+
+const commandRows = (
+  leaves: readonly LeafCommandSpec[],
+): readonly CommandRow[] =>
+  leaves.map((spec) => {
     const command = spec.commandPath.join(" ");
     return {
       domain: spec.commandPath[0] ?? command,
@@ -79,11 +102,6 @@ const commandRows = (tree: RouteNode): readonly CommandRow[] => {
       notes: notesFor(spec),
     };
   });
-  // Sort for determinism independent of registry/annotation iteration order.
-  // Explicit locale keeps the ordering byte-identical across machines; the
-  // drift guard diffs the emitted SKILL.md against a committed snapshot.
-  return rows.toSorted((a, b) => a.command.localeCompare(b.command, "en"));
-};
 
 const renderCommandTable = (rows: readonly CommandRow[]): string => {
   const lines = [
@@ -98,6 +116,43 @@ const renderCommandTable = (rows: readonly CommandRow[]): string => {
   return lines.join("\n");
 };
 
+/**
+ * One curated command's flags as a bullet block: the command line, then one
+ * indented bullet per flag rendered through the SAME `flagBrief` derivation
+ * `--help` uses, so the skill's documented flags can never drift from what
+ * `--help` actually prints for that command.
+ */
+const commandFlagsBlock = (spec: LeafCommandSpec): string => {
+  const command = `stella ${spec.commandPath.join(" ")}`;
+  if (spec.flags.length === 0) {
+    const hint =
+      spec.inputOnly.length > 0
+        ? `no flags; pass \`--input\` with ${spec.inputOnly.join(", ")}`
+        : "no arguments";
+    return `- \`${command}\` — ${hint}`;
+  }
+  return [
+    `- \`${command}\``,
+    ...spec.flags.map(
+      (flag) => `  - \`${flag.flag}\` — ${oneLine(flagBrief(flag))}`,
+    ),
+  ].join("\n");
+};
+
+const renderCommandFlagsSection = (
+  leaves: readonly LeafCommandSpec[],
+): string =>
+  [
+    "## Command flags",
+    "",
+    "Every curated command's flags, same order as the table above. Each flag",
+    "line is `--flag — description (required|optional, type)`; an enum lists its",
+    "values and a repeatable flag is passed once per value. `stella <command>",
+    "--help` prints the identical facts plus a full JSON `--input` example.",
+    "",
+    leaves.map((spec) => commandFlagsBlock(spec)).join("\n\n"),
+  ].join("\n");
+
 const renderExitCodeTable = (): string =>
   [
     "| Code | Meaning |",
@@ -109,15 +164,49 @@ const renderExitCodeTable = (): string =>
 export type CapabilitySkillSummary = {
   /** Count of generated `invoke_capability`-backed leaf commands. */
   commandCount: number;
+  /** Domain segments actually present in the merged tree, see `capabilityDomainsOf`. */
+  domains: readonly string[];
 };
 
 /**
- * The compact capability-tree section (spec 049 deliverable 4). The curated
- * command table above stays the primary surface; the long tail is described
- * (count + discovery) rather than enumerated, so the skill stays readable.
+ * Two worked "no curated command" examples the skill states verbatim
+ * (spec 049-flags deliverable 2). Checked against the live domain list below
+ * rather than hand-trusted, so a catalog change that removes either domain
+ * fails codegen instead of shipping a stale example.
  */
-const renderCapabilitySection = (summary: CapabilitySkillSummary): string =>
-  [
+const CAPABILITY_WORKED_EXAMPLES = [
+  {
+    domain: "entities",
+    task: "Translate a document",
+    command:
+      "stella capability entities translate --field-id <id> --target-lang <lang>",
+  },
+  {
+    domain: "workspaces",
+    task: "Start workflow extraction",
+    command: "stella capability workspaces workflow-start --workspace <id>",
+  },
+] as const;
+
+/**
+ * The compact capability-tree section (spec 049 deliverable 4), extended with
+ * the domain list, two worked examples, and the `--input` casing rule (spec
+ * 049-flags deliverable 2). The curated command table above stays the primary
+ * surface; the long tail is described (count + discovery) rather than
+ * enumerated, so the skill stays readable.
+ */
+const renderCapabilitySection = (summary: CapabilitySkillSummary): string => {
+  for (const example of CAPABILITY_WORKED_EXAMPLES) {
+    if (!summary.domains.includes(example.domain)) {
+      throw new RouteGenerationError(
+        `generateCliSkill: worked example "${example.command}" names domain "${example.domain}", which is no longer in the capability tree; update or drop the example`,
+      );
+    }
+  }
+  const domainList = summary.domains
+    .map((domain) => `\`${domain}\``)
+    .join(", ");
+  return [
     "## Capability commands (full surface)",
     "",
     `Beyond the curated commands above, the CLI generates ${summary.commandCount}`,
@@ -139,7 +228,50 @@ const renderCapabilitySection = (summary: CapabilitySkillSummary): string =>
     "- **Destructive** capabilities prompt on a TTY and need `--yes` off a TTY; the",
     "  server's per-capability confirm gate is satisfied automatically once confirmed.",
     "- Exit codes are identical to the curated commands (see above).",
+    "",
+    "### When no curated command fits",
+    "",
+    "The curated commands above cover common tasks; anything else goes through the",
+    `generic capability path. Current domains: ${domainList}.`,
+    "",
+    ...CAPABILITY_WORKED_EXAMPLES.map(
+      ({ task, command }) => `- ${task}: \`${command}\`.`,
+    ),
+    "- **`--input` casing is not uniform; never guess it.** A curated command's",
+    "  `--input` JSON (the table and flags above) uses the MCP tool schema's own",
+    "  keys, snake_case (`matter_id`, `contact_id`). A capability command's",
+    "  `--input` JSON uses the handler schema's own keys, camelCase (`fieldId`,",
+    "  `workspaceId`). Run `stella <command> --help` or `stella capability describe",
+    "  <id>` and copy the field paths it prints.",
   ].join("\n");
+};
+
+/**
+ * What the CLI structurally cannot do: binary-file MCP tools have no JSON
+ * transport to ride. Derived from the two tools the document-version-upload
+ * feature is built from (`document-version-upload-transport.ts`) so the note
+ * disappears on its own if either tool is ever dropped from the exclusion
+ * list, instead of silently going stale.
+ */
+const renderUploadGapNote = (
+  annotations: Readonly<Record<string, ToolAnnotation>>,
+): string => {
+  const { toolName, pickerToolName } = DOCUMENT_VERSION_UPLOAD_TRANSPORT;
+  if (
+    annotations[toolName]?.excluded !== true ||
+    annotations[pickerToolName]?.excluded !== true
+  ) {
+    throw new RouteGenerationError(
+      `generateCliSkill: expected "${toolName}" and "${pickerToolName}" to be excluded CLI tools (binary file upload); update the upload-gap note if that changed`,
+    );
+  }
+  return (
+    "- **No binary uploads**: the CLI cannot upload a new document version " +
+    `(a file) — \`${toolName}\`/\`${pickerToolName}\` are MCP-only, excluded ` +
+    "from the CLI. Upload a new version through an MCP-connected client or the " +
+    "stella web app."
+  );
+};
 
 /**
  * Emit the `SKILL.md` markdown for the stella CLI. Pure over the registry
@@ -152,9 +284,12 @@ export const generateCliSkill = (
   capability: CapabilitySkillSummary,
 ): string => {
   const tree = generateRouteMap(listings, annotations);
-  const table = renderCommandTable(commandRows(tree));
+  const leaves = sortedLeaves(tree);
+  const table = renderCommandTable(commandRows(leaves));
+  const flagsSection = renderCommandFlagsSection(leaves);
   const exitCodes = renderExitCodeTable();
   const capabilitySection = renderCapabilitySection(capability);
+  const uploadGapNote = renderUploadGapNote(annotations);
 
   const frontmatter = [
     "---",
@@ -232,6 +367,16 @@ export const generateCliSkill = (
     "  (windowed, so follow `--cursor`).",
     "- **MCP resources**: `stella reference list` enumerates static server resources;",
     "  `stella reference show <name>` prints one.",
+    uploadGapNote,
+    "",
+    "## Command tree",
+    "",
+    "Generated from the MCP tool registry; `Access` is the OAuth scope the command",
+    "requires (request it at `stella auth login --scopes`).",
+    "",
+    table,
+    "",
+    flagsSection,
     "",
     "## Exit codes",
     "",
@@ -256,13 +401,6 @@ export const generateCliSkill = (
     "- **github** (preferred): returns a prefilled new-issue URL and a `gh` command",
     "  the human opens and submits under their own GitHub account. The CLI never",
     "  publishes anything itself.",
-    "",
-    "## Command tree",
-    "",
-    "Generated from the MCP tool registry; `Access` is the OAuth scope the command",
-    "requires (request it at `stella auth login --scopes`).",
-    "",
-    table,
     "",
   ].join("\n");
 

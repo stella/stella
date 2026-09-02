@@ -13,7 +13,10 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
-import { buildCliRouteTree } from "./generate-capability-tree.js";
+import {
+  buildCliRouteTree,
+  capabilityDomainsOf,
+} from "./generate-capability-tree.js";
 import { generateResourceTree } from "./generate-resource-tree.js";
 import { generateCliSkill, SKILL_NAME } from "./generate-skill.js";
 import { MCP_CLI_TOOL_SCOPES } from "./generated/mcp-contract.js";
@@ -236,6 +239,7 @@ await writeFile(
   skillUrl,
   generateCliSkill(listings, toolAnnotations, {
     commandCount: capabilityStats.generated,
+    domains: capabilityDomainsOf(routeMap),
   }),
 );
 process.stderr.write(`Wrote ${skillUrl.pathname}\n`);
