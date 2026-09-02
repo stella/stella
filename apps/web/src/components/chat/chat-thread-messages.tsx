@@ -321,18 +321,6 @@ export const ChatThreadMessages = ({
                 />
               ) : null,
             )}
-            {threadRef &&
-              userTurnHasAssistantReply(messages, index) && (
-                // Revealed on message hover (or keyboard focus), matching the
-                // hover-reveal idiom of tool-step and citation actions: user
-                // bubbles carry no persistent actions row to join.
-                <div className="flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
-                  <ChatMessageForkButton
-                    messageId={message.id}
-                    threadRef={threadRef}
-                  />
-                </div>
-              )}
           </>
         )}
       </MessageContent>
@@ -368,7 +356,6 @@ export const ChatThreadMessages = ({
                 key={turn.header.id}
                 messages={messages}
                 scrollRef={scrollRef}
-                threadRef={threadRef}
               >
                 {turn.body.map((item) =>
                   renderMessageNode(item.message, item.index),
@@ -406,8 +393,6 @@ type StickyUserTurnProps = {
   headerMessage: PersistedChatMessage;
   messages: readonly PersistedChatMessage[];
   scrollRef: RefObject<HTMLDivElement | null> | null;
-  /** Present on the main chat surface; enables the per-message fork action. */
-  threadRef?: ChatThreadRef | undefined;
   children: ReactNode;
 };
 
@@ -426,7 +411,6 @@ const StickyUserTurn = ({
   headerMessage,
   messages,
   scrollRef,
-  threadRef,
   children,
 }: StickyUserTurnProps) => {
   const t = useTranslations();
@@ -624,15 +608,6 @@ const StickyUserTurn = ({
                   ) : null,
                 )}
               </div>
-              {threadRef &&
-                userTurnHasAssistantReply(messages, headerIndex) && (
-                  <div className="flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-data-[stuck=true]/sticky:hidden focus-within:opacity-100">
-                    <ChatMessageForkButton
-                      messageId={headerMessage.id}
-                      threadRef={threadRef}
-                    />
-                  </div>
-                )}
             </MessageContent>
           </Message>
         </div>
@@ -1068,8 +1043,9 @@ const AssistantMessageActions = ({
     onResend && isLatestAssistantMessage && !isGenerating,
   );
   // Forking reads persisted history, so it is offered on every settled
-  // message rather than only the latest: unlike retry, it neither replaces
-  // nor discards anything in this thread.
+  // answer rather than only the latest: unlike retry, it neither replaces nor
+  // discards anything in this thread. Only answers carry it — a fork branches
+  // off an answer, and the server rejects any other boundary.
   const canFork = Boolean(
     threadRef && (!isGenerating || !isLatestAssistantMessage),
   );
@@ -1134,30 +1110,6 @@ const AssistantMessageActions = ({
       )}
     </div>
   );
-};
-
-/**
- * Whether the turn opened by the user message at `index` holds an assistant
- * reply: the client's only proof the server accepted, and so persisted, that
- * message. An optimistic append (send in flight, or failed and left in the
- * transcript) never gets a reply of its own, and a later turn's reply proves
- * nothing about this one, so the scan stops at the next user message. Gates
- * the fork action, whose boundary must be a durable row or the fork 404s.
- */
-const userTurnHasAssistantReply = (
-  messages: readonly PersistedChatMessage[],
-  index: number,
-): boolean => {
-  for (let i = index + 1; i < messages.length; i += 1) {
-    const role = messages[i]?.role;
-    if (role === "assistant") {
-      return true;
-    }
-    if (role === "user") {
-      return false;
-    }
-  }
-  return false;
 };
 
 const getRetryableAssistantMessageId = (

@@ -344,7 +344,7 @@ test("copies the prefix up to a mid-thread message and records provenance", asyn
 
   expect(result).toEqual({
     threadId: newThreadId,
-    title: "Termination clause",
+    title: "Forked - Termination clause",
   });
 
   const copied = await readMessages(newThreadId);
@@ -368,7 +368,7 @@ test("copies the prefix up to a mid-thread message and records provenance", asyn
     chatReasoningEffort: "high",
     forkedFromMessageId: messageAt(source, 1),
     parentThreadId: source.threadId,
-    title: "Termination clause",
+    title: "Forked - Termination clause",
     titleSource: "user",
     webSearchEnabled: true,
     workspaceId: null,
@@ -404,6 +404,34 @@ test("forking at the head copies the whole thread", async () => {
   ]);
 });
 
+test("forking at a user message is rejected before anything is copied", async () => {
+  const source = await seedThread({
+    texts: ["Ask", "Answer"],
+    withAttachment: true,
+  });
+  const newThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+
+  const denied = await forkThread.handler(
+    forkContext({
+      newThreadId,
+      threadId: source.threadId,
+      upToMessageId: messageAt(source, 0),
+    }),
+  );
+
+  // A fork branches off an answer, so an ask is not a boundary. The check runs
+  // with the prefix read, before any attachment is copied to storage.
+  expect(denied).toMatchObject({ code: 400 });
+  expect(await readFork(newThreadId)).toBeUndefined();
+  expect(
+    await testDb
+      .select({ id: userFiles.id })
+      .from(userFiles)
+      .where(eq(userFiles.threadId, newThreadId))
+      .limit(1),
+  ).toHaveLength(0);
+});
+
 test("duplicates attachments so neither thread's deletion touches the other's objects", async () => {
   const source = await seedThread({
     texts: ["See the exhibit", "Reviewed"],
@@ -421,7 +449,7 @@ test("duplicates attachments so neither thread's deletion touches the other's ob
       forkContext({
         newThreadId,
         threadId: source.threadId,
-        upToMessageId: messageAt(source, 0),
+        upToMessageId: messageAt(source, 1),
       }),
     ),
   );
@@ -473,17 +501,19 @@ test("a retried fork returns the existing copy instead of duplicating it", async
     forkContext({
       newThreadId,
       threadId: source.threadId,
-      upToMessageId: messageAt(source, 0),
+      upToMessageId: messageAt(source, 1),
     });
 
   await expectForked(forkThread.handler(context()));
   await expectForked(forkThread.handler(context()));
 
-  expect(await readMessages(newThreadId)).toHaveLength(1);
+  expect(await readMessages(newThreadId)).toHaveLength(2);
 });
 
 test("a thread id already used for a different boundary is a conflict", async () => {
-  const source = await seedThread({ texts: ["Ask", "Answer"] });
+  const source = await seedThread({
+    texts: ["Ask one", "Answer one", "Ask two", "Answer two"],
+  });
   const newThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   seededThreadIds.push(newThreadId);
 
@@ -492,7 +522,7 @@ test("a thread id already used for a different boundary is a conflict", async ()
       forkContext({
         newThreadId,
         threadId: source.threadId,
-        upToMessageId: messageAt(source, 0),
+        upToMessageId: messageAt(source, 1),
       }),
     ),
   );
@@ -501,7 +531,7 @@ test("a thread id already used for a different boundary is a conflict", async ()
     forkContext({
       newThreadId,
       threadId: source.threadId,
-      upToMessageId: messageAt(source, 1),
+      upToMessageId: messageAt(source, 3),
     }),
   );
 
@@ -516,7 +546,7 @@ test("a retried fork still converges after the source thread was deleted", async
     forkContext({
       newThreadId,
       threadId: source.threadId,
-      upToMessageId: messageAt(source, 0),
+      upToMessageId: messageAt(source, 1),
     });
 
   await expectForked(forkThread.handler(context()));
@@ -526,12 +556,14 @@ test("a retried fork still converges after the source thread was deleted", async
   // null), but the durable copy must be returned, not a 404 or a duplicate.
   const retried = await expectForked(forkThread.handler(context()));
   expect(retried.threadId).toBe(newThreadId);
-  expect(await readMessages(newThreadId)).toHaveLength(1);
+  expect(await readMessages(newThreadId)).toHaveLength(2);
 });
 
 test("a request naming the wrong source cannot adopt an existing fork", async () => {
   const source = await seedThread({ texts: ["Ask", "Answer"] });
-  const other = await seedThread({ texts: ["Elsewhere"] });
+  const other = await seedThread({
+    texts: ["Elsewhere", "Answered elsewhere"],
+  });
   const newThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   seededThreadIds.push(newThreadId);
 
@@ -540,7 +572,7 @@ test("a request naming the wrong source cannot adopt an existing fork", async ()
       forkContext({
         newThreadId,
         threadId: source.threadId,
-        upToMessageId: messageAt(source, 0),
+        upToMessageId: messageAt(source, 1),
       }),
     ),
   );
@@ -551,7 +583,7 @@ test("a request naming the wrong source cannot adopt an existing fork", async ()
     forkContext({
       newThreadId,
       threadId: other.threadId,
-      upToMessageId: messageAt(source, 0),
+      upToMessageId: messageAt(source, 1),
     }),
   );
 
@@ -560,14 +592,16 @@ test("a request naming the wrong source cannot adopt an existing fork", async ()
 
 test("a boundary message from another thread is a 404", async () => {
   const source = await seedThread({ texts: ["Ask", "Answer"] });
-  const other = await seedThread({ texts: ["Elsewhere"] });
+  const other = await seedThread({
+    texts: ["Elsewhere", "Answered elsewhere"],
+  });
   const newThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
 
   const denied = await forkThread.handler(
     forkContext({
       newThreadId,
       threadId: source.threadId,
-      upToMessageId: messageAt(other, 0),
+      upToMessageId: messageAt(other, 1),
     }),
   );
 
@@ -588,7 +622,7 @@ test("another user in the same organization cannot fork the thread", async () =>
       }),
       newThreadId,
       threadId: source.threadId,
-      upToMessageId: messageAt(source, 0),
+      upToMessageId: messageAt(source, 1),
       userId: ids.userA2,
     }),
   );
@@ -611,7 +645,7 @@ test("a reader in another organization cannot fork the thread", async () => {
       newThreadId,
       organizationId: ids.orgB,
       threadId: source.threadId,
-      upToMessageId: messageAt(source, 0),
+      upToMessageId: messageAt(source, 1),
       userId: ids.userB1,
     }),
   );
@@ -633,7 +667,7 @@ test("the fork keeps the parent's data scope and stays visible to it", async () 
       forkContext({
         newThreadId,
         threadId: source.threadId,
-        upToMessageId: messageAt(source, 0),
+        upToMessageId: messageAt(source, 1),
       }),
     ),
   );
@@ -672,7 +706,7 @@ test("get-messages reports the fork's provenance and loses it when the parent go
       forkContext({
         newThreadId,
         threadId: source.threadId,
-        upToMessageId: messageAt(source, 0),
+        upToMessageId: messageAt(source, 1),
       }),
     ),
   );
@@ -711,7 +745,7 @@ test("get-messages reports the fork's provenance and loses it when the parent go
   // carries no foreign key) survives as the "this is a fork" discriminator.
   const orphaned = await readFork(newThreadId);
   expect(orphaned?.parentThreadId).toBeNull();
-  expect(orphaned?.forkedFromMessageId).toBe(messageAt(source, 0));
+  expect(orphaned?.forkedFromMessageId).toBe(messageAt(source, 1));
   expect(await readProvenance()).toEqual({ type: "parent-unavailable" });
 });
 
@@ -725,7 +759,7 @@ test("a parent outside the reader's scope reports as unavailable, not by title",
       forkContext({
         newThreadId,
         threadId: source.threadId,
-        upToMessageId: messageAt(source, 0),
+        upToMessageId: messageAt(source, 1),
       }),
     ),
   );
@@ -842,7 +876,7 @@ test("a missing thumbnail copies the attachment without one", async () => {
       forkContext({
         newThreadId,
         threadId: source.threadId,
-        upToMessageId: messageAt(source, 0),
+        upToMessageId: messageAt(source, 1),
       }),
     ),
   );

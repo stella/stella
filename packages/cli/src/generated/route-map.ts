@@ -6057,7 +6057,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "chat", "fork-create"],
                 capabilityId: "chat.fork.create",
                 description:
-                  "Fork one of your own chat threads into a new thread that keeps the history up to a chosen message, so another direction or model can be explored without touching the original. The new thread id is minted by the caller, which makes a retried fork return the existing copy instead of duplicating it. Attachments are duplicated, never shared: deleting either thread leaves the other's files intact. The fork records where it came from and starts with no compaction state of its own.",
+                  "Fork one of your own chat threads into a new thread that keeps the history up to a chosen answer, so another direction or model can be explored without touching the original. The boundary must be an assistant message: a fork branches off an answer, not off an ask. The new thread id is minted by the caller, which makes a retried fork return the existing copy instead of duplicating it. Attachments are duplicated, never shared: deleting either thread leaves the other's files intact. The fork records where it came from and starts with no compaction state of its own.",
                 access: "write",
                 flags: [
                   {

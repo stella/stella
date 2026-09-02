@@ -848,7 +848,7 @@ describe("buildMessageTurns", () => {
     expect(second.body.map((item) => item.index)).toEqual([4]);
   });
 
-  test("offers the fork action on every message of a thread, not just the latest", () => {
+  test("offers the fork action on every answer, not just the latest", () => {
     const chatMessages: ChatUIMessage[] = [
       {
         id: "message-user",
@@ -885,14 +885,14 @@ describe("buildMessageTurns", () => {
       />,
     );
 
-    // Both assistant messages plus the user message: forking neither replaces
-    // nor discards anything, so it is not gated on being the latest turn the
-    // way retry is.
-    expect(html.match(/>Fork from here<\/button>/gu)).toHaveLength(3);
+    // Both assistant messages: forking neither replaces nor discards
+    // anything, so it is not gated on being the latest turn the way retry is.
+    // The user message carries no fork action.
+    expect(html.match(/>Fork from here<\/button>/gu)).toHaveLength(2);
     expect(html.match(/>Retry<\/button>/gu)).toHaveLength(1);
   });
 
-  test("offers the fork action in the sticky user header too", () => {
+  test("keeps the fork action off the sticky user header", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         approvalPendingMessageId={null}
@@ -922,10 +922,11 @@ describe("buildMessageTurns", () => {
       />,
     );
 
-    expect(html.match(/>Fork from here<\/button>/gu)).toHaveLength(2);
+    // The pinned ask is a user message: only the answer beneath it forks.
+    expect(html.match(/>Fork from here<\/button>/gu)).toHaveLength(1);
   });
 
-  test("hides fork on a user message whose turn has no assistant reply", () => {
+  test("offers no fork action on a user message", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         approvalPendingMessageId={null}
@@ -959,11 +960,10 @@ describe("buildMessageTurns", () => {
       />,
     );
 
-    // The replied ask and the answer offer forking; the trailing ask does
-    // not: without a reply of its own the client cannot know its row is
-    // durable (the send may still be in flight, or have failed), and the
-    // fork boundary must exist server-side.
-    expect(html.match(/>Fork from here<\/button>/gu)).toHaveLength(2);
+    // Only the answer offers forking. Neither ask does: a fork branches off
+    // an answer, and the server rejects any other boundary. An unreplied ask
+    // may not even be durable yet, so it could not be one regardless.
+    expect(html.match(/>Fork from here<\/button>/gu)).toHaveLength(1);
   });
 
   test("omits the fork action on surfaces that carry no thread reference", () => {

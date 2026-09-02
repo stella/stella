@@ -18,15 +18,17 @@ import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 type ChatMessageForkButtonProps = {
-  /** The message the fork keeps history up to, inclusive. */
+  /** The assistant message the fork keeps history up to, inclusive. */
   messageId: string;
   threadRef: ChatThreadRef;
 };
 
 /**
- * "Fork from here": copies this thread's history up to one message into a new
- * thread and opens it, leaving the original untouched. Valid on any message,
- * not only the latest, so it deliberately does not reuse the retry gate.
+ * "Fork from here": copies this thread's history up to one answer into a new
+ * thread and opens it, leaving the original untouched. Offered on any settled
+ * assistant message, not only the latest, so it deliberately does not reuse
+ * the retry gate. A fork branches off an answer: user messages carry no fork
+ * action, and the server rejects any other boundary.
  *
  * The new thread id is minted here rather than server-side, which is what
  * makes a retried request return the existing fork instead of a second copy.

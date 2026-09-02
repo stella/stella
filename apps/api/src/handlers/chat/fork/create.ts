@@ -16,6 +16,7 @@ import {
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
+import { forkedThreadTitle } from "@/api/handlers/chat/fork/title";
 import type { ChatMessagePrefixRow } from "@/api/handlers/chat/history-window";
 import { loadChatMessagePrefixOnTx } from "@/api/handlers/chat/history-window";
 import type {
@@ -33,6 +34,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
+import { extractLangFromRequest } from "@/api/lib/locale";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
 import { copyObject } from "@/api/lib/s3-presign";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
@@ -41,8 +43,10 @@ import { parseUserFileId, toUserFileUrl } from "@/api/lib/user-files/types";
 const config = {
   description:
     "Fork one of your own chat threads into a new thread that keeps the " +
-    "history up to a chosen message, so another direction or model can be " +
-    "explored without touching the original. The new thread id is minted by " +
+    "history up to a chosen answer, so another direction or model can be " +
+    "explored without touching the original. The boundary must be an " +
+    "assistant message: a fork branches off an answer, not off an ask. " +
+    "The new thread id is minted by " +
     "the caller, which makes a retried fork return the existing copy instead " +
     "of duplicating it. Attachments are duplicated, never shared: deleting " +
     "either thread leaves the other's files intact. The fork records where " +
@@ -60,7 +64,10 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-/** Settings a fork inherits verbatim from the thread it was cut from. */
+/**
+ * Settings a fork is built from. All are inherited verbatim except `title`,
+ * which the fork carries a marked copy of (see `forkedThreadTitle`).
+ */
 const FORKED_THREAD_COLUMNS = {
   chatModel: chatThreads.chatModel,
   chatReasoningEffort: chatThreads.chatReasoningEffort,
@@ -302,10 +309,10 @@ const rollbackCopiedS3Keys = async (copiedS3Keys: string[]): Promise<void> => {
   }
 };
 
-// Forks a chat thread at one of its messages. The prefix, its attachments and
-// the thread's settings are copied; turns, compaction state and the file /
-// template thread mappings are not. The fork's id comes from the caller, so a
-// retry converges on one copy instead of duplicating it.
+// Forks a chat thread at one of its assistant messages. The prefix, its
+// attachments and the thread's settings are copied; turns, compaction state
+// and the file / template thread mappings are not. The fork's id comes from
+// the caller, so a retry converges on one copy instead of duplicating it.
 export const createForkThread = ({
   indexChatThread = upsertChatThreadSearchDocument,
 }: {
@@ -321,6 +328,7 @@ export const createForkThread = ({
       query: { workspaceId },
       params,
       recordAuditEvent,
+      request,
       safeDb,
       session,
       user,
@@ -421,6 +429,12 @@ export const createForkThread = ({
           if (prefixRows === null) {
             return { kind: "boundary-missing" as const };
           }
+          // A fork branches off an answer: the boundary is the last row of the
+          // copied prefix, and ending on an ask would hand the fork a thread
+          // whose final turn is an unanswered question.
+          if (prefixRows.at(-1)?.role !== "assistant") {
+            return { kind: "boundary-not-assistant" as const };
+          }
           const prefix: PrefixMessage[] = prefixRows.map((row) => ({
             message: chatMessageFromPersisted(row),
             row,
@@ -468,6 +482,16 @@ export const createForkThread = ({
         }),
       );
 
+      if (reads.kind === "boundary-not-assistant") {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message:
+              "A chat thread can only be forked from an assistant message",
+          }),
+        );
+      }
+
       if (
         reads.kind === "source-missing" ||
         reads.kind === "boundary-missing"
@@ -513,6 +537,10 @@ export const createForkThread = ({
         );
       }
       const forkWorkspaceId = source.workspaceId;
+      const forkTitle = forkedThreadTitle({
+        locale: extractLangFromRequest(request),
+        title: source.title,
+      });
       const copiedS3Keys: string[] = [];
       const copyResults = await Promise.all(
         sourceFiles.map(
@@ -582,7 +610,7 @@ export const createForkThread = ({
           id: newThreadId,
           organizationId: session.activeOrganizationId,
           parentThreadId: params.threadId,
-          title: source.title,
+          title: forkTitle,
           titleSource: source.titleSource,
           usedAnonymization: source.usedAnonymization,
           userId: user.id,
@@ -713,7 +741,7 @@ export const createForkThread = ({
       // new thread. Mirrors rename-thread.ts and send-message.ts.
       indexChatThread(newThreadId).catch(captureError);
 
-      return Result.ok({ threadId: newThreadId, title: source.title });
+      return Result.ok({ threadId: newThreadId, title: forkTitle });
     },
   );
 
