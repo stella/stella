@@ -168,6 +168,10 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
+    "file": "apps/api/src/handlers/flows/run-read.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
     "file": "apps/api/src/handlers/invoices/get.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
@@ -268,6 +272,10 @@
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
+    "file": "apps/api/src/handlers/rates/entries-read.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
     "file": "apps/api/src/handlers/rates/list.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
@@ -325,6 +333,10 @@
   },
   {
     "file": "apps/api/src/handlers/style-sets/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/tasks/entity-links-read.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },
   {
@@ -425,6 +437,10 @@
   },
   {
     "file": "apps/api/src/handlers/workspaces/read-workflow-status.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/workspace-contacts-read.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   }
 ]

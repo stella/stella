@@ -42,7 +42,7 @@ type ProjectionModule = {
 // "list-cursor.ts" helper matches too) -- a false positive only costs an
 // allowlist line, while a false negative hides a real gap.
 const CLIENT_FACING_FILENAME =
-  /(^|\/)(list|get|read|read-model|response|list-query|detail)(\.|-)/u;
+  /(^|[/-])(list|get|read|read-model|response|list-query|detail)(\.|-)/u;
 
 // Any one of these substrings is enough to call a file "reads rows from a
 // schema table": a row type derived straight from the table, or a query

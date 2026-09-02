@@ -63,6 +63,23 @@ describe("isResourceProjectionModule", () => {
     ).toBe(true);
   });
 
+  test("classifies a handler whose operation is a basename suffix", () => {
+    expect(
+      isResourceProjectionModule({
+        relativePath: "apps/api/src/handlers/rates/entries-read.ts",
+        content: "const row = await tx.query.rateEntries.findFirst({});",
+      }),
+    ).toBe(true);
+    expect(
+      isResourceProjectionModule({
+        relativePath:
+          "apps/api/src/handlers/workspaces/workspace-contacts-read.ts",
+        content:
+          "const rows = await tx.select({ id: contacts.id }).from(contacts);",
+      }),
+    ).toBe(true);
+  });
+
   test("classifies a non-list-named module that still declares $inferSelect", () => {
     expect(
       isResourceProjectionModule({

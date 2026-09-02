@@ -96,6 +96,21 @@ run_code_check() {
   bun run code-check
 }
 
+run_dead_columns_guard() {
+  # A schema column referenced nowhere in application code is a defect in
+  # waiting; the matcher self-test runs first so a broken matcher cannot
+  # pass silently.
+  bun test scripts/check-dead-columns.test.ts || return 1
+  bun run check:dead-columns
+}
+
+run_projection_totality_guard() {
+  # Every resource projection module carries the bidirectional column guard
+  # or an allowlisted reason; the classifier self-test runs first.
+  bun test scripts/check-projection-totality.test.ts || return 1
+  bun run check:projection-totality
+}
+
 run_typecheck_coverage() {
   bun scripts/typecheck-coverage.ts --self-test || return 1
   bun scripts/typecheck-coverage.ts
@@ -261,6 +276,8 @@ run_step "React Compiler bailout guard" bun scripts/rc-bailouts.ts --check
 run_step "Oxlint override union guard" bun test \
   scripts/oxlint-override-union.test.ts
 run_step "Ratchet guard" run_ratchet_guard
+run_step "Dead columns" run_dead_columns_guard
+run_step "Projection totality" run_projection_totality_guard
 run_step "Module-mock ledger membership" run_module_mock_ledger_guard
 run_step "Suppression waiver ledger" run_suppression_waiver_guard
 run_step "Crawl posture guard" run_crawl_posture_guard
