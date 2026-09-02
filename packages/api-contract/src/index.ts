@@ -34,6 +34,11 @@ export {
   CHAT_TURN_INTENT,
 } from "./chat";
 export {
+  DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
+  DOCX_SUGGESTION_SURFACE,
+} from "./chat-docx-suggestions";
+export type { DocxSuggestionSurface } from "./chat-docx-suggestions";
+export {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   CHAT_TOOL_POLICY_KIND,
   CHAT_TOOL_POLICY_REQUIRES_APPROVAL,

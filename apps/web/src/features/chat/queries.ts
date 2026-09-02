@@ -2,6 +2,10 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { DataTag, QueryClient, QueryKey } from "@tanstack/react-query";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import {
+  DOCX_SUGGESTION_SURFACE,
+  type DocxSuggestionSurface,
+} from "@stll/api-contract";
 
 import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -23,8 +27,6 @@ import { invalidateWorkspaceActivity } from "@/lib/workspaces/queries";
 
 import { chatKeys, getChatRuntimeContextKind } from "./chat-query-contract";
 import type {
-  ApplyActiveDocxEditsInput,
-  ApplyActiveDocxEditsOutput,
   ChatThreadKey,
   ChatThreadOptionsContext,
   ChatThreadOptionsInput,
@@ -434,7 +436,7 @@ type FileChatThreadOptionsArgs = {
    * Whether the overlay wires a live Folio editor ref for this file (the
    * DOCX browser-edit surface). This is the same condition
    * `FileChatOverlayInner` uses to decide whether its own
-   * `chatThreadContext` carries `handleActiveDocxEditToolCall` or
+   * `chatThreadContext` carries `getDocxSuggestionSurface` or
    * `getActiveFile` — which in turn decides the `contextKind` baked into
    * `chatThreadOptions`' cache key (see `getChatRuntimeContextKind`).
    * Passed through so the seed below lands under the exact key that
@@ -446,14 +448,8 @@ type FileChatThreadOptionsArgs = {
 /** Never actually invoked: exists only so its presence steers
  *  `getChatRuntimeContextKind` to "active-docx-edit", matching the real
  *  `chatThreadContext` the docx-editing overlay builds once mounted. */
-const stubHandleActiveDocxEditToolCall = (
-  _input: ApplyActiveDocxEditsInput,
-): ApplyActiveDocxEditsOutput => ({
-  version: 1,
-  applied: [],
-  queued: [],
-  skipped: [],
-});
+const stubGetDocxSuggestionSurface = (): DocxSuggestionSurface =>
+  DOCX_SUGGESTION_SURFACE.fileOverlay;
 
 /** Never actually invoked: mirrors `getActiveFile`'s presence for the
  *  non-docx (PDF) overlay, steering `getChatRuntimeContextKind` to
@@ -495,7 +491,7 @@ const seedFileThreadMessageCache = ({
   const stubContext: ChatThreadOptionsContext = hasDocxEditSurface
     ? {
         allowMissingThread: true,
-        handleActiveDocxEditToolCall: stubHandleActiveDocxEditToolCall,
+        getDocxSuggestionSurface: stubGetDocxSuggestionSurface,
       }
     : { allowMissingThread: true, getActiveFile: stubGetActiveFile };
 
@@ -725,7 +721,7 @@ const CHAT_CONTEXT_CAPABILITY_KEYS = [
   "getEditApplyMode",
   "getSendMode",
   "getUserContext",
-  "handleActiveDocxEditToolCall",
+  "getDocxSuggestionSurface",
 ] as const satisfies readonly ChatContextCapabilityKey[];
 
 type MissingChatContextCapabilityKey = Exclude<

@@ -3,6 +3,7 @@ import type { AnyServerTool } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import {
   createSubagentProposalBuffer,
@@ -54,7 +55,7 @@ describe("projectToolMapForSubagent", () => {
       ),
       "create-document": clientTool("create-document"),
       "ask-user": clientTool("ask-user"),
-      "apply-active-docx-edits": clientTool("apply-active-docx-edits"),
+      [SUGGEST_CHANGES_TOOL_NAME]: clientTool(SUGGEST_CHANGES_TOOL_NAME),
     };
 
     const projected = projectToolMapForSubagent(tools, sink());

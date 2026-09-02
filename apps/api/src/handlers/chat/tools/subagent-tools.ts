@@ -76,7 +76,7 @@ const buildProposalWrapper = (
  *    `chat-tools.ts` via `SUBAGENT_DELEGATION_DEPTH_CAP`; this is a
  *    second, local guarantee that the projected set never contains it.
  *  - Any tool with no server `execute` (e.g. `create-document`,
- *    `ask-user`, `apply-active-docx-edits`) is client-executed: the
+ *    `ask-user`, `suggest_changes`) is client-executed: the
  *    real chat client resolves it via `ChatClient.addToolResult`. A
  *    nested loop has no client attached, so calling one of these
  *    would hang forever waiting for a result that never arrives.

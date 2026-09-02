@@ -223,7 +223,7 @@ type PromptBarProps = {
    * Whether the bar is allowed to send. False when we know the
    * downstream tool can't be honoured — currently set by the
    * file-chat overlay while the Folio PM view hasn't initialised
-   * (no snapshot to attach to apply-active-docx-edits). The send
+   * (no snapshot to attach to `suggest_changes`). The send
    * button is disabled and a "Loading editor…" hint replaces the
    * empty-state placeholder so the user doesn't fire a message
    * into a dead context.

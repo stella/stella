@@ -1483,7 +1483,7 @@ export const createSendMessage = (
       // with a server defect so every toolset built this turn refuses to
       // re-execute the identical call (see `ChatToolDefectMemo`).
       const toolDefectMemo = createChatToolDefectMemo();
-      // Narrower than the combined `apply-active-docx-edits` gate below:
+      // Narrower than the combined `suggest_changes` gate below:
       // only the file overlay (`file-chat-overlay.tsx`) mounts the
       // auto-run watcher that resolves the folio-agents `read_document` /
       // `find_text` tools via `addToolResult`. Template Studio has no such
@@ -1493,7 +1493,7 @@ export const createSendMessage = (
       const hasActiveDocxFileClient =
         body.activeFile?.supportsDocxEdits === true;
       // Per-turn DOCX-edit review-mode setting: which of the two mutually
-      // exclusive tools (`apply-active-docx-edits` manual /
+      // exclusive tools (`suggest_changes` manual /
       // `edit_workspace_document` auto) `getChatTools` registers, and (for
       // auto) which redline representation it applies with. Resolved once
       // and reused for both the validation and streaming tool sets below,
@@ -1838,7 +1838,7 @@ export const createSendMessage = (
 
         // Streaming tools mirror the surface the user is on: only the
         // DOCX file-overlay client knows how to satisfy
-        // apply-active-docx-edits (it queues into the review store and
+        // suggest_changes (it queues into the review store and
         // sends the output back via TanStack ChatClient.addToolResult).
         // PDF/file overlays
         // still send active-file context, but they must not expose the

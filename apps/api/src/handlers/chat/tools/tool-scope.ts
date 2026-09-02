@@ -1,6 +1,6 @@
 import { CHAT_TOOL_SCOPE } from "@stll/api-contract";
 
-import { APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME } from "@/api/handlers/chat/tools/active-docx-edit-tool";
+import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { SUGGEST_TEMPLATE_FIELDS_TOOL_NAME } from "@/api/handlers/chat/tools/template-tools";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
@@ -20,7 +20,7 @@ export type ChatToolScope =
 const CHAT_TOOL_SCOPE_ALLOWLISTS = {
   [CHAT_TOOL_SCOPE.suggestTemplateFields]: new Set<string>([
     SUGGEST_TEMPLATE_FIELDS_TOOL_NAME,
-    APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME,
+    SUGGEST_CHANGES_TOOL_NAME,
   ]),
 } as const satisfies Record<ChatToolScope, ReadonlySet<string>>;
 

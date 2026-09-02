@@ -38,13 +38,13 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 export const EDIT_WORKSPACE_DOCUMENT_TOOL_NAME = "edit_workspace_document";
 
 /**
- * Server-executed, headless counterpart to `apply-active-docx-edits`: this
+ * Server-executed, headless counterpart to `suggest_changes`: this
  * tool applies a versioned document-operation batch straight to the active
  * DOCX and writes a new entity version, with no browser review panel in the
  * loop. `chat-tools.ts` registers exactly one of the two tools per turn
  * (`editApplyMode`), never both.
  *
- * The input envelope/derivation mirrors `active-docx-edit-tool.ts`
+ * The input envelope/derivation mirrors the retired manual edit tool
  * (`{version, operations}`, derived from folio's exported
  * `FOLIO_DOCUMENT_OPERATION_JSON_SCHEMA`), with different narrowings:
  * - `severity` / `area` are left exactly as folio declares them (optional):
@@ -347,7 +347,7 @@ const validateEditWorkspaceDocumentInput = (
   }
 
   // No await: folio's batch schema is a synchronous valibot schema (see
-  // `active-docx-edit-tool.ts`'s identical comment on this exact call).
+  // the retired manual tool's identical comment on this exact call).
   const operationsForValidation = parseable.map((operation, index) =>
     operation["id"] === undefined
       ? { ...operation, id: `validation-${String(index)}` }
@@ -520,7 +520,7 @@ export type CreateEditWorkspaceDocumentToolsProps = {
 /**
  * Server-executed `edit_workspace_document` chat tool: the headless
  * (`auto`) counterpart to the manual, client-executed
- * `apply-active-docx-edits`. Applies a versioned document-operation batch
+ * `suggest_changes`. Applies a versioned document-operation batch
  * directly to the active DOCX (`@stll/folio-core/server`'s
  * `applyFolioAIEditsToBuffer`) and writes the result as a new entity
  * version -- no browser review panel, no per-suggestion accept step.
@@ -553,7 +553,7 @@ export const createEditWorkspaceDocumentTools = ({
     description:
       "Apply edits directly to the DOCX currently open in the document " +
       "editor and save a new version -- no user review step. Use this " +
-      "instead of `apply-active-docx-edits` when automatic apply mode is " +
+      "instead of `suggest_changes` when automatic apply mode is " +
       "active. Send the exact `baseVersionId` exposed by the schema with " +
       'a versioned batch: `{"baseVersionId": "...", "version": 1, ' +
       '"operations": [...]}`. The redline representation ' +

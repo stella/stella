@@ -25,7 +25,6 @@ export type NeedsApprovalPolicyKind = {
 }[ChatToolPolicyKind];
 
 export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
-  "apply-active-docx-edits": CHAT_TOOL_POLICY_KIND.internal,
   "ask-user": CHAT_TOOL_POLICY_KIND.internal,
   boe_find_related_laws: CHAT_TOOL_POLICY_KIND.publicOfficial,
   boe_get_law: CHAT_TOOL_POLICY_KIND.publicOfficial,
@@ -57,9 +56,18 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   fetch_url: CHAT_TOOL_POLICY_KIND.external,
   find_text: CHAT_TOOL_POLICY_KIND.internal,
   // Folio editor reads inspect the authorized live document without mutation.
+  get_document_outline: CHAT_TOOL_POLICY_KIND.internal,
+  list_stories: CHAT_TOOL_POLICY_KIND.internal,
   read_changes: CHAT_TOOL_POLICY_KIND.internal,
   read_comments: CHAT_TOOL_POLICY_KIND.internal,
   read_document: CHAT_TOOL_POLICY_KIND.internal,
+  read_section: CHAT_TOOL_POLICY_KIND.internal,
+  read_story: CHAT_TOOL_POLICY_KIND.internal,
+  show_in_document: CHAT_TOOL_POLICY_KIND.internal,
+  // Queue-only on every chat surface: the client bridge parks the proposed
+  // operations for per-suggestion human review and never writes, so the
+  // meaningful gate is the Accept click, not a chat-level approval.
+  suggest_changes: CHAT_TOOL_POLICY_KIND.internal,
   // Folio comment operations write tracked comments, replies, or resolutions;
   // the client executes each only after per-call approval.
   add_comment: CHAT_TOOL_POLICY_KIND.mutation,
