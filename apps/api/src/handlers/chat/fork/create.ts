@@ -16,7 +16,6 @@ import {
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
-import { forkedThreadTitle } from "@/api/handlers/chat/fork/title";
 import type { ChatMessagePrefixRow } from "@/api/handlers/chat/history-window";
 import { loadChatMessagePrefixOnTx } from "@/api/handlers/chat/history-window";
 import type {
@@ -34,7 +33,6 @@ import { consumeInBatches } from "@/api/lib/destructive-effect-chunks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
-import { extractLangFromRequest } from "@/api/lib/locale";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
 import { copyObject } from "@/api/lib/s3-presign";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
@@ -65,8 +63,7 @@ const config = {
 } satisfies HandlerConfig;
 
 /**
- * Settings a fork is built from. All are inherited verbatim except `title`,
- * which the fork carries a marked copy of (see `forkedThreadTitle`).
+ * Settings a fork inherits verbatim from its source thread.
  */
 const FORKED_THREAD_COLUMNS = {
   chatModel: chatThreads.chatModel,
@@ -336,7 +333,6 @@ export const createForkThread = ({
       query: { workspaceId },
       params,
       recordAuditEvent,
-      request,
       safeDb,
       session,
       user,
@@ -545,10 +541,6 @@ export const createForkThread = ({
         );
       }
       const forkWorkspaceId = source.workspaceId;
-      const forkTitle = forkedThreadTitle({
-        locale: extractLangFromRequest(request),
-        title: source.title,
-      });
       const copiedS3Keys: string[] = [];
       const copyResults: Result<UserFileCopyOutcome, HandlerError<500>>[] = [];
       await consumeInBatches({
@@ -630,7 +622,7 @@ export const createForkThread = ({
           id: newThreadId,
           organizationId: session.activeOrganizationId,
           parentThreadId: params.threadId,
-          title: forkTitle,
+          title: source.title,
           titleSource: source.titleSource,
           usedAnonymization: source.usedAnonymization,
           userId: user.id,
@@ -768,7 +760,7 @@ export const createForkThread = ({
       // new thread. Mirrors rename-thread.ts and send-message.ts.
       indexChatThread(newThreadId).catch(captureError);
 
-      return Result.ok({ threadId: newThreadId, title: forkTitle });
+      return Result.ok({ threadId: newThreadId, title: source.title });
     },
   );
 

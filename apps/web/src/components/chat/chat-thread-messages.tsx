@@ -34,7 +34,7 @@ import {
 } from "@/components/chat/chat-activity.logic";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
-import { ChatMessageForkButton } from "@/components/chat/chat-message-fork-button";
+import { ChatMessageActionsMenu } from "@/components/chat/chat-message-actions-menu";
 import {
   ChatRichMessagePart,
   isRichChatPart,
@@ -68,7 +68,6 @@ import {
   isOpaquePersistedChatToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
-import { MessageExportMenu } from "@/components/chat/message-export-menu";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
@@ -1097,17 +1096,19 @@ const AssistantMessageActions = ({
           {t("common.retry")}
         </Button>
       )}
-      {canFork && threadRef && (
-        <ChatMessageForkButton messageId={message.id} threadRef={threadRef} />
-      )}
-      {(!isGenerating || !isLatestAssistantMessage) && text && threadRef && (
-        <MessageExportMenu
-          artifact={exportArtifact ?? undefined}
-          key={`${message.id}:${exportArtifact?.toolCallId ?? "message-only"}`}
-          message={message}
-          threadRef={threadRef}
-        />
-      )}
+      {threadRef &&
+        (canFork ||
+          ((!isGenerating || !isLatestAssistantMessage) && Boolean(text))) && (
+          <ChatMessageActionsMenu
+            canExport={
+              (!isGenerating || !isLatestAssistantMessage) && Boolean(text)
+            }
+            canFork={canFork}
+            exportArtifact={exportArtifact}
+            message={message}
+            threadRef={threadRef}
+          />
+        )}
     </div>
   );
 };

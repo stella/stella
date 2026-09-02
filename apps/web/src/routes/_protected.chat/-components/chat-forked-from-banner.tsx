@@ -15,7 +15,7 @@ const BANNER_CLASSNAME =
   "text-muted-foreground inline-flex max-w-full items-center gap-1.5 text-xs";
 
 /**
- * "Forked from <source>" above a forked thread's transcript. A fork opens on
+ * "Created from <source>" above a forked thread's transcript. A fork opens on
  * history its reader never wrote, so the banner stays even once the source is
  * gone: only the link disappears with it.
  *

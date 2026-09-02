@@ -4,6 +4,11 @@ import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
+  CHAT_THREAD_ORIGIN,
+  type ChatThreadOrigin,
+} from "@stll/api-contract/chat";
+
+import {
   chatMessages,
   chatThreads,
   workspaces as workspacesTable,
@@ -97,6 +102,7 @@ const getThreads = createSafeRootHandler(
         tx
           .select({
             createdAt: chatThreads.createdAt,
+            forkedFromMessageId: chatThreads.forkedFromMessageId,
             id: chatThreads.id,
             title: chatThreads.title,
             updatedAt: chatThreads.updatedAt,
@@ -130,6 +136,7 @@ const getThreads = createSafeRootHandler(
 
     const global: {
       id: string;
+      origin: ChatThreadOrigin;
       title: string;
       createdAt: Date;
       updatedAt: Date;
@@ -143,6 +150,7 @@ const getThreads = createSafeRootHandler(
         workspaceName: string;
         threads: {
           id: string;
+          origin: ChatThreadOrigin;
           title: string;
           createdAt: Date;
           updatedAt: Date;
@@ -152,9 +160,14 @@ const getThreads = createSafeRootHandler(
     >();
 
     for (const thread of page) {
+      const origin =
+        thread.forkedFromMessageId === null
+          ? CHAT_THREAD_ORIGIN.original
+          : CHAT_THREAD_ORIGIN.fork;
       if (thread.workspaceId === null) {
         global.push({
           id: thread.id,
+          origin,
           title: thread.title,
           createdAt: thread.createdAt,
           updatedAt: thread.updatedAt,
@@ -169,6 +182,7 @@ const getThreads = createSafeRootHandler(
 
       const slice = {
         id: thread.id,
+        origin,
         title: thread.title,
         createdAt: thread.createdAt,
         updatedAt: thread.updatedAt,

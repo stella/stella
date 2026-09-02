@@ -44,6 +44,18 @@ import type { ChatRuntime } from "./chat-runtime";
 
 const CHAT_THREADS_PAGE_SIZE = 50;
 
+type SerializedChatMessage = Omit<PersistedChatMessage, "createdAt"> & {
+  createdAt: string;
+};
+
+const deserializeChatMessages = (
+  messages: readonly SerializedChatMessage[],
+): PersistedChatMessage[] =>
+  messages.map(({ createdAt, ...message }) => ({
+    ...message,
+    createdAt: new Date(createdAt),
+  }));
+
 /**
  * Where a thread's opening history came from. "parent-unavailable" is a fork
  * whose source cannot be opened any more (deleted, or a matter this user lost
@@ -131,7 +143,7 @@ const fetchThreadMessages = async (
 
   return {
     forkProvenance: response.data.forkProvenance,
-    messages: response.data.messages,
+    messages: deserializeChatMessages(response.data.messages),
     olderCursor: response.data.olderCursor,
     contextMatterIds: response.data.contextMatterIds,
     lastActivityAt: response.data.lastActivityAt,
@@ -172,7 +184,7 @@ export const fetchOlderMessages = async ({
   const data = unwrapEden(response);
 
   return {
-    messages: data.messages,
+    messages: deserializeChatMessages(data.messages),
     olderCursor: data.olderCursor,
   };
 };
@@ -265,7 +277,7 @@ const fetchFileChatThread = async ({
 
   return {
     threadId: data.threadId === null ? null : toChatThreadId(data.threadId),
-    messages: data.messages,
+    messages: deserializeChatMessages(data.messages),
     olderCursor: data.olderCursor,
     contextMatterIds: data.contextMatterIds,
     lastActivityAt: data.lastActivityAt,
@@ -636,7 +648,7 @@ export const materializeFileChatThread = async ({
       activeOrganizationId,
       client,
       fetched: {
-        messages: data.messages,
+        messages: deserializeChatMessages(data.messages),
         olderCursor: data.olderCursor,
         contextMatterIds: data.contextMatterIds,
         lastActivityAt: data.lastActivityAt,

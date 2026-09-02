@@ -34,6 +34,7 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import getMessages from "../get-messages";
+import getThreads from "../get-threads";
 import { createForkThread } from "./create";
 
 // Search indexing writes through the root (unscoped) database, which this
@@ -50,6 +51,7 @@ const forkThread = createForkThread({ indexChatThread: indexChatThreadMock });
 
 type ForkCtx = Parameters<typeof forkThread.handler>[0];
 type MessagesCtx = Parameters<typeof getMessages.handler>[0];
+type ThreadsCtx = Parameters<typeof getThreads.handler>[0];
 
 const BUCKET = process.env["S3_BUCKET"] ?? "stella";
 const IMAGE_MIME_TYPE = "image/png";
@@ -257,6 +259,15 @@ const forkContext = ({
     user: { id: userId ?? ids.userA1 },
   });
 
+const threadsContext = (): ThreadsCtx =>
+  asTestRaw<ThreadsCtx>({
+    memberRole: { role: "owner" },
+    query: { limit: 100 },
+    safeDb,
+    session: { activeOrganizationId: ids.orgA },
+    user: { id: ids.userA1 },
+  });
+
 const readFork = async (threadId: SafeId<"chatThread">) => {
   const [row] = await testDb
     .select({
@@ -325,7 +336,7 @@ const messageAt = (seeded: SeededThread, index: number) => {
   return id;
 };
 
-test("copies the prefix up to a mid-thread message and records provenance", async () => {
+test("copies the prefix, preserves the title, and projects fork provenance", async () => {
   const source = await seedThread({
     texts: ["Ask one", "Answer one", "Ask two", "Answer two"],
   });
@@ -344,7 +355,7 @@ test("copies the prefix up to a mid-thread message and records provenance", asyn
 
   expect(result).toEqual({
     threadId: newThreadId,
-    title: "Forked - Termination clause",
+    title: "Termination clause",
   });
 
   const copied = await readMessages(newThreadId);
@@ -368,7 +379,7 @@ test("copies the prefix up to a mid-thread message and records provenance", asyn
     chatReasoningEffort: "high",
     forkedFromMessageId: messageAt(source, 1),
     parentThreadId: source.threadId,
-    title: "Forked - Termination clause",
+    title: "Termination clause",
     titleSource: "user",
     webSearchEnabled: true,
     workspaceId: null,
@@ -381,6 +392,20 @@ test("copies the prefix up to a mid-thread message and records provenance", asyn
     "Ask two",
     "Answer two",
   ]);
+
+  const listed = await getThreads.handler(threadsContext());
+  if ("code" in listed) {
+    throw new TypeError(`get-threads failed: ${JSON.stringify(listed)}`);
+  }
+  expect(
+    listed.global.find((thread) => thread.id === newThreadId),
+  ).toMatchObject({
+    origin: "fork",
+    title: "Termination clause",
+  });
+  expect(
+    listed.global.find((thread) => thread.id === source.threadId),
+  ).toMatchObject({ origin: "original", title: "Termination clause" });
 });
 
 test("forking at the head copies the whole thread", async () => {

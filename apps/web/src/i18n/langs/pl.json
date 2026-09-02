@@ -715,10 +715,11 @@
     "fileTooLarge": "Plik przekracza limit {maxSize}",
     "focusSuggestion": "Ustaw fokus na sugestii: {topic}",
     "folioCitationFallback": "s. {n}",
-    "forkFromHere": "Rozgałęź stąd",
-    "forkedFrom": "Rozgałęziono z <bdi>{title}</bdi>",
-    "forkedFromUnavailable": "Rozgałęziono z rozmowy, która nie jest już dostępna",
-    "forkingThread": "Rozgałęzianie rozmowy…",
+    "forkFromHere": "Utwórz stąd nowy czat",
+    "forkedFrom": "Utworzono na podstawie <bdi>{title}</bdi>",
+    "forkedFromUnavailable": "Utworzono na podstawie czatu, który nie jest już dostępny",
+    "forkedThread": "Z innego czatu",
+    "forkingThread": "Tworzenie nowego czatu…",
     "greeting": "Nad czym chcesz pracować?",
     "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
     "hideThread": "Ukryj konwersację",
@@ -748,6 +749,7 @@
       },
       "loadError": "Nie udało się załadować elementów"
     },
+    "messageTimestampToday": "Dzisiaj, {time}",
     "modelSelector": {
       "autoDescription": "Automatycznie wybiera model i poziom rozumowania.",
       "autoLabel": "Automatycznie",

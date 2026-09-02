@@ -87,3 +87,32 @@ export const formatFullTimestamp = (date: Date | string): string => {
     timeStyle: "medium",
   });
 };
+
+type FormatContextualTimestampOptions = {
+  date: Date | string;
+  now?: Date;
+  today: (time: string) => string;
+};
+
+export const formatContextualTimestamp = ({
+  date,
+  now = new Date(),
+  today,
+}: FormatContextualTimestampOptions): string => {
+  const resolvedDate = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(resolvedDate.getTime())) {
+    return "";
+  }
+
+  const formatter = getFormatter();
+  const isToday =
+    resolvedDate.getFullYear() === now.getFullYear() &&
+    resolvedDate.getMonth() === now.getMonth() &&
+    resolvedDate.getDate() === now.getDate();
+
+  if (isToday) {
+    return today(formatter.dateTime(resolvedDate, { timeStyle: "short" }));
+  }
+
+  return formatter.dateTime(resolvedDate, MEDIUM_DATE_SHORT_TIME_FORMAT);
+};

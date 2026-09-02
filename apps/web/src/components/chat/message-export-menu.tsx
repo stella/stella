@@ -1,17 +1,13 @@
 import { useState } from "react";
+import type { ComponentProps } from "react";
 
 import { Result } from "better-result";
-import { DownloadIcon, Loader2Icon } from "lucide-react";
+import { Loader2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTitle,
-  PopoverTrigger,
-} from "@stll/ui/popover";
+import { Popover, PopoverPopup, PopoverTitle } from "@stll/ui/popover";
 import {
   Select,
   SelectItem,
@@ -65,7 +61,10 @@ const DOWNLOAD_TIMEOUT_MS = 60_000;
 const EXPORT_REQUEST_TIMEOUT_MS = 130_000;
 
 type MessageExportMenuProps = {
+  anchor: ComponentProps<typeof PopoverPopup>["anchor"];
   artifact?: CreateDocumentDraft | undefined;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
   threadRef: ChatThreadRef;
   // Optional only for dev HMR compatibility: an already-mounted child can
   // briefly receive the previous parent's prop shape during a module swap.
@@ -81,12 +80,14 @@ const compileArtifactDraft = async (artifact: CreateDocumentDraft) => {
 };
 
 export const MessageExportMenu = ({
+  anchor,
   artifact,
+  onOpenChange,
+  open,
   threadRef,
   message,
 }: MessageExportMenuProps) => {
   const t = useTranslations();
-  const [open, setOpen] = useState(false);
   const hasCitations =
     message !== undefined && hasMessageExportCitations(message);
   const [citationStyle, setCitationStyle] = useState<CitationStyle>(
@@ -191,25 +192,17 @@ export const MessageExportMenu = ({
       return;
     }
 
-    setOpen(false);
+    onOpenChange(false);
   };
 
   return (
-    <Popover onOpenChange={setOpen} open={open}>
-      <PopoverTrigger
-        render={
-          <Button
-            aria-label={t("common.export.title")}
-            className="text-muted-foreground h-6 px-1.5 text-xs"
-            size="xs"
-            variant="ghost"
-          >
-            <DownloadIcon className="size-3.5" />
-            {t("common.export.title")}
-          </Button>
-        }
-      />
-      <PopoverPopup align="end" className="w-64 p-3" side="top">
+    <Popover onOpenChange={onOpenChange} open={open}>
+      <PopoverPopup
+        align="start"
+        anchor={anchor}
+        className="w-64 p-3"
+        side="top"
+      >
         <div className="flex flex-col gap-3">
           <PopoverTitle className="text-sm font-medium">
             {t("common.export.title")}

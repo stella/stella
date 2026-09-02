@@ -715,10 +715,11 @@
     "fileTooLarge": "File exceeds {maxSize} limit",
     "focusSuggestion": "Focus suggestion: {topic}",
     "folioCitationFallback": "p. {n}",
-    "forkFromHere": "Fork from here",
-    "forkedFrom": "Forked from <bdi>{title}</bdi>",
-    "forkedFromUnavailable": "Forked from a conversation that is no longer available",
-    "forkingThread": "Forking the conversation…",
+    "forkFromHere": "Start a new chat from here",
+    "forkedFrom": "Created from <bdi>{title}</bdi>",
+    "forkedFromUnavailable": "Created from a chat that is no longer available",
+    "forkedThread": "From another chat",
+    "forkingThread": "Creating a new chat…",
     "greeting": "What would you like to work on?",
     "greetingSubtitle": "Start with a matter, document, or plain question.",
     "hideThread": "Hide conversation",
@@ -748,6 +749,7 @@
       },
       "loadError": "Failed to load items"
     },
+    "messageTimestampToday": "Today, {time}",
     "modelSelector": {
       "autoDescription": "Automatically chooses the model and effort.",
       "autoLabel": "Auto",

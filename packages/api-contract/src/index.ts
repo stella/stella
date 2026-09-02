@@ -29,6 +29,7 @@ export {
 export type { BusinessRegistrySlug } from "./business-registries";
 export {
   CHAT_RUN_MODE,
+  CHAT_THREAD_ORIGIN,
   CHAT_THREAD_PLACEHOLDER_TITLE,
   CHAT_TOOL_SCOPE,
   CHAT_TURN_INTENT,
@@ -49,6 +50,7 @@ export type {
   ChatInterruptResolution,
   ChatRunMode,
   ChatSendRequest,
+  ChatThreadOrigin,
 } from "./chat";
 export {
   CHAT_EDIT_APPLY_MODE,

@@ -28,6 +28,7 @@ import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { parseUserFileId } from "@/api/lib/user-files/types";
 
 export type ClientMessage = {
+  createdAt: string;
   id: SafeId<"chatMessage">;
   metadata?: ChatMessageMetadata;
   role: ChatMessageRole;
@@ -179,6 +180,7 @@ export const loadChatMessagePage = async ({
 
 type ChatMessagePageRow = {
   content: PersistedChatMessageContent;
+  createdAt: Date;
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
 };
@@ -189,6 +191,7 @@ export const clientMessageFromPageRow = (
 ): ClientMessage => {
   const message = chatMessageFromPersisted(row);
   return {
+    createdAt: row.createdAt.toISOString(),
     id: message.id,
     ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
     role: message.role,

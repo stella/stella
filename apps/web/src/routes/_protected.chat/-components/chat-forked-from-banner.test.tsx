@@ -34,7 +34,7 @@ describe("chat forked-from banner", () => {
   test("keeps the provenance visible once the source is gone", () => {
     const html = render({ type: "parent-unavailable" });
 
-    expect(html).toContain("Forked from a conversation that is no longer");
+    expect(html).toContain("Created from a chat that is no longer available");
     // Nothing to open: the source cannot be reached any more.
     expect(html).not.toContain("<a ");
   });
@@ -50,7 +50,7 @@ describe("chat forked-from banner", () => {
     expect(html).toContain('href="/chat/thread-parent"');
     // The title is user text of unknown direction inside a sentence whose
     // direction comes from the UI locale, so it is isolated in a `bdi`.
-    expect(html).toContain("Forked from <bdi");
+    expect(html).toContain("Created from <bdi");
     expect(html).toContain("Lease renewal</bdi>");
   });
 
@@ -78,7 +78,7 @@ describe("chat forked-from banner", () => {
       "de",
     );
 
-    expect(html).toContain("Verzweigt von <bdi");
+    expect(html).toContain("Erstellt aus <bdi");
     expect(html).toContain("Neuer Chat</bdi>");
     expect(html).not.toContain(CHAT_THREAD_PLACEHOLDER_TITLE);
   });

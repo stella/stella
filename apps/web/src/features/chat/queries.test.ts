@@ -340,6 +340,7 @@ describe("mergeGroupedChatThreadPages", () => {
           {
             createdAt: date("2026-05-16T08:00:00.000Z"),
             id: "global-A",
+            origin: "original",
             title: "Global A",
             updatedAt: date("2026-05-16T08:00:00.000Z"),
             usedAnonymization: false,
@@ -354,6 +355,7 @@ describe("mergeGroupedChatThreadPages", () => {
               {
                 createdAt: date("2026-05-16T07:00:00.000Z"),
                 id: "workspace-thread-A",
+                origin: "original",
                 title: "Workspace A",
                 updatedAt: date("2026-05-16T07:00:00.000Z"),
                 usedAnonymization: false,
@@ -367,6 +369,7 @@ describe("mergeGroupedChatThreadPages", () => {
           {
             createdAt: date("2026-05-16T08:00:00.000Z"),
             id: "global-A",
+            origin: "original",
             title: "Global A duplicate",
             updatedAt: date("2026-05-16T08:00:00.000Z"),
             usedAnonymization: false,
@@ -374,6 +377,7 @@ describe("mergeGroupedChatThreadPages", () => {
           {
             createdAt: date("2026-05-16T06:00:00.000Z"),
             id: "global-B",
+            origin: "fork",
             title: "Global B",
             updatedAt: date("2026-05-16T06:00:00.000Z"),
             usedAnonymization: false,
@@ -388,6 +392,7 @@ describe("mergeGroupedChatThreadPages", () => {
               {
                 createdAt: date("2026-05-16T07:00:00.000Z"),
                 id: "workspace-thread-A",
+                origin: "original",
                 title: "Workspace A duplicate",
                 updatedAt: date("2026-05-16T07:00:00.000Z"),
                 usedAnonymization: false,
@@ -395,6 +400,7 @@ describe("mergeGroupedChatThreadPages", () => {
               {
                 createdAt: date("2026-05-16T05:00:00.000Z"),
                 id: "workspace-thread-B",
+                origin: "original",
                 title: "Workspace B",
                 updatedAt: date("2026-05-16T05:00:00.000Z"),
                 usedAnonymization: false,
@@ -408,6 +414,7 @@ describe("mergeGroupedChatThreadPages", () => {
               {
                 createdAt: date("2026-05-16T06:00:00.000Z"),
                 id: "workspace-thread-D",
+                origin: "original",
                 title: "Workspace D",
                 updatedAt: date("2026-05-16T06:00:00.000Z"),
                 usedAnonymization: false,
@@ -415,6 +422,7 @@ describe("mergeGroupedChatThreadPages", () => {
               {
                 createdAt: date("2026-05-16T04:00:00.000Z"),
                 id: "workspace-thread-C",
+                origin: "original",
                 title: "Workspace C",
                 updatedAt: date("2026-05-16T04:00:00.000Z"),
                 usedAnonymization: false,
@@ -442,6 +450,7 @@ describe("mergeGroupedChatThreadPages", () => {
     expect(
       listChatHistoryItems(result).map((thread) => ({
         id: thread.id,
+        origin: thread.origin,
         scope: thread.scope,
         workspaceId:
           thread.scope === "workspace" ? thread.workspaceId : undefined,
@@ -451,36 +460,42 @@ describe("mergeGroupedChatThreadPages", () => {
     ).toEqual([
       {
         id: "global-A",
+        origin: "original",
         scope: "global",
         workspaceId: undefined,
         workspaceName: undefined,
       },
       {
         id: "workspace-thread-A",
+        origin: "original",
         scope: "workspace",
         workspaceId: "workspace-A",
         workspaceName: "Matter A",
       },
       {
         id: "workspace-thread-D",
+        origin: "original",
         scope: "workspace",
         workspaceId: "workspace-B",
         workspaceName: "Matter B",
       },
       {
         id: "global-B",
+        origin: "fork",
         scope: "global",
         workspaceId: undefined,
         workspaceName: undefined,
       },
       {
         id: "workspace-thread-B",
+        origin: "original",
         scope: "workspace",
         workspaceId: "workspace-A",
         workspaceName: "Matter A",
       },
       {
         id: "workspace-thread-C",
+        origin: "original",
         scope: "workspace",
         workspaceId: "workspace-B",
         workspaceName: "Matter B",

@@ -198,7 +198,7 @@ describe("chat thread messages", () => {
     expect(html).not.toContain("&lt;p&gt;Widget&lt;/p&gt;");
   });
 
-  test("keeps historical exports available while the latest answer streams", () => {
+  test("keeps historical message actions available while the latest answer streams", () => {
     const chatMessages: ChatUIMessage[] = [
       {
         id: "message-old",
@@ -230,7 +230,8 @@ describe("chat thread messages", () => {
       />,
     );
 
-    expect(html.match(/aria-label="Save message"/gu)).toHaveLength(1);
+    expect(html.match(/aria-label="Actions"/gu)).toHaveLength(1);
+    expect(html).not.toContain('aria-label="Save message"');
   });
 
   test("renders assistant reasoning separately from the final answer", () => {
@@ -851,7 +852,7 @@ describe("buildMessageTurns", () => {
     expect(second.body.map((item) => item.index)).toEqual([4]);
   });
 
-  test("offers the fork action on every answer, not just the latest", () => {
+  test("offers the actions menu on every answer, not just the latest", () => {
     const chatMessages: ChatUIMessage[] = [
       {
         id: "message-user",
@@ -888,14 +889,13 @@ describe("buildMessageTurns", () => {
       />,
     );
 
-    // Both assistant messages: forking neither replaces nor discards
-    // anything, so it is not gated on being the latest turn the way retry is.
-    // The user message carries no fork action.
-    expect(html.match(/>Fork from here<\/button>/gu)).toHaveLength(2);
+    // Both assistant messages retain their secondary actions in the menu. The
+    // user message has no assistant-message action row.
+    expect(html.match(/aria-label="Actions"/gu)).toHaveLength(2);
     expect(html.match(/>Retry<\/button>/gu)).toHaveLength(1);
   });
 
-  test("keeps the fork action off the sticky user header", () => {
+  test("keeps the actions menu off the sticky user header", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         approvalPendingMessageId={null}
@@ -925,11 +925,12 @@ describe("buildMessageTurns", () => {
       />,
     );
 
-    // The pinned ask is a user message: only the answer beneath it forks.
-    expect(html.match(/>Fork from here<\/button>/gu)).toHaveLength(1);
+    // The pinned ask is a user message: only the answer beneath it has the
+    // assistant-message actions menu.
+    expect(html.match(/aria-label="Actions"/gu)).toHaveLength(1);
   });
 
-  test("offers no fork action on a user message", () => {
+  test("offers no assistant-message actions on a user message", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         approvalPendingMessageId={null}
@@ -963,13 +964,12 @@ describe("buildMessageTurns", () => {
       />,
     );
 
-    // Only the answer offers forking. Neither ask does: a fork branches off
-    // an answer, and the server rejects any other boundary. An unreplied ask
-    // may not even be durable yet, so it could not be one regardless.
-    expect(html.match(/>Fork from here<\/button>/gu)).toHaveLength(1);
+    // Only the answer has the secondary actions menu. Neither ask does; an
+    // unreplied ask may not even be durable yet.
+    expect(html.match(/aria-label="Actions"/gu)).toHaveLength(1);
   });
 
-  test("omits the fork action on surfaces that carry no thread reference", () => {
+  test("omits thread actions on surfaces that carry no thread reference", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         approvalPendingMessageId={null}
@@ -995,7 +995,7 @@ describe("buildMessageTurns", () => {
     );
 
     expect(html).toContain("Embedded answer");
-    expect(html).not.toContain("Fork from here");
+    expect(html).not.toContain('aria-label="Actions"');
   });
 
   test("groups assistant messages preceding any user message into an orphan turn", () => {
