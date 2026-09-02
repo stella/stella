@@ -1,6 +1,6 @@
 import { chat, EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyClientTool, AnyServerTool, ModelMessage } from "@tanstack/ai";
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { isDeepStrictEqual } from "node:util";
 import * as v from "valibot";
 
@@ -1369,6 +1369,11 @@ export const catalogModelIds = (provider: CanaryProvider): string[] => {
 
 // The cheapest role: a short reply, no reasoning budget, no attachment.
 const CATALOG_PROBE_ROLE = "fast" satisfies ModelRole;
+// The catalog sweep is sequential (one provider quota) and each id may retry
+// with backoff, so the whole sweep gets one aggregate budget: ids left when
+// it runs out are reported as failures rather than silently unprobed, and the
+// job stays inside the workflow timeout on a degraded provider.
+export const CATALOG_SWEEP_BUDGET_MS = 10 * 60 * 1000;
 
 type CreateCanaryConfigOptions = {
   apiKey: string;
@@ -1729,26 +1734,56 @@ const runCatalogModelProbe = async ({
 type RunCatalogCanaryProbesOptions = {
   apiKey: string;
   provider: CanaryProvider;
+  /** Seam for tests: the per-model probe. */
+  probeModel?: (options: RunCatalogModelProbeOptions) => Promise<void>;
+  /** Seam for tests: the sweep clock. */
+  now?: () => number;
+  runProbe?: (options: RunCanaryProbeOptions) => Promise<CanaryProbeResult>;
 };
 
-const runCatalogCanaryProbes = async (
-  { apiKey, provider }: RunCatalogCanaryProbesOptions,
+export class CanaryCatalogSweepBudgetError extends TaggedError(
+  "CanaryCatalogSweepBudgetError",
+)<{ message: string; modelId: string }> {}
+
+export const runCatalogCanaryProbes = async (
+  {
+    apiKey,
+    provider,
+    probeModel = runCatalogModelProbe,
+    now = () => Date.now(),
+    runProbe = runCanaryProbe,
+  }: RunCatalogCanaryProbesOptions,
   failures: number,
 ): Promise<number> => {
   let totalFailures = failures;
+  const deadline = now() + CATALOG_SWEEP_BUDGET_MS;
   for (const modelId of catalogModelIds(provider)) {
+    const label = `catalog:${modelId}`;
+    const remainingMs = deadline - now();
+    if (remainingMs <= 0) {
+      totalFailures += recordProbeResult({
+        label,
+        provider,
+        result: {
+          attempts: 0,
+          error: new CanaryCatalogSweepBudgetError({
+            message: "catalog sweep budget exhausted before this id was probed",
+            modelId,
+          }),
+          signal: new AbortController().signal,
+          status: "failed",
+        },
+      });
+      continue;
+    }
     // oxlint-disable-next-line no-await-in-loop -- catalog probes share the provider quota and must remain sequential.
-    const result = await runCanaryProbe({
+    const result = await runProbe({
       run: async (signal) => {
-        await runCatalogModelProbe({ apiKey, modelId, provider, signal });
+        await probeModel({ apiKey, modelId, provider, signal });
       },
-      timeoutMs: MODEL_ROLE_PROBE_TIMEOUT_MS,
+      timeoutMs: Math.min(MODEL_ROLE_PROBE_TIMEOUT_MS, remainingMs),
     });
-    totalFailures += recordProbeResult({
-      label: `catalog:${modelId}`,
-      provider,
-      result,
-    });
+    totalFailures += recordProbeResult({ label, provider, result });
   }
   return totalFailures;
 };

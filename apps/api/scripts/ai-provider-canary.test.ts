@@ -15,6 +15,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   CanaryCredentialRejectedError,
   CanaryProviderRunError,
+  CATALOG_SWEEP_BUDGET_MS,
   catalogModelIds,
   classifyCanaryFailure,
   createPdfCanaryMessages,
@@ -27,6 +28,7 @@ import {
   requireWeeklyToolExecution,
   runCanaryProbe,
   runCanaryProbeSequence,
+  runCatalogCanaryProbes,
   toolRoundTripInputSchema,
   toolRoundTripInputSchemaForProvider,
   toolRoundTripPromptForProvider,
@@ -34,7 +36,7 @@ import {
 import { CANARY_PROVIDERS } from "./ai-provider-canary-config";
 
 describe("AI provider catalog canary coverage", () => {
-  test("probes every selectable model id of a provider exactly once", () => {
+  test("declares every selectable model id of a provider exactly once", () => {
     for (const provider of CANARY_PROVIDERS) {
       const ids = catalogModelIds(provider);
       expect(new Set(ids).size).toBe(ids.length);
@@ -45,6 +47,48 @@ describe("AI provider catalog canary coverage", () => {
         expect(ids).toContain(modelId);
       }
     }
+  });
+
+  test("the sweep probes exactly the declared ids, each once", async () => {
+    for (const provider of CANARY_PROVIDERS) {
+      const probed: string[] = [];
+      // oxlint-disable-next-line no-await-in-loop -- providers run one at a time so the recorded order stays deterministic.
+      const failures = await runCatalogCanaryProbes(
+        {
+          apiKey: "test-key",
+          provider,
+          probeModel: async ({ modelId, provider: probedProvider }) => {
+            expect(probedProvider).toBe(provider);
+            probed.push(modelId);
+          },
+        },
+        0,
+      );
+      expect(failures).toBe(0);
+      expect(probed).toEqual(catalogModelIds(provider));
+    }
+  });
+
+  test("ids left when the sweep budget runs out fail instead of going unprobed", async () => {
+    const provider = CANARY_PROVIDERS[0];
+    const ids = catalogModelIds(provider);
+    const probed: string[] = [];
+    let clock = 0;
+    const failures = await runCatalogCanaryProbes(
+      {
+        apiKey: "test-key",
+        provider,
+        now: () => clock,
+        probeModel: async ({ modelId }) => {
+          probed.push(modelId);
+          // The first probe consumes the whole budget.
+          clock += CATALOG_SWEEP_BUDGET_MS;
+        },
+      },
+      0,
+    );
+    expect(probed).toEqual(ids.slice(0, 1));
+    expect(failures).toBe(ids.length - 1);
   });
 });
 
