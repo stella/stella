@@ -15,7 +15,7 @@ export const parseContentLengthHeader = (
   return Number.isSafeInteger(contentLength) ? contentLength : undefined;
 };
 
-type SecureDocumentResponseOptions = {
+export type SecureDocumentResponseOptions = {
   body: Exclude<ConstructorParameters<typeof Response>[0], undefined>;
   contentType: string;
   disposition: "attachment" | "inline";

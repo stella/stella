@@ -37,7 +37,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+import type { SecureDocumentResponseOptions } from "@/api/lib/secure-document-response";
 import { recordTemplateUse } from "@/api/lib/templates/record-use";
 import { containsNull } from "@/api/lib/templates/template-data";
 import { assertTemplateFillUsage } from "@/api/lib/templates/template-fill-usage";
@@ -412,15 +412,18 @@ export const fillByIdLogic = async function* ({
     const pdfName = DOCX_EXT_RE.test(baseName)
       ? baseName.replace(DOCX_EXT_RE, ".pdf")
       : `${baseName}.pdf`;
-    return Result.ok(
-      secureDocumentResponse({
-        body: new Uint8Array(pdfResult.value.buffer),
-        // Octet-stream, not application/pdf: see OCTET_STREAM_MIME_TYPE.
-        contentType: OCTET_STREAM_MIME_TYPE,
-        disposition: "attachment",
-        fileName: sanitizeFilename(pdfName),
-      }),
-    );
+    // The literal file-response construction stays in the endpoint module
+    // (fill-by-id.ts calls secureDocumentResponse on this payload): the
+    // capability-catalog exporter statically scans each handler module's own
+    // source for that call, so returning the ready-made Response from here
+    // instead would make its declared file-response transport look stale.
+    return Result.ok({
+      body: new Uint8Array(pdfResult.value.buffer),
+      // Octet-stream, not application/pdf: see OCTET_STREAM_MIME_TYPE.
+      contentType: OCTET_STREAM_MIME_TYPE,
+      disposition: "attachment",
+      fileName: sanitizeFilename(pdfName),
+    } satisfies SecureDocumentResponseOptions);
   }
 
   const additionalHeaders = new Headers();
@@ -446,16 +449,14 @@ export const fillByIdLogic = async function* ({
     );
   }
 
-  return Result.ok(
-    secureDocumentResponse({
-      additionalHeaders,
-      body: new Uint8Array(result.buffer),
-      // Octet-stream, not the DOCX mime type: the Eden treaty client
-      // text-decodes unrecognized content types, which corrupts the ZIP
-      // container (Word then reports unreadable content).
-      contentType: OCTET_STREAM_MIME_TYPE,
-      disposition: "attachment",
-      fileName: sanitizeFilename(baseName),
-    }),
-  );
+  return Result.ok({
+    additionalHeaders,
+    body: new Uint8Array(result.buffer),
+    // Octet-stream, not the DOCX mime type: the Eden treaty client
+    // text-decodes unrecognized content types, which corrupts the ZIP
+    // container (Word then reports unreadable content).
+    contentType: OCTET_STREAM_MIME_TYPE,
+    disposition: "attachment",
+    fileName: sanitizeFilename(baseName),
+  } satisfies SecureDocumentResponseOptions);
 };

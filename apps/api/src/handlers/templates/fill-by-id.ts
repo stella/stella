@@ -1,9 +1,11 @@
+import { Result } from "better-result";
 import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { fillByIdLogic } from "@/api/lib/templates/fill-by-id-logic";
 import { OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
@@ -64,7 +66,13 @@ const fillTemplateById = createSafeRootHandler(
     query,
     recordAuditEvent,
   }) {
-    return yield* fillByIdLogic({
+    // fillByIdLogic returns the resolved document as data (body, content
+    // type, filename), not a Response: the capability-catalog exporter
+    // statically scans each handler module's own source for a file-like
+    // construction, so the actual secureDocumentResponse(...) call — the
+    // thing that makes this endpoint's declared file-response transport
+    // true — has to live here, not in the delegated lib module.
+    const filled = yield* yield* fillByIdLogic({
       safeDb,
       scopedDb,
       organizationId: session.activeOrganizationId,
@@ -74,6 +82,7 @@ const fillTemplateById = createSafeRootHandler(
       query,
       recordAuditEvent,
     });
+    return Result.ok(secureDocumentResponse(filled));
   },
 );
 
