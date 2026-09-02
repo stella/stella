@@ -1,5 +1,6 @@
 import { Elysia, type Context } from "elysia";
 
+import { isResponseValidationError } from "@/api/lib/errors/response-validation";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 
 type MaybePromise<T> = T | Promise<T>;
@@ -200,12 +201,6 @@ const rateLimitErrorStatus = (error: unknown): number | undefined => {
   }
   return undefined;
 };
-
-const isResponseValidationError = (error: unknown): boolean =>
-  typeof error === "object" &&
-  error !== null &&
-  "type" in error &&
-  error.type === "response";
 
 const isEarlyFailureStatus = (statusCode: number): boolean =>
   statusCode === 400 || statusCode === 404 || statusCode === 422;

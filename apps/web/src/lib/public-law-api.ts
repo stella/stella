@@ -20,19 +20,42 @@ export class PublicLawUnavailableError extends TaggedError(
   message: string;
 }> {}
 
+/**
+ * The body the public route groups answer from their before-handle gate when
+ * the surface is off. Eden types it into the success branch of every
+ * public-law route, so the unwrap below excludes it from the data type.
+ */
+type DisabledPublicLawData = {
+  readonly error: typeof PUBLIC_LAW_DISABLED_MARKER;
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-// The public route groups answer `404 { error: "Not Found" }` from a
-// before-handle gate when the surface is off; a missing resource on an
-// enabled surface carries a different body, so the marker is unambiguous.
+const isDisabledPublicLawData = (value: unknown): boolean =>
+  isRecord(value) && value["error"] === PUBLIC_LAW_DISABLED_MARKER;
+
+// A generic predicate, so the exclusion narrows the payload type of each
+// route instead of one fixed type.
+const isPublicLawData = <T>(
+  data: T,
+): data is Exclude<T, DisabledPublicLawData> => !isDisabledPublicLawData(data);
+
+// The gate answers with status 404, so Eden files the marker under `error`;
+// a missing resource on an enabled surface carries a different body, so the
+// marker is unambiguous.
 const isDisabledPublicLawResponse = ({
   status,
   value,
 }: ToAPIErrorProps): boolean =>
-  status === PUBLIC_LAW_DISABLED_STATUS &&
-  isRecord(value) &&
-  value["error"] === PUBLIC_LAW_DISABLED_MARKER;
+  status === PUBLIC_LAW_DISABLED_STATUS && isDisabledPublicLawData(value);
+
+const publicLawUnavailable = (action: string) =>
+  new PublicLawUnavailableError({
+    action,
+    area: PUBLIC_LAW_AREA,
+    message: "Public law is not available.",
+  });
 
 /**
  * Classifies a failed public-law Eden response. Eden files every non-2xx
@@ -46,24 +69,27 @@ export const toPublicLawError = (
   action: string,
 ): APIError | PublicLawUnavailableError =>
   isDisabledPublicLawResponse(error)
-    ? new PublicLawUnavailableError({
-        action,
-        area: PUBLIC_LAW_AREA,
-        message: "Public law is not available.",
-      })
+    ? publicLawUnavailable(action)
     : toAPIError(error);
 
 /**
  * Unwraps a public-law Eden response, throwing the classified failure.
  * Taking the whole response is what makes the classification structural: a
- * helper handed unwrapped data could never see the disabled marker.
+ * helper handed unwrapped data could never see the disabled marker. The
+ * marker is also excluded from the data type (and checked at runtime, in
+ * case a gate ever answers it with a success status), so callers read the
+ * payload type alone.
  */
 export function unwrapPublicLawEden<T>(
   response: EdenResponse<T>,
   action: string,
-): T {
+): Exclude<T, DisabledPublicLawData> {
   if (response.error) {
     throw toPublicLawError(response.error, action);
   }
-  return response.data;
+  const { data } = response;
+  if (!isPublicLawData(data)) {
+    throw publicLawUnavailable(action);
+  }
+  return data;
 }

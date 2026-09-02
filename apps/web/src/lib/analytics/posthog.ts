@@ -107,6 +107,27 @@ const isHttpStatus = (value: unknown): value is number =>
   value >= HTTP_STATUS_MIN &&
   value <= HTTP_STATUS_MAX;
 
+const isApiError = (error: unknown): error is Record<string, unknown> =>
+  isTaggedError(error) && error._tag === API_ERROR_TAG && isRecord(error);
+
+// Error boundaries wrap the failure they caught (`ClientTelemetryError` with
+// the `ApiError` as its cause), so the API error is found anywhere in the
+// cause chain. `cause` is writable, so the walk is bounded against cycles.
+const apiErrorInChain = (
+  error: unknown,
+): Record<string, unknown> | undefined => {
+  const seen = new Set<unknown>();
+  let current = error;
+  while (isRecord(current) && !seen.has(current)) {
+    if (isApiError(current)) {
+      return current;
+    }
+    seen.add(current);
+    current = current["cause"];
+  }
+  return undefined;
+};
+
 // The status and code of an `ApiError` are the only parts of a failed API
 // response that identify the outcome without carrying its payload, so they
 // ride along as flat properties and feed the grouping identity below. The
@@ -115,15 +136,12 @@ const isHttpStatus = (value: unknown): value is number =>
 const apiErrorTelemetryProperties = (
   error: unknown,
 ): Record<string, number | string> | undefined => {
-  if (
-    !isTaggedError(error) ||
-    error._tag !== API_ERROR_TAG ||
-    !isRecord(error)
-  ) {
+  const apiError = apiErrorInChain(error);
+  if (apiError === undefined) {
     return undefined;
   }
-  const status = error["status"];
-  const code = error["code"];
+  const status = apiError["status"];
+  const code = apiError["code"];
   if (!isHttpStatus(status)) {
     return undefined;
   }

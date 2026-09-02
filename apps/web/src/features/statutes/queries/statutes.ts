@@ -138,7 +138,7 @@ export const statuteAsOfOptions = (key: StatuteAsOfKey) =>
         throw error;
       }
 
-      return response.data;
+      return unwrapPublicLawEden(response, "readPublicStatuteAsOf");
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

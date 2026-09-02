@@ -1133,7 +1133,7 @@ export default eslintCompatPlugin({
             assignedResults.length = 0;
           },
           ImportDeclaration(node) {
-            if (node.source?.value !== API_MODULE) {
+            if (node.source.value !== API_MODULE) {
               return;
             }
             for (const specifier of node.specifiers) {

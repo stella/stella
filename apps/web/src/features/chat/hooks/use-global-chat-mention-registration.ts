@@ -13,6 +13,7 @@ import { api } from "@/lib/api";
 import {
   PublicLawUnavailableError,
   toPublicLawError,
+  unwrapPublicLawEden,
 } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -52,7 +53,9 @@ const searchCaseLawMentions = async (
     return [];
   }
 
-  return response.data.hits.map((hit) => ({
+  const data = unwrapPublicLawEden(response, "searchPublicCaseLawMentions");
+
+  return data.hits.map((hit) => ({
     resource: resourceRef({
       type: RESOURCE_TYPE.CASE_LAW_DECISION,
       id: toSafeId<"caseLawDecision">(hit.decisionId),

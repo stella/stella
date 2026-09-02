@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { INGESTION_REQUIRED_KEYS } from "@/lib/analytics/posthog-ingestion";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 import { APIError } from "@/lib/errors/api";
+import { ClientTelemetryError } from "@/lib/errors/telemetry";
 
 type CapturedBrowserEvent = {
   event: string;
@@ -1474,6 +1475,30 @@ describe("PostHog browser analytics adapter", () => {
     expect(captureExceptionMock.mock.calls.at(-1)?.[1]).toEqual({
       error_code: "usage_limit_exceeded",
       error_status: 402,
+    });
+  });
+
+  test("captureError finds the API error behind a boundary wrapper", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    analytics.captureError(
+      new ClientTelemetryError({
+        area: "pdf-viewer",
+        message: "[pdf-viewer] Privileged document name",
+        cause: new APIError({
+          code: "forbidden",
+          message: "Privileged localized text",
+          status: 403,
+        }),
+      }),
+    );
+
+    expect(captureExceptionMock.mock.calls.at(-1)?.[1]).toEqual({
+      area: "pdf-viewer",
+      error_code: "forbidden",
+      error_status: 403,
     });
   });
 });

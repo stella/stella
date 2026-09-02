@@ -128,6 +128,7 @@ import { initDocumentReviewRunWorker } from "@/api/lib/document-review/run-queue
 import { initDocumentTranslationRunWorker } from "@/api/lib/document-translation/run-queue";
 import { initEntityDeletionCleanupWorker } from "@/api/lib/entity-deletion-cleanup-queue";
 import { httpError } from "@/api/lib/errors/http-error";
+import { isResponseValidationError } from "@/api/lib/errors/response-validation";
 import { errorFingerprint, errorTag } from "@/api/lib/errors/utils";
 import { initFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
 import { initFlowRunWorker } from "@/api/lib/flows/flow-run-worker";
@@ -451,9 +452,13 @@ const api = new Elysia()
     // A framework-answered client fault (a rejected body, an unknown route,
     // an unparseable request) is the caller's own outcome: the WARN record
     // above keeps it, and reporting it as an exception would fill the tracker
-    // with one issue per scanner probe and schema mismatch. Every other code
-    // is the server's, and stays captured.
-    if (STATUS_BY_ELYSIA_CODE[code] === undefined) {
+    // with one issue per scanner probe and schema mismatch. A response-schema
+    // violation shares the VALIDATION code but is the handler's own fault, so
+    // it stays captured along with every other code.
+    if (
+      STATUS_BY_ELYSIA_CODE[code] === undefined ||
+      isResponseValidationError(error)
+    ) {
       captureRequestError(error, {
         request,
         context: {
