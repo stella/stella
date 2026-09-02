@@ -19,6 +19,7 @@ import {
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -41,6 +42,52 @@ const unwrapTxRead = <T>(result: Result<T, SafeDbError>): T =>
 
 const serializeThreadRevision = (updatedAt: Date | null): string | null =>
   updatedAt?.toISOString() ?? null;
+
+/**
+ * Where a thread's opening history came from, as the three states the two
+ * provenance columns can express. `forkedFromMessageId` is the discriminator:
+ * it survives the parent's deletion, which nulls `parentThreadId` alone.
+ *
+ * "unavailable" deliberately covers both a deleted parent and one this reader
+ * can no longer see (a matter whose access they lost): the distinction is not
+ * the reader's to learn, and either way the source cannot be opened.
+ */
+type ForkProvenance =
+  | { type: "none" }
+  | { type: "parent-unavailable" }
+  | {
+      threadId: SafeId<"chatThread">;
+      title: string;
+      type: "parent";
+      workspaceId: SafeId<"workspace"> | null;
+    };
+
+const resolveForkProvenance = ({
+  forkedFromMessageId,
+  parent,
+}: {
+  forkedFromMessageId: SafeId<"chatMessage"> | null;
+  parent:
+    | {
+        id: SafeId<"chatThread">;
+        title: string;
+        workspaceId: SafeId<"workspace"> | null;
+      }
+    | undefined;
+}): ForkProvenance => {
+  if (forkedFromMessageId === null) {
+    return { type: "none" };
+  }
+  if (parent === undefined) {
+    return { type: "parent-unavailable" };
+  }
+  return {
+    threadId: parent.id,
+    title: parent.title,
+    type: "parent",
+    workspaceId: parent.workspaceId,
+  };
+};
 
 const config = {
   description:
@@ -150,6 +197,8 @@ const getMessages = createSafeRootHandler(
             usedAnonymization: true,
             chatModel: true,
             chatReasoningEffort: true,
+            forkedFromMessageId: true,
+            parentThreadId: true,
             updatedAt: true,
           },
         });
@@ -221,6 +270,19 @@ const getMessages = createSafeRootHandler(
         // read once and threaded into loadWindowedThreadMessages (which would
         // otherwise re-run the identical query itself), so both observe the
         // same compaction state instead of racing as two independent reads.
+        // Provenance of a forked thread, for the "forked from …" link. Read
+        // by primary key under the same RLS scope, so a parent the reader can
+        // no longer see resolves to no row instead of leaking its title.
+        const parent = thread.parentThreadId
+          ? await tx.query.chatThreads.findFirst({
+              where: {
+                id: { eq: thread.parentThreadId },
+                userId: { eq: user.id },
+              },
+              columns: { id: true, title: true, workspaceId: true },
+            })
+          : undefined;
+
         const checkpoint = await readLatestChatCompactionOnTx({
           threadId,
           tx,
@@ -238,6 +300,7 @@ const getMessages = createSafeRootHandler(
           webSearchAvailable,
           thread,
           page,
+          parent,
           checkpoint,
           windowedMessages,
         };
@@ -247,6 +310,7 @@ const getMessages = createSafeRootHandler(
     if (reads.kind === "not-found") {
       if (allowMissingThread) {
         return Result.ok({
+          forkProvenance: { type: "none" } as const,
           messages: [],
           olderCursor: null,
           contextMatterIds: [],
@@ -288,8 +352,14 @@ const getMessages = createSafeRootHandler(
       );
     }
 
-    const { thread, webSearchAvailable, page, checkpoint, windowedMessages } =
-      reads;
+    const {
+      thread,
+      webSearchAvailable,
+      page,
+      parent,
+      checkpoint,
+      windowedMessages,
+    } = reads;
 
     // Estimated for every thread, empty ones included: with no messages and no
     // summary the estimate is just the cache-stable floor, so the meter is
@@ -315,6 +385,10 @@ const getMessages = createSafeRootHandler(
     });
 
     return Result.ok({
+      forkProvenance: resolveForkProvenance({
+        forkedFromMessageId: thread.forkedFromMessageId,
+        parent,
+      }),
       messages: page.messages,
       olderCursor: page.olderCursor,
       contextMatterIds: thread.contextMatterIds,

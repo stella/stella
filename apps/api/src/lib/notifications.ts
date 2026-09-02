@@ -15,6 +15,7 @@ import type { Transaction } from "@/api/db/root";
 import { notifications, workspaceMembers } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { chunked } from "@/api/lib/chunked";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcastToUser } from "@/api/lib/sse";
@@ -106,14 +107,6 @@ export type NewNotification = {
  * of parameter placeholders.
  */
 export const NOTIFICATION_INSERT_BATCH_SIZE = 200;
-
-const chunked = <T>(items: readonly T[], size: number): T[][] => {
-  const batches: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    batches.push(items.slice(index, index + size));
-  }
-  return batches;
-};
 
 /**
  * Structural handle the owner-connection paths read and write through.

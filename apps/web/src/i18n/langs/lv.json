@@ -715,6 +715,11 @@
     "fileTooLarge": "Fails pārsniedz {maxSize} ierobežojumu",
     "focusSuggestion": "Fokusēt ieteikumu: {topic}",
     "folioCitationFallback": "lpp. {n}",
+    "forkFromHere": "Sākt jaunu sarunu no šejienes",
+    "forkedFrom": "Izveidota no <bdi>{title}</bdi>",
+    "forkedFromUnavailable": "Izveidota no sarunas, kas vairs nav pieejama",
+    "forkedThread": "No citas sarunas",
+    "forkingThread": "Tiek veidota jauna saruna…",
     "greeting": "Pie kā vēlaties strādāt?",
     "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "hideThread": "Paslēpt sarunu",
@@ -744,6 +749,7 @@
       },
       "loadError": "Neizdevās ielādēt vienumus"
     },
+    "messageTimestampToday": "Šodien, {time}",
     "modelSelector": {
       "autoDescription": "Automātiski izvēlas modeli un spriešanas līmeni.",
       "autoLabel": "Automātiski",

@@ -715,6 +715,11 @@
     "fileTooLarge": "Fail ületab {maxSize} piirangu",
     "focusSuggestion": "Fookusta soovitus: {topic}",
     "folioCitationFallback": "lk {n}",
+    "forkFromHere": "Alusta siit uut vestlust",
+    "forkedFrom": "Loodud vestlusest <bdi>{title}</bdi>",
+    "forkedFromUnavailable": "Loodud vestlusest, mis pole enam saadaval",
+    "forkedThread": "Teisest vestlusest",
+    "forkingThread": "Uue vestluse loomine…",
     "greeting": "Millega soovite tegeleda?",
     "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "hideThread": "Peida vestlus",
@@ -744,6 +749,7 @@
       },
       "loadError": "Üksuste laadimine ebaõnnestus"
     },
+    "messageTimestampToday": "Täna, {time}",
     "modelSelector": {
       "autoDescription": "Valib mudeli ja arutlustaseme automaatselt.",
       "autoLabel": "Automaatne",

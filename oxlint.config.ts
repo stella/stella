@@ -1362,6 +1362,31 @@ export default defineConfig({
       },
     },
     {
+      // Two guards contradict each other in apps/web; this override picks one.
+      //
+      // React Compiler: bails out of any component or hook containing a logical
+      // assignment operator (`??=`, `||=`, `&&=`), and a bailed-out function is
+      // memoized not at all. scripts/rc-bailouts.ts baselines every bailout.
+      //
+      // prefer-nullish-coalescing: wants every `if (x === null) x = ...`
+      // rewritten as `??=`, the exact syntax that costs the memoization.
+      //
+      // Resolution: keep the `if` spelling where the compiler runs, which is
+      // apps/web/src alone; everything else keeps the stricter rule. Options are
+      // restated in full because oxlint resolves overrides by replacement, not
+      // merge.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
+        "typescript/prefer-nullish-coalescing": [
+          "error",
+          {
+            ignoreIfStatements: true,
+            ignorePrimitives: { string: true, boolean: true },
+          },
+        ],
+      },
+    },
+    {
       // Browser surfaces only: `document` does not exist in apps/api's
       // Bun runtime. CLAUDE.md: "No direct document.cookie assignment."
       files: [

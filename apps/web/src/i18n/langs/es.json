@@ -715,6 +715,11 @@
     "fileTooLarge": "El archivo supera el límite de {maxSize}",
     "focusSuggestion": "Enfocar sugerencia: {topic}",
     "folioCitationFallback": "p. {n}",
+    "forkFromHere": "Crear un chat nuevo desde aquí",
+    "forkedFrom": "Creado a partir de <bdi>{title}</bdi>",
+    "forkedFromUnavailable": "Creado a partir de un chat que ya no está disponible",
+    "forkedThread": "De otro chat",
+    "forkingThread": "Creando un chat nuevo…",
     "greeting": "¿En qué le gustaría trabajar?",
     "greetingSubtitle": "Empiece con un asunto, un documento o una pregunta sencilla.",
     "hideThread": "Ocultar conversación",
@@ -744,6 +749,7 @@
       },
       "loadError": "Error al cargar elementos"
     },
+    "messageTimestampToday": "Hoy, {time}",
     "modelSelector": {
       "autoDescription": "Elige automáticamente el modelo y el nivel de razonamiento.",
       "autoLabel": "Automático",

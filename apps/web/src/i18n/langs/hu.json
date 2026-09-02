@@ -715,6 +715,11 @@
     "fileTooLarge": "A fájl meghaladja a {maxSize} korlátot",
     "focusSuggestion": "Javaslat fókuszálása: {topic}",
     "folioCitationFallback": "o. {n}",
+    "forkFromHere": "Új csevegés indítása innen",
+    "forkedFrom": "Ebből a csevegésből létrehozva: <bdi>{title}</bdi>",
+    "forkedFromUnavailable": "Egy már nem elérhető csevegésből létrehozva",
+    "forkedThread": "Másik csevegésből",
+    "forkingThread": "Új csevegés létrehozása…",
     "greeting": "Min szeretne dolgozni?",
     "greetingSubtitle": "Kezdje egy üggyel, dokumentummal vagy egyszerű kérdéssel.",
     "hideThread": "Beszélgetés elrejtése",
@@ -744,6 +749,7 @@
       },
       "loadError": "Az elemek betöltése sikertelen"
     },
+    "messageTimestampToday": "Ma, {time}",
     "modelSelector": {
       "autoDescription": "Automatikusan választja ki a modellt és a gondolkodási szintet.",
       "autoLabel": "Automatikus",

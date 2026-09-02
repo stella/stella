@@ -44,7 +44,36 @@ import type { ChatRuntime } from "./chat-runtime";
 
 const CHAT_THREADS_PAGE_SIZE = 50;
 
+type SerializedChatMessage = Omit<PersistedChatMessage, "createdAt"> & {
+  createdAt: string;
+};
+
+const deserializeChatMessages = (
+  messages: readonly SerializedChatMessage[],
+): PersistedChatMessage[] =>
+  messages.map(({ createdAt, ...message }) => ({
+    ...message,
+    createdAt: new Date(createdAt),
+  }));
+
+/**
+ * Where a thread's opening history came from. "parent-unavailable" is a fork
+ * whose source cannot be opened any more (deleted, or a matter this user lost
+ * access to); the fork still says it inherited its history.
+ */
+export type ForkProvenance =
+  | { type: "none" }
+  | { type: "parent-unavailable" }
+  | {
+      threadId: string;
+      title: string;
+      type: "parent";
+      workspaceId: string | null;
+    };
+
 type ThreadFetch = {
+  /** Where this thread's opening history came from. */
+  forkProvenance: ForkProvenance;
   messages: PersistedChatMessage[];
   /** Cursor for the page before the oldest loaded message; null when none. */
   olderCursor: string | null;
@@ -93,6 +122,7 @@ const fetchThreadMessages = async (
 
     if (allowMissingThread && APIError.is(error) && error.status === 404) {
       return {
+        forkProvenance: { type: "none" },
         messages: [],
         olderCursor: null,
         contextMatterIds: [],
@@ -112,7 +142,8 @@ const fetchThreadMessages = async (
   }
 
   return {
-    messages: response.data.messages,
+    forkProvenance: response.data.forkProvenance,
+    messages: deserializeChatMessages(response.data.messages),
     olderCursor: response.data.olderCursor,
     contextMatterIds: response.data.contextMatterIds,
     lastActivityAt: response.data.lastActivityAt,
@@ -153,7 +184,7 @@ export const fetchOlderMessages = async ({
   const data = unwrapEden(response);
 
   return {
-    messages: data.messages,
+    messages: deserializeChatMessages(data.messages),
     olderCursor: data.olderCursor,
   };
 };
@@ -246,7 +277,7 @@ const fetchFileChatThread = async ({
 
   return {
     threadId: data.threadId === null ? null : toChatThreadId(data.threadId),
-    messages: data.messages,
+    messages: deserializeChatMessages(data.messages),
     olderCursor: data.olderCursor,
     contextMatterIds: data.contextMatterIds,
     lastActivityAt: data.lastActivityAt,
@@ -372,6 +403,11 @@ export const __resetChatRequestStateForTests = (): void => {
 };
 
 export type ChatThreadFetched = {
+  /**
+   * Where this thread's opening history came from, driving the "forked from"
+   * banner above the transcript.
+   */
+  forkProvenance: ForkProvenance;
   /**
    * Sanitized initial history for this thread (running tool-call
    * parts left by a stream that died mid-call are dropped — see
@@ -502,6 +538,9 @@ const seedFileThreadMessageCache = ({
       context: stubContext,
     }).queryKey,
     {
+      // A file thread is opened from its document, never forked: the fork
+      // action is only offered on the main chat surface.
+      forkProvenance: { type: "none" } as const,
       messages: sanitizeRunningToolCalls(fetched.messages),
       olderCursor: fetched.olderCursor,
       contextMatterIds: fetched.contextMatterIds,
@@ -609,7 +648,7 @@ export const materializeFileChatThread = async ({
       activeOrganizationId,
       client,
       fetched: {
-        messages: data.messages,
+        messages: deserializeChatMessages(data.messages),
         olderCursor: data.olderCursor,
         contextMatterIds: data.contextMatterIds,
         lastActivityAt: data.lastActivityAt,

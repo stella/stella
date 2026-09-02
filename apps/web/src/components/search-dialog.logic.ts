@@ -1,6 +1,8 @@
 import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
 
 import type { GlobalSearchHit } from "@/lib/api-contract";
+import { chatThreadRoute } from "@/lib/chat-thread-ref";
+import type { ChatThreadRoute } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
 import type { RecentFile } from "@/lib/search-recents";
 
@@ -183,29 +185,8 @@ export const getRecentFilePreviewDateVisibility = (
   file: RecentFile,
 ): "hide" | "show" => (file.updatedAt ? "show" : "hide");
 
-export type ChatHitRoute =
-  | {
-      to: "/chat/$threadId";
-      params: { threadId: string };
-    }
-  | {
-      to: "/chat/workspaces/$workspaceId/$threadId";
-      params: { workspaceId: string; threadId: string };
-    };
-
-export const getChatHitRoute = (hit: ChatGlobalSearchHit): ChatHitRoute => {
-  if (hit.workspaceId) {
-    return {
-      to: "/chat/workspaces/$workspaceId/$threadId",
-      params: { workspaceId: hit.workspaceId, threadId: hit.threadId },
-    };
-  }
-
-  return {
-    to: "/chat/$threadId",
-    params: { threadId: hit.threadId },
-  };
-};
+export const getChatHitRoute = (hit: ChatGlobalSearchHit): ChatThreadRoute =>
+  chatThreadRoute({ threadId: hit.threadId, workspaceId: hit.workspaceId });
 
 /**
  * Chat message content travels as composer HTML; a raw search query must be

@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
@@ -155,6 +156,90 @@ export const loadWindowedThreadMessages = async ({
       }),
   );
 
+/**
+ * `(created_at, id)` keyset boundary for the prefix ending at one message,
+ * resolved in-database from the target row.
+ *
+ * The boundary is NOT built from a JS-Date-truncated value: a target whose
+ * `created_at` carries PostgreSQL microseconds would fall before a truncated
+ * boundary and drop out of its own prefix. `inclusive` keeps the target row
+ * (retained prefix, forked history); the exclusive form selects only the tail
+ * a replay discards.
+ *
+ * The subselect binds the boundary row to the thread being read: a target
+ * that belongs to another thread, or that was deleted since the caller last
+ * saw it, resolves to a NULL boundary that matches no row, never to another
+ * thread's timestamp.
+ */
+const chatMessagePrefixBoundary = ({
+  inclusive,
+  targetMessageId,
+  threadId,
+}: {
+  inclusive: boolean;
+  targetMessageId: SafeId<"chatMessage">;
+  threadId: SafeId<"chatThread">;
+}): SQL =>
+  sql`(${chatMessages.createdAt}, ${chatMessages.id}) ${sql.raw(inclusive ? "<=" : ">")} (select b.created_at, b.id from chat_messages b where b.id = ${targetMessageId} and b.thread_id = ${threadId})`;
+
+type LoadChatMessagePrefixOnTxArgs = {
+  targetMessageId: SafeId<"chatMessage">;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+};
+
+export type ChatMessagePrefixRow = {
+  content: PersistedChatMessageContent;
+  createdAt: Date;
+  id: SafeId<"chatMessage">;
+  memoryExtractionEligible: boolean;
+  role: ChatMessageRole;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+/**
+ * Every row of a thread at or before one of its messages, oldest-first, with
+ * the columns a copy of that history needs. Returns null when the target is
+ * not a message of this thread.
+ *
+ * One statement, not an existence check followed by the read: under READ
+ * COMMITTED a target deleted between two statements would turn into an
+ * empty prefix that reads as success. An inclusive prefix always contains
+ * its own boundary row, so an empty read can only mean the boundary has no
+ * row in this thread.
+ */
+export const loadChatMessagePrefixOnTx = async ({
+  targetMessageId,
+  threadId,
+  tx,
+}: LoadChatMessagePrefixOnTxArgs): Promise<ChatMessagePrefixRow[] | null> => {
+  const prefix = await tx
+    .select({
+      content: chatMessages.content,
+      createdAt: chatMessages.createdAt,
+      id: chatMessages.id,
+      memoryExtractionEligible: chatMessages.memoryExtractionEligible,
+      role: chatMessages.role,
+      workspaceId: chatMessages.workspaceId,
+    })
+    .from(chatMessages)
+    .where(
+      and(
+        eq(chatMessages.threadId, threadId),
+        chatMessagePrefixBoundary({
+          inclusive: true,
+          targetMessageId,
+          threadId,
+        }),
+      ),
+    )
+    // SAFETY: bounded by the prefix [start..target] of one thread; a fork
+    // copies history up to it, so every row is needed.
+    // eslint-disable-next-line require-query-limit/require-query-limit -- bounded by the copied prefix up to the target row; see SAFETY above
+    .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
+  return prefix.length === 0 ? null : prefix;
+};
+
 type ResolveTruncationTargetArgs = {
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -184,78 +269,41 @@ export const resolveTruncationTarget = async ({
 }: ResolveTruncationTargetArgs): Promise<
   Result<TruncationTarget | null, SafeDbError>
 > =>
-  await Result.gen(async function* () {
-    const target = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({ id: chatMessages.id })
-          .from(chatMessages)
-          .where(
-            and(
-              eq(chatMessages.threadId, threadId),
-              eq(chatMessages.id, targetMessageId),
-            ),
-          )
-          .limit(1),
-      ),
-    );
-    if (!target.at(0)) {
-      return Result.ok(null);
+  // One scoped transaction for both halves of the split, so the retained
+  // prefix and the discarded tail cannot observe different thread states.
+  await safeDb(async (tx) => {
+    const retainedPrefix = await loadChatMessagePrefixOnTx({
+      targetMessageId,
+      threadId,
+      tx,
+    });
+    if (retainedPrefix === null) {
+      return null;
     }
 
-    const retainedPrefix = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({
-            id: chatMessages.id,
-            role: chatMessages.role,
-            content: chatMessages.content,
-          })
-          .from(chatMessages)
-          .where(
-            and(
-              eq(chatMessages.threadId, threadId),
-              // Resolve the (createdAt, id) boundary in-DB by id, NOT via a
-              // JS-Date-truncated value: a target whose created_at carries
-              // Postgres microseconds would otherwise fall before the truncated
-              // boundary and be dropped from the retained prefix (then deleted),
-              // making the edited message vanish.
-              sql`(${chatMessages.createdAt}, ${chatMessages.id}) <= (select b.created_at, b.id from chat_messages b where b.id = ${targetMessageId})`,
-            ),
-          )
-          // SAFETY: bounded by the retained prefix [start..target]; the target is
-          // a real row in this thread (resolved above), and a replay only retains
-          // messages up to it.
-          // eslint-disable-next-line require-query-limit/require-query-limit -- bounded by the retained replay prefix up to the target row; see SAFETY above
-          .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id)),
-      ),
-    );
+    const idsAfterTarget = await tx
+      .select({ id: chatMessages.id, role: chatMessages.role })
+      .from(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.threadId, threadId),
+          chatMessagePrefixBoundary({
+            inclusive: false,
+            targetMessageId,
+            threadId,
+          }),
+        ),
+      )
+      // SAFETY: bounded by the to-be-deleted tail (target..now]; the rows a
+      // replay discards after the target, which the caller deletes.
+      // eslint-disable-next-line require-query-limit/require-query-limit -- bounded by the replayed-away tail after the target row; see SAFETY above
+      .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
 
-    const idsAfterTarget = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({ id: chatMessages.id, role: chatMessages.role })
-          .from(chatMessages)
-          .where(
-            and(
-              eq(chatMessages.threadId, threadId),
-              // Same in-DB boundary, strictly greater, so the target row is kept
-              // (only newer rows are replayed away).
-              sql`(${chatMessages.createdAt}, ${chatMessages.id}) > (select b.created_at, b.id from chat_messages b where b.id = ${targetMessageId})`,
-            ),
-          )
-          // SAFETY: bounded by the to-be-deleted tail (target..now]; the rows a
-          // replay discards after the target, which the caller deletes.
-          // eslint-disable-next-line require-query-limit/require-query-limit -- bounded by the replayed-away tail after the target row; see SAFETY above
-          .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id)),
-      ),
-    );
-
-    return Result.ok({
+    return {
       messagesForPersistence: retainedPrefix.map(toWindowedMessage),
       deleteMessageIdsBeforeLatest: idsAfterTarget.map((row) => row.id),
       hasLaterUserMessage: idsAfterTarget.some((row) => row.role === "user"),
-    });
+    };
   });
 
 type ChatMessageExistsForThreadArgs = {

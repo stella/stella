@@ -13,6 +13,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import messages from "@/i18n/langs/en.json";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { ChatThreadTestRouter } from "@/lib/chat-thread-test-router";
 
 const previousApiUrl = process.env["VITE_API_URL"];
 process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
@@ -32,30 +33,32 @@ afterAll(() => {
 
 const renderWithProviders = (children: ReactNode) =>
   renderToStaticMarkup(
-    <QueryClientProvider client={new QueryClient()}>
-      <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <ChatMattersContext
-          value={{
-            createDocumentMatters: [],
-            isLoadingCreateDocumentMatters: false,
-          }}
-        >
-          <ChatApprovalContext
+    <ChatThreadTestRouter>
+      <QueryClientProvider client={new QueryClient()}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <ChatMattersContext
             value={{
-              activeOrganizationId: "test-active-organization",
-              alwaysApprovedTools: new Set(),
-              conversationApprovedTools: new Set(),
-              handleAllowInConversation: () => {},
-              handleAlwaysAllow: () => {},
-              handleApprove: () => {},
-              handleDeny: () => {},
+              createDocumentMatters: [],
+              isLoadingCreateDocumentMatters: false,
             }}
           >
-            {children}
-          </ChatApprovalContext>
-        </ChatMattersContext>
-      </IntlProvider>
-    </QueryClientProvider>,
+            <ChatApprovalContext
+              value={{
+                activeOrganizationId: "test-active-organization",
+                alwaysApprovedTools: new Set(),
+                conversationApprovedTools: new Set(),
+                handleAllowInConversation: () => {},
+                handleAlwaysAllow: () => {},
+                handleApprove: () => {},
+                handleDeny: () => {},
+              }}
+            >
+              {children}
+            </ChatApprovalContext>
+          </ChatMattersContext>
+        </IntlProvider>
+      </QueryClientProvider>
+    </ChatThreadTestRouter>,
   );
 
 describe("chat thread messages", () => {
@@ -195,7 +198,7 @@ describe("chat thread messages", () => {
     expect(html).not.toContain("&lt;p&gt;Widget&lt;/p&gt;");
   });
 
-  test("keeps historical exports available while the latest answer streams", () => {
+  test("keeps historical message actions available while the latest answer streams", () => {
     const chatMessages: ChatUIMessage[] = [
       {
         id: "message-old",
@@ -227,7 +230,8 @@ describe("chat thread messages", () => {
       />,
     );
 
-    expect(html.match(/aria-label="Save message"/gu)).toHaveLength(1);
+    expect(html.match(/aria-label="Actions"/gu)).toHaveLength(1);
+    expect(html).not.toContain('aria-label="Save message"');
   });
 
   test("renders assistant reasoning separately from the final answer", () => {
@@ -846,6 +850,152 @@ describe("buildMessageTurns", () => {
     expect(second.header.id).toBe("u2");
     expect(second.index).toBe(3);
     expect(second.body.map((item) => item.index)).toEqual([4]);
+  });
+
+  test("offers the actions menu on every answer, not just the latest", () => {
+    const chatMessages: ChatUIMessage[] = [
+      {
+        id: "message-user",
+        parts: [{ type: "text", content: "First ask" }],
+        role: "user",
+      },
+      {
+        id: "message-old",
+        parts: [{ type: "text", content: "Older answer" }],
+        role: "assistant",
+      },
+      {
+        id: "message-latest",
+        parts: [{ type: "text", content: "Latest answer" }],
+        role: "assistant",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        onResend={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+        threadRef={{
+          scope: "global",
+          threadId: toChatThreadId("thread"),
+        }}
+      />,
+    );
+
+    // Both assistant messages retain their secondary actions in the menu. The
+    // user message has no assistant-message action row.
+    expect(html.match(/aria-label="Actions"/gu)).toHaveLength(2);
+    expect(html.match(/>Retry<\/button>/gu)).toHaveLength(1);
+  });
+
+  test("keeps the actions menu off the sticky user header", () => {
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={[
+          {
+            id: "message-user",
+            parts: [{ type: "text", content: "Sticky ask" }],
+            role: "user",
+          },
+          {
+            id: "message-assistant",
+            parts: [{ type: "text", content: "Sticky answer" }],
+            role: "assistant",
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        stickyUserMessages
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+        threadRef={{
+          scope: "global",
+          threadId: toChatThreadId("thread"),
+        }}
+      />,
+    );
+
+    // The pinned ask is a user message: only the answer beneath it has the
+    // assistant-message actions menu.
+    expect(html.match(/aria-label="Actions"/gu)).toHaveLength(1);
+  });
+
+  test("offers no assistant-message actions on a user message", () => {
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={[
+          {
+            id: "message-replied-ask",
+            parts: [{ type: "text", content: "Replied ask" }],
+            role: "user",
+          },
+          {
+            id: "message-answer",
+            parts: [{ type: "text", content: "The answer" }],
+            role: "assistant",
+          },
+          {
+            id: "message-unreplied-ask",
+            parts: [{ type: "text", content: "Unreplied ask" }],
+            role: "user",
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+        threadRef={{
+          scope: "global",
+          threadId: toChatThreadId("thread"),
+        }}
+      />,
+    );
+
+    // Only the answer has the secondary actions menu. Neither ask does; an
+    // unreplied ask may not even be durable yet.
+    expect(html.match(/aria-label="Actions"/gu)).toHaveLength(1);
+  });
+
+  test("omits thread actions on surfaces that carry no thread reference", () => {
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={[
+          {
+            id: "message-user",
+            parts: [{ type: "text", content: "Embedded ask" }],
+            role: "user",
+          },
+          {
+            id: "message-assistant",
+            parts: [{ type: "text", content: "Embedded answer" }],
+            role: "assistant",
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain("Embedded answer");
+    expect(html).not.toContain('aria-label="Actions"');
   });
 
   test("groups assistant messages preceding any user message into an orphan turn", () => {

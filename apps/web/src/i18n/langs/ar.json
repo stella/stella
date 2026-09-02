@@ -715,6 +715,11 @@
     "fileTooLarge": "يتجاوز الملف الحدّ المسموح به {maxSize}",
     "focusSuggestion": "اقتراح التركيز: {topic}",
     "folioCitationFallback": "ص {n}",
+    "forkFromHere": "بدء محادثة جديدة من هنا",
+    "forkedFrom": "تم إنشاؤها من <bdi>{title}</bdi>",
+    "forkedFromUnavailable": "تم إنشاؤها من محادثة لم تعد متاحة",
+    "forkedThread": "من محادثة أخرى",
+    "forkingThread": "جارٍ إنشاء محادثة جديدة…",
     "greeting": "ما الذي تودّ العمل عليه؟",
     "greetingSubtitle": "ابدأ بملف قانوني أو مستند أو سؤال مباشر.",
     "hideThread": "إخفاء المحادثة",
@@ -744,6 +749,7 @@
       },
       "loadError": "تعذّر تحميل العناصر"
     },
+    "messageTimestampToday": "اليوم، {time}",
     "modelSelector": {
       "autoDescription": "يختار النموذج ومستوى الاستدلال تلقائيًا.",
       "autoLabel": "تلقائي",

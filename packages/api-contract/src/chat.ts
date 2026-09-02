@@ -9,6 +9,14 @@ import type { SafeId } from "./safe-id";
  */
 export const CHAT_THREAD_PLACEHOLDER_TITLE = "New chat";
 
+/** Whether a thread started independently or as a fork of another thread. */
+export const CHAT_THREAD_ORIGIN = {
+  fork: "fork",
+  original: "original",
+} as const;
+export type ChatThreadOrigin =
+  (typeof CHAT_THREAD_ORIGIN)[keyof typeof CHAT_THREAD_ORIGIN];
+
 export const CHAT_TOOL_SCOPE = {
   suggestTemplateFields: "suggest-template-fields",
 } as const;

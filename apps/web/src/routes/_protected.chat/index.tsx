@@ -38,6 +38,7 @@ import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
+import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterIcon } from "@/components/matter-icon";
@@ -684,6 +685,7 @@ function ChatIndex() {
                         icon={<MessageSquareIcon className="size-4" />}
                         meta={
                           <>
+                            <ChatThreadOriginPrefix origin={chat.origin} />
                             <BidiText>{chat.workspaceName}</BidiText>
                             {" - "}
                             {formatRelativeTime(chat.updatedAt)}
@@ -705,7 +707,12 @@ function ChatIndex() {
                     >
                       <LandingItemText
                         icon={<MessageSquareIcon className="size-4" />}
-                        meta={formatRelativeTime(chat.updatedAt)}
+                        meta={
+                          <>
+                            <ChatThreadOriginPrefix origin={chat.origin} />
+                            {formatRelativeTime(chat.updatedAt)}
+                          </>
+                        }
                         title={
                           isPlaceholderThreadTitle(chat.title)
                             ? t("chat.newChat")

@@ -34,6 +34,7 @@ import {
 } from "@/components/chat/chat-activity.logic";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
+import { ChatMessageActionsMenu } from "@/components/chat/chat-message-actions-menu";
 import {
   ChatRichMessagePart,
   isRichChatPart,
@@ -67,7 +68,6 @@ import {
   isOpaquePersistedChatToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
-import { MessageExportMenu } from "@/components/chat/message-export-menu";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
@@ -1041,8 +1041,15 @@ const AssistantMessageActions = ({
   const canRetry = Boolean(
     onResend && isLatestAssistantMessage && !isGenerating,
   );
+  // Forking reads persisted history, so it is offered on every settled
+  // answer rather than only the latest: unlike retry, it neither replaces nor
+  // discards anything in this thread. Only answers carry it — a fork branches
+  // off an answer, and the server rejects any other boundary.
+  const canFork = Boolean(
+    threadRef && (!isGenerating || !isLatestAssistantMessage),
+  );
 
-  if (!text && !canRetry) {
+  if (!text && !canRetry && !canFork) {
     return null;
   }
 
@@ -1089,14 +1096,19 @@ const AssistantMessageActions = ({
           {t("common.retry")}
         </Button>
       )}
-      {(!isGenerating || !isLatestAssistantMessage) && text && threadRef && (
-        <MessageExportMenu
-          artifact={exportArtifact ?? undefined}
-          key={`${message.id}:${exportArtifact?.toolCallId ?? "message-only"}`}
-          message={message}
-          threadRef={threadRef}
-        />
-      )}
+      {threadRef &&
+        (canFork ||
+          ((!isGenerating || !isLatestAssistantMessage) && Boolean(text))) && (
+          <ChatMessageActionsMenu
+            canExport={
+              (!isGenerating || !isLatestAssistantMessage) && Boolean(text)
+            }
+            canFork={canFork}
+            exportArtifact={exportArtifact}
+            message={message}
+            threadRef={threadRef}
+          />
+        )}
     </div>
   );
 };

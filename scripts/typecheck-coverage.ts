@@ -20,6 +20,8 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { withoutTsgoOnlyOptionDiagnostics } from "../packages/scripts/src/tsgo-compiler-options.ts";
+
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const TSC_NATIVE = "packages/scripts/src/tsc-native.ts";
 const WORKSPACE_PARENTS = ["apps", "packages"] as const;
@@ -288,9 +290,10 @@ const readCompilerOptions = (project: string): ts.CompilerOptions => {
     undefined,
     configFile,
   );
-  if (parsed.errors.length > 0) {
+  const errors = withoutTsgoOnlyOptionDiagnostics(parsed.errors);
+  if (errors.length > 0) {
     panic(
-      `${project} is invalid:\n${parsed.errors
+      `${project} is invalid:\n${errors
         .map((error) =>
           ts.flattenDiagnosticMessageText(error.messageText, "\n"),
         )

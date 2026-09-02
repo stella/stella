@@ -715,6 +715,11 @@
     "fileTooLarge": "Soubor překračuje limit {maxSize}",
     "focusSuggestion": "Zaměřit návrh: {topic}",
     "folioCitationFallback": "str. {n}",
+    "forkFromHere": "Vytvořit odsud nový chat",
+    "forkedFrom": "Vytvořeno z chatu: <bdi>{title}</bdi>",
+    "forkedFromUnavailable": "Vytvořeno z chatu, který už není dostupný",
+    "forkedThread": "Z jiného chatu",
+    "forkingThread": "Vytváří se nový chat…",
     "greeting": "Na čem chcete pracovat?",
     "greetingSubtitle": "Začněte spisem, dokumentem nebo obyčejnou otázkou.",
     "hideThread": "Skrýt konverzaci",
@@ -744,6 +749,7 @@
       },
       "loadError": "Nepodařilo se načíst položky"
     },
+    "messageTimestampToday": "Dnes, {time}",
     "modelSelector": {
       "autoDescription": "Automaticky vybere model a úroveň uvažování.",
       "autoLabel": "Automaticky",

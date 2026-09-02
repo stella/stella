@@ -715,6 +715,11 @@
     "fileTooLarge": "Le fichier dépasse la limite de {maxSize}",
     "focusSuggestion": "Cibler la suggestion : {topic}",
     "folioCitationFallback": "p. {n}",
+    "forkFromHere": "Créer une nouvelle discussion à partir d’ici",
+    "forkedFrom": "Créée à partir de <bdi>{title}</bdi>",
+    "forkedFromUnavailable": "Créée à partir d’une discussion qui n’est plus disponible",
+    "forkedThread": "Issue d’une autre discussion",
+    "forkingThread": "Création d’une nouvelle discussion…",
     "greeting": "Sur quoi souhaitez-vous travailler ?",
     "greetingSubtitle": "Commencez par un dossier, un document ou une question simple.",
     "hideThread": "Masquer la conversation",
@@ -744,6 +749,7 @@
       },
       "loadError": "Échec du chargement des éléments"
     },
+    "messageTimestampToday": "Aujourd’hui, {time}",
     "modelSelector": {
       "autoDescription": "Choisit automatiquement le modèle et le niveau de raisonnement.",
       "autoLabel": "Automatique",

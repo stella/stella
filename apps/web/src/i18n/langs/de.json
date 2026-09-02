@@ -715,6 +715,11 @@
     "fileTooLarge": "Datei überschreitet das Limit von {maxSize}",
     "focusSuggestion": "Vorschlag fokussieren: {topic}",
     "folioCitationFallback": "S. {n}",
+    "forkFromHere": "Ab hier einen neuen Chat starten",
+    "forkedFrom": "Erstellt aus <bdi>{title}</bdi>",
+    "forkedFromUnavailable": "Erstellt aus einem nicht mehr verfügbaren Chat",
+    "forkedThread": "Aus einem anderen Chat",
+    "forkingThread": "Neuer Chat wird erstellt…",
     "greeting": "Woran möchten Sie arbeiten?",
     "greetingSubtitle": "Beginnen Sie mit einer Akte, einem Dokument oder einer einfachen Frage.",
     "hideThread": "Konversation ausblenden",
@@ -744,6 +749,7 @@
       },
       "loadError": "Einträge konnten nicht geladen werden"
     },
+    "messageTimestampToday": "Heute, {time}",
     "modelSelector": {
       "autoDescription": "Wählt Modell und Denkaufwand automatisch aus.",
       "autoLabel": "Automatisch",

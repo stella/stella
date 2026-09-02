@@ -73,6 +73,9 @@ const CHAT_TURN_CANCELLATION_REASON_SQL_VALUES =
 const CHAT_TURN_INTERRUPTION_REASON_SQL_VALUES =
   CHAT_TURN_INTERRUPTION_REASONS.map((reason) => sql.raw(`'${reason}'`));
 
+/** Width of `chat_threads.title`; anything deriving a title must fit it. */
+export const CHAT_THREAD_TITLE_MAX_LENGTH = 255;
+
 export const chatThreads = p.pgTable(
   "chat_threads",
   {
@@ -90,7 +93,7 @@ export const chatThreads = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    title: p.varchar({ length: 255 }).notNull(),
+    title: p.varchar({ length: CHAT_THREAD_TITLE_MAX_LENGTH }).notNull(),
     // Provenance of `title`; gates whether background AI titling may replace it.
     // See ChatTitleSource in ./common. New threads start "default"; a rename
     // stamps "user"; the generator only replaces "default" and stamps "ai".
@@ -176,6 +179,21 @@ export const chatThreads = p.pgTable(
     recapGeneratedAt: timestamptz("recap_generated_at"),
     usedAnonymization: p.boolean("used_anonymization").notNull().default(false),
     /**
+     * Provenance of a thread created by forking another one at a chosen
+     * message. `forkedFromMessageId` is the "this thread is a fork"
+     * discriminator and deliberately carries no foreign key: edit and replay
+     * truncation delete messages, and provenance must neither dangle-block
+     * that delete nor vanish with it (same reasoning as `recapMessageId`).
+     * `parentThreadId` goes null when the source thread is deleted, so a null
+     * parent beside a non-null boundary message reads as "forked from a thread
+     * that no longer exists".
+     */
+    parentThreadId: safeUuid<"chatThread">("parent_thread_id").references(
+      (): AnyPgColumn => chatThreads.id,
+      { onDelete: "set null" },
+    ),
+    forkedFromMessageId: safeUuid<"chatMessage">("forked_from_message_id"),
+    /**
      * Durable queue address for incremental thread compaction. Null means no
      * compaction work is pending. A send whose history window crosses the
      * compaction trigger stamps `now()`; the compactor claims a due thread by
@@ -242,6 +260,13 @@ export const chatThreads = p.pgTable(
       .index("chat_threads_data_workspace_ids_idx")
       .using("gin", table.dataWorkspaceIds),
     p.index("chat_threads_user_updated_idx").on(table.userId, table.updatedAt),
+    // Serves the parent self-reference's ON DELETE SET NULL scan: without it
+    // every thread delete reads all of chat_threads. Partial because only a
+    // fork carries a parent.
+    p
+      .index("chat_threads_parent_thread_idx")
+      .on(table.parentThreadId)
+      .where(isNotNull(table.parentThreadId)),
     // Serves the compactor's claim seek: due threads oldest-first, with
     // never-attempted work ahead of previously failed work.
     p

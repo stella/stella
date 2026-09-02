@@ -34,6 +34,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
 import {
   ChatTitleRename,
   ChatTitleSuggestButton,
@@ -427,6 +428,7 @@ const ThreadRow = ({
                 {displayTitle}
               </BidiText>
               <span className="text-muted-foreground text-xs">
+                <ChatThreadOriginPrefix origin={thread.origin} />
                 {thread.scope === "workspace" ? (
                   <>
                     <BidiText as="span">{thread.workspaceName}</BidiText>

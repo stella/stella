@@ -9,12 +9,14 @@ import {
   test,
 } from "bun:test";
 
-import { useI18nStore } from "@/i18n/i18n-store";
+import { getFormatter, useI18nStore } from "@/i18n/i18n-store";
 
 import {
+  formatContextualTimestamp,
   formatFullTimestamp,
   formatRelativeTime,
   getRelativeTimeFormatter,
+  MEDIUM_DATE_SHORT_TIME_FORMAT,
 } from "./relative-time";
 
 const NOW = new Date("2026-01-15T12:00:00.000Z");
@@ -119,5 +121,44 @@ describe("full timestamps", () => {
 
   test("returns an empty string for an invalid date", () => {
     expect(formatFullTimestamp("not-a-date")).toBe("");
+  });
+});
+
+describe("contextual timestamps", () => {
+  test("uses the translated today label for a timestamp on the current day", () => {
+    expect(
+      formatContextualTimestamp({
+        date: new Date("2026-01-15T13:45:00.000Z"),
+        now: NOW,
+        today: (time) => `Today, ${time}`,
+      }),
+    ).toBe("Today, 1:45 PM");
+  });
+
+  test("includes the date for a timestamp from another day", () => {
+    const date = new Date("2026-01-14T13:45:00.000Z");
+    let usedTodayLabel = false;
+
+    expect(
+      formatContextualTimestamp({
+        date,
+        now: NOW,
+        today: () => {
+          usedTodayLabel = true;
+          return "Today";
+        },
+      }),
+    ).toBe(getFormatter().dateTime(date, MEDIUM_DATE_SHORT_TIME_FORMAT));
+    expect(usedTodayLabel).toBe(false);
+  });
+
+  test("returns an empty string for an invalid date", () => {
+    expect(
+      formatContextualTimestamp({
+        date: "not-a-date",
+        now: NOW,
+        today: (time) => `Today, ${time}`,
+      }),
+    ).toBe("");
   });
 });

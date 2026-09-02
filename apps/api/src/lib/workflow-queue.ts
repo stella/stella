@@ -25,6 +25,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLocks } from "@/api/lib/cell-lock";
+import { chunked } from "@/api/lib/chunked";
 import { recordTableRunVerdicts } from "@/api/lib/document-review/table-run-findings";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -309,14 +310,6 @@ type EnqueueEntityJobsArgs = {
   forcePropertyIds?: readonly SafeId<"property">[];
 };
 
-const chunkItems = <T>(items: readonly T[], size: number): T[][] => {
-  const chunks: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
-};
-
 const workflowEntityJobId = ({
   entityId,
   requestId,
@@ -374,7 +367,7 @@ const removeQueuedWorkflowJobs = async (
   q: WorkflowEntityQueue,
   jobIds: readonly string[],
 ): Promise<void> => {
-  for (const chunk of chunkItems(jobIds, LIMITS.workflowEntityBatchSize)) {
+  for (const chunk of chunked(jobIds, LIMITS.workflowEntityBatchSize)) {
     // oxlint-disable-next-line no-await-in-loop -- sequential chunk drain bounds the per-batch Promise.all concurrency
     await Promise.all(
       chunk.map(async (jobId) => {
@@ -612,7 +605,7 @@ export const startWorkflow = async ({
     const q = getQueueForClass(workflowQueueClassForServiceTier(serviceTier));
     const queuedJobIds: string[] = [];
     try {
-      for (const chunk of chunkItems(
+      for (const chunk of chunked(
         targetEntityIds,
         LIMITS.workflowEntityBatchSize,
       )) {
@@ -705,7 +698,7 @@ const selectWorkspacesWithPendingCells = async (
   const workspaceIdBatches =
     workspaceIds === undefined
       ? [null]
-      : chunkItems(workspaceIds, LIMITS.workflowEntityBatchSize);
+      : chunked(workspaceIds, LIMITS.workflowEntityBatchSize);
 
   for (const workspaceIdBatch of workspaceIdBatches) {
     const workspaceFilter =
@@ -750,7 +743,7 @@ const readWorkflowRequestIds = async (
 ): Promise<Map<string, string | null>> => {
   const runStateStore = getRootWorkflowRunStateStore();
   const requestIds = new Map<string, string | null>();
-  for (const workspaceIdBatch of chunkItems(
+  for (const workspaceIdBatch of chunked(
     workspaceIds,
     LIMITS.workflowEntityBatchSize,
   )) {
@@ -772,7 +765,7 @@ const readWorkflowRunningValues = async (
 ): Promise<Map<string, string | null>> => {
   const runStateStore = getRootWorkflowRunStateStore();
   const runningValues = new Map<string, string | null>();
-  for (const workspaceIdBatch of chunkItems(
+  for (const workspaceIdBatch of chunked(
     workspaceIds,
     LIMITS.workflowEntityBatchSize,
   )) {

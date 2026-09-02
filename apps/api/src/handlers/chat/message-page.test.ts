@@ -11,6 +11,7 @@ import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 const MESSAGE_ID = brandPersistedChatMessageId(
   "018f4ad2-3a6d-7000-8b1d-44f76f5df001",
 );
+const CREATED_AT = new Date("2026-09-02T15:06:00.000Z");
 
 const encodeParts = (parts: unknown): string =>
   Buffer.from(JSON.stringify(parts)).toString("base64url");
@@ -48,6 +49,7 @@ describe("clientMessageFromPageRow", () => {
   test("preserves persisted message metadata", () => {
     const message = clientMessageFromPageRow(
       {
+        createdAt: CREATED_AT,
         id: MESSAGE_ID,
         role: "assistant",
         content: toChatMessageContent({
@@ -96,5 +98,6 @@ describe("clientMessageFromPageRow", () => {
         totalTokens: 5,
       },
     });
+    expect(message.createdAt).toBe(CREATED_AT.toISOString());
   });
 });
