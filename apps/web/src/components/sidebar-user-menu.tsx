@@ -91,7 +91,9 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
             <MenuTrigger
               className={cn(
                 "hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent flex w-full items-center overflow-hidden rounded-md p-2 text-start text-sm outline-hidden",
-                isCollapsed ? "justify-center" : "gap-2",
+                // The rail's 32px square, as `SidebarMenuButton` renders it,
+                // so the avatar sits on the same axis as the icons above.
+                isCollapsed ? "size-8 justify-center p-0.5" : "gap-2",
               )}
             />
           }
