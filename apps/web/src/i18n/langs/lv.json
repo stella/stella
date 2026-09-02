@@ -2984,10 +2984,12 @@
   "lawHome": {
     "enteringIntoForce": "Drīzumā stāsies spēkā",
     "inForceFrom": "Stājas spēkā {date}",
+    "prompt": "Ko jūs meklējat?",
     "recentlyInForce": "Nesen stājās spēkā",
     "scopeLabel": "Meklēt",
     "searchLabel": "Meklēt tiesību datubāzē",
     "searchPlaceholder": "Lietas numurs, akta numurs, ECLI vai vārdi",
+    "signals": "Signāli",
     "tier": {
       "constitutional": "Konstitucionālā kontrole",
       "supreme": "Augstākā instance"

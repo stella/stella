@@ -2984,10 +2984,12 @@
   "lawHome": {
     "enteringIntoForce": "Peagi jõustuv",
     "inForceFrom": "Jõustub {date}",
+    "prompt": "Mida otsite?",
     "recentlyInForce": "Hiljuti jõustunud",
     "scopeLabel": "Otsi",
     "searchLabel": "Otsi õigusandmebaasist",
     "searchPlaceholder": "Kohtuasja number, akti number, ECLI või sõnad",
+    "signals": "Signaalid",
     "tier": {
       "constitutional": "Põhiseaduslikkuse järelevalve",
       "supreme": "Kõrgeim aste"

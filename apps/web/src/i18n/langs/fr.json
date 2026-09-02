@@ -2984,10 +2984,12 @@
   "lawHome": {
     "enteringIntoForce": "Entrée en vigueur prochaine",
     "inForceFrom": "En vigueur à partir du {date}",
+    "prompt": "Que cherchez-vous ?",
     "recentlyInForce": "Entrée en vigueur récente",
     "scopeLabel": "Rechercher dans",
     "searchLabel": "Rechercher dans la base juridique",
     "searchPlaceholder": "Numéro d'affaire, numéro de texte, ECLI ou mots",
+    "signals": "Signaux",
     "tier": {
       "constitutional": "Contrôle de constitutionnalité",
       "supreme": "Dernière instance"

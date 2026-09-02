@@ -2987,10 +2987,12 @@ type Messages = {
   "lawHome": {
     "enteringIntoForce": "Entering into force";
     "inForceFrom": "In force from {date}";
+    "prompt": "What are you looking for?";
     "recentlyInForce": "Recently in force";
     "scopeLabel": "Search in";
     "searchLabel": "Search the legal database";
     "searchPlaceholder": "Case number, act number, ECLI or words";
+    "signals": "Signals";
     "tier": {
       "constitutional": "Constitutional review";
       "supreme": "Highest instance";

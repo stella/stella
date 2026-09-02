@@ -2984,10 +2984,12 @@
   "lawHome": {
     "enteringIntoForce": "Tritt demnächst in Kraft",
     "inForceFrom": "In Kraft ab {date}",
+    "prompt": "Wonach suchen Sie?",
     "recentlyInForce": "Kürzlich in Kraft getreten",
     "scopeLabel": "Suchen in",
     "searchLabel": "Rechtsdatenbank durchsuchen",
     "searchPlaceholder": "Aktenzeichen, Gesetzesnummer, ECLI oder Stichwörter",
+    "signals": "Signale",
     "tier": {
       "constitutional": "Verfassungskontrolle",
       "supreme": "Höchste Instanz"

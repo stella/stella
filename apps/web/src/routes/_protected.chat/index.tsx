@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState } from "react";
-import type { ReactElement, ReactNode } from "react";
 
 import {
   useInfiniteQuery,
@@ -28,7 +27,6 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import {
   ChatSubmitPreservedError,
@@ -41,6 +39,14 @@ import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import {
+  LANDING_ROW_CLASS,
+  LANDING_SECTION_HEADING_CLASS,
+  LandingButton,
+  LandingEmpty,
+  LandingItemText,
+  LandingSection,
+} from "@/components/landing/landing-section";
 import { MatterIcon } from "@/components/matter-icon";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
@@ -574,7 +580,7 @@ function ChatIndex() {
             <LandingSection
               heading={
                 <Link
-                  className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase transition-colors outline-none focus-visible:ring-2"
+                  className={LANDING_SECTION_HEADING_CLASS}
                   to="/workspaces"
                 >
                   {pinnedMatters.length > 0 ? (
@@ -599,7 +605,7 @@ function ChatIndex() {
                     }}
                   >
                     <Link
-                      className="group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start transition-colors outline-none focus-visible:ring-2"
+                      className={LANDING_ROW_CLASS}
                       params={{ workspaceId: matter.id }}
                       to="/workspaces/$workspaceId"
                     >
@@ -638,7 +644,7 @@ function ChatIndex() {
             <LandingSection
               heading={
                 <Link
-                  className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase transition-colors outline-none focus-visible:ring-2"
+                  className={LANDING_SECTION_HEADING_CLASS}
                   to="/knowledge/prompts"
                 >
                   <BookOpenIcon className="size-4" />
@@ -673,7 +679,7 @@ function ChatIndex() {
                 recentChats.map((chat) =>
                   chat.scope === "workspace" ? (
                     <Link
-                      className="group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start transition-colors outline-none focus-visible:ring-2"
+                      className={LANDING_ROW_CLASS}
                       key={chat.id}
                       params={{
                         workspaceId: chat.workspaceId,
@@ -700,7 +706,7 @@ function ChatIndex() {
                     </Link>
                   ) : (
                     <Link
-                      className="group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start transition-colors outline-none focus-visible:ring-2"
+                      className={LANDING_ROW_CLASS}
                       key={chat.id}
                       params={{ threadId: chat.id }}
                       to="/chat/$threadId"
@@ -742,110 +748,6 @@ type PinnedMatter = {
   client: { displayName: string } | null;
 };
 
-type LandingSectionProps = {
-  children: ReactNode;
-  heading: ReactNode;
-};
-
-const LandingSection = ({ children, heading }: LandingSectionProps) => (
-  <section className="min-w-0">
-    <div className="mb-3">{heading}</div>
-    <div className="flex flex-col gap-1">{children}</div>
-  </section>
-);
-
-type LandingButtonProps = {
-  icon?: ReactElement;
-  meta?: ReactNode | undefined;
-  onClick: () => void;
-  title: ReactNode;
-};
-
-const LandingButton = ({ icon, meta, onClick, title }: LandingButtonProps) => (
-  <button
-    className="group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start transition-colors outline-none focus-visible:ring-2"
-    onClick={onClick}
-    type="button"
-  >
-    <span className="flex min-w-0 items-start gap-2">
-      {icon !== undefined && <LandingRowIcon>{icon}</LandingRowIcon>}
-      <span className="min-w-0 flex-1">
-        <BidiText
-          as="span"
-          className="text-foreground block truncate text-sm font-medium"
-        >
-          {title}
-        </BidiText>
-        {meta !== undefined && meta !== null ? (
-          <span className="text-muted-foreground block truncate text-xs">
-            {meta}
-          </span>
-        ) : null}
-      </span>
-    </span>
-  </button>
-);
-
-type LandingItemTextProps = {
-  icon?: ReactElement;
-  iconTone?: "muted" | "matter" | undefined;
-  meta?: ReactNode | undefined;
-  title: ReactNode;
-};
-
-const LandingItemText = ({
-  icon,
-  iconTone = "muted",
-  meta,
-  title,
-}: LandingItemTextProps) => (
-  <span className="flex min-w-0 items-start gap-2">
-    {icon !== undefined && (
-      <LandingRowIcon tone={iconTone}>{icon}</LandingRowIcon>
-    )}
-    <span className="min-w-0 flex-1">
-      <BidiText
-        as="span"
-        className="text-foreground block truncate text-sm font-medium"
-      >
-        {title}
-      </BidiText>
-      {meta !== undefined && meta !== null ? (
-        <span className="text-muted-foreground block truncate text-xs">
-          {meta}
-        </span>
-      ) : null}
-    </span>
-  </span>
-);
-
-type LandingRowIconProps = {
-  children: ReactElement;
-  tone?: "muted" | "matter" | undefined;
-};
-
-const LandingRowIcon = ({ children, tone = "muted" }: LandingRowIconProps) => (
-  <span
-    className={cn(
-      "mt-0.5 flex size-4 shrink-0 items-center justify-center transition-colors",
-      tone === "muted" &&
-        "text-foreground-muted group-hover:text-muted-foreground",
-    )}
-  >
-    {children}
-  </span>
-);
-
 const SlashPromptIcon = () => (
   <span className="font-mono text-[13px] leading-none">/</span>
-);
-
-type LandingEmptyProps = {
-  children: ReactNode;
-};
-
-const LandingEmpty = ({ children }: LandingEmptyProps) => (
-  <div className="border-border text-muted-foreground rounded-md border border-dashed px-3 py-3 text-sm">
-    {children}
-  </div>
 );

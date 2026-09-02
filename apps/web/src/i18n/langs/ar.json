@@ -2984,10 +2984,12 @@
   "lawHome": {
     "enteringIntoForce": "يدخل حيز النفاذ قريبًا",
     "inForceFrom": "نافذ اعتبارًا من {date}",
+    "prompt": "عمّ تبحث؟",
     "recentlyInForce": "دخل حيز النفاذ مؤخرًا",
     "scopeLabel": "البحث في",
     "searchLabel": "البحث في قاعدة البيانات القانونية",
     "searchPlaceholder": "رقم القضية أو رقم التشريع أو ECLI أو كلمات",
+    "signals": "إشارات",
     "tier": {
       "constitutional": "الرقابة الدستورية",
       "supreme": "أعلى درجة"

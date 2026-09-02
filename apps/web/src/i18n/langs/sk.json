@@ -2984,10 +2984,12 @@
   "lawHome": {
     "enteringIntoForce": "Čoskoro nadobudne účinnosť",
     "inForceFrom": "Účinné od {date}",
+    "prompt": "Čo hľadáte?",
     "recentlyInForce": "Nedávno nadobudlo účinnosť",
     "scopeLabel": "Hľadať v",
     "searchLabel": "Hľadať v právnej databáze",
     "searchPlaceholder": "Spisová značka, číslo predpisu, ECLI alebo slová",
+    "signals": "Signály",
     "tier": {
       "constitutional": "Ústavný prieskum",
       "supreme": "Najvyššia inštancia"

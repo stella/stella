@@ -2984,10 +2984,12 @@
   "lawHome": {
     "enteringIntoForce": "Hamarosan hatályba lép",
     "inForceFrom": "Hatálybalépés: {date}",
+    "prompt": "Mit keres?",
     "recentlyInForce": "Nemrég hatályba lépett",
     "scopeLabel": "Keresés itt",
     "searchLabel": "Keresés a jogi adatbázisban",
     "searchPlaceholder": "Ügyszám, jogszabályszám, ECLI vagy szavak",
+    "signals": "Jelzések",
     "tier": {
       "constitutional": "Alkotmányossági felülvizsgálat",
       "supreme": "Legfelsőbb fórum"

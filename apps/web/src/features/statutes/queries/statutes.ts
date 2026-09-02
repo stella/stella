@@ -116,11 +116,6 @@ export const legislationShelfOptions = (country: string) =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-/** The legislation shelf as the public reader sees it: both of its sides. */
-export type LegislationShelf = Awaited<
-  ReturnType<NonNullable<ReturnType<typeof legislationShelfOptions>["queryFn"]>>
->;
-
 const readStatute = async (documentId: string, signal: AbortSignal) => {
   const response = await api.law
     .statutes({ documentId: toSafeId<"legislationDocument">(documentId) })

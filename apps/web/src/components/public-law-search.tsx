@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 import { useRouterState } from "@tanstack/react-router";
 import { MessageSquareTextIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -14,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { cn } from "@stll/ui/utils";
 
 import { openPublicLawChat } from "@/components/public-law-ask";
 import { usePublicSignInRequest } from "@/components/public-sign-in-request";
@@ -41,31 +40,19 @@ type PublicLawSearchProps = {
    * hides the chat button (nothing to ask about yet).
    */
   askPrompt: (query: string) => string | null;
-  /**
-   * `inline`: the pill beside the box, as a results screen's toolbar.
-   * `entry`: the box on a row of its own, the pill and the optional filters
-   * beneath it, as the home's one way in.
-   */
-  layout?: "inline" | "entry";
-  /** Controls shown before the pill in the `entry` layout. */
-  filters?: ReactNode;
-  /** What follows the pill in the `entry` layout, e.g. example identifiers. */
-  hints?: ReactNode;
 };
 
 /**
  * The one box of a public-law browser: an identifier, an alias or words,
- * scoped by the jurisdiction pill. A form so Enter submits the way the
- * browser already knows how to. The home, the statutes and the case-law
- * browsers share it so a reader learns one box, not three.
+ * scoped by the jurisdiction pill beside it. A form so Enter submits the way
+ * the browser already knows how to. The statutes and case-law browsers share
+ * it so a reader learns one box, not two; the home's entry box is built from
+ * the same parts.
  */
 export const PublicLawSearch = ({
   askPrompt,
   country,
   countries,
-  filters,
-  hints,
-  layout = "inline",
   maxLength,
   onCountryChange,
   onQueryChange,
@@ -76,45 +63,6 @@ export const PublicLawSearch = ({
 }: PublicLawSearchProps) => {
   const trimmed = query.trim();
   const prompt = trimmed.length > 0 ? askPrompt(trimmed) : null;
-  const countrySelect = (
-    <CountrySelect
-      countries={countries}
-      country={country}
-      onCountryChange={onCountryChange}
-    />
-  );
-
-  if (layout === "entry") {
-    return (
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSubmit();
-        }}
-        role="search"
-      >
-        <div className="flex items-center gap-2">
-          <Input
-            aria-label={searchLabel}
-            className="flex-1"
-            maxLength={maxLength}
-            onChange={(event) => onQueryChange(event.currentTarget.value)}
-            placeholder={placeholder}
-            size={CONTROL_SIZE.lg}
-            type="search"
-            value={query}
-          />
-          {prompt !== null && <AskInChat label={trimmed} prompt={prompt} />}
-        </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          {filters}
-          {countrySelect}
-          {hints}
-        </div>
-      </form>
-    );
-  }
 
   return (
     <form
@@ -125,7 +73,11 @@ export const PublicLawSearch = ({
       }}
       role="search"
     >
-      {countrySelect}
+      <PublicLawCountrySelect
+        countries={countries}
+        country={country}
+        onCountryChange={onCountryChange}
+      />
       <Input
         aria-label={searchLabel}
         className="min-w-64 flex-1 sm:max-w-md"
@@ -135,22 +87,28 @@ export const PublicLawSearch = ({
         type="search"
         value={query}
       />
-      {prompt !== null && <AskInChat label={trimmed} prompt={prompt} />}
+      {prompt !== null && (
+        <PublicLawAskInChat label={trimmed} prompt={prompt} />
+      )}
     </form>
   );
 };
 
-type CountrySelectProps = Pick<
+type PublicLawCountrySelectProps = Pick<
   PublicLawSearchProps,
   "countries" | "country" | "onCountryChange"
->;
+> & {
+  /** `ghost` sits inside another control's row, the way the chat's pickers do. */
+  variant?: "outline" | "ghost";
+};
 
 /** The jurisdiction pill: one value, the route's, in the route's own form. */
-const CountrySelect = ({
+export const PublicLawCountrySelect = ({
   countries,
   country,
   onCountryChange,
-}: CountrySelectProps) => {
+  variant = "outline",
+}: PublicLawCountrySelectProps) => {
   const t = useTranslations();
 
   return (
@@ -162,7 +120,15 @@ const CountrySelect = ({
       }}
       value={country}
     >
-      <SelectTrigger aria-label={t("common.country")} className="w-40">
+      <SelectTrigger
+        aria-label={t("common.country")}
+        className={cn(
+          "w-40",
+          variant === "ghost" &&
+            "text-muted-foreground hover:text-foreground min-h-7 w-auto min-w-0 border-transparent bg-transparent shadow-none before:shadow-none sm:min-h-7",
+        )}
+        size={variant === "ghost" ? CONTROL_SIZE.sm : CONTROL_SIZE.default}
+      >
         <SelectValue placeholder={t("common.country")} />
       </SelectTrigger>
       <SelectPopup>
@@ -180,7 +146,13 @@ const CountrySelect = ({
  * Hands the entry to a chat with the corpus tools. The chat is an account
  * feature: a visitor is sent to sign in and comes back to the same list.
  */
-const AskInChat = ({ label, prompt }: { label: string; prompt: string }) => {
+export const PublicLawAskInChat = ({
+  label,
+  prompt,
+}: {
+  label: string;
+  prompt: string;
+}) => {
   const t = useTranslations();
   const user = useMaybeAuthenticatedUser();
   const requestSignIn = usePublicSignInRequest();
