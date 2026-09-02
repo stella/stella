@@ -1580,17 +1580,17 @@ const processOneBatch = async ({
         ...batch,
         properties: aiModelProperties,
       };
-      // generateBatch returns a Result<T, E> directly. The combined
-      // signal aborts when EITHER the per-batch AI timeout fires OR the
-      // worker-level per-job timeout does, so TanStack AI actually cancels
-      // the in-flight request.
+      // generateBatch returns a Result<T, E> directly. Only the worker-level
+      // per-job timeout is applied here: a batch is no longer one model
+      // request, because `generateWorkflowData` splits it into as many
+      // requests as the provider's schema budget allows. It applies the
+      // per-request AI timeout to each of those, which is the only place the
+      // request count is known; applying it to the whole batch here would
+      // abort a large batch partway through its first minutes.
       const batchResult = await runWorkflowBatchGenerationWithRetry({
         generate: async () =>
           await generateFn({
-            abortSignal: AbortSignal.any([
-              AbortSignal.timeout(getWorkflowBatchAITimeoutMs(serviceTier)),
-              signal,
-            ]),
+            abortSignal: signal,
             batch: aiBatch,
             entityVersionId,
             organizationId,

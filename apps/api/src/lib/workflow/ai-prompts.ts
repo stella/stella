@@ -221,7 +221,7 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
 };
 
 export const buildBatchSchema = (
-  properties: BatchProperty[],
+  properties: readonly BatchProperty[],
   filenames: JustificationFilenames,
 ) => {
   const justificationSchema = createJustificationSchema(filenames);

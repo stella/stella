@@ -1,4 +1,9 @@
-import { EventType, chat, parsePartialJSON } from "@tanstack/ai";
+import {
+  EventType,
+  chat,
+  convertSchemaToJsonSchema,
+  parsePartialJSON,
+} from "@tanstack/ai";
 import type {
   ModelMessage,
   RunErrorEvent,
@@ -7,10 +12,14 @@ import type {
   SystemPrompt,
 } from "@tanstack/ai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
 import * as v from "valibot";
 
-import type { ModelRole, ReasoningEffort } from "@stll/ai-catalog";
+import type {
+  ModelRole,
+  ReasoningEffort,
+  TanStackAIProvider,
+} from "@stll/ai-catalog";
 
 import type {
   AIRequestServiceTier,
@@ -35,6 +44,7 @@ import {
   providerSafeJsonSchemaOptionsForTanStackProvider,
   type ProviderSafeJsonSchemaProjectionOptions,
 } from "@/api/lib/provider-safe-json-schema";
+import { checkStructuredOutputBudget } from "@/api/lib/structured-output-budget";
 import { tanStackCacheControl } from "@/api/lib/tanstack-ai-caching";
 import {
   getTanStackTextModelById,
@@ -407,6 +417,61 @@ const structuredOutputProjectionOptions = (
     isMockTextAdapterActive() ? "mock-structured-output" : "structured-output",
   );
 
+type StructuredOutputWireJsonSchemaOptions = {
+  outputSchema: v.GenericSchema;
+  provider: TanStackAIProvider;
+};
+
+/**
+ * The JSON Schema a structured-output request actually sends. `@tanstack/ai`
+ * runs this exact conversion on the schema handed to `chat`, so sizing a
+ * request against anything else would drift from what the provider compiles.
+ */
+export const structuredOutputWireJsonSchema = ({
+  outputSchema,
+  provider,
+}: StructuredOutputWireJsonSchemaOptions): unknown =>
+  convertSchemaToJsonSchema(
+    toTanStackValibotSchema(
+      outputSchema,
+      structuredOutputProjectionOptions(provider),
+    ),
+    { forStructuredOutput: true },
+  );
+
+/**
+ * The one seam every structured-output request in this API passes through, so
+ * a schema over the provider's grammar budget cannot reach a provider and come
+ * back as an unrecoverable HTTP 400. Callers that can shrink their request
+ * (the workflow batch splitter) size it before dispatch; this is the backstop
+ * for the ones that cannot.
+ */
+const guardStructuredOutputBudget = ({
+  model,
+  outputSchema,
+}: {
+  model: ResolvedTanStackTextModel;
+  outputSchema: v.GenericSchema;
+}): void => {
+  // The mock adapter answers locally: no provider compiles the grammar, and
+  // its projection deliberately keeps keywords the wire schema drops.
+  if (isMockTextAdapterActive()) {
+    return;
+  }
+
+  const budget = checkStructuredOutputBudget({
+    provider: model.provider,
+    modelId: model.modelId,
+    schema: structuredOutputWireJsonSchema({
+      outputSchema,
+      provider: model.provider,
+    }),
+  });
+  if (Result.isError(budget)) {
+    throw budget.error;
+  }
+};
+
 export const generateTanStackObjectForRole = async <
   TSchema extends v.GenericSchema,
 >({
@@ -420,6 +485,7 @@ export const generateTanStackObjectForRole = async <
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
+  guardStructuredOutputBudget({ model, outputSchema });
   const tanStackOutputSchema = toTanStackValibotSchema(
     outputSchema,
     structuredOutputProjectionOptions(model.provider),
@@ -508,6 +574,7 @@ const streamTanStackStructuredOutput = async function* <
 }): AsyncIterable<TanStackStructuredOutputEvent<v.InferOutput<TSchema>>> {
   let completed = false;
   let rawJson = "";
+  guardStructuredOutputBudget({ model, outputSchema });
   const tanStackOutputSchema = toTanStackValibotSchema(
     outputSchema,
     structuredOutputProjectionOptions(model.provider),
