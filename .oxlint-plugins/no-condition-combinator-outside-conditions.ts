@@ -15,16 +15,22 @@
 // The ban is a plain, non-computed property-access check on `.combinator`
 // and `.negated`: an object-literal key (`{ combinator: "and" }`, building a
 // new node) is a `Property`, not a `MemberExpression`, so it is unaffected —
-// only *reading* an existing node's combinator/negated is in scope.
+// only *reading* an existing node's combinator/negated is in scope. A
+// destructured read (`const { combinator } = node`, including a function
+// parameter pattern) reads the same fields through an `ObjectPattern`
+// instead, so it is banned the same way.
 //
 // Exempt (the condition builder legitimately reads and writes these
 // fields):
 //   - packages/conditions/src/** (the tree's own fold/walk/evaluate)
 //   - packages/workspace-ui/src/** (the interactive condition builder)
-//   - any module importing `foldCondition` or `foldConditions` from
-//     `@stll/conditions`
+//   - any module *value*-importing `foldCondition` or `foldConditions` from
+//     `@stll/conditions`; a type-only import (`import type { foldCondition }`
+//     or `import { type foldCondition }`) cannot run the fold, so it does
+//     not exempt the module
 //
-// Enabled only for apps/web/src/** and apps/api/src/**; the exemption paths
+// Enabled only for production modules under apps/web/src/** and
+// apps/api/src/** (test files build and inspect nodes as data); the exemption paths
 // are checked here too so the rule stays correct on its own even if a future
 // config change broadens the enabling scope.
 
@@ -34,6 +40,7 @@ import {
   filenameForContext,
   getImportedName,
   getPropertyName,
+  isAstNode,
   isStringLiteral,
 } from "./utils.ts";
 
@@ -44,13 +51,19 @@ const FOLD_EXPORT_NAMES = new Set(["foldCondition", "foldConditions"]);
 
 const SCOPE_PREFIXES = ["apps/web/src/", "apps/api/src/"];
 
+// `*.test.ts` also matches `*.integration.test.ts`, `*.differential.test.ts`
+// and `*.property.test.ts`: every test-file convention still ends in it.
+const TEST_FILE_PATTERN = /\.test\.tsx?$/u;
+
 const EXEMPT_PREFIXES = [
   "packages/conditions/src/",
   "packages/workspace-ui/src/",
 ];
 
-const FIXTURE_FILE_SUFFIX =
-  ".oxlint-plugins/__fixtures__/no-condition-combinator-outside-conditions.fixture.ts";
+// Matches both the main fixture and the type-import regression fixture
+// (`no-condition-combinator-outside-conditions.fixture.type-import.ts`).
+const FIXTURE_FILE_PREFIX =
+  ".oxlint-plugins/__fixtures__/no-condition-combinator-outside-conditions.fixture.";
 
 export default eslintCompatPlugin({
   meta: { name: "no-condition-combinator-outside-conditions" },
@@ -73,8 +86,14 @@ export default eslintCompatPlugin({
           before() {
             consumesFold = false;
             const filename = filenameForContext(context);
-            if (filename.endsWith(FIXTURE_FILE_SUFFIX)) {
+            if (filename.includes(FIXTURE_FILE_PREFIX)) {
               return true;
+            }
+            // Tests build and inspect condition nodes as data (fixtures,
+            // generators, assertions on a node's shape); the semantics the
+            // rule guards live in production modules only.
+            if (TEST_FILE_PATTERN.test(filename)) {
+              return false;
             }
             return (
               SCOPE_PREFIXES.some((prefix) => filename.includes(prefix)) &&
@@ -84,12 +103,16 @@ export default eslintCompatPlugin({
           ImportDeclaration(node) {
             if (
               !isStringLiteral(node.source) ||
-              node.source.value !== CONDITIONS_PACKAGE
+              node.source.value !== CONDITIONS_PACKAGE ||
+              node.importKind === "type"
             ) {
               return;
             }
             if (
               node.specifiers.some((specifier) => {
+                if (isAstNode(specifier) && specifier.importKind === "type") {
+                  return false;
+                }
                 const imported = getImportedName(specifier);
                 return imported !== null && FOLD_EXPORT_NAMES.has(imported);
               })
@@ -109,6 +132,28 @@ export default eslintCompatPlugin({
               return;
             }
             context.report({ node, messageId: "combinatorRead" });
+          },
+          // Destructured reads (`const { combinator } = node` or a function
+          // parameter pattern) surface the same fields through an
+          // ObjectPattern rather than a MemberExpression, so the ban needs
+          // its own visitor to catch them.
+          ObjectPattern(node) {
+            if (consumesFold) {
+              return;
+            }
+            for (const property of node.properties) {
+              if (property.type !== "Property" || property.computed) {
+                continue;
+              }
+              const propertyName = getPropertyName(property.key);
+              if (
+                propertyName === null ||
+                !TARGET_PROPERTY_NAMES.has(propertyName)
+              ) {
+                continue;
+              }
+              context.report({ node: property, messageId: "combinatorRead" });
+            }
           },
         };
       },
