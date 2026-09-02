@@ -315,7 +315,7 @@ fn write_history_item(state: &ClipboardAppState, id: &str) -> Result<(), String>
     let mut manager = state.lock().map_err(|_| lock_error())?;
     let item = manager
       .item(id)
-      .ok_or_else(|| "clipboard item no longer exists".to_string())?;
+      .ok_or_else(|| ITEM_NOT_FOUND_ERROR.to_string())?;
     manager.suppress_next(&item, false);
     item
   };
@@ -324,6 +324,15 @@ fn write_history_item(state: &ClipboardAppState, id: &str) -> Result<(), String>
       manager.clear_suppression();
     }
     return Err(error);
+  }
+  // The clipboard already holds the clip; failing to reorder history must not
+  // report the copy itself as failed.
+  let touched = state
+    .lock()
+    .map_err(|_| lock_error())
+    .and_then(|mut manager| manager.touch_item(id, chrono::Utc::now()));
+  if let Err(error) = touched {
+    tracing::warn!(error = %error, "copied clipboard item could not be moved to the front");
   }
   Ok(())
 }
@@ -335,6 +344,7 @@ pub fn clipboard_copy_item(
   window: WebviewWindow,
 ) -> Result<(), String> {
   write_history_item(state.inner(), &id)?;
+  let _ = window.emit(HISTORY_EVENT, ());
   clipboard_window::hide(&window)
 }
 
