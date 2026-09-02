@@ -221,6 +221,29 @@ describe("dock", () => {
     expect(markup).not.toContain("rtl:flex-row-reverse");
   });
 
+  // The regression this guards: the rail rendered after the pane, so an
+  // expanded pane opened between the content and the rail and the rail's
+  // tabs and toggle jumped to the far edge of the screen. The workspace
+  // inspector panel orders rail, then pane; the dock must match it.
+  test("keeps the rail on the pane's inline-start edge when expanded", () => {
+    const markup = renderToStaticMarkup(
+      <InspectorDock
+        rail={<InspectorRail />}
+        resizeHandleLabel="Resize"
+        resizeHandleProps={noopHandlers}
+        showPaneContent
+        width={512}
+      >
+        <Inspector />
+      </InspectorDock>,
+    );
+    const order = [
+      ...markup.matchAll(/data-slot="(inspector-rail|inspector)"/gu),
+    ].map((match) => match[1]);
+
+    expect(order).toEqual(["inspector-rail", "inspector"]);
+  });
+
   test("keeps the permanent rail when pane content is collapsed", () => {
     const markup = renderToStaticMarkup(
       <InspectorDock

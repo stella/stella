@@ -18,6 +18,12 @@ import { INSPECTOR_RAIL_WIDTH } from "./pane-width";
  * which is exactly the failure the spacer exists to prevent. With the width
  * on the root, the dock reserves the same footprint in a flex row, a grid
  * track, or a plain block.
+ *
+ * The permanent rail sits on the pane's inline-start edge, the same order
+ * the workspace inspector panel uses: collapsed, the rail is the whole dock
+ * on the viewport edge; expanded, the pane opens beyond the rail, so the
+ * rail keeps its place beside the content and its tabs and toggle stay next
+ * to the pane they drive instead of jumping to the far edge of the screen.
  */
 
 type InspectorResizeHandleProps = {
@@ -37,7 +43,7 @@ type InspectorResizeHandleProps = {
 type InspectorDockProps = {
   children: ReactNode;
   className?: string | undefined;
-  /** Permanent inline-end rail shown beside the pane, or by itself when collapsed. */
+  /** Permanent rail on the pane's inline-start edge, or by itself when collapsed. */
   rail?: ReactNode | undefined;
   /** Accessible name for the drag handle. */
   resizeHandleLabel: string;
@@ -104,8 +110,8 @@ export const InspectorDock = ({
         )}
         {showPaneContent || rail === undefined ? (
           <div className="bg-sidebar flex h-full w-full flex-row">
-            <div className="min-w-0 flex-1">{children}</div>
             {rail}
+            <div className="min-w-0 flex-1">{children}</div>
           </div>
         ) : (
           rail
