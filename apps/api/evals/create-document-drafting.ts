@@ -35,6 +35,7 @@ import type { TokenUsage } from "@tanstack/ai";
 import { panic } from "better-result";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import * as v from "valibot";
 
 import { compileLegalSourceToDocument } from "@stll/docx-core";
 import type {
@@ -44,7 +45,10 @@ import type {
   Paragraph,
 } from "@stll/docx-core";
 
-import { createCreateDocumentTool } from "@/api/handlers/chat/tools/create-document-tool";
+import {
+  createCreateDocumentTool,
+  createDocumentToolInputSchema,
+} from "@/api/handlers/chat/tools/create-document-tool";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
   mergeGenerationOptions,
@@ -58,6 +62,8 @@ import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
 // Anthropic so a non-Anthropic default provider cannot claim them.
 const DEFAULT_MODELS = ["gpt-5.4-nano", "anthropic::claude-sonnet-5"];
 const DEFAULT_RUNS = 1;
+// Every run is a paid request; keep a typo from turning into a bill.
+const MAX_RUNS = 20;
 const MAX_OUTPUT_TOKENS = 6000;
 // A whole draft can take a minute on a slow model; a stalled provider must
 // not hang the run.
@@ -68,16 +74,44 @@ const SYSTEM_PROMPT =
   "a document, call the create-document tool once with the complete source. " +
   "Write in the language the user writes in.";
 
-type ExpectedBlockType = Extract<
-  LegalDraftBlock["type"],
-  "list" | "signatures" | "table"
->;
+/** A structural property the request calls for, checked on the draft blocks. */
+type StructuralExpectation = {
+  label: string;
+  holds: (blocks: readonly LegalDraftBlock[]) => boolean;
+};
+
+const signatures: StructuralExpectation = {
+  label: "signatures",
+  holds: (blocks) => blocks.some((block) => block.type === "signatures"),
+};
+
+const orderedList: StructuralExpectation = {
+  label: "ordered list",
+  holds: (blocks) =>
+    blocks.some((block) => block.type === "list" && block.ordered),
+};
+
+const bulletList: StructuralExpectation = {
+  label: "bullet list",
+  holds: (blocks) =>
+    blocks.some((block) => block.type === "list" && !block.ordered),
+};
+
+const tableWithColumns = (columns: number): StructuralExpectation => ({
+  label: `table with ${String(columns)} columns`,
+  holds: (blocks) =>
+    blocks.some(
+      (block) =>
+        block.type === "table" &&
+        block.table.headers.length === columns &&
+        block.table.rows.every((row) => row.length === columns),
+    ),
+});
 
 type EvalTask = {
   id: string;
   prompt: string;
-  /** Draft block types the request calls for. */
-  expects: readonly ExpectedBlockType[];
+  expects: readonly StructuralExpectation[];
 };
 
 const TASKS: readonly EvalTask[] = [
@@ -87,7 +121,7 @@ const TASKS: readonly EvalTask[] = [
       "Připrav plnou moc, kterou Jan Novák (nar. 1. 2. 1980, bytem Praha 5) " +
       "zmocňuje advokáta Mgr. Petra Svobodu k zastupování ve sporu s firmou " +
       "Alfa s.r.o. o zaplacení 250 000 Kč. Česky, s podpisovým blokem.",
-    expects: ["signatures"],
+    expects: [signatures],
   },
   {
     id: "en-nda",
@@ -96,7 +130,7 @@ const TASKS: readonly EvalTask[] = [
       "Republic) for evaluating a software partnership: definitions, a " +
       "three-year term, a table listing the categories of confidential " +
       "information with their handling rules, and signature blocks.",
-    expects: ["table", "signatures"],
+    expects: [tableWithColumns(2), signatures],
   },
   {
     id: "de-kuendigung",
@@ -113,7 +147,7 @@ const TASKS: readonly EvalTask[] = [
       "(two columns, Czech left, English right) between Gamma a.s. as client " +
       "and Delta Consulting s.r.o. as provider: scope, fees of 50 000 CZK per " +
       "month, three-month notice, Czech governing law. Signatures for both.",
-    expects: ["table", "signatures"],
+    expects: [tableWithColumns(2), signatures],
   },
   {
     id: "checklist-closing",
@@ -121,7 +155,7 @@ const TASKS: readonly EvalTask[] = [
       "Make a closing checklist for a share purchase deal: board approvals, " +
       "regulatory consents, funds flow, escrow release, post-closing filings. " +
       "Checkbox items the team can tick off.",
-    expects: ["list"],
+    expects: [bulletList],
   },
   {
     id: "sk-memo",
@@ -129,7 +163,7 @@ const TASKS: readonly EvalTask[] = [
       "Napíš krátke interné memo pre vedenie o povinnostiach zamestnávateľa " +
       "pri práci z domu podľa slovenského Zákonníka práce, s očíslovaným " +
       "zoznamom povinností a odporúčaniami na záver.",
-    expects: ["list"],
+    expects: [orderedList],
   },
   {
     id: "markdown-pressure",
@@ -137,7 +171,7 @@ const TASKS: readonly EvalTask[] = [
       "Write a consultancy agreement between Acme Inc. and Jane Roe. Use " +
       "markdown: headings for each section, bullet lists for the " +
       "obligations, bold every defined term, and italicize the recitals.",
-    expects: ["list"],
+    expects: [bulletList],
   },
 ];
 
@@ -147,6 +181,14 @@ type CliOptions = {
   taskFilter: string | null;
   jsonPath: string | null;
   sourcesDir: string | null;
+};
+
+const parseRuns = (value: string): number => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    return DEFAULT_RUNS;
+  }
+  return Math.min(MAX_RUNS, parsed);
 };
 
 const parseArgs = (argv: readonly string[]): CliOptions => {
@@ -169,7 +211,7 @@ const parseArgs = (argv: readonly string[]): CliOptions => {
         index += 1;
         break;
       case "--runs":
-        options.runs = Math.max(1, Number.parseInt(value, 10) || DEFAULT_RUNS);
+        options.runs = parseRuns(value);
         index += 1;
         break;
       case "--task":
@@ -291,18 +333,13 @@ const parseJsonOrNull = (text: string): unknown => {
   }
 };
 
+// The same schema the chat tool validates with, so `bad-input` means what
+// production would reject.
 const readToolInput = (
   input: unknown,
 ): { name: string; source: string } | null => {
-  if (typeof input !== "object" || input === null) {
-    return null;
-  }
-  const name = Reflect.get(input, "name");
-  const source = Reflect.get(input, "source");
-  if (typeof name !== "string" || typeof source !== "string") {
-    return null;
-  }
-  return { name, source };
+  const parsed = v.safeParse(createDocumentToolInputSchema, input);
+  return parsed.success ? parsed.output : null;
 };
 
 const BODY_STYLE_IDS = new Set([
@@ -395,7 +432,7 @@ type RunScore = {
   leaks: string[];
   wholeBoldParagraphs: number;
   blockTypes: Record<string, number>;
-  missing: ExpectedBlockType[];
+  missing: string[];
   placeholders: number;
 };
 
@@ -413,7 +450,9 @@ const scoreCompiled = (
   source: string,
 ): RunScore => {
   const blockTypes = countBy(compiled.draft.blocks.map((block) => block.type));
-  const missing = task.expects.filter((type) => !(type in blockTypes));
+  const missing = task.expects
+    .filter((expectation) => !expectation.holds(compiled.draft.blocks))
+    .map((expectation) => expectation.label);
   const placeholders = source.match(/\[\[[^\]]+\]\]/gu)?.length ?? 0;
   if (compiled.status !== "ok") {
     return {

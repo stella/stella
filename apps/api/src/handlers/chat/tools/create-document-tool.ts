@@ -17,7 +17,7 @@ export { CREATE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat
 // `workspaceId` is intentionally NOT in the input schema —
 // matter resolution is a UI concern, not something the model
 // should pass.
-const createDocumentToolInputSchema = v.strictObject({
+export const createDocumentToolInputSchema = v.strictObject({
   name: v.pipe(
     v.string(),
     v.minLength(1),
