@@ -392,6 +392,7 @@ function LawHome() {
 
   return (
     <LandingLayout
+      footer={<CaseLawBrowseLinks facets={facets} />}
       hero={
         <>
           <LawHomeGreeting>{t("lawHome.prompt")}</LawHomeGreeting>
@@ -518,9 +519,6 @@ function LawHome() {
           />
         ))}
       </LandingSection>
-      <div className="@2xl:col-span-3">
-        <CaseLawBrowseLinks facets={facets} />
-      </div>
     </LandingLayout>
   );
 }

@@ -5,7 +5,7 @@ import {
   InboxIcon,
   LibraryBigIcon,
   MessageSquareIcon,
-  ScaleIcon,
+  BookOpenIcon,
   SearchIcon,
   UsersIcon,
 } from "lucide-react";
@@ -65,7 +65,7 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
     to: "/workspaces",
   },
   {
-    icon: ScaleIcon,
+    icon: BookOpenIcon,
     id: "caseLaw",
     kind: "route",
     labelKey: "common.caseLaw",

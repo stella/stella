@@ -2993,7 +2993,7 @@ type Messages = {
     "recentlyInForce": "Recently in force";
     "scopeLabel": "Search in";
     "searchLabel": "Search the legal database";
-    "searchPlaceholder": "Case number, act number, ECLI or words";
+    "searchPlaceholder": "Case number, act number, ECLI or keywords";
     "signals": "Signals";
     "tier": {
       "constitutional": "Constitutional review";

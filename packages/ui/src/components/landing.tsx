@@ -18,16 +18,19 @@ type LandingLayoutProps = {
   actions?: ReactNode | undefined;
   /** The greeting and the box; centred in the upper fold. */
   hero: ReactNode;
-  /** The columns; take the rest of the height and own any overflow. */
+  /** The columns; take the rest of the height, each scrolling on its own. */
   children: ReactNode;
+  /** Below the columns, in its own bounded scroll: crawlable navigation. */
+  footer?: ReactNode | undefined;
 };
 
 export const LandingLayout = ({
   actions,
   hero,
   children,
+  footer,
 }: LandingLayoutProps) => (
-  <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
+  <div className="mx-auto flex h-full w-full max-w-5xl flex-1 flex-col overflow-hidden">
     {actions}
     {/* The landing folds against its own width, not the viewport's: a side
         pane can leave this column far narrower than a viewport breakpoint
@@ -43,14 +46,17 @@ export const LandingLayout = ({
           {hero}
         </div>
       </ScrollArea>
-      {/* Keep the box stable while this secondary region owns any overflow
-          on short or narrow viewports. One shared viewport avoids competing
-          scroll traps between the columns. */}
-      <ScrollArea className="min-h-0 w-full flex-1" scrollFade>
-        <div className="grid w-full gap-8 pb-16 @2xl:grid-cols-3">
-          {children}
-        </div>
-      </ScrollArea>
+      {/* The columns share the remaining height; each `LandingSection`
+          keeps its heading in place and scrolls its own rows, so a long list
+          in one column never pushes another's heading out of view. */}
+      <div className="grid min-h-0 w-full flex-1 auto-rows-fr gap-8 pb-6 @2xl:grid-cols-3">
+        {children}
+      </div>
+      {footer !== undefined && (
+        <ScrollArea className="h-auto max-h-[40vh] w-full shrink-0" scrollFade>
+          {footer}
+        </ScrollArea>
+      )}
     </div>
   </div>
 );
@@ -86,10 +92,13 @@ type LandingSectionProps = {
   heading: ReactNode;
 };
 
+/** A column: its heading stays put, its rows scroll beneath it. */
 export const LandingSection = ({ children, heading }: LandingSectionProps) => (
-  <section className="min-w-0">
-    <div className="mb-3">{heading}</div>
-    <div className="flex flex-col gap-1">{children}</div>
+  <section className="flex min-h-0 min-w-0 flex-col">
+    <div className="mb-3 shrink-0">{heading}</div>
+    <ScrollArea className="min-h-0 flex-1" scrollFade>
+      <div className="flex flex-col gap-1 pb-4">{children}</div>
+    </ScrollArea>
   </section>
 );
 

@@ -2990,7 +2990,7 @@
     "recentlyInForce": "Nedávno nabylo účinnosti",
     "scopeLabel": "Hledat v",
     "searchLabel": "Hledat v právní databázi",
-    "searchPlaceholder": "Spisová značka, číslo předpisu, ECLI nebo slova",
+    "searchPlaceholder": "Spisová značka, číslo předpisu, ECLI nebo klíčová slova",
     "signals": "Signály",
     "tier": {
       "constitutional": "Ústavní přezkum",

@@ -2990,7 +2990,7 @@
     "recentlyInForce": "Hiljuti jõustunud",
     "scopeLabel": "Otsi",
     "searchLabel": "Otsi õigusandmebaasist",
-    "searchPlaceholder": "Kohtuasja number, akti number, ECLI või sõnad",
+    "searchPlaceholder": "Kohtuasja number, akti number, ECLI või märksõnad",
     "signals": "Signaalid",
     "tier": {
       "constitutional": "Põhiseaduslikkuse järelevalve",
