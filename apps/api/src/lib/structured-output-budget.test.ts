@@ -64,6 +64,30 @@ describe("measuring a projected structured-output schema", () => {
     expect(measured.unionParameters).toBe(3);
   });
 
+  test("counts non-ASCII option labels as the UTF-8 bytes they occupy", () => {
+    // A workspace's own select options are embedded in the schema, so a CJK
+    // or emoji label costs more on the wire than its UTF-16 length suggests.
+    const schema = {
+      enum: ["契約書", "解約通知", "秘密保持契約", "🇨🇿 smlouva"],
+    };
+    const serialized = JSON.stringify(schema);
+
+    // The fixture must actually differ, or the assertion below is vacuous.
+    expect(serialized.length).toBeLessThan(
+      Buffer.byteLength(serialized, "utf-8"),
+    );
+    expect(measureStructuredOutputSchema(schema).bytes).toBe(
+      Buffer.byteLength(serialized, "utf-8"),
+    );
+  });
+
+  test("admits an ASCII schema at exactly the same size either way", () => {
+    const schema = { enum: ["contract", "termination-notice"] };
+    const serialized = JSON.stringify(schema);
+
+    expect(measureStructuredOutputSchema(schema).bytes).toBe(serialized.length);
+  });
+
   test("counts no union in a schema that has none", () => {
     expect(
       measureStructuredOutputSchema({
@@ -127,6 +151,50 @@ describe("resolving which provider's budget applies", () => {
         modelId: "unprefixed-model",
       }).provider,
     ).toBe("openrouter");
+  });
+
+  test("holds a Bedrock-hosted Claude to the Anthropic budget", () => {
+    // Bedrock names the vendor after an optional region, separated by dots.
+    expect(
+      resolveStructuredOutputBudget({
+        provider: "bedrock",
+        modelId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      }),
+    ).toEqual({
+      provider: "anthropic",
+      budget: STRUCTURED_OUTPUT_BUDGETS.anthropic,
+    });
+    expect(
+      resolveStructuredOutputBudget({
+        provider: "bedrock",
+        modelId: "openai.gpt-oss-120b-1:0",
+      }).provider,
+    ).toBe("openai");
+    // A vendor with no budget of its own keeps Bedrock's.
+    expect(
+      resolveStructuredOutputBudget({
+        provider: "bedrock",
+        modelId: "us.amazon.nova-pro-v1:0",
+      }).provider,
+    ).toBe("bedrock");
+  });
+
+  test("never reads a vendor out of a first-party model id", () => {
+    // A first-party provider compiles the schema itself, so its own id is
+    // never parsed — an id that happened to contain another vendor's name
+    // must not redirect the budget.
+    expect(
+      resolveStructuredOutputBudget({
+        provider: "mistral",
+        modelId: "mistral-large-latest",
+      }).provider,
+    ).toBe("mistral");
+    expect(
+      resolveStructuredOutputBudget({
+        provider: "google",
+        modelId: "gemini-3.7-flash",
+      }).provider,
+    ).toBe("google");
   });
 });
 
@@ -222,6 +290,41 @@ describe("checking a schema against a provider budget", () => {
         }),
       ),
     ).toBe(false);
+  });
+
+  test("rejects a non-ASCII schema that only fits when counted as UTF-16", () => {
+    // Sized so the string length lands under Anthropic's budget while the
+    // UTF-8 payload the provider receives is over it: counting code units
+    // would admit a request the compiler then rejects.
+    const label = "契約書類";
+    const schema = {
+      enum: Array.from(
+        {
+          length: Math.ceil(
+            STRUCTURED_OUTPUT_BUDGETS.anthropic.maxSchemaBytes / 16,
+          ),
+        },
+        (_, index) => `${label}${index}`,
+      ),
+    };
+    const serialized = JSON.stringify(schema);
+
+    expect(serialized.length).toBeLessThan(
+      STRUCTURED_OUTPUT_BUDGETS.anthropic.maxSchemaBytes,
+    );
+    expect(Buffer.byteLength(serialized, "utf-8")).toBeGreaterThan(
+      STRUCTURED_OUTPUT_BUDGETS.anthropic.maxSchemaBytes,
+    );
+
+    expect(
+      Result.isError(
+        checkStructuredOutputBudget({
+          provider: "anthropic",
+          modelId: ANTHROPIC_MODEL_ID,
+          schema,
+        }),
+      ),
+    ).toBe(true);
   });
 
   test("rejects an OpenRouter request whose upstream is Anthropic", () => {

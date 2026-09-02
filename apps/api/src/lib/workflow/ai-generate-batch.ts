@@ -35,6 +35,7 @@ import type {
   AIJustificationOutput,
   JustificationFilenames,
 } from "@/api/lib/workflow/parse-justifications";
+import { getWorkflowBatchAITimeoutMs } from "@/api/lib/workflow/run-logic";
 import {
   consumePartialAnswers,
   consumeTanStackPartialAnswer,
@@ -283,6 +284,16 @@ export const generateWorkflowData = async ({
       { type: "text", content: buildPromptsMessage(chunkProperties) },
     ];
 
+    // Each chunk is one model request, so it gets the per-request budget;
+    // before the batch was split, the caller applied that same budget once
+    // because a batch *was* one request. The caller's signal (the worker's
+    // per-job timeout) still bounds the batch as a whole, so a stalled chunk
+    // fails on its own instead of consuming what the remaining chunks need.
+    const chunkAbortSignal = AbortSignal.any([
+      abortSignal,
+      AbortSignal.timeout(getWorkflowBatchAITimeoutMs(serviceTier)),
+    ]);
+
     return await Result.tryPromise({
       try: async () => {
         const stream = streamTanStackObjectForRole({
@@ -295,7 +306,7 @@ export const generateWorkflowData = async ({
           serviceTier,
           messages: [{ role: "user", content: chunkContent }],
           system: WORKFLOW_SYSTEM_PROMPT,
-          abortSignal,
+          abortSignal: chunkAbortSignal,
           outputSchema: buildBatchSchema(chunkProperties, filenames),
         });
 

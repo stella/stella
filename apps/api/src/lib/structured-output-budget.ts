@@ -1,6 +1,9 @@
 import { Result, TaggedError } from "better-result";
 
-import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
+import {
+  MODEL_CATALOG_PROVIDER_KIND,
+  TANSTACK_AI_PROVIDERS,
+} from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 
 /**
@@ -60,23 +63,39 @@ export type ResolvedStructuredOutputBudget = {
   budget: StructuredOutputBudget;
 };
 
-// Derived from the catalogue's own provider list, so a new TanStack provider
-// is recognized as an OpenRouter upstream without a second list to update.
+// An aggregator or platform id names its upstream vendor in the id itself,
+// separated by "/" on OpenRouter (`anthropic/claude-sonnet-5`) and by "." on
+// Bedrock, after an optional region (`us.anthropic.claude-sonnet-4-5-...`).
+// Matching against the catalogue's own provider list means a new TanStack
+// provider is recognized as an upstream without a second list to update.
+const MODEL_ID_VENDOR_SEPARATOR = /[/.]/u;
+
 const upstreamProviderFromModelId = (
   modelId: string,
 ): TanStackAIProvider | undefined => {
-  const prefix = modelId.split("/").at(0);
-  return TANSTACK_AI_PROVIDERS.find((provider) => provider === prefix);
+  const segments = new Set(modelId.split(MODEL_ID_VENDOR_SEPARATOR));
+  return TANSTACK_AI_PROVIDERS.find((provider) => segments.has(provider));
 };
 
+/**
+ * Which provider's grammar compiler a request reaches, and the budget it
+ * must fit.
+ *
+ * A first-party provider compiles the schema itself. An aggregator or
+ * platform proxies to a vendor named in the model id, so a routed Claude
+ * (`anthropic/claude-sonnet-5` on OpenRouter, `us.anthropic.claude-*` on
+ * Bedrock) is held to Anthropic's measured budget rather than the proxy's
+ * placeholder. An id naming no known vendor keeps the proxy's own budget:
+ * nothing better is known about it.
+ */
 export const resolveStructuredOutputBudget = ({
   provider,
   modelId,
 }: StructuredOutputTarget): ResolvedStructuredOutputBudget => {
   const compiler =
-    provider === "openrouter"
-      ? (upstreamProviderFromModelId(modelId) ?? "openrouter")
-      : provider;
+    MODEL_CATALOG_PROVIDER_KIND[provider] === "first-party"
+      ? provider
+      : (upstreamProviderFromModelId(modelId) ?? provider);
   return { provider: compiler, budget: STRUCTURED_OUTPUT_BUDGETS[compiler] };
 };
 
@@ -117,6 +136,8 @@ const countUnionParameters = (node: unknown): number => {
  * Measures a projected JSON schema the way the providers do: the serialized
  * size they compile, and the number of union-typed nodes anywhere in it.
  */
+const schemaUtf8Encoder = new TextEncoder();
+
 export const measureStructuredOutputSchema = (
   schema: unknown,
 ): StructuredOutputMeasure => {
@@ -124,7 +145,12 @@ export const measureStructuredOutputSchema = (
     return { bytes: 0, unionParameters: 0 };
   }
   return {
-    bytes: JSON.stringify(schema).length,
+    // UTF-8 bytes, not string length: the limit is on the wire payload, and a
+    // workspace's own option labels go into the schema. One CJK character is
+    // a single UTF-16 code unit but three bytes, so measuring `.length` would
+    // under-report a non-ASCII workspace's schema and admit a request the
+    // provider then rejects.
+    bytes: schemaUtf8Encoder.encode(JSON.stringify(schema)).byteLength,
     unionParameters: countUnionParameters(schema),
   };
 };
