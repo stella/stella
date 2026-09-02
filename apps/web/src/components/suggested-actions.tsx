@@ -69,7 +69,9 @@ export const SuggestedActionSurface = ({
  * A row (or stack) of click-to-run "suggested action" chips. Horizontal
  * chips scroll sideways so the list never wraps or overflows its container;
  * the row's trailing edge fades so a clipped chip reads as "more to scroll"
- * instead of a hard cut.
+ * instead of a hard cut. The row shows no scrollbar: the fade carries the
+ * overflow signal, and a scrollbar track would add height only when the
+ * chips overflow, so the gap to the composer below would depend on content.
  */
 export const SuggestedActions = ({
   actions,
@@ -92,7 +94,7 @@ export const SuggestedActions = ({
       className={cn(
         "flex max-w-full gap-1.5",
         horizontal
-          ? "scrollbar-hover overflow-x-auto [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] rtl:[mask-image:linear-gradient(to_left,black_calc(100%-2.5rem),transparent)]"
+          ? "scrollbar-none overflow-x-auto [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] rtl:[mask-image:linear-gradient(to_left,black_calc(100%-2.5rem),transparent)]"
           : "flex-col items-start",
         className,
       )}
