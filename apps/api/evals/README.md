@@ -35,3 +35,6 @@ the default provider chain (see `getTanStackTextModelById`).
 - `create-document-drafting.ts`: can a model write legal source the
   docx-core compiler accepts, how much does the compiler normalize, and does
   literal markdown leak into the document.
+- `suggest-changes-precision.ts`: given a DOCX and an edit request, does a
+  model change exactly what was asked (no collateral edits), guard its
+  operations with block hashes, and do the reviewer's skips match its intent.
