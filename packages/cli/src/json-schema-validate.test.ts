@@ -598,6 +598,9 @@ describe("format", () => {
       "2026-01-01T00:00:00.250z",
       "2026-01-01T23:59:59+02:00",
       "2026-06-30T23:59:60Z",
+      // RFC 3339 §5.7: the UTC leap second seen from another offset.
+      "1990-12-31T15:59:60-08:00",
+      "2026-07-01T01:29:60+01:30",
     ]) {
       expect(validateAgainstSchema(schema, { at }).valid).toBe(true);
     }
@@ -609,8 +612,9 @@ describe("format", () => {
       "2026-01-01T00:00:00",
       "2026-02-30T00:00:00Z",
       "2026-01-01T25:00:00Z",
-      // A leap second exists only at the end of the day.
+      // A leap second exists only at the end of the UTC day.
       "2026-01-01T00:00:60Z",
+      "2026-06-30T23:59:60+02:00",
       "yesterday",
     ]) {
       const result = validateAgainstSchema(schema, { at });

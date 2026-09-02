@@ -57,13 +57,62 @@ const STRING_ASSERTION_KEYWORDS = [
 const FULL_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 
 /**
- * RFC 3339 §5.6 date-time: full date, `T`, full time with in-range fields
- * (the leap second only as `23:59:60`), and an offset. `Date.parse` alone
- * also admits a bare date, an offset-less local time, and out-of-range
- * fields.
+ * RFC 3339 §5.6 date-time: full date, `T`, full time with in-range fields,
+ * and an offset. `Date.parse` alone also admits a bare date, an offset-less
+ * local time, and out-of-range fields. Second 60 is admitted here and
+ * settled by {@link isUtcLeapSecond}.
  */
 const RFC3339_DATE_TIME =
-  /^\d{4}-\d{2}-\d{2}[Tt](?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d|23:59:60)(?:\.\d+)?(?:[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/u;
+  /^\d{4}-\d{2}-\d{2}[Tt](?<hour>[01]\d|2[0-3]):(?<minute>[0-5]\d):(?<second>[0-5]\d|60)(?:\.\d+)?(?<offset>[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/u;
+
+const MINUTES_PER_DAY = 24 * 60;
+const LAST_UTC_MINUTE = 23 * 60 + 59;
+
+/**
+ * A leap second exists only as the last second of a UTC day (RFC 3339 §5.7:
+ * `15:59:60-08:00` is `23:59:60Z`), so a second-60 timestamp is valid exactly
+ * when its local time minus its offset lands on 23:59 UTC.
+ */
+const isUtcLeapSecond = (fields: RFC3339TimeFields): boolean => {
+  if (fields.second !== "60") {
+    return true;
+  }
+  const local = Number(fields.hour) * 60 + Number(fields.minute);
+  const offset = fields.offset.toLowerCase();
+  const offsetMinutes =
+    offset === "z"
+      ? 0
+      : (offset.startsWith("-") ? -1 : 1) *
+        (Number(offset.slice(1, 3)) * 60 + Number(offset.slice(4, 6)));
+  const utc =
+    (((local - offsetMinutes) % MINUTES_PER_DAY) + MINUTES_PER_DAY) %
+    MINUTES_PER_DAY;
+  return utc === LAST_UTC_MINUTE;
+};
+
+type RFC3339TimeFields = {
+  hour: string;
+  minute: string;
+  second: string;
+  offset: string;
+};
+
+const rfc3339TimeFields = (value: string): RFC3339TimeFields | undefined => {
+  const groups = RFC3339_DATE_TIME.exec(value)?.groups;
+  const hour = groups?.["hour"];
+  const minute = groups?.["minute"];
+  const second = groups?.["second"];
+  const offset = groups?.["offset"];
+  if (
+    hour === undefined ||
+    minute === undefined ||
+    second === undefined ||
+    offset === undefined
+  ) {
+    return undefined;
+  }
+  return { hour, minute, second, offset };
+};
 
 /**
  * Whether a `YYYY-MM-DD` names a day the calendar has. `Date.parse` rolls an
@@ -83,8 +132,14 @@ const isCalendarDay = (day: string): boolean => {
  */
 const KNOWN_STRING_FORMATS = {
   date: (value: string) => FULL_DATE.test(value) && isCalendarDay(value),
-  "date-time": (value: string) =>
-    RFC3339_DATE_TIME.test(value) && isCalendarDay(value.slice(0, 10)),
+  "date-time": (value: string) => {
+    const fields = rfc3339TimeFields(value);
+    return (
+      fields !== undefined &&
+      isUtcLeapSecond(fields) &&
+      isCalendarDay(value.slice(0, 10))
+    );
+  },
   uuid: (value: string) =>
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(
       value,
