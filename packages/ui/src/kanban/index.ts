@@ -14,7 +14,10 @@ export type { KanbanCardShellProps } from "./card-shell";
 export { KanbanCardShell } from "./card-shell";
 export type { KanbanCellActionProps } from "./cell-action";
 export { KanbanCellAction } from "./cell-action";
-export type { KanbanColumnBandHeaderProps } from "./column-band-header";
+export type {
+  KanbanBandToggleActivation,
+  KanbanColumnBandHeaderProps,
+} from "./column-band-header";
 export { KanbanColumnBandHeader } from "./column-band-header";
 export type { KanbanColumnBandSpan } from "./column-bands";
 export {
@@ -128,8 +131,9 @@ export type {
 } from "./subgroup-board";
 export {
   KANBAN_BAND_PEEK_DELAY_MS,
-  KanbanSubgroupBoard,
-} from "./subgroup-board";
+  KANBAN_BAND_PEEK_LINGER_MS,
+} from "./band-peek";
+export { KanbanSubgroupBoard } from "./subgroup-board";
 export type {
   KanbanVirtualCellPagination,
   KanbanVirtualCellProps,

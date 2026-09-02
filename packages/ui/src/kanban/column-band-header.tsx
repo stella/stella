@@ -5,6 +5,13 @@ import { ChevronDownIcon } from "lucide-react";
 import { DirectionalIcon } from "../components/directional-icon";
 import { cn } from "../lib/utils";
 
+/**
+ * How a band toggle was activated. A pointer activation leaves the pointer
+ * over whatever replaces the caption (the folded slot), which matters to the
+ * board's peek behaviour; a keyboard activation does not.
+ */
+export type KanbanBandToggleActivation = { viaPointer: boolean };
+
 export type KanbanColumnBandHeaderProps = {
   /** The band name, or the control that has taken its place. */
   title: ReactNode;
@@ -22,7 +29,10 @@ export type KanbanColumnBandHeaderProps = {
   compact?: boolean | undefined;
   /** Accessible name for the toggle, such as "Collapse To do". */
   toggleLabel: string;
-  onCollapsedChange: (collapsed: boolean) => void;
+  onCollapsedChange: (
+    collapsed: boolean,
+    activation: KanbanBandToggleActivation,
+  ) => void;
   /** Band menu or other controls, after the toggle. */
   actions?: ReactNode;
 };
@@ -56,7 +66,11 @@ export const KanbanColumnBandHeader = ({
       aria-expanded={!collapsed}
       aria-label={toggleLabel}
       className="hover:bg-muted/60 text-muted-foreground hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded-md transition-[background-color]"
-      onClick={() => onCollapsedChange(!collapsed)}
+      // A keyboard activation reports no click count, so the board can tell a
+      // fold that leaves the pointer over the new slot from one that does not.
+      onClick={(event) =>
+        onCollapsedChange(!collapsed, { viaPointer: event.detail > 0 })
+      }
       title={toggleLabel}
       type="button"
     >
