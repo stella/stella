@@ -54,10 +54,22 @@ describe("isColumnReferenced", () => {
     ).toBe(false);
   });
 
-  test("does not match a key as a substring of a longer identifier", () => {
+  // Each boundary is exercised on its own: a fixture with word characters on
+  // both sides would still pass if only one of the two `\b` anchors broke.
+  test("does not match a key that ends a longer identifier", () => {
     expect(
       isColumnReferenced({
-        corpus: "const value = row.notautoInvokeHintAtAll;",
+        corpus: "const value = row.notautoInvokeHint;",
+        tsKey: "autoInvokeHint",
+        sqlName: "auto_invoke_hint",
+      }),
+    ).toBe(false);
+  });
+
+  test("does not match a key that starts a longer identifier", () => {
+    expect(
+      isColumnReferenced({
+        corpus: "const value = row.autoInvokeHintAtAll;",
         tsKey: "autoInvokeHint",
         sqlName: "auto_invoke_hint",
       }),
