@@ -29,7 +29,7 @@
  *
  * Usage (from apps/api):
  *   bun run eval:template-fill
- *   bun run eval:template-fill -- --models gpt-5.4-mini --task cs-work-contract
+ *   bun run eval:template-fill -- --models gpt-5.6-luna --task cs-work-contract
  *   bun run eval:template-fill -- --runs 3 --json out.json
  */
 import { EventType, chat, maxIterations, toolDefinition } from "@tanstack/ai";
@@ -65,7 +65,7 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 // A bare id resolves through whichever configured provider rates it (GPT
 // models may come from OpenAI or OpenRouter); Claude ids are pinned to
 // Anthropic so a non-Anthropic default provider cannot claim them.
-const DEFAULT_MODELS = ["gpt-5.4-mini", "anthropic::claude-sonnet-5"];
+const DEFAULT_MODELS = ["gpt-5.6-luna", "anthropic::claude-sonnet-5"];
 const DEFAULT_RUNS = 1;
 const MAX_OUTPUT_TOKENS = 3000;
 const MAX_ITERATIONS = 6;
