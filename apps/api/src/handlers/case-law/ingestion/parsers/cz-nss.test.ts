@@ -826,6 +826,32 @@ describe("parseNssDecisionHtml", () => {
       );
     });
 
+    test("groups the paragraphs of one publisher footnote under its container id", () => {
+      const html = `<html><body>
+        <p>Text<a href="#_ftn1">[1]</a>.</p>
+        <div id="_ftn1">
+          <p><a href="#_ftnref1">[1]</a> První odstavec.</p>
+          <p>Druhý odstavec.</p>
+        </div>
+        <div id="_ftn2">
+          <p><a href="#_ftnref2">[2]</a> Jiná poznámka.</p>
+        </div>
+      </body></html>`;
+
+      const { documentAst } = parseNssDecisionHtml(baseInput(html));
+      const notes = documentAst.blocks.flatMap((block) =>
+        block.type === "paragraph" && block.note?.type === "footnote"
+          ? [block.note]
+          : [],
+      );
+
+      expect(notes).toEqual([
+        { type: "footnote", label: "1", noteId: "_ftn1" },
+        { type: "footnote", label: "1", noteId: "_ftn1" },
+        { type: "footnote", label: "2", noteId: "_ftn2" },
+      ]);
+    });
+
     test("gives every paragraph in one publisher footnote a unique anchor", () => {
       const html = `<html><body>
         <p>Text<a href="#_ftn1">[1]</a>.</p>
