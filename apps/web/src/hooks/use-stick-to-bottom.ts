@@ -116,6 +116,10 @@ export const useStickToBottom = () => {
     // transcript would land wherever the old scroll offset happened to be.
     userScrolledUp.current = false;
     programmaticScroll.current = false;
+    // The observable state moves with the refs: the content observer would
+    // restore it a frame later, but until then `isScrollable && !isAtBottom`
+    // can flash the scroll button over a transcript that is already pinned.
+    setIsAtBottom(true);
     let lastScrollTop = el.scrollTop;
 
     const onScroll = () => {
