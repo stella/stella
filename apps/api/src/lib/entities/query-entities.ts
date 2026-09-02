@@ -28,6 +28,7 @@ import {
   extractedContent,
   fields,
   searchDocuments,
+  taskAssignees,
 } from "@/api/db/schema";
 import type {
   CellMetadata,
@@ -73,6 +74,12 @@ type CellMetadataFlagProvenanceResult = {
 type CellLockProvenanceResult = NonNullable<CellMetadata["lockProvenance"]> & {
   lockedByName: string | null;
   lockedByImage: string | null;
+};
+
+export type QueryEntityAssignee = {
+  userId: string;
+  name: string | null;
+  image: string | null;
 };
 
 type CellMetadataResult = Omit<
@@ -141,6 +148,7 @@ export type QueryEntityResult = {
     propertyId: string;
     metadata: CellMetadataResult;
   }[];
+  assignees: QueryEntityAssignee[];
 };
 
 type QueryEntitiesProps = {
@@ -765,6 +773,7 @@ const queryEntitiesGenerator = async function* ({
     fieldRowsResult,
     cellMetadataRowsResult,
     activeSessionsResult,
+    assigneeRowsResult,
   ] = await Promise.all([
     safeDb((tx) => {
       const createdByMembers = organizationMemberIdsSubquery(
@@ -938,6 +947,23 @@ const queryEntitiesGenerator = async function* ({
           .limit(pageIds.length)
       );
     }),
+    safeDb((tx) =>
+      tx
+        .select({
+          entityId: taskAssignees.entityId,
+          userId: taskAssignees.userId,
+          // Same fallback as the Author column: Better Auth allows an empty
+          // `name`, so passwordless email signups need the email fallback
+          // to avoid a blank assignee label.
+          name: sql<
+            string | null
+          >`coalesce(nullif(trim(${user.name}), ''), ${user.email})`,
+          image: user.image,
+        })
+        .from(taskAssignees)
+        .innerJoin(user, eq(taskAssignees.userId, user.id))
+        .where(inArray(taskAssignees.entityId, pageIds)),
+    ),
   ]);
 
   const entityRows = yield* entityRowsResult;
@@ -945,6 +971,7 @@ const queryEntitiesGenerator = async function* ({
   const fieldRows = yield* fieldRowsResult;
   const cellMetadataRows = yield* cellMetadataRowsResult;
   const activeSessions = yield* activeSessionsResult;
+  const assigneeRows = yield* assigneeRowsResult;
   const cellMetadataActorIds = getCellMetadataActorIds(cellMetadataRows);
   const cellMetadataActors =
     cellMetadataActorIds.length > 0
@@ -996,6 +1023,21 @@ const queryEntitiesGenerator = async function* ({
 
   const fieldsByVersionId = groupByEntityVersionId(fieldRows);
   const cellMetadataByVersionId = groupByEntityVersionId(cellMetadataRows);
+
+  const assigneesByEntityId = new Map<string, QueryEntityAssignee[]>();
+  for (const row of assigneeRows) {
+    const existing = assigneesByEntityId.get(row.entityId);
+    const assignee: QueryEntityAssignee = {
+      userId: row.userId,
+      name: row.name,
+      image: row.image,
+    };
+    if (existing) {
+      existing.push(assignee);
+    } else {
+      assigneesByEntityId.set(row.entityId, [assignee]);
+    }
+  }
 
   const entityMap = new Map(entityRows.map((e) => [e.id, e]));
 
@@ -1065,6 +1107,7 @@ const queryEntitiesGenerator = async function* ({
         propertyId: entry.propertyId,
         metadata: enrichCellMetadata(entry.metadata, cellMetadataActorMap),
       })),
+      assignees: assigneesByEntityId.get(entity.id) ?? [],
     });
   }
 

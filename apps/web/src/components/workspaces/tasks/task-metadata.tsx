@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -26,12 +26,10 @@ import {
   TASK_STATUSES,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import { useLocale } from "@/i18n/formatting-context";
-import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
-import { toSafeId } from "@/lib/safe-id";
-import { workspacesKeys } from "@/lib/workspaces/queries";
-import { entitiesKeys } from "@/lib/workspaces/queries/entities";
-import { taskKeys } from "@/lib/workspaces/queries/tasks";
+import {
+  useAddTaskAssignee,
+  useRemoveTaskAssignee,
+} from "@/lib/workspaces/mutations/tasks";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 
 import type {
@@ -342,50 +340,12 @@ export const AssigneePicker = ({
 }: AssigneePickerProps) => {
   const t = useTranslations("tasks");
   const tCommon = useTranslations("common");
-  const queryClient = useQueryClient();
   const { data: members } = useQuery(workspaceMembersOptions(workspaceId));
 
   const assignedIds = new Set(assignees.map((a) => a.user.id));
 
-  const invalidate = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: taskKeys.detail(workspaceId, taskId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: entitiesKeys.all(workspaceId),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: workspacesKeys.overview(workspaceId),
-      }),
-    ]);
-  };
-
-  const addAssignee = useMutation({
-    mutationFn: async (userId: string) => {
-      const response = await api
-        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .assignees.post({
-          taskId: toSafeId<"entity">(taskId),
-          userId: toSafeId<"user">(userId),
-        });
-      return unwrapEden(response);
-    },
-    onSuccess: invalidate,
-  });
-
-  const removeAssignee = useMutation({
-    mutationFn: async (userId: string) => {
-      const response = await api
-        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .assignees.delete({
-          taskId: toSafeId<"entity">(taskId),
-          userId: toSafeId<"user">(userId),
-        });
-      return unwrapEden(response);
-    },
-    onSuccess: invalidate,
-  });
+  const addAssignee = useAddTaskAssignee(workspaceId);
+  const removeAssignee = useRemoveTaskAssignee(workspaceId);
 
   const unassignedMembers = members?.filter(
     (m) => m.user && !assignedIds.has(m.user.id),
@@ -415,7 +375,7 @@ export const AssigneePicker = ({
             aria-label={tCommon("remove")}
             className="size-5 opacity-0 transition-opacity group-hover/assignee:opacity-100"
             disabled={removeAssignee.isPending}
-            onClick={() => removeAssignee.mutate(a.user.id)}
+            onClick={() => removeAssignee.mutate({ taskId, userId: a.user.id })}
             size="icon-xs"
             variant="ghost"
           >
@@ -450,7 +410,9 @@ export const AssigneePicker = ({
                   <button
                     className="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors"
                     key={user.id}
-                    onClick={() => addAssignee.mutate(user.id)}
+                    onClick={() =>
+                      addAssignee.mutate({ taskId, userId: user.id })
+                    }
                     type="button"
                   >
                     <UserIdentity

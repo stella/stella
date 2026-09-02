@@ -16,7 +16,8 @@ void mock.module("@atlaskit/pragmatic-drag-and-drop/element/adapter", () => ({
   draggable: () => () => undefined,
 }));
 
-const { attachElementDropTarget } = await import("./use-kanban-drop-targets");
+const { attachElementDropTarget, readSourceSubgroupValue } =
+  await import("./use-kanban-drop-targets");
 
 // SAFETY: attachElementDropTarget only ever uses `element` as a WeakMap key
 // in these tests; the adapter above is mocked to a no-op, so no DOM API on
@@ -69,5 +70,31 @@ describe("attachElementDropTarget", () => {
       cleanupChild();
       cleanupParent();
     }).not.toThrow();
+  });
+});
+
+describe("readSourceSubgroupValue", () => {
+  test("keeps a string lane value", () => {
+    expect(
+      readSourceSubgroupValue({ subgroupValue: "workspace-user:u1" }),
+    ).toBe("workspace-user:u1");
+  });
+
+  test("keeps an explicit null (the Unassigned lane) distinct from absence", () => {
+    expect(readSourceSubgroupValue({ subgroupValue: null })).toBeNull();
+  });
+
+  test("reports undefined when the payload carries no lane at all", () => {
+    expect(readSourceSubgroupValue({})).toBeUndefined();
+  });
+
+  test("never trusts a non-string, non-null value", () => {
+    expect(readSourceSubgroupValue({ subgroupValue: 42 })).toBeUndefined();
+    expect(
+      readSourceSubgroupValue({ subgroupValue: { nested: true } }),
+    ).toBeUndefined();
+    expect(
+      readSourceSubgroupValue({ subgroupValue: ["array"] }),
+    ).toBeUndefined();
   });
 });

@@ -30,6 +30,7 @@ const INTERNAL_PROPERTIES = [
   "status",
   "priority",
   "due-date",
+  "assignee",
 ] as const;
 
 type InternalProperty = (typeof INTERNAL_PROPERTIES)[number];

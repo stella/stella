@@ -51,6 +51,7 @@ type KanbanSubgroupBoardProps = {
     entityId: string,
     columnValue: string,
     laneValue: string | null,
+    sourceSubgroupValue: string | null | undefined,
   ) => void;
   onHideColumn: (columnValue: string) => void;
   onLoadMore: () => void;
@@ -165,6 +166,7 @@ type WorkspaceKanbanSubgroupCellProps = {
     entityId: string,
     columnValue: string,
     laneValue: string | null,
+    sourceSubgroupValue: string | null | undefined,
   ) => void;
   onLoadMore: () => void;
   onRenameEntity: (entityId: string, newName: string) => void;
@@ -198,9 +200,9 @@ const WorkspaceKanbanSubgroupCell = ({
     elementRef: cellRef,
     enabled: canMoveCards,
     name: `${cell.coordinate.column.type === "group" ? cell.coordinate.column.group.label : cell.coordinate.column.destination.label}, ${cell.coordinate.lane.type === "group" ? cell.coordinate.lane.group.label : ""}`,
-    onDrop: (entityId) => {
+    onDrop: (entityId, sourceSubgroupValue) => {
       if (columnValue !== null) {
-        onDropCard(entityId, columnValue, laneValue);
+        onDropCard(entityId, columnValue, laneValue, sourceSubgroupValue);
       }
     },
   });
@@ -241,6 +243,7 @@ const WorkspaceKanbanSubgroupCell = ({
         <KanbanCard
           cardFields={cardFields}
           draggable={canMoveCards}
+          dragSubgroupValue={laneValue}
           entity={entity}
           onRename={onRenameEntity}
           properties={properties}

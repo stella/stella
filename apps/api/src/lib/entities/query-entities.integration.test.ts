@@ -12,10 +12,16 @@ import {
 import { eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { desktopEditSessions, entities } from "@/api/db/schema";
+import {
+  desktopEditSessions,
+  entities,
+  entityVersions,
+  taskAssignees,
+} from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -244,5 +250,116 @@ describe("entity creator projection", () => {
         .set({ createdBy: null, lastEditedBy: null })
         .where(eq(entities.id, ids.entityA1));
     }
+  });
+});
+
+describe("task assignee projection", () => {
+  const taskEntityIds: SafeId<"entity">[] = [];
+
+  afterEach(async () => {
+    if (taskEntityIds.length === 0) {
+      return;
+    }
+    await testDb.delete(entities).where(inArray(entities.id, taskEntityIds));
+    taskEntityIds.length = 0;
+  });
+
+  const seedTask = async (): Promise<SafeId<"entity">> => {
+    const entityId = createSafeId<"entity">();
+    const versionId = createSafeId<"entityVersion">();
+    taskEntityIds.push(entityId);
+
+    await testDb.insert(entities).values({
+      id: entityId,
+      workspaceId: ids.wsA1,
+      kind: "task",
+      name: "assignee projection task",
+      status: "open",
+      createdBy: ids.userA1,
+    });
+    await testDb.insert(entityVersions).values({
+      id: versionId,
+      workspaceId: ids.wsA1,
+      entityId,
+    });
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: versionId })
+      .where(eq(entities.id, entityId));
+
+    return entityId;
+  };
+
+  const readAssignees = async (entityId: SafeId<"entity">) => {
+    const result = await queryEntities({
+      safeDb,
+      workspaceId: ids.wsA1,
+      currentUserId: ids.userA1,
+      currentOrganizationId: ids.orgA,
+      filters: [],
+      sorts: [],
+      limit: 10,
+      fieldMode: "visible",
+      fieldIds: [],
+    });
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    return result.value.entities.find(
+      (candidate) => candidate.entityId === entityId,
+    )?.assignees;
+  };
+
+  test("returns an empty list for a task with no assignees", async () => {
+    const entityId = await seedTask();
+
+    expect(await readAssignees(entityId)).toEqual([]);
+  });
+
+  test("returns one entry for a task with a single assignee", async () => {
+    const entityId = await seedTask();
+    await testDb.insert(taskAssignees).values({
+      id: createSafeId<"taskAssignee">(),
+      workspaceId: ids.wsA1,
+      entityId,
+      userId: ids.userA1,
+      role: TASK_ASSIGNEE_ROLE.ASSIGNEE,
+    });
+
+    const assignees = await readAssignees(entityId);
+
+    expect(assignees).toEqual([
+      expect.objectContaining({ userId: ids.userA1, name: "User A1" }),
+    ]);
+  });
+
+  test("returns every assignee row for a task with several assignees, regardless of role", async () => {
+    const entityId = await seedTask();
+    await testDb.insert(taskAssignees).values([
+      {
+        id: createSafeId<"taskAssignee">(),
+        workspaceId: ids.wsA1,
+        entityId,
+        userId: ids.userA1,
+        role: TASK_ASSIGNEE_ROLE.ASSIGNEE,
+      },
+      {
+        id: createSafeId<"taskAssignee">(),
+        workspaceId: ids.wsA1,
+        entityId,
+        userId: ids.userA2,
+        role: TASK_ASSIGNEE_ROLE.REVIEWER,
+      },
+    ]);
+
+    const assignees = await readAssignees(entityId);
+
+    expect(assignees).toHaveLength(2);
+    expect(assignees).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ userId: ids.userA1 }),
+        expect.objectContaining({ userId: ids.userA2 }),
+      ]),
+    );
   });
 });

@@ -54,6 +54,7 @@ const entity = (value: number): WorkspaceEntity => {
     sortOrder: null,
     activeEditBy: null,
     cellMetadata: {},
+    assignees: [],
     fields: {
       [FEE]: {
         entityId,

@@ -13,19 +13,34 @@ import {
 } from "@stll/api-contract";
 import type { EntityKind, TaskStatus } from "@stll/api-contract";
 import type {
+  KanbanBoardCell,
+  KanbanBoardColumn,
+  KanbanBoardLane,
+  KanbanBoardMatrix,
   KanbanBuiltInGroup,
+  KanbanGroup,
   KanbanGrouping,
   KanbanGroupOption,
   KanbanSchema,
 } from "@stll/ui/kanban";
-import { resolveKanbanGrouping } from "@stll/ui/kanban";
+import {
+  getKanbanBoardColumnIdentity,
+  getKanbanBoardLaneIdentity,
+  getKanbanGroups,
+  isKanbanGroupingRenderable,
+  resolveKanbanGroupOptions,
+  resolveKanbanGrouping,
+  selectKanbanRows,
+} from "@stll/ui/kanban";
 
 import {
   getInternalPropertyId,
   resolveKanbanGroupBy,
 } from "@/components/workspaces/entity-utils";
 import { resolveOptionColor } from "@/components/workspaces/property-utils";
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import type { OptionColor } from "@/lib/api-contract";
+import { compareByLocale } from "@/lib/collation";
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 
 export type WorkspaceKanbanSchema = KanbanSchema<
@@ -94,6 +109,17 @@ const createdByGroup = (): KanbanBuiltInGroup<WorkspaceEntity> => ({
   options: [],
 });
 
+/**
+ * Assignee is a sub-group-only lane: the primary Group picker never offers
+ * it (server paging and counts do not support grouping by it), but it shares
+ * the created-by mechanism of declaring no fixed column list, since who is
+ * assigned is data on the loaded rows rather than a fixed set.
+ */
+const assigneeGroup = (): KanbanBuiltInGroup<WorkspaceEntity> => ({
+  id: getInternalPropertyId("assignee"),
+  options: [],
+});
+
 export const isGroupableProperty = (property: WorkspaceProperty): boolean =>
   property.content.type === "single-select" ||
   property.content.type === "multi-select";
@@ -138,6 +164,7 @@ export const workspaceKanbanSchema = ({
     statusGroup(statusLabels),
     kindGroup(entityKindLabels),
     createdByGroup(),
+    assigneeGroup(),
   ],
   properties,
   getPropertyId: (property) => property.id,
@@ -182,6 +209,51 @@ const authorGroupValue = ({
 }: WorkspaceEntity): string | null =>
   createdByUserId === null ? null : `workspace-user:${createdByUserId}`;
 
+const WORKSPACE_USER_LANE_PREFIX = "workspace-user:";
+
+const assigneeGroupValue = (userId: string): string =>
+  `${WORKSPACE_USER_LANE_PREFIX}${userId}`;
+
+/** The user id behind an assignee lane value, or `null` for Unassigned. */
+export const parseAssigneeLaneUserId = (value: string | null): string | null =>
+  value?.startsWith(WORKSPACE_USER_LANE_PREFIX)
+    ? value.slice(WORKSPACE_USER_LANE_PREFIX.length)
+    : null;
+
+export type AssigneeLaneDropIntent = {
+  removeUserId: string | null;
+  addUserId: string | null;
+};
+
+/**
+ * The assignee mutations a card's move between assignee lanes calls for:
+ * lane X to lane Y removes X and adds Y, Unassigned to Y only adds Y, X to
+ * Unassigned only removes X, and staying in the same lane calls for nothing.
+ */
+export const resolveAssigneeLaneDropIntent = (
+  sourceLaneValue: string | null,
+  targetLaneValue: string | null,
+): AssigneeLaneDropIntent => {
+  if (sourceLaneValue === targetLaneValue) {
+    return { removeUserId: null, addUserId: null };
+  }
+  return {
+    removeUserId: parseAssigneeLaneUserId(sourceLaneValue),
+    addUserId: parseAssigneeLaneUserId(targetLaneValue),
+  };
+};
+
+/**
+ * Every assignee lane value a row belongs to (fan-out), `[]` when the task
+ * carries no assignees (the Unassigned lane). Order follows the row's
+ * `assignees` array, which the API returns grouped per entity with no
+ * particular ordering guarantee across rows.
+ */
+export const resolveWorkspaceKanbanAssigneeLaneValues = (
+  entity: WorkspaceEntity,
+): string[] =>
+  entity.assignees.map((assignee) => assigneeGroupValue(assignee.userId));
+
 /** Person and author lanes come from the loaded rows rather than a fixed
  * schema option list. Each identity keeps its real avatar with the lane. */
 export const resolveWorkspaceKanbanDynamicSubgroup = (
@@ -209,6 +281,35 @@ export const resolveWorkspaceKanbanDynamicSubgroup = (
       type: "built-in",
       propertyId: subgroup.propertyId,
       group: { ...subgroup.group, options: [...optionsByValue.values()] },
+    };
+  }
+
+  if (
+    subgroup.type === "built-in" &&
+    subgroup.group.id === getInternalPropertyId("assignee")
+  ) {
+    for (const row of rows) {
+      for (const assignee of row.assignees) {
+        if (assignee.name === null) {
+          continue;
+        }
+        optionsByValue.set(assigneeGroupValue(assignee.userId), {
+          value: assigneeGroupValue(assignee.userId),
+          label: assignee.name,
+          image: assignee.image,
+        });
+      }
+    }
+    // Lanes order by label, same as the fixed Unassigned bucket that always
+    // lands last (appended by `getKanbanGroups`, never sorted into place).
+    const compareLabels = compareByLocale(getFormattingLocale());
+    const options = [...optionsByValue.values()].toSorted((a, b) =>
+      compareLabels(a.label, b.label),
+    );
+    return {
+      type: "built-in",
+      propertyId: subgroup.propertyId,
+      group: { ...subgroup.group, options },
     };
   }
 
@@ -262,6 +363,14 @@ export const resolveWorkspaceKanbanGroupValue = (
       return entity.kind;
     case "_created-by":
       return authorGroupValue(entity);
+    case "_assignee": {
+      // A row can carry several assignees, so no single value can represent
+      // every lane it belongs to; this keeps the single-valued contract the
+      // generic matrix relies on by reporting the first. The real fan-out
+      // across every assignee lane happens in `buildKanbanAssigneeMatrix`.
+      const first = entity.assignees.at(0);
+      return first === undefined ? null : assigneeGroupValue(first.userId);
+    }
     default:
       return null;
   }
@@ -273,12 +382,135 @@ type CanMoveCardToSubgroupLaneOptions = {
   targetLaneValue: string | null;
 };
 
-/** Writable property lanes may change; read-only lanes accept primary-axis
- * moves only when the card stays in its current lane. */
+/** Writable property lanes may change, as does the assignee sub-group
+ * (subject to the task's own read-only state, mirroring the assignees-add
+ * and assignees-remove handler guards). Every other read-only lane accepts
+ * primary-axis moves only when the card stays in its current lane. */
 export const canMoveCardToSubgroupLane = ({
   subgroup,
   entity,
   targetLaneValue,
-}: CanMoveCardToSubgroupLaneOptions): boolean =>
-  subgroup.type === "property" ||
-  resolveWorkspaceKanbanGroupValue(subgroup, entity) === targetLaneValue;
+}: CanMoveCardToSubgroupLaneOptions): boolean => {
+  if (subgroup.type === "property") {
+    return true;
+  }
+  if (
+    subgroup.type === "built-in" &&
+    subgroup.group.id === getInternalPropertyId("assignee")
+  ) {
+    return !entity.readOnly;
+  }
+  return resolveWorkspaceKanbanGroupValue(subgroup, entity) === targetLaneValue;
+};
+
+const normalizeToGroupValue = (
+  groups: readonly KanbanGroup[],
+  value: string | null,
+): string | null =>
+  groups.some((candidate) => candidate.value === value) ? value : null;
+
+export type BuildKanbanAssigneeMatrixParams = {
+  /** The vertical board columns (e.g. status); unaffected by the fan-out. */
+  group: WorkspaceKanbanGrouping;
+  /** The assignee sub-group, already resolved dynamically over `rows`. */
+  assigneeSubgroup: WorkspaceKanbanGrouping;
+  rows: readonly WorkspaceEntity[];
+  uncategorizedLabel: string;
+};
+
+/**
+ * `buildKanbanBoardMatrix` places every row in exactly one cell — a row
+ * outside that invariant makes it panic. A task can carry several
+ * assignees, so it belongs in several lanes at once; this sibling builder
+ * produces the identical `KanbanBoardMatrix` shape but pushes a row into
+ * `cell.rows` once per lane it matches (its lane values from
+ * `resolveWorkspaceKanbanAssigneeLaneValues`, or the Unassigned lane alone
+ * when that list is empty), instead of enforcing one placement.
+ *
+ * `cell.rows` is the per-cell source of truth every renderer and lane count
+ * reads; the top-level `rows` field stays the board's deduplicated scoped
+ * rows (one entry per row, exactly what `buildKanbanBoardMatrix` means by
+ * it), since nothing reads that top-level list for a per-lane total — a
+ * row's repeated appearances only ever live inside `cell.rows`.
+ */
+export const buildKanbanAssigneeMatrix = ({
+  group,
+  assigneeSubgroup,
+  rows,
+  uncategorizedLabel,
+}: BuildKanbanAssigneeMatrixParams): KanbanBoardMatrix<WorkspaceEntity> => {
+  if (!isKanbanGroupingRenderable(group)) {
+    return { cells: [], columns: [], lanes: [], rows: [] };
+  }
+
+  const columnGroups = getKanbanGroups(
+    resolveKanbanGroupOptions(group),
+    uncategorizedLabel,
+  );
+  const columns: KanbanBoardColumn[] = columnGroups.map((columnGroup) => ({
+    group: columnGroup,
+    type: "group",
+  }));
+
+  const laneGroups = isKanbanGroupingRenderable(assigneeSubgroup)
+    ? getKanbanGroups(
+        resolveKanbanGroupOptions(assigneeSubgroup),
+        uncategorizedLabel,
+      )
+    : [];
+  const lanes: KanbanBoardLane[] = laneGroups.map((laneGroup) => ({
+    group: laneGroup,
+    type: "group",
+  }));
+
+  const cells: KanbanBoardCell<WorkspaceEntity>[] = [];
+  const cellsByKey = new Map<string, KanbanBoardCell<WorkspaceEntity>>();
+  for (const lane of lanes) {
+    for (const column of columns) {
+      const cell: KanbanBoardCell<WorkspaceEntity> = {
+        coordinate: { column, lane },
+        rows: [],
+      };
+      cells.push(cell);
+      cellsByKey.set(
+        `${getKanbanBoardColumnIdentity(column)}|${getKanbanBoardLaneIdentity(lane)}`,
+        cell,
+      );
+    }
+  }
+
+  const scopedRows = selectKanbanRows(rows, group);
+  for (const row of scopedRows) {
+    const columnValue = normalizeToGroupValue(
+      columnGroups,
+      resolveWorkspaceKanbanGroupValue(group, row),
+    );
+    const column = columns.find(
+      (candidate): candidate is Extract<KanbanBoardColumn, { type: "group" }> =>
+        candidate.type === "group" && candidate.group.value === columnValue,
+    );
+    if (column === undefined) {
+      continue;
+    }
+
+    const rowLaneValues = resolveWorkspaceKanbanAssigneeLaneValues(row);
+    const targetLaneValues =
+      rowLaneValues.length === 0 ? [null] : rowLaneValues;
+    for (const rawLaneValue of targetLaneValues) {
+      const laneValue = normalizeToGroupValue(laneGroups, rawLaneValue);
+      const lane = lanes.find(
+        (candidate): candidate is Extract<KanbanBoardLane, { type: "group" }> =>
+          candidate.type === "group" && candidate.group.value === laneValue,
+      );
+      if (lane === undefined) {
+        continue;
+      }
+      const cell = cellsByKey.get(
+        `${getKanbanBoardColumnIdentity(column)}|${getKanbanBoardLaneIdentity(lane)}`,
+      );
+      cell?.rows.push(row);
+    }
+  }
+
+  return { cells, columns, lanes, rows: scopedRows };
+};

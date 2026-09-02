@@ -59,6 +59,7 @@ const entity = (
     sortOrder: null,
     activeEditBy: null,
     cellMetadata: {},
+    assignees: [],
     fields:
       sizeBytes === undefined
         ? {}

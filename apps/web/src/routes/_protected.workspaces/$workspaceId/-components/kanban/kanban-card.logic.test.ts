@@ -124,5 +124,6 @@ const createEntity = (overrides: Partial<EntityInput>): EntityInput => ({
   activeEditBy: null,
   fields: {},
   cellMetadata: {},
+  assignees: [],
   ...overrides,
 });

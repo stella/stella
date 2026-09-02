@@ -87,11 +87,30 @@ export const attachElementDropTarget = ({
   };
 };
 
+/**
+ * The dragged card's source subgroup lane, read from the drag payload.
+ * `undefined` means the payload carried no lane at all (a flat board, or a
+ * card that never declared one) — distinct from `null`, the Unassigned
+ * lane, which is a real source value a caller must not discard.
+ */
+export const readSourceSubgroupValue = (
+  data: Record<string, unknown>,
+): string | null | undefined => {
+  const raw = data["subgroupValue"];
+  if (typeof raw === "string") {
+    return raw;
+  }
+  return raw === null ? null : undefined;
+};
+
 type UseKanbanEntityDropTargetParams<TElement extends HTMLElement> = {
   elementRef: RefObject<TElement | null>;
   enabled?: boolean;
   name: string;
-  onDrop: (entityId: string) => void;
+  onDrop: (
+    entityId: string,
+    sourceSubgroupValue: string | null | undefined,
+  ) => void;
 };
 
 /** One card drop contract for flat columns and subgroup cells. */
@@ -121,7 +140,7 @@ export const useKanbanEntityDropTarget = <TElement extends HTMLElement>({
         setIsDragOver(false);
         const entityId = source.data["entityId"];
         if (typeof entityId === "string") {
-          handleDrop(entityId);
+          handleDrop(entityId, readSourceSubgroupValue(source.data));
         }
       },
     });

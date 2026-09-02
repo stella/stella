@@ -5,13 +5,17 @@ import {
   resolveKanbanGroupOptions,
   selectKanbanRows,
 } from "@stll/ui/kanban";
+import type { KanbanBoardColumn, KanbanBoardLane } from "@stll/ui/kanban";
 
 import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 
 import {
+  buildKanbanAssigneeMatrix,
   canMoveCardToSubgroupLane,
+  resolveAssigneeLaneDropIntent,
+  resolveWorkspaceKanbanAssigneeLaneValues,
   resolveWorkspaceKanbanDynamicSubgroup,
   resolveWorkspaceKanbanGrouping,
   resolveWorkspaceKanbanGroupValue,
@@ -61,6 +65,7 @@ const entity = (
   sortOrder: null,
   activeEditBy: null,
   cellMetadata: {},
+  assignees: [],
   fields: {},
 });
 
@@ -386,5 +391,202 @@ describe("kanban subgroup placement", () => {
     expect(resolveWorkspaceKanbanGroupValue(subgroup, second)).toBe(
       "workspace-user:user-2",
     );
+  });
+});
+
+const groupColumnValue = (column: KanbanBoardColumn) =>
+  column.type === "group" ? column.group.value : null;
+const groupLaneValue = (lane: KanbanBoardLane) =>
+  lane.type === "group" ? lane.group.value : null;
+
+describe("kanban assignee subgroup", () => {
+  const assigneeSubgroupDefinition = () =>
+    resolveWorkspaceKanbanSubgroup(
+      getInternalPropertyId("assignee"),
+      getInternalPropertyId("status"),
+      schemaFor(),
+    );
+
+  test("an unassigned row has no lane values", () => {
+    const row = entity("task-1", "task");
+
+    expect(resolveWorkspaceKanbanAssigneeLaneValues(row)).toEqual([]);
+  });
+
+  test("a two-assignee row's lane values fan out over every assignee", () => {
+    const row = entity("task-1", "task");
+    row.assignees = [
+      { userId: "user-1", name: "Anna Nováková", image: null },
+      { userId: "user-2", name: "Petr Svoboda", image: null },
+    ];
+
+    expect(resolveWorkspaceKanbanAssigneeLaneValues(row)).toEqual([
+      "workspace-user:user-1",
+      "workspace-user:user-2",
+    ]);
+  });
+
+  test("lane options come from the loaded rows, ordered by label", () => {
+    const first = entity("task-1", "task");
+    first.assignees = [{ userId: "user-2", name: "Petr Svoboda", image: null }];
+    const second = entity("task-2", "task");
+    second.assignees = [
+      {
+        userId: "user-1",
+        name: "Anna Nováková",
+        image: "https://example.test/anna.jpg",
+      },
+    ];
+    const subgroup = resolveWorkspaceKanbanDynamicSubgroup(
+      assigneeSubgroupDefinition(),
+      [first, second],
+    );
+
+    expect(resolveKanbanGroupOptions(subgroup)).toEqual([
+      {
+        value: "workspace-user:user-1",
+        label: "Anna Nováková",
+        image: "https://example.test/anna.jpg",
+      },
+      { value: "workspace-user:user-2", label: "Petr Svoboda", image: null },
+    ]);
+  });
+
+  test("the group value reports the first assignee, null when unassigned", () => {
+    const definition = assigneeSubgroupDefinition();
+    const assigned = entity("task-1", "task");
+    assigned.assignees = [
+      { userId: "user-1", name: "Anna", image: null },
+      { userId: "user-2", name: "Petr", image: null },
+    ];
+    const unassigned = entity("task-2", "task");
+
+    expect(resolveWorkspaceKanbanGroupValue(definition, assigned)).toBe(
+      "workspace-user:user-1",
+    );
+    expect(resolveWorkspaceKanbanGroupValue(definition, unassigned)).toBeNull();
+  });
+
+  test("cards may move between assignee lanes unless the task is read-only", () => {
+    const definition = assigneeSubgroupDefinition();
+    const row = entity("task-1", "task");
+
+    expect(
+      canMoveCardToSubgroupLane({
+        subgroup: definition,
+        entity: row,
+        targetLaneValue: "workspace-user:user-9",
+      }),
+    ).toBe(true);
+
+    row.readOnly = true;
+    expect(
+      canMoveCardToSubgroupLane({
+        subgroup: definition,
+        entity: row,
+        targetLaneValue: "workspace-user:user-9",
+      }),
+    ).toBe(false);
+  });
+
+  test("a two-assignee row appears in both of its lanes' cells", () => {
+    const shared = entity("task-1", "task");
+    shared.status = "open";
+    shared.assignees = [
+      { userId: "user-1", name: "Anna", image: null },
+      { userId: "user-2", name: "Petr", image: null },
+    ];
+    const unassigned = entity("task-2", "task");
+    unassigned.status = "open";
+
+    const subgroup = resolveWorkspaceKanbanDynamicSubgroup(
+      assigneeSubgroupDefinition(),
+      [shared, unassigned],
+    );
+    const matrix = buildKanbanAssigneeMatrix({
+      group: groupingFor(getInternalPropertyId("status")),
+      assigneeSubgroup: subgroup,
+      rows: [shared, unassigned],
+      uncategorizedLabel: "Unassigned",
+    });
+
+    const openColumnCells = matrix.cells.filter(
+      (cell) => groupColumnValue(cell.coordinate.column) === "open",
+    );
+    const rowIdsByLane = new Map(
+      openColumnCells.map((cell) => [
+        groupLaneValue(cell.coordinate.lane),
+        cell.rows.map((row) => row.entityId),
+      ]),
+    );
+
+    expect(rowIdsByLane.get("workspace-user:user-1")).toEqual([
+      toSafeId<"entity">("task-1"),
+    ]);
+    expect(rowIdsByLane.get("workspace-user:user-2")).toEqual([
+      toSafeId<"entity">("task-1"),
+    ]);
+    expect(rowIdsByLane.get(null)).toEqual([toSafeId<"entity">("task-2")]);
+    // The row repeats across lane cells, but the board's scoped-row list
+    // stays deduplicated: one entry per row.
+    expect(matrix.rows.map((row) => row.entityId)).toEqual([
+      toSafeId<"entity">("task-1"),
+      toSafeId<"entity">("task-2"),
+    ]);
+  });
+
+  test("drop intent: lane X to lane Y removes X and adds Y", () => {
+    expect(
+      resolveAssigneeLaneDropIntent(
+        "workspace-user:user-1",
+        "workspace-user:user-2",
+      ),
+    ).toEqual({ removeUserId: "user-1", addUserId: "user-2" });
+  });
+
+  test("drop intent: Unassigned to Y only adds Y", () => {
+    expect(
+      resolveAssigneeLaneDropIntent(null, "workspace-user:user-2"),
+    ).toEqual({ removeUserId: null, addUserId: "user-2" });
+  });
+
+  test("drop intent: X to Unassigned only removes X", () => {
+    expect(
+      resolveAssigneeLaneDropIntent("workspace-user:user-1", null),
+    ).toEqual({ removeUserId: "user-1", addUserId: null });
+  });
+
+  test("drop intent: staying in the same lane calls for nothing", () => {
+    expect(
+      resolveAssigneeLaneDropIntent(
+        "workspace-user:user-1",
+        "workspace-user:user-1",
+      ),
+    ).toEqual({ removeUserId: null, addUserId: null });
+    expect(resolveAssigneeLaneDropIntent(null, null)).toEqual({
+      removeUserId: null,
+      addUserId: null,
+    });
+  });
+
+  test("drop intent: a two-assignee row dragged from its second assignee's lane removes the second, not the first", () => {
+    const row = entity("task-1", "task");
+    row.assignees = [
+      { userId: "user-1", name: "Anna", image: null },
+      { userId: "user-2", name: "Petr", image: null },
+    ];
+    // The card was rendered in (and dragged from) user-2's lane, not the
+    // first-assignee lane `resolveWorkspaceKanbanGroupValue` would report.
+    const sourceLaneValue = "workspace-user:user-2";
+
+    const intent = resolveAssigneeLaneDropIntent(
+      sourceLaneValue,
+      "workspace-user:user-3",
+    );
+
+    expect(intent).toEqual({ removeUserId: "user-2", addUserId: "user-3" });
+    // The row still carries both original assignees until the mutation
+    // runs; this only proves the intent never reaches for the first one.
+    expect(row.assignees.map((a) => a.userId)).toEqual(["user-1", "user-2"]);
   });
 });

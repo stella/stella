@@ -113,6 +113,7 @@ describe("buildEntityMentionOption", () => {
       sortOrder: null,
       activeEditBy: null,
       cellMetadata: {},
+      assignees: [],
       fields: {
         [toSafeId<"property">("file")]: {
           id: toSafeId<"field">("field_1"),
