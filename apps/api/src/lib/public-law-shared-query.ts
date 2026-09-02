@@ -2,6 +2,7 @@ export const PUBLIC_LAW_SHARED_QUERY = {
   caseLawAnalysis: "case-law.analysis",
   caseLawBrowseFacets: "case-law.browse-facets",
   caseLawCorpusIndexRehydration: "case-law.corpus-index-rehydration",
+  caseLawCorpusStatus: "case-law.corpus-status",
   caseLawDecisionRead: "case-law.decision-read",
   caseLawDecisionTextPresence: "case-law.decision-text-presence",
   caseLawDocumentContext: "case-law.document-context",

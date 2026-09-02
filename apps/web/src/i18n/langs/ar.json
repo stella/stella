@@ -2986,6 +2986,8 @@
     "databaseUpToDate": "محدّثة",
     "enteringIntoForce": "يدخل حيز النفاذ قريبًا",
     "inForceFrom": "نافذ اعتبارًا من {date}",
+    "noRecentSearches": "لا توجد عمليات بحث بعد",
+    "noSignals": "لا توجد إشارات بعد",
     "prompt": "عمّ تبحث؟",
     "recentlyInForce": "دخل حيز النفاذ مؤخرًا",
     "scopeLabel": "البحث في",

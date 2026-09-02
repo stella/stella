@@ -27,6 +27,7 @@ import {
   LANDING_ROW_CLASS,
   LANDING_SECTION_HEADING_CLASS,
   LandingButton,
+  LandingEmpty,
   LandingGreeting,
   LandingItemText,
   LandingLayout,
@@ -51,10 +52,13 @@ import {
   openDecisionMatch,
 } from "@/features/case-law/open-decision-match";
 import {
+  caseLawCorpusStatusOptions,
   decisionFacetsOptions,
   latestDecisionsOptions,
 } from "@/features/case-law/queries/decisions";
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
+import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
+import { formatValidityDate } from "@/features/statutes/statute-format";
 import {
   parseStatuteQuery,
   type StatuteQueryIntent,
@@ -67,6 +71,7 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
+import { recordLawSearch, useLawSearchHistory } from "@/lib/law-search-history";
 import { pageTitle } from "@/lib/page-title";
 import {
   createLegalCollectionJsonLd,
@@ -74,6 +79,7 @@ import {
   createPublicLawHead,
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { formatRelativeTime } from "@/lib/relative-time";
 import {
   LAW_HOME_JURISDICTION_CODES,
   type LawScope,
@@ -82,10 +88,6 @@ import {
 } from "@/routes/law/-law-home/jurisdictions";
 import { LawDatabaseStatus } from "@/routes/law/-law-home/law-database-status";
 import { LawEntryBox } from "@/routes/law/-law-home/law-entry-box";
-import {
-  PLACEHOLDER_RECENT_SEARCHES,
-  PLACEHOLDER_SIGNALS,
-} from "@/routes/law/-law-home/law-home-placeholders";
 import {
   type LawHomeScope,
   LawScopePicker,
@@ -96,6 +98,9 @@ const MAX_QUERY_LENGTH = 256;
 
 /** Decisions per court in the top-courts column: a sample, not a list. */
 const DECISIONS_PER_COURT = 2;
+
+/** Acts per side of the legislation shelf in the signals column. */
+const ACTS_PER_SHELF_SIDE = 3;
 
 /** Rows per column while the route's own data is still in flight. */
 const PENDING_ROW_KEYS = ["a", "b", "c"] as const;
@@ -183,12 +188,17 @@ export const Route = createFileRoute("/law/")({
   },
   loader: async ({ context: { queryClient }, deps }) => {
     const scope = caseLawCountryScope(deps.country);
+    const statuteCountry = statuteCountryOf(scope);
     const [latest] = await Promise.all([
       scope === undefined
         ? Promise.resolve(null)
         : ensureRouteQueryData(queryClient, latestDecisionsOptions(scope)),
       // Unscoped: the pill offers every jurisdiction the corpus holds.
       ensureRouteQueryData(queryClient, decisionFacetsOptions()),
+      ensureRouteQueryData(queryClient, caseLawCorpusStatusOptions()),
+      scope === undefined || statuteCountry === null
+        ? Promise.resolve(null)
+        : ensureRouteQueryData(queryClient, legislationShelfOptions(scope)),
     ]);
 
     return {
@@ -323,6 +333,11 @@ function LawHome() {
     ...latestDecisionsOptions(scope ?? ""),
     enabled: scope !== undefined,
   });
+  const { data: shelf } = useQuery({
+    ...legislationShelfOptions(scope ?? ""),
+    enabled: scope !== undefined && statuteCountry !== null,
+  });
+  const history = useLawSearchHistory();
 
   const countryName = (code: string): string => {
     const region = caseLawCountryRegion(code);
@@ -341,6 +356,7 @@ function LawHome() {
     if (trimmed.length === 0) {
       return;
     }
+    recordLawSearch(trimmed);
 
     if (
       statuteCountry !== null &&
@@ -383,12 +399,39 @@ function LawHome() {
   };
 
   const topCourtRows =
-    latest?.courts.flatMap((group) =>
-      group.decisions.slice(0, DECISIONS_PER_COURT).map((decision) => ({
-        decision,
-        court: group.court,
-      })),
-    ) ?? [];
+    latest === undefined
+      ? []
+      : latest.courts.flatMap((group) =>
+          group.decisions.slice(0, DECISIONS_PER_COURT).map((decision) => ({
+            decision,
+            court: group.court,
+          })),
+        );
+  // What moved in the law lately: acts that just came into force, then acts
+  // about to. Court signals join here once the corpus reports them.
+  const signalRows =
+    shelf === undefined
+      ? []
+      : [
+          ...shelf.recentlyInForce
+            .slice(0, ACTS_PER_SHELF_SIDE)
+            .map((item) => ({ item, side: "recentlyInForce" as const })),
+          ...shelf.enteringIntoForce
+            .slice(0, ACTS_PER_SHELF_SIDE)
+            .map((item) => ({ item, side: "enteringIntoForce" as const })),
+        ];
+  const signalLine = (
+    side: "enteringIntoForce" | "recentlyInForce",
+    validFrom: string | null,
+  ): string | null => {
+    const date = formatValidityDate(validFrom, format);
+    if (date === null) {
+      return null;
+    }
+    return side === "recentlyInForce"
+      ? t("statutes.inForceSince", { date })
+      : t("lawHome.inForceFrom", { date });
+  };
 
   return (
     <LandingLayout
@@ -489,17 +532,40 @@ function LawHome() {
       )}
       <LandingSection
         heading={
-          <span className={LANDING_SECTION_HEADING_CLASS}>
-            <ActivityIcon className="size-4" />
-            {t("lawHome.signals")}
-          </span>
+          statuteCountry === null ? (
+            <span className={LANDING_SECTION_HEADING_CLASS}>
+              <ActivityIcon className="size-4" />
+              {t("lawHome.signals")}
+            </span>
+          ) : (
+            <Link
+              className={LANDING_SECTION_HEADING_CLASS}
+              params={{ country: statuteCountry }}
+              to="/law/$country/statutes"
+            >
+              <ActivityIcon className="size-4" />
+              {t("lawHome.signals")}
+            </Link>
+          )
         }
       >
-        {PLACEHOLDER_SIGNALS.map((signal) => (
-          <div className="px-2 py-1.5" key={signal.title}>
-            <LandingItemText meta={signal.meta} title={signal.title} />
-          </div>
-        ))}
+        {signalRows.length > 0 && statuteCountry !== null ? (
+          signalRows.map(({ item, side }) => (
+            <Link
+              className={LANDING_ROW_CLASS}
+              key={item.id}
+              params={{ country: statuteCountry, documentId: item.id }}
+              to="/law/$country/statutes/$documentId"
+            >
+              <LandingItemText
+                meta={signalLine(side, item.versionValidFrom)}
+                title={item.title}
+              />
+            </Link>
+          ))
+        ) : (
+          <LandingEmpty>{t("lawHome.noSignals")}</LandingEmpty>
+        )}
       </LandingSection>
       <LandingSection
         heading={
@@ -509,15 +575,19 @@ function LawHome() {
           </span>
         }
       >
-        {PLACEHOLDER_RECENT_SEARCHES.map((search) => (
-          <LandingButton
-            icon={<SearchIcon className="size-4" />}
-            key={search.query}
-            meta={search.when}
-            onClick={() => rerunSearch(search.query)}
-            title={search.query}
-          />
-        ))}
+        {history.length > 0 ? (
+          history.map((entry) => (
+            <LandingButton
+              icon={<SearchIcon className="size-4" />}
+              key={entry.query}
+              meta={formatRelativeTime(entry.at)}
+              onClick={() => rerunSearch(entry.query)}
+              title={entry.query}
+            />
+          ))
+        ) : (
+          <LandingEmpty>{t("lawHome.noRecentSearches")}</LandingEmpty>
+        )}
       </LandingSection>
     </LandingLayout>
   );

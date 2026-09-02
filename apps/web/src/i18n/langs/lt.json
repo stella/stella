@@ -2986,6 +2986,8 @@
     "databaseUpToDate": "Atnaujinta",
     "enteringIntoForce": "Netrukus įsigalios",
     "inForceFrom": "Įsigalioja {date}",
+    "noRecentSearches": "Paieškų dar nėra",
+    "noSignals": "Signalų dar nėra",
     "prompt": "Ko ieškote?",
     "recentlyInForce": "Neseniai įsigaliojo",
     "scopeLabel": "Ieškoti",

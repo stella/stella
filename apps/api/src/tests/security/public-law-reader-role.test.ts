@@ -26,6 +26,7 @@ import {
   readSitemapBucketShards,
   readSitemapDecisionAlternates,
 } from "@/api/handlers/case-law/decisions/sitemap";
+import { readCaseLawCorpusStatusQuery } from "@/api/handlers/case-law/decisions/status";
 import { readNonRedistributableLegislationSourceIdsQuery } from "@/api/handlers/legislation/non-redistributable-sources";
 import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -635,6 +636,9 @@ describe("public-law reader role", () => {
         exercised.add(
           readNonRedistributableCaseLawSourceIdsQuery.publicLawSharedQuery,
         );
+
+        await readCaseLawCorpusStatusQuery(tx);
+        exercised.add(readCaseLawCorpusStatusQuery.publicLawSharedQuery);
 
         await readNonRedistributableLegislationSourceIdsQuery(tx);
         exercised.add(

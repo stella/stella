@@ -1,32 +1,32 @@
+import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import Tooltip from "@/components/tooltip";
+import { caseLawCorpusStatusOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
-import { parseDeterministicDate } from "@/lib/deterministic-date";
-import { PLACEHOLDER_DATABASE_STATUS } from "@/routes/law/-law-home/law-home-placeholders";
+import { formatFullTimestamp } from "@/lib/relative-time";
 
 /**
  * The corpus's freshness, where the chat's status row keeps its meter: a
  * green dot and one word, with the count and the last update on hover.
+ * Nothing is shown until the status is known; a dot that cannot say when
+ * would be a decoration.
  */
 export const LawDatabaseStatus = () => {
   const t = useTranslations();
   const format = useFormatter();
-  const updatedAt = parseDeterministicDate(
-    PLACEHOLDER_DATABASE_STATUS.updatedAt,
-  );
+  const { data: status } = useQuery(caseLawCorpusStatusOptions());
+
+  const updatedAt = status?.updatedAt ?? null;
+  if (status === undefined || updatedAt === null) {
+    return null;
+  }
 
   return (
     <Tooltip
       content={t("lawHome.databaseStatus", {
-        count: format.number(PLACEHOLDER_DATABASE_STATUS.entries),
-        date:
-          updatedAt === null
-            ? PLACEHOLDER_DATABASE_STATUS.updatedAt
-            : format.dateTime(updatedAt, {
-                dateStyle: "medium",
-                timeStyle: "short",
-              }),
+        count: format.number(status.decisions),
+        date: formatFullTimestamp(updatedAt),
       })}
       render={
         <span className="inline-flex cursor-default items-center gap-1.5 text-[11px]" />

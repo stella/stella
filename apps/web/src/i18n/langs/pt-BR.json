@@ -2986,6 +2986,8 @@
     "databaseUpToDate": "Atualizado",
     "enteringIntoForce": "Entrada em vigor em breve",
     "inForceFrom": "Em vigor a partir de {date}",
+    "noRecentSearches": "Ainda não há pesquisas",
+    "noSignals": "Ainda não há sinais",
     "prompt": "O que você procura?",
     "recentlyInForce": "Em vigor recentemente",
     "scopeLabel": "Pesquisar em",

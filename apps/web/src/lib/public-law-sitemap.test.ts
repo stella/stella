@@ -630,6 +630,7 @@ describe("public law sitemap", () => {
 
     expect(source).toContain("validateSearch: searchSchema");
     expect(source).toContain("latestDecisionsOptions(scope)");
+    expect(source).toContain("legislationShelfOptions(scope)");
     expect(source).toContain("createLegalCollectionJsonLd");
     expect(source).toContain("CaseLawBrowseLinks");
   });

@@ -2986,6 +2986,8 @@
     "databaseUpToDate": "Ajakohane",
     "enteringIntoForce": "Peagi jõustuv",
     "inForceFrom": "Jõustub {date}",
+    "noRecentSearches": "Otsinguid veel pole",
+    "noSignals": "Signaale veel pole",
     "prompt": "Mida otsite?",
     "recentlyInForce": "Hiljuti jõustunud",
     "scopeLabel": "Otsi",

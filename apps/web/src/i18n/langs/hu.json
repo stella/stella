@@ -2986,6 +2986,8 @@
     "databaseUpToDate": "Naprakész",
     "enteringIntoForce": "Hamarosan hatályba lép",
     "inForceFrom": "Hatálybalépés: {date}",
+    "noRecentSearches": "Még nincsenek keresések",
+    "noSignals": "Még nincsenek jelzések",
     "prompt": "Mit keres?",
     "recentlyInForce": "Nemrég hatályba lépett",
     "scopeLabel": "Keresés itt",

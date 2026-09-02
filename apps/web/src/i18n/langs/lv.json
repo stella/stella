@@ -2986,6 +2986,8 @@
     "databaseUpToDate": "Aktuāls",
     "enteringIntoForce": "Drīzumā stāsies spēkā",
     "inForceFrom": "Stājas spēkā {date}",
+    "noRecentSearches": "Meklējumu vēl nav",
+    "noSignals": "Signālu vēl nav",
     "prompt": "Ko jūs meklējat?",
     "recentlyInForce": "Nesen stājās spēkā",
     "scopeLabel": "Meklēt",

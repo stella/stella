@@ -108,8 +108,7 @@ export const legislationShelfOptions = (country: string) =>
         fetch: { signal },
       });
 
-      const data = unwrapEden(response);
-      assertPublicLawApiData(data, "readPublicLegislationShelf");
+      const data = unwrapPublicLawEden(response, "readPublicLegislationShelf");
 
       return data;
     },

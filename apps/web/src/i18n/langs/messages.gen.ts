@@ -2989,6 +2989,8 @@ type Messages = {
     "databaseUpToDate": "Up to date";
     "enteringIntoForce": "Entering into force";
     "inForceFrom": "In force from {date}";
+    "noRecentSearches": "No searches yet";
+    "noSignals": "No signals yet";
     "prompt": "What are you looking for?";
     "recentlyInForce": "Recently in force";
     "scopeLabel": "Search in";

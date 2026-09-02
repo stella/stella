@@ -2986,6 +2986,8 @@
     "databaseUpToDate": "Aktuálne",
     "enteringIntoForce": "Čoskoro nadobudne účinnosť",
     "inForceFrom": "Účinné od {date}",
+    "noRecentSearches": "Zatiaľ žiadne vyhľadávania",
+    "noSignals": "Zatiaľ žiadne signály",
     "prompt": "Čo hľadáte?",
     "recentlyInForce": "Nedávno nadobudlo účinnosť",
     "scopeLabel": "Hľadať v",

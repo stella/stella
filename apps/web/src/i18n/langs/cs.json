@@ -2986,6 +2986,8 @@
     "databaseUpToDate": "Aktuální",
     "enteringIntoForce": "Brzy nabude účinnosti",
     "inForceFrom": "Účinné od {date}",
+    "noRecentSearches": "Zatím žádná hledání",
+    "noSignals": "Zatím žádné signály",
     "prompt": "Co hledáte?",
     "recentlyInForce": "Nedávno nabylo účinnosti",
     "scopeLabel": "Hledat v",
