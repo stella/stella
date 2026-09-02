@@ -2391,6 +2391,7 @@
     },
     "openChat": "Atidaryti pokalbį",
     "reopenTab": "Iš naujo atidaryti {name}",
+    "resizePane": "Keisti polangio dydį",
     "review": {
       "actionNeeded": "Reikia veiksmų",
       "addComment": "Pridėti kaip komentarą",

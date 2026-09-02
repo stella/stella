@@ -2391,6 +2391,7 @@
     },
     "openChat": "Atvērt tērzēšanu",
     "reopenTab": "Atkārtoti atvērt {name}",
+    "resizePane": "Mainīt paneļa izmēru",
     "review": {
       "actionNeeded": "Nepieciešama rīcība",
       "addComment": "Pievienot kā komentāru",

@@ -2391,6 +2391,7 @@
     },
     "openChat": "Otwórz czat",
     "reopenTab": "Otwórz ponownie {name}",
+    "resizePane": "Zmień rozmiar panelu",
     "review": {
       "actionNeeded": "Wymaga działania",
       "addComment": "Dodaj jako komentarz",

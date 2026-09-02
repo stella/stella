@@ -199,7 +199,7 @@ test.describe("public hydration", () => {
     await expect(decisionTitle).toHaveCount(1);
     await expect(decisionTitle).toHaveText(/\S/u);
     const routeErrorTitle = page.locator("#route-error-title");
-    const inspector = page.locator('[data-side="right"]');
+    const inspector = page.locator('[data-slot="inspector-dock"]');
     await expect(routeErrorTitle).toHaveCount(0);
     await expect(inspector).toHaveAttribute("data-state", "expanded");
     await expect(page.locator('[data-slot="sidebar"]').first()).toHaveAttribute(

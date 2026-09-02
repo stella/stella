@@ -2391,6 +2391,7 @@
     },
     "openChat": "Abrir bate-papo",
     "reopenTab": "Reabrir {name}",
+    "resizePane": "Redimensionar painel",
     "review": {
       "actionNeeded": "Requer ação",
       "addComment": "Adicionar como comentário",

@@ -2394,6 +2394,7 @@ type Messages = {
     };
     "openChat": "Open chat";
     "reopenTab": "Reopen {name}";
+    "resizePane": "Resize pane";
     "review": {
       "actionNeeded": "Action needed";
       "addComment": "Add as comment";

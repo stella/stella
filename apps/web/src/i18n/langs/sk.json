@@ -2391,6 +2391,7 @@
     },
     "openChat": "Otvoriť chat",
     "reopenTab": "Znova otvoriť {name}",
+    "resizePane": "Zmeniť veľkosť panela",
     "review": {
       "actionNeeded": "Na riešenie",
       "addComment": "Pridať ako komentár",

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useRef, useState } from "react";
-import type { MouseEvent, PointerEvent } from "react";
+import type { MouseEvent } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import {
@@ -19,8 +19,11 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import {
+  INSPECTOR_RAIL_WIDTH,
+  InspectorDock,
   SIDE_RAIL_ICON_BUTTON_SIZE,
   SIDE_RAIL_WIDTH,
+  useInspectorPaneWidth,
 } from "@stll/ui/inspector";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
@@ -80,11 +83,7 @@ import {
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { loadAuthContext } from "@/routes/-auth-context";
-import {
-  INSPECTOR_PANE_DEFAULT_WIDTH,
-  resolveInspectorPaneWidth,
-  shouldForceSidebarCollapsed,
-} from "@/routes/-inspector-pane-width";
+import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
 
 const MEMORY_ROUTE_PATH = "/settings/account/memory";
 
@@ -603,12 +602,6 @@ function ProtectedContent() {
   );
 }
 
-// Matches SIDE_RAIL_WIDTH (`w-12` = 48px) so the wrapper width
-// equals the rail's actual rendered width. Earlier this was 40,
-// leaving the rail 8px wider than its wrapper and pushing the
-// toast / find-replace right-offset CSS vars under the visible rail.
-const INSPECTOR_RAIL_WIDTH = 48;
-
 type InspectorWorkspaceResolutionInput = {
   activeId: string | null;
   routeWorkspaceId: string | undefined;
@@ -699,52 +692,24 @@ function WorkspaceInspectorSidePanel() {
     routeWorkspaceId,
     tabs,
   });
-  // The width the user dragged to. What actually renders is this clamped
-  // against the room left beside the sidebar, so shrinking the window or
-  // expanding the sidebar takes space back from the pane instead of
-  // crushing the content column.
-  const [desiredWidth, setDesiredWidth] = useState(
-    INSPECTOR_PANE_DEFAULT_WIDTH,
-  );
+  // The pane's width policy (the dragged width, its clamp against the room
+  // left beside the sidebar, pointer and keyboard resizing) is the shared
+  // inspector's; this panel only supplies the sidebar's inline size.
   const sidebarWidth = useSidebarInlineSize();
   const viewportWidth = useViewportWidth();
-  const width = resolveInspectorPaneWidth({
-    desiredWidth,
+  const { resetWidth, resizeHandleProps, width } = useInspectorPaneWidth({
     sidebarWidth,
     viewportWidth,
   });
-  const isDragging = useRef(false);
   // Re-run the offset effect once the new bundle applies: `loadedLang` (not
   // `lang`) is what flips document.documentElement.dir, so depending on it
   // reads the correct direction.
   const loadedLang = useI18nStore((s) => s.loadedLang);
 
-  const handlePointerDown = (e: PointerEvent<HTMLElement>) => {
-    e.preventDefault();
-    isDragging.current = true;
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-
-  const handlePointerMove = (e: PointerEvent<HTMLElement>) => {
-    if (!isDragging.current) {
-      return;
-    }
-    // The pane docks to the inline-end edge: that's the right in LTR
-    // (width = distance from the right) and the left in RTL (width =
-    // distance from the left). Without the RTL branch the delta is
-    // inverted and the drag oscillates.
-    const isRtl = document.documentElement.dir === "rtl";
-    setDesiredWidth(isRtl ? e.clientX : window.innerWidth - e.clientX);
-  };
-
-  const handlePointerUp = () => {
-    isDragging.current = false;
-  };
-
   // Rail is always shown; only when there are real tabs and the
   // user hasn't minimized do we widen to the full pane width.
-  const widthPx = `${showPaneContent ? width : INSPECTOR_RAIL_WIDTH}px`;
-  const reservedInlineEndWidthPx = isMobile ? "0px" : widthPx;
+  const dockWidth = showPaneContent ? width : INSPECTOR_RAIL_WIDTH;
+  const reservedInlineEndWidthPx = isMobile ? "0px" : `${dockWidth}px`;
 
   useExternalSyncEffect(() => {
     // The toast offset is consumed via a logical `end-` utility, so the same
@@ -812,31 +777,20 @@ function WorkspaceInspectorSidePanel() {
     );
   }
 
+  // The panel owns its rail (the tab strip lives inside `InspectorPanel`), so
+  // the dock gets the whole panel as its content and no `rail` of its own;
+  // the collapsed width is the rail's, passed in as the dock's width.
   return (
-    <div
-      className="text-sidebar-foreground hidden md:block"
-      data-side="right"
-      data-state={showPaneContent ? "expanded" : "collapsed"}
+    <InspectorDock
+      resizeHandleLabel={t("inspector.resizePane")}
+      resizeHandleProps={resizeHandleProps}
+      showPaneContent={showPaneContent}
+      width={dockWidth}
+      onResetWidth={resetWidth}
     >
-      <div className="bg-sidebar relative" style={{ width: widthPx }} />
-      <div
-        className="fixed inset-y-0 end-0 z-10 hidden h-svh md:flex"
-        style={{ width: widthPx }}
-      >
-        {showPaneContent && (
-          <div
-            className="hover:bg-border active:bg-border absolute inset-y-0 -start-px z-20 flex w-1 cursor-col-resize items-center justify-center border-s"
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-          />
-        )}
-        <div className="bg-sidebar flex h-full w-full flex-col">
-          <Suspense fallback={<InspectorRailFallback />}>
-            <LazyInspectorPanel workspaceId={activeWorkspaceId} />
-          </Suspense>
-        </div>
-      </div>
-    </div>
+      <Suspense fallback={<InspectorRailFallback />}>
+        <LazyInspectorPanel workspaceId={activeWorkspaceId} />
+      </Suspense>
+    </InspectorDock>
   );
 }
