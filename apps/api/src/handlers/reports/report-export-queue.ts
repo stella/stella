@@ -63,7 +63,10 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
-import type { MissingRequiredField } from "@/api/lib/templates/template-fill-service";
+import type {
+  AiFillCollaborators,
+  MissingRequiredField,
+} from "@/api/lib/templates/template-fill-service";
 import {
   fillStoredTemplateDocx,
   fillTemplateDocx,
@@ -626,11 +629,16 @@ const renderSpecReport = async ({
       return { usageRejection };
     }
   }
+  // A spec report renders its narrative directly rather than through the fill
+  // service, so it resolves the collaborators itself — and only when the
+  // narrative is actually requested.
   const rendered = await renderReportSpec({
     spec: builtin.spec,
     report,
     prompts: builtin.prompts,
-    generateAiValue: generators.generateAiValue,
+    generateAiValue: aiNarrative
+      ? (await generators.aiCollaborators?.())?.generateAiValue
+      : undefined,
     aiNarrative,
     linkBase,
   });
@@ -644,12 +652,12 @@ const renderSpecReport = async ({
   };
 };
 
-/** The AI generator bundle passed into the fill pipeline; every field is
- *  optional so a deterministic export can pass `{}`. */
+/** The AI hooks passed into the fill pipeline; both are optional so a
+ *  deterministic export can pass `{}`. */
 type ReportAiGenerators = {
-  generateAiValue?: ReturnType<typeof buildAiFieldGenerator> | undefined;
-  decideAiCondition?: ReturnType<typeof buildAiConditionDecider> | undefined;
-  adaptAiValue?: ReturnType<typeof buildAiOccurrenceAdapter> | undefined;
+  aiCollaborators?:
+    | (() => AiFillCollaborators | Promise<AiFillCollaborators>)
+    | undefined;
   assertUsageAvailable?: (() => Promise<unknown>) | undefined;
 };
 
@@ -690,32 +698,24 @@ const buildReportAiGenerators = ({
           })
       : undefined;
 
-  const skillContext = {
+  const shared = {
+    orgAIConfig,
     organizationId: actor.organizationId,
-    safeDb: actor.safeDb,
-    userId: actor.userId,
+    skillContext: {
+      organizationId: actor.organizationId,
+      safeDb: actor.safeDb,
+      userId: actor.userId,
+    },
+    aiAnalytics,
+    tenantWorkspaceIds: [actor.workspaceId],
   };
   return {
-    generateAiValue: buildAiFieldGenerator({
-      orgAIConfig,
-      organizationId: actor.organizationId,
-      skillContext,
-      aiAnalytics,
-      tenantWorkspaceIds: [actor.workspaceId],
-    }),
-    decideAiCondition: buildAiConditionDecider({
-      orgAIConfig,
-      organizationId: actor.organizationId,
-      skillContext,
-      aiAnalytics,
-      tenantWorkspaceIds: [actor.workspaceId],
-    }),
-    adaptAiValue: buildAiOccurrenceAdapter({
-      orgAIConfig,
-      organizationId: actor.organizationId,
-      skillContext,
-      aiAnalytics,
-      tenantWorkspaceIds: [actor.workspaceId],
+    // The fill service builds these only when the manifest declares an AI
+    // field, so a deterministic export never reaches the model layer.
+    aiCollaborators: () => ({
+      generateAiValue: buildAiFieldGenerator(shared),
+      decideAiCondition: buildAiConditionDecider(shared),
+      adaptAiValue: buildAiOccurrenceAdapter(shared),
     }),
     assertUsageAvailable,
   };
@@ -740,6 +740,7 @@ const fillReportDocx = async ({
       values,
       scopedDb: actor.scopedDb,
       organizationId: actor.organizationId,
+      requiredFields: "enforce",
       ...generators,
     });
   }
@@ -758,6 +759,7 @@ const fillReportDocx = async ({
     values,
     scopedDb: actor.scopedDb,
     organizationId: actor.organizationId,
+    requiredFields: "enforce",
     ...generators,
   });
 };

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -34,14 +35,17 @@ const config = {
 const fillTemplatePreview = createSafeRootHandler(
   config,
   async function* ({ safeDb, scopedDb, session, user, params, body }) {
-    return yield* fillPreviewLogic({
-      safeDb,
-      scopedDb,
-      organizationId: session.activeOrganizationId,
-      userId: user.id,
-      templateId: params.templateId,
-      body,
-    });
+    const preview = yield* Result.await(
+      fillPreviewLogic({
+        safeDb,
+        scopedDb,
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+        templateId: params.templateId,
+        body,
+      }),
+    );
+    return Result.ok(preview);
   },
 );
 

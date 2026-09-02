@@ -3,35 +3,19 @@ import { t } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { templateFills } from "@/api/db/schema";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { adaptAiFields } from "@/api/lib/docx/adapt-ai-fields";
-import {
-  buildAiConditionDecider,
-  buildAiFieldGenerator,
-  buildAiOccurrenceAdapter,
-} from "@/api/lib/docx/ai-field-generator";
-import { documentTextForAiFields } from "@/api/lib/docx/extract-text";
-import { createDispatchLookupResolver } from "@/api/lib/docx/lookup-fields";
-import { applyManifestFillSteps } from "@/api/lib/docx/manifest-fill-steps";
-import { fillTemplate } from "@/api/lib/docx/patch-template";
-import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
-import { resolveAiConditions } from "@/api/lib/docx/resolve-ai-conditions";
-import { resolveAiFields } from "@/api/lib/docx/resolve-ai-fields";
-import { readManifest } from "@/api/lib/docx/template-manifest";
-import { isTemplateData, type TemplateData } from "@/api/lib/docx/types";
+import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { containsNull } from "@/api/lib/templates/template-data";
-import { assertTemplateFillUsage } from "@/api/lib/templates/template-fill-usage";
-import { collectMissingRequiredFields } from "@/api/lib/templates/template-optional-defaults";
+import { fillTemplateDocx } from "@/api/lib/templates/template-fill-service";
+import { buildTemplateFillAiWiring } from "@/api/lib/templates/template-fill-usage";
 import { isTemplateOutputValid } from "@/api/lib/templates/validate-template-output";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
@@ -134,160 +118,44 @@ export const fillHandler = async ({
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
+  const sourceName = sanitizeFilename(file.name);
 
-  // Draft any AI-fillable fields (manifest fields with an aiPrompt) before fill,
-  // so an AI placeholder like "the scope of this power of attorney" is filled on
-  // download just as the chat fill tool fills it. A user-supplied value wins.
-  let fillData: TemplateData = parsed;
-  let fillBuffer: Buffer = buffer;
-  let adaptedPaths: readonly string[] = [];
-  const manifest = await readManifest(buffer);
-
-  // Reject before any AI/registry work runs: a required, user-entered field
-  // left absent or empty must never download as an invented value or a raw
-  // `{{marker}}`. This route always enforces the full contract (unlike
-  // fill-preview, whose live typing preview legitimately allows partial
-  // values).
-  if (manifest) {
-    const missingRequiredFields = collectMissingRequiredFields({
-      fields: manifest.fields,
-      policy: "enforce",
-      values: fillData,
-    });
-    if (missingRequiredFields.length > 0) {
-      return new Response(
-        JSON.stringify({
-          error: "missing_required_fields",
-          missingFields: missingRequiredFields,
-        }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
-    }
-  }
-
-  const hasAiDraftFields = manifest?.fields.some((field) => field.aiPrompt);
-  const hasAiAdaptFields = manifest?.fields.some((field) => field.aiAdapt);
-  // Loaded once for the AI draft/adapt steps below.
-  const orgAIConfig =
-    manifest && (hasAiDraftFields || hasAiAdaptFields)
-      ? await loadOrgAIConfig(organizationId)
-      : null;
-
-  // This download route streams its own Response, so a usage rejection is
-  // serialized to the same body the framework preflight emits (message plus
-  // usage detail) here.
-  const usageRejection = await assertTemplateFillUsage({
-    orgAIConfig,
-    hasAiFields: Boolean(hasAiDraftFields) || Boolean(hasAiAdaptFields),
+  const result = await fillTemplateDocx({
+    source: { name: sourceName, fileName: sourceName, buffer },
+    values: parsed,
+    scopedDb,
     organizationId,
-    userId,
-    safeDb,
-  });
-  if (usageRejection !== null) {
-    return usageRejectionResponse(usageRejection);
-  }
-
-  // Resolve registry lookups, assemble composite (multipart) values,
-  // evaluate formula (derived) fields, and check dependent (optionsFrom)
-  // selects before any AI step or substitution sees them (in place: a
-  // resolved value is a plain string, so the data stays valid TemplateData);
-  // a failing step rejects naming the field.
-  const stepError = await applyManifestFillSteps({
-    values: fillData,
-    manifest,
-    resolveLookup: createDispatchLookupResolver({
-      isRegistryEnabledForOrg: await buildIsRegistryEnabledForOrg({
-        organizationId,
-        scopedDb,
-      }),
+    // A required, user-entered field left absent or empty must never download
+    // as an invented value or a raw `{{marker}}`.
+    requiredFields: "enforce",
+    ...buildTemplateFillAiWiring({
+      organizationId,
+      userId,
+      safeDb,
+      feature: "templates.fill",
     }),
   });
-  if (stepError !== null) {
-    return new Response(JSON.stringify({ error: stepError }), {
+
+  if ("requiredFieldsRejection" in result) {
+    return new Response(
+      JSON.stringify({
+        error: "missing_required_fields",
+        missingFields: result.requiredFieldsRejection,
+      }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+  if ("usageRejection" in result) {
+    return usageRejectionResponse(result.usageRejection);
+  }
+  if ("error" in result) {
+    return new Response(JSON.stringify({ error: result.error }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  if (manifest && (hasAiDraftFields || hasAiAdaptFields)) {
-    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-      usageMetering: {
-        actionType: "chat",
-        organizationId,
-        safeDb,
-        serviceTier: "standard",
-        userId,
-        workspaceId: null,
-      },
-      feature: "templates.fill",
-      modelRole: "fast",
-      orgAIConfig,
-      properties: { organization_id: organizationId },
-      traceId: Bun.randomUUIDv7(),
-    });
-    if (hasAiDraftFields) {
-      const documentText = await documentTextForAiFields(
-        new Uint8Array(buffer),
-        manifest.fields,
-      );
-      const resolved = await resolveAiFields({
-        values: parsed,
-        fields: manifest.fields,
-        documentText,
-        // This route fills a raw uploaded DOCX via a root handler, so there is
-        // no workspace/matter scope to redact tenant ids against.
-        generate: buildAiFieldGenerator({
-          orgAIConfig,
-          organizationId,
-          skillContext: { organizationId, safeDb, userId },
-          aiAnalytics,
-          tenantWorkspaceIds: [],
-        }),
-      });
-      // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
-      // alongside the string drafts; resolveAiFields skips boolean fields.
-      const decided = await resolveAiConditions({
-        values: resolved,
-        fields: manifest.fields,
-        decide: buildAiConditionDecider({
-          orgAIConfig,
-          organizationId,
-          skillContext: { organizationId, safeDb, userId },
-          aiAnalytics,
-          tenantWorkspaceIds: [],
-        }),
-      });
-      if (isTemplateData(decided)) {
-        fillData = decided;
-      }
-    }
-    if (hasAiAdaptFields) {
-      // Rewrite each aiAdapt marker occurrence to fit its surrounding text
-      // (declension); the stub stays in fillData so uncovered occurrences
-      // still get the plain global substitution below.
-      const adapted = await adaptAiFields({
-        buffer,
-        fields: manifest.fields,
-        values: fillData,
-        adapt: buildAiOccurrenceAdapter({
-          orgAIConfig,
-          organizationId,
-          skillContext: { organizationId, safeDb, userId },
-          aiAnalytics,
-          tenantWorkspaceIds: [],
-        }),
-      });
-      fillBuffer = adapted.buffer;
-      adaptedPaths = adapted.adaptedPaths;
-    }
-  }
-
-  const result = await fillTemplate(fillBuffer, fillData);
-  // Adapted stubs no longer match a marker (each occurrence was already
-  // substituted), so they are not "unused" in any user-meaningful sense.
-  const unusedValues = result.unusedValues.filter(
-    (name) => !adaptedPaths.includes(name),
-  );
+  const { unusedValues } = result;
 
   const fillStatus =
     result.unmatchedPlaceholders.length > 0 ? "partial" : "success";
@@ -322,7 +190,7 @@ export const fillHandler = async ({
     if (
       !(await isTemplateOutputValid({
         buffer: docxBytes,
-        fileName: sanitizeFilename(file.name),
+        fileName: sourceName,
       }))
     ) {
       return new Response(
@@ -338,7 +206,7 @@ export const fillHandler = async ({
         docxBytes.byteOffset,
         docxBytes.byteOffset + docxBytes.byteLength,
       ),
-      sanitizeFilename(file.name),
+      sourceName,
       DOCX_MIME_TYPE,
     );
     if (Result.isError(pdfResult)) {
@@ -348,10 +216,9 @@ export const fillHandler = async ({
       });
     }
 
-    const sanitized = sanitizeFilename(file.name);
-    const pdfName = DOCX_EXT_RE.test(sanitized)
-      ? sanitized.replace(DOCX_EXT_RE, ".pdf")
-      : `${sanitized}.pdf`;
+    const pdfName = DOCX_EXT_RE.test(sourceName)
+      ? sourceName.replace(DOCX_EXT_RE, ".pdf")
+      : `${sourceName}.pdf`;
     return secureDocumentResponse({
       body: new Uint8Array(pdfResult.value.buffer),
       // Octet-stream, not application/pdf: see OCTET_STREAM_MIME_TYPE.

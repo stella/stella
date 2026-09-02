@@ -147,21 +147,37 @@ const fillTemplateToWorkspace = createSafeHandler(
       }
     }
 
-    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-      usageMetering: {
-        actionType: "chat",
+    // Built only when the manifest declares an AI field: the fill service
+    // defers this, so a deterministic fill opens no metered trace.
+    const aiCollaborators = () => {
+      const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+        usageMetering: {
+          actionType: "chat",
+          organizationId,
+          safeDb,
+          serviceTier: "standard",
+          userId: user.id,
+          workspaceId,
+        },
+        feature: "templates.fill",
+        modelRole: "fast",
+        orgAIConfig,
+        properties: { organization_id: organizationId },
+        traceId: Bun.randomUUIDv7(),
+      });
+      const shared = {
+        orgAIConfig,
         organizationId,
-        safeDb,
-        serviceTier: "standard",
-        userId: user.id,
-        workspaceId,
-      },
-      feature: "templates.fill",
-      modelRole: "fast",
-      orgAIConfig,
-      properties: { organization_id: organizationId },
-      traceId: Bun.randomUUIDv7(),
-    });
+        skillContext: { organizationId, safeDb, userId: user.id },
+        aiAnalytics,
+        tenantWorkspaceIds: [workspaceId],
+      };
+      return {
+        generateAiValue: buildAiFieldGenerator(shared),
+        decideAiCondition: buildAiConditionDecider(shared),
+        adaptAiValue: buildAiOccurrenceAdapter(shared),
+      };
+    };
 
     // The fill service runs this only when the manifest declares AI fields,
     // before any model call, so a deterministic fill never spends AI quota.
@@ -191,29 +207,10 @@ const fillTemplateToWorkspace = createSafeHandler(
             scopedDb,
             organizationId,
             workspaceId,
+            requiredFields: "enforce",
             clauseOverrides: body.clauseOverrides,
             assertUsageAvailable,
-            generateAiValue: buildAiFieldGenerator({
-              orgAIConfig,
-              organizationId,
-              skillContext: { organizationId, safeDb, userId: user.id },
-              aiAnalytics,
-              tenantWorkspaceIds: [workspaceId],
-            }),
-            decideAiCondition: buildAiConditionDecider({
-              orgAIConfig,
-              organizationId,
-              skillContext: { organizationId, safeDb, userId: user.id },
-              aiAnalytics,
-              tenantWorkspaceIds: [workspaceId],
-            }),
-            adaptAiValue: buildAiOccurrenceAdapter({
-              orgAIConfig,
-              organizationId,
-              skillContext: { organizationId, safeDb, userId: user.id },
-              aiAnalytics,
-              tenantWorkspaceIds: [workspaceId],
-            }),
+            aiCollaborators,
           }),
         catch: (cause) =>
           new HandlerError({

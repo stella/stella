@@ -813,41 +813,37 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   const orgAIConfig = await (
     context.testDependencies?.loadOrgAIConfig ?? loadOrgAIConfig
   )(context.organizationId);
-  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-    usageMetering: {
-      actionType: "chat",
+  // Built only when the manifest declares an AI field: the fill service defers
+  // this, so a deterministic fill opens no metered trace. fill_template is
+  // org-scoped (no matter binding), so there is no workspace id to redact
+  // tenant ids against.
+  const aiCollaborators = () => {
+    const shared = {
+      orgAIConfig,
       organizationId: context.organizationId,
-      safeDb: context.safeDb,
-      serviceTier: "standard",
-      userId: context.userId,
-      workspaceId: null,
-    },
-    feature: "templates.fill",
-    modelRole: "fast",
-    orgAIConfig,
-    properties: { organization_id: context.organizationId },
-    traceId: Bun.randomUUIDv7(),
-  });
-  // fill_template is org-scoped (no matter binding), so there is no
-  // workspace id to redact tenant ids against.
-  const generateAiValue = buildAiFieldGenerator({
-    orgAIConfig,
-    organizationId: context.organizationId,
-    aiAnalytics,
-    tenantWorkspaceIds: [],
-  });
-  const decideAiCondition = buildAiConditionDecider({
-    orgAIConfig,
-    organizationId: context.organizationId,
-    aiAnalytics,
-    tenantWorkspaceIds: [],
-  });
-  const adaptAiValue = buildAiOccurrenceAdapter({
-    orgAIConfig,
-    organizationId: context.organizationId,
-    aiAnalytics,
-    tenantWorkspaceIds: [],
-  });
+      aiAnalytics: createTanStackAIAnalyticsCallbacks({
+        usageMetering: {
+          actionType: "chat",
+          organizationId: context.organizationId,
+          safeDb: context.safeDb,
+          serviceTier: "standard",
+          userId: context.userId,
+          workspaceId: null,
+        },
+        feature: "templates.fill",
+        modelRole: "fast",
+        orgAIConfig,
+        properties: { organization_id: context.organizationId },
+        traceId: Bun.randomUUIDv7(),
+      }),
+      tenantWorkspaceIds: [],
+    };
+    return {
+      generateAiValue: buildAiFieldGenerator(shared),
+      decideAiCondition: buildAiConditionDecider(shared),
+      adaptAiValue: buildAiOccurrenceAdapter(shared),
+    };
+  };
 
   // Gate AI quota the same way the web/chat fill paths do: the service runs
   // this only when the manifest declares AI fields, before any model call, so a
@@ -879,10 +875,9 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
     values: parsed.output.values,
     scopedDb: context.scopedDb,
     organizationId: context.organizationId,
+    requiredFields: "enforce",
     assertUsageAvailable,
-    generateAiValue,
-    decideAiCondition,
-    adaptAiValue,
+    aiCollaborators,
   });
   if ("usageRejection" in filled) {
     return errorResult(filled.usageRejection.message);
@@ -1233,26 +1228,6 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
   const orgAIConfig = await (
     context.testDependencies?.loadOrgAIConfig ?? loadOrgAIConfig
   )(context.organizationId);
-  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-    usageMetering: {
-      actionType: "chat",
-      organizationId: context.organizationId,
-      safeDb: context.safeDb,
-      serviceTier: "standard",
-      userId: context.userId,
-      workspaceId,
-    },
-    feature: "templates.fill",
-    modelRole: "fast",
-    orgAIConfig,
-    properties: { organization_id: context.organizationId },
-    traceId: Bun.randomUUIDv7(),
-  });
-  const skillContext = {
-    organizationId: context.organizationId,
-    safeDb: context.safeDb,
-    userId: context.userId,
-  };
   const assertUsageAvailable =
     orgAIConfig || hasTanStackInstanceProvider()
       ? async () =>
@@ -1273,6 +1248,41 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     context.request === undefined
       ? renderDeadline
       : AbortSignal.any([context.request.signal, renderDeadline]);
+  // Built only when the manifest declares an AI field: the fill service defers
+  // this, so a deterministic fill opens no metered trace.
+  const aiCollaborators = () => {
+    const shared = {
+      orgAIConfig,
+      organizationId: context.organizationId,
+      skillContext: {
+        organizationId: context.organizationId,
+        safeDb: context.safeDb,
+        userId: context.userId,
+      },
+      aiAnalytics: createTanStackAIAnalyticsCallbacks({
+        usageMetering: {
+          actionType: "chat",
+          organizationId: context.organizationId,
+          safeDb: context.safeDb,
+          serviceTier: "standard",
+          userId: context.userId,
+          workspaceId,
+        },
+        feature: "templates.fill",
+        modelRole: "fast",
+        orgAIConfig,
+        properties: { organization_id: context.organizationId },
+        traceId: Bun.randomUUIDv7(),
+      }),
+      operationSignal,
+      tenantWorkspaceIds: [workspaceId],
+    };
+    return {
+      generateAiValue: buildAiFieldGenerator(shared),
+      decideAiCondition: buildAiConditionDecider(shared),
+      adaptAiValue: buildAiOccurrenceAdapter(shared),
+    };
+  };
   const filledResult = await Result.tryPromise(
     async () =>
       await withTimeout(
@@ -1286,32 +1296,10 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
             scopedDb: context.scopedDb,
             organizationId: context.organizationId,
             workspaceId,
+            requiredFields: "enforce",
             useRecording: "caller",
             assertUsageAvailable,
-            generateAiValue: buildAiFieldGenerator({
-              orgAIConfig,
-              organizationId: context.organizationId,
-              skillContext,
-              aiAnalytics,
-              operationSignal,
-              tenantWorkspaceIds: [workspaceId],
-            }),
-            decideAiCondition: buildAiConditionDecider({
-              orgAIConfig,
-              organizationId: context.organizationId,
-              skillContext,
-              aiAnalytics,
-              operationSignal,
-              tenantWorkspaceIds: [workspaceId],
-            }),
-            adaptAiValue: buildAiOccurrenceAdapter({
-              orgAIConfig,
-              organizationId: context.organizationId,
-              skillContext,
-              aiAnalytics,
-              operationSignal,
-              tenantWorkspaceIds: [workspaceId],
-            }),
+            aiCollaborators,
           }),
         {
           label: "save filled template render",

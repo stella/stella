@@ -95,6 +95,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      requiredFields: "enforce",
     });
 
     expect(result).toEqual({
@@ -117,6 +118,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "" },
       scopedDb: stubScopedDb(),
       organizationId,
+      requiredFields: "enforce",
     });
 
     expect("requiredFieldsRejection" in result).toBe(true);
@@ -130,6 +132,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "   " },
       scopedDb: stubScopedDb(),
       organizationId,
+      requiredFields: "enforce",
     });
 
     expect("requiredFieldsRejection" in result).toBe(true);
@@ -153,6 +156,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { persons: [{ member: "Alice" }, { member: "" }] },
       scopedDb: stubScopedDb(),
       organizationId,
+      requiredFields: "enforce",
     });
 
     expect(result).toEqual({
@@ -185,6 +189,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { persons: [{ member: "Alice" }, { member: "Bob" }] },
       scopedDb: stubScopedDb(),
       organizationId,
+      requiredFields: "enforce",
     });
 
     expect("requiredFieldsRejection" in result).toBe(false);
@@ -204,6 +209,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "Czech" },
       scopedDb: stubScopedDb(),
       organizationId,
+      requiredFields: "enforce",
     });
 
     expect("requiredFieldsRejection" in result).toBe(false);
@@ -230,7 +236,8 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
-      generateAiValue: async () => "Slovak",
+      requiredFields: "enforce",
+      aiCollaborators: async () => ({ generateAiValue: async () => "Slovak" }),
     });
 
     expect("requiredFieldsRejection" in result).toBe(false);
@@ -257,6 +264,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      requiredFields: "enforce",
     });
 
     // No matter is bound (no workspaceId), so the source field simply stays
@@ -272,9 +280,83 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      requiredFields: "enforce",
     });
 
     expect("requiredFieldsRejection" in result).toBe(false);
+  });
+});
+
+// The service owns the use counter, but a persistence caller that writes its
+// own atomic transaction (fill-by-id, save_filled_template) takes it over with
+// `useRecording: "caller"`. That option was silently dropped on the
+// stored-template path, so those callers bumped the counter twice per fill.
+
+describe("template use recording", () => {
+  const usedTemplateId = toSafeId<"template">("tmpl_use");
+
+  /** ScopedDb stub that counts the `templates` use-counter update. */
+  const countingScopedDb = (): {
+    scopedDb: ScopedDb;
+    updates: () => number;
+  } => {
+    let updates = 0;
+    const fakeTx = {
+      query: {
+        organizationSettings: { findFirst: async () => undefined },
+      },
+      update: () => {
+        updates += 1;
+        return { set: () => ({ where: async () => undefined }) };
+      },
+    };
+    // SAFETY: test stub; this fill touches only the registry-gate read and the
+    // use-counter update counted above.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const scopedDb = (async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(fakeTx)) as unknown as ScopedDb;
+    return { scopedDb, updates: () => updates };
+  };
+
+  test("bumps the use counter once by default", async () => {
+    const buffer = await makeManifestDocx([requiredTextField]);
+    const { scopedDb, updates } = countingScopedDb();
+
+    await fillTemplateDocx({
+      source: {
+        name: "NDA",
+        fileName: "nda.docx",
+        buffer,
+        templateId: usedTemplateId,
+      },
+      values: { governing_law: "Czech" },
+      scopedDb,
+      organizationId,
+      requiredFields: "enforce",
+    });
+
+    expect(updates()).toBe(1);
+  });
+
+  test("leaves the counter to the caller under useRecording: caller", async () => {
+    const buffer = await makeManifestDocx([requiredTextField]);
+    const { scopedDb, updates } = countingScopedDb();
+
+    await fillTemplateDocx({
+      source: {
+        name: "NDA",
+        fileName: "nda.docx",
+        buffer,
+        templateId: usedTemplateId,
+      },
+      values: { governing_law: "Czech" },
+      scopedDb,
+      organizationId,
+      requiredFields: "enforce",
+      useRecording: "caller",
+    });
+
+    expect(updates()).toBe(0);
   });
 });
 
