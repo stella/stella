@@ -26,6 +26,11 @@ import path from "node:path";
 // This module is also imported by the no-install Dependabot autofix runner.
 class ChangesetPolicyError extends Error {
   readonly _tag = "ChangesetPolicyError";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ChangesetPolicyError";
+  }
 }
 
 const panic = (message: string): never => {

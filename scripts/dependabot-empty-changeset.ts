@@ -19,6 +19,11 @@ const COMMIT_SHA = /^[0-9a-f]{40}$/u;
 
 class DependabotChangesetError extends Error {
   readonly _tag = "DependabotChangesetError";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "DependabotChangesetError";
+  }
 }
 
 const panic = (message: string): never => {

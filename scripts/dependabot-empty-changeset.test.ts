@@ -135,7 +135,7 @@ const makeGitFixture = (change: GitFixtureChange): GitFixture => {
   runGit(root, ["config", "user.name", "Test"]);
 
   if (change !== "added") {
-    writeFileSync(manifestPath, JSON.stringify(baseManifest) + "\n");
+    writeFileSync(manifestPath, `${JSON.stringify(baseManifest)}\n`);
   }
   runGit(root, ["add", "."]);
   runGit(root, ["commit", "--quiet", "-m", "base"]);
@@ -145,7 +145,7 @@ const makeGitFixture = (change: GitFixtureChange): GitFixture => {
     rmSync(manifestPath);
     runGit(root, ["add", "-u", "."]);
   } else {
-    writeFileSync(manifestPath, JSON.stringify(headManifest) + "\n");
+    writeFileSync(manifestPath, `${JSON.stringify(headManifest)}\n`);
     if (change === "executable") {
       chmodSync(manifestPath, 0o755);
     }
@@ -436,7 +436,7 @@ describe("Dependabot empty changeset CLI boundary", () => {
     writeFileSync(outputPath, "keep this file\n");
 
     expect(() => runFixture(fixture)).toThrow(/overwrite/u);
-    expect(readFileSync(outputPath, "utf8")).toBe("keep this file\n");
+    expect(readFileSync(outputPath, "utf-8")).toBe("keep this file\n");
   });
 
   test("refuses to follow a symlink at the output path", () => {
@@ -449,7 +449,7 @@ describe("Dependabot empty changeset CLI boundary", () => {
 
     expect(() => runFixture(fixture)).toThrow(/overwrite/u);
     expect(lstatSync(outputPath).isSymbolicLink()).toBe(true);
-    expect(readFileSync(targetPath, "utf8")).toBe("keep the target\n");
+    expect(readFileSync(targetPath, "utf-8")).toBe("keep the target\n");
   });
 
   test.each([

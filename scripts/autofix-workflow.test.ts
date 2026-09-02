@@ -5,10 +5,10 @@ const WORKFLOW_URL = new URL(
   import.meta.url,
 );
 const HELPER_URL = new URL(
-  "./dependabot-empty-changeset.ts",
+  "dependabot-empty-changeset.ts",
   import.meta.url,
 );
-const CHANGESET_GUARD_URL = new URL("./changeset-guard.ts", import.meta.url);
+const CHANGESET_GUARD_URL = new URL("changeset-guard.ts", import.meta.url);
 
 describe("Dependabot Bun autofix boundary", () => {
   test("keeps the runner read-only and hands off only verified autofixes", async () => {
