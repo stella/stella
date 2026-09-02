@@ -41,7 +41,7 @@
  * resolves to whichever configured provider offers it — directly, or
  * (for an OpenAI id without OPENAI_API_KEY) routed through OpenRouter.
  */
-import { panic, Result } from "better-result";
+import { Panic, panic, Result } from "better-result";
 import { writeFile } from "node:fs/promises";
 
 import { BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
@@ -640,6 +640,33 @@ const buildOrgAIConfig = (selection: ModelSelection): OrgAIConfig => {
   };
 };
 
+// A model spec resolves independently of its siblings: one invalid provider
+// or missing credential must not stop the other `--models` entries from
+// running. `resolveModelSelection` panics on failure (a defect, not a typed
+// Result) because it also guards genuine programmer errors elsewhere; here
+// that panic is an expected per-spec outcome, so it is caught at this
+// boundary and turned into the documented "error" score for every task and
+// repeat of that model.
+type ModelTarget =
+  | { type: "resolved"; id: string; orgAIConfig: OrgAIConfig }
+  | { type: "resolution-error"; id: string; message: string };
+
+const resolveModelTargets = (specs: readonly string[]): ModelTarget[] =>
+  specs.map((spec) => {
+    try {
+      return {
+        type: "resolved",
+        id: spec,
+        orgAIConfig: buildOrgAIConfig(resolveModelSelection(spec)),
+      };
+    } catch (error) {
+      if (!Panic.is(error)) {
+        throw error;
+      }
+      return { type: "resolution-error", id: spec, message: error.message };
+    }
+  });
+
 // --------------- Scoring ---------------
 
 type FieldOutcome =
@@ -700,6 +727,9 @@ const gradeAnswer = (
     case "int": {
       if (validated.type !== "int") {
         return panic("Fixture/property type mismatch: int");
+      }
+      if (validated.value === null) {
+        return "missing";
       }
       return validated.value === expected.amount &&
         validated.currency === expected.currency
@@ -991,20 +1021,37 @@ const main = async () => {
     panic(`Unknown task ${String(options.taskFilter)}`);
   }
 
-  const models = options.models.map((spec) => ({
-    id: spec,
-    orgAIConfig: buildOrgAIConfig(resolveModelSelection(spec)),
-  }));
+  const targets = resolveModelTargets(options.models);
 
   const runs: EvalRun[] = [];
-  for (const { id, orgAIConfig } of models) {
+  for (const target of targets) {
     for (const task of tasks) {
       for (let repeat = 1; repeat <= options.runs; repeat += 1) {
-        process.stderr.write(`${id} · ${task.id} · run ${String(repeat)}\n`);
+        process.stderr.write(
+          `${target.id} · ${task.id} · run ${String(repeat)}\n`,
+        );
+        if (target.type === "resolution-error") {
+          runs.push({
+            modelId: target.id,
+            taskId: task.id,
+            repeat,
+            score: ERROR_SCORE,
+            latencyMs: 0,
+            error: target.message,
+            rawOutput: null,
+          });
+          continue;
+        }
         // One model call at a time: keeps provider rate limits and the
         // report order, and a failure points at the run that caused it.
         // eslint-disable-next-line no-await-in-loop
-        runs.push(await runTask({ modelId: id, orgAIConfig, task, repeat }));
+        const run = await runTask({
+          modelId: target.id,
+          orgAIConfig: target.orgAIConfig,
+          task,
+          repeat,
+        });
+        runs.push(run);
       }
     }
   }
