@@ -42,6 +42,13 @@ const IGNORED_COLUMN_KEYS = new Set([
 
 // The schema definitions themselves obviously reference every column; excluding
 // them is what makes this a "used elsewhere" check rather than a tautology.
+const TEST_FILE_SUFFIXES = [
+  ".test.ts",
+  ".test.tsx",
+  ".spec.ts",
+  ".spec.tsx",
+] as const;
+
 const EXCLUDED_PATH_PREFIXES = ["apps/api/src/db/schema"] as const;
 // Migrations replay column names verbatim and would make every column look
 // referenced; generated/vendor output belongs out for the same reason.
@@ -97,8 +104,8 @@ export const shouldScanFile = (relativePath: string): boolean => {
     return false;
   }
   // Also excludes *.integration.test.ts and *.property.test.ts, which share
-  // this suffix.
-  if (relativePath.endsWith(".test.ts") || relativePath.endsWith(".test.tsx")) {
+  // the `.test` suffix.
+  if (TEST_FILE_SUFFIXES.some((suffix) => relativePath.endsWith(suffix))) {
     return false;
   }
   if (
@@ -189,7 +196,10 @@ const isAllowlistEntry = (value: unknown): value is AllowlistEntry =>
   "reason" in value &&
   typeof value.table === "string" &&
   typeof value.column === "string" &&
-  typeof value.reason === "string";
+  typeof value.reason === "string" &&
+  // The reason is the only reviewable evidence that an exception is
+  // deliberate; an empty one is not an allowlist entry.
+  value.reason.trim().length > 0;
 
 const loadAllowlist = (): AllowlistEntry[] => {
   const raw = readFileSync(ALLOWLIST_PATH, "utf-8");

@@ -57,7 +57,7 @@ describe("isColumnReferenced", () => {
   test("does not match a key as a substring of a longer identifier", () => {
     expect(
       isColumnReferenced({
-        corpus: "const value = row.notAutoInvokeHintAtAll;",
+        corpus: "const value = row.notautoInvokeHintAtAll;",
         tsKey: "autoInvokeHint",
         sqlName: "auto_invoke_hint",
       }),
@@ -75,6 +75,15 @@ describe("shouldScanFile", () => {
 
   test("excludes the schema definitions", () => {
     expect(shouldScanFile("apps/api/src/db/schema.ts")).toBe(false);
+  });
+
+  test("excludes spec files as well as test files", () => {
+    expect(shouldScanFile("apps/web/src/components/search.spec.ts")).toBe(
+      false,
+    );
+    expect(shouldScanFile("apps/web/src/components/search.spec.tsx")).toBe(
+      false,
+    );
     expect(shouldScanFile("apps/api/src/db/schema/properties.ts")).toBe(false);
   });
 
