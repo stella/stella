@@ -106,9 +106,7 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const resolveVariable = (identifier: {
-          name: string;
-        }): ScopeVariable | null => {
+        const resolveVariable = (identifier): ScopeVariable | null => {
           let scope: Scope | null = context.sourceCode.getScope(identifier);
           while (scope !== null) {
             const variable = scope.set.get(identifier.name);
