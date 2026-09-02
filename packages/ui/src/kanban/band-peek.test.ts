@@ -62,22 +62,6 @@ describe("band peek controller", () => {
     expect(changes).toEqual([]);
   });
 
-  // The defect this guards: folding a band from its caption left the new
-  // slot under the cursor, the first movement peeked it straight back open,
-  // and leaving the caption folded it again, over and over.
-  test("a band folded under the pointer does not peek until the pointer leaves its slot", () => {
-    const { clock, changes, peek } = setup();
-    peek.foldedUnderPointer("todo");
-    peek.slotDragOver("todo");
-    clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
-    expect(changes).toEqual([]);
-
-    peek.slotDragLeave("todo");
-    peek.slotDragOver("todo");
-    clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
-    expect(changes).toEqual(["todo"]);
-  });
-
   test("moving between the parts of an open band keeps the peek", () => {
     const { clock, changes, peek } = setup();
     peek.slotDragOver("todo");
@@ -109,17 +93,6 @@ describe("band peek controller", () => {
     expect(changes).toEqual(["todo", null]);
   });
 
-  test("folding a peeked band from its caption ends the peek and suppresses the slot", () => {
-    const { clock, changes, peek } = setup();
-    peek.slotDragOver("todo");
-    clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
-    peek.foldedUnderPointer("todo");
-    expect(changes).toEqual(["todo", null]);
-    peek.slotDragOver("todo");
-    clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
-    expect(changes).toEqual(["todo", null]);
-  });
-
   test("a slot that unmounts mid-delay cancels its pending peek", () => {
     const { clock, changes, peek } = setup();
     peek.slotDragOver("todo");
@@ -128,16 +101,7 @@ describe("band peek controller", () => {
     expect(changes).toEqual([]);
   });
 
-  test("a slot that unmounts drops its suppression", () => {
-    const { clock, changes, peek } = setup();
-    peek.foldedUnderPointer("todo");
-    peek.slotUnmounted("todo");
-    peek.slotDragOver("todo");
-    clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
-    expect(changes).toEqual(["todo"]);
-  });
-
-  test("a fold without a pointer ends the peek but does not suppress the slot", () => {
+  test("folding a band ends its peek and lets the slot peek again on the next hover", () => {
     const { clock, changes, peek } = setup();
     peek.slotDragOver("todo");
     clock.advance(KANBAN_BAND_PEEK_DELAY_MS);

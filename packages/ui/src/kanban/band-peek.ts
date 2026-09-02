@@ -5,17 +5,13 @@
  * a drag can still land on a specific column inside a folded band, and the
  * board only feeds the controller drag events.
  *
- * Two rules keep a peek from fighting the drag:
- *
- *  - A slot that appeared under the dragged card does not peek. Folding a
- *    band from its caption leaves the new slot right under the cursor; the
- *    band is suppressed until the pointer leaves the slot once.
- *  - A peek ends only after the drag has left every part of the open band
- *    for a short linger. The band renders as separate elements (its caption,
- *    then its columns in each lane), so moving from the caption down into a
- *    column crosses an element boundary; without the linger the band would
- *    fold under the card and the slot would peek it straight back open.
- *  - The end of the drag, wherever it lands, ends the peek at once.
+ * One rule keeps a peek from fighting the drag: it ends only after the drag
+ * has left every part of the open band for a short linger. The band renders
+ * as separate elements (its caption, then its columns in each lane), so
+ * moving from the caption down into a column crosses an element boundary;
+ * without the linger the band would fold under the card and the slot would
+ * peek it straight back open. The end of the drag, wherever it lands, ends
+ * the peek at once.
  */
 
 /** How long a dragged card rests on a folded slot before the band peeks open. */
@@ -56,12 +52,7 @@ export type BandPeekController = {
   /** The drag ended (dropped or cancelled), wherever it was. */
   dragEnded: () => void;
   /**
-   * The band was folded by a pointer on its caption, so its slot now sits
-   * under the pointer; it must not peek until the pointer leaves the slot.
-   */
-  foldedUnderPointer: (bandId: string) => void;
-  /**
-   * The band was folded without a pointer on it (keyboard, or a controlled
+   * The band was folded (from its caption, the keyboard, or a controlled
    * caller): any peek ends, and the slot may peek on the next hover.
    */
   bandFolded: (bandId: string) => void;
@@ -69,8 +60,7 @@ export type BandPeekController = {
   bandExpanded: (bandId: string) => void;
   /**
    * A band's folded slot left the DOM (the band expanded or disappeared) so
-   * a peek it was about to open, or a suppression it carried, no longer
-   * applies.
+   * a peek it was about to open no longer applies.
    */
   slotUnmounted: (bandId: string) => void;
   /** Ends any pending timer, for unmount. */
@@ -84,7 +74,6 @@ export const createBandPeekController = ({
   schedule = hostScheduler,
 }: BandPeekControllerOptions): BandPeekController => {
   let peekingBandId: string | null = null;
-  let suppressedBandId: string | null = null;
   let cancelOpen: (() => void) | null = null;
   let openingBandId: string | null = null;
   let cancelEnd: (() => void) | null = null;
@@ -122,11 +111,7 @@ export const createBandPeekController = ({
 
   return {
     slotDragOver: (bandId) => {
-      if (
-        suppressedBandId === bandId ||
-        peekingBandId === bandId ||
-        openingBandId === bandId
-      ) {
+      if (peekingBandId === bandId || openingBandId === bandId) {
         return;
       }
       clearOpenTimer();
@@ -141,9 +126,6 @@ export const createBandPeekController = ({
     slotDragLeave: (bandId) => {
       if (openingBandId === bandId) {
         clearOpenTimer();
-      }
-      if (suppressedBandId === bandId) {
-        suppressedBandId = null;
       }
     },
     openDragEnter: (bandId) => {
@@ -160,17 +142,10 @@ export const createBandPeekController = ({
         setPeeking(null);
       }, lingerMs);
     },
-    foldedUnderPointer: (bandId) => {
-      bandFolded(bandId);
-      suppressedBandId = bandId;
-    },
     bandFolded,
     bandExpanded: (bandId) => {
       if (openingBandId === bandId) {
         clearOpenTimer();
-      }
-      if (suppressedBandId === bandId) {
-        suppressedBandId = null;
       }
       if (peekingBandId === bandId) {
         clearEndTimer();
@@ -180,9 +155,6 @@ export const createBandPeekController = ({
     slotUnmounted: (bandId) => {
       if (openingBandId === bandId) {
         clearOpenTimer();
-      }
-      if (suppressedBandId === bandId) {
-        suppressedBandId = null;
       }
     },
     dragEnded: () => {
