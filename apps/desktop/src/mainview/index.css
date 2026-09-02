@@ -146,15 +146,17 @@ body:has(.clipboard-editor-window) .font-sans {
 
 /* While the search field holds focus the selected card stays the Enter
  * target but renders exactly like its siblings: the highlight would read as
- * a competing focus. It returns when ArrowUp hands focus back to the rail. */
-.clipboard-window:not(:has(.clipboard-search-input:focus))
+ * a competing focus. It returns when ArrowUp hands focus back to the rail.
+ * `.clipboard-search-input` lands on the input's wrapper, so the guard reads
+ * `:focus-within` rather than `:focus`. */
+.clipboard-window:not(:has(.clipboard-search-input:focus-within))
   .clipboard-card[aria-current="true"] {
   box-shadow:
     inset 0 0 0 1.5px color-mix(in srgb, var(--foreground) 30%, transparent),
     0 12px 30px rgb(23 28 38 / 0.16);
 }
 
-.clipboard-window:not(:has(.clipboard-search-input:focus))
+.clipboard-window:not(:has(.clipboard-search-input:focus-within))
   .clipboard-card[aria-current="true"]::after {
   border-color: var(--option-blue);
   box-shadow: inset 0 0 0 1px
@@ -163,7 +165,7 @@ body:has(.clipboard-editor-window) .font-sans {
 }
 
 /* Match the resting opacity of unselected cards (opacity-86, full on hover). */
-.clipboard-window:has(.clipboard-search-input:focus)
+.clipboard-window:has(.clipboard-search-input:focus-within)
   .clipboard-card[aria-current="true"]:not(:hover) {
   opacity: 0.86;
 }
@@ -196,7 +198,7 @@ body:has(.clipboard-editor-window) .font-sans {
 }
 
 .dark
-  .clipboard-window:not(:has(.clipboard-search-input:focus))
+  .clipboard-window:not(:has(.clipboard-search-input:focus-within))
   .clipboard-card[aria-current="true"] {
   box-shadow:
     inset 0 0 0 1.5px color-mix(in srgb, var(--color-white) 32%, transparent),
