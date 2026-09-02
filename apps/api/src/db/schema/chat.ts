@@ -73,6 +73,9 @@ const CHAT_TURN_CANCELLATION_REASON_SQL_VALUES =
 const CHAT_TURN_INTERRUPTION_REASON_SQL_VALUES =
   CHAT_TURN_INTERRUPTION_REASONS.map((reason) => sql.raw(`'${reason}'`));
 
+/** Width of `chat_threads.title`; anything deriving a title must fit it. */
+export const CHAT_THREAD_TITLE_MAX_LENGTH = 255;
+
 export const chatThreads = p.pgTable(
   "chat_threads",
   {
@@ -90,7 +93,7 @@ export const chatThreads = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    title: p.varchar({ length: 255 }).notNull(),
+    title: p.varchar({ length: CHAT_THREAD_TITLE_MAX_LENGTH }).notNull(),
     // Provenance of `title`; gates whether background AI titling may replace it.
     // See ChatTitleSource in ./common. New threads start "default"; a rename
     // stamps "user"; the generator only replaces "default" and stamps "ai".
