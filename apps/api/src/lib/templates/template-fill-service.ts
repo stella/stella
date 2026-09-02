@@ -164,7 +164,11 @@ const collectDescribedArrayGroups = (
 
   const visit = (field: DiscoveredField, parentPath: string): void => {
     const path = parentPath === "" ? field.path : `${parentPath}.${field.path}`;
-    const itemFields = field.itemFields ?? [];
+    const itemFields = field.itemFields;
+    // A leaf field has no children to group or descend into.
+    if (itemFields === undefined) {
+      return;
+    }
     // A primitive-item loop (itemFields === [{ path: "value" }]) is already
     // addressed by its own array-typed field; only an object-item loop needs
     // this grouping to convey its shape.
