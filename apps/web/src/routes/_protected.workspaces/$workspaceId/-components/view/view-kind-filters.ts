@@ -28,7 +28,12 @@ export const includesListItems = (filters: readonly ConditionNode[]): boolean =>
 export const viewEntityKinds = (
   filters: readonly ConditionNode[],
 ): readonly EntityKind[] | null => {
-  const admitted = combineAnd(foldConditions(filters, kindFoldHandlers) ?? []);
+  // A filter whose nodes are all dropped restricts nothing.
+  const survivors = foldConditions(filters, kindFoldHandlers);
+  if (survivors === null) {
+    return null;
+  }
+  const admitted = combineAnd(survivors);
   return admitted.type === "kinds" ? [...admitted.kinds] : null;
 };
 
