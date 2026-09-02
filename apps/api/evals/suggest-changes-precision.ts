@@ -59,6 +59,8 @@ import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
 // Anthropic so a non-Anthropic default provider cannot claim them.
 const DEFAULT_MODELS = ["gpt-5.4-nano", "anthropic::claude-sonnet-5"];
 const DEFAULT_RUNS = 1;
+// Every run is a paid request; keep a typo from turning into a bill.
+const MAX_RUNS = 20;
 const MAX_OUTPUT_TOKENS = 4000;
 const MAX_ITERATIONS = 8;
 const MODEL_REQUEST_TIMEOUT_MS = 240_000;
@@ -278,6 +280,14 @@ type CliOptions = {
   jsonPath: string | null;
 };
 
+const parseRuns = (value: string): number => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    return DEFAULT_RUNS;
+  }
+  return Math.min(MAX_RUNS, parsed);
+};
+
 const parseArgs = (argv: readonly string[]): CliOptions => {
   const options: CliOptions = {
     models: DEFAULT_MODELS,
@@ -297,7 +307,7 @@ const parseArgs = (argv: readonly string[]): CliOptions => {
         index += 1;
         break;
       case "--runs":
-        options.runs = Math.max(1, Number.parseInt(value, 10) || DEFAULT_RUNS);
+        options.runs = parseRuns(value);
         index += 1;
         break;
       case "--task":
