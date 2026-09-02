@@ -24,7 +24,7 @@
  *
  * Usage (from apps/api):
  *   bun run eval:create-document
- *   bun run eval:create-document -- --models gpt-5.4-mini,anthropic::claude-sonnet-5
+ *   bun run eval:create-document -- --models gpt-5.6-luna,anthropic::claude-sonnet-5
  *   bun run eval:create-document -- --runs 3 --task en-nda --json out.json --sources-dir out/sources
  *
  * Model ids use `provider::modelId` or a bare id resolved through the
@@ -60,7 +60,7 @@ import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
 // A bare id resolves through whichever configured provider rates it (GPT
 // models may come from OpenAI or OpenRouter); Claude ids are pinned to
 // Anthropic so a non-Anthropic default provider cannot claim them.
-const DEFAULT_MODELS = ["gpt-5.4-mini", "anthropic::claude-sonnet-5"];
+const DEFAULT_MODELS = ["gpt-5.6-luna", "anthropic::claude-sonnet-5"];
 const DEFAULT_RUNS = 1;
 // Every run is a paid request; keep a typo from turning into a bill.
 const MAX_RUNS = 20;
