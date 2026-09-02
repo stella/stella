@@ -282,6 +282,14 @@ impl ClipboardItem {
     }
   }
 
+  fn set_copied_at(&mut self, new_copied_at: DateTime<Utc>) {
+    match self {
+      Self::Text { copied_at, .. } | Self::FormattedText { copied_at, .. } => {
+        *copied_at = new_copied_at;
+      }
+    }
+  }
+
   fn replace_content(&mut self, new_plain_text: String, new_html: Option<String>) {
     let (copied_at, group_id, id, name, source_app) = match self {
       Self::Text {
@@ -698,6 +706,25 @@ impl ClipboardManager {
     let duplicate = item.duplicate_at(copied_at);
     self.items.insert(0, duplicate);
     prune_items(&mut self.items, self.retention, copied_at);
+    self.persist_or_restore(checkpoint)?;
+    Ok(true)
+  }
+
+  /// A clip copied back from history becomes the newest one: the system
+  /// clipboard now holds it, and the capture that would have moved it to the
+  /// front is suppressed to keep the item's identity and metadata.
+  pub fn touch_item(
+    &mut self,
+    id: &str,
+    copied_at: DateTime<Utc>,
+  ) -> Result<bool, String> {
+    let Some(index) = self.items.iter().position(|item| item.id() == id) else {
+      return Ok(false);
+    };
+    let checkpoint = self.checkpoint();
+    let mut item = self.items.remove(index);
+    item.set_copied_at(copied_at);
+    self.items.insert(0, item);
     self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
@@ -1957,6 +1984,25 @@ mod tests {
     assert_eq!(manager.items[0].name(), original.name());
     assert_eq!(manager.items[0].source_app(), original.source_app());
     assert_eq!(manager.items[1], original);
+  }
+
+  #[test]
+  fn touching_an_item_refreshes_its_timestamp_and_moves_it_to_the_front() {
+    let now = Utc::now();
+    let mut manager = ready_manager();
+    let newest = text_item(now - Duration::minutes(1), "newest");
+    let older = text_item(now - Duration::hours(2), "older");
+    let older_id = older.id().to_string();
+    manager.items = vec![newest.clone(), older];
+
+    assert!(manager.touch_item(&older_id, now).unwrap());
+    assert_eq!(manager.items.len(), 2);
+    assert_eq!(manager.items[0].id(), older_id);
+    assert_eq!(manager.items[0].copied_at(), now);
+    assert_eq!(manager.items[0].plain_text(), "older");
+    assert_eq!(manager.items[1], newest);
+
+    assert!(!manager.touch_item("missing", now).unwrap());
   }
 
   #[test]

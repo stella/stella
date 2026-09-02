@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CLIPBOARD_RETENTIONS,
+  isClipboardCopyError,
   isClipboardSnapshot,
 } from "../src/clipboard/clipboard-types";
 
@@ -53,5 +54,21 @@ describe("clipboard snapshot retention", () => {
         }),
       ).toBe(false);
     }
+  });
+});
+
+describe("clipboard copy error", () => {
+  test("accepts every failed step the copy command reports", () => {
+    for (const kind of ["copy", "hide", "history"]) {
+      expect(isClipboardCopyError({ kind, message: "failed" })).toBe(true);
+    }
+  });
+
+  test("rejects other rejection payloads", () => {
+    expect(isClipboardCopyError("clipboard item no longer exists")).toBe(false);
+    expect(isClipboardCopyError({ kind: "unknown", message: "failed" })).toBe(
+      false,
+    );
+    expect(isClipboardCopyError({ kind: "copy" })).toBe(false);
   });
 });

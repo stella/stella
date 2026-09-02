@@ -418,6 +418,10 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
   .always_on_top(true)
   .content_protected(content_protected)
   .decorations(false)
+  // Tauri's native drag-drop handler consumes every drop on macOS and
+  // Windows, so HTML5 drops (a card onto a group chip) never reach the
+  // webview. The window accepts no OS file drops.
+  .disable_drag_drop_handler()
   .effects(
     EffectsBuilder::new()
       .effect(Effect::UnderWindowBackground)

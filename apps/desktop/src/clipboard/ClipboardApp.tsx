@@ -27,6 +27,7 @@ import {
   CopyPlusIcon,
   CheckIcon,
   ClockIcon,
+  EllipsisIcon,
   FileTextIcon,
   FolderInputIcon,
   FolderPlusIcon,
@@ -41,7 +42,7 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -111,9 +112,14 @@ import {
   measureClipboardSnapshotRequest,
   observeClipboardReopens,
 } from "./clipboard-startup-timing";
-import { CLIPBOARD_RETENTIONS, isClipboardSnapshot } from "./clipboard-types";
+import {
+  CLIPBOARD_RETENTIONS,
+  isClipboardCopyError,
+  isClipboardSnapshot,
+} from "./clipboard-types";
 import type {
   ClipboardCaptureStatus,
+  ClipboardCopyErrorKind,
   ClipboardRetention,
   ClipboardGroup,
   ClipboardGroupColor,
@@ -150,6 +156,28 @@ const RETENTION_LABEL_KEYS = {
   year: "retentionYear",
 } as const satisfies Record<ClipboardRetention, string>;
 const CLIPBOARD_CARD_SELECTOR = "[data-clipboard-id]";
+// Which step of a copy failed decides what the user is told: only a `copy`
+// failure means the clip never reached the system clipboard.
+const COPY_FAILURE_FEEDBACK = {
+  copy: {
+    messageKey: "errorPaste",
+    operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardCopy,
+  },
+  hide: {
+    messageKey: "errorUpdateHistory",
+    operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardWindowHide,
+  },
+  history: {
+    messageKey: "errorUpdateHistory",
+    operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
+  },
+} as const satisfies Record<
+  ClipboardCopyErrorKind,
+  {
+    messageKey: "errorPaste" | "errorUpdateHistory";
+    operation: (typeof DESKTOP_TELEMETRY_OPERATIONS)[keyof typeof DESKTOP_TELEMETRY_OPERATIONS];
+  }
+>;
 // Must match the card's `w-[246px]` and the rail's `gap-3 px-5`.
 const CLIPBOARD_CARD_WIDTH = 246;
 const CLIPBOARD_CARD_GAP = 12;
@@ -263,6 +291,7 @@ const ClipboardCard = ({
   sourceVisual,
 }: ClipboardCardProps) => {
   const t = useTranslations("clipboard");
+  const format = useFormatter();
   const cancelNameEditRef = useRef(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(item.name ?? "");
@@ -274,6 +303,10 @@ const ClipboardCard = ({
   }).format(age.value);
   const relativeTime =
     age.type === "lessThan" ? `<${formattedAge}` : formattedAge;
+  const copiedAtLabel = format.dateTime(new Date(item.copiedAt), {
+    dateStyle: "full",
+    timeStyle: "medium",
+  });
   const sourceAppName = item.sourceApp?.name ?? null;
   const sourceTintIndex = clipboardSourceTintIndex(
     item.sourceApp?.identifier ?? sourceAppName,
@@ -467,8 +500,10 @@ const ClipboardCard = ({
         <time
           className="text-muted-foreground shrink-0 text-xs tabular-nums"
           dateTime={item.copiedAt}
+          title={copiedAtLabel}
         >
-          {relativeTime}
+          <span aria-hidden="true">{relativeTime}</span>
+          <span className="sr-only">{copiedAtLabel}</span>
         </time>
         {index < 9 ? (
           <kbd className="bg-muted text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
@@ -1082,7 +1117,7 @@ const ClipboardApp = () => {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [error, setError] = useState<ClipboardAppError | null>(null);
+  const [appError, setError] = useState<ClipboardAppError | null>(null);
   const [dialog, setDialog] = useState<ClipboardDialogState>({
     type: "closed",
   });
@@ -1347,14 +1382,19 @@ const ClipboardApp = () => {
 
   const copyItem = (item: ClipboardItem) => {
     setError((current) => (current?.source === "operation" ? null : current));
-    void invoke("clipboard_copy_item", { id: item.id }).catch(() => {
-      reportDesktopError({
-        code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-        operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardCopy,
-        window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
-      });
-      setError({ message: t("errorPaste"), source: "operation" });
-    });
+    void invoke("clipboard_copy_item", { id: item.id }).catch(
+      (error: unknown) => {
+        // An unrecognised rejection means the clip never left the window.
+        const kind = isClipboardCopyError(error) ? error.kind : "copy";
+        const feedback = COPY_FAILURE_FEEDBACK[kind];
+        reportDesktopError({
+          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          operation: feedback.operation,
+          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+        });
+        setError({ message: t(feedback.messageKey), source: "operation" });
+      },
+    );
   };
 
   const openEditor = (id: string) => {
@@ -1695,20 +1735,23 @@ const ClipboardApp = () => {
     };
   }, [handleKeyDown, handleKeyDownCapture]);
 
-  const nextCaptureStatus: ClipboardCaptureStatus =
-    snapshot.captureStatus === "active" ? "paused" : "active";
+  const captureActive = snapshot.captureStatus === "active";
+  const nextCaptureStatus: ClipboardCaptureStatus = captureActive
+    ? "paused"
+    : "active";
+  const captureActionLabel = captureActive ? t("pause") : t("resume");
   let persistenceWarningLabel = t("memoryOnly");
   if (snapshot.persistence.status === "deletionOnly") {
     persistenceWarningLabel = t("errorReadHistory");
   }
   let feedback: ReactNode = null;
-  if (error) {
+  if (appError) {
     feedback = (
       <div
         className="bg-destructive text-destructive-foreground absolute inset-x-0 top-0 z-20 px-5 py-1.5 text-center text-xs"
         role="alert"
       >
-        {error.message}
+        {appError.message}
       </div>
     );
   }
@@ -1887,17 +1930,21 @@ const ClipboardApp = () => {
               </span>
             ) : null}
             <Button
-              aria-label={t("welcomeHelp")}
-              className="size-11 rounded-full"
-              onClick={() => {
-                setWelcomeDismissed(false);
-                setWelcomeRequested(true);
-              }}
+              aria-label={t("createGroup")}
+              className="size-11 shrink-0 rounded-full"
+              disabled={snapshot.groups.length >= 24}
+              onClick={() =>
+                setDialog({
+                  color: nextGroupColor,
+                  name: "",
+                  type: "createGroup",
+                })
+              }
               size="icon"
-              title={t("welcomeHelp")}
+              title={t("createGroup")}
               variant="ghost"
             >
-              <CircleHelpIcon aria-hidden="true" className="size-4" />
+              <FolderPlusIcon aria-hidden="true" className="size-4" />
             </Button>
           </div>
 
@@ -1969,23 +2016,6 @@ const ClipboardApp = () => {
                 <Trash2Icon aria-hidden="true" className="size-3.5" />
               </Button>
             ) : null}
-            <Button
-              aria-label={t("createGroup")}
-              className="size-11 shrink-0 rounded-full"
-              disabled={snapshot.groups.length >= 24}
-              onClick={() =>
-                setDialog({
-                  color: nextGroupColor,
-                  name: "",
-                  type: "createGroup",
-                })
-              }
-              size="icon"
-              title={t("createGroup")}
-              variant="ghost"
-            >
-              <FolderPlusIcon aria-hidden="true" className="size-4" />
-            </Button>
           </nav>
         </div>
 
@@ -2015,77 +2045,83 @@ const ClipboardApp = () => {
         </InputGroup>
 
         <div className="flex shrink-0 items-center gap-0.5 justify-self-end">
-          <Button
-            aria-label={
-              snapshot.captureStatus === "active" ? t("pause") : t("resume")
-            }
-            className="size-11 rounded-full"
-            onClick={() => {
-              applySnapshotCommand("clipboard_set_capture_status", {
-                status: nextCaptureStatus,
-              });
-            }}
-            size="icon"
-            title={
-              snapshot.captureStatus === "active" ? t("pause") : t("resume")
-            }
-            variant="ghost"
-          >
-            {snapshot.captureStatus === "active" ? (
-              <PauseIcon aria-hidden="true" className="size-4" />
-            ) : (
-              <PlayIcon aria-hidden="true" className="size-4" />
-            )}
-          </Button>
           <Menu>
             <MenuTrigger
               render={
                 <Button
-                  aria-label={t("retention")}
+                  aria-label={t("moreOptions")}
                   className="size-11 rounded-full"
                   size="icon"
-                  title={t("retention")}
+                  title={t("moreOptions")}
                   variant="ghost"
                 />
               }
             >
-              <ClockIcon aria-hidden="true" className="size-4" />
+              <EllipsisIcon aria-hidden="true" className="size-4" />
             </MenuTrigger>
-            <MenuPopup align="end" className="w-56">
-              <MenuRadioGroup value={snapshot.retention}>
-                {CLIPBOARD_RETENTIONS.map((retention) => (
-                  <MenuRadioItem
-                    className="min-h-11 rounded-xl"
-                    key={retention}
-                    onClick={() => {
-                      applySnapshotCommand("clipboard_set_retention", {
-                        retention,
-                      });
-                    }}
-                    value={retention}
-                  >
-                    {t(RETENTION_LABEL_KEYS[retention])}
-                  </MenuRadioItem>
-                ))}
-              </MenuRadioGroup>
+            <MenuPopup align="end" className="w-60" side="top">
+              <MenuItem
+                className="min-h-11 rounded-xl"
+                onClick={() => {
+                  applySnapshotCommand("clipboard_set_capture_status", {
+                    status: nextCaptureStatus,
+                  });
+                }}
+              >
+                {captureActive ? <PauseIcon /> : <PlayIcon />}
+                {captureActionLabel}
+              </MenuItem>
+              <MenuSub>
+                <MenuSubTrigger className="min-h-11 rounded-xl">
+                  <ClockIcon />
+                  {t("retention")}
+                </MenuSubTrigger>
+                <MenuSubPopup className="w-56">
+                  <MenuRadioGroup value={snapshot.retention}>
+                    {CLIPBOARD_RETENTIONS.map((retention) => (
+                      <MenuRadioItem
+                        className="min-h-11 rounded-xl"
+                        key={retention}
+                        onClick={() => {
+                          applySnapshotCommand("clipboard_set_retention", {
+                            retention,
+                          });
+                        }}
+                        value={retention}
+                      >
+                        {t(RETENTION_LABEL_KEYS[retention])}
+                      </MenuRadioItem>
+                    ))}
+                  </MenuRadioGroup>
+                </MenuSubPopup>
+              </MenuSub>
+              <MenuItem
+                className="min-h-11 rounded-xl"
+                disabled={
+                  snapshot.items.length === 0 &&
+                  snapshot.persistence.status !== "deletionOnly"
+                }
+                onClick={() => {
+                  setDialog({ type: "clearHistory" });
+                }}
+                variant="destructive"
+              >
+                <Trash2Icon />
+                {t("clear")}
+              </MenuItem>
+              <MenuSeparator />
+              <MenuItem
+                className="min-h-11 rounded-xl"
+                onClick={() => {
+                  setWelcomeDismissed(false);
+                  setWelcomeRequested(true);
+                }}
+              >
+                <CircleHelpIcon />
+                {t("welcomeHelp")}
+              </MenuItem>
             </MenuPopup>
           </Menu>
-          <Button
-            aria-label={t("clear")}
-            className="size-11 rounded-full"
-            disabled={
-              snapshot.items.length === 0 &&
-              snapshot.persistence.status !== "deletionOnly"
-            }
-            onClick={() => {
-              setDialog({ type: "clearHistory" });
-            }}
-            size="icon"
-            title={t("clear")}
-            variant="ghost"
-          >
-            <Trash2Icon aria-hidden="true" className="size-4" />
-          </Button>
           <Button
             aria-label={t("close")}
             className="size-11 rounded-full"

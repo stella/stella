@@ -131,6 +131,7 @@
     "keyboardNavigate": "← → navegar",
     "local": "Local",
     "memoryOnly": "El almacenamiento cifrado no está disponible. El historial se conservará solo hasta cerrar stella desktop.",
+    "moreOptions": "Más opciones",
     "noResults": "No hay recortes coincidentes",
     "noResultsDescription": "Prueba con otra palabra o frase.",
     "noGroup": "Sin grupo",
