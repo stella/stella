@@ -193,6 +193,7 @@ export const createTemplateTools = ({
       async ({ templateId }) =>
         await describeStoredTemplate({
           templateId: brandPersistedTemplateId(templateId),
+          organizationId,
           scopedDb,
         }),
     ),

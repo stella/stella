@@ -6,10 +6,12 @@ import type { Transaction } from "@/api/db/root";
 import { entities, templates } from "@/api/db/schema";
 import type { TemplatePersistenceResult } from "@/api/db/schema";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import type {
   AssertNoExtraFields,
   LIST_TEMPLATES_LIST_PROJECTION,
@@ -718,6 +720,7 @@ const describeTemplateDetail: TypedMcpToolHandler<
     context.testDependencies?.describeStoredTemplate ?? describeStoredTemplate
   )({
     templateId: brandPersistedTemplateId(parsed.output.template_id),
+    organizationId: context.organizationId,
     scopedDb: context.scopedDb,
   });
   if ("error" in result) {
@@ -784,6 +787,52 @@ const requiredFieldsRejectionResult = (
   });
 };
 
+/**
+ * Read the org AI config at most once, and only when the fill service actually
+ * asks for a usage preflight or AI collaborators. A deterministic template
+ * declares no AI field, so it must not pay for that read.
+ */
+const deferOrgAIConfig = (context: McpRequestContext) => {
+  let pending: Promise<OrgAIConfig | null> | undefined;
+  return async (): Promise<OrgAIConfig | null> => {
+    pending ??= (context.testDependencies?.loadOrgAIConfig ?? loadOrgAIConfig)(
+      context.organizationId,
+    );
+    return await pending;
+  };
+};
+
+/**
+ * Usage preflight for a template fill, invoked by the fill service only once
+ * the manifest is known to declare an AI field, before any model call, so a
+ * deterministic fill never spends quota. Skips only when no provider could run
+ * a model at all: with an instance provider but no org BYOK the fill still
+ * calls the fast model (the metering layer prices it at the non-BYOK rate), so
+ * the quota check must still apply.
+ */
+const assertTemplateFillUsage = async ({
+  context,
+  readOrgAIConfig,
+  workspaceId,
+}: {
+  context: McpRequestContext;
+  readOrgAIConfig: () => Promise<OrgAIConfig | null>;
+  workspaceId: SafeId<"workspace"> | null;
+}) => {
+  const orgAIConfig = await readOrgAIConfig();
+  if (!orgAIConfig && !hasTanStackInstanceProvider()) {
+    return null;
+  }
+  return await assertUsageAvailableForHandler({
+    metering: { actionType: "chat", modelRole: "fast" },
+    organizationId: context.organizationId,
+    orgAIConfig,
+    workspaceId,
+    userId: context.userId,
+    safeDb: context.safeDb,
+  });
+};
+
 const fillTemplateArgsSchema = v.strictObject({
   template_id: v.pipe(v.string(), v.minLength(1)),
   values: v.record(v.string(), v.unknown()),
@@ -807,17 +856,16 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
     return validationErrorResult(parsed.issues);
   }
 
-  // Load the org's AI config so AI-fillable / aiAdapt fields behave exactly as
+  // The org's AI config makes AI-fillable / aiAdapt fields behave exactly as
   // they do in the chat tools and web fill routes; a missing config simply
-  // leaves those fields unfilled rather than erroring.
-  const orgAIConfig = await (
-    context.testDependencies?.loadOrgAIConfig ?? loadOrgAIConfig
-  )(context.organizationId);
-  // Built only when the manifest declares an AI field: the fill service defers
-  // this, so a deterministic fill opens no metered trace. fill_template is
-  // org-scoped (no matter binding), so there is no workspace id to redact
-  // tenant ids against.
-  const aiCollaborators = () => {
+  // leaves those fields unfilled rather than erroring. Read lazily: the fill
+  // service asks for it only when the manifest declares an AI field.
+  const readOrgAIConfig = deferOrgAIConfig(context);
+  // Built only when the manifest declares an AI field, so a deterministic fill
+  // opens no metered trace. fill_template is org-scoped (no matter binding),
+  // so there is no workspace id to redact tenant ids against.
+  const aiCollaborators = async () => {
+    const orgAIConfig = await readOrgAIConfig();
     const shared = {
       orgAIConfig,
       organizationId: context.organizationId,
@@ -845,24 +893,12 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
     };
   };
 
-  // Gate AI quota the same way the web/chat fill paths do: the service runs
-  // this only when the manifest declares AI fields, before any model call, so a
-  // deterministic fill never spends quota. Gated on a usable provider — org
-  // BYOK or the deployment's instance provider — since the generators run the
-  // fast model in either case; a null org config flows through to the metering
-  // layer (instance-provider rate).
-  const assertUsageAvailable =
-    orgAIConfig || hasTanStackInstanceProvider()
-      ? async () =>
-          await assertUsageAvailableForHandler({
-            metering: { actionType: "chat", modelRole: "fast" },
-            organizationId: context.organizationId,
-            orgAIConfig,
-            workspaceId: null,
-            userId: context.userId,
-            safeDb: context.safeDb,
-          })
-      : undefined;
+  const assertUsageAvailable = async () =>
+    await assertTemplateFillUsage({
+      context,
+      readOrgAIConfig,
+      workspaceId: null,
+    });
 
   const fillStoredTemplate =
     parsed.output.allow_unused_values === true
@@ -1225,21 +1261,9 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     return errorResult(destinationError);
   }
 
-  const orgAIConfig = await (
-    context.testDependencies?.loadOrgAIConfig ?? loadOrgAIConfig
-  )(context.organizationId);
-  const assertUsageAvailable =
-    orgAIConfig || hasTanStackInstanceProvider()
-      ? async () =>
-          await assertUsageAvailableForHandler({
-            metering: { actionType: "chat", modelRole: "fast" },
-            organizationId: context.organizationId,
-            orgAIConfig,
-            workspaceId,
-            userId: context.userId,
-            safeDb: context.safeDb,
-          })
-      : undefined;
+  const readOrgAIConfig = deferOrgAIConfig(context);
+  const assertUsageAvailable = async () =>
+    await assertTemplateFillUsage({ context, readOrgAIConfig, workspaceId });
 
   const renderDeadline = AbortSignal.timeout(
     SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS,
@@ -1250,7 +1274,8 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
       : AbortSignal.any([context.request.signal, renderDeadline]);
   // Built only when the manifest declares an AI field: the fill service defers
   // this, so a deterministic fill opens no metered trace.
-  const aiCollaborators = () => {
+  const aiCollaborators = async () => {
+    const orgAIConfig = await readOrgAIConfig();
     const shared = {
       orgAIConfig,
       organizationId: context.organizationId,
@@ -1608,6 +1633,7 @@ const configureExistingTemplate = async ({
     context.testDependencies?.describeStoredTemplate ?? describeStoredTemplate
   )({
     templateId,
+    organizationId: context.organizationId,
     scopedDb: context.scopedDb,
   });
   if ("error" in described) {

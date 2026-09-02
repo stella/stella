@@ -86,7 +86,11 @@ export const fillPreviewLogic = async ({
     );
   }
 
-  const source = await loadStoredTemplateSource({ templateId, scopedDb });
+  const source = await loadStoredTemplateSource({
+    templateId,
+    organizationId,
+    scopedDb,
+  });
   if (!source) {
     return Result.err(
       new HandlerError({ status: 404, message: "Template not found" }),

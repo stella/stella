@@ -107,20 +107,30 @@ export type FillTemplateSource = {
 };
 
 /**
- * Resolve a stored template into a fill source: its row (organization-scoped
- * by RLS on `scopedDb`) plus the DOCX bytes from S3. Null when no such
- * template exists for the caller, which every boundary reports as not found.
+ * Resolve a stored template into a fill source: its row plus the DOCX bytes
+ * from S3. Null when no such template exists for the caller, which every
+ * boundary reports as not found.
+ *
+ * The organization predicate is redundant with RLS on `scopedDb` and stays
+ * anyway: tenant isolation on a cross-tenant-addressable id should not rest on
+ * a single mechanism, and a session whose RLS role is ever misconfigured must
+ * still not read another organization's template.
  */
 export const loadStoredTemplateSource = async ({
   templateId,
+  organizationId,
   scopedDb,
 }: {
   templateId: SafeId<"template">;
+  organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
 }): Promise<FillTemplateSource | null> => {
   const template = await scopedDb((tx) =>
     tx.query.templates.findFirst({
-      where: { id: { eq: templateId } },
+      where: {
+        id: { eq: templateId },
+        organizationId: { eq: organizationId },
+      },
       columns: { name: true, fileName: true, s3Key: true, languages: true },
     }),
   );
@@ -245,12 +255,18 @@ export type DescribeTemplateResult =
 
 export const describeStoredTemplate = async ({
   templateId,
+  organizationId,
   scopedDb,
 }: {
   templateId: SafeId<"template">;
+  organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
 }): Promise<DescribeTemplateResult> => {
-  const loaded = await loadStoredTemplateSource({ templateId, scopedDb });
+  const loaded = await loadStoredTemplateSource({
+    templateId,
+    organizationId,
+    scopedDb,
+  });
   if (!loaded) {
     return { error: "Template not found." };
   }
@@ -699,6 +715,7 @@ export const fillStoredTemplateDocx = async <TRejection = never>({
 > => {
   const loaded = await loadStoredTemplateSource({
     templateId,
+    organizationId: options.organizationId,
     scopedDb: options.scopedDb,
   });
   if (!loaded) {
@@ -782,6 +799,7 @@ export const fillStoredTemplateWithTextStrict = async <TRejection = never>({
 > => {
   const loaded = await loadStoredTemplateSource({
     templateId,
+    organizationId: options.organizationId,
     scopedDb: options.scopedDb,
   });
   if (!loaded) {
