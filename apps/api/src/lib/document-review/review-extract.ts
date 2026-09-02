@@ -12,8 +12,10 @@ import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { createDefaultTool } from "@/api/lib/properties/create-schema";
 import { brandDerivedPropertyId } from "@/api/lib/safe-id-boundaries";
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
-import { validateAIOutput } from "@/api/lib/workflow/ai-validators";
-import type { ValidatedResult } from "@/api/lib/workflow/ai-validators";
+import {
+  fieldContentFromValidated,
+  validateAIOutput,
+} from "@/api/lib/workflow/ai-validators";
 import {
   buildJustificationFilenames,
   fetchAndPrepareFiles,
@@ -113,30 +115,6 @@ const buildAiTool = (question: string): AIBatchProperty["tool"] => {
     return panic("createDefaultTool returned a non ai-model tool for an ASK");
   }
   return tool;
-};
-
-const validatedToFieldContent = (validated: ValidatedResult): FieldContent => {
-  switch (validated.type) {
-    case "text":
-      return { version: 1, type: "text", value: validated.value };
-    case "single-select":
-      return { version: 1, type: "single-select", value: validated.value };
-    case "multi-select":
-      return { version: 1, type: "multi-select", value: validated.value };
-    case "date":
-      return { version: 1, type: "date", value: validated.value };
-    case "int":
-      return {
-        version: 1,
-        type: "int",
-        value: validated.value,
-        currency: validated.currency,
-      };
-    default: {
-      validated satisfies never;
-      return panic("Unexpected validated ASK content type");
-    }
-  }
 };
 
 export const collectReviewCitations = (
@@ -330,6 +308,14 @@ export const extractAskContents = async ({
         );
       }
 
+      const content = fieldContentFromValidated(validated.value);
+      if (content === null) {
+        // The model reported no value for this text/int ASK. Leave the
+        // position unextracted so presence grading reads it as absent
+        // rather than a fabricated answer.
+        continue;
+      }
+
       const justification = normalizeJustification({
         justification: propertyResult.justification,
         filenames,
@@ -342,7 +328,7 @@ export const extractAskContents = async ({
         : [];
 
       contentBySourceId.set(sourceId, {
-        content: validatedToFieldContent(validated.value),
+        content,
         citations,
       });
     }

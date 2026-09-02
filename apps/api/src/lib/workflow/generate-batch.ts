@@ -5,10 +5,7 @@ import { FolioDocxReviewer, type FolioAIBlock } from "@stll/folio-core/server";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  Unreachable,
-  WorkflowIntegrationError,
-} from "@/api/lib/errors/tagged-errors";
+import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
@@ -17,7 +14,10 @@ import {
   isAISupportedFile,
 } from "@/api/lib/workflow/ai-file-support";
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
-import { validateAIOutput } from "@/api/lib/workflow/ai-validators";
+import {
+  fieldContentFromValidated,
+  validateAIOutput,
+} from "@/api/lib/workflow/ai-validators";
 import {
   fetchInputFieldsForBatch,
   prepareBatchInput,
@@ -355,6 +355,13 @@ export const generateBatch = async (
         property,
       });
 
+      const content = fieldContentFromValidated(validated);
+      if (content === null) {
+        // The model reported no value for this text/int property. Leave the
+        // cell unwritten rather than persist a fabricated placeholder.
+        continue;
+      }
+
       const fieldId = createSafeId<"field">();
 
       const justification = yield* normalizeJustification({
@@ -371,73 +378,11 @@ export const generateBatch = async (
         });
       }
 
-      switch (validated.type) {
-        case "text": {
-          aiResults.push({
-            fieldId,
-            propertyId: property.id,
-            content: {
-              type: "text",
-              version: 1,
-              value: validated.value,
-            },
-          });
-          break;
-        }
-        case "single-select": {
-          aiResults.push({
-            fieldId,
-            propertyId: property.id,
-            content: {
-              type: "single-select",
-              version: 1,
-              value: validated.value,
-            },
-          });
-          break;
-        }
-        case "multi-select": {
-          aiResults.push({
-            fieldId,
-            propertyId: property.id,
-            content: {
-              type: "multi-select",
-              version: 1,
-              value: validated.value,
-            },
-          });
-          break;
-        }
-        case "date": {
-          aiResults.push({
-            fieldId,
-            propertyId: property.id,
-            content: {
-              type: "date",
-              version: 1,
-              value: validated.value,
-            },
-          });
-          break;
-        }
-        case "int": {
-          aiResults.push({
-            fieldId,
-            propertyId: property.id,
-            content: {
-              type: "int",
-              version: 1,
-              value: validated.value,
-              currency: validated.currency,
-            },
-          });
-          break;
-        }
-        default:
-          throw new Unreachable({
-            message: "Property type not matched",
-          });
-      }
+      aiResults.push({
+        fieldId,
+        propertyId: property.id,
+        content,
+      });
     }
 
     return Result.ok({

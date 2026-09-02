@@ -21,6 +21,8 @@ export const WORKFLOW_SYSTEM_PROMPT =
   "propertyIds and values contain the answer and justification " +
   "for each propertyId. The justification schema for the current " +
   "batch tells you exactly how to cite each source. " +
+  "When the source does not state a property's value, answer null " +
+  "for that property; never invent or guess a value. " +
   "DOCX block text may contain review tags: " +
   `${DOCX_REVIEW_MARKUP_EXAMPLES.insertion}, ` +
   `${DOCX_REVIEW_MARKUP_EXAMPLES.deletion}, and ` +
@@ -55,19 +57,22 @@ const context = {
   text: {
     description:
       "Answer for property. Keep it plain text, keep it " +
-      "short and concise, less than 100 characters",
-    examples: ["Contract for sale of goods"],
+      "short and concise, less than 100 characters. Answer null if the " +
+      "source does not state this value; never guess.",
+    examples: ["Contract for sale of goods", null],
   },
   singleSelect: {
     description:
-      "Answer for property. Select exactly one option or " +
-      "null if none applicable",
+      "Answer for property. Select exactly one option from the list " +
+      "below, or null if the source does not state this value or no " +
+      "option applies; never guess.",
     examples: [null],
   },
   multiSelect: {
     description:
-      "Answer for property. Select one or more options, " +
-      "or null if none applicable",
+      "Answer for property. Select one or more options from the list " +
+      "below, or null if the source does not state this value or no " +
+      "option applies; never guess.",
     examples: [null],
   },
   date: {
@@ -77,6 +82,9 @@ const context = {
     examples: ["2024-03-15", null],
   },
   int: {
+    description:
+      "Answer for property, or null if the source does not state this " +
+      "value; never guess.",
     amount: {
       description: "The integer amount extracted from the document",
       examples: [1500],
@@ -90,8 +98,13 @@ const context = {
   },
 };
 
+const describeOptions = (options: string[]): string =>
+  `Valid options: ${options.join(", ")}.`;
+
 // --------------- Schema builders ---------------
 
+// `null` is an explicit "the source does not state this" answer, valid for
+// every property type — not just date/select, which supported it already.
 export type Answer =
   | string
   | string[]
@@ -225,7 +238,7 @@ export const buildBatchSchema = (
       case "text": {
         schemaShape[property.id] = v.strictObject({
           answer: v.pipe(
-            v.string(),
+            v.nullable(v.string()),
             v.description(context.text.description),
             v.examples(context.text.examples),
           ),
@@ -236,10 +249,18 @@ export const buildBatchSchema = (
       case "single-select": {
         const options = content.options.map((opt) => opt.value);
         if (options.length > 0) {
+          // The picklist isn't enforced as a JSON Schema enum: a model
+          // deviation would otherwise fail `v.parse` for the whole batch
+          // object, not just this property. The raw string passes through
+          // to `validateAIOutput`, which checks membership against
+          // `content.options` and reports a property-scoped
+          // `WorkflowValidationError` instead of a silent null.
           schemaShape[property.id] = v.strictObject({
             answer: v.pipe(
-              v.fallback(v.nullable(v.picklist(options)), null),
-              v.description(context.singleSelect.description),
+              v.nullable(v.string()),
+              v.description(
+                `${context.singleSelect.description} ${describeOptions(options)}`,
+              ),
               v.examples(context.singleSelect.examples),
             ),
             justification: justificationSchema,
@@ -250,13 +271,16 @@ export const buildBatchSchema = (
       case "multi-select": {
         const options = content.options.map((opt) => opt.value);
         if (options.length > 0) {
+          // See the single-select case above: options pass through as raw
+          // strings so an out-of-picklist answer surfaces as a validation
+          // error on this property, not a silent null or a whole-batch parse
+          // failure.
           schemaShape[property.id] = v.strictObject({
             answer: v.pipe(
-              v.fallback(
-                v.nullable(v.pipe(v.array(v.picklist(options)), v.nonEmpty())),
-                null,
+              v.nullable(v.pipe(v.array(v.string()), v.nonEmpty())),
+              v.description(
+                `${context.multiSelect.description} ${describeOptions(options)}`,
               ),
-              v.description(context.multiSelect.description),
               v.examples(context.multiSelect.examples),
             ),
             justification: justificationSchema,
@@ -277,19 +301,24 @@ export const buildBatchSchema = (
       }
       case "int": {
         schemaShape[property.id] = v.strictObject({
-          answer: v.strictObject({
-            amount: v.pipe(
-              v.number(),
-              v.integer(),
-              v.description(context.int.amount.description),
-              v.examples(context.int.amount.examples),
+          answer: v.pipe(
+            v.nullable(
+              v.strictObject({
+                amount: v.pipe(
+                  v.number(),
+                  v.integer(),
+                  v.description(context.int.amount.description),
+                  v.examples(context.int.amount.examples),
+                ),
+                currency: v.pipe(
+                  v.nullable(v.string()),
+                  v.description(context.int.currency.description),
+                  v.examples(context.int.currency.examples),
+                ),
+              }),
             ),
-            currency: v.pipe(
-              v.nullable(v.string()),
-              v.description(context.int.currency.description),
-              v.examples(context.int.currency.examples),
-            ),
-          }),
+            v.description(context.int.description),
+          ),
           justification: justificationSchema,
         });
         break;
