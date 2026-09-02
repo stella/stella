@@ -734,9 +734,9 @@ const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
  */
 // Clicking a DOCX-edit-batch card jumps the user to the document-review
 // facet for the entity those edits target, where the batch lists under
-// "From chat". The output's `queued` ids are the same client-side
-// suggestion ids the review store keys its session entries by, so we look
-// up the entity by matching any of them.
+// "From chat". The output's `queued` ids are folio operation ids, which each
+// queued review-store entry records as `operationId`, so we look up the
+// entity by matching any of them.
 const getDocxReviewPanelHandler = ({
   isDocxEditBatch,
   part,
@@ -759,7 +759,9 @@ const getDocxReviewPanelHandler = ({
     const opIds = new Set(queuedIds);
     const sessions = useReviewStore.getState().sessions;
     const entityIdMatch = Object.entries(sessions).find(([, items]) =>
-      items.some((item) => opIds.has(item.id)),
+      items.some(
+        (item) => item.operationId !== undefined && opIds.has(item.operationId),
+      ),
     )?.[0];
     if (!entityIdMatch) {
       return;

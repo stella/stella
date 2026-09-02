@@ -229,6 +229,7 @@ const buildFullCoverageChatTools = (
     }),
     hasActiveDocxEditClient: true,
     hasActiveDocxFileClient: true,
+    docxSuggestionSurface: "file-overlay",
     // Explicit "manual": DEFAULT_CHAT_EDIT_APPLY_MODE is now "auto", which
     // would suppress suggest_changes here (this call sets no
     // activeFile, so the auto tool never registers either) and drop it out
@@ -626,6 +627,7 @@ describe("chat tool schemas", () => {
       }),
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       recordAuditEvent: noopAuditRecorder,
@@ -680,6 +682,7 @@ describe("chat tool schemas", () => {
       }),
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio" as const,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       recordAuditEvent: noopAuditRecorder,
@@ -730,6 +733,7 @@ describe("chat tool schemas", () => {
       ...baseArgs,
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
     });
     expect(withoutClient).not.toHaveProperty(READ_DOCUMENT_TOOL_NAME);
     expect(withoutClient).not.toHaveProperty(FIND_TEXT_TOOL_NAME);
@@ -745,6 +749,7 @@ describe("chat tool schemas", () => {
       ...baseArgs,
       hasActiveDocxEditClient: true,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
     });
     expect(templateOnly).toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
     // No file-overlay client: `suggest_changes` gets the narrower
@@ -770,6 +775,7 @@ describe("chat tool schemas", () => {
       ...baseArgs,
       hasActiveDocxEditClient: true,
       hasActiveDocxFileClient: true,
+      docxSuggestionSurface: "file-overlay",
     });
     const readDocument = withClient[READ_DOCUMENT_TOOL_NAME];
     const findText = withClient[FIND_TEXT_TOOL_NAME];
@@ -870,6 +876,7 @@ describe("chat tool schemas", () => {
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
     } as const;
     const activeFile = {
       entityId: toSafeId<"entity">("33333333-3333-4333-8333-333333333333"),
@@ -929,6 +936,7 @@ describe("chat tool schemas", () => {
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -955,6 +963,7 @@ describe("chat tool schemas", () => {
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       activeFile: {
         entityId: toSafeId<"entity">("33333333-3333-4333-8333-333333333333"),
         fileFieldId: toSafeId<"field">("44444444-4444-4444-8444-444444444444"),
@@ -987,6 +996,7 @@ describe("chat tool schemas", () => {
       }),
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       activeSkillContext: editableActiveSkillContext,
@@ -1043,6 +1053,7 @@ describe("chat tool schemas", () => {
       }),
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       activeSkillContext: {
@@ -1085,6 +1096,7 @@ describe("chat tool schemas", () => {
       }),
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
     });
@@ -1897,6 +1909,7 @@ describe("chat tool schemas", () => {
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       recordAuditEvent: noopAuditRecorder,
       workspaceId: null,
       toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -1983,6 +1996,7 @@ describe("chat tool schemas", () => {
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       recordAuditEvent: noopAuditRecorder,
       activeFile,
       workspaceId: null,
@@ -2140,6 +2154,7 @@ describe("registry write tool approval policy", () => {
       }),
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       recordAuditEvent: noopAuditRecorder,
@@ -2180,6 +2195,7 @@ describe("registry write tool approval policy", () => {
       }),
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
+      docxSuggestionSurface: "template-studio",
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       recordAuditEvent: noopAuditRecorder,

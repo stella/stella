@@ -106,8 +106,15 @@ export type ReviewSuggestionOrigin =
   (typeof REVIEW_SUGGESTION_ORIGIN)[keyof typeof REVIEW_SUGGESTION_ORIGIN];
 
 export type ReviewSuggestion = {
-  /** Operation id from the AI tool call (uuid). */
+  /** Client-generated suggestion id (uuid); unique across every batch. */
   id: string;
+  /**
+   * The operation id the chat tool echoed to the model for this suggestion
+   * (folio's operation id). A model may reuse one across calls, so it is a
+   * lookup key for "which entity did this tool call queue into", never the
+   * store identity.
+   */
+  operationId?: string | undefined;
   /** Which surface proposed this change. */
   origin: ReviewSuggestionOrigin;
   /** Block id the suggestion targets. */

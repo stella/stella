@@ -7,6 +7,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   CHAT_TURN_INTENT,
+  DOCX_SUGGESTION_SURFACE,
   resourceRef,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
@@ -1030,6 +1031,9 @@ const prepareValidatedIncomingMessage = async ({
       activeFile: activeFileForTools,
       hasActiveDocxEditClient: true,
       hasActiveDocxFileClient: true,
+      // Validation must admit persisted calls from either surface; the file
+      // overlay's operation set is the superset.
+      docxSuggestionSurface: DOCX_SUGGESTION_SURFACE.fileOverlay,
       editApplyMode,
       docxEditRepresentation,
       includeAllDocxEditToolsForValidation: true,
@@ -1492,6 +1496,14 @@ export const createSendMessage = (
       // streaming) and for the matching prompt guidance below.
       const hasActiveDocxFileClient =
         body.activeFile?.supportsDocxEdits === true;
+      // Which client executor resolves `suggest_changes`, hence which
+      // per-surface schema the model sees. Only Template Studio narrows to
+      // text replacements; the file overlay hosts both entity-backed files
+      // and unsaved generated drafts with the full operation set.
+      const docxSuggestionSurface =
+        body.activeTemplate !== undefined
+          ? DOCX_SUGGESTION_SURFACE.templateStudio
+          : DOCX_SUGGESTION_SURFACE.fileOverlay;
       // Per-turn DOCX-edit review-mode setting: which of the two mutually
       // exclusive tools (`suggest_changes` manual /
       // `edit_workspace_document` auto) `getChatTools` registers, and (for
@@ -1871,6 +1883,7 @@ export const createSendMessage = (
             body.activeDraft !== undefined ||
             body.activeTemplate !== undefined,
           hasActiveDocxFileClient,
+          docxSuggestionSurface,
           editApplyMode,
           docxEditRepresentation,
           webSearchEnabled: thread.data.webSearchEnabled,

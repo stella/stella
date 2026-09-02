@@ -31,6 +31,7 @@ import {
 import { panic, Result } from "better-result";
 import { LoaderCircleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+import { v7 as uuidv7 } from "uuid";
 
 import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
@@ -200,13 +201,19 @@ type ActiveExternal = {
 };
 
 type PreparedOperation = {
-  /** The operation as queued: folio's parsed op, with inserted text cleaned of directive markers. */
+  /**
+   * The operation as queued: folio's parsed op, re-keyed to {@link id} and
+   * with inserted text cleaned of directive markers.
+   */
   folio: FolioAIEditOperation;
   /**
-   * Review-store and model-facing id. folio mints ids unique across calls
-   * (and keeps a model-supplied one), so one id serves both roles.
+   * Internal suggestion id, always generated: review-store entries must stay
+   * unique across batches, and folio keeps a model-supplied operation id
+   * verbatim (a model can reuse `op-1` on every call).
    */
   id: string;
+  /** Id echoed to the model in `queued` / `skipped`: folio's operation id. */
+  reportId: string;
 };
 
 // Defense-in-depth: even with the structural ops below, the model can
@@ -338,10 +345,14 @@ const normalizeQueuedOperation = (
 const prepareOperations = (
   operations: readonly FolioAIEditOperation[],
 ): PreparedOperation[] =>
-  operations.map((operation) => ({
-    folio: normalizeQueuedOperation(operation),
-    id: operation.id,
-  }));
+  operations.map((operation, index) => {
+    const id = `ai-docx-${String(index + 1)}-${uuidv7()}`;
+    return {
+      folio: { ...normalizeQueuedOperation(operation), id },
+      id,
+      reportId: operation.id,
+    };
+  });
 
 // The file-overlay `suggest_changes` options require `severity` / `area`,
 // so folio's parser rejects a call without them; the fallbacks cover the
@@ -396,47 +407,50 @@ const queueReviewSuggestions = ({
   const queuedIds: string[] = [];
   const skipped: { id: string; reason: "noopOperation" | "missingBlock" }[] =
     [];
-  const items: ReviewSuggestion[] = prepared.flatMap(({ id, folio }) => {
-    // Drop true no-ops before they ever reach the panel: the model
-    // occasionally emits `find === replace` (or replaceBlock text
-    // identical to the source) as a side effect of running through
-    // every block. Showing them as "X → X" cards is noise.
-    if (isNoopReviewOperation(folio, blocksById)) {
-      skipped.push({ id, reason: "noopOperation" });
-      return [];
-    }
-    const preview = buildPreview(folio, blocksById);
-    if (!preview) {
-      skipped.push({ id, reason: "missingBlock" });
-      return [];
-    }
-    queuedIds.push(id);
-    const blockLabel = labelsById.get(folioOperationBlockId(folio));
-    const base: ReviewSuggestion = {
-      id,
-      origin: REVIEW_SUGGESTION_ORIGIN.chat,
-      blockId: folioOperationBlockId(folio),
-      type: folio.type,
-      summary: summarizeOperation(folio, blockLabel),
-      preview,
-      severity: inputOperationSeverity(folio),
-      area: inputOperationArea(folio),
-      status: "pending",
-      applyMode: null,
-      revisionIds: null,
-      undoHandle: null,
-      pendingOperation: folio,
-      snapshot,
-    };
-    if (blockLabel !== undefined) {
-      base.blockLabel = blockLabel;
-    }
-    const folioComment = folioOperationComment(folio);
-    if (folioComment) {
-      base.comment = folioComment.text;
-    }
-    return [base];
-  });
+  const items: ReviewSuggestion[] = prepared.flatMap(
+    ({ id, reportId, folio }) => {
+      // Drop true no-ops before they ever reach the panel: the model
+      // occasionally emits `find === replace` (or replaceBlock text
+      // identical to the source) as a side effect of running through
+      // every block. Showing them as "X → X" cards is noise.
+      if (isNoopReviewOperation(folio, blocksById)) {
+        skipped.push({ id: reportId, reason: "noopOperation" });
+        return [];
+      }
+      const preview = buildPreview(folio, blocksById);
+      if (!preview) {
+        skipped.push({ id: reportId, reason: "missingBlock" });
+        return [];
+      }
+      queuedIds.push(reportId);
+      const blockLabel = labelsById.get(folioOperationBlockId(folio));
+      const base: ReviewSuggestion = {
+        id,
+        operationId: reportId,
+        origin: REVIEW_SUGGESTION_ORIGIN.chat,
+        blockId: folioOperationBlockId(folio),
+        type: folio.type,
+        summary: summarizeOperation(folio, blockLabel),
+        preview,
+        severity: inputOperationSeverity(folio),
+        area: inputOperationArea(folio),
+        status: "pending",
+        applyMode: null,
+        revisionIds: null,
+        undoHandle: null,
+        pendingOperation: folio,
+        snapshot,
+      };
+      if (blockLabel !== undefined) {
+        base.blockLabel = blockLabel;
+      }
+      const folioComment = folioOperationComment(folio);
+      if (folioComment) {
+        base.comment = folioComment.text;
+      }
+      return [base];
+    },
+  );
 
   useReviewStore.getState().appendSuggestions(entityId, items);
 

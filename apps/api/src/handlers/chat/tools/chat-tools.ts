@@ -1,8 +1,8 @@
 import {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
-  DOCX_SUGGESTION_SURFACE,
   type ApprovalRequiredBuiltInChatToolName,
   type BuiltInChatToolPolicyKindByName,
+  type DocxSuggestionSurface,
 } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 import type { SkillMetadata } from "@stll/skills";
@@ -360,6 +360,13 @@ type GetChatToolsProps = {
    */
   hasActiveDocxFileClient: boolean;
   /**
+   * Which client executor resolves `suggest_changes` this turn, and so
+   * which per-surface schema the model sees. Not derivable from the two
+   * flags above: an unsaved generated draft is hosted by the file overlay
+   * (full operation set) without being an entity-backed active file.
+   */
+  docxSuggestionSurface: DocxSuggestionSurface;
+  /**
    * Per-thread opt-in for the web_search + fetch_url tools. Combined
    * with FEATURE_WEB_SEARCH (deploy gate), the org's
    * disabledNativeToolSlugs ("web-search" disabled), and the presence
@@ -582,6 +589,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     thirdPartyBoundary,
     hasActiveDocxEditClient,
     hasActiveDocxFileClient,
+    docxSuggestionSurface,
     webSearchEnabled,
     webSearchProviders,
     externalTools = {},
@@ -694,11 +702,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const suggestChangesTools =
     registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.manual ||
     (includeAllDocxEditToolsForValidation && hasActiveDocxEditClient)
-      ? createSuggestChangesTools(
-          hasActiveDocxFileClient
-            ? DOCX_SUGGESTION_SURFACE.fileOverlay
-            : DOCX_SUGGESTION_SURFACE.templateStudio,
-        )
+      ? createSuggestChangesTools(docxSuggestionSurface)
       : {};
   const automaticDocxEditAvailableForValidation =
     includeAllDocxEditToolsForValidation &&
