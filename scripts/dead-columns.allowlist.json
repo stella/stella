@@ -1,0 +1,62 @@
+[
+  {
+    "table": "agent_skills",
+    "column": "autoInvokeHint",
+    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
+  },
+  {
+    "table": "ai_memories",
+    "column": "supersededById",
+    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
+  },
+  {
+    "table": "bilingual_translation_runs",
+    "column": "modelRef",
+    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
+  },
+  {
+    "table": "document_review_runs",
+    "column": "modelRef",
+    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
+  },
+  {
+    "table": "document_translation_runs",
+    "column": "modelRef",
+    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
+  },
+  {
+    "table": "usage_provider_webhook_events",
+    "column": "processedAt",
+    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
+  },
+  {
+    "table": "organization_settings",
+    "column": "documentStampEnabled",
+    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
+  },
+  {
+    "table": "buffer_object_cleanup_intents",
+    "column": "writerUserId",
+    "reason": "not app-code dead: default expression pulls the PostgreSQL session var and the column only appears inside the RLS policy predicate built alongside the table in schema/entities.ts, which this check excludes as the definitions. Allowlisted rather than a scanner fix -- picking it up would require reading inside the excluded schema files, defeating the point of the exclusion."
+  },
+  {
+    "table": "corpus_index_projection_revisions",
+    "column": "transactionId",
+    "reason": "not app-code dead: populated only by migration-owned triggers (apps/api/drizzle/20260901060000_concurrent_corpus_projection_revision_fence/migration.sql) for ON CONFLICT dedup; app code only ever selects `revision`. Migrations are excluded by design, so this column is invisible to the check even though it is live."
+  },
+  {
+    "table": "case_law_corpus_jurisdictions",
+    "column": "firstObservedAt",
+    "reason": "not app-code dead: append-only audit timestamp written by a migration-owned trigger (see schema/case-law.ts comment); census.ts only ever selects `country`. Migrations are excluded by design."
+  },
+  {
+    "table": "case_law_citation_resolution_census_runs",
+    "column": "keysScanned",
+    "reason": "dormant feature: citation-resolution-census-consts.ts is explicitly headed 'Dormant closed vocabularies of the citation-resolution census' -- the whole table is scaffolded ahead of a census feature that has not landed; only referenced in branded-id registries and RLS/schema-invariant tests."
+  },
+  {
+    "table": "case_law_citation_resolution_census_runs",
+    "column": "cursorKey",
+    "reason": "dormant feature: see case_law_citation_resolution_census_runs.keysScanned -- same not-yet-landed census feature."
+  }
+]
