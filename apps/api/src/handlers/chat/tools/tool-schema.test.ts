@@ -1135,10 +1135,10 @@ describe("chat tool schemas", () => {
     });
     expect(createDocument.needsApproval).toBeUndefined();
     expect(createDocument.description).toContain(
-      "Never wrap an entire body paragraph, table cell, or bilingual column in `**`",
+      "INLINE MARKDOWN: body text is GFM markdown",
     );
     expect(createDocument.description).toContain(
-      "use @title, @clause, or @subclause for structural headings",
+      "use @clause or @subclause for headings instead",
     );
     expect(getChatToolPolicy(createDocument)).toEqual({
       kind: "internal",

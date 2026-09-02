@@ -147,11 +147,13 @@ export const createCreateDocumentTool = () =>
       "  @schedule <heading> — schedule/annex starting on a new page.\n" +
       "  @signatures — side-by-side party signature block; see below.\n" +
       "  @pagebreak — force a page break.\n\n" +
-      "INLINE EMPHASIS: wrap only a short inline label in `**` for bold, for example " +
-      "`**Seller:** [[seller name]]`. Never wrap an entire body paragraph, " +
-      "table cell, or bilingual column in `**`; use @title, @clause, or @subclause " +
-      "for structural headings. The markers are compiled into DOCX runs and are " +
-      "not shown literally.\n\n" +
+      "INLINE MARKDOWN: body text is GFM markdown. `**bold**`, `*italic*`, and " +
+      "`[text](https://…)` links compile into DOCX runs and are not shown " +
+      "literally; a `- ` or `1. ` list and a `| a | b |` pipe table inside a " +
+      "clause body become a real list or table. Bold suits short labels such " +
+      "as `**Seller:** [[seller name]]`; a paragraph or bilingual column that " +
+      "is bold end to end reads as a heading, so use @clause or @subclause " +
+      "for headings instead.\n\n" +
       "RESULT REPORT: the result lists `fixes` the compiler applied on its own " +
       "and `warnings` it kept; a failed compile returns `errors` with source " +
       "lines. Read them: if a fix changed what you meant, call the tool again " +
