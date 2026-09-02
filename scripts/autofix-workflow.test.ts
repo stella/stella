@@ -4,12 +4,20 @@ const WORKFLOW_URL = new URL(
   "../.github/workflows/autofix.yml",
   import.meta.url,
 );
+const HELPER_URL = new URL(
+  "dependabot-empty-changeset.ts",
+  import.meta.url,
+);
+const CHANGESET_GUARD_URL = new URL("changeset-guard.ts", import.meta.url);
 
 describe("Dependabot Bun autofix boundary", () => {
   test("keeps the runner read-only and hands off only verified autofixes", async () => {
     const workflow = await Bun.file(WORKFLOW_URL).text();
     const restrictionStep = workflow.indexOf(
       "- name: Restrict generated changes",
+    );
+    const trustedSourcesStep = workflow.indexOf(
+      "- name: Verify trusted autofix sources",
     );
     const pushStep = workflow.indexOf("- name: Push autofixes");
 
@@ -40,41 +48,58 @@ describe("Dependabot Bun autofix boundary", () => {
       "bun --no-env-file dedupe --lockfile-only --ignore-scripts",
     );
     expect(workflow).toContain(
-      `git diff --name-only -- . ':(exclude)bun.lock' ":(exclude)$EMPTY_CHANGESET_PATH"`,
+      `git diff --name-only "$HEAD_SHA" -- . ':(exclude)bun.lock' ":(exclude)$EMPTY_CHANGESET_PATH"`,
     );
     expect(workflow).toContain(
       `git ls-files --others --exclude-standard -- . ":(exclude)$EMPTY_CHANGESET_PATH"`,
     );
     expect(restrictionStep).toBeGreaterThanOrEqual(0);
+    expect(trustedSourcesStep).toBeGreaterThanOrEqual(0);
+    expect(restrictionStep).toBeGreaterThan(trustedSourcesStep);
     expect(pushStep).toBeGreaterThan(restrictionStep);
     expect(workflow).toContain(
       "autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4",
     );
+    expect(workflow).toContain("- name: Verify trusted autofix sources");
+    expect(workflow).toContain(
+      `git diff --quiet "$BASE_SHA" "$HEAD_SHA" --`,
+    );
+    expect(workflow).toContain(
+      `if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then`,
+    );
+    expect(workflow).toContain(
+      "bun --no-install --no-env-file scripts/dependabot-empty-changeset.ts",
+    );
+
+    const [helper, changesetGuard] = await Promise.all([
+      Bun.file(HELPER_URL).text(),
+      Bun.file(CHANGESET_GUARD_URL).text(),
+    ]);
+    expect(helper).not.toContain('from "better-result"');
+    expect(changesetGuard).not.toContain('from "better-result"');
   });
 
-  test("adds a deterministic empty changeset for @stll/ui updates that lack one", async () => {
+  test("adds a deterministic empty changeset for published dev dependency updates", async () => {
     const workflow = await Bun.file(WORKFLOW_URL).text();
     const changesetStep = workflow.indexOf(
-      "- name: Add missing empty @stll/ui changeset",
+      "- name: Add missing empty dev dependency changeset",
     );
     const restrictionStep = workflow.indexOf(
       "- name: Restrict generated changes",
     );
     const pushStep = workflow.indexOf("- name: Push autofixes");
 
-    expect(workflow).toContain('- "packages/ui/**"');
+    expect(workflow).toContain('- "packages/*/package.json"');
+    expect(workflow).not.toContain('- "packages/ui/**"');
     expect(workflow).toContain(
-      `EMPTY_CHANGESET_PATH: .changeset/dependabot-ui-\${{ github.event.pull_request.number }}.md`,
+      `EMPTY_CHANGESET_PATH: .changeset/dependabot-dev-dependencies-\${{ github.event.pull_request.number }}.md`,
     );
     expect(workflow).toContain("fetch-depth: 0");
     expect(workflow).toContain(
-      `git diff --name-only "\${BASE_SHA}...\${HEAD_SHA}" -- packages/ui`,
+      "bun --no-install --no-env-file scripts/dependabot-empty-changeset.ts",
     );
-    expect(workflow).toContain("git diff --name-only --diff-filter=A");
-    expect(workflow).toContain(`".changeset/*.md"`);
-    expect(workflow).toContain(`":(exclude).changeset/README.md"`);
     expect(workflow).toContain(
-      `printf '%s\\n' "---" "---" > "$EMPTY_CHANGESET_PATH"`,
+      `--base "$BASE_SHA" --head "$HEAD_SHA" --output "$EMPTY_CHANGESET_PATH"`,
     );
     expect(workflow).toContain(
       `cmp -s <(printf '%s\\n' "---" "---") "$EMPTY_CHANGESET_PATH"`,

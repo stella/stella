@@ -20,9 +20,22 @@
 //
 //   bun scripts/changeset-guard.ts [--base origin/main]
 
-import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+
+// This module is also imported by the no-install Dependabot autofix runner.
+class ChangesetPolicyError extends Error {
+  readonly _tag = "ChangesetPolicyError";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ChangesetPolicyError";
+  }
+}
+
+const panic = (message: string): never => {
+  throw new ChangesetPolicyError(message);
+};
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const POLICY_FILE = "scripts/changeset-policy.json";
@@ -57,7 +70,7 @@ const isChangesetPolicy = (value: unknown): value is ChangesetPolicy =>
 export const parseChangesetPolicy = (text: string): ChangesetPolicy => {
   const parsed: unknown = JSON.parse(text);
   if (!isChangesetPolicy(parsed)) {
-    panic(
+    return panic(
       `${POLICY_FILE} must hold releasePaths, generatedPaths and packageFiles as string arrays.`,
     );
   }
@@ -235,7 +248,7 @@ const parseArgs = (args: readonly string[]): { readonly base: string } => {
     }
     const value = args.at(index + 1);
     if (value === undefined) {
-      panic("--base requires a git ref");
+      return panic("--base requires a git ref");
     }
     base = value;
     index += 1;
