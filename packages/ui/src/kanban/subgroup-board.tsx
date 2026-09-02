@@ -8,6 +8,7 @@ import { cn } from "../lib/utils";
 import { createBandPeekController } from "./band-peek";
 import type { BandPeekController } from "./band-peek";
 import { KanbanColumnBandHeader } from "./column-band-header";
+import type { KanbanBandToggleActivation } from "./column-band-header";
 import {
   KANBAN_COLLAPSED_BAND_WIDTH_CLASS,
   KANBAN_COLUMN_GAP_PX,
@@ -68,7 +69,15 @@ export type KanbanSubgroupBandHeaderContext = {
    * name and offer to pin the band open.
    */
   folded: boolean;
-  onCollapsedChange: (collapsed: boolean) => void;
+  /**
+   * A custom caption reports which way it was activated; omitting the
+   * activation is read as a pointer fold, the conservative choice for the
+   * peek that follows.
+   */
+  onCollapsedChange: (
+    collapsed: boolean,
+    activation?: KanbanBandToggleActivation,
+  ) => void;
 };
 
 /**
@@ -250,13 +259,38 @@ export const KanbanSubgroupBoard = <TRow,>({
    */
   const isBandFolded = (band: KanbanColumnBand): boolean =>
     peekingBandId !== band.id && isBandCollapsedNow(band);
-  const setBandCollapsed = (band: KanbanColumnBand, collapsed: boolean) => {
-    // A fold from the caption leaves the new slot under the pointer; the
-    // controller keeps it from peeking straight back open.
-    if (collapsed) {
+  // A peek belongs to a band that is collapsed by state. When a controlled
+  // caller expands that band, or a matrix change removes it, no open element
+  // of it may ever emit a leave, so the controller is told directly.
+  const peekedBand =
+    peekingBandId === null
+      ? null
+      : (spans.find((span) => span.band?.id === peekingBandId)?.band ?? null);
+  const staleBandId =
+    peekingBandId !== null &&
+    (peekedBand === null || !isBandCollapsedNow(peekedBand))
+      ? peekingBandId
+      : null;
+  useEffect(() => {
+    if (staleBandId !== null) {
+      peek.bandExpanded(staleBandId);
+    }
+  }, [peek, staleBandId]);
+  const setBandCollapsed = (
+    band: KanbanColumnBand,
+    collapsed: boolean,
+    activation?: KanbanBandToggleActivation,
+  ) => {
+    const viaPointer = activation === undefined ? true : activation.viaPointer;
+    // A pointer fold from the caption leaves the new slot under the pointer;
+    // the controller keeps it from peeking straight back open. A keyboard
+    // fold leaves no pointer there, so the next hover may peek as usual.
+    if (!collapsed) {
+      peek.bandExpanded(band.id);
+    } else if (viaPointer) {
       peek.foldedUnderPointer(band.id);
     } else {
-      peek.bandExpanded(band.id);
+      peek.bandFolded(band.id);
     }
     if (onBandCollapsedChange) {
       onBandCollapsedChange(band, collapsed);
@@ -359,7 +393,8 @@ export const KanbanSubgroupBoard = <TRow,>({
       columns: span.columns,
       count: span.columns.reduce((sum, column) => sum + columnCount(column), 0),
       folded,
-      onCollapsedChange: (next) => setBandCollapsed(band, next),
+      onCollapsedChange: (next, activation) =>
+        setBandCollapsed(band, next, activation),
     };
     if (renderBandHeader) {
       return <>{renderBandHeader(context)}</>;
@@ -622,14 +657,19 @@ const FoldedBandSlot = ({
   children,
   className,
   peek,
-}: FoldedBandSlotProps) => (
-  <div
-    className={className}
-    data-kanban-band={band.id}
-    data-kanban-band-collapsed=""
-    onPointerMove={() => peek.slotPointerMove(band.id)}
-    onPointerLeave={() => peek.slotPointerLeave(band.id)}
-  >
-    {children}
-  </div>
-);
+}: FoldedBandSlotProps) => {
+  // A slot that leaves the DOM mid-delay (its band expanded or disappeared)
+  // takes its pending peek and its suppression with it.
+  useEffect(() => () => peek.slotUnmounted(band.id), [peek, band.id]);
+  return (
+    <div
+      className={className}
+      data-kanban-band={band.id}
+      data-kanban-band-collapsed=""
+      onPointerMove={() => peek.slotPointerMove(band.id)}
+      onPointerLeave={() => peek.slotPointerLeave(band.id)}
+    >
+      {children}
+    </div>
+  );
+};

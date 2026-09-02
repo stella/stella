@@ -53,12 +53,23 @@ export type BandPeekController = {
   /** The pointer left a part of a band that is rendered open. */
   openPointerLeave: (bandId: string) => void;
   /**
-   * The band was folded by its own caption, so its slot now sits under the
-   * pointer; it must not peek until the pointer leaves the slot.
+   * The band was folded by a pointer on its caption, so its slot now sits
+   * under the pointer; it must not peek until the pointer leaves the slot.
    */
   foldedUnderPointer: (bandId: string) => void;
+  /**
+   * The band was folded without a pointer on it (keyboard, or a controlled
+   * caller): any peek ends, and the slot may peek on the next hover.
+   */
+  bandFolded: (bandId: string) => void;
   /** The band was pinned open (its toggle, or a peek confirmed by a click). */
   bandExpanded: (bandId: string) => void;
+  /**
+   * A band's folded slot left the DOM (the band expanded or disappeared) so
+   * a peek it was about to open, or a suppression it carried, no longer
+   * applies.
+   */
+  slotUnmounted: (bandId: string) => void;
   /** Ends any pending timer, for unmount. */
   dispose: () => void;
 };
@@ -94,6 +105,16 @@ export const createBandPeekController = ({
     }
     peekingBandId = bandId;
     onChange(bandId);
+  };
+
+  const bandFolded = (bandId: string) => {
+    if (openingBandId === bandId) {
+      clearOpenTimer();
+    }
+    if (peekingBandId === bandId) {
+      clearEndTimer();
+      setPeeking(null);
+    }
   };
 
   return {
@@ -137,15 +158,10 @@ export const createBandPeekController = ({
       }, lingerMs);
     },
     foldedUnderPointer: (bandId) => {
-      if (openingBandId === bandId) {
-        clearOpenTimer();
-      }
-      if (peekingBandId === bandId) {
-        clearEndTimer();
-        setPeeking(null);
-      }
+      bandFolded(bandId);
       suppressedBandId = bandId;
     },
+    bandFolded,
     bandExpanded: (bandId) => {
       if (openingBandId === bandId) {
         clearOpenTimer();
@@ -156,6 +172,14 @@ export const createBandPeekController = ({
       if (peekingBandId === bandId) {
         clearEndTimer();
         setPeeking(null);
+      }
+    },
+    slotUnmounted: (bandId) => {
+      if (openingBandId === bandId) {
+        clearOpenTimer();
+      }
+      if (suppressedBandId === bandId) {
+        suppressedBandId = null;
       }
     },
     dispose: () => {

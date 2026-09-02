@@ -120,6 +120,34 @@ describe("band peek controller", () => {
     expect(changes).toEqual(["todo", null]);
   });
 
+  test("a slot that unmounts mid-delay cancels its pending peek", () => {
+    const { clock, changes, peek } = setup();
+    peek.slotPointerMove("todo");
+    peek.slotUnmounted("todo");
+    clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
+    expect(changes).toEqual([]);
+  });
+
+  test("a slot that unmounts drops its suppression", () => {
+    const { clock, changes, peek } = setup();
+    peek.foldedUnderPointer("todo");
+    peek.slotUnmounted("todo");
+    peek.slotPointerMove("todo");
+    clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
+    expect(changes).toEqual(["todo"]);
+  });
+
+  test("a fold without a pointer ends the peek but does not suppress the slot", () => {
+    const { clock, changes, peek } = setup();
+    peek.slotPointerMove("todo");
+    clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
+    peek.bandFolded("todo");
+    expect(changes).toEqual(["todo", null]);
+    peek.slotPointerMove("todo");
+    clock.advance(KANBAN_BAND_PEEK_DELAY_MS);
+    expect(changes).toEqual(["todo", null, "todo"]);
+  });
+
   test("a second band's slot takes over a pending peek", () => {
     const { clock, changes, peek } = setup();
     peek.slotPointerMove("todo");

@@ -14,7 +14,10 @@ export type { KanbanCardShellProps } from "./card-shell";
 export { KanbanCardShell } from "./card-shell";
 export type { KanbanCellActionProps } from "./cell-action";
 export { KanbanCellAction } from "./cell-action";
-export type { KanbanColumnBandHeaderProps } from "./column-band-header";
+export type {
+  KanbanBandToggleActivation,
+  KanbanColumnBandHeaderProps,
+} from "./column-band-header";
 export { KanbanColumnBandHeader } from "./column-band-header";
 export type { KanbanColumnBandSpan } from "./column-bands";
 export {
