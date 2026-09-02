@@ -156,12 +156,14 @@ const USER_INPUT_TOOL_NAMES = {
 } as const satisfies Record<string, true>;
 
 // folio-agents tools a DOCX surface auto-runs against its bridge with no
-// approval click: the read tools, plus `suggest_changes`, which is queue-only
-// on every chat surface (the bridge parks operations for per-suggestion
-// review and never writes). The comment MUTATION tools (`add_comment`,
-// `reply_comment`, `resolve_comment`) are deliberately NOT here: they carry
-// `needsApproval` and are resolved through the approval flow, not this
-// auto-run watcher.
+// approval click: the read tools, plus the queue-only registration of
+// `suggest_changes` (the bridge parks operations for per-suggestion review
+// and never writes). The server-executed apply registration shares the name
+// but is approval-gated, so its calls never rest in the `input-complete`
+// state the watcher acts on once the stream is idle. The comment MUTATION
+// tools (`add_comment`, `reply_comment`, `resolve_comment`) are deliberately
+// NOT here: they carry `needsApproval` and are resolved through the approval
+// flow, not this auto-run watcher.
 const FOLIO_AGENT_DOC_TOOL_NAMES = {
   [FOLIO_AGENT_TOOL_NAMES.findText]: true,
   [FOLIO_AGENT_TOOL_NAMES.getDocumentOutline]: true,
@@ -175,8 +177,33 @@ const FOLIO_AGENT_DOC_TOOL_NAMES = {
   [FOLIO_AGENT_TOOL_NAMES.suggestChanges]: true,
 } as const satisfies Record<string, true>;
 
-/** The one DOCX mutation tool: queue-only, so it never carries an approval gate. */
+/** The one DOCX mutation tool: queued for review in manual mode, applied and saved by the API in auto mode. */
 export const SUGGEST_CHANGES_TOOL_NAME = FOLIO_AGENT_TOOL_NAMES.suggestChanges;
+
+type SuggestChangesOutput =
+  ChatUITools[typeof SUGGEST_CHANGES_TOOL_NAME]["output"];
+
+/**
+ * The server-executed apply variant's outcome. The client-executed queue
+ * variant answers with folio's `{ ok, ... }` envelope instead; the two
+ * registrations share the tool name, so the output type is their union.
+ */
+export type SuggestChangesApplyOutput = Exclude<
+  SuggestChangesOutput,
+  { ok: boolean }
+>;
+
+// No shared discriminator exists across the two envelopes (`ok` vs
+// `success`), so membership is decided by which one is present. Accepts
+// `unknown` because TanStack types a two-registration tool's streamed
+// output as unknown; the approval card passes the typed union.
+export const isSuggestChangesApplyOutput = (
+  output: unknown,
+): output is SuggestChangesApplyOutput =>
+  typeof output === "object" &&
+  output !== null &&
+  "success" in output &&
+  typeof output.success === "boolean";
 
 const CHAT_TOOL_TITLE_KEYS = {
   add_comment: "chat.tool.add_comment",
@@ -202,9 +229,6 @@ const CHAT_TOOL_TITLE_KEYS = {
   // Code-mode discovery companion to execute_typescript: fetches a read tool's
   // full signature on demand.
   discover_tools: "chat.tool.discover_tools",
-  // Headless (auto) counterpart to suggest_changes: writes a new entity
-  // version directly, no per-suggestion review step.
-  edit_workspace_document: "chat.tool.edit_workspace_document",
   // Code-mode sandbox runner (replaces run-stella-query).
   execute_typescript: "chat.tool.execute_typescript",
   "expand-chat-history": "chat.tool.expand-chat-history",
@@ -256,6 +280,9 @@ const RETIRED_CHAT_TOOL_TITLE_KEYS = {
   // The manual DOCX edit tool that `suggest_changes` replaced; persisted
   // threads still carry its calls.
   "apply-active-docx-edits": "chat.tool.apply-active-docx-edits",
+  // The automatic DOCX edit tool the server-executed `suggest_changes`
+  // variant replaced; persisted threads still carry its calls.
+  edit_workspace_document: "chat.tool.suggest_changes",
   ares_lookup_company: "chat.tool.ares_lookup_company",
   ares_search_companies: "chat.tool.ares_search_companies",
   // Retired hand-rolled code-execution tools, replaced by the code-mode
@@ -377,7 +404,6 @@ const CHAT_TOOL_GRANT_POLICY = {
   delete_document: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
   delete_matter: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
   delete_time_entry: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
-  edit_workspace_document: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
   fetch_url: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   fill_template: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   link_matter_contact: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
@@ -396,6 +422,9 @@ const CHAT_TOOL_GRANT_POLICY = {
   set_field_value: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   set_practice_jurisdictions: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   spawn_subagents: CHAT_TOOL_GRANT_POLICY_KIND.neverAuto,
+  // Only the server-executed apply variant ever requests approval; it writes
+  // a new document version, so each call is approved on its own.
+  suggest_changes: CHAT_TOOL_GRANT_POLICY_KIND.approveOnce,
   "update-current-skill-body": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "update-current-skill-resource": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "update-entity-fields": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
@@ -461,7 +490,6 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   delete_document: true,
   delete_matter: true,
   delete_time_entry: true,
-  edit_workspace_document: false,
   fetch_url: false,
   fill_template: true,
   link_matter_contact: true,
@@ -480,6 +508,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   set_field_value: true,
   set_practice_jurisdictions: true,
   spawn_subagents: false,
+  suggest_changes: false,
   "update-current-skill-body": false,
   "update-current-skill-resource": false,
   "update-entity-fields": false,

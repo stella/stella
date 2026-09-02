@@ -36,13 +36,16 @@ import type {
  *   executes them against the editor bridge (`getComments` / `setComments`
  *   wired to the host's controlled `comments` state) only after the user
  *   approves.
- * - `suggest_changes`, auto-run (no approval): the one DOCX mutation tool.
- *   It never writes to the document on these surfaces; the client executes
- *   it through a review-queue bridge that parks every operation for human
- *   accept / reject (the review panel, or the Studio's in-document
- *   suggestions). The per-surface options in
- *   `DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE` shape its schema; the client
- *   passes the same options to `executeFolioToolCall`.
+ * - `suggest_changes`, auto-run (no approval): the one DOCX mutation tool,
+ *   in its manual (queue-only) registration. It never writes to the
+ *   document on these surfaces; the client executes it through a
+ *   review-queue bridge that parks every operation for human accept /
+ *   reject (the review panel, or the Studio's in-document suggestions). The
+ *   per-surface options in `DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE` shape
+ *   its schema; the client passes the same options to
+ *   `executeFolioToolCall`. The automatic apply mode registers the same
+ *   tool name server-executed instead
+ *   (`auto-apply-suggest-changes-tools.ts`).
  *
  * Not registered: `read_page` / `read_selection` / `scroll_to_block` are
  * navigation-only live-editor capabilities with no chat surface driving them.
@@ -62,7 +65,7 @@ export const REPLY_COMMENT_TOOL_NAME = FOLIO_AGENT_TOOL_NAMES.replyComment;
 export const RESOLVE_COMMENT_TOOL_NAME = FOLIO_AGENT_TOOL_NAMES.resolveComment;
 export const SUGGEST_CHANGES_TOOL_NAME = FOLIO_AGENT_TOOL_NAMES.suggestChanges;
 
-const requireFolioToolDefinition = (
+export const requireFolioToolDefinition = (
   definitions: readonly FolioAgentToolDefinition[],
   name: FolioAgentToolName,
 ): FolioAgentToolDefinition => {
@@ -167,9 +170,10 @@ export const createFolioAgentDocTools = () => {
 
 /**
  * The `suggest_changes` tool shaped for one review surface. Queue-only on
- * every surface (the client bridge never writes), hence no approval gate:
+ * both client surfaces (the bridge never writes), hence no approval gate:
  * the meaningful human gate is the per-suggestion Accept, not a chat-level
- * approval click.
+ * approval click. `chat-tools.ts` relaxes the contract's `mutation` policy
+ * to `internal` for exactly this registration.
  */
 export const createSuggestChangesTools = (surface: DocxSuggestionSurface) => {
   const definitions = getFolioToolDefinitions({

@@ -33,7 +33,6 @@ import {
 } from "@/api/handlers/chat/tools/chat-history-tools";
 import { getChatTools as getChatToolsWithPin } from "@/api/handlers/chat/tools/chat-tools";
 import { CREATE_WORKSPACE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/create-workspace-document-tools";
-import { EDIT_WORKSPACE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/edit-workspace-document-tools";
 import { REVIEW_FOLDER_CONSISTENCY_TOOL_NAME } from "@/api/handlers/chat/tools/folder-consistency-review-tool";
 import {
   ADD_COMMENT_TOOL_NAME,
@@ -721,11 +720,11 @@ describe("chat tool schemas", () => {
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       // Explicit "manual": Template Studio has no entity-backed
       // `activeFile` (it uses `activeTemplate`), so the "auto" default
-      // could never register `edit_workspace_document` there anyway; pin
-      // "manual" so this test keeps exercising suggest_changes's
-      // registration independent of the production default, matching
-      // this test's actual subject (the folio-agents read tools' own
-      // narrower gate).
+      // could never register the server-executed apply variant there
+      // anyway; pin "manual" so this test keeps exercising the queue
+      // variant's registration independent of the production default,
+      // matching this test's actual subject (the folio-agents read tools'
+      // own narrower gate).
       editApplyMode: "manual",
     } as const;
 
@@ -1962,16 +1961,23 @@ describe("chat tool schemas", () => {
   });
 
   // Regression coverage mirroring `create_workspace_document authorization`
-  // above: `edit_workspace_document` writes a new entity version directly
-  // (no client review panel in the loop), so it must mirror the same class
-  // of explicit authorization mirror -- here `entity: ["update"]` (an edit
-  // to an EXISTING document) rather than `entity: ["create"]` -- plus the
-  // active-matter status gate, PLUS a review-mode gate
-  // (`editApplyMode === "auto"`) that has no analogue on the create tool:
-  // this tool and the manual, client-executed `suggest_changes`
-  // are mutually exclusive review-mode surfaces, never both registered for
-  // the same turn.
-  describe("edit_workspace_document authorization", () => {
+  // above: in `auto` mode `suggest_changes` is server-executed and writes a
+  // new entity version directly (no client review panel in the loop), so it
+  // must mirror the same class of explicit authorization mirror -- here
+  // `entity: ["update"]` (an edit to an EXISTING document) rather than
+  // `entity: ["create"]` -- plus the active-matter status gate, PLUS a
+  // review-mode gate (`editApplyMode === "auto"`) that has no analogue on
+  // the create tool: the apply variant and the manual, client-executed
+  // queue variant are mutually exclusive review-mode surfaces, never both
+  // registered for the same turn.
+  //
+  // Both variants carry the SAME tool name, so presence alone proves
+  // nothing. They are told apart by their registration shape: the apply
+  // variant is server-executed and approval-gated (`execute` defined,
+  // `needsApproval === true`, policy kind "mutation"); the queue variant is
+  // client-executed with no chat-level approval (no `execute`, no
+  // `needsApproval`, policy kind "internal").
+  describe("suggest_changes automatic apply registration", () => {
     const activeFile = {
       entityId: toSafeId<"entity">("77777777-7777-4777-8777-777777777777"),
       currentVersionId: toSafeId<"entityVersion">(
@@ -2006,50 +2012,71 @@ describe("chat tool schemas", () => {
       }),
     } as const;
 
-    test("registers edit_workspace_document for an updater on an active matter with an editable active file", () => {
-      const tools = getChatTools({
-        ...baseArgs,
-        memberRole: "owner",
-        editApplyMode: "auto",
-        workspaceStatusById: new Map([[workspaceId, "active"]]),
-      });
-      expect(tools).toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+    const expectApplyVariant = (tools: ReturnType<typeof getChatTools>) => {
+      const tool = tools[SUGGEST_CHANGES_TOOL_NAME];
+      if (!tool) {
+        throw new Error("Expected the apply variant to be registered");
+      }
+      expect(tool.execute).toBeDefined();
+      expect(tool.needsApproval).toBe(true);
+      expect(getChatToolPolicy(tool).kind).toBe("mutation");
+    };
+
+    const expectQueueVariant = (tools: ReturnType<typeof getChatTools>) => {
+      const tool = tools[SUGGEST_CHANGES_TOOL_NAME];
+      if (!tool) {
+        throw new Error("Expected the queue variant to be registered");
+      }
+      expect(tool.execute).toBeUndefined();
+      expect(tool.needsApproval).toBeUndefined();
+      expect(getChatToolPolicy(tool).kind).toBe("internal");
+    };
+
+    test("registers the apply variant for an updater on an active matter with an editable active file", () => {
+      expectApplyVariant(
+        getChatTools({
+          ...baseArgs,
+          memberRole: "owner",
+          editApplyMode: "auto",
+          workspaceStatusById: new Map([[workspaceId, "active"]]),
+        }),
+      );
     });
 
     // `intern` has `chat: [...]` but `entity: []` -- chat-capable, but not
     // entitled to edit documents. Without this gate, the tool would let an
     // entity-update-less role overwrite documents through chat alone.
-    test("does not register edit_workspace_document for a role without entity:update", () => {
+    test("does not register suggest_changes for a role without entity:update", () => {
       const tools = getChatTools({
         ...baseArgs,
         memberRole: "intern",
         editApplyMode: "auto",
         workspaceStatusById: new Map([[workspaceId, "active"]]),
       });
-      expect(tools).not.toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+      expect(tools).not.toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
     });
 
-    test("does not register edit_workspace_document for an archived matter", () => {
+    test("does not register suggest_changes for an archived matter", () => {
       const tools = getChatTools({
         ...baseArgs,
         memberRole: "owner",
         editApplyMode: "auto",
         workspaceStatusById: new Map([[workspaceId, "archived"]]),
       });
-      expect(tools).not.toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+      expect(tools).not.toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
     });
 
     // Fail-closed: an unknown workspace status must NOT default to "active".
-    test("does not register edit_workspace_document when no workspace status is known", () => {
+    test("does not register suggest_changes when no workspace status is known", () => {
       const tools = getChatTools({
         ...baseArgs,
         memberRole: "owner",
         editApplyMode: "auto",
       });
-      expect(tools).not.toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+      expect(tools).not.toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
     });
 
-    test("does not register edit_workspace_document without an editable active DOCX file", () => {
+    test("does not register suggest_changes without an editable active DOCX file", () => {
       const tools = getChatTools({
         ...baseArgs,
         activeFile: { entityId: activeFile.entityId },
@@ -2057,10 +2084,10 @@ describe("chat tool schemas", () => {
         editApplyMode: "auto",
         workspaceStatusById: new Map([[workspaceId, "active"]]),
       });
-      expect(tools).not.toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+      expect(tools).not.toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
     });
 
-    test("does not register edit_workspace_document without the exact active file field", () => {
+    test("does not register suggest_changes without the exact active file field", () => {
       const tools = getChatTools({
         ...baseArgs,
         activeFile: {
@@ -2071,13 +2098,13 @@ describe("chat tool schemas", () => {
         editApplyMode: "auto",
         workspaceStatusById: new Map([[workspaceId, "active"]]),
       });
-      expect(tools).not.toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+      expect(tools).not.toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
     });
 
     // The two review modes are mutually exclusive tool surfaces: the model
-    // is never handed a choice between the headless writer and the
-    // client-executed queue-for-review tool on the same turn.
-    describe("mutual exclusion with suggest_changes", () => {
+    // is never handed both the headless writer and the client-executed
+    // queue-for-review registration on the same turn.
+    describe("mutual exclusion between the apply and queue variants", () => {
       const mutualExclusionArgs = {
         ...baseArgs,
         memberRole: "owner" as const,
@@ -2085,43 +2112,52 @@ describe("chat tool schemas", () => {
         workspaceStatusById: new Map([[workspaceId, "active" as const]]),
       };
 
-      test("auto mode registers edit_workspace_document and NOT suggest_changes", () => {
-        const tools = getChatTools({
-          ...mutualExclusionArgs,
-          editApplyMode: "auto",
-        });
-        expect(tools).toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
-        expect(tools).not.toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
+      test("auto mode registers the apply variant", () => {
+        expectApplyVariant(
+          getChatTools({ ...mutualExclusionArgs, editApplyMode: "auto" }),
+        );
       });
 
-      test("manual mode registers suggest_changes and NOT edit_workspace_document", () => {
-        const tools = getChatTools({
-          ...mutualExclusionArgs,
-          editApplyMode: "manual",
-        });
-        expect(tools).toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
-        expect(tools).not.toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+      test("manual mode registers the queue variant", () => {
+        expectQueueVariant(
+          getChatTools({ ...mutualExclusionArgs, editApplyMode: "manual" }),
+        );
       });
 
       // DEFAULT_CHAT_EDIT_APPLY_MODE is "auto": AI edits auto-apply as
       // tracked changes by default, writing a new version directly; the
       // user switches to manual (queued) review via the mode selector.
       test("defaults to auto when editApplyMode is omitted", () => {
-        const tools = getChatTools(mutualExclusionArgs);
-        expect(tools).toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
-        expect(tools).not.toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
+        expectApplyVariant(getChatTools(mutualExclusionArgs));
       });
 
-      test("validation accepts pending DOCX calls after the selector mode changes", () => {
+      // Validation widening replays a persisted call whose mode may have
+      // changed since. The queue variant's raw JSON Schema input and absent
+      // output schema admit a persisted call of either variant, so with a
+      // live edit client it is the one registered in BOTH modes.
+      test("validation registers the queue variant in both modes while an edit client is live", () => {
         for (const editApplyMode of ["auto", "manual"] as const) {
-          const tools = getChatTools({
-            ...mutualExclusionArgs,
-            editApplyMode,
-            includeAllDocxEditToolsForValidation: true,
-          });
-          expect(tools).toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
-          expect(tools).toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
+          expectQueueVariant(
+            getChatTools({
+              ...mutualExclusionArgs,
+              editApplyMode,
+              includeAllDocxEditToolsForValidation: true,
+            }),
+          );
         }
+      });
+
+      // Without a live edit client there is no queue variant to widen to,
+      // so auto mode keeps the apply variant it would register anyway.
+      test("validation keeps the apply variant when no edit client is live", () => {
+        expectApplyVariant(
+          getChatTools({
+            ...mutualExclusionArgs,
+            hasActiveDocxEditClient: false,
+            editApplyMode: "auto",
+            includeAllDocxEditToolsForValidation: true,
+          }),
+        );
       });
     });
   });

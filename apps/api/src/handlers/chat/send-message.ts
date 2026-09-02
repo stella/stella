@@ -60,6 +60,7 @@ import type {
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import {
+  CHAT_EDIT_APPLY_MODE,
   CHAT_RUN_MODE,
   agUiSendMessageBodySchema,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
@@ -112,6 +113,7 @@ import {
   intersectAccessibleWorkspaceIds,
   resolveToolWorkspaceIds,
 } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import { hasSuggestChangesApprovalResponse } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import {
   areSubagentToolsRegistered,
   areTemplateAuthoringToolsRegistered,
@@ -1505,12 +1507,19 @@ export const createSendMessage = (
           ? DOCX_SUGGESTION_SURFACE.templateStudio
           : DOCX_SUGGESTION_SURFACE.fileOverlay;
       // Per-turn DOCX-edit review-mode setting: which of the two mutually
-      // exclusive tools (`suggest_changes` manual /
-      // `edit_workspace_document` auto) `getChatTools` registers, and (for
-      // auto) which redline representation it applies with. Resolved once
-      // and reused for both the validation and streaming tool sets below,
-      // matching every other per-turn setting on this path.
-      const editApplyMode = body.editApplyMode ?? DEFAULT_CHAT_EDIT_APPLY_MODE;
+      // exclusive `suggest_changes` variants (client-executed queue for
+      // manual, server-executed apply for auto) `getChatTools` registers,
+      // and (for auto) which redline representation it applies with.
+      // Resolved once and reused for both the validation and streaming tool
+      // sets below, matching every other per-turn setting on this path. An
+      // approval response on `suggest_changes` pins the turn to auto: only
+      // the apply variant requests approval, and the composer selection may
+      // have changed since the call was issued.
+      const editApplyMode = hasSuggestChangesApprovalResponse(
+        body.message.parts,
+      )
+        ? CHAT_EDIT_APPLY_MODE.auto
+        : (body.editApplyMode ?? DEFAULT_CHAT_EDIT_APPLY_MODE);
       const docxEditRepresentation =
         body.docxEditRepresentation ?? DEFAULT_DOCX_EDIT_REPRESENTATION;
       const activeFileEntity =

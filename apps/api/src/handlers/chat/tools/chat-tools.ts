@@ -19,6 +19,7 @@ import {
 } from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
@@ -27,7 +28,6 @@ import {
   createCreateDocumentTool,
 } from "@/api/handlers/chat/tools/create-document-tool";
 import { createCreateWorkspaceDocumentTools } from "@/api/handlers/chat/tools/create-workspace-document-tools";
-import { createEditWorkspaceDocumentTools } from "@/api/handlers/chat/tools/edit-workspace-document-tools";
 import {
   buildChatCodeModeTools,
   type ChatCodeModeToolMap,
@@ -36,6 +36,7 @@ import { createFolderConsistencyReviewTools } from "@/api/handlers/chat/tools/fo
 import {
   createFolioAgentDocTools,
   createSuggestChangesTools,
+  SUGGEST_CHANGES_TOOL_NAME,
 } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
@@ -209,14 +210,18 @@ type SkillTools = ReturnType<typeof createSkillTools>;
 type BusinessRegistryTools = ReturnType<typeof createBusinessRegistryTools>;
 type BoeTools = ReturnType<typeof createBoeTools>;
 type InfosoudTools = ReturnType<typeof createInfosoudTools>;
-type SuggestChangesTools = ReturnType<typeof createSuggestChangesTools>;
+/**
+ * `suggest_changes` is one tool name with two registrations: the manual,
+ * client-executed queue variant and the automatic, server-executed apply
+ * variant. A union (not an intersection) so `ChatUITools` sees both shapes.
+ */
+type SuggestChangesTools =
+  | ReturnType<typeof createSuggestChangesTools>
+  | ReturnType<typeof createAutoApplySuggestChangesTools>;
 type FolioAgentDocTools = ReturnType<typeof createFolioAgentDocTools>;
 type CreateDocumentTools = ReturnType<typeof createCreateDocumentTools>;
 type CreateWorkspaceDocumentTools = ReturnType<
   typeof createCreateWorkspaceDocumentTools
->;
-type EditWorkspaceDocumentTools = ReturnType<
-  typeof createEditWorkspaceDocumentTools
 >;
 type WebSearchTools = ReturnType<typeof createWebSearchTools>;
 type ChatHistoryTools = ReturnType<typeof createChatHistoryTools>;
@@ -249,7 +254,6 @@ type BuiltInChatTools = OrgTools &
   FolioAgentDocTools &
   CreateDocumentTools &
   CreateWorkspaceDocumentTools &
-  EditWorkspaceDocumentTools &
   WebSearchTools &
   ChatHistoryTools &
   TemplateTools &
@@ -422,19 +426,18 @@ type GetChatToolsProps = {
   /**
    * Which DOCX-edit review mode this turn uses; defaults to
    * `DEFAULT_CHAT_EDIT_APPLY_MODE` ("auto": AI edits auto-apply as
-   * tracked changes by default). Gates `suggest_changes` and
-   * `edit_workspace_document` into a mutually exclusive pair -- exactly
-   * one of the two is ever registered for a given turn, never both.
-   * Neither registers when `edit_workspace_document`'s own preconditions
-   * (an entity-backed active DOCX file, `entity:update`, active matter)
-   * fail to hold in "auto" mode -- e.g. Template Studio, which has no
-   * entity-backed `activeFile`, must explicitly pass "manual" to keep
-   * its DOCX-edit tool.
+   * tracked changes by default). Picks which `suggest_changes` variant is
+   * registered: the manual, client-executed queue variant or the automatic,
+   * server-executed apply variant -- exactly one per turn, never both.
+   * Neither registers when the apply variant's own preconditions (an
+   * entity-backed active DOCX file, `entity:update`, active matter) fail to
+   * hold in "auto" mode -- e.g. Template Studio, which has no entity-backed
+   * `activeFile`, must explicitly pass "manual" to keep its DOCX-edit tool.
    */
   editApplyMode?: ChatEditApplyMode | undefined;
   /**
-   * Redline representation `edit_workspace_document` (the `auto` mode)
-   * applies operations with; defaults to `DEFAULT_DOCX_EDIT_REPRESENTATION`.
+   * Redline representation the automatic `suggest_changes` variant applies
+   * operations with; defaults to `DEFAULT_DOCX_EDIT_REPRESENTATION`.
    * Ignored in `manual` mode.
    */
   docxEditRepresentation?: DocxEditRepresentation | undefined;
@@ -442,8 +445,12 @@ type GetChatToolsProps = {
    * Validation-only widening for continuation messages. A pending DOCX tool
    * call was issued under the mode selected on the previous request, so its
    * call/result must remain schema-valid even if the user changed the composer
-   * mode before approving it. Live streaming callers must leave this false so
-   * the model still receives exactly one DOCX edit tool.
+   * mode before approving it. Both variants share the `suggest_changes` name,
+   * so widening registers the queue variant whenever a client surface exists
+   * (its schemas admit a persisted call of either variant) and falls back to
+   * the apply variant when only its preconditions hold. Live streaming
+   * callers must leave this false so the model still receives exactly one
+   * DOCX edit tool.
    */
   includeAllDocxEditToolsForValidation?: boolean | undefined;
   /**
@@ -696,14 +703,6 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     toolWorkspaceIds,
     workspaceStatusById,
   });
-  // The file overlay queues into the review panel with the full operation
-  // set; Template Studio renders in-document text replacements only, so it
-  // gets the narrower schema. Same tool, per-surface options.
-  const suggestChangesTools =
-    registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.manual ||
-    (includeAllDocxEditToolsForValidation && hasActiveDocxEditClient)
-      ? createSuggestChangesTools(docxSuggestionSurface)
-      : {};
   const automaticDocxEditAvailableForValidation =
     includeAllDocxEditToolsForValidation &&
     resolveRegisteredDocxEditMode({
@@ -716,6 +715,84 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       toolWorkspaceIds,
       workspaceStatusById,
     }) === CHAT_EDIT_APPLY_MODE.auto;
+  // Exactly one `suggest_changes` registration per turn.
+  //
+  // Manual: the client-executed queue variant. The file overlay queues into
+  // the review panel with the full operation set; Template Studio renders
+  // in-document text replacements only, so it gets the narrower schema.
+  // Same tool, per-surface options. Validation widening also lands here:
+  // its raw JSON Schema input and absent output schema admit a persisted
+  // call of either variant, whereas the apply variant's output schema would
+  // reject a persisted queue result.
+  //
+  // Auto: the server-executed apply variant. It writes a new entity
+  // version directly instead of queuing suggestions into the browser review
+  // panel, so it needs its own explicit authorization mirror rather than
+  // inheriting one from the queue variant (which has none of its own -- it
+  // never writes). Registered ONLY when every one of these holds:
+  //   - `editApplyMode === "auto"`: the session opted into headless apply
+  //     (see `editApplyMode`'s doc comment on `GetChatToolsProps`).
+  //   - An editable active DOCX file is present
+  //     (`activeFile.supportsDocxEdits === true`), the same precondition
+  //     `compare_versions` uses, with its current version id to pin the
+  //     batch to.
+  //   - `entity: ["update"]` permission -- this tool overwrites the active
+  //     document's content, the same grant `docx-suggestions/create.ts`,
+  //     `resolve.ts`, and `upload-version.ts` require for DOCX edits.
+  //     `create_workspace_document` checks `entity: ["create"]` instead
+  //     because it creates a new document; this tool edits an existing
+  //     one, so it checks the "update" action, not "create".
+  //   - Active (non-archived) matter status, from the same
+  //     `workspaceStatusById` map `create_workspace_document` reads, so an
+  //     archived matter stays read-only through this tool too.
+  //   - `recordAuditEvent` present, since `createEntityVersionFromBuffer`
+  //     always writes an audit event.
+  // (`resolveRegisteredDocxEditMode` checks the role, matter, and file
+  // preconditions; the remaining narrowings below only refine the types.)
+  const manualSuggestChangesRegistered =
+    registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.manual ||
+    (includeAllDocxEditToolsForValidation && hasActiveDocxEditClient);
+  const autoApplySuggestChangesTarget =
+    !manualSuggestChangesRegistered &&
+    (registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.auto ||
+      automaticDocxEditAvailableForValidation) &&
+    activeFile?.currentVersionId !== undefined &&
+    activeFile.fileFieldId !== undefined &&
+    requestWorkspaceId !== null &&
+    recordAuditEvent !== undefined
+      ? {
+          entityId: activeFile.entityId,
+          expectedCurrentVersionId: activeFile.currentVersionId,
+          fileFieldId: activeFile.fileFieldId,
+          recordAuditEvent,
+          workspaceId: requestWorkspaceId,
+        }
+      : null;
+  const resolveSuggestChangesTools = () => {
+    if (manualSuggestChangesRegistered) {
+      return createSuggestChangesTools(docxSuggestionSurface);
+    }
+    if (autoApplySuggestChangesTarget === null) {
+      return {};
+    }
+    return createAutoApplySuggestChangesTools({
+      ...autoApplySuggestChangesTarget,
+      safeDb,
+      organizationId,
+      userId,
+      docxEditRepresentation,
+    });
+  };
+  const suggestChangesTools = resolveSuggestChangesTools();
+  // The contract classifies `suggest_changes` as a mutation for the apply
+  // variant. The queue variant never writes (the per-suggestion Accept is
+  // the human gate), so it runs without a chat-level approval.
+  const policyKinds = {
+    ...BUILT_IN_CHAT_TOOL_POLICY_KINDS,
+    [SUGGEST_CHANGES_TOOL_NAME]: manualSuggestChangesRegistered
+      ? CHAT_TOOL_POLICY_KIND.internal
+      : BUILT_IN_CHAT_TOOL_POLICY_KINDS[SUGGEST_CHANGES_TOOL_NAME],
+  };
   // Narrower than `suggest_changes` above: only the file overlay mounts
   // the live-editor bridge that resolves these via `addToolResult` (see
   // `hasActiveDocxFileClient` doc comment). Template Studio has no editor
@@ -847,49 +924,6 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     workspaceStatusById,
   });
 
-  // edit_workspace_document is the headless (`auto`) counterpart to
-  // `suggest_changes`: it writes a new entity version directly
-  // instead of queuing suggestions into the browser review panel, so it
-  // needs its own explicit authorization mirror rather than inheriting one
-  // from the manual tool (which has none of its own -- it never writes).
-  // Registered ONLY when every one of these holds:
-  //   - `editApplyMode === "auto"`: the session opted into headless apply
-  //     (see `editApplyMode`'s doc comment on `GetChatToolsProps`); this is
-  //     what makes the tool mutually exclusive with the manual one above.
-  //   - An editable active DOCX file is present
-  //     (`activeFile.supportsDocxEdits === true`), the same precondition
-  //     `suggest_changes` and `compare_versions` use.
-  //   - `entity: ["update"]` permission -- this tool overwrites the active
-  //     document's content, the same grant `docx-suggestions/create.ts`,
-  //     `resolve.ts`, and `upload-version.ts` require for DOCX edits.
-  //     `create_workspace_document` above checks `entity: ["create"]`
-  //     instead because it creates a new document; this tool edits an
-  //     existing one, so it checks the "update" action, not "create".
-  //   - Active (non-archived) matter status, from the same
-  //     `workspaceStatusById` map `create_workspace_document` reads, so an
-  //     archived matter stays read-only through this tool too.
-  //   - `recordAuditEvent` present, since `createEntityVersionFromBuffer`
-  //     always writes an audit event.
-  const editWorkspaceDocumentTools =
-    (registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.auto ||
-      automaticDocxEditAvailableForValidation) &&
-    activeFile?.currentVersionId !== undefined &&
-    activeFile.fileFieldId !== undefined &&
-    requestWorkspaceId !== null &&
-    recordAuditEvent !== undefined
-      ? createEditWorkspaceDocumentTools({
-          safeDb,
-          organizationId,
-          userId,
-          workspaceId: requestWorkspaceId,
-          entityId: activeFile.entityId,
-          expectedCurrentVersionId: activeFile.currentVersionId,
-          fileFieldId: activeFile.fileFieldId,
-          recordAuditEvent,
-          docxEditRepresentation,
-        })
-      : {};
-
   // Registry write projections: per-call mutation tools (save/delete/etc.),
   // each behind approval. Gated on a non-empty workspace set exactly like the
   // hand-written workspace mutation tool (`createWorkspaceTools`), so
@@ -961,7 +995,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     : {};
 
   return applyChatToolPolicies({
-    policyKinds: BUILT_IN_CHAT_TOOL_POLICY_KINDS,
+    policyKinds,
     tools: {
       ...orgTools,
       ...executionTools,
@@ -976,7 +1010,6 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...rememberTools,
       ...createDocumentTools,
       ...createWorkspaceDocumentTools,
-      ...editWorkspaceDocumentTools,
       ...suggestChangesTools,
       ...folioAgentDocTools,
       ...versionCompareTools,

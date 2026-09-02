@@ -41,9 +41,11 @@ import {
   isApprovalToolName,
   isChatClientRequestActive,
   isExternalMcpToolName,
+  isSuggestChangesApplyOutput,
   isToolApprovalGrant,
   projectCanonicalChatUIMessages,
   sanitizeRunningToolCalls,
+  SUGGEST_CHANGES_TOOL_NAME,
 } from "@/components/chat/chat-ui-tools";
 import {
   beginCreateDocumentDraftPersistence,
@@ -973,11 +975,12 @@ export const useChatSession = ({
     );
   }, [getContextMatterIds, messages, queryClient, workspaceId]);
 
-  // Server-side automatic DOCX edits replace the entity's file field. Follow
-  // that replacement immediately in the inspector and refresh entity-backed
-  // routes; otherwise an open tab keeps addressing the stale field until a
-  // later navigation. The backend moves the file-chat mapping in the same
-  // transaction, so resolving the new field id preserves this conversation.
+  // Server-side automatic DOCX edits (the apply variant of `suggest_changes`)
+  // replace the entity's file field. Follow that replacement immediately in
+  // the inspector and refresh entity-backed routes; otherwise an open tab
+  // keeps addressing the stale field until a later navigation. The backend
+  // moves the file-chat mapping in the same transaction, so resolving the new
+  // field id preserves this conversation.
   useExternalSyncEffect(() => {
     let shouldInvalidateEntities = false;
 
@@ -988,12 +991,11 @@ export const useChatSession = ({
       for (const part of message.parts) {
         if (
           part.type !== "tool-call" ||
-          part.name !== "edit_workspace_document" ||
+          part.name !== SUGGEST_CHANGES_TOOL_NAME ||
           part.state !== "complete" ||
           part.output === undefined ||
+          !isSuggestChangesApplyOutput(part.output) ||
           !part.output.success ||
-          typeof part.output.replacedFieldId !== "string" ||
-          typeof part.output.fieldId !== "string" ||
           handledDocxReplacementToolCallIdsRef.current.has(part.id)
         ) {
           continue;

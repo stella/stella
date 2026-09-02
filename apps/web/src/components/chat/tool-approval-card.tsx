@@ -14,7 +14,6 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
-import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import {
@@ -26,15 +25,17 @@ import {
   isNonPersistentGrantChatToolName,
   isPublicOfficialChatToolName,
   isRegistryWriteSummaryToolName,
+  isSuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
   ApprovalToolPart,
   ChatUITools,
+  SuggestChangesApplyOutput,
 } from "@/components/chat/chat-ui-tools";
 import { SpawnSubagentsSubtaskList } from "@/components/chat/spawn-subagents-card";
 import {
-  describeEditWorkspaceDocumentOutcome,
+  describeSuggestChangesApplyOutcome,
   hasAutomaticApproval,
 } from "@/components/chat/tool-approval-card.logic";
 import {
@@ -43,7 +44,6 @@ import {
   getReadableInputRows,
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterIcon } from "@/components/matter-icon";
 import { useMountEffect } from "@/hooks/use-effect";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
@@ -56,10 +56,6 @@ import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
 type CreateWorkspaceDocumentInput =
   ChatUITools["create_workspace_document"]["input"];
-type EditWorkspaceDocumentInput =
-  ChatUITools["edit_workspace_document"]["input"];
-type EditWorkspaceDocumentOutput =
-  ChatUITools["edit_workspace_document"]["output"];
 
 const getApprovalId = (part: ApprovalToolPart): string | null => {
   const { state } = part;
@@ -123,6 +119,8 @@ const UpdateSummary = ({ input }: UpdateSummaryProps) => {
 
 type SuggestChangesSummaryProps = {
   operations: readonly unknown[];
+  /** The active file the batch targets, when the surface knows it. */
+  activeFileName?: string | undefined;
 };
 
 /**
@@ -172,7 +170,10 @@ const readSummaryOperation = (operation: unknown): SummaryOperation | null => {
   };
 };
 
-const SuggestChangesSummary = ({ operations }: SuggestChangesSummaryProps) => {
+const SuggestChangesSummary = ({
+  activeFileName,
+  operations,
+}: SuggestChangesSummaryProps) => {
   const t = useTranslations("chat.tool");
   const summaries = operations.flatMap((operation) => {
     const summary = readSummaryOperation(operation);
@@ -231,6 +232,11 @@ const SuggestChangesSummary = ({ operations }: SuggestChangesSummaryProps) => {
 
   return (
     <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2 text-xs">
+      {activeFileName && (
+        <div className="text-foreground-strong-muted truncate font-medium">
+          {activeFileName}
+        </div>
+      )}
       <div className="text-muted-foreground">
         {t("docxEditSummary", { count: operations.length })}
       </div>
@@ -287,12 +293,7 @@ const CreateWorkspaceDocumentSummary = ({
   );
 };
 
-// -- Edit workspace document (auto DOCX edit) summary --
-
-type EditWorkspaceDocumentSummaryProps = {
-  input: EditWorkspaceDocumentInput;
-  activeFileName?: string | undefined;
-};
+// -- Automatic apply result (server-executed `suggest_changes`) --
 
 type ChatToolTranslationKey = Parameters<
   ReturnType<typeof useTranslations<"chat.tool">>
@@ -300,60 +301,31 @@ type ChatToolTranslationKey = Parameters<
 
 const REPRESENTATION_LABEL_KEY = {
   [DOCX_EDIT_REPRESENTATION.trackedChanges]:
-    "editWorkspaceDocumentRepresentationTrackedChanges",
-  [DOCX_EDIT_REPRESENTATION.direct]:
-    "editWorkspaceDocumentRepresentationDirect",
+    "suggestChangesRepresentationTrackedChanges",
+  [DOCX_EDIT_REPRESENTATION.direct]: "suggestChangesRepresentationDirect",
 } as const satisfies Record<DocxEditRepresentation, ChatToolTranslationKey>;
 
-/**
- * Approval preview for `edit_workspace_document` (the `auto` DOCX-edit
- * tool): the target document (from the file overlay's active file) and a
- * readable operation count. The representation is intentionally omitted
- * before approval because it is session metadata, not tool input; reading the
- * mutable current composer preference could mislabel a pending or historical
- * call. Completed cards render the actual representation from tool output.
- */
-const EditWorkspaceDocumentSummary = ({
-  input,
-  activeFileName,
-}: EditWorkspaceDocumentSummaryProps) => {
-  const t = useTranslations("chat.tool");
-
-  return (
-    <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2 text-xs">
-      {activeFileName && (
-        <div className="text-foreground-strong-muted truncate font-medium">
-          {activeFileName}
-        </div>
-      )}
-      <div className="text-muted-foreground">
-        {t("editWorkspaceDocumentSummary", {
-          count: input.operations.length,
-        })}
-      </div>
-    </div>
-  );
-};
-
-type EditWorkspaceDocumentResultProps = {
-  output: EditWorkspaceDocumentOutput;
+type SuggestChangesApplyResultProps = {
+  output: SuggestChangesApplyOutput;
 };
 
 /**
- * Completed-call result for `edit_workspace_document`: a concise
- * "Applied N edits (M skipped)" line on success, or -- when the tool
- * returned the structured `author_name_required` outcome instead of
- * writing anything -- a message plus a button that opens
- * `AuthorNameRequiredDialog` and retries the turn once a name is saved.
+ * Completed-call result for the server-executed `suggest_changes` variant
+ * (the `auto` DOCX-edit mode): a concise "Applied N edits (M skipped)" line
+ * on success, or -- when the tool returned the structured
+ * `author_name_required` outcome instead of writing anything -- a message
+ * plus a button that opens `AuthorNameRequiredDialog` and retries the turn
+ * once a name is saved. The representation is read from the output, never
+ * from the mutable composer preference, so a historical card stays right.
  */
-const EditWorkspaceDocumentResult = ({
+const SuggestChangesApplyResult = ({
   output,
-}: EditWorkspaceDocumentResultProps) => {
+}: SuggestChangesApplyResultProps) => {
   const t = useTranslations("chat.tool");
   const { handleRetryAfterAuthorNameSet } = useChatApproval();
   const [nameDialogOpen, setNameDialogOpen] = useState(false);
 
-  const outcome = describeEditWorkspaceDocumentOutcome(output);
+  const outcome = describeSuggestChangesApplyOutcome(output);
   if (outcome === null) {
     return null;
   }
@@ -362,11 +334,11 @@ const EditWorkspaceDocumentResult = ({
     return (
       <div className="border-border/50 text-muted-foreground border-t px-3 py-2 text-xs">
         {outcome.skippedCount > 0
-          ? t("editWorkspaceDocumentAppliedWithSkipped", {
+          ? t("suggestChangesAppliedWithSkipped", {
               applied: outcome.appliedCount,
               skipped: outcome.skippedCount,
             })
-          : t("editWorkspaceDocumentApplied", {
+          : t("suggestChangesApplied", {
               applied: outcome.appliedCount,
             })}{" "}
         · {t(REPRESENTATION_LABEL_KEY[outcome.representation])}
@@ -377,14 +349,14 @@ const EditWorkspaceDocumentResult = ({
   return (
     <div className="border-border/50 flex flex-col items-start gap-2 border-t px-3 py-2 text-xs">
       <p className="text-muted-foreground">
-        {t("editWorkspaceDocumentAuthorNameDialogDescription")}
+        {t("suggestChangesAuthorNameDialogDescription")}
       </p>
       <Button
         onClick={() => setNameDialogOpen(true)}
         size="xs"
         variant="outline"
       >
-        {t("editWorkspaceDocumentSetNameAction")}
+        {t("suggestChangesSetNameAction")}
       </Button>
       <AuthorNameRequiredDialog
         onNameSaved={() => {
@@ -404,7 +376,7 @@ const EditWorkspaceDocumentResult = ({
 // -- Main card --
 
 type ToolApprovalCardProps = {
-  /** Threaded through for `edit_workspace_document`'s summary; see
+  /** Threaded through for the `suggest_changes` approval summary; see
    *  `ChatThreadMessagesProps.activeFileName`. */
   activeFileName?: string | undefined;
   part: ApprovalToolPart;
@@ -446,7 +418,6 @@ export const ToolApprovalCard = ({
     isApprovalRequested,
     isApproved,
     isBlocked,
-    isDocxEditBatch,
     isProcessing,
     isPublicOfficialApproval,
     isDenied,
@@ -481,7 +452,6 @@ export const ToolApprovalCard = ({
       alwaysApprovedTools,
       canAlwaysAllow,
       conversationApprovedTools,
-      isDocxEditBatch,
       isPublicOfficialApproval,
       name,
     });
@@ -510,35 +480,14 @@ export const ToolApprovalCard = ({
     return true;
   };
 
-  const handleOpenReviewFacet = getDocxReviewPanelHandler({
-    isDocxEditBatch,
-    part,
-  });
-
   return (
-    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- conditional role/handlers are paired below; the linter can't see they're always set together
     <div
       className={cn(
         "my-1 rounded-lg border text-sm",
         isApprovalRequested && !isProcessing
           ? "border-border bg-muted/30"
           : "bg-muted/40 border-transparent",
-        handleOpenReviewFacet &&
-          "hover:bg-muted/50 cursor-pointer transition-colors",
       )}
-      onClick={handleOpenReviewFacet ?? undefined}
-      onKeyDown={
-        handleOpenReviewFacet
-          ? (event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                handleOpenReviewFacet();
-              }
-            }
-          : undefined
-      }
-      role={handleOpenReviewFacet ? "button" : undefined}
-      tabIndex={handleOpenReviewFacet ? 0 : undefined}
     >
       {automaticResponse?.shouldRespond && (
         <AutomaticApprovalResponse
@@ -574,11 +523,9 @@ export const ToolApprovalCard = ({
         providerName={externalMcpProviderName ?? label}
       />
 
-      {/* Actions — hidden for DOCX edit batches (reviewed in the side panel). */}
       {approvalId &&
         !isProcessing &&
         !isBlocked &&
-        !isDocxEditBatch &&
         !isPublicOfficialApproval && (
           <div className="border-border/50 flex flex-wrap items-center gap-2 border-t px-3 py-2">
             <Button
@@ -665,22 +612,20 @@ const ToolApprovalSummary = ({
         <UpdateSummary input={part.input} />
       )}
       {part.name === "suggest_changes" && part.input !== undefined && (
-        <SuggestChangesSummary operations={part.input.operations} />
+        <SuggestChangesSummary
+          activeFileName={activeFileName}
+          operations={part.input.operations}
+        />
       )}
+      {part.name === "suggest_changes" &&
+        part.state === "complete" &&
+        part.output !== undefined &&
+        isSuggestChangesApplyOutput(part.output) && (
+          <SuggestChangesApplyResult output={part.output} />
+        )}
       {part.name === "create_workspace_document" &&
         part.input !== undefined && (
           <CreateWorkspaceDocumentSummary input={part.input} />
-        )}
-      {part.name === "edit_workspace_document" && part.input !== undefined && (
-        <EditWorkspaceDocumentSummary
-          activeFileName={activeFileName}
-          input={part.input}
-        />
-      )}
-      {part.name === "edit_workspace_document" &&
-        part.state === "complete" &&
-        part.output !== undefined && (
-          <EditWorkspaceDocumentResult output={part.output} />
         )}
       {part.name === "spawn_subagents" && part.input !== undefined && (
         <SpawnSubagentsSubtaskList
@@ -728,59 +673,6 @@ const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
   return byId;
 };
 
-/**
- * One approval-summary row. A value that is a matter id renders as the matter:
- * its name beside the layers glyph in the matter's own colour, the same way it
- * reads everywhere else in the app. The id itself is what the user least needs
- * to see when deciding whether to allow a write.
- */
-// Clicking a DOCX-edit-batch card jumps the user to the document-review
-// facet for the entity those edits target, where the batch lists under
-// "From chat". The output's `queued` ids are folio operation ids, which each
-// queued review-store entry records as `operationId`, so we look up the
-// entity by matching any of them.
-const getDocxReviewPanelHandler = ({
-  isDocxEditBatch,
-  part,
-}: {
-  isDocxEditBatch: boolean;
-  part: ApprovalToolPart;
-}) => {
-  const output =
-    isDocxEditBatch &&
-    part.name === "suggest_changes" &&
-    part.state === "complete"
-      ? part.output
-      : undefined;
-  const queued = output?.ok === true ? output.result.queued : undefined;
-  if (queued === undefined || queued.length === 0) {
-    return null;
-  }
-  const queuedIds = queued.map((item) => item.id);
-  return () => {
-    const opIds = new Set(queuedIds);
-    const sessions = useReviewStore.getState().sessions;
-    const entityIdMatch = Object.entries(sessions).find(([, items]) =>
-      items.some(
-        (item) => item.operationId !== undefined && opIds.has(item.operationId),
-      ),
-    )?.[0];
-    if (!entityIdMatch) {
-      return;
-    }
-    const inspector = useInspectorTabsStore.getState();
-    const tab = inspector.tabs.find(
-      (candidate) =>
-        candidate.type === "pdf" && candidate.entityId === entityIdMatch,
-    );
-    if (!tab) {
-      return;
-    }
-    inspector.setActive(tab.id);
-    inspector.setFileFacet(tab.id, "playbook", { pulse: true });
-  };
-};
-
 const getToolApprovalState = ({
   blockedApprovalTools,
   defaultLabel,
@@ -798,10 +690,14 @@ const getToolApprovalState = ({
 }) => {
   const isApprovalRequested = part.state === "approval-requested";
   const isApprovalResponded = part.state === "approval-responded";
+  // The server-executed `suggest_changes` variant reports a missing author
+  // name as a structured outcome rather than a thrown error; the card shows
+  // it as a decline with an inline remedy.
   const isStructuredEditFailure =
-    part.name === "edit_workspace_document" &&
+    part.name === "suggest_changes" &&
     part.state === "complete" &&
     part.output !== undefined &&
+    isSuggestChangesApplyOutput(part.output) &&
     !part.output.success;
   const isApproved =
     part.state === "complete" &&
@@ -818,16 +714,7 @@ const getToolApprovalState = ({
   // grant can auto-approve a later call.
   const isApprovalOnce = isApprovalOnceChatToolName(name);
   const canAllowInConversation =
-    name !== "suggest_changes" &&
-    !isApprovalOnce &&
-    !isNonPersistentGrantChatToolName(name);
-  /**
-   * DOCX edit batches always go to the side review panel — never
-   * gated by a chat-level Allow/Deny. The card collapses to a
-   * compact status and auto-approves once so the queueing
-   * handler can register the suggestions.
-   */
-  const isDocxEditBatch = name === "suggest_changes";
+    !isApprovalOnce && !isNonPersistentGrantChatToolName(name);
   const externalMcpProviderName = getExternalMcpProviderName(name);
 
   return {
@@ -844,7 +731,6 @@ const getToolApprovalState = ({
     isApproved,
     isBlocked,
     isDenied,
-    isDocxEditBatch,
     isExternalMcpApproval,
     isProcessing: isApprovalResponded || (responded && isApprovalRequested),
     isPublicOfficialApproval: isPublicOfficialChatToolName(name),
@@ -854,6 +740,12 @@ const getToolApprovalState = ({
   };
 };
 
+/**
+ * One approval-summary row. A value that is a matter id renders as the matter:
+ * its name beside the layers glyph in the matter's own colour, the same way it
+ * reads everywhere else in the app. The id itself is what the user least needs
+ * to see when deciding whether to allow a write.
+ */
 const RegistryWriteSummaryRow = ({
   label,
   matter,

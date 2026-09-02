@@ -32,8 +32,9 @@ type AuthorNameRequiredDialogProps = {
 };
 
 /**
- * Prompts for a preferred name when `edit_workspace_document` returns
- * `{success: false, code: "author_name_required"}` -- automatic DOCX edits
+ * Prompts for a preferred name when the server-executed `suggest_changes`
+ * variant returns `{success: false, code: "author_name_required"}` --
+ * automatic DOCX edits
  * write tracked changes attributed to the acting user, so a name is
  * required before the tool can apply anything. Saves via the same
  * `authClient.updateUser({ preferredName })` mutation as the account
@@ -82,10 +83,10 @@ export const AuthorNameRequiredDialog = ({
       <DialogPopup className="max-w-sm">
         <DialogHeader>
           <DialogTitle>
-            {t("chat.tool.editWorkspaceDocumentAuthorNameDialogTitle")}
+            {t("chat.tool.suggestChangesAuthorNameDialogTitle")}
           </DialogTitle>
           <DialogDescription>
-            {t("chat.tool.editWorkspaceDocumentAuthorNameDialogDescription")}
+            {t("chat.tool.suggestChangesAuthorNameDialogDescription")}
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>

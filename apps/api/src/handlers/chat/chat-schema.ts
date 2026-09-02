@@ -237,8 +237,8 @@ const sendMessageCommonProperties = {
   /**
    * Which DOCX-edit review mode this turn uses; omitted means
    * `DEFAULT_CHAT_EDIT_APPLY_MODE`. Threaded into `getChatTools`, which
-   * registers exactly one of `suggest_changes` (manual) /
-   * `edit_workspace_document` (auto) accordingly -- never both.
+   * registers exactly one `suggest_changes` variant accordingly: the
+   * client-executed queue (manual) or the server-executed apply (auto).
    */
   editApplyMode: t.Optional(
     t.Union([
