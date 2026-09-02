@@ -4,6 +4,17 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import {
+  COMPOSER_BOX_ANONYMIZED_CLASS,
+  COMPOSER_BOX_CLASS,
+  COMPOSER_BOX_FOCUS_CLASS,
+  COMPOSER_COMPACT_ROW_CLASS,
+  COMPOSER_COMPACT_TEXT_CELL_CLASS,
+  COMPOSER_LARGE_ACTION_ROW_CLASS,
+  COMPOSER_LARGE_TEXT_WELL_CLASS,
+  COMPOSER_LEADING_GROUP_CLASS,
+  COMPOSER_PLACEHOLDER_CLASS,
+} from "@stll/ui/composer";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -20,17 +31,6 @@ import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachmen
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { ChatPromptImproveButton } from "@/components/chat/chat-prompt-improve-button";
 import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
-import {
-  COMPOSER_BOX_ANONYMIZED_CLASS,
-  COMPOSER_BOX_CLASS,
-  COMPOSER_BOX_FOCUS_CLASS,
-  COMPOSER_COMPACT_ROW_CLASS,
-  COMPOSER_COMPACT_TEXT_CELL_CLASS,
-  COMPOSER_LARGE_ACTION_ROW_CLASS,
-  COMPOSER_LARGE_TEXT_WELL_CLASS,
-  COMPOSER_LEADING_GROUP_CLASS,
-  COMPOSER_PLACEHOLDER_CLASS,
-} from "@/components/chat/composer-control-style";
 import {
   ComposerPlusMenu,
   type ComposerContextMenuProps,

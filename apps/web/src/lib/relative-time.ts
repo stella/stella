@@ -116,3 +116,13 @@ export const formatContextualTimestamp = ({
 
   return formatter.dateTime(resolvedDate, MEDIUM_DATE_SHORT_TIME_FORMAT);
 };
+
+/** Whether `date` lies within the last `seconds`; false for an unparsable date. */
+export const isWithinLast = (date: Date | string, seconds: number): boolean => {
+  const then =
+    typeof date === "string" ? new Date(date).getTime() : date.getTime();
+  if (Number.isNaN(then)) {
+    return false;
+  }
+  return Date.now() - then <= seconds * 1000;
+};

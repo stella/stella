@@ -33,6 +33,7 @@ export const caseLawDecisionKeys = {
     "latest",
     { country },
   ],
+  status: () => [...caseLawDecisionKeys.all, "status"],
   list: (key: DecisionListFilters) => [
     ...caseLawDecisionKeys.all,
     "list",
@@ -110,6 +111,30 @@ export const latestDecisionsOptions = (country: string) =>
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
+
+/** How much case law the database holds and when it last changed. */
+export const caseLawCorpusStatusOptions = () =>
+  queryOptions({
+    queryKey: caseLawDecisionKeys.status(),
+    queryFn: async ({ signal }) => {
+      const response = await api.case.decisions.status.get({
+        fetch: { signal },
+      });
+
+      const data = unwrapPublicLawEden(
+        response,
+        "readPublicCaseLawCorpusStatus",
+      );
+
+      return data;
+    },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+/** One apex court's slice of the shelf: the court, its rank, its newest few. */
+export type LatestDecisionsCourt = Awaited<
+  ReturnType<NonNullable<ReturnType<typeof latestDecisionsOptions>["queryFn"]>>
+>["courts"][number];
 
 export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
   infiniteQueryOptions({

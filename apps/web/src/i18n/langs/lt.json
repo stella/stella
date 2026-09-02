@@ -2981,6 +2981,26 @@
       "shadowed": "Uždengta komandos įgūdžio"
     }
   },
+  "lawHome": {
+    "databaseStatus": "{count} įrašų · atnaujinta {date}",
+    "databaseUpToDate": "Atnaujinta",
+    "enteringIntoForce": "Netrukus įsigalios",
+    "inForceFrom": "Įsigalioja {date}",
+    "noRecentSearches": "Paieškų dar nėra",
+    "noSignals": "Signalų dar nėra",
+    "prompt": "Ko ieškote?",
+    "recentlyInForce": "Neseniai įsigaliojo",
+    "scopeLabel": "Ieškoti",
+    "searchLabel": "Ieškoti teisės duomenų bazėje",
+    "searchPlaceholder": "Bylos numeris, akto numeris, ECLI arba raktažodžiai",
+    "signals": "Signalai",
+    "tier": {
+      "constitutional": "Konstitucinė kontrolė",
+      "supreme": "Aukščiausioji instancija"
+    },
+    "topCourts": "Iš aukščiausiųjų teismų",
+    "tryIdentifier": "Išbandykite identifikatorių"
+  },
   "markdownEditor": {
     "rawLabel": "Markdown pirminis tekstas"
   },

@@ -154,8 +154,11 @@ const ensurePublicDecision = async <T>(load: () => Promise<T>): Promise<T> => {
     return await load();
   } catch (error) {
     if (error instanceof APIError && error.status === 404) {
+      // The entry screen, not the results screen: a dead decision link leaves
+      // the reader with nothing to show results for, so they land where a new
+      // entry starts and the miss is named there.
       throw redirect({
-        to: "/law/cases",
+        to: "/law",
         search: { notFound: true },
         replace: true,
       });

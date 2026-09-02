@@ -22,6 +22,7 @@ const SUBJECT_FREE_ROUTES = [
   "GET /case/decisions",
   "GET /case/decisions/facets",
   "GET /case/decisions/latest",
+  "GET /case/decisions/status",
   "GET /case/provisions/citing-decisions",
   "GET /case/sitemap/decisions/shard",
   "GET /case/sitemap/shards",

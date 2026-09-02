@@ -30,6 +30,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/button";
+import { COMPOSER_COMPACT_TEXT_CELL_CLASS } from "@stll/ui/composer";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -57,7 +58,6 @@ import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
-import { COMPOSER_COMPACT_TEXT_CELL_CLASS } from "@/components/chat/composer-control-style";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";

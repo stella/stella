@@ -287,13 +287,21 @@ export const createPublicLawStaticSitemapXml = ({
 `;
   }
 
-  const loc = createPublicLawCanonicalUrl("/law/cases");
+  // The home is the entry point; the results screen is reached through the
+  // browse links, since an unfiltered request redirects to the home.
+  const entries = (["/law"] as const).map((path) =>
+    createPublicLawCanonicalUrl(path),
+  );
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
+${entries
+  .map(
+    (loc) => `  <url>
     <loc>${escapeSitemapXml(loc)}</loc>
-  </url>
+  </url>`,
+  )
+  .join("\n")}
 </urlset>
 `;
 };

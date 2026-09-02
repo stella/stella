@@ -2981,6 +2981,26 @@
       "shadowed": "محجوبة بمهارة الفريق"
     }
   },
+  "lawHome": {
+    "databaseStatus": "{count} سجلًا · حُدّثت {date}",
+    "databaseUpToDate": "محدّثة",
+    "enteringIntoForce": "يدخل حيز النفاذ قريبًا",
+    "inForceFrom": "نافذ اعتبارًا من {date}",
+    "noRecentSearches": "لا توجد عمليات بحث بعد",
+    "noSignals": "لا توجد إشارات بعد",
+    "prompt": "عمّ تبحث؟",
+    "recentlyInForce": "دخل حيز النفاذ مؤخرًا",
+    "scopeLabel": "البحث في",
+    "searchLabel": "البحث في قاعدة البيانات القانونية",
+    "searchPlaceholder": "رقم القضية أو رقم التشريع أو ECLI أو كلمات مفتاحية",
+    "signals": "إشارات",
+    "tier": {
+      "constitutional": "الرقابة الدستورية",
+      "supreme": "أعلى درجة"
+    },
+    "topCourts": "من المحاكم العليا",
+    "tryIdentifier": "جرّب معرّفًا"
+  },
   "markdownEditor": {
     "rawLabel": "مصدر Markdown"
   },

@@ -44,7 +44,8 @@ type PublicLawSearchProps = {
  * The one box of a public-law browser: an identifier, an alias or words,
  * scoped by the jurisdiction pill beside it. A form so Enter submits the way
  * the browser already knows how to. The statutes and case-law browsers share
- * it so a reader learns one box, not two.
+ * it so a reader learns one box, not two; the home's entry box is built from
+ * the same parts.
  */
 export const PublicLawSearch = ({
   askPrompt,
@@ -58,7 +59,6 @@ export const PublicLawSearch = ({
   query,
   searchLabel,
 }: PublicLawSearchProps) => {
-  const t = useTranslations();
   const trimmed = query.trim();
   const prompt = trimmed.length > 0 ? askPrompt(trimmed) : null;
 
@@ -71,25 +71,11 @@ export const PublicLawSearch = ({
       }}
       role="search"
     >
-      <Select
-        onValueChange={(value: string | null) => {
-          if (value !== null && value !== country) {
-            onCountryChange(value);
-          }
-        }}
-        value={country}
-      >
-        <SelectTrigger aria-label={t("common.country")} className="w-40">
-          <SelectValue placeholder={t("common.country")} />
-        </SelectTrigger>
-        <SelectPopup>
-          {countries.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectPopup>
-      </Select>
+      <PublicLawCountrySelect
+        countries={countries}
+        country={country}
+        onCountryChange={onCountryChange}
+      />
       <Input
         aria-label={searchLabel}
         className="min-w-64 flex-1 sm:max-w-md"
@@ -99,8 +85,46 @@ export const PublicLawSearch = ({
         type="search"
         value={query}
       />
-      {prompt !== null && <AskInChat label={trimmed} prompt={prompt} />}
+      {prompt !== null && (
+        <PublicLawAskInChat label={trimmed} prompt={prompt} />
+      )}
     </form>
+  );
+};
+
+type PublicLawCountrySelectProps = Pick<
+  PublicLawSearchProps,
+  "countries" | "country" | "onCountryChange"
+>;
+
+/** The jurisdiction pill: one value, the route's, in the route's own form. */
+const PublicLawCountrySelect = ({
+  countries,
+  country,
+  onCountryChange,
+}: PublicLawCountrySelectProps) => {
+  const t = useTranslations();
+
+  return (
+    <Select
+      onValueChange={(value: string | null) => {
+        if (value !== null && value !== country) {
+          onCountryChange(value);
+        }
+      }}
+      value={country}
+    >
+      <SelectTrigger aria-label={t("common.country")} className="w-40">
+        <SelectValue placeholder={t("common.country")} />
+      </SelectTrigger>
+      <SelectPopup>
+        {countries.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectPopup>
+    </Select>
   );
 };
 
@@ -108,7 +132,13 @@ export const PublicLawSearch = ({
  * Hands the entry to a chat with the corpus tools. The chat is an account
  * feature: a visitor is sent to sign in and comes back to the same list.
  */
-const AskInChat = ({ label, prompt }: { label: string; prompt: string }) => {
+export const PublicLawAskInChat = ({
+  label,
+  prompt,
+}: {
+  label: string;
+  prompt: string;
+}) => {
   const t = useTranslations();
   const user = useMaybeAuthenticatedUser();
   const requestSignIn = usePublicSignInRequest();

@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState } from "react";
-import type { ReactElement, ReactNode } from "react";
 
 import {
   useInfiniteQuery,
@@ -26,9 +25,17 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { ScrollArea } from "@stll/ui/scroll-area";
+import {
+  LANDING_ROW_CLASS,
+  LANDING_SECTION_HEADING_CLASS,
+  LandingButton,
+  LandingEmpty,
+  LandingGreeting,
+  LandingItemText,
+  LandingLayout,
+  LandingSection,
+} from "@stll/ui/landing";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import {
   ChatSubmitPreservedError,
@@ -469,267 +476,242 @@ function ChatIndex() {
   };
 
   return (
-    <div className="flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
-      <ChromeHeaderActions>
-        <Tooltip
-          content={t("chat.moveToSide")}
-          render={
-            <Button onClick={moveToSide} size="icon-sm" variant="ghost">
-              <Minimize2Icon className="size-4" />
-            </Button>
-          }
-        />
-        <ThreadsSheet />
-      </ChromeHeaderActions>
-      {/* The landing folds against its own width, not the viewport's: the
-          inspector pane can leave this column far narrower than a viewport
-          breakpoint would suggest. */}
-      <div className="@container flex min-h-0 flex-1 flex-col items-center overflow-hidden px-4">
-        {/* Expanded drafts and attachments may exceed the preferred hero
-            height; keep every composer control reachable without making the
-            whole landing page scroll. */}
-        <ScrollArea
-          className="min-h-72 w-full max-w-2xl shrink basis-[22rem]"
-          scrollFade
-        >
-          <div className="flex min-h-full w-full flex-col items-center justify-center gap-8">
-            <div className="flex w-full flex-col items-center gap-4 text-center">
-              <div className="border-border bg-background text-foreground flex size-12 items-center justify-center rounded-lg border shadow-sm">
-                <StellaMark className="size-7" />
-              </div>
-              <p className="text-foreground max-w-md text-center text-lg font-medium">
-                {t("chat.greeting")}
-              </p>
-            </div>
-            <div className="w-full">
-              <ChatAnonymizationLayer
-                editor={controller.editor}
-                enabled={anonymized}
-                focused={composerFocused}
-                ownerKey={getChatThreadKey(threadRef)}
-                workspaceId={draftThreadId}
-              />
-              <ChatInputSurface
-                anonymized={anonymized}
-                autoFocus
-                context={{ activeOrganizationId, threadRef }}
-                controller={controller}
-                guideAnchorsEnabled
-                variant="large"
-                mcpOrganizationId={activeOrganizationId}
-                models={{
-                  activeOrganizationId,
-                  threadRef,
-                  selectedModel: chatDraftMeta?.model ?? null,
-                  selectedReasoningEffort:
-                    chatDraftMeta?.reasoningEffort ?? null,
-                  selectModel: modelSelection.selectModel,
-                }}
-                reservedCommands={{ hasPersistedThread: false }}
-                skillsOrganizationId={activeOrganizationId}
-                dock={
-                  <ChatComposerDock
-                    data={{
-                      webSearchAvailable:
-                        chatDraftMeta?.webSearchAvailable ?? false,
-                      webSearchEnabled:
-                        chatDraftMeta?.webSearchEnabled ?? false,
-                      // The draft carries the same cache-stable floor its first
-                      // send will pay, so the meter shows the honest baseline
-                      // (~system prompt + tools) rather than 0% until send.
-                      context: chatDraftMeta?.context ?? null,
-                    }}
-                    guideAnchorsEnabled
-                    models={{
-                      activeOrganizationId,
-                      threadRef,
-                      selectedModel: chatDraftMeta?.model ?? null,
-                      selectedReasoningEffort:
-                        chatDraftMeta?.reasoningEffort ?? null,
-                      selectModel: modelSelection.selectModel,
-                    }}
-                    leadingContext={
-                      <ChatMatterPicker
-                        matterIds={contextMatterIds}
-                        onChange={setContextMatterIds}
-                      />
-                    }
-                    // The hero already IS a fresh thread; a new-chat
-                    // affordance here would be a no-op, so opt out.
-                    onNewThread={null}
-                    threadRef={threadRef}
-                  />
-                }
-                onSubmit={handleSubmit}
-                onFocusChange={setComposerFocused}
-              />
-            </div>
-          </div>
-        </ScrollArea>
-        {/* Keep the primary composer stable while this secondary discovery
-            region owns any overflow on short or narrow viewports. One shared
-            viewport avoids competing scroll traps between the three lists. */}
-        <ScrollArea className="min-h-0 w-full flex-1" scrollFade>
-          <div className="grid w-full gap-8 pb-16 @2xl:grid-cols-3">
-            <LandingSection
-              heading={
-                <Link
-                  className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase transition-colors outline-none focus-visible:ring-2"
-                  to="/workspaces"
-                >
-                  {pinnedMatters.length > 0 ? (
-                    <PinIcon className="size-4" />
-                  ) : (
-                    <MatterIcon className="size-4" variant="all" />
-                  )}
-                  {mattersHeading}
-                </Link>
-              }
-            >
-              {visibleMatters.length > 0 ? (
-                visibleMatters.map((matter) => (
-                  <MatterContextMenu
-                    className="contents"
-                    key={matter.id}
-                    target={{
-                      id: matter.id,
-                      name: matter.name,
-                      color: matter.color,
-                      client: matter.client,
-                    }}
-                  >
-                    <Link
-                      className="group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start transition-colors outline-none focus-visible:ring-2"
-                      params={{ workspaceId: matter.id }}
-                      to="/workspaces/$workspaceId"
-                    >
-                      <LandingItemText
-                        icon={
-                          <MatterIcon
-                            className="size-4"
-                            matter={{ id: matter.id, color: matter.color }}
-                          />
-                        }
-                        iconTone="matter"
-                        meta={formatRelativeTime(matter.lastActivityAt)}
-                        title={matter.name}
-                      />
-                    </Link>
-                  </MatterContextMenu>
-                ))
-              ) : (
-                <LandingEmpty>
-                  <div className="flex flex-col items-start gap-2.5">
-                    {t("chat.landing.noMatters")}
-                    {canCreateMatter && (
-                      <Button
-                        onClick={() => openCreateMatter()}
-                        size="sm"
-                        variant="outline"
-                      >
-                        <PlusIcon className="size-4" />
-                        {t("workspaces.createNewWorkspace")}
-                      </Button>
-                    )}
-                  </div>
-                </LandingEmpty>
-              )}
-            </LandingSection>
-            <LandingSection
-              heading={
-                <Link
-                  className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase transition-colors outline-none focus-visible:ring-2"
-                  to="/knowledge/prompts"
-                >
-                  <BookOpenIcon className="size-4" />
-                  {t("chat.landing.prompts")}
-                </Link>
-              }
-            >
-              {prompts.length > 0 ? (
-                prompts.map((prompt) => (
-                  <LandingButton
-                    icon={<SlashPromptIcon />}
-                    key={prompt.id}
-                    meta={prompt.body}
-                    onClick={() => selectPrompt(prompt)}
-                    title={prompt.name}
-                  />
-                ))
-              ) : (
-                <LandingEmpty>{t("chat.landing.noPrompts")}</LandingEmpty>
-              )}
-            </LandingSection>
-            <LandingSection
-              heading={
-                <ThreadsSheet
-                  icon={<HistoryIcon className="size-4" />}
-                  label={t("chat.landing.recentChats")}
-                  triggerVariant="section"
+    <LandingLayout
+      actions={
+        <ChromeHeaderActions>
+          <Tooltip
+            content={t("chat.moveToSide")}
+            render={
+              <Button onClick={moveToSide} size="icon-sm" variant="ghost">
+                <Minimize2Icon className="size-4" />
+              </Button>
+            }
+          />
+          <ThreadsSheet />
+        </ChromeHeaderActions>
+      }
+      hero={
+        <>
+          <LandingGreeting icon={<StellaMark className="size-7" />}>
+            {t("chat.greeting")}
+          </LandingGreeting>
+          <div className="w-full">
+            <ChatAnonymizationLayer
+              editor={controller.editor}
+              enabled={anonymized}
+              focused={composerFocused}
+              ownerKey={getChatThreadKey(threadRef)}
+              workspaceId={draftThreadId}
+            />
+            <ChatInputSurface
+              anonymized={anonymized}
+              autoFocus
+              context={{ activeOrganizationId, threadRef }}
+              controller={controller}
+              guideAnchorsEnabled
+              variant="large"
+              mcpOrganizationId={activeOrganizationId}
+              models={{
+                activeOrganizationId,
+                threadRef,
+                selectedModel: chatDraftMeta?.model ?? null,
+                selectedReasoningEffort: chatDraftMeta?.reasoningEffort ?? null,
+                selectModel: modelSelection.selectModel,
+              }}
+              reservedCommands={{ hasPersistedThread: false }}
+              skillsOrganizationId={activeOrganizationId}
+              dock={
+                <ChatComposerDock
+                  data={{
+                    webSearchAvailable:
+                      chatDraftMeta?.webSearchAvailable ?? false,
+                    webSearchEnabled: chatDraftMeta?.webSearchEnabled ?? false,
+                    // The draft carries the same cache-stable floor its first
+                    // send will pay, so the meter shows the honest baseline
+                    // (~system prompt + tools) rather than 0% until send.
+                    context: chatDraftMeta?.context ?? null,
+                  }}
+                  guideAnchorsEnabled
+                  models={{
+                    activeOrganizationId,
+                    threadRef,
+                    selectedModel: chatDraftMeta?.model ?? null,
+                    selectedReasoningEffort:
+                      chatDraftMeta?.reasoningEffort ?? null,
+                    selectModel: modelSelection.selectModel,
+                  }}
+                  leadingContext={
+                    <ChatMatterPicker
+                      matterIds={contextMatterIds}
+                      onChange={setContextMatterIds}
+                    />
+                  }
+                  // The hero already IS a fresh thread; a new-chat
+                  // affordance here would be a no-op, so opt out.
+                  onNewThread={null}
+                  threadRef={threadRef}
                 />
               }
-            >
-              {recentChats.length > 0 ? (
-                recentChats.map((chat) =>
-                  chat.scope === "workspace" ? (
-                    <Link
-                      className="group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start transition-colors outline-none focus-visible:ring-2"
-                      key={chat.id}
-                      params={{
-                        workspaceId: chat.workspaceId,
-                        threadId: chat.id,
-                      }}
-                      to="/chat/workspaces/$workspaceId/$threadId"
-                    >
-                      <LandingItemText
-                        icon={<MessageSquareIcon className="size-4" />}
-                        meta={
-                          <>
-                            <ChatThreadOriginPrefix origin={chat.origin} />
-                            <BidiText>{chat.workspaceName}</BidiText>
-                            {" - "}
-                            {formatRelativeTime(chat.updatedAt)}
-                          </>
-                        }
-                        title={
-                          isPlaceholderThreadTitle(chat.title)
-                            ? t("chat.newChat")
-                            : chat.title
-                        }
-                      />
-                    </Link>
-                  ) : (
-                    <Link
-                      className="group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start transition-colors outline-none focus-visible:ring-2"
-                      key={chat.id}
-                      params={{ threadId: chat.id }}
-                      to="/chat/$threadId"
-                    >
-                      <LandingItemText
-                        icon={<MessageSquareIcon className="size-4" />}
-                        meta={
-                          <>
-                            <ChatThreadOriginPrefix origin={chat.origin} />
-                            {formatRelativeTime(chat.updatedAt)}
-                          </>
-                        }
-                        title={
-                          isPlaceholderThreadTitle(chat.title)
-                            ? t("chat.newChat")
-                            : chat.title
-                        }
-                      />
-                    </Link>
-                  ),
-                )
-              ) : (
-                <LandingEmpty>{t("chat.landing.noRecentChats")}</LandingEmpty>
-              )}
-            </LandingSection>
+              onSubmit={handleSubmit}
+              onFocusChange={setComposerFocused}
+            />
           </div>
-        </ScrollArea>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <LandingSection
+        heading={
+          <Link className={LANDING_SECTION_HEADING_CLASS} to="/workspaces">
+            {pinnedMatters.length > 0 ? (
+              <PinIcon className="size-4" />
+            ) : (
+              <MatterIcon className="size-4" variant="all" />
+            )}
+            {mattersHeading}
+          </Link>
+        }
+      >
+        {visibleMatters.length > 0 ? (
+          visibleMatters.map((matter) => (
+            <MatterContextMenu
+              className="contents"
+              key={matter.id}
+              target={{
+                id: matter.id,
+                name: matter.name,
+                color: matter.color,
+                client: matter.client,
+              }}
+            >
+              <Link
+                className={LANDING_ROW_CLASS}
+                params={{ workspaceId: matter.id }}
+                to="/workspaces/$workspaceId"
+              >
+                <LandingItemText
+                  icon={
+                    <MatterIcon
+                      className="size-4"
+                      matter={{ id: matter.id, color: matter.color }}
+                    />
+                  }
+                  iconTone="matter"
+                  meta={formatRelativeTime(matter.lastActivityAt)}
+                  title={matter.name}
+                />
+              </Link>
+            </MatterContextMenu>
+          ))
+        ) : (
+          <LandingEmpty>
+            <div className="flex flex-col items-start gap-2.5">
+              {t("chat.landing.noMatters")}
+              {canCreateMatter && (
+                <Button
+                  onClick={() => openCreateMatter()}
+                  size="sm"
+                  variant="outline"
+                >
+                  <PlusIcon className="size-4" />
+                  {t("workspaces.createNewWorkspace")}
+                </Button>
+              )}
+            </div>
+          </LandingEmpty>
+        )}
+      </LandingSection>
+      <LandingSection
+        heading={
+          <Link
+            className={LANDING_SECTION_HEADING_CLASS}
+            to="/knowledge/prompts"
+          >
+            <BookOpenIcon className="size-4" />
+            {t("chat.landing.prompts")}
+          </Link>
+        }
+      >
+        {prompts.length > 0 ? (
+          prompts.map((prompt) => (
+            <LandingButton
+              icon={<SlashPromptIcon />}
+              key={prompt.id}
+              meta={prompt.body}
+              onClick={() => selectPrompt(prompt)}
+              title={prompt.name}
+            />
+          ))
+        ) : (
+          <LandingEmpty>{t("chat.landing.noPrompts")}</LandingEmpty>
+        )}
+      </LandingSection>
+      <LandingSection
+        heading={
+          <ThreadsSheet
+            icon={<HistoryIcon className="size-4" />}
+            label={t("chat.landing.recentChats")}
+            triggerVariant="section"
+          />
+        }
+      >
+        {recentChats.length > 0 ? (
+          recentChats.map((chat) =>
+            chat.scope === "workspace" ? (
+              <Link
+                className={LANDING_ROW_CLASS}
+                key={chat.id}
+                params={{
+                  workspaceId: chat.workspaceId,
+                  threadId: chat.id,
+                }}
+                to="/chat/workspaces/$workspaceId/$threadId"
+              >
+                <LandingItemText
+                  icon={<MessageSquareIcon className="size-4" />}
+                  meta={
+                    <>
+                      <ChatThreadOriginPrefix origin={chat.origin} />
+                      <BidiText>{chat.workspaceName}</BidiText>
+                      {" - "}
+                      {formatRelativeTime(chat.updatedAt)}
+                    </>
+                  }
+                  title={
+                    isPlaceholderThreadTitle(chat.title)
+                      ? t("chat.newChat")
+                      : chat.title
+                  }
+                />
+              </Link>
+            ) : (
+              <Link
+                className={LANDING_ROW_CLASS}
+                key={chat.id}
+                params={{ threadId: chat.id }}
+                to="/chat/$threadId"
+              >
+                <LandingItemText
+                  icon={<MessageSquareIcon className="size-4" />}
+                  meta={
+                    <>
+                      <ChatThreadOriginPrefix origin={chat.origin} />
+                      {formatRelativeTime(chat.updatedAt)}
+                    </>
+                  }
+                  title={
+                    isPlaceholderThreadTitle(chat.title)
+                      ? t("chat.newChat")
+                      : chat.title
+                  }
+                />
+              </Link>
+            ),
+          )
+        ) : (
+          <LandingEmpty>{t("chat.landing.noRecentChats")}</LandingEmpty>
+        )}
+      </LandingSection>
+    </LandingLayout>
   );
 }
 
@@ -742,110 +724,6 @@ type PinnedMatter = {
   client: { displayName: string } | null;
 };
 
-type LandingSectionProps = {
-  children: ReactNode;
-  heading: ReactNode;
-};
-
-const LandingSection = ({ children, heading }: LandingSectionProps) => (
-  <section className="min-w-0">
-    <div className="mb-3">{heading}</div>
-    <div className="flex flex-col gap-1">{children}</div>
-  </section>
-);
-
-type LandingButtonProps = {
-  icon?: ReactElement;
-  meta?: ReactNode | undefined;
-  onClick: () => void;
-  title: ReactNode;
-};
-
-const LandingButton = ({ icon, meta, onClick, title }: LandingButtonProps) => (
-  <button
-    className="group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start transition-colors outline-none focus-visible:ring-2"
-    onClick={onClick}
-    type="button"
-  >
-    <span className="flex min-w-0 items-start gap-2">
-      {icon !== undefined && <LandingRowIcon>{icon}</LandingRowIcon>}
-      <span className="min-w-0 flex-1">
-        <BidiText
-          as="span"
-          className="text-foreground block truncate text-sm font-medium"
-        >
-          {title}
-        </BidiText>
-        {meta !== undefined && meta !== null ? (
-          <span className="text-muted-foreground block truncate text-xs">
-            {meta}
-          </span>
-        ) : null}
-      </span>
-    </span>
-  </button>
-);
-
-type LandingItemTextProps = {
-  icon?: ReactElement;
-  iconTone?: "muted" | "matter" | undefined;
-  meta?: ReactNode | undefined;
-  title: ReactNode;
-};
-
-const LandingItemText = ({
-  icon,
-  iconTone = "muted",
-  meta,
-  title,
-}: LandingItemTextProps) => (
-  <span className="flex min-w-0 items-start gap-2">
-    {icon !== undefined && (
-      <LandingRowIcon tone={iconTone}>{icon}</LandingRowIcon>
-    )}
-    <span className="min-w-0 flex-1">
-      <BidiText
-        as="span"
-        className="text-foreground block truncate text-sm font-medium"
-      >
-        {title}
-      </BidiText>
-      {meta !== undefined && meta !== null ? (
-        <span className="text-muted-foreground block truncate text-xs">
-          {meta}
-        </span>
-      ) : null}
-    </span>
-  </span>
-);
-
-type LandingRowIconProps = {
-  children: ReactElement;
-  tone?: "muted" | "matter" | undefined;
-};
-
-const LandingRowIcon = ({ children, tone = "muted" }: LandingRowIconProps) => (
-  <span
-    className={cn(
-      "mt-0.5 flex size-4 shrink-0 items-center justify-center transition-colors",
-      tone === "muted" &&
-        "text-foreground-muted group-hover:text-muted-foreground",
-    )}
-  >
-    {children}
-  </span>
-);
-
 const SlashPromptIcon = () => (
   <span className="font-mono text-[13px] leading-none">/</span>
-);
-
-type LandingEmptyProps = {
-  children: ReactNode;
-};
-
-const LandingEmpty = ({ children }: LandingEmptyProps) => (
-  <div className="border-border text-muted-foreground rounded-md border border-dashed px-3 py-3 text-sm">
-    {children}
-  </div>
 );

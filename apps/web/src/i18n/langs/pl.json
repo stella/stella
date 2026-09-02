@@ -2981,6 +2981,26 @@
       "shadowed": "Przesłonięte przez umiejętność zespołu"
     }
   },
+  "lawHome": {
+    "databaseStatus": "{count} wpisów · zaktualizowano {date}",
+    "databaseUpToDate": "Aktualne",
+    "enteringIntoForce": "Wkrótce wejdzie w życie",
+    "inForceFrom": "Obowiązuje od {date}",
+    "noRecentSearches": "Brak wyszukiwań",
+    "noSignals": "Brak sygnałów",
+    "prompt": "Czego szukasz?",
+    "recentlyInForce": "Niedawno weszło w życie",
+    "scopeLabel": "Szukaj w",
+    "searchLabel": "Szukaj w bazie prawnej",
+    "searchPlaceholder": "Sygnatura, numer aktu, ECLI lub słowa kluczowe",
+    "signals": "Sygnały",
+    "tier": {
+      "constitutional": "Kontrola konstytucyjna",
+      "supreme": "Najwyższa instancja"
+    },
+    "topCourts": "Z najwyższych sądów",
+    "tryIdentifier": "Wypróbuj identyfikator"
+  },
   "markdownEditor": {
     "rawLabel": "Źródło Markdown"
   },

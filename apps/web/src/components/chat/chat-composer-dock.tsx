@@ -4,6 +4,7 @@ import { MessageSquarePlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { ComposerStatusRow } from "@stll/ui/composer";
 
 import {
   ChatContextMeter,
@@ -11,7 +12,6 @@ import {
 } from "@/components/chat/chat-context-meter";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { ChatModelSelector } from "@/components/chat/chat-model-selector";
-import { ComposerStatusRow } from "@/components/chat/composer-status-row";
 import Tooltip from "@/components/tooltip";
 import { ChatAnonymizedToggle } from "@/features/chat/components/chat-anonymized-toggle";
 import { ChatWebSearchToggle } from "@/features/chat/components/chat-web-search-toggle";

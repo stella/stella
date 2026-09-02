@@ -2981,6 +2981,26 @@
       "shadowed": "Aizstāts ar komandas prasmi"
     }
   },
+  "lawHome": {
+    "databaseStatus": "{count} ieraksti · atjaunināts {date}",
+    "databaseUpToDate": "Aktuāls",
+    "enteringIntoForce": "Drīzumā stāsies spēkā",
+    "inForceFrom": "Stājas spēkā {date}",
+    "noRecentSearches": "Meklējumu vēl nav",
+    "noSignals": "Signālu vēl nav",
+    "prompt": "Ko jūs meklējat?",
+    "recentlyInForce": "Nesen stājās spēkā",
+    "scopeLabel": "Meklēt",
+    "searchLabel": "Meklēt tiesību datubāzē",
+    "searchPlaceholder": "Lietas numurs, akta numurs, ECLI vai atslēgvārdi",
+    "signals": "Signāli",
+    "tier": {
+      "constitutional": "Konstitucionālā kontrole",
+      "supreme": "Augstākā instance"
+    },
+    "topCourts": "No augstākajām tiesām",
+    "tryIdentifier": "Izmēģiniet identifikatoru"
+  },
   "markdownEditor": {
     "rawLabel": "Markdown avotteksts"
   },

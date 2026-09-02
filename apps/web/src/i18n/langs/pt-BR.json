@@ -2981,6 +2981,26 @@
       "shadowed": "Substituída por habilidade da equipe"
     }
   },
+  "lawHome": {
+    "databaseStatus": "{count} registros · atualizado em {date}",
+    "databaseUpToDate": "Atualizado",
+    "enteringIntoForce": "Entrada em vigor em breve",
+    "inForceFrom": "Em vigor a partir de {date}",
+    "noRecentSearches": "Ainda não há pesquisas",
+    "noSignals": "Ainda não há sinais",
+    "prompt": "O que você procura?",
+    "recentlyInForce": "Em vigor recentemente",
+    "scopeLabel": "Pesquisar em",
+    "searchLabel": "Pesquisar na base jurídica",
+    "searchPlaceholder": "Número do processo, número da norma, ECLI ou palavras-chave",
+    "signals": "Sinais",
+    "tier": {
+      "constitutional": "Controle de constitucionalidade",
+      "supreme": "Última instância"
+    },
+    "topCourts": "Dos tribunais superiores",
+    "tryIdentifier": "Experimente um identificador"
+  },
   "markdownEditor": {
     "rawLabel": "Código-fonte Markdown"
   },

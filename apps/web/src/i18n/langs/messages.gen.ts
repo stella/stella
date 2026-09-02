@@ -2984,6 +2984,26 @@ type Messages = {
       "shadowed": "Shadowed by team skill";
     };
   };
+  "lawHome": {
+    "databaseStatus": "{count} entries · updated {date}";
+    "databaseUpToDate": "Up to date";
+    "enteringIntoForce": "Entering into force";
+    "inForceFrom": "In force from {date}";
+    "noRecentSearches": "No searches yet";
+    "noSignals": "No signals yet";
+    "prompt": "What are you looking for?";
+    "recentlyInForce": "Recently in force";
+    "scopeLabel": "Search in";
+    "searchLabel": "Search the legal database";
+    "searchPlaceholder": "Case number, act number, ECLI or keywords";
+    "signals": "Signals";
+    "tier": {
+      "constitutional": "Constitutional review";
+      "supreme": "Highest instance";
+    };
+    "topCourts": "From the top courts";
+    "tryIdentifier": "Try an identifier";
+  };
   "markdownEditor": {
     "rawLabel": "Markdown source";
   };

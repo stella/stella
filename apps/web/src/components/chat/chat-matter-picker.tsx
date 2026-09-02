@@ -5,6 +5,7 @@ import { panic } from "better-result";
 import { ChevronDownIcon, ExternalLinkIcon, SearchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { COMPOSER_PICKER_TRIGGER_CLASS } from "@stll/ui/composer";
 import {
   Menu,
   MenuCheckboxItem,
@@ -240,7 +241,7 @@ export const ChatMatterPicker = ({
       }}
     >
       <MenuTrigger
-        className="text-muted-foreground hover:text-foreground hover:bg-accent inline-flex max-w-[220px] min-w-0 shrink items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors"
+        className={cn(COMPOSER_PICKER_TRIGGER_CLASS, "max-w-[220px]")}
         title={
           selected.length > 1
             ? selected.map((m) => m.name).join(", ")

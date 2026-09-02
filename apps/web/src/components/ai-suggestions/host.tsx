@@ -41,6 +41,16 @@ import type {
   AISuggestionSeverity,
 } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
+import {
+  COMPOSER_BOX_ANONYMIZED_CLASS,
+  COMPOSER_BOX_CLASS,
+  COMPOSER_BOX_FOCUS_CLASS,
+  COMPOSER_COMPACT_ROW_CLASS,
+  COMPOSER_COMPACT_TEXT_CELL_CLASS,
+  COMPOSER_CONTROL_BUTTON_SIZE,
+  COMPOSER_PLACEHOLDER_CLASS,
+  COMPOSER_TEXT_CLASS,
+} from "@stll/ui/composer";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
@@ -55,16 +65,6 @@ import { ChatComposerActionButton } from "@/components/chat/chat-composer-action
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
-import {
-  COMPOSER_BOX_ANONYMIZED_CLASS,
-  COMPOSER_BOX_CLASS,
-  COMPOSER_BOX_FOCUS_CLASS,
-  COMPOSER_COMPACT_ROW_CLASS,
-  COMPOSER_COMPACT_TEXT_CELL_CLASS,
-  COMPOSER_CONTROL_BUTTON_SIZE,
-  COMPOSER_PLACEHOLDER_CLASS,
-  COMPOSER_TEXT_CLASS,
-} from "@/components/chat/composer-control-style";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
 import { ComposerVeil } from "@/components/chat/composer-veil";
