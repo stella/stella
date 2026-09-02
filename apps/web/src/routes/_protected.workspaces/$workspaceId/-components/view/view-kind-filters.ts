@@ -1,6 +1,6 @@
 import { isEntityKind } from "@stll/api-contract";
-import { conditionIncludesKind } from "@stll/conditions";
-import type { ConditionNode, GroupNode, PredicateNode } from "@stll/conditions";
+import { conditionIncludesKind, foldConditions } from "@stll/conditions";
+import type { ConditionNode, FoldHandlers } from "@stll/conditions";
 
 import type { EntityKind } from "@/lib/types";
 
@@ -15,9 +15,10 @@ export const includesListItems = (filters: readonly ConditionNode[]): boolean =>
  * The entity kinds a view's filters admit, read from its `kind in […]`
  * predicates, or `null` when the view does not provably restrict the kind.
  *
- * The rules mirror how the API compiles a filter to SQL: a group with no
- * compiled children is dropped, and never counts as a restriction or as an
- * "everything" branch of its parent; an `and` intersects the sets its
+ * The rules mirror how the API compiles a filter to SQL (`@stll/conditions`'s
+ * `foldCondition`/`foldConditions` own that structural agreement): a group
+ * with no compiled children is dropped, and never counts as a restriction or
+ * as an "everything" branch of its parent; an `and` intersects the sets its
  * restricted children admit (an unrestricted child is ignored); an `or` is
  * restricted only when every remaining child is, and is then their union;
  * a negated group, and any predicate or compare node other than
@@ -27,41 +28,29 @@ export const includesListItems = (filters: readonly ConditionNode[]): boolean =>
 export const viewEntityKinds = (
   filters: readonly ConditionNode[],
 ): readonly EntityKind[] | null => {
-  const admitted = admittedKindsForAnd(filters);
+  const admitted = combineAnd(foldConditions(filters, kindFoldHandlers) ?? []);
   return admitted.type === "kinds" ? [...admitted.kinds] : null;
 };
 
 /**
- * What a node contributes to the kinds a view admits. `dropped` is a node
- * the query compiler discards (an empty group, recursively), which must not
- * be confused with `unrestricted`: an `or` over a task restriction and a
- * dropped group still shows only tasks.
+ * What a node contributes to the kinds a view admits. Unlike the fold's
+ * generic drop rule (a `null` result), this never reports "dropped" — a
+ * predicate or compare other than `kind in […]` still compiles to SQL, it
+ * just does not restrict which kind rows match, so it folds to
+ * `UNRESTRICTED` rather than `null`. Only an empty group is ever dropped,
+ * and that is handled by the fold itself before `group` below is called.
  */
 type AdmittedKinds =
-  | { type: "dropped" }
   | { type: "unrestricted" }
   | { type: "kinds"; kinds: ReadonlySet<EntityKind> };
 
-const DROPPED = { type: "dropped" } as const satisfies AdmittedKinds;
 const UNRESTRICTED = {
   type: "unrestricted",
 } as const satisfies AdmittedKinds;
 
-const admittedKinds = (node: ConditionNode): AdmittedKinds => {
-  switch (node.type) {
-    case "compare":
-      return UNRESTRICTED;
-    case "predicate":
-      return admittedKindsForPredicate(node);
-    case "group":
-      return admittedKindsForGroup(node);
-    default:
-      return node satisfies never;
-  }
-};
-
-const admittedKindsForPredicate = (node: PredicateNode): AdmittedKinds => {
+const admittedKindsForLeaf: FoldHandlers<AdmittedKinds>["leaf"] = (node) => {
   if (
+    node.type !== "predicate" ||
     node.operand.type !== "kind" ||
     node.op !== "in" ||
     !Array.isArray(node.value)
@@ -77,13 +66,10 @@ const admittedKindsForPredicate = (node: PredicateNode): AdmittedKinds => {
   return { type: "kinds", kinds };
 };
 
-const admittedKindsForGroup = (node: GroupNode): AdmittedKinds => {
-  const children = node.children
-    .map(admittedKinds)
-    .filter((child) => child.type !== "dropped");
-  if (children.length === 0) {
-    return DROPPED;
-  }
+const admittedKindsForGroup: FoldHandlers<AdmittedKinds>["group"] = (
+  node,
+  children,
+) => {
   if (node.negated) {
     return UNRESTRICTED;
   }
@@ -97,11 +83,10 @@ const admittedKindsForGroup = (node: GroupNode): AdmittedKinds => {
   }
 };
 
-/** The implicit `and` over a filter list; an all-dropped list restricts nothing. */
-const admittedKindsForAnd = (nodes: readonly ConditionNode[]): AdmittedKinds =>
-  combineAnd(
-    nodes.map(admittedKinds).filter((child) => child.type !== "dropped"),
-  );
+const kindFoldHandlers: FoldHandlers<AdmittedKinds> = {
+  leaf: admittedKindsForLeaf,
+  group: admittedKindsForGroup,
+};
 
 /** Intersection of restricted children; unrestricted children are ignored. */
 const combineAnd = (children: readonly AdmittedKinds[]): AdmittedKinds => {
