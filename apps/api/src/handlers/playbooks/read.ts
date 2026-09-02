@@ -73,7 +73,8 @@ type MissingProjectedPlaybookListColumn = UnprojectedColumns<
 >;
 type UnexpectedProjectedPlaybookListColumn = UnbackedProjectionKeys<
   PlaybookDefinitionRow,
-  PlaybookDefinitionListItem
+  PlaybookDefinitionListItem,
+  (typeof UNPROJECTED_PLAYBOOK_LIST_COLUMNS)[number]
 >;
 
 true satisfies MissingProjectedPlaybookListColumn extends never ? true : never;
@@ -252,7 +253,8 @@ type MissingProjectedPlaybookDetailColumn = UnprojectedColumns<
 >;
 type UnexpectedProjectedPlaybookDetailColumn = UnbackedProjectionKeys<
   PlaybookDefinitionRow,
-  PlaybookDefinitionDetail
+  PlaybookDefinitionDetail,
+  (typeof UNPROJECTED_PLAYBOOK_DETAIL_COLUMNS)[number]
 >;
 
 true satisfies MissingProjectedPlaybookDetailColumn extends never

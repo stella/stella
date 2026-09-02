@@ -36,7 +36,8 @@ type MissingProjectedSavedSearchColumn = UnprojectedColumns<
 >;
 type UnexpectedProjectedSavedSearchColumn = UnbackedProjectionKeys<
   SavedSearchRow,
-  SavedSearchResponse
+  SavedSearchResponse,
+  (typeof UNPROJECTED_SAVED_SEARCH_COLUMNS)[number]
 >;
 
 true satisfies MissingProjectedSavedSearchColumn extends never ? true : never;

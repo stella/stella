@@ -88,7 +88,8 @@ type MissingProjectedNotificationColumn = UnprojectedColumns<
 >;
 type UnexpectedProjectedNotificationColumn = UnbackedProjectionKeys<
   NotificationRow,
-  NotificationListItem
+  NotificationListItem,
+  (typeof UNPROJECTED_NOTIFICATION_COLUMNS)[number]
 >;
 
 true satisfies MissingProjectedNotificationColumn extends never ? true : never;
