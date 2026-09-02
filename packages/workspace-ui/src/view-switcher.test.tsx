@@ -2,6 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
+import { TOOLBAR_ROW_HEIGHT } from "@stll/ui/inspector";
+
 import { WorkspaceViewSwitcher } from "./view-switcher";
 
 const VIEWS = [
@@ -33,6 +35,11 @@ describe("WorkspaceViewSwitcher", () => {
     expect(markup).toContain("Deadlines");
     expect(markup).toContain("Add view");
     expect(markup).toContain("Actions");
+    // One toolbar row, the same height as the frame's top bar and a kanban
+    // column header, so the three rows line up in any host.
+    expect(markup).toContain(
+      `class="flex min-w-0 flex-1 items-center gap-1 px-2 ${TOOLBAR_ROW_HEIGHT}"`,
+    );
     expect(markup).toContain('class="relative flex items-center"');
     expect(markup).toContain(
       'class="absolute inset-e-0 top-1/2 -translate-y-1/2"',

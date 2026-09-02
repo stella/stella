@@ -2,6 +2,8 @@
 
 import type { ComponentProps, ReactElement, ReactNode } from "react";
 
+import { PanelLeftIcon } from "lucide-react";
+
 import {
   ApplicationRail,
   ApplicationRailButton,
@@ -10,8 +12,27 @@ import {
   ApplicationRailHeader,
   ApplicationRailMenu,
 } from "@stll/ui/application-rail";
-import { InspectorDock, TOOLBAR_ROW_HEIGHT } from "@stll/ui/inspector";
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  InspectorDock,
+  SIDE_RAIL_ICON_BUTTON_SIZE,
+  TOOLBAR_ROW_HEIGHT,
+} from "@stll/ui/inspector";
 import { Sheet, SheetPopup, SheetTitle } from "@stll/ui/sheet";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  useSidebar,
+} from "@stll/ui/sidebar";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail, WorkspaceShell } from "@stll/ui/workspace-shell";
@@ -27,9 +48,36 @@ export type WorkspaceFrameNavigationItem = {
   onActivate: () => void;
 };
 
+/**
+ * Renders the described navigation through the sidebar shell from
+ * `@stll/ui/sidebar` instead of the fixed application rail: the same
+ * collapsible sidebar Stella's own app mounts, so a host gets the header
+ * toggle, the labelled menu while expanded, and the tooltips while collapsed
+ * without composing the shell itself.
+ */
+export type WorkspaceFrameSidebarNavigation = {
+  /** Shown at the start of the header row while the sidebar is expanded,
+   * typically a wordmark. The collapse toggle sits at its end. */
+  brand?: ReactNode;
+  /** Accessible names for the header toggle in each state. */
+  toggleLabel: {
+    collapse: string;
+    expand: string;
+  };
+  /** Controlled open state, for a host that persists it. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  defaultOpen?: boolean;
+  /** Keeps the sidebar collapsed regardless of the requested state, e.g.
+   * while an inspector pane needs the width. */
+  forceCollapsed?: boolean;
+};
+
 export type WorkspaceFrameNavigation = {
   label: string;
   items: readonly WorkspaceFrameNavigationItem[];
+  /** Rail-only: the application rail's header slot. The sidebar
+   * presentation owns its header (brand and toggle) and ignores this. */
   header?: ReactNode;
   footer?: ReactNode;
   compact: {
@@ -39,6 +87,7 @@ export type WorkspaceFrameNavigation = {
     onOpenChange: (open: boolean) => void;
     trigger: ReactElement | null;
   };
+  sidebar?: WorkspaceFrameSidebarNavigation;
 };
 
 export type WorkspaceFrameInspector = {
@@ -101,11 +150,12 @@ type DescribedWorkspaceFrameProps = Extract<
  * The two compositions mount different navigation primitives. `described`
  * renders `navigation.items` through the narrower `ApplicationRail` from
  * `@stll/ui/application-rail` — a fixed-width, always-collapsed rail with no
- * expand/collapse state of its own. `host-responsive` passes `navigation`
- * straight through to `WorkspaceShell` and takes no position on what fills
- * it; a host that wants an expandable/collapsible sidebar (with mobile
- * sheet, tooltips-when-collapsed, and persisted open state) mounts the
- * shell from `@stll/ui/sidebar` there, as this app's `AppSidebar` does.
+ * expand/collapse state of its own — or, with `navigation.sidebar`, through
+ * the collapsible sidebar shell from `@stll/ui/sidebar`. `host-responsive`
+ * passes `navigation` straight through to `WorkspaceShell` and takes no
+ * position on what fills it; a host that composes its own sidebar content
+ * mounts the shell from `@stll/ui/sidebar` there, as this app's `AppSidebar`
+ * does.
  */
 export const WorkspaceFrame = (props: WorkspaceFrameProps) => {
   if (props.composition === "host-responsive") {
@@ -135,30 +185,12 @@ const DescribedWorkspaceFrame = ({
     hasMobilePresentation: inspector?.mobile !== undefined,
     isCompact,
   });
-  const desktopNavigation = (
-    <ApplicationRail aria-label={navigation.label}>
-      <ApplicationRailHeader>{navigation.header}</ApplicationRailHeader>
-      <ApplicationRailContent>
-        <ApplicationRailMenu>
-          {navigation.items.map((item) => (
-            <ApplicationRailButton
-              aria-current={item.active ? "page" : undefined}
-              aria-label={item.label}
-              data-active={item.active || undefined}
-              disabled={item.disabled}
-              key={item.id}
-              title={item.label}
-              className="data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground"
-              onClick={item.onActivate}
-            >
-              {item.icon}
-            </ApplicationRailButton>
-          ))}
-        </ApplicationRailMenu>
-      </ApplicationRailContent>
-      <ApplicationRailFooter>{navigation.footer}</ApplicationRailFooter>
-    </ApplicationRail>
-  );
+  const desktopNavigation =
+    navigation.sidebar === undefined ? (
+      <DescribedApplicationRail navigation={navigation} />
+    ) : (
+      <DescribedSidebar navigation={navigation} sidebar={navigation.sidebar} />
+    );
 
   const endDock =
     inspector && inspectorPresentation === "desktop" ? (
@@ -176,7 +208,7 @@ const DescribedWorkspaceFrame = ({
       <WorkspaceEndRail {...endRail} />
     );
 
-  const frame = (
+  const shell = (
     <WorkspaceShell
       endDock={endDock}
       navigation={{
@@ -204,6 +236,15 @@ const DescribedWorkspaceFrame = ({
     </WorkspaceShell>
   );
 
+  const frame =
+    navigation.sidebar === undefined ? (
+      shell
+    ) : (
+      <SidebarProvider {...resolveSidebarProviderProps(navigation.sidebar)}>
+        {shell}
+      </SidebarProvider>
+    );
+
   if (inspector?.mobile === undefined) {
     return frame;
   }
@@ -229,5 +270,143 @@ const DescribedWorkspaceFrame = ({
         </SheetPopup>
       ) : null}
     </Sheet>
+  );
+};
+
+type SidebarProviderProps = ComponentProps<typeof SidebarProvider>;
+
+/**
+ * Only the sidebar options the host actually set reach the provider: an
+ * explicit `undefined` would otherwise turn a controlled `open` into an
+ * uncontrolled one, or clear the provider's own default.
+ */
+const resolveSidebarProviderProps = ({
+  defaultOpen,
+  forceCollapsed,
+  open,
+  onOpenChange,
+}: WorkspaceFrameSidebarNavigation): SidebarProviderProps => ({
+  ...(defaultOpen === undefined ? {} : { defaultOpen }),
+  ...(forceCollapsed === undefined ? {} : { forceCollapsed }),
+  ...(open === undefined ? {} : { open }),
+  ...(onOpenChange === undefined ? {} : { onOpenChange }),
+});
+
+const DescribedApplicationRail = ({
+  navigation,
+}: {
+  navigation: WorkspaceFrameNavigation;
+}) => (
+  <ApplicationRail aria-label={navigation.label}>
+    <ApplicationRailHeader>{navigation.header}</ApplicationRailHeader>
+    <ApplicationRailContent>
+      <ApplicationRailMenu>
+        {navigation.items.map((item) => (
+          <ApplicationRailButton
+            aria-current={item.active ? "page" : undefined}
+            aria-label={item.label}
+            data-active={item.active || undefined}
+            disabled={item.disabled}
+            key={item.id}
+            title={item.label}
+            className="data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground"
+            onClick={item.onActivate}
+          >
+            {item.icon}
+          </ApplicationRailButton>
+        ))}
+      </ApplicationRailMenu>
+    </ApplicationRailContent>
+    <ApplicationRailFooter>{navigation.footer}</ApplicationRailFooter>
+  </ApplicationRail>
+);
+
+/**
+ * The described items as Stella's collapsible sidebar. The header is the
+ * same row Stella's app shows: brand at the start while expanded, the
+ * collapse toggle at the end, at toolbar-row height so it lines up with the
+ * top bar beside it. Each item is a sidebar menu button, which shows its
+ * label while expanded and a tooltip while collapsed.
+ */
+const DescribedSidebar = ({
+  navigation,
+  sidebar,
+}: {
+  navigation: WorkspaceFrameNavigation;
+  sidebar: WorkspaceFrameSidebarNavigation;
+}) => {
+  const { isMobile, state, toggleSidebar } = useSidebar();
+  const collapsed = state === "collapsed" && !isMobile;
+  const toggleLabel = collapsed
+    ? sidebar.toggleLabel.expand
+    : sidebar.toggleLabel.collapse;
+
+  return (
+    <Sidebar
+      aria-label={navigation.label}
+      collapsible="icon"
+      mobileTitle={navigation.label}
+    >
+      <SidebarHeader className={cn("border-b p-0", TOOLBAR_ROW_HEIGHT)}>
+        <div
+          className={cn(
+            "flex h-full items-center",
+            collapsed ? "justify-center" : "justify-between ps-3 pe-2",
+          )}
+        >
+          {collapsed ? null : sidebar.brand}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  aria-label={toggleLabel}
+                  className={cn(
+                    "text-muted-foreground",
+                    SIDE_RAIL_ICON_BUTTON_SIZE,
+                  )}
+                  data-slot="workspace-frame-sidebar-toggle"
+                  size="icon"
+                  variant="ghost"
+                  onClick={toggleSidebar}
+                >
+                  {/* A drawer glyph on the sidebar's edge: mirrored under
+                   * RTL, where the inline-start sidebar sits on the right. */}
+                  <DirectionalIcon className="size-4" icon={PanelLeftIcon} />
+                </Button>
+              }
+            />
+            <TooltipPopup side="right">{toggleLabel}</TooltipPopup>
+          </Tooltip>
+        </div>
+      </SidebarHeader>
+      <SidebarContent>
+        {/* The items stay a navigation landmark, as they are on the rail;
+         * the sidebar's own container is a plain region. */}
+        <nav aria-label={navigation.label}>
+          {/* Collapsed, the group's padding narrows so a 44px item fits the
+           * 48px rail; expanded it keeps the sidebar's usual inset. */}
+          <SidebarGroup className="group-data-[collapsible=icon]:px-0.5">
+            <SidebarMenu>
+              {navigation.items.map((item) => (
+                <SidebarMenuItem key={item.id}>
+                  <SidebarMenuButton
+                    aria-current={item.active ? "page" : undefined}
+                    disabled={item.disabled}
+                    isActive={item.active ?? false}
+                    size="rail"
+                    tooltip={item.label}
+                    onClick={item.onActivate}
+                  >
+                    {item.icon}
+                    <span className="truncate">{item.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        </nav>
+      </SidebarContent>
+      <SidebarFooter>{navigation.footer}</SidebarFooter>
+    </Sidebar>
   );
 };

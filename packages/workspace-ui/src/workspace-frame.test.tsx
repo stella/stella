@@ -139,6 +139,104 @@ test("renders the same stella rail primitive when the inspector pane is absent",
   expect(rendered).toContain("w-12");
 });
 
+const sidebarNavigation = (
+  defaultOpen: boolean,
+  sidebar: { forceCollapsed?: boolean; open?: boolean } = {},
+) =>
+  ({
+    compact: {
+      content: <div />,
+      label: "Navigation",
+      onOpenChange: () => undefined,
+      open: false,
+      trigger: null,
+    },
+    footer: <span data-testid="nav-footer" />,
+    header: <span data-testid="rail-only-header" />,
+    items: [
+      {
+        active: true,
+        icon: <span data-testid="nav-icon" />,
+        id: "board",
+        label: "Board",
+        onActivate: () => undefined,
+      },
+    ],
+    label: "Navigation",
+    sidebar: {
+      brand: <span data-testid="brand" />,
+      defaultOpen,
+      toggleLabel: { collapse: "Hide sidebar", expand: "Show sidebar" },
+      ...sidebar,
+    },
+  }) as const;
+
+const renderSidebarFrame = (
+  defaultOpen: boolean,
+  sidebar?: { forceCollapsed?: boolean; open?: boolean },
+) =>
+  renderToStaticMarkup(
+    <WorkspaceFrame
+      composition="described"
+      endRail={{
+        chatAction: {
+          label: "Chat",
+          reason: "Unavailable",
+          status: "unavailable",
+        },
+        label: "Inspector",
+        topAction: <span />,
+      }}
+      navigation={sidebarNavigation(defaultOpen, sidebar)}
+      topBar={{}}
+    >
+      <div />
+    </WorkspaceFrame>,
+  );
+
+test("renders described navigation through the sidebar shell when asked", () => {
+  const rendered = renderSidebarFrame(true);
+
+  expect(rendered).toContain('data-slot="workspace-shell"');
+  expect(rendered).toContain('data-slot="sidebar"');
+  expect(rendered).toContain('data-state="expanded"');
+  // The items stay a navigation landmark, and keep the rail's 44px target.
+  expect(rendered).toContain('<nav aria-label="Navigation">');
+  expect(rendered).toContain('data-sidebar="menu-button"');
+  expect(rendered).toContain('data-size="rail"');
+  expect(rendered).toContain("h-11");
+  expect(rendered).toContain('aria-current="page"');
+  expect(rendered).toContain('data-testid="nav-icon"');
+  expect(rendered).toContain('data-testid="nav-footer"');
+  expect(rendered).toContain('data-testid="brand"');
+  expect(rendered).toContain('aria-label="Hide sidebar"');
+  expect(rendered).not.toContain('data-slot="application-rail"');
+  // The sidebar owns its header row; the rail-only header slot is not shown.
+  expect(rendered).not.toContain('data-testid="rail-only-header"');
+});
+
+test("hides the brand and names the expand toggle while the sidebar is collapsed", () => {
+  const rendered = renderSidebarFrame(false);
+
+  expect(rendered).toContain('data-state="collapsed"');
+  expect(rendered).toContain('data-collapsible="icon"');
+  expect(rendered).not.toContain('data-testid="brand"');
+  expect(rendered).toContain('aria-label="Show sidebar"');
+  expect(rendered).toContain('data-testid="nav-icon"');
+});
+
+test("a controlled open state wins over the default, and a forced collapse over both", () => {
+  expect(renderSidebarFrame(true, { open: false })).toContain(
+    'data-state="collapsed"',
+  );
+  expect(renderSidebarFrame(false, { open: true })).toContain(
+    'data-state="expanded"',
+  );
+  expect(
+    renderSidebarFrame(true, { forceCollapsed: true, open: true }),
+  ).toContain('data-state="collapsed"');
+});
+
 test("uses the same frame for Stella-owned responsive chrome", () => {
   const rendered = renderToStaticMarkup(
     <WorkspaceFrame
