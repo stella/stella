@@ -3,6 +3,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { templates } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -79,26 +80,61 @@ export const decodeTemplateListCursor = (
 export const encodeTemplateListCursor = (id: SafeId<"template">): string =>
   encodePaginationCursor([id]);
 
-// The shape the `.select({...})` below must project, plus the two
-// author-identity fields that come from the joined `user` row rather than
-// from `templates` itself.
-type TemplateListItem = Pick<
-  TemplateRow,
-  | "id"
-  | "name"
-  | "fileName"
-  | "fieldCount"
-  | "sizeBytes"
-  | "categoryId"
-  | "createdAt"
-  | "updatedAt"
-  | "lastUsedAt"
-  | "useCount"
-  | "tags"
-  | "languages"
-  | "whenToUse"
-  | "whenNotToUse"
-> & { authorName: string | null; authorImage: string | null };
+// The exact `.select({...})` passed to the query below. Hoisted so the
+// selection and the derived `TemplateListItem` type can never drift apart.
+const TEMPLATE_LIST_SELECTION = {
+  id: templates.id,
+  name: templates.name,
+  fileName: templates.fileName,
+  fieldCount: templates.fieldCount,
+  sizeBytes: templates.sizeBytes,
+  categoryId: templates.categoryId,
+  createdAt: templates.createdAt,
+  updatedAt: templates.updatedAt,
+  lastUsedAt: templates.lastUsedAt,
+  useCount: templates.useCount,
+  tags: templates.tags,
+  languages: templates.languages,
+  whenToUse: templates.whenToUse,
+  whenNotToUse: templates.whenNotToUse,
+  authorName: user.name,
+  authorImage: user.image,
+} as const;
+
+// Select + from + join only: the row shape this produces is unaffected by
+// the `.where()`/`.orderBy()`/`.limit()` the real query below chains onto
+// it, so this alone is enough to derive `TemplateListItem` from. Both joins
+// are left joins, so `authorName`/`authorImage` come out nullable -- a
+// departed or otherwise unresolved author renders as anonymous rather than
+// failing the query.
+const selectTemplateListRows = ({
+  tx,
+  organizationId,
+}: {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+}) =>
+  tx
+    .select(TEMPLATE_LIST_SELECTION)
+    .from(templates)
+    // Author identity only for users still in the org: scope the
+    // user join through membership so departed users render as
+    // anonymous instead of leaking profile data.
+    .leftJoin(
+      member,
+      and(
+        eq(member.userId, templates.createdBy),
+        eq(member.organizationId, organizationId),
+      ),
+    )
+    .leftJoin(user, eq(user.id, member.userId));
+
+// The two author-identity fields come from the joined `user` row rather than
+// from `templates` itself, so they stay excluded from the reverse totality
+// check via `Omit`.
+type TemplateListItem = Awaited<
+  ReturnType<typeof selectTemplateListRows>
+>[number];
 
 // Totality guard, bidirectional: every schema column must be projected onto
 // the response or explicitly excused above, and the projection cannot carry
@@ -111,7 +147,8 @@ type MissingProjectedTemplateListColumn = UnprojectedColumns<
 >;
 type UnexpectedProjectedTemplateListColumn = UnbackedProjectionKeys<
   TemplateRow,
-  Omit<TemplateListItem, "authorName" | "authorImage">
+  Omit<TemplateListItem, "authorName" | "authorImage">,
+  (typeof UNPROJECTED_TEMPLATE_LIST_COLUMNS)[number]
 >;
 
 true satisfies MissingProjectedTemplateListColumn extends never ? true : never;
@@ -162,49 +199,15 @@ export const listTemplatesHandler = async function* ({
 
   const result = yield* Result.await(
     safeDb((tx) =>
-      tx
-        .select({
-          id: templates.id,
-          name: templates.name,
-          fileName: templates.fileName,
-          fieldCount: templates.fieldCount,
-          sizeBytes: templates.sizeBytes,
-          categoryId: templates.categoryId,
-          createdAt: templates.createdAt,
-          updatedAt: templates.updatedAt,
-          lastUsedAt: templates.lastUsedAt,
-          useCount: templates.useCount,
-          tags: templates.tags,
-          languages: templates.languages,
-          whenToUse: templates.whenToUse,
-          whenNotToUse: templates.whenNotToUse,
-          authorName: user.name,
-          authorImage: user.image,
-        })
-        .from(templates)
-        // Author identity only for users still in the org: scope the
-        // user join through membership so departed users render as
-        // anonymous instead of leaking profile data.
-        .leftJoin(
-          member,
-          and(
-            eq(member.userId, templates.createdBy),
-            eq(member.organizationId, organizationId),
-          ),
-        )
-        .leftJoin(user, eq(user.id, member.userId))
+      selectTemplateListRows({ tx, organizationId })
         .where(and(...conditions))
         .orderBy(desc(templates.createdAt), desc(templates.id))
         .limit(limit + 1),
     ),
   );
 
-  // Ties the `.select({...})` above to `TemplateListItem`: if either drops
-  // a field the other still names, this check stops typechecking.
-  const projectedResult = result satisfies TemplateListItem[];
-
   const page = createCursorPage({
-    rows: projectedResult,
+    rows: result,
     limit,
     cursorForItem: (item) => encodeTemplateListCursor(item.id),
   });

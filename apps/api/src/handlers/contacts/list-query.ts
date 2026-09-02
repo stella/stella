@@ -2,6 +2,7 @@ import { and, count, eq, gt, ilike, or } from "drizzle-orm";
 
 import type { ContactType } from "@stll/api-contract";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -119,22 +120,52 @@ const decodeCursor = (cursor: string): DecodedCursor | null => {
 const encodeCursor = (displayName: string, id: string): string =>
   encodePaginationCursor([displayName, id]);
 
-// The shape the `.select({...})` below must project, plus the one
-// aggregate (`clientMatterCount`) that traces back to no single column.
-type ContactListItem = Pick<
-  ContactRow,
-  | "id"
-  | "type"
-  | "displayName"
-  | "firstName"
-  | "lastName"
-  | "organizationName"
-  | "emails"
-  | "phones"
-  | "tags"
-  | "color"
-  | "createdAt"
-> & { clientMatterCount: number };
+// The exact `.select({...})` passed to the query below. Hoisted so the
+// selection and the derived `ContactListItem` type can never drift apart:
+// a column added to one without the other is either a totality-guard
+// failure (added to the select, not the row type -- impossible, since the
+// row type is derived from the select) or simply doesn't compile.
+const CONTACT_LIST_SELECTION = {
+  id: contacts.id,
+  type: contacts.type,
+  displayName: contacts.displayName,
+  firstName: contacts.firstName,
+  lastName: contacts.lastName,
+  organizationName: contacts.organizationName,
+  emails: contacts.emails,
+  phones: contacts.phones,
+  tags: contacts.tags,
+  color: contacts.color,
+  createdAt: contacts.createdAt,
+  clientMatterCount: count(workspaces.id),
+} as const;
+
+// Select + from + join only: the row shape this produces is unaffected by
+// the `.where()`/`.groupBy()`/`.orderBy()`/`.limit()` the real query below
+// chains onto it, so this alone is enough to derive `ContactListItem` from.
+const selectContactListRows = ({
+  tx,
+  organizationId,
+}: {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+}) =>
+  tx
+    .select(CONTACT_LIST_SELECTION)
+    .from(contacts)
+    .leftJoin(
+      workspaces,
+      and(
+        eq(workspaces.clientId, contacts.id),
+        eq(workspaces.organizationId, organizationId),
+      ),
+    );
+
+// The join-derived aggregate (`clientMatterCount`) traces back to no single
+// column, so it stays excluded from the reverse totality check via `Omit`.
+type ContactListItem = Awaited<
+  ReturnType<typeof selectContactListRows>
+>[number];
 
 // Totality guard, bidirectional: every schema column must be projected onto
 // the response or explicitly excused above, and the projection cannot carry
@@ -147,7 +178,8 @@ type MissingProjectedContactListColumn = UnprojectedColumns<
 >;
 type UnexpectedProjectedContactListColumn = UnbackedProjectionKeys<
   ContactRow,
-  Omit<ContactListItem, "clientMatterCount">
+  Omit<ContactListItem, "clientMatterCount">,
+  (typeof UNPROJECTED_CONTACT_LIST_COLUMNS)[number]
 >;
 
 true satisfies MissingProjectedContactListColumn extends never ? true : never;
@@ -194,40 +226,14 @@ export const listContactsPage = async ({
       }
     }
 
-    const rows = await tx
-      .select({
-        id: contacts.id,
-        type: contacts.type,
-        displayName: contacts.displayName,
-        firstName: contacts.firstName,
-        lastName: contacts.lastName,
-        organizationName: contacts.organizationName,
-        emails: contacts.emails,
-        phones: contacts.phones,
-        tags: contacts.tags,
-        color: contacts.color,
-        createdAt: contacts.createdAt,
-        clientMatterCount: count(workspaces.id),
-      })
-      .from(contacts)
-      .leftJoin(
-        workspaces,
-        and(
-          eq(workspaces.clientId, contacts.id),
-          eq(workspaces.organizationId, organizationId),
-        ),
-      )
+    const rows = await selectContactListRows({ tx, organizationId })
       .where(and(...conditions))
       .groupBy(contacts.id)
       .orderBy(contacts.displayName, contacts.id)
       .limit(limit + 1);
 
-    // Ties the `.select({...})` above to `ContactListItem`: if either drops
-    // a field the other still names, this check stops typechecking.
-    const projectedRows = rows satisfies ContactListItem[];
-
     return createCursorPage({
-      rows: projectedRows,
+      rows,
       limit,
       cursorForItem: (item) => encodeCursor(item.displayName, item.id),
     });

@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillComments } from "@/api/db/schema";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
@@ -25,23 +26,32 @@ const UNPROJECTED_SKILL_COMMENT_COLUMNS = [
   "organizationId",
 ] as const satisfies readonly (keyof AgentSkillCommentRow)[];
 
-// The shape the `.select({...})` below must project. Kept as an explicit
-// type (rather than derived) so the totality guard has something concrete
-// to check both directions against.
-type SkillCommentListItem = Pick<
-  AgentSkillCommentRow,
-  | "id"
-  | "revisionId"
-  | "proposalId"
-  | "rangeStart"
-  | "rangeEnd"
-  | "anchorText"
-  | "body"
-  | "authorId"
-  | "resolvedAt"
-  | "resolvedBy"
-  | "createdAt"
->;
+// The exact `.select({...})` passed to the query below. Hoisted so the
+// selection and the derived `SkillCommentListItem` type can never drift
+// apart.
+const SKILL_COMMENT_LIST_SELECTION = {
+  id: agentSkillComments.id,
+  revisionId: agentSkillComments.revisionId,
+  proposalId: agentSkillComments.proposalId,
+  rangeStart: agentSkillComments.rangeStart,
+  rangeEnd: agentSkillComments.rangeEnd,
+  anchorText: agentSkillComments.anchorText,
+  body: agentSkillComments.body,
+  authorId: agentSkillComments.authorId,
+  resolvedAt: agentSkillComments.resolvedAt,
+  resolvedBy: agentSkillComments.resolvedBy,
+  createdAt: agentSkillComments.createdAt,
+} as const;
+
+// Select + from only: the row shape this produces is unaffected by the
+// `.where()`/`.orderBy()`/`.limit()` the real query below chains onto it,
+// so this alone is enough to derive `SkillCommentListItem` from.
+const selectSkillCommentListRows = (tx: Transaction) =>
+  tx.select(SKILL_COMMENT_LIST_SELECTION).from(agentSkillComments);
+
+type SkillCommentListItem = Awaited<
+  ReturnType<typeof selectSkillCommentListRows>
+>[number];
 
 // Totality guard, bidirectional: every schema column must be projected onto
 // the response or explicitly excused above, and the projection cannot carry
@@ -53,7 +63,8 @@ type MissingProjectedSkillCommentColumn = UnprojectedColumns<
 >;
 type UnexpectedProjectedSkillCommentColumn = UnbackedProjectionKeys<
   AgentSkillCommentRow,
-  SkillCommentListItem
+  SkillCommentListItem,
+  (typeof UNPROJECTED_SKILL_COMMENT_COLUMNS)[number]
 >;
 
 true satisfies MissingProjectedSkillCommentColumn extends never ? true : never;
@@ -86,21 +97,7 @@ const listSkillComments = createSafeRootHandler(
           organizationId: session.activeOrganizationId,
         });
 
-        return await tx
-          .select({
-            id: agentSkillComments.id,
-            revisionId: agentSkillComments.revisionId,
-            proposalId: agentSkillComments.proposalId,
-            rangeStart: agentSkillComments.rangeStart,
-            rangeEnd: agentSkillComments.rangeEnd,
-            anchorText: agentSkillComments.anchorText,
-            body: agentSkillComments.body,
-            authorId: agentSkillComments.authorId,
-            resolvedAt: agentSkillComments.resolvedAt,
-            resolvedBy: agentSkillComments.resolvedBy,
-            createdAt: agentSkillComments.createdAt,
-          })
-          .from(agentSkillComments)
+        return await selectSkillCommentListRows(tx)
           .where(
             and(
               eq(agentSkillComments.skillId, params.skillId),
@@ -118,12 +115,7 @@ const listSkillComments = createSafeRootHandler(
       }),
     );
 
-    // Ties the `.select({...})` above to `SkillCommentListItem`: if either
-    // drops a field the other still names, this assignment stops
-    // typechecking.
-    const projectedItems = items satisfies SkillCommentListItem[];
-
-    return Result.ok({ items: projectedItems });
+    return Result.ok({ items });
   },
 );
 

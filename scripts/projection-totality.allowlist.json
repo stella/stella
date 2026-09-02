@@ -1,0 +1,430 @@
+[
+  {
+    "file": "apps/api/src/handlers/bilingual-translations/read-run.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/billing-codes/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/annotations/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/decisions/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/decisions/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/pipeline.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/matter-links/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/polarity/rule-engine.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/provisions/list-for-decision.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/research/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/research/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/catalogue/list-catalogue.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/chat/get-messages.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/chat/get-older-messages.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/chat/get-suggested-prompts.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/chat/get-thread-recap.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/chat/get-thread-title.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/chat/get-threads.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/chat/memory-context.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/chat/stream-chat.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/clauses/read.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/contacts/create.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/contacts/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/document-reviews/list-runs.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/document-reviews/list-sources.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/document-translations/read-run.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/document-types/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/docx-suggestions/read.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/entities/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/entities/list-files.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/entities/list-folders.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/entities/read-field-file.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/entities/read-filesystem-tree.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/entities/read-group-counts.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/entities/read-property-facets.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/entities/read-summaries-count.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/entities/read-summaries.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/entities/read-version-by-id.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/entities/read-versions.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/expenses/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/files/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/flows/read.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/invoices/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/invoices/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/legislation/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/legislation/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/lists/generation-candidates/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/lists/generations/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/lists/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/lists/items/activity/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/lists/items/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/lists/items/sources/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/lists/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/mcp-connectors/connect.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/mcp-connectors/create-connection.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/mcp-connectors/list-connections.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/mcp-connectors/list-connectors.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/memories/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/notifications/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/organization-settings/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/organization-settings/read-ai-config.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/organization-settings/read-anonymization-blacklist.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/organization-settings/read-deepl-availability.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/organization-settings/read-deepl-config.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/organization-settings/read-web-search-config.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/playbooks/list-versions.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/playbooks/recent/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/rates/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/reports/export-history.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/reports/list-templates.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/reports/read-export.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/saved-searches/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/sharepoint/list-drive-root.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/signals/read.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/skills/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/skills/list-commands.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/skills/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/skills/proposals/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/skills/proposals/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/skills/revisions/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/skills/revisions/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/style-sets/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/tasks/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/templates/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/time-entries/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/time-entries/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/time-entries/summary/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/uploads/update.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/usage/get-entitlement.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/usage/get-lane.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/usage/list-seat-assignments.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/user-files/read-content.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/user-files/read-thumbnail.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/view-templates/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/views/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/work-obligations/queues/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/anonymization-allowlist/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/anonymization-terms/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/get.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/list.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/read-active.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/read-activity.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/read-justifications.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/read-navigation.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/read-overview-activity.query.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/read-overview.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/read-workflow-status.ts",
+    "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
+  }
+]

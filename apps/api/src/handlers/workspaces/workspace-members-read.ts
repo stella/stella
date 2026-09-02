@@ -39,7 +39,8 @@ type MissingProjectedWorkspaceMemberColumn = UnprojectedColumns<
 >;
 type UnexpectedProjectedWorkspaceMemberColumn = UnbackedProjectionKeys<
   WorkspaceMemberRow,
-  typeof WORKSPACE_MEMBER_COLUMNS
+  typeof WORKSPACE_MEMBER_COLUMNS,
+  (typeof UNPROJECTED_WORKSPACE_MEMBER_COLUMNS)[number]
 >;
 
 true satisfies MissingProjectedWorkspaceMemberColumn extends never

@@ -87,7 +87,8 @@ type MissingProjectedPropertyColumn = UnprojectedColumns<
 >;
 type UnexpectedProjectedPropertyColumn = UnbackedProjectionKeys<
   PropertyRow,
-  PropertyListItem
+  PropertyListItem,
+  (typeof UNPROJECTED_PROPERTY_COLUMNS)[number]
 >;
 
 true satisfies MissingProjectedPropertyColumn extends never ? true : never;

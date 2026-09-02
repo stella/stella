@@ -1043,6 +1043,15 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/check-dead-columns.test.ts
 
+      # Self-test the projection-totality module classifier: a regression
+      # here would either silently stop flagging an unguarded resource
+      # projection or start flagging unrelated modules, in both cases
+      # undermining the check:projection-totality gate in the code-quality
+      # job.
+      - name: Test projection-totality classification
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/check-projection-totality.test.ts
+
       # Fail PRs that change the desktop bridge surface without
       # bumping BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs.
       # See scripts/check-bridge-version.sh for rationale.
@@ -1113,6 +1122,9 @@ jobs:
 
       - name: Dead columns
         run: bun run check:dead-columns
+
+      - name: Projection totality
+        run: bun run check:projection-totality
 
       - name: Result consumption
         env:
