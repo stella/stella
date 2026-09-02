@@ -118,6 +118,23 @@ describe("source map removal", () => {
 });
 
 describe("source-map injection coverage", () => {
+  test("rejects a client build with no mapped JavaScript chunks", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "stella-sourcemaps-empty-"));
+    const clientRoot = path.join(root, "client");
+    await mkdir(path.join(clientRoot, "assets"), { recursive: true });
+
+    let failure: unknown;
+    try {
+      await assertChunksInjected(clientRoot);
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure instanceof Error ? failure.message : "").toMatch(
+      /no mapped client chunks/u,
+    );
+  });
+
   test("validates mapped chunks without rejecting emitted mapless assets", async () => {
     const root = await createDist();
     const clientRoot = path.join(root, "client");

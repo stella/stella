@@ -140,6 +140,9 @@ export const assertChunksInjected = async (
       missing.push(path.relative(clientRoot, file));
     }
   }
+  if (count === 0) {
+    return panic("no mapped client chunks found after source-map publication");
+  }
   if (missing.length > 0) {
     return panic(
       `chunks without an injected id: ${missing.toSorted().join(", ")}`,
