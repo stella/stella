@@ -22,11 +22,10 @@ export type KanbanColumnBandHeaderProps = {
 };
 
 /**
- * The band header row above a run of columns: the same rhythm as
- * `KanbanColumnHeader` (swatch, name, count, controls), plus the collapse
- * toggle that folds the run into one narrow lane. Collapsed, the header is
- * the only thing left of the band, so it also carries the band's identity on
- * `aria-expanded` for the columns it hides.
+ * The band line above a run of columns: one 28px row of toggle, swatch, name,
+ * and count, so a band costs the board a caption's height and nothing more.
+ * Folded, only the toggle remains in this line; the band's name moves down
+ * into the narrow column body, where the height is already there.
  */
 export const KanbanColumnBandHeader = ({
   title,
@@ -39,8 +38,8 @@ export const KanbanColumnBandHeader = ({
 }: KanbanColumnBandHeaderProps) => (
   <div
     className={cn(
-      "flex items-center gap-2 py-2",
-      collapsed ? "flex-col px-1" : "px-3",
+      "flex h-7 items-center gap-1",
+      collapsed ? "justify-center" : "pe-1",
     )}
     data-collapsed={collapsed ? "" : undefined}
     data-slot="kanban-column-band-header"
@@ -48,30 +47,33 @@ export const KanbanColumnBandHeader = ({
     <button
       aria-expanded={!collapsed}
       aria-label={toggleLabel}
-      className="hover:bg-muted/60 text-muted-foreground hover:text-foreground flex size-8 shrink-0 items-center justify-center rounded-md transition-[background-color]"
+      className="hover:bg-muted/60 text-muted-foreground hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded-md transition-[background-color]"
       onClick={() => onCollapsedChange(!collapsed)}
+      title={toggleLabel}
       type="button"
     >
       <DirectionalIcon
-        className={cn("size-4 transition-transform", collapsed && "-rotate-90")}
+        className={cn(
+          "size-3.5 transition-transform",
+          collapsed && "-rotate-90",
+        )}
         flip={collapsed}
         icon={ChevronDownIcon}
       />
     </button>
-    {swatch}
-    <span
-      className={cn(
-        "flex min-w-0 items-center gap-1.5 text-sm font-medium",
-        collapsed ? "rotate-180 [writing-mode:vertical-rl]" : "flex-1 truncate",
-      )}
-    >
-      {title}
-      {meta !== undefined && (
-        <span className="text-muted-foreground text-xs tabular-nums">
-          {meta}
+    {collapsed ? null : (
+      <>
+        {swatch}
+        <span className="flex min-w-0 flex-1 items-baseline gap-1.5 truncate text-xs font-medium">
+          {title}
+          {meta !== undefined && (
+            <span className="text-muted-foreground font-normal tabular-nums">
+              {meta}
+            </span>
+          )}
         </span>
-      )}
-    </span>
-    {collapsed ? null : actions}
+        {actions}
+      </>
+    )}
   </div>
 );

@@ -223,6 +223,39 @@ describe("KanbanSubgroupBoard with column bands", () => {
     expect(markup).toContain("cell:ada:done:1");
   });
 
+  test("keeps the band line one caption tall and moves a folded name into the body", () => {
+    const open = renderBanded(false);
+    const folded = renderToStaticMarkup(
+      <KanbanSubgroupBoard
+        isBandCollapsed={(band) => band.id === "todo"}
+        isLaneCollapsed={() => false}
+        matrix={bandedMatrix}
+        renderCell={() => <span>cell</span>}
+        renderColumnHeader={() => <span>column</span>}
+        renderLaneIdentity={() => <span>lane</span>}
+        onBandCollapsedChange={() => undefined}
+        onLaneCollapsedChange={() => undefined}
+      />,
+    );
+
+    // The caption line is a fixed 28px row with a hairline, not a boxed panel.
+    expect(open).toContain('data-slot="kanban-column-band-header"');
+    expect(open).toMatch(
+      /class="[^"]*\bh-7\b[^"]*"[^>]*data-slot="kanban-column-band-header"/u,
+    );
+    expect(open).not.toContain("rounded-lg border");
+    // Folded, the caption keeps only the toggle; the name sits vertically in
+    // the default body slot with the count under it.
+    const foldedHeader =
+      /<div[^>]*data-slot="kanban-column-band-header"[^>]*>[\s\S]*?<\/div>/u.exec(
+        folded,
+      )?.[0] ?? "";
+    expect(foldedHeader).toContain('aria-expanded="false"');
+    expect(foldedHeader).not.toContain(">To do<");
+    expect(folded).toContain("[writing-mode:vertical-rl]");
+    expect(folded).toContain('data-kanban-collapsed-band-count="2"');
+  });
+
   test("folds a collapsed band into one slot per row and keeps its cells reachable", () => {
     const markup = renderBanded(true);
 

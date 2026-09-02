@@ -93,15 +93,16 @@ export type KanbanSubgroupBoardProps<TRow> = {
   renderLaneIdentity: (context: KanbanSubgroupLaneIdentityContext) => ReactNode;
   renderCell: (context: KanbanSubgroupCellContext<TRow>) => ReactNode;
   /**
-   * The header above a band's columns. Defaults to `KanbanColumnBandHeader`
+   * The line above a band's columns. Defaults to `KanbanColumnBandHeader`
    * with the band's label and count.
    */
   renderBandHeader?:
     | ((context: KanbanSubgroupBandHeaderContext) => ReactNode)
     | undefined;
   /**
-   * A lane's slot while its band is collapsed. Defaults to the count alone;
-   * a host that accepts drops into a collapsed band renders its target here.
+   * A lane's slot while its band is collapsed. Defaults to the band's name
+   * set vertically over the count; a host that accepts drops into a collapsed
+   * band renders its target here.
    */
   renderCollapsedBandCell?:
     | ((context: KanbanSubgroupCollapsedBandCellContext<TRow>) => ReactNode)
@@ -126,12 +127,14 @@ export type KanbanSubgroupBoardProps<TRow> = {
 /**
  * Reusable swimlane layout over the canonical two-axis Kanban matrix.
  *
- * Columns that carry band metadata render under a band header and can be
- * collapsed as a run: the band folds into one narrow slot in every row, whose
- * cells stay reachable (a host renders its drop target in them), and peeks
- * open while a pointer rests on it, so a drag can still land on a specific
- * column inside. Every row is laid out span by span with the same widths,
- * which is what keeps headers, counts, and cells aligned in every state.
+ * Columns that carry band metadata render under a one-line band caption and
+ * can be collapsed as a run: the band folds into one narrow slot in every
+ * row, whose cells stay reachable (a host renders its drop target in them),
+ * and peeks open while a pointer rests on it, so a drag can still land on a
+ * specific column inside. Every row is laid out span by span with the same
+ * widths, which is what keeps captions, headers, counts, and cells aligned
+ * in every state; the caption line never grows past its own height, so a
+ * folded band costs no vertical space.
  */
 export const KanbanSubgroupBoard = <TRow,>({
   matrix,
@@ -375,10 +378,13 @@ export const KanbanSubgroupBoard = <TRow,>({
     }
     return (
       <div
-        className="text-muted-foreground flex justify-center px-1 py-2 text-xs tabular-nums"
+        className="text-muted-foreground flex flex-col items-center gap-2 py-2 text-xs"
         data-kanban-collapsed-band-count={count}
       >
-        {formatCount(count)}
+        <span className="max-h-40 truncate font-medium [writing-mode:vertical-rl]">
+          {band.label}
+        </span>
+        <span className="tabular-nums">{formatCount(count)}</span>
       </div>
     );
   };
@@ -405,7 +411,10 @@ export const KanbanSubgroupBoard = <TRow,>({
       <div className="min-w-max">
         <div className="bg-background sticky top-0 z-20 pt-4 pb-3">
           {hasBands ? (
-            <div className="flex gap-3 pb-2" data-kanban-band-row="">
+            <div
+              className="flex items-end gap-3 pb-1.5"
+              data-kanban-band-row=""
+            >
               {spans.map((span) => {
                 const band = span.band;
                 if (band === null) {
@@ -422,7 +431,7 @@ export const KanbanSubgroupBoard = <TRow,>({
                     <FoldedBandSlot
                       band={band}
                       className={cn(
-                        "border-border/60 bg-muted/40 rounded-lg border",
+                        "border-border/60 border-b",
                         KANBAN_COLLAPSED_BAND_WIDTH_CLASS,
                       )}
                       key={spanKey(span)}
@@ -435,7 +444,7 @@ export const KanbanSubgroupBoard = <TRow,>({
                 }
                 return (
                   <div
-                    className="border-border/60 bg-muted/40 shrink-0 rounded-lg border"
+                    className="border-border/60 shrink-0 border-b"
                     data-kanban-band={band.id}
                     key={spanKey(span)}
                     style={{ width: `${String(spanWidth(span))}px` }}
@@ -586,6 +595,8 @@ type FoldedBandSlotProps = {
  * The narrow slot a folded band occupies in a row. A pointer resting on it
  * for `KANBAN_BAND_PEEK_DELAY_MS` peeks the band open; leaving ends the peek
  * and cancels a pending one, so a drag passing over it does not unfold it.
+ * The pointer must enter the slot after it appeared: a band folded under a
+ * resting pointer does not peek straight back open.
  */
 const FoldedBandSlot = ({
   band,
@@ -609,9 +620,12 @@ const FoldedBandSlot = ({
       className={className}
       data-kanban-band={band.id}
       data-kanban-band-collapsed=""
-      onPointerEnter={() => {
+      // The peek arms on movement inside the slot, not on entering it: a
+      // browser reports an enter for a slot that appears under a resting
+      // pointer (the band the user just folded), and that must stay folded.
+      onPointerMove={() => {
         if (timer.current !== null) {
-          clearTimeout(timer.current);
+          return;
         }
         timer.current = setTimeout(() => {
           timer.current = null;
