@@ -304,9 +304,9 @@ describe("PostHog browser analytics adapter", () => {
       })?.properties?.["$exception_fingerprint"];
 
     // A message-less DOM exception carries the bare name as its value.
-    expect(fingerprintOf("AbortError")).toBe("AbortError|||");
+    expect(fingerprintOf("NetworkError")).toBe("NetworkError|||");
     expect(fingerprintOf("NotAllowedError: denied")).toBe("NotAllowedError|||");
-    expect(fingerprintOf("AbortError")).not.toBe(
+    expect(fingerprintOf("NetworkError")).not.toBe(
       fingerprintOf("SecurityError"),
     );
   });
@@ -328,6 +328,47 @@ describe("PostHog browser analytics adapter", () => {
       $exception_list: [{ type: "DOMException", value: "" }],
       $exception_type: "DOMException",
     });
+  });
+
+  test("keeps only standard DOM exception names, never a custom one", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    const typeOf = (value: string) =>
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.exception,
+        properties: { $exception_list: [{ type: "DOMException", value }] },
+      })?.properties?.["$exception_type"];
+
+    expect(typeOf("TimeoutError: signal timed out")).toBe("TimeoutError");
+    // A constructor-supplied name is free text even when symbol-shaped.
+    expect(typeOf("Matter2041Error: leaked")).toBe("DOMException");
+    expect(typeOf("SmithVExampleError")).toBe("DOMException");
+  });
+
+  test("drops a cancelled request's abort reason as noise", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    for (const value of [
+      "AbortError",
+      "AbortError: signal is aborted without reason",
+    ]) {
+      expect(
+        initOptions?.before_send({
+          event: WEB_ANALYTICS_EVENTS.exception,
+          properties: { $exception_list: [{ type: "DOMException", value }] },
+        }),
+      ).toBeNull();
+    }
+
+    // Other DOM failures keep flowing under their own name.
+    expect(
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.exception,
+        properties: {
+          $exception_list: [{ type: "DOMException", value: "SecurityError" }],
+        },
+      })?.properties?.["$exception_type"],
+    ).toBe("SecurityError");
   });
 
   test("keeps actionable rejection types without their raw value", () => {
