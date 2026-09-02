@@ -406,7 +406,7 @@ describe("Dependabot empty changeset CLI boundary", () => {
     const fixture = makeGitFixture("bump");
 
     expect(runFixture(fixture)).toBe(0);
-    expect(readFileSync(path.join(fixture.root, fixture.output))).toBe(
+    expect(readFileSync(path.join(fixture.root, fixture.output), "utf-8")).toBe(
       "---\n---\n",
     );
   });

@@ -70,7 +70,7 @@ const isChangesetPolicy = (value: unknown): value is ChangesetPolicy =>
 export const parseChangesetPolicy = (text: string): ChangesetPolicy => {
   const parsed: unknown = JSON.parse(text);
   if (!isChangesetPolicy(parsed)) {
-    panic(
+    return panic(
       `${POLICY_FILE} must hold releasePaths, generatedPaths and packageFiles as string arrays.`,
     );
   }
@@ -248,7 +248,7 @@ const parseArgs = (args: readonly string[]): { readonly base: string } => {
     }
     const value = args.at(index + 1);
     if (value === undefined) {
-      panic("--base requires a git ref");
+      return panic("--base requires a git ref");
     }
     base = value;
     index += 1;
