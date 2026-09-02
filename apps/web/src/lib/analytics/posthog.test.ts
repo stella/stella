@@ -272,6 +272,64 @@ describe("PostHog browser analytics adapter", () => {
     }
   });
 
+  test("identifies a DOM exception by its error name", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $exception_list: [
+          {
+            type: "DOMException",
+            value: "QuotaExceededError: Smith v Example",
+          },
+        ],
+      },
+    });
+
+    expect(sanitized?.properties).toEqual({
+      $exception_fingerprint: "QuotaExceededError|||",
+      $exception_list: [{ type: "QuotaExceededError", value: "" }],
+      $exception_type: "QuotaExceededError",
+    });
+  });
+
+  test("separates DOM exceptions that differ only by error name", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    const fingerprintOf = (value: string) =>
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.exception,
+        properties: { $exception_list: [{ type: "DOMException", value }] },
+      })?.properties?.["$exception_fingerprint"];
+
+    // A message-less DOM exception carries the bare name as its value.
+    expect(fingerprintOf("AbortError")).toBe("AbortError|||");
+    expect(fingerprintOf("NotAllowedError: denied")).toBe("NotAllowedError|||");
+    expect(fingerprintOf("AbortError")).not.toBe(
+      fingerprintOf("SecurityError"),
+    );
+  });
+
+  test("falls back to the class when a DOM exception name is not a symbol", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $exception_list: [
+          { type: "DOMException", value: "Client Smith v Example: leaked" },
+        ],
+      },
+    });
+
+    expect(sanitized?.properties).toEqual({
+      $exception_fingerprint: "DOMException|||",
+      $exception_list: [{ type: "DOMException", value: "" }],
+      $exception_type: "DOMException",
+    });
+  });
+
   test("keeps actionable rejection types without their raw value", () => {
     createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 

@@ -214,8 +214,35 @@ const sanitizeFrame = (frame: unknown): SanitizedFrame => {
   };
 };
 
+// Every `DOMException` is coerced to this one class name (and every legacy
+// `DOMError` to its own), so the entry type cannot tell an `AbortError` from a
+// `QuotaExceededError` or a `SecurityError`. The distinguishing `name` is
+// carried in the value instead, which the redaction below blanks, leaving the
+// class as the sole identity of unrelated failures.
+const DOM_EXCEPTION_CLASS = /^DOM(?:Error|Exception)$/u;
+
+// Error names are bare symbols ending in `Error`; the coerced value is either
+// the name alone or `name: message`. Only the part before the separator is
+// read, and only when it matches, so no fragment of a message can ride along.
+const DOM_EXCEPTION_NAME = /^[A-Za-z][A-Za-z0-9]{0,63}Error$/u;
+
+// Recovers the specific error name of a DOM exception, keeping each kind of DOM
+// failure a distinct class. This matches `telemetryErrorType`, which already
+// identifies hand-captured errors by `error.name`.
+const domExceptionClass = (type: string, value: string): string => {
+  if (!DOM_EXCEPTION_CLASS.test(type)) {
+    return type;
+  }
+  const separator = value.indexOf(":");
+  const name = separator === -1 ? value : value.slice(0, separator);
+  return DOM_EXCEPTION_NAME.test(name) ? name : type;
+};
+
 const sanitizeExceptionEntry = (entry: unknown) => {
-  const type = normalizeTelemetryErrorTypeName(readStringField(entry, "type"));
+  const type = domExceptionClass(
+    normalizeTelemetryErrorTypeName(readStringField(entry, "type")),
+    readStringField(entry, "value"),
+  );
   const stacktrace = isRecord(entry) ? entry["stacktrace"] : undefined;
   const frames = isRecord(stacktrace) ? stacktrace["frames"] : undefined;
   return {
