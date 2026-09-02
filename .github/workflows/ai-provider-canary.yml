@@ -40,7 +40,7 @@ jobs:
     # A weekly run can spend 650 seconds on first attempts. One bounded retry
     # per transient failure can double that budget; leave room for backoff,
     # runner setup, and dependency installation.
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
     strategy:

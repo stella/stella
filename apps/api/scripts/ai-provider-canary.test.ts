@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
+  BYOK_MODEL_OPTIONS,
   CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
   DEFAULT_MODELS,
   isBYOKProviderRoleSupported,
+  MODEL_ROLES,
 } from "@stll/ai-catalog";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
@@ -13,6 +15,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   CanaryCredentialRejectedError,
   CanaryProviderRunError,
+  CATALOG_SWEEP_BUDGET_MS,
+  catalogModelIds,
   classifyCanaryFailure,
   createPdfCanaryMessages,
   CREDENTIAL_REJECTION_SIGNATURES,
@@ -24,11 +28,91 @@ import {
   requireWeeklyToolExecution,
   runCanaryProbe,
   runCanaryProbeSequence,
+  runCatalogCanaryProbes,
   toolRoundTripInputSchema,
   toolRoundTripInputSchemaForProvider,
   toolRoundTripPromptForProvider,
 } from "./ai-provider-canary";
 import { CANARY_PROVIDERS } from "./ai-provider-canary-config";
+
+describe("AI provider catalog canary coverage", () => {
+  test("declares every selectable model id of a provider exactly once", () => {
+    for (const provider of CANARY_PROVIDERS) {
+      const ids = catalogModelIds(provider);
+      expect(new Set(ids).size).toBe(ids.length);
+      for (const role of MODEL_ROLES) {
+        expect(ids).toContain(DEFAULT_MODELS[provider][role]);
+      }
+      for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
+        expect(ids).toContain(modelId);
+      }
+    }
+  });
+
+  test("the sweep probes exactly the declared ids, each once", async () => {
+    for (const provider of CANARY_PROVIDERS) {
+      const probed: string[] = [];
+      // oxlint-disable-next-line no-await-in-loop -- providers run one at a time so the recorded order stays deterministic.
+      const failures = await runCatalogCanaryProbes(
+        {
+          apiKey: "test-key",
+          provider,
+          probeModel: async ({ modelId, provider: probedProvider }) => {
+            expect(probedProvider).toBe(provider);
+            probed.push(modelId);
+          },
+        },
+        0,
+      );
+      expect(failures).toBe(0);
+      expect(probed).toEqual(catalogModelIds(provider));
+    }
+  });
+
+  test("ids left when the sweep budget runs out fail instead of going unprobed", async () => {
+    const provider = CANARY_PROVIDERS[0];
+    const ids = catalogModelIds(provider);
+    const probed: string[] = [];
+    let clock = 0;
+    const failures = await runCatalogCanaryProbes(
+      {
+        apiKey: "test-key",
+        provider,
+        now: () => clock,
+        probeModel: async ({ modelId }) => {
+          probed.push(modelId);
+          // The first probe consumes the whole budget.
+          clock += CATALOG_SWEEP_BUDGET_MS;
+        },
+      },
+      0,
+    );
+    expect(probed).toEqual(ids.slice(0, 1));
+    expect(failures).toBe(ids.length - 1);
+  });
+});
+
+describe("AI provider canary overload backoff", () => {
+  test("waits longer before each further attempt and gives an overloaded provider three tries", async () => {
+    const waits: number[] = [];
+    let attempts = 0;
+    const result = await runCanaryProbe({
+      retryDelayMs: 5000,
+      run: async () => {
+        attempts += 1;
+        if (attempts < 3) {
+          throw new ProviderStatusError(503);
+        }
+      },
+      timeoutMs: 1000,
+      wait: async (delayMs) => {
+        waits.push(delayMs);
+      },
+    });
+    expect(result).toEqual({ attempts: 3, status: "passed" });
+    expect(waits).toEqual([5000, 20_000]);
+  });
+});
 
 describe("AI provider PDF canary contract", () => {
   test("sends a real inline PDF rather than a text-only pdf-role probe", () => {
@@ -286,8 +370,8 @@ describe("AI provider canary retry contract", () => {
       })),
     ).toEqual(
       statuses.map(({ retryable, status }) => ({
-        attempts: retryable ? 2 : 1,
-        calls: retryable ? 2 : 1,
+        attempts: retryable ? 3 : 1,
+        calls: retryable ? 3 : 1,
         retryable,
         status,
       })),
