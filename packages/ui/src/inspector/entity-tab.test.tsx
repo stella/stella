@@ -111,15 +111,15 @@ describe("InspectorEntityTab", () => {
 
 describe("entityTabGlyph", () => {
   test("drops the extension and uppercases the stem", () => {
-    expect(entityTabGlyph("contract.docx")).toBe("CON");
+    expect(entityTabGlyph("contract.docx")).toBe("con");
   });
 
   test("keeps a short name as-is, uppercased", () => {
-    expect(entityTabGlyph("ab")).toBe("AB");
+    expect(entityTabGlyph("ab")).toBe("ab");
   });
 
   test("a name with no extension uses the whole stem", () => {
-    expect(entityTabGlyph("readme")).toBe("REA");
+    expect(entityTabGlyph("readme")).toBe("rea");
   });
 
   test("a leading dot (dotfile) has no extension to drop", () => {
@@ -127,6 +127,6 @@ describe("entityTabGlyph", () => {
   });
 
   test("honours a custom length", () => {
-    expect(entityTabGlyph("contract.docx", 5)).toBe("CONTR");
+    expect(entityTabGlyph("contract.docx", 5)).toBe("contr");
   });
 });

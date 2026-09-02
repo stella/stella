@@ -106,10 +106,12 @@ export const InspectorEntityTab = ({
 
 /**
  * Short abbreviation for a rail tab's inactive glyph: the filename stem
- * (extension dropped), the first `length` characters, uppercased.
+ * (extension dropped), the first `length` characters; the cell uppercases it.
  */
 export const entityTabGlyph = (name: string, length = 3): string => {
   const dot = name.lastIndexOf(".");
   const stem = dot === -1 ? name : name.slice(0, dot);
-  return stem.slice(0, length).toUpperCase();
+  // Casing is left to the cell's CSS so the document language decides it
+  // (a Turkish name keeps its dotted capital).
+  return stem.slice(0, length);
 };
