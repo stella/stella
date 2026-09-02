@@ -396,7 +396,7 @@
         "prosemirror-keymap": "^1.2.3",
         "prosemirror-model": "^1.25.11",
         "prosemirror-state": "^1.4.4",
-        "prosemirror-view": "^1.42.2",
+        "prosemirror-view": "^1.42.3",
         "react": "catalog:react19",
         "react-dom": "catalog:react19",
         "streamdown": "^2.6.0",
