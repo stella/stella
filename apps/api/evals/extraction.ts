@@ -675,6 +675,12 @@ const gradeAnswer = (
       if (validated.type !== "text") {
         return panic("Fixture/property type mismatch: text");
       }
+      // `expected.value` for "text" is always set (no text fixture expects
+      // an absent answer); a null `validated.value` (the model gave none) is
+      // therefore always "missing", never "hallucinated".
+      if (validated.value === null) {
+        return "missing";
+      }
       return normalizeText(validated.value) === normalizeText(expected.value)
         ? "correct"
         : "wrong";
