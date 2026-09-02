@@ -1632,7 +1632,7 @@ export const generatedRouteMap: RouteNode = {
                   items: {
                     type: "object",
                     properties: {
-                      countryCode: {
+                      country_code: {
                         enum: [
                           "AD",
                           "AE",
@@ -1888,19 +1888,19 @@ export const generatedRouteMap: RouteNode = {
                         type: "string",
                         description: "ISO 3166-1 alpha-2 country code",
                       },
-                      isPrimary: {
+                      is_primary: {
                         type: "boolean",
                         description:
                           "Whether this is the organization's primary jurisdiction",
                       },
                     },
-                    required: ["countryCode", "isPrimary"],
+                    required: ["country_code", "is_primary"],
                     additionalProperties: false,
                   },
                   minItems: 1,
                   maxItems: 12,
                   description:
-                    "Practice jurisdictions for this organization. countryCode is an ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary to true.",
+                    "Practice jurisdictions for this organization. country_code is an ISO 3166-1 alpha-2 code; exactly one entry should set is_primary to true.",
                 },
               },
             },
@@ -2617,7 +2617,7 @@ export const generatedRouteMap: RouteNode = {
                         type: "string",
                         description: "Fill hint for the person filling",
                       },
-                      inputType: {
+                      input_type: {
                         enum: ["text", "number", "boolean", "date", "select"],
                         type: "string",
                         description: "Input control type",
@@ -2636,11 +2636,11 @@ export const generatedRouteMap: RouteNode = {
                             type: "boolean",
                             description: "Value is required",
                           },
-                          minLength: {
+                          min_length: {
                             type: "number",
                             description: "Minimum string length",
                           },
-                          maxLength: {
+                          max_length: {
                             type: "number",
                             description: "Maximum string length",
                           },
@@ -2656,11 +2656,11 @@ export const generatedRouteMap: RouteNode = {
                             type: "string",
                             description: "Regex for the whole value",
                           },
-                          minItems: {
+                          min_items: {
                             type: "number",
                             description: "Minimum repeated items",
                           },
-                          maxItems: {
+                          max_items: {
                             type: "number",
                             description: "Maximum repeated items",
                           },
@@ -2673,15 +2673,15 @@ export const generatedRouteMap: RouteNode = {
                         type: "boolean",
                         description: "Value is required",
                       },
-                      aiPrompt: {
+                      ai_prompt: {
                         type: "string",
                         description: "Who fills = AI: drafting instruction",
                       },
-                      aiAdapt: {
+                      ai_adapt: {
                         type: "boolean",
                         description: "Who fills = person + AI",
                       },
-                      aiSeesDocument: {
+                      ai_sees_document: {
                         type: "boolean",
                         description: "AI field also sees the document",
                       },
@@ -2698,7 +2698,7 @@ export const generatedRouteMap: RouteNode = {
                               type: "string",
                               description: "Part label",
                             },
-                            inputType: {
+                            input_type: {
                               enum: ["text", "select"],
                               type: "string",
                               description: "Part input control",
@@ -2715,7 +2715,7 @@ export const generatedRouteMap: RouteNode = {
                               description: "Regex for the whole part value",
                             },
                           },
-                          required: ["key", "inputType"],
+                          required: ["key", "input_type"],
                           additionalProperties: false,
                         },
                         minItems: 1,
@@ -2725,7 +2725,7 @@ export const generatedRouteMap: RouteNode = {
                         type: "string",
                         description: "Join template over the part keys",
                       },
-                      optionsFrom: {
+                      options_from: {
                         type: "string",
                         description: "Dependent select: source field path",
                       },
@@ -2924,7 +2924,7 @@ export const generatedRouteMap: RouteNode = {
                         type: "string",
                         description: "Boolean rule for an {{#if}} marker",
                       },
-                      dateFormat: {
+                      date_format: {
                         type: "object",
                         properties: {
                           locale: {
@@ -3550,23 +3550,23 @@ export const generatedRouteMap: RouteNode = {
                         description:
                           "Optional inline formatting runs whose text concatenates to the paragraph",
                       },
-                      listKind: {
+                      list_kind: {
                         enum: ["bullet", "ordered"],
                         type: "string",
                         description:
                           "List item kind when the paragraph is a list item",
                       },
-                      listLevel: {
+                      list_level: {
                         type: "integer",
                         description:
                           "0-based list nesting depth for a list item",
                       },
-                      isDirective: {
+                      is_directive: {
                         type: "boolean",
                         description:
                           "Whether the paragraph is a template directive marker",
                       },
-                      directiveKind: {
+                      directive_kind: {
                         enum: [
                           "if",
                           "elseif",
@@ -3576,9 +3576,9 @@ export const generatedRouteMap: RouteNode = {
                           "endeach",
                         ],
                         type: "string",
-                        description: "Directive kind when isDirective is set",
+                        description: "Directive kind when is_directive is set",
                       },
-                      directiveExpression: {
+                      directive_expression: {
                         type: "string",
                         description:
                           "Directive expression for an if/each directive",

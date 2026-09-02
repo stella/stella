@@ -56,7 +56,7 @@ describe("MCP resources", () => {
     // the field, the dependent-select rule, the lookup format addressing, and
     // the binding kinds with their allowed keys.
     expect(content.text).toContain("Who fills = AI");
-    expect(content.text).toContain("`optionsFrom`");
+    expect(content.text).toContain("`options_from`");
     expect(content.text).toContain("{{path.key}}");
     expect(content.text).toContain('`kind: "party"`');
     expect(content.text).toContain("dataBox");

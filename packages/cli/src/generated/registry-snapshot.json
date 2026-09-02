@@ -315,7 +315,7 @@
       "scope": "onboarding"
     },
     "name": "set_practice_jurisdictions",
-    "description": "Set the practice jurisdictions for the user's stella organization. Call this when the org's practice jurisdictions are empty (e.g., the user signed up via an OAuth client and skipped onboarding). Pass an array of {countryCode, isPrimary}; exactly one entry should be primary.",
+    "description": "Set the practice jurisdictions for the user's stella organization. Call this when the org's practice jurisdictions are empty (e.g., the user signed up via an OAuth client and skipped onboarding). Pass an array of {country_code, is_primary}; exactly one entry should be primary.",
     "inputSchema": {
       "type": "object",
       "required": ["jurisdictions"],
@@ -326,7 +326,7 @@
           "items": {
             "type": "object",
             "properties": {
-              "countryCode": {
+              "country_code": {
                 "enum": [
                   "AD",
                   "AE",
@@ -582,17 +582,17 @@
                 "type": "string",
                 "description": "ISO 3166-1 alpha-2 country code"
               },
-              "isPrimary": {
+              "is_primary": {
                 "type": "boolean",
                 "description": "Whether this is the organization's primary jurisdiction"
               }
             },
-            "required": ["countryCode", "isPrimary"],
+            "required": ["country_code", "is_primary"],
             "additionalProperties": false
           },
           "minItems": 1,
           "maxItems": 12,
-          "description": "Practice jurisdictions for this organization. countryCode is an ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary to true."
+          "description": "Practice jurisdictions for this organization. country_code is an ISO 3166-1 alpha-2 code; exactly one entry should set is_primary to true."
         }
       }
     },
@@ -611,7 +611,7 @@
       "singleReadWhen": "template_id"
     },
     "name": "list_templates",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape save_template's fields overlay takes (see stella://reference/template-fields), plus its named conditions and formula fields. Omitted optional scalar placeholders render blank.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, in the shape the field reference documents (see stella://reference/template-fields), plus its named conditions and formula fields. Omitted optional scalar placeholders render blank.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -823,7 +823,7 @@
                 "type": "string",
                 "description": "Fill hint for the person filling"
               },
-              "inputType": {
+              "input_type": {
                 "enum": ["text", "number", "boolean", "date", "select"],
                 "type": "string",
                 "description": "Input control type"
@@ -842,11 +842,11 @@
                     "type": "boolean",
                     "description": "Value is required"
                   },
-                  "minLength": {
+                  "min_length": {
                     "type": "number",
                     "description": "Minimum string length"
                   },
-                  "maxLength": {
+                  "max_length": {
                     "type": "number",
                     "description": "Maximum string length"
                   },
@@ -862,11 +862,11 @@
                     "type": "string",
                     "description": "Regex for the whole value"
                   },
-                  "minItems": {
+                  "min_items": {
                     "type": "number",
                     "description": "Minimum repeated items"
                   },
-                  "maxItems": {
+                  "max_items": {
                     "type": "number",
                     "description": "Maximum repeated items"
                   }
@@ -879,15 +879,15 @@
                 "type": "boolean",
                 "description": "Value is required"
               },
-              "aiPrompt": {
+              "ai_prompt": {
                 "type": "string",
                 "description": "Who fills = AI: drafting instruction"
               },
-              "aiAdapt": {
+              "ai_adapt": {
                 "type": "boolean",
                 "description": "Who fills = person + AI"
               },
-              "aiSeesDocument": {
+              "ai_sees_document": {
                 "type": "boolean",
                 "description": "AI field also sees the document"
               },
@@ -904,7 +904,7 @@
                       "type": "string",
                       "description": "Part label"
                     },
-                    "inputType": {
+                    "input_type": {
                       "enum": ["text", "select"],
                       "type": "string",
                       "description": "Part input control"
@@ -921,7 +921,7 @@
                       "description": "Regex for the whole part value"
                     }
                   },
-                  "required": ["key", "inputType"],
+                  "required": ["key", "input_type"],
                   "additionalProperties": false
                 },
                 "minItems": 1,
@@ -931,7 +931,7 @@
                 "type": "string",
                 "description": "Join template over the part keys"
               },
-              "optionsFrom": {
+              "options_from": {
                 "type": "string",
                 "description": "Dependent select: source field path"
               },
@@ -1127,7 +1127,7 @@
                 "type": "string",
                 "description": "Boolean rule for an {{#if}} marker"
               },
-              "dateFormat": {
+              "date_format": {
                 "type": "object",
                 "properties": {
                   "locale": {
@@ -2200,7 +2200,7 @@
       "scope": "knowledge_write"
     },
     "name": "save_clause",
-    "description": "Create or update a clause in the organization's clause library. Omit clause_id to create (title and body required); pass clause_id to update. body is an ordered array of paragraphs, each with text and optional formatting. category_id, language, description, usage_notes, and metadata accept null to clear them on update. Set snapshot_version true on an update to also append a version snapshot of the body. Returns the clause id.",
+    "description": "Create or update a clause in the organization's clause library. Omit clause_id to create (title and body required); pass clause_id to update. body is an ordered array of paragraphs, each with text and optional style, level, runs, list_kind, list_level, is_directive, directive_kind, and directive_expression. category_id, language, description, usage_notes, and metadata accept null to clear them on update. Set snapshot_version true on an update to also append a version snapshot of the body. Returns the clause id.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -2257,25 +2257,25 @@
                 },
                 "description": "Optional inline formatting runs whose text concatenates to the paragraph"
               },
-              "listKind": {
+              "list_kind": {
                 "enum": ["bullet", "ordered"],
                 "type": "string",
                 "description": "List item kind when the paragraph is a list item"
               },
-              "listLevel": {
+              "list_level": {
                 "type": "integer",
                 "description": "0-based list nesting depth for a list item"
               },
-              "isDirective": {
+              "is_directive": {
                 "type": "boolean",
                 "description": "Whether the paragraph is a template directive marker"
               },
-              "directiveKind": {
+              "directive_kind": {
                 "enum": ["if", "elseif", "else", "endif", "each", "endeach"],
                 "type": "string",
-                "description": "Directive kind when isDirective is set"
+                "description": "Directive kind when is_directive is set"
               },
-              "directiveExpression": {
+              "directive_expression": {
                 "type": "string",
                 "description": "Directive expression for an if/each directive"
               }

@@ -24,7 +24,6 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import type { FieldMeta, FieldPart } from "@/api/lib/docx/types";
-import { fieldMetaToolInputSchema } from "@/api/lib/docx/types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import {
@@ -60,6 +59,10 @@ import {
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  templateFieldInputSchema,
+  toFieldMetaToolInput,
+} from "@/api/mcp/template-field-input";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 import {
@@ -144,7 +147,7 @@ const saveTemplateArgsSchema = v.pipe(
     ),
     fields: v.optional(
       v.pipe(
-        v.array(fieldMetaToolInputSchema),
+        v.array(templateFieldInputSchema),
         v.description(
           `Field configuration overlay; see ${TEMPLATE_FIELD_REFERENCE_URI}`,
         ),
@@ -425,7 +428,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       "tags, and usage guidance (whenToUse / whenNotToUse); prefer a template " +
       "whose whenToUse matches the request and skip any whose whenNotToUse " +
       "applies. Pass template_id to return that template's full field " +
-      "configuration, in the shape save_template's fields overlay takes " +
+      "configuration, in the shape the field reference documents " +
       `(see ${TEMPLATE_FIELD_REFERENCE_URI}), plus its named conditions and ` +
       "formula fields. Omitted optional scalar placeholders render blank.",
     inputSchema: {
@@ -1583,6 +1586,7 @@ const handleSaveTemplateTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
+  const fields = input.fields?.map(toFieldMetaToolInput);
 
   // Configure branch: template_id (no docx_base64) overlays field config onto an
   // existing template. The schema guarantees fields is present here.
@@ -1590,7 +1594,7 @@ const handleSaveTemplateTool: TypedMcpToolHandler<
     return await configureExistingTemplate({
       context,
       fields:
-        input.fields ??
+        fields ??
         panic(
           "save_template configure branch reached without a fields overlay",
         ),
@@ -1604,7 +1608,7 @@ const handleSaveTemplateTool: TypedMcpToolHandler<
     docxBase64:
       input.docx_base64 ??
       panic("save_template create branch reached without docx_base64"),
-    fields: input.fields,
+    fields,
     name:
       input.name ?? panic("save_template create branch reached without name"),
   });

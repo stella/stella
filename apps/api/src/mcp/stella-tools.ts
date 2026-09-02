@@ -660,11 +660,11 @@ const readContactArgsSchema = v.strictObject({
 });
 
 const practiceJurisdictionInputSchema = v.strictObject({
-  countryCode: v.pipe(
+  country_code: v.pipe(
     v.picklist(COUNTRY_CODES),
     v.description("ISO 3166-1 alpha-2 country code"),
   ),
-  isPrimary: v.pipe(
+  is_primary: v.pipe(
     v.boolean(),
     v.description("Whether this is the organization's primary jurisdiction"),
   ),
@@ -676,11 +676,24 @@ const setPracticeJurisdictionsArgsSchema = v.strictObject({
     v.minLength(1),
     v.maxLength(LIMITS.practiceJurisdictionsPerOrganization),
     v.description(
-      "Practice jurisdictions for this organization. countryCode is an " +
-        "ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary " +
+      "Practice jurisdictions for this organization. country_code is an " +
+        "ISO 3166-1 alpha-2 code; exactly one entry should set is_primary " +
         "to true.",
     ),
   ),
+});
+
+// MCP tool inputs are snake_case; the persisted jurisdiction shape is
+// camelCase.
+type PracticeJurisdictionHandlerInput = Parameters<
+  typeof normalizePracticeJurisdictions
+>[0][number];
+
+const toPracticeJurisdiction = (
+  jurisdiction: v.InferOutput<typeof practiceJurisdictionInputSchema>,
+): PracticeJurisdictionHandlerInput => ({
+  countryCode: jurisdiction.country_code,
+  isPrimary: jurisdiction.is_primary,
 });
 
 export const STELLA_TOOL_DEFINITIONS = [
@@ -813,7 +826,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       "Set the practice jurisdictions for the user's stella organization. " +
       "Call this when the org's practice jurisdictions are empty (e.g., the " +
       "user signed up via an OAuth client and skipped onboarding). Pass an " +
-      "array of {countryCode, isPrimary}; exactly one entry should be primary.",
+      "array of {country_code, is_primary}; exactly one entry should be " +
+      "primary.",
     inputSchema: setPracticeJurisdictionsArgsSchema,
     // Not idempotent: the handler records a fresh audit event and bumps
     // updatedAt on every call even when the jurisdictions are unchanged, so a
@@ -846,7 +860,7 @@ const loadPracticeJurisdictions = async (
 const buildOnboardingHintText = () =>
   `Your stella organization has not configured its practice jurisdictions ` +
   `yet. Call \`set_practice_jurisdictions\` (input: array of ` +
-  `\`{ countryCode, isPrimary }\`) to enable jurisdiction-aware tools, or ` +
+  `\`{ country_code, is_primary }\`) to enable jurisdiction-aware tools, or ` +
   `have the user complete onboarding at ${getAppBaseUrl()}.`;
 
 const withOnboardingHintIfApplicable = async <TData>({
@@ -1949,14 +1963,14 @@ const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<
   }
 
   const primaryCount = parsed.output.jurisdictions.filter(
-    (jurisdiction) => jurisdiction.isPrimary,
+    (jurisdiction) => jurisdiction.is_primary,
   ).length;
   if (primaryCount > 1) {
     return errorResult("Only one jurisdiction can be primary");
   }
 
   const practiceJurisdictions = normalizePracticeJurisdictions(
-    parsed.output.jurisdictions,
+    parsed.output.jurisdictions.map(toPracticeJurisdiction),
   );
 
   await context.scopedDb(async (tx) => {

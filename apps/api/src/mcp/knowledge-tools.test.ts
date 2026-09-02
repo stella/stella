@@ -83,6 +83,35 @@ const createPlaybookScopedDb = (playbook: unknown) =>
     ),
   );
 
+/**
+ * A scopedDb standing in for the clause-create write path, capturing every
+ * body `createClauseHandler` hands the insert so the persisted shape can be
+ * asserted against the snake_case MCP input.
+ */
+const createClauseWriteScopedDb = () => {
+  const insertedBodies: unknown[] = [];
+  const scopedDb = asTestRaw<
+    McpRequestContext["scopedDb"] & ReturnType<typeof mock>
+  >(
+    mock(async (run: (tx: unknown) => unknown) => {
+      const tx = {
+        $count: async () => 0,
+        insert: () => ({
+          values: (row: { body?: unknown }) => {
+            if (row.body !== undefined) {
+              insertedBodies.push(row.body);
+            }
+            return { returning: async () => [{ id: "c1" }] };
+          },
+        }),
+        update: () => ({ set: () => ({ where: async () => undefined }) }),
+      };
+      return await run(tx);
+    }),
+  );
+  return { insertedBodies, scopedDb };
+};
+
 /** A scopedDb whose clauses.findFirst resolves to `clause` (detail mode). */
 const createClauseDetailScopedDb = (clause: unknown) =>
   asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
@@ -230,6 +259,66 @@ describe("MCP knowledge tools", () => {
     });
     // The malformed body must never reach the payload, anonymized or not.
     expect(JSON.stringify(response)).not.toContain("SECRET_UNREDACTED_MARKER");
+  });
+
+  test("save_clause refuses a camelCase body paragraph key", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        title: "Indemnity",
+        body: [{ text: "The Supplier shall indemnify.", listKind: "bullet" }],
+      },
+      context: createContext(),
+      toolName: "save_clause",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseToolPayload(result)).toMatchObject({
+      error: {
+        code: "validation_error",
+        issues: expect.arrayContaining([
+          expect.objectContaining({ path: "body.0.listKind" }),
+        ]),
+      },
+    });
+  });
+
+  test("save_clause maps snake_case paragraph keys onto the persisted body", async () => {
+    const { insertedBodies, scopedDb } = createClauseWriteScopedDb();
+
+    const result = await handleMcpToolCall({
+      args: {
+        title: "Indemnity",
+        body: [
+          {
+            text: "The Supplier shall indemnify.",
+            runs: [{ text: "The Supplier shall indemnify.", bold: true }],
+            list_kind: "bullet",
+            list_level: 1,
+            is_directive: true,
+            directive_kind: "if",
+            directive_expression: "party.isSupplier",
+          },
+        ],
+      },
+      context: createContext({ scopedDb }),
+      toolName: "save_clause",
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(insertedBodies).not.toBeEmpty();
+    for (const body of insertedBodies) {
+      expect(body).toEqual([
+        {
+          text: "The Supplier shall indemnify.",
+          runs: [{ text: "The Supplier shall indemnify.", bold: true }],
+          listKind: "bullet",
+          listLevel: 1,
+          isDirective: true,
+          directiveKind: "if",
+          directiveExpression: "party.isSupplier",
+        },
+      ]);
+    }
   });
 
   test("save_clause rejects an update that changes nothing", async () => {
