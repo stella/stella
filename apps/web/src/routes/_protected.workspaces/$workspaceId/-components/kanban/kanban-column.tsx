@@ -252,6 +252,9 @@ export const KanbanColumn = ({
           "bg-primary/5 ring-primary/50 ring-2",
         isDragging && "opacity-40",
       )}
+      // A stable hook for the card drag-over state that does not depend on
+      // the Tailwind classes above (which also flip for a file drag).
+      data-drag-over={isEntityDragOver ? "true" : "false"}
       ref={columnRef}
       style={
         colorBg

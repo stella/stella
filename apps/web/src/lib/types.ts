@@ -20,6 +20,7 @@ import type {
   ViewLayout,
   ViewLayoutType,
   SafeId,
+  WorkspacePropertyWire,
 } from "@/lib/api-contract";
 import {
   DOCX_MIME,
@@ -115,17 +116,22 @@ type PlaybookVerdictTool = {
   dependencies: PropertyDependency[];
 };
 
-export type WorkspaceProperty = {
+// Derived from the wire shape (`WorkspacePropertyWire`) rather than
+// hand-listed: a column the API starts projecting appears here without an
+// edit, and a field named here that the API stops sending becomes a type
+// error at the one place (`toWorkspaceProperty`) that builds this type from
+// the response, instead of silently drifting out of sync.
+export type WorkspaceProperty = Omit<
+  WorkspacePropertyWire,
+  "id" | "workspaceId" | "tool" | "kinds" | "role" | "content"
+> & {
   id: PropertyId;
-  name: string;
-  createdAt: Date;
   workspaceId: WorkspaceId;
-  status: "stale" | "fresh";
   /**
    * The entity kinds the property applies to; null means every kind. A view
    * scoped to one kind offers only the properties that apply to it.
    */
-  kinds: EntityKind[] | null;
+  kinds: WorkspacePropertyWire["kinds"];
   content:
     | {
         version: 1;
@@ -168,7 +174,7 @@ export type WorkspaceProperty = {
   // rather than by the literal name "Document Type" (mirrors the server
   // `properties.role` column). Optional because not every property source
   // carries it; absent/null means an ordinary property.
-  role?: "document-type-classifier" | null;
+  role?: WorkspacePropertyWire["role"];
 };
 
 export type WorkspacePropertyOption = {
