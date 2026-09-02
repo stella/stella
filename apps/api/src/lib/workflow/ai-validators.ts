@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import type { FieldContent } from "@/api/db/schema-validators";
 import {
   Unreachable,
   WorkflowValidationError,
@@ -10,7 +11,7 @@ import type { AIJustificationOutput } from "@/api/lib/workflow/parse-justificati
 
 type TextValidatedResult = {
   type: "text";
-  value: string;
+  value: string | null;
   justification: AIJustificationOutput;
 };
 
@@ -34,7 +35,7 @@ type DateValidatedResult = {
 
 type IntValidatedResult = {
   type: "int";
-  value: number;
+  value: number | null;
   currency: string | null;
   justification: AIJustificationOutput;
 };
@@ -63,7 +64,7 @@ const validateTextResult = ({
   answer: Answer;
   justification: AIJustificationOutput;
 }): ValidateResult => {
-  if (typeof answer === "string") {
+  if (typeof answer === "string" || answer === null) {
     return Result.ok({
       type: "text",
       value: answer,
@@ -87,7 +88,7 @@ const validateSingleSelectResult = ({
   justification: AIJustificationOutput;
   content: SelectContent;
 }): ValidateResult => {
-  if (answer === null && content.fallback !== null) {
+  if (answer === null) {
     return Result.ok({
       type: "single-select",
       value: content.fallback,
@@ -95,19 +96,30 @@ const validateSingleSelectResult = ({
     });
   }
 
-  if (typeof answer === "string" || answer === null) {
-    return Result.ok({
-      type: "single-select",
-      value: answer,
-      justification,
-    });
+  if (typeof answer !== "string") {
+    return Result.err(
+      new WorkflowValidationError({
+        message: "Single select answer is invalid",
+      }),
+    );
   }
 
-  return Result.err(
-    new WorkflowValidationError({
-      message: "Single select answer is invalid",
-    }),
+  const isConfiguredOption = content.options.some(
+    (option) => option.value === answer,
   );
+  if (!isConfiguredOption) {
+    return Result.err(
+      new WorkflowValidationError({
+        message: `Single select answer "${answer}" is not one of the configured options`,
+      }),
+    );
+  }
+
+  return Result.ok({
+    type: "single-select",
+    value: answer,
+    justification,
+  });
 };
 
 const validateMultiSelectResult = ({
@@ -127,19 +139,31 @@ const validateMultiSelectResult = ({
     });
   }
 
-  if (isStringArray(answer)) {
-    return Result.ok({
-      type: "multi-select",
-      value: [...new Set(answer)],
-      justification,
-    });
+  if (!isStringArray(answer)) {
+    return Result.err(
+      new WorkflowValidationError({
+        message: "Multi select answer is invalid",
+      }),
+    );
   }
 
-  return Result.err(
-    new WorkflowValidationError({
-      message: "Multi select answer is invalid",
-    }),
+  const configuredValues = new Set(
+    content.options.map((option) => option.value),
   );
+  const invalidValues = answer.filter((value) => !configuredValues.has(value));
+  if (invalidValues.length > 0) {
+    return Result.err(
+      new WorkflowValidationError({
+        message: `Multi select answer contains options not in the configured list: ${invalidValues.join(", ")}`,
+      }),
+    );
+  }
+
+  return Result.ok({
+    type: "multi-select",
+    value: [...new Set(answer)],
+    justification,
+  });
 };
 
 const validateDateResult = ({
@@ -171,7 +195,16 @@ const validateIntResult = ({
   answer: Answer;
   justification: AIJustificationOutput;
 }): ValidateResult => {
-  if (!Array.isArray(answer) && typeof answer === "object" && answer !== null) {
+  if (answer === null) {
+    return Result.ok({
+      type: "int",
+      value: null,
+      currency: null,
+      justification,
+    });
+  }
+
+  if (!Array.isArray(answer) && typeof answer === "object") {
     return Result.ok({
       type: "int",
       value: answer.amount,
@@ -230,5 +263,46 @@ export const validateAIOutput = ({
       throw new Unreachable({
         message: "Property type not matched",
       });
+  }
+};
+
+// The cell content a validated answer produces. Text and int intentionally
+// have no "answered: absent" content variant yet, so a null value maps to
+// `null` here rather than a fabricated placeholder; callers must leave the
+// cell unwritten in that case instead of persisting it.
+type ValidatedFieldContent = Extract<
+  FieldContent,
+  { type: "text" | "single-select" | "multi-select" | "date" | "int" }
+>;
+
+export const fieldContentFromValidated = (
+  validated: ValidatedResult,
+): ValidatedFieldContent | null => {
+  switch (validated.type) {
+    case "text":
+      return validated.value === null
+        ? null
+        : { version: 1, type: "text", value: validated.value };
+    case "single-select":
+      return { version: 1, type: "single-select", value: validated.value };
+    case "multi-select":
+      return { version: 1, type: "multi-select", value: validated.value };
+    case "date":
+      return { version: 1, type: "date", value: validated.value };
+    case "int":
+      return validated.value === null
+        ? null
+        : {
+            version: 1,
+            type: "int",
+            value: validated.value,
+            currency: validated.currency,
+          };
+    default: {
+      validated satisfies never;
+      throw new Unreachable({
+        message: "Validated result type not matched",
+      });
+    }
   }
 };
