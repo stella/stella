@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import { TOOL_ANNOTATIONS } from "./annotations.js";
-import { CAPABILITY_NAMESPACE } from "./generate-capability-tree.js";
+import {
+  CAPABILITY_NAMESPACE,
+  capabilityDomainsOf,
+  insertCapabilities,
+  type CapabilityCatalogEntry,
+} from "./generate-capability-tree.js";
+import { generateRouteMap } from "./generate-route-map.js";
 import { generateCliSkill, SKILL_NAME } from "./generate-skill.js";
 import type { RegistryToolListing } from "./route-types.js";
 
@@ -12,7 +18,23 @@ const snapshotUrl = new URL(
 const listings: readonly RegistryToolListing[] =
   await Bun.file(snapshotUrl).json();
 
-const CAPABILITY = { commandCount: 2 } as const;
+// The real committed catalog, merged onto the real curated tree exactly the
+// way `codegen.ts` does. Worked capability examples in the generated skill
+// (see generate-skill.ts) resolve a real leaf out of this tree, so the test
+// input has to carry one instead of a hand-trimmed stand-in.
+const catalogUrl = new URL("../capability-catalog.json", import.meta.url);
+const catalog: readonly CapabilityCatalogEntry[] =
+  await Bun.file(catalogUrl).json();
+const { tree: mergedTree, stats: capabilityStats } = insertCapabilities({
+  tree: generateRouteMap(listings, TOOL_ANNOTATIONS),
+  entries: catalog,
+});
+
+const CAPABILITY = {
+  commandCount: capabilityStats.generated,
+  domains: capabilityDomainsOf(mergedTree),
+  tree: mergedTree,
+};
 
 describe("generateCliSkill (TanStack Intent)", () => {
   test("is deterministic across calls and input clones", () => {
@@ -39,7 +61,9 @@ describe("generateCliSkill (TanStack Intent)", () => {
   test("documents the capability tree (count + discovery + dry-run)", () => {
     const skill = generateCliSkill(listings, TOOL_ANNOTATIONS, CAPABILITY);
     expect(skill).toContain("## Capability commands (full surface)");
-    expect(skill).toContain("generates 2\ncapability commands");
+    expect(skill).toContain(
+      `generates ${CAPABILITY.commandCount}\ncapability commands`,
+    );
     expect(skill).toContain("stella capability list");
     expect(skill).toContain("stella capability describe");
     expect(skill).toContain(`stella ${CAPABILITY_NAMESPACE} <domain> <action>`);

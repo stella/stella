@@ -7,15 +7,25 @@
 // from the command surface the CLI actually dispatches.
 
 import { CLI_DEFAULT_SCOPES } from "./auth/constants.js";
+import { uploadSpecificFlags } from "./commands/upload.js";
+import { flagKindFact } from "./flag-help.js";
 import { CAPABILITY_NAMESPACE } from "./generate-capability-tree.js";
-import { generateRouteMap } from "./generate-route-map.js";
+import {
+  generateRouteMap,
+  kebabCase,
+  RouteGenerationError,
+} from "./generate-route-map.js";
+import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "./generated/document-version-upload-transport.js";
 import { exitCodeEntries } from "./mcp-constants.js";
 import type {
+  FlagSpec,
   LeafCommandSpec,
   RegistryToolListing,
   RouteNode,
   ToolAnnotation,
 } from "./route-types.js";
+
+const oneLine = (text: string): string => text.replace(/\s+/gu, " ").trim();
 
 /**
  * The skill's leaf name. Intent requires `skills/<name>/SKILL.md` where the
@@ -63,10 +73,26 @@ const notesFor = (spec: LeafCommandSpec): string => {
   return parts.join("; ");
 };
 
-const commandRows = (tree: RouteNode): readonly CommandRow[] => {
+/**
+ * Every curated leaf, sorted for determinism independent of
+ * registry/annotation iteration order. Explicit locale keeps the ordering
+ * byte-identical across machines; the drift guard diffs the emitted SKILL.md
+ * against a committed snapshot. Both the command table and the per-command
+ * flag section below walk this SAME list, so they can never fall out of sync
+ * with each other.
+ */
+const sortedLeaves = (tree: RouteNode): readonly LeafCommandSpec[] => {
   const leaves: LeafCommandSpec[] = [];
   collectLeaves(tree, leaves);
-  const rows = leaves.map((spec) => {
+  return leaves.toSorted((a, b) =>
+    a.commandPath.join(" ").localeCompare(b.commandPath.join(" "), "en"),
+  );
+};
+
+const commandRows = (
+  leaves: readonly LeafCommandSpec[],
+): readonly CommandRow[] =>
+  leaves.map((spec) => {
     const command = spec.commandPath.join(" ");
     return {
       domain: spec.commandPath[0] ?? command,
@@ -79,11 +105,6 @@ const commandRows = (tree: RouteNode): readonly CommandRow[] => {
       notes: notesFor(spec),
     };
   });
-  // Sort for determinism independent of registry/annotation iteration order.
-  // Explicit locale keeps the ordering byte-identical across machines; the
-  // drift guard diffs the emitted SKILL.md against a committed snapshot.
-  return rows.toSorted((a, b) => a.command.localeCompare(b.command, "en"));
-};
 
 const renderCommandTable = (rows: readonly CommandRow[]): string => {
   const lines = [
@@ -98,6 +119,85 @@ const renderCommandTable = (rows: readonly CommandRow[]): string => {
   return lines.join("\n");
 };
 
+/**
+ * Global flags every command carries (`buildLeafFlags` in `build-cli-tree.ts`)
+ * and that "Conventions every agent must know" already documents once. A
+ * tool-derived `FlagSpec` can never actually collide with one of these
+ * (`generate-route-map.ts` throws on the collision at codegen time), so this
+ * filter is a defensive no-op today; it stays so a per-command line can never
+ * silently repeat a convention flag if that invariant ever changes.
+ */
+const CONVENTION_FLAGS: ReadonlySet<string> = new Set([
+  "--output",
+  "--cursor",
+  "--limit",
+  "--all",
+  "--yes",
+  "--input",
+]);
+
+/** An optional flag's compact token: its name, plus enum values in parens. */
+const optionalFlagToken = (flag: FlagSpec): string =>
+  flag.enum === undefined ? flag.flag : `${flag.flag} (${flag.enum.join("|")})`;
+
+/**
+ * A required flag's full line: name, description, type/enum (via the SAME
+ * `flagKindFact` derivation `--help` uses, so it can never drift). The
+ * required/optional word is dropped: every flag documented here IS required
+ * (an optional flag never reaches this branch), so repeating it would only
+ * cost space.
+ */
+const requiredFlagLine = (flag: FlagSpec): string => {
+  const facts = flag.repeatable
+    ? `${flagKindFact(flag)}, repeatable`
+    : flagKindFact(flag);
+  const description =
+    flag.description === undefined ? "" : ` — ${oneLine(flag.description)}`;
+  return `\`${flag.flag}\`${description} (${facts})`;
+};
+
+/**
+ * One curated command's flags as a bullet block. A required flag keeps a full
+ * line; optional flags collapse to one names-only line (enum values kept, in
+ * parens) so the skill stays small enough to load into every agent's context
+ * — `--help` remains the source for an optional flag's full description.
+ */
+const commandFlagsBlock = (spec: LeafCommandSpec): string => {
+  const command = `stella ${spec.commandPath.join(" ")}`;
+  const flags = spec.flags.filter((flag) => !CONVENTION_FLAGS.has(flag.flag));
+  if (flags.length === 0) {
+    const hint =
+      spec.inputOnly.length > 0
+        ? `no flags; pass \`--input\` with ${spec.inputOnly.join(", ")}`
+        : "no arguments";
+    return `- \`${command}\` — ${hint}`;
+  }
+  const required = flags.filter((flag) => flag.required);
+  const optional = flags.filter((flag) => !flag.required);
+  const lines = [
+    `- \`${command}\``,
+    ...required.map((flag) => `  - ${requiredFlagLine(flag)}`),
+  ];
+  if (optional.length > 0) {
+    lines.push(`  - optional: ${optional.map(optionalFlagToken).join(", ")}`);
+  }
+  return lines.join("\n");
+};
+
+const renderCommandFlagsSection = (
+  leaves: readonly LeafCommandSpec[],
+): string =>
+  [
+    "## Command flags",
+    "",
+    "Required: `--flag — description (type)`. Optional: one `optional: --a,",
+    "--b (enum1|enum2)` line, names only (`--help` has full descriptions).",
+    "Global flags (output/cursor/limit/all/yes/input; see Conventions above)",
+    "are omitted here.",
+    "",
+    leaves.map((spec) => commandFlagsBlock(spec)).join("\n"),
+  ].join("\n");
+
 const renderExitCodeTable = (): string =>
   [
     "| Code | Meaning |",
@@ -109,15 +209,90 @@ const renderExitCodeTable = (): string =>
 export type CapabilitySkillSummary = {
   /** Count of generated `invoke_capability`-backed leaf commands. */
   commandCount: number;
+  /** Domain segments actually present in the merged tree, see `capabilityDomainsOf`. */
+  domains: readonly string[];
+  /**
+   * The merged tree (curated leaves + capability leaves). Worked examples
+   * below resolve a real `CapabilityLeafSpec` out of it, so an example's
+   * flags are derived from the leaf, never hand-typed.
+   */
+  tree: RouteNode;
+};
+
+/** The node at `path` in `tree`, or `undefined` if the path does not resolve. */
+const routeNodeAt = (
+  tree: RouteNode,
+  path: readonly string[],
+): RouteNode | undefined => {
+  let node: RouteNode = tree;
+  for (const segment of path) {
+    if (node.kind !== "route") {
+      return undefined;
+    }
+    const child = node.children[segment];
+    if (child === undefined) {
+      return undefined;
+    }
+    node = child;
+  }
+  return node;
 };
 
 /**
- * The compact capability-tree section (spec 049 deliverable 4). The curated
- * command table above stays the primary surface; the long tail is described
- * (count + discovery) rather than enumerated, so the skill stays readable.
+ * Two worked "no curated command" examples (spec 049-flags deliverable 2):
+ * task prose plus the command path to a real capability leaf. The invocation
+ * — every required flag, in the leaf's own flag order, placeholder named
+ * after the flag itself — is derived from that leaf at render time (see
+ * `capabilityExampleLine`), so a catalog change that renames a flag, adds a
+ * new required one, or drops the leaf fails codegen instead of shipping a
+ * stale example.
  */
-const renderCapabilitySection = (summary: CapabilitySkillSummary): string =>
-  [
+const CAPABILITY_WORKED_EXAMPLES = [
+  {
+    task: "Translate a document",
+    commandPath: [CAPABILITY_NAMESPACE, "entities", "translate"],
+  },
+  {
+    task: "Start workflow extraction",
+    commandPath: [CAPABILITY_NAMESPACE, "workspaces", "workflow-start"],
+  },
+] as const;
+
+const capabilityExampleLine = (
+  tree: RouteNode,
+  example: (typeof CAPABILITY_WORKED_EXAMPLES)[number],
+): string => {
+  const node = routeNodeAt(tree, example.commandPath);
+  if (node?.kind !== "capability-leaf") {
+    throw new RouteGenerationError(
+      `generateCliSkill: worked example "${example.task}" names command "stella ${example.commandPath.join(" ")}", which is not a capability command in the current tree; update or drop the example`,
+    );
+  }
+  const required = node.spec.flags.filter((flag) => flag.required);
+  const args = required
+    .map((flag) => `${flag.flag} <${flag.flag.replace(/^--/u, "")}>`)
+    .join(" ");
+  const invocation = [`stella ${example.commandPath.join(" ")}`, args]
+    .filter((part) => part.length > 0)
+    .join(" ");
+  return `- ${example.task}: \`${invocation}\`.`;
+};
+
+/**
+ * The compact capability-tree section (spec 049 deliverable 4), extended with
+ * the domain list, two worked examples, and the `--input` casing rule (spec
+ * 049-flags deliverable 2). The curated command table above stays the primary
+ * surface; the long tail is described (count + discovery) rather than
+ * enumerated, so the skill stays readable.
+ */
+const renderCapabilitySection = (summary: CapabilitySkillSummary): string => {
+  const exampleLines = CAPABILITY_WORKED_EXAMPLES.map((example) =>
+    capabilityExampleLine(summary.tree, example),
+  );
+  const domainList = summary.domains
+    .map((domain) => `\`${domain}\``)
+    .join(", ");
+  return [
     "## Capability commands (full surface)",
     "",
     `Beyond the curated commands above, the CLI generates ${summary.commandCount}`,
@@ -139,7 +314,80 @@ const renderCapabilitySection = (summary: CapabilitySkillSummary): string =>
     "- **Destructive** capabilities prompt on a TTY and need `--yes` off a TTY; the",
     "  server's per-capability confirm gate is satisfied automatically once confirmed.",
     "- Exit codes are identical to the curated commands (see above).",
+    "",
+    "### When no curated command fits",
+    "",
+    "The curated commands above cover common tasks; anything else goes through the",
+    `generic capability path. Current domains: ${domainList}.`,
+    "",
+    ...exampleLines,
+    "- **`--input` casing is not uniform; never guess it.** A curated command's",
+    "  `--input` JSON (the table and flags above) uses the MCP tool schema's own",
+    "  keys, snake_case (`matter_id`, `contact_id`). A capability command's",
+    "  `--input` JSON uses the handler schema's own keys, camelCase (`fieldId`,",
+    "  `workspaceId`). Run `stella <command> --help` or `stella capability describe",
+    "  <id>` and copy the field paths it prints.",
   ].join("\n");
+};
+
+type UploadFlagEntry =
+  (typeof uploadSpecificFlags)[keyof typeof uploadSpecificFlags];
+
+const isOptionalUploadFlag = (flag: UploadFlagEntry): boolean =>
+  "optional" in flag;
+
+const uploadFlagName = (key: string): string => `--${kebabCase(key)}`;
+
+/** `stella upload`'s required flags, in invocation order (spec upload-note). */
+const REQUIRED_UPLOAD_KEYS = ["file", "matterId"] as const;
+
+/**
+ * Documents the real `stella upload` invocation, including uploading a new
+ * document VERSION (`--entity-id`) — a hand-wired top-level command
+ * (`commands/upload.ts`, registered directly in `build-cli-tree.ts`, never
+ * part of the generated route tree `generateRouteMap` walks). Its required
+ * flags are read off `uploadSpecificFlags`, the SAME object `buildCommand`
+ * registers, so the invocation cannot silently drift from what the command
+ * actually accepts. Contrasted with the excluded MCP tools
+ * (`document-version-upload-transport.ts`), which take a host-supplied file
+ * reference the CLI has no channel for and are genuinely unreachable.
+ */
+const renderUploadNote = (
+  annotations: Readonly<Record<string, ToolAnnotation>>,
+): string => {
+  const { toolName, pickerToolName } = DOCUMENT_VERSION_UPLOAD_TRANSPORT;
+  if (
+    annotations[toolName]?.excluded !== true ||
+    annotations[pickerToolName]?.excluded !== true
+  ) {
+    throw new RouteGenerationError(
+      `generateCliSkill: expected "${toolName}" and "${pickerToolName}" to be excluded CLI tools (host-file-reference upload); update the upload note if that changed`,
+    );
+  }
+  for (const key of REQUIRED_UPLOAD_KEYS) {
+    if (isOptionalUploadFlag(uploadSpecificFlags[key])) {
+      throw new RouteGenerationError(
+        `generateCliSkill: expected "stella upload" flag "${uploadFlagName(key)}" to be required; update the upload note if that changed`,
+      );
+    }
+  }
+  if (!isOptionalUploadFlag(uploadSpecificFlags.entityId)) {
+    throw new RouteGenerationError(
+      'generateCliSkill: expected "stella upload" to offer an optional --entity-id (new-version mode); update the upload note if that changed',
+    );
+  }
+  const requiredInvocation = REQUIRED_UPLOAD_KEYS.map(
+    (key) => `${uploadFlagName(key)} <${kebabCase(key)}>`,
+  ).join(" ");
+  return (
+    `- **Uploading a file**: \`stella upload ${requiredInvocation}\` uploads ` +
+    `a local file as a new document; add \`${uploadFlagName("entityId")} <id>\` ` +
+    "to upload it as a new version of an existing document instead — a " +
+    "CLI-native path (the CLI reads the file itself), separate from the MCP " +
+    `\`${toolName}\`/\`${pickerToolName}\` tools (which take a host-supplied ` +
+    "file reference and are excluded from the CLI)."
+  );
+};
 
 /**
  * Emit the `SKILL.md` markdown for the stella CLI. Pure over the registry
@@ -152,9 +400,12 @@ export const generateCliSkill = (
   capability: CapabilitySkillSummary,
 ): string => {
   const tree = generateRouteMap(listings, annotations);
-  const table = renderCommandTable(commandRows(tree));
+  const leaves = sortedLeaves(tree);
+  const table = renderCommandTable(commandRows(leaves));
+  const flagsSection = renderCommandFlagsSection(leaves);
   const exitCodes = renderExitCodeTable();
   const capabilitySection = renderCapabilitySection(capability);
+  const uploadNote = renderUploadNote(annotations);
 
   const frontmatter = [
     "---",
@@ -232,6 +483,16 @@ export const generateCliSkill = (
     "  (windowed, so follow `--cursor`).",
     "- **MCP resources**: `stella reference list` enumerates static server resources;",
     "  `stella reference show <name>` prints one.",
+    uploadNote,
+    "",
+    "## Command tree",
+    "",
+    "Generated from the MCP tool registry; `Access` is the OAuth scope the command",
+    "requires (request it at `stella auth login --scopes`).",
+    "",
+    table,
+    "",
+    flagsSection,
     "",
     "## Exit codes",
     "",
@@ -256,13 +517,6 @@ export const generateCliSkill = (
     "- **github** (preferred): returns a prefilled new-issue URL and a `gh` command",
     "  the human opens and submits under their own GitHub account. The CLI never",
     "  publishes anything itself.",
-    "",
-    "## Command tree",
-    "",
-    "Generated from the MCP tool registry; `Access` is the OAuth scope the command",
-    "requires (request it at `stella auth login --scopes`).",
-    "",
-    table,
     "",
   ].join("\n");
 

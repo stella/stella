@@ -28,6 +28,7 @@ import { compatibilityRoute } from "./commands/compatibility.js";
 import { uploadCommand } from "./commands/upload.js";
 import type { Context } from "./context.js";
 import { expandSchemaDefs } from "./expand-schema-defs.js";
+import { flagBrief } from "./flag-help.js";
 import { generatedResourceTree } from "./generated/resource-tree.js";
 import {
   buildInputContractHelp,
@@ -81,44 +82,6 @@ const variadicFlag = (brief: string) =>
 
 const booleanFlag = (brief: string, withNegated: boolean) =>
   ({ brief, kind: "boolean", optional: true, withNegated }) as const;
-
-/**
- * A flag's `--help` line: the property's authored prose first (that is what a
- * caller — usually an agent — actually needs), then the mechanical
- * required/kind/enum/range facts the schema already encodes.
- */
-const flagBrief = (spec: FlagSpec): string => {
-  const facts = mechanicalFlagFacts(spec);
-  return spec.description === undefined
-    ? facts
-    : `${spec.description} ${facts}`;
-};
-
-/**
- * The schema facts as one parenthesised, comma-separated clause:
- * `(required, string)`, `(optional, enum: draft, sent)`, `(optional, int
- * 1..100, repeatable)`. Stricli already brackets an optional flag's usage, so
- * nesting brackets here produced the misleading `[--entity-id ... [(required)
- * string]]`: required-ness is a fact about the tool input, not about the
- * stricli flag, which stays optional (see `OptionalStricliFlag`).
- */
-const mechanicalFlagFacts = (spec: FlagSpec): string => {
-  const parts = [spec.required ? "required" : "optional", flagKindFact(spec)];
-  if (spec.repeatable) {
-    parts.push("repeatable");
-  }
-  return `(${parts.join(", ")})`;
-};
-
-const flagKindFact = (spec: FlagSpec): string => {
-  if (spec.enum) {
-    return `${spec.kind}: ${spec.enum.join(", ")}`;
-  }
-  if (spec.min !== undefined || spec.max !== undefined) {
-    return `${spec.kind} ${spec.min ?? "-inf"}..${spec.max ?? "inf"}`;
-  }
-  return spec.kind;
-};
 
 /**
  * Build the stricli flag for one capability/tool input field. The single

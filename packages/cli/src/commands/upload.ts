@@ -24,8 +24,34 @@ import {
 
 const parseString = (input: string): string => input;
 
-const optionalStringFlag = (brief: string) =>
-  ({ brief, kind: "parsed", optional: true, parse: parseString }) as const;
+/**
+ * The exact shape stricli's `ParsedFlagParameter` wants for a required vs. an
+ * optional string flag (`kind: "parsed"` literal, `optional` literal or
+ * absent). Written out by hand — rather than left for `buildCommand` to
+ * infer through `as const` — because `uploadSpecificFlags` below is exported,
+ * and an exported const's initializer must carry an explicit type under
+ * `isolatedDeclarations`; `optionalStringFlag`'s call sites feed straight
+ * into it, so its return type needs the same treatment.
+ */
+type RequiredStringFlagSpec = {
+  readonly brief: string;
+  readonly kind: "parsed";
+  readonly parse: (input: string) => string;
+};
+
+type OptionalStringFlagSpec = {
+  readonly brief: string;
+  readonly kind: "parsed";
+  readonly optional: true;
+  readonly parse: (input: string) => string;
+};
+
+const optionalStringFlag = (brief: string): OptionalStringFlagSpec => ({
+  brief,
+  kind: "parsed",
+  optional: true,
+  parse: parseString,
+});
 
 type UploadFlags = CommonFlagValues & {
   readonly entityId: string | undefined;
@@ -65,6 +91,48 @@ const renderNestedFailure = ({
     context,
     failure.type === "local" ? EXIT_CODES.validation : EXIT_CODES.server,
   );
+};
+
+/**
+ * This command's own flags (the shared `buildCommonFlags()` ones excluded),
+ * as one plain object literal `buildCommand` registers directly. Exported so
+ * the generated skill (`generate-skill.ts`) can state `stella upload`'s real
+ * invocation (which flags exist, which are required) from this SAME object
+ * instead of hand-typed prose that could silently drift from it. A flag here
+ * is required unless it carries `optional: true` (see `optionalStringFlag`).
+ */
+export const uploadSpecificFlags: {
+  readonly file: RequiredStringFlagSpec;
+  readonly matterId: RequiredStringFlagSpec;
+  readonly propertyId: OptionalStringFlagSpec;
+  readonly parentId: OptionalStringFlagSpec;
+  readonly entityId: OptionalStringFlagSpec;
+  readonly name: OptionalStringFlagSpec;
+  readonly mimeType: OptionalStringFlagSpec;
+} = {
+  file: {
+    brief: "Local file path to upload",
+    kind: "parsed",
+    parse: parseString,
+  },
+  matterId: {
+    brief: "Matter id that will own the document",
+    kind: "parsed",
+    parse: parseString,
+  },
+  propertyId: optionalStringFlag(
+    "File-property id override; by default the unique file property is discovered automatically",
+  ),
+  parentId: optionalStringFlag("Destination folder entity id"),
+  entityId: optionalStringFlag(
+    "Existing document entity id; when set, upload the file as its new version",
+  ),
+  name: optionalStringFlag(
+    "Document name override; defaults to the local file name",
+  ),
+  mimeType: optionalStringFlag(
+    "MIME type override; by default it is inferred from the standard extension database",
+  ),
 };
 
 export const uploadCommand: Command<Context> = buildCommand<
@@ -170,29 +238,7 @@ export const uploadCommand: Command<Context> = buildCommand<
   parameters: {
     flags: {
       ...buildCommonFlags(),
-      file: {
-        brief: "Local file path to upload",
-        kind: "parsed",
-        parse: parseString,
-      },
-      matterId: {
-        brief: "Matter id that will own the document",
-        kind: "parsed",
-        parse: parseString,
-      },
-      propertyId: optionalStringFlag(
-        "File-property id override; by default the unique file property is discovered automatically",
-      ),
-      parentId: optionalStringFlag("Destination folder entity id"),
-      entityId: optionalStringFlag(
-        "Existing document entity id; when set, upload the file as its new version",
-      ),
-      name: optionalStringFlag(
-        "Document name override; defaults to the local file name",
-      ),
-      mimeType: optionalStringFlag(
-        "MIME type override; by default it is inferred from the standard extension database",
-      ),
+      ...uploadSpecificFlags,
     },
   },
 });
